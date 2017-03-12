@@ -1,6 +1,7 @@
 """ Dataset module implements Dataset, DatasetIndex, Preprocess and Batch classes"""
 
-from .batch import *
-from .dataset import *
-from .dsindex import *
-from .preprocess import *
+from .batch import Batch, ArrayBatch, DataFrameBatch
+from .dataset import Dataset
+from .fulldataset import FullDataset
+from .dsindex import DatasetIndex
+from .preprocess import Preprocessing
