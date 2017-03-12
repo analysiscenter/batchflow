@@ -62,10 +62,10 @@ BATCH_SIZE = 3
 
 # Load data and take some actions
 print("\nFull preprocessing")
-fp_data = Preprocessing(ds_data) \
-            .load(data) \
-            .action1() \
-            .action2()
+fp_data = (Preprocessing(ds_data)
+            .load(data)
+            .action1()
+            .action2())
 # nothing has been done yet, all the actions are lazy
 # Now run the actions once for each batch
 fp_data.run(BATCH_SIZE, shuffle=False)
@@ -73,11 +73,11 @@ fp_data.run(BATCH_SIZE, shuffle=False)
 
 print("\nLoad and preprocess target")
 # Define target preprocessing procedure and run it
-fp_target = Preprocessing(ds_target) \
-                .load(target) \
-                .add(100) \
-                .print() \
-                .run(BATCH_SIZE, shuffle=False)
+fp_target = (Preprocessing(ds_target)
+                .load(target)
+                .add(100)
+                .print()
+                .run(BATCH_SIZE, shuffle=False))
 
 # Preprocessing does not mute the source data
 print("\nOriginal target left unchanged")
@@ -85,14 +85,14 @@ print(target)
 
 
 # Now define some processing which will run during training
-lazy_pp_data = Preprocessing(ds_data) \
-                .load(data) \
-                .action1()
-lazy_pp_target = Preprocessing(ds_target) \
-                    .load(target) \
-                    .add(5) \
-                    .add(1) \
-                    .print()
+lazy_pp_data = (Preprocessing(ds_data)
+                .load(data)
+                .action1())
+lazy_pp_target = (Preprocessing(ds_target)
+                    .load(target)
+                    .add(5)
+                    .add(1)
+                    .print())
 # Nothing has been done yet
 
 # Define dataset which is based on lazy processing
