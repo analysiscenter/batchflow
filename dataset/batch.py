@@ -81,6 +81,7 @@ class ArrayBatch(Batch):
         fullname = os.path.join(dst, filename + '.' + fmt)
 
         if fmt is None:
+            # this line doesn't dump to the given array
             dst = self.data
         elif fmt == 'blosc':
             packed_array = blosc.pack_array(self.data)

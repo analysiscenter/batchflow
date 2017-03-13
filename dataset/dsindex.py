@@ -79,7 +79,7 @@ class DatasetIndex:
         elif _shares.shape[0] == 2:
             train_share, test_share, valid_share = _shares[0], _shares[1], 1 - _shares.sum()
         else:
-            train_share, test_share, valid_share = _shares, 1 - _shares.sum(), 0.
+            train_share, test_share, valid_share = _shares[0], 1 - _shares[0], 0.
 
         n_items = len(self.index)
         train_share, test_share, valid_share = \
