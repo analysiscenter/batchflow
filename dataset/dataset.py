@@ -19,7 +19,7 @@ class Dataset:
         """ Create Dataset from another dataset with new index
             (usually subset of the source dataset index)
         """
-        if batch_class is not None and (batch_class == dataset.batch_class) and (index == dataset.index):
+        if (batch_class is None or (batch_class == dataset.batch_class)) and (index == dataset.index):
             return dataset
         else:
             bcl = batch_class if batch_class is not None else dataset.batch_class
