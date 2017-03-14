@@ -40,7 +40,8 @@ class Preprocessing:
     def _exec_all_actions(self, batch):
         for _action in self.action_list:
             batch_action = getattr(batch, _action['name'])
-            batch_action(*_action['args'], **_action['kwargs'])
+            batch = batch_action(*_action['args'], **_action['kwargs'])
+        return batch
 
 
     def _run_seq(self, gen_batch):
@@ -60,7 +61,7 @@ class Preprocessing:
     def create_batch(self, batch_indices, *args, **kwargs):
         """ Create a new batch by give indices and execute all previous lazy actions """
         batch = self.dataset.create_batch(batch_indices, *args, **kwargs)
-        self._exec_all_actions(batch)
+        batch = self._exec_all_actions(batch)
         return batch
 
 
@@ -70,5 +71,5 @@ class Preprocessing:
             self.batch_generator = self.dataset.gen_batch(batch_size, shuffle=shuffle,
                                                           one_pass=one_pass, *args, **kwargs)
         batch = next(self.batch_generator)
-        self._exec_all_actions(batch)
+        batch = self._exec_all_actions(batch)
         return batch

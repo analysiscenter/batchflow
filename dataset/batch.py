@@ -12,9 +12,14 @@ from .preprocess import action
 class Batch:
     """ Base Batch class """
     def __init__(self, index):
-        """ Create batch by subsetting source dataset """
         self.index = index
         self.data = None
+
+    @classmethod
+    def from_data(cls, data):
+        """ Create batch from given dataset """
+        # this is equiv to self.data = data[:]
+        return cls(slice(None, None)).load(data)
 
     @staticmethod
     def make_filename():
@@ -81,8 +86,8 @@ class ArrayBatch(Batch):
         fullname = os.path.join(dst, filename + '.' + fmt)
 
         if fmt is None:
-            # this line doesn't dump to the given array
-            dst = self.data
+            # think carefully when dumping to an array
+            dst[self.index] = self.data
         elif fmt == 'blosc':
             packed_array = blosc.pack_array(self.data)
             self._write_file(fullname, 'b', packed_array)
