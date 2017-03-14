@@ -9,7 +9,7 @@ from dataset import * # pylint: disable=wrong-import-
 
 
 # Create index from ./data
-findex = FilesIndex('./data')
+findex = FilesIndex('./data/*')
 # print list of files
 print("Index:")
 print(findex.index)
@@ -28,7 +28,7 @@ for dsi in [findex.train, findex.test, findex.validation]:
 
 
 # Create index from ./data/dirs
-dindex = DirectoriesIndex('./data/dirs', sort=True)
+dindex = FilesIndex('./data/dir*/*', dirs=True, sort=True)
 # print list of subdirectories
 print("Index:")
 print(dindex.index)

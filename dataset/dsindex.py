@@ -1,6 +1,7 @@
 """ DatasetIndex """
 
 import os
+import glob
 import numpy as np
 
 
@@ -40,6 +41,8 @@ class DatasetIndex:
                 _ = _index[[0]]
             except TypeError:
                 _index = np.asarray(_index)
+            except IndexError:
+                raise ValueError("Index cannot be empty")
 
         if len(_index.shape) > 1:
             raise TypeError("index should be 1-dimensional")
@@ -155,22 +158,14 @@ class DatasetIndex:
 
 
 class FilesIndex(DatasetIndex):
-    """ Index with the list of files in the given directory """
+    """ Index with the list of files or directories with the given path pattern """
     @staticmethod
-    def build_index(path, sort=False):    # pylint: disable=arguments-differ
+    def build_index(path, dirs=False, sort=False):    # pylint: disable=arguments-differ
         """ Generate index from path """
-        _index = np.asarray([fname for fname in os.listdir(path) if os.path.isfile(os.path.join(path, fname))])
-        if sort:
-            _index = np.sort(_index)
-        return _index
-
-
-class DirectoriesIndex(DatasetIndex):
-    """ Index with the list of directories in the given directory """
-    @staticmethod
-    def build_index(path, sort=False):    # pylint: disable=arguments-differ
-        """ Generate index from path """
-        _index = np.asarray([fname for fname in os.listdir(path) if os.path.isdir(os.path.join(path, fname))])
+        check_fn = os.path.isdir if dirs else os.path.isfile
+        pathlist = glob.iglob(path)
+        _index = np.asarray([os.path.basename(fname) for fname in pathlist if check_fn(fname)])
+        print(_index)
         if sort:
             _index = np.sort(_index)
         return _index
