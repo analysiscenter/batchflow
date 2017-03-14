@@ -3,5 +3,5 @@
 from .batch import Batch, ArrayBatch, DataFrameBatch
 from .dataset import Dataset
 from .fulldataset import FullDataset
-from .dsindex import DatasetIndex, FilesIndex, DirectoriesIndex
+from .dsindex import DatasetIndex, FilesIndex
 from .preprocess import Preprocessing, action
