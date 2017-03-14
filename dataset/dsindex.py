@@ -158,14 +158,20 @@ class DatasetIndex:
 
 
 class FilesIndex(DatasetIndex):
-    """ Index with the list of files or directories with the given path pattern """
+    """ Index with the list of files or directories with the given path pattern
+
+        Usage:
+        Create sorted index of files in a directory:
+        fi = FilesIndex('/path/to/data/files/*', sort=True)
+        Create unsorted index of directories through all subdirectories:
+        fi = FilesIndex('/path/to/data/archive*/patient*', dirs=True)
+    """
     @staticmethod
     def build_index(path, dirs=False, sort=False):    # pylint: disable=arguments-differ
         """ Generate index from path """
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path)
         _index = np.asarray([os.path.basename(fname) for fname in pathlist if check_fn(fname)])
-        print(_index)
         if sort:
             _index = np.sort(_index)
         return _index
