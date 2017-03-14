@@ -87,7 +87,7 @@ class ArrayBatch(Batch):
 
         if fmt is None:
             # think carefully when dumping to an array
-            dst[:] = self.data
+            dst[self.index] = self.data
         elif fmt == 'blosc':
             packed_array = blosc.pack_array(self.data)
             self._write_file(fullname, 'b', packed_array)
