@@ -12,6 +12,7 @@ from dataset import * # pylint: disable=wrong-import-
 class MyDataFrameBatch(DataFrameBatch):
     @action
     def print(self):
+        print("print")
         print(self.data)
 
     @action

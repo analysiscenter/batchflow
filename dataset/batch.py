@@ -6,6 +6,7 @@ import blosc
 import numpy as np
 import pandas as pd
 import feather
+import dask.dataframe as dd
 from .preprocess import action
 
 
@@ -116,7 +117,13 @@ class DataFrameBatch(Batch):
             raise ValueError('Unknown format %s' % fmt)
 
         # But put into this batch only part of it (defined by index)
-        self.data = dfr.loc[self.index]
+        if isinstance(dfr, pd.DataFrame):
+            self.data = dfr.loc[self.index]
+        elif isinstance(dfr, dd.DataFrame):
+            # dask.DataFrame.loc supports advanced indexing only with lists
+            self.data = dfr.loc[list(self.index)].compute()
+        else:
+            raise TypeError("Unknown DataFrame. DataFrameBatch supports only pandas and dask.")
 
         return self
 
@@ -125,7 +132,7 @@ class DataFrameBatch(Batch):
     def dump(self, dst, fmt='feather', *args, **kwargs):
         """ Save batch data to disk
             dst should point to a directory where all batches will be stored
-            as separate files named 'batch_id.format', e.g. '1.csv', '2.csv', etc.
+            as separate files named 'batch_id.format', e.g. '6a0b1c35.csv', '32458678.csv', etc.
         """
         filename = self.make_filename()
         fullname = os.path.join(dst, filename + '.' + fmt)
