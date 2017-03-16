@@ -1,6 +1,6 @@
 # Dataset
 
-# Basic usage
+## Basic usage
 
 A dataset consists of an index (1-d sequence with unique keys per each data item)
 and a batch class which process the data.
