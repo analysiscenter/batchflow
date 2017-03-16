@@ -2,13 +2,13 @@
 
 # Basic usage
 
-A dataset consists of an index (1-d sequence with unique keys for each data item)
+A dataset consists of an index (1-d sequence with unique keys per each data item)
 and a batch class which process the data.
 
-There are some ready-to-use index (e.g. `FilesIndex`) and batch classes (e.g. `ArrayBatch` and `DataFrameBatch`),
-but you are likely to need your own class with specific action methods.
+There are some ready-to-use indices (e.g. `FilesIndex`) and batch classes (e.g. `ArrayBatch` and `DataFrameBatch`),
+but you are likely to need your own classes with specific action methods.
 
-So let's define a class to work with your unique data (CT scans)
+So let's define a class to work with your unique data (for instance, CT scans)
 ```python
 import numpy as np
 import pandas as pd
@@ -28,7 +28,7 @@ class PatientScans(ds.Batch):
 ```
 
 The scans are too huge to load into memory at once.
-That is why we need a dataset which has an index of all data items and a specific action class to process a small subset of data (batch)
+That is why we need the `Dataset` class which holds an index of all data items (scans) and a specific action class to process a small subset of scans (batch)
 ```python
 CT_SCAN_PATH = '/path/to/CT_scans'
 # each CT_SCAN_PATH's subdirectory contains one patient scans and its name is the patient id
@@ -48,7 +48,7 @@ scans_pp = (ds.Preprocessing(scans_dataset).
 ```
 All the actions are lazy so they are not executed unless their results are needed.
 
-`load`, `resize`, `segment_lungs`, and `dump` are `PatientScans` methods marked with `@action` decorator.
+Take into account that `load`, `resize`, `segment_lungs`, and `dump` are `PatientScans` methods marked with `@action` decorator.
 
 `Preprocessing` knows nothing about your data, where it is stored and how to process it.
 It's just a convenient wrapper.
@@ -63,7 +63,7 @@ scans_pp.run(batch_size=64, shuffle=False, one_pass=True)
 Inside `run` the dataset is divided into batches and all the actions are executed for each batch.
 
 Moving further, you might want to make a combined dataset which contains scans and labels.
-And labels might come as a pandas.DataFrame loaded from a `csv`-file.
+And labels might come as a `pandas.DataFrame` loaded from a `csv`-file.
 ```python
 # labels have the very same index as scans
 labels_dataset = ds.Dataset(index=patient_index, batch_class=DataFrameBatch)
@@ -71,7 +71,7 @@ labels_dataset = ds.Dataset(index=patient_index, batch_class=DataFrameBatch)
 labels_processing = Preprocessing(labels_dataset).load('/path/to/labels.csv', fmt='csv')
 ```
 
-You often train a model with augmented data. Let's define it as a lazy process too.
+You often train a model with augmented data. Let's configure it as a lazy process too.
 ```python
 scan_augm = (Preprocessing(scans_dataset).
                load('/path/to/processed/scans').
