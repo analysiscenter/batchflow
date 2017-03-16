@@ -28,7 +28,7 @@ class PatientScans(ds.Batch):
 ```
 
 The scans are too huge to load into memory at once.
-That is why we need a dataset which has an index and a specific action class to process a small subset of data (batch)
+That is why we need a dataset which has an index of all data items and a specific action class to process a small subset of data (batch)
 ```python
 CT_SCAN_PATH = '/path/to/CT_scans'
 # each CT_SCAN_PATH's subdirectory contains one patient scans and its name is the patient id
@@ -62,18 +62,19 @@ scans_pp.run(batch_size=64, shuffle=False, one_pass=True)
 ```
 Inside `run` the dataset is divided into batches and all the actions are executed for each batch.
 
-Moving further, you need to make a combined dataset which contains scans and labels.
-You might have labels as pandas.DataFrame loaded from a `csv`-file.
+Moving further, you might want to make a combined dataset which contains scans and labels.
+And labels might come as a pandas.DataFrame loaded from a `csv`-file.
 ```python
+# labels have the very same index as scans
 labels_dataset = ds.Dataset(index=patient_index, batch_class=DataFrameBatch)
 # Define how you need to process labels (here you just load them from a file)
 labels_processing = Preprocessing(labels_dataset).load('/path/to/labels.csv', fmt='csv')
 ```
 
-To train the model you might need some data augmentation. Let's define it as a lazy process too.
+You often train a model with augmented data. Let's define it as a lazy process too.
 ```python
 scan_augm = (Preprocessing(scans_dataset).
-               load('path/to/processed/scans').
+               load('/path/to/processed/scans').
                random_crop(64, 64, 64).
                random_rotate(-pi/4, pi/4))
 ```
@@ -83,9 +84,9 @@ Now define the combined dataset
 full_data = ds.FullDataset(data=scan_augm, target=labels_processing)
 ```
 And again, nothing has been executed or loaded yet.
-You don't have to waste CPU or GPU cycles unless you need the processed data.
+You don't have to waste CPU, GPU or IO cycles unless you need the processed data.
 
-Before training you might want to split the dataset into train / test / validation subsets.
+Before training you can split the dataset into train / test / validation subsets.
 ```python
 full_data.cv_split([0.7, 0.2])
 ```
