@@ -103,4 +103,4 @@ for i in range(NUM_ITERS):
 
 ```
 
-For more advanced cases and detailed API see [the documentation](doc/INDEX.md)
+For more advanced cases and detailed API see [the documentation](doc/index.md)
