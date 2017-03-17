@@ -1,5 +1,8 @@
 """ FullDataset """
+
 import numpy as np
+from .base import Baseset
+from .dsindex import DatasetIndex
 from .dataset import Dataset
 from .preprocess import Preprocessing
 
@@ -22,11 +25,11 @@ class JointDataset(Baseset):
 
         self.datasets = datasets
         super().__init__(*args, **kwargs)
-        self.batch_generator = None
 
 
     @staticmethod
-    def build_index(datasets, *args, **kwargs):
+    def build_index(datasets):
+        """ Create a common index for all included datasets """
         return DatasetIndex(np.arange(len(datasets[0])))
 
 
@@ -63,14 +66,14 @@ class JointDataset(Baseset):
         """ Create a list of batches from all source datasets """
         ds_batches = list()
         for dataset in self.datasets:
-            ds_batches.append(dataset.create_batch(ix_batch, pos, *args, **kwargs))
+            ds_batches.append(dataset.create_batch(batch_indices, pos, *args, **kwargs))
         return ds_batches
 
 
 class FullDataset(JointDataset):
     """ Dataset which include data and target sub-Datasets """
     def __init__(self, data, target):
-        super.__init__((data, target))
+        super().__init__((data, target))
 
     @property
     def data(self):

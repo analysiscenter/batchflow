@@ -35,7 +35,7 @@ class Baseset:
         """ True if dataset was splitted into train / test / validation sub-datasets """
         return self.train is not None
 
-    def calc_cv_split(self, shares=0.8, shuffle=False):
+    def calc_cv_split(self, shares=0.8):
         """ Calculate split into train, test and validation subsets
 
         Return: a tuple which contains number of items in train, test and validation subsets
