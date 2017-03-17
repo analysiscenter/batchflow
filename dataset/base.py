@@ -3,6 +3,7 @@ import numpy as np
 
 
 class Baseset:
+    """ Base class """
     def __init__(self, *args, **kwargs):
         self._index = self.build_index(*args, **kwargs)
 
@@ -13,7 +14,7 @@ class Baseset:
         self._start_index = 0
         self._order = None
         self._n_epochs = 0
-        self.batch_generator = None        
+        self.batch_generator = None
 
 
     @staticmethod
@@ -85,4 +86,5 @@ class Baseset:
         return batch
 
     def create_batch(self, batch_indices, pos=True):
+        """ Create batch with indices given """
         raise NotImplementedError("create_batch should be defined in child classes")

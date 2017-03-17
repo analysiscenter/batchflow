@@ -53,7 +53,7 @@ class DatasetIndex(Baseset):
            # split into train / test / validation in 50/30/20 ratio
            di.cv_split([0.5, 0.3, 0.2])
         """
-        train_share, test_share, valid_share = self.calc_cv_split(shares)
+        _, test_share, valid_share = self.calc_cv_split(shares)
 
         # TODO: make a view not copy if not shuffled
         order = np.arange(len(self))
@@ -118,8 +118,8 @@ class DatasetIndex(Baseset):
 
 
     def create_batch(self, batch_indices, pos=True):
-        """ Create a batch from given indices 
-            if pos is False then batch_indices contains the value of indices 
+        """ Create a batch from given indices
+            if pos is False then batch_indices contains the value of indices
             which should be included in the batch (so expected batch is just the very same batch_indices)
             otherwise batch_indices contains positions in the index
         """
