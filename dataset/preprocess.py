@@ -31,6 +31,12 @@ class Preprocessing:
         return self.append_action
 
 
+    @property
+    def index(self):
+        """ Return index of the source dataset """
+        return self.dataset.index
+
+
     def append_action(self, *args, **kwargs):
         """ Add new action to the log of future actions """
         self.action_list[-1].update({'args': args, 'kwargs': kwargs})
