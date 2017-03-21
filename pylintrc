@@ -7,7 +7,7 @@ max-attributes=20
 ignored-modules=numpy
 
 [MESSAGE CONTROL]
-disable=locally-disabled
+#disable=locally-disabled
 
 [MISCELLANEOUS]
 notes=

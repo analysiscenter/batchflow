@@ -11,8 +11,14 @@ from dataset import * # pylint: disable=wrong-import-
 # Example of custome Batch class which defines some actions
 class MyDataFrameBatch(DataFrameBatch):
     @action
-    def print(self):
+    def print(self, ds=None, text=None):
+        if text is not None:
+            print(text)
         print(self.data)
+        if ds is not None:
+           print('Joined data')
+           print(ds[0].data)
+        return self
 
     @action
     def action1(self):
@@ -84,6 +90,11 @@ print("\nOriginal target left unchanged")
 print(target)
 
 
+fp_t2 = (Preprocessing(ds_target)
+                .load(target)
+                .add(100)
+                .print(text="   T2"))
+
 # Now define some processing which will run during training
 lazy_pp_data = (Preprocessing(ds_data)
                 .load(data)
@@ -92,7 +103,8 @@ lazy_pp_target = (Preprocessing(ds_target)
                     .load(target)
                     .add(5)
                     .add(1)
-                    .print())
+                    .join(fp_t2)
+                    .print(text="   PP Target"))
 # Nothing has been done yet
 
 # Define dataset which is based on lazy processing
@@ -100,7 +112,7 @@ ds_full = FullDataset(lazy_pp_data, lazy_pp_target)
 
 print("\n\nPreproces one batch at a time")
 for i in range(5):
-    print("Next batch")
+    print("\n\nNext batch")
     # all the actions are fired when you call next_batch
     b_data, b_target = ds_full.next_batch(BATCH_SIZE, shuffle=True)
     # Because of one_pass=False all the batches will have equal size

@@ -72,6 +72,32 @@ class Baseset:
         return train_share, test_share, valid_share
 
 
+    def create_subset(self, index):
+        """ Create a new subset based on the give index subset """
+        raise NotImplementedError("create_subset should be defined in child classes")
+
+
+    def cv_split(self, shares=0.8, shuffle=False):
+        """ Split the dataset into train, test and validation sub-datasets
+        Subsets are available as .train, .test and .validation respectively
+
+        Usage:
+           # split into train / test in 80/20 ratio
+           ds.cv_split()
+           # split into train / test / validation in 60/30/10 ratio
+           ds.cv_split([0.6, 0.3])
+           # split into train / test / validation in 50/30/20 ratio
+           ds.cv_split([0.5, 0.3, 0.2])
+        """
+        self.index.cv_split(shares, shuffle)
+
+        self.train = self.create_subset(self.index.train)
+        if self.index.test is not None:
+            self.test = self.create_subset(self.index.test)
+        if self.index.validation is not None:
+            self.validation = self.create_subset(self.index.validation)
+
+
     def gen_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
         """ Generate batches """
         for ix_batch in self.index.gen_batch(batch_size, shuffle, one_pass):

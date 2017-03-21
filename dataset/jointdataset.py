@@ -9,7 +9,7 @@ from .preprocess import Preprocessing
 
 class JointDataset(Baseset):
     """ Dataset comprising several Datasets """
-    def __init__(self, datasets, *args, **kwargs):
+    def __init__(self, datasets, align='order', *args, **kwargs):
         if not isinstance(datasets, (list, tuple)) or len(datasets) == 0:
             raise TypeError("Expected a non-empty list-like with instances of Dataset or Preprocessing.")
         else:
@@ -23,50 +23,41 @@ class JointDataset(Baseset):
                 elif index_len != ds_ilen:
                     raise TypeError("All datasets should have indices of the same length.")
 
+        if isinstance(align, bool):
+            _align = align
+        elif align in ['same', 'order']:
+            _align = align == 'order'
+        else:
+            raise ValueError("align should be one of 'order', 'same', True or False")
+
+        self.align = _align
         self.datasets = datasets
-        super().__init__(*args, **kwargs)
+        super().__init__(datasets, self.align, *args, **kwargs)
 
 
     @staticmethod
-    def build_index(datasets):
+    def build_index(datasets, align, *args, **kwargs):
         """ Create a common index for all included datasets """
-        return DatasetIndex(np.arange(len(datasets[0])))
+        if align:
+            return DatasetIndex(np.arange(len(datasets[0])))
+        else:
+            return datasets[0].index
 
 
     def create_subset(self, index):
-        """ Create new JointDataset """
+        """ Create new JointDataset from a subset of indices """
         ds_set = list()
+        ds_index = self.index.create_batch(index, pos=self.align)
         for dataset in self.datasets:
-            ds_set.append(Dataset.from_dataset(dataset, dataset.index.subset_by_pos(index)))
-        return JointDataset(ds_set)
-
-
-    def cv_split(self, shares=0.8, shuffle=False):
-        """ Split the dataset into train, test and validation sub-datasets
-        Subsets are available as .train, .test and .validation respectively
-
-        Usage:
-           # split into train / test in 80/20 ratio
-           ds.cv_split()
-           # split into train / test / validation in 60/30/10 ratio
-           ds.cv_split([0.6, 0.3])
-           # split into train / test / validation in 50/30/20 ratio
-           ds.cv_split([0.5, 0.3, 0.2])
-        """
-        self.index.cv_split(shares, shuffle)
-
-        self.train = self.create_subset(self.index.train)
-        if self.index.test is not None:
-            self.test = self.create_subset(self.index.test)
-        if self.index.validation is not None:
-            self.validation = self.create_subset(self.index.validation)
+            ds_set.append(Dataset.from_dataset(dataset, ds_index))
+        return JointDataset(ds_set, align='same')
 
 
     def create_batch(self, batch_indices, pos=True, *args, **kwargs):
         """ Create a list of batches from all source datasets """
         ds_batches = list()
         for dataset in self.datasets:
-            ds_batches.append(dataset.create_batch(batch_indices, pos, *args, **kwargs))
+            ds_batches.append(dataset.create_batch(batch_indices, pos=self.align, *args, **kwargs))
         return ds_batches
 
 
@@ -77,10 +68,10 @@ class FullDataset(JointDataset):
 
     @property
     def data(self):
-        """ Data datset """
+        """ Data dataset """
         return self.datasets[0]
 
     @property
     def target(self):
-        """ Target datset """
+        """ Target dataset """
         return self.datasets[1]

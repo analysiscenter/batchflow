@@ -1,2 +1,2 @@
-# pylint: skip-file
-from .dataset import *
+""" Dataset """
+from .dataset import * # pylint: disable=wildcard-import

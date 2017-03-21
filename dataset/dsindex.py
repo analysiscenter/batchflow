@@ -39,6 +39,9 @@ class DatasetIndex(Baseset):
         """ Return subset of index by given positions in the index """
         return self.index[pos]
 
+    def create_subset(self, index):
+        """ Return new DatasetIndex based on the subset of indices given """
+        return DatasetIndex(index)
 
     def cv_split(self, shares=0.8, shuffle=False):
         """ Split index into train, test and validation subsets
@@ -62,12 +65,12 @@ class DatasetIndex(Baseset):
 
         if valid_share > 0:
             validation_pos = order[:valid_share]
-            self.validation = DatasetIndex(self.subset_by_pos(validation_pos))
+            self.validation = self.create_subset(self.subset_by_pos(validation_pos))
         if test_share > 0:
             test_pos = order[valid_share : valid_share + test_share]
-            self.test = DatasetIndex(self.subset_by_pos(test_pos))
+            self.test = self.create_subset(self.subset_by_pos(test_pos))
         train_pos = order[valid_share + test_share:]
-        self.train = DatasetIndex(self.subset_by_pos(train_pos))
+        self.train = self.create_subset(self.subset_by_pos(train_pos))
 
 
     def next_batch(self, batch_size, shuffle=False, one_pass=False):
@@ -119,14 +122,18 @@ class DatasetIndex(Baseset):
 
     def create_batch(self, batch_indices, pos=True):
         """ Create a batch from given indices
-            if pos is False then batch_indices contains the value of indices
-            which should be included in the batch (so expected batch is just the very same batch_indices)
-            otherwise batch_indices contains positions in the index
+        if pos is False then batch_indices contains the value of indices
+        which should be included in the batch (so expected batch is just the very same batch_indices)
+        otherwise batch_indices contains positions in the index
         """
-        if pos:
-            batch = self.subset_by_pos(batch_indices)
+        if isinstance(batch_indices, DatasetIndex):
+            _batch_indices = batch_indices.index
         else:
-            batch = batch_indices
+            _batch_indices = batch_indices
+        if pos:
+            batch = self.subset_by_pos(_batch_indices)
+        else:
+            batch = _batch_indices
         return batch
 
 

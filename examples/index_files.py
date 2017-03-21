@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.append('..')
-from dataset import * # pylint: disable=wrong-import-
+from dataset import * # pylint: disable=wildcard-import
 
 
 # Create index from ./data
