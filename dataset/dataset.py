@@ -3,6 +3,7 @@
 import numpy as np
 from .base import Baseset
 from .dsindex import DatasetIndex
+from .preprocess import Preprocessing
 
 
 class Dataset(Baseset):
@@ -50,5 +51,7 @@ class Dataset(Baseset):
         batch_ix = self.index.create_batch(batch_indices, pos, *args, **kwargs)
         return self.batch_class(batch_ix, *args, **kwargs)
 
-    def workflow():
+
+    def workflow(self):
+        """ Start a data processing workflow """
         return Preprocessing(self)

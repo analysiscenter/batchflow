@@ -36,7 +36,7 @@ class JointDataset(Baseset):
 
 
     @staticmethod
-    def build_index(datasets, align, *args, **kwargs):
+    def build_index(datasets, align):
         """ Create a common index for all included datasets """
         if align:
             return DatasetIndex(np.arange(len(datasets[0])))
