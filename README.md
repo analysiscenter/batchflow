@@ -32,9 +32,9 @@ for client_batch in client_ds.gen_batch(BATCH_SIZE, shuffle=False, one_pass=True
     # for instance, load data from some source
     batch_df = client_batch.load(client_data)
 ```
-You can define a new batch class which contains action methods to process your specific data.
+You can define a new batch class which action methods process your specific data.
 
-For machine learning models you might also need to generate random batches
+For machine learning models you might also need to generate random batches with `gen_batch` or `next_batch`:
 ```python
 NUM_ITERS = 1000
 for i in range(NUM_ITERS):
@@ -45,8 +45,8 @@ for i in range(NUM_ITERS):
 
 ### DatasetIndex
 
-`DatasetIndex` stores a sequence of unique ids for your data items. In the simplest case it might be just an ordered sequence of numbers (1, 2, 3,...)
-In other cases it can be the list of domain-specific identificators (e.g. client ids, product codes, serial numbers, timestamps, etc.)
+`DatasetIndex` stores a sequence of unique ids for your data items. In the simplest case it might be just an ordered sequence of numbers (1, 2, 3,...).
+In other cases it can be the list of domain-specific identificators (e.g. client ids, product codes, serial numbers, timestamps, etc).
 When your data is stored in files it might be convenient to use `FilesIndex`
 ```python
 files_index = FilesIndex("/path/to/some/files/*.csv", dirs=False, order=False)
@@ -62,7 +62,7 @@ Here `dirs_index` will contain an ordered list of all subdirectories names.
 
 ### Processing workflow
 
-Quite often you can't just use the data itself. You need to preprocess it beforehand. And not too rarely you end up with several processinng workflows which you have to use simultaneously. That is the situation when Dataset might come in handy.
+Quite often you can't just use the data itself. You need to preprocess it beforehand. And not too rarely you end up with several processing workflows which you have to use simultaneously. That is the situation when Dataset might come in handy.
 
 ```python
 class ClientTransactions(ds.DataFrameBatch):
