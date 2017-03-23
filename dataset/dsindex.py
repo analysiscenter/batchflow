@@ -167,11 +167,15 @@ class FilesIndex(DatasetIndex):
         fi = FilesIndex('/path/to/data/archive*/patient*', dirs=True)
     """
     @staticmethod
-    def build_index(path, dirs=False, sort=False):    # pylint: disable=arguments-differ
+    def build_index(path, dirs=False, no_ext=True, sort=False):    # pylint: disable=arguments-differ
         """ Generate index from path """
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path)
-        _index = np.asarray([os.path.basename(fname) for fname in pathlist if check_fn(fname)])
+        if no_ext:
+            get_name = lambda fname: '.'.join(fname.split('.')[:-1])
+        else:
+            get_name = lambda fname: fname
+        _index = np.asarray([get_name(fname) for fname in pathlist if check_fn(fname)])
         if sort:
             _index = np.sort(_index)
         return _index
