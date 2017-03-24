@@ -10,7 +10,7 @@ from dataset import * # pylint: disable=wrong-import-
 
 
 # Create index from ./data
-findex = FilesIndex('./data/*')
+findex = FilesIndex('./data/data/*', no_ext=True)
 # print list of files
 print("Index:")
 print(findex.index)
@@ -39,11 +39,12 @@ for i in range(3):
 # Create index from ./data/dirs
 dindex = FilesIndex(os.path.join(DIR_PATH, 'dir*/*'), dirs=True, sort=True)
 # print list of subdirectories
-print("Index:")
+print("\n\nIndex:")
 print(dindex.index)
 
 print("\nSplit")
 dindex.cv_split([0.35, 0.35])
 for dsi in [dindex.train, dindex.test, dindex.validation]:
     if dsi is not None:
-        print(dsi.index)
+    	for dir in dsi.index:
+           print(dir, dindex.get_fullpath(dir))
