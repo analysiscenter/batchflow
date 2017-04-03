@@ -40,8 +40,8 @@ class DatasetIndex(Baseset):
         return self.index[pos]
 
     def create_subset(self, index):
-        """ Return new DatasetIndex based on the subset of indices given """
-        return DatasetIndex(index)
+        """ Return a new index object based on the subset of indices given """
+        return type(self)(index)
 
     def cv_split(self, shares=0.8, shuffle=False):
         """ Split index into train, test and validation subsets
@@ -150,8 +150,25 @@ class FilesIndex(DatasetIndex):
         self._paths = None
         super().__init__(*args, **kwargs)
 
-    def build_index(self, path, dirs=False, no_ext=False, sort=False):    # pylint: disable=arguments-differ
-        """ Generate index from path """
+    @classmethod
+    def from_index(cls, index, paths):
+        """Create index from another FilesIndex """
+        return cls(index=index, path=None, paths=paths)
+
+    def build_index(self, index=None, path=None, *args, **kwargs):     # pylint: disable=arguments-differ
+        """ Build index from a path string or an index given """
+        if path is None:
+            return self.build_from_index(index, *args, **kwargs)
+        else:
+            return self.build_from_path(path, *args, **kwargs)
+
+    def build_from_index(self, index, paths):
+        """ Build index from another index for indices given """
+        self._paths = dict((file, paths[file]) for file in index)
+        return index
+
+    def build_from_path(self, path, dirs=False, no_ext=False, sort=False):
+        """ Build index from a path """
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path)
         _full_index = np.asarray([self.build_key(fname, no_ext) for fname in pathlist if check_fn(fname)])
@@ -176,3 +193,7 @@ class FilesIndex(DatasetIndex):
     def get_fullpath(self, key):
         """ Return the full path name for an item in the index """
         return self._paths[key]
+
+    def create_subset(self, index):
+        """ Return a new FilesIndex based on the subset of indices given """
+        return FilesIndex.from_index(index, self._paths)
