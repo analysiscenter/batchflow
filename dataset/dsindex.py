@@ -3,30 +3,15 @@
 import os
 import glob
 import numpy as np
+from .base import Baseset
 
 
-class DatasetIndex:
+class DatasetIndex(Baseset):
     """ Stores an index for a dataset
     The index should be 1-d array-like, e.g. numpy array, pandas Series, etc.
     """
-    def __init__(self, *args, **kwargs):
-        _index = self.build_index(*args, **kwargs)
-        self.index = self.check_index(_index)
-        self.train = None
-        self.test = None
-        self.validation = None
-        self._start_index = 0
-        self._order = None
-        self._n_epochs = 0
-
-
     @staticmethod
     def build_index(index):
-        """ Return index. Child classes should generate index from the arguments given """
-        return index
-
-    @staticmethod
-    def check_index(index):
         """ Check index type and structure """
         if callable(index):
             _index = index()
@@ -45,15 +30,18 @@ class DatasetIndex:
                 raise ValueError("Index cannot be empty")
 
         if len(_index.shape) > 1:
-            raise TypeError("index should be 1-dimensional")
+            raise TypeError("Index should be 1-dimensional")
 
         return _index
 
 
-    def _subset_by_pos(self, pos):
+    def subset_by_pos(self, pos):
         """ Return subset of index by given positions in the index """
         return self.index[pos]
 
+    def create_subset(self, index):
+        """ Return new DatasetIndex based on the subset of indices given """
+        return DatasetIndex(index)
 
     def cv_split(self, shares=0.8, shuffle=False):
         """ Split index into train, test and validation subsets
@@ -68,51 +56,26 @@ class DatasetIndex:
            # split into train / test / validation in 50/30/20 ratio
            di.cv_split([0.5, 0.3, 0.2])
         """
-        _shares = np.array(shares).ravel() # pylint: disable=no-member
-
-        if _shares.shape[0] > 3:
-            raise ValueError("shares must have no more than 3 elements")
-        if _shares.sum() > 1:
-            raise ValueError("shares must sum to 1")
-
-        if _shares.shape[0] == 3:
-            if not np.allclose(1. - _shares.sum(), 0.):
-                raise ValueError("shares must sum to 1")
-            train_share, test_share, valid_share = _shares
-        elif _shares.shape[0] == 2:
-            train_share, test_share, valid_share = _shares[0], _shares[1], 1 - _shares.sum()
-        else:
-            train_share, test_share, valid_share = _shares[0], 1 - _shares[0], 0.
-
-        n_items = len(self.index)
-        train_share, test_share, valid_share = \
-            np.round(np.array([train_share, test_share, valid_share]) * n_items).astype('int')
-        train_share = n_items - test_share - valid_share
+        _, test_share, valid_share = self.calc_cv_split(shares)
 
         # TODO: make a view not copy if not shuffled
-        order = np.arange(n_items)
+        order = np.arange(len(self))
         if shuffle:
             np.random.shuffle(order)
 
         if valid_share > 0:
             validation_pos = order[:valid_share]
-            self.validation = DatasetIndex(self._subset_by_pos(validation_pos))
+            self.validation = self.create_subset(self.subset_by_pos(validation_pos))
         if test_share > 0:
             test_pos = order[valid_share : valid_share + test_share]
-            self.test = DatasetIndex(self._subset_by_pos(test_pos))
+            self.test = self.create_subset(self.subset_by_pos(test_pos))
         train_pos = order[valid_share + test_share:]
-        self.train = DatasetIndex(self._subset_by_pos(train_pos))
-
-
-    @property
-    def is_splitted(self):
-        """ True if dataset was splitted into train / test / validation sub-datasets """
-        return self.train is not None
+        self.train = self.create_subset(self.subset_by_pos(train_pos))
 
 
     def next_batch(self, batch_size, shuffle=False, one_pass=False):
         """ Return next batch """
-        num_items = len(self.index)
+        num_items = len(self)
 
         # TODO: make a view not copy whenever possible
         if self._order is None:
@@ -139,14 +102,14 @@ class DatasetIndex:
             batch_items = np.concatenate((rest_items, new_items))
 
         if one_pass and rest_items is not None:
-            return self.index[rest_items]
+            return self.create_batch(rest_items, pos=True)
         else:
             self._start_index += rest_of_batch
-            return self.index[batch_items]
+            return self.create_batch(batch_items, pos=True)
 
 
     def gen_batch(self, batch_size, shuffle=False, one_pass=False):
-        """ Generate one batch """
+        """ Generate batches """
         self._start_index = 0
         self._order = None
         _n_epochs = self._n_epochs
@@ -155,6 +118,23 @@ class DatasetIndex:
                 raise StopIteration()
             else:
                 yield self.next_batch(batch_size, shuffle, one_pass)
+
+
+    def create_batch(self, batch_indices, pos=True):
+        """ Create a batch from given indices
+        if pos is False then batch_indices contains the value of indices
+        which should be included in the batch (so expected batch is just the very same batch_indices)
+        otherwise batch_indices contains positions in the index
+        """
+        if isinstance(batch_indices, DatasetIndex):
+            _batch_indices = batch_indices.index
+        else:
+            _batch_indices = batch_indices
+        if pos:
+            batch = self.subset_by_pos(_batch_indices)
+        else:
+            batch = _batch_indices
+        return batch
 
 
 class FilesIndex(DatasetIndex):

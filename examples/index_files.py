@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 
 sys.path.append('..')
-from dataset import * # pylint: disable=wrong-import-
+from dataset import * # pylint: disable=wildcard-import
 
 
 # Create index from ./data
 findex = FilesIndex('./data/*')
 # print list of files
-print("Index:")
+print("File Index:")
 print(findex.index)
 
 print("\nSplit")
@@ -36,10 +36,11 @@ for i in range(3):
     for j in range(5):
         os.makedirs(os.path.join(DIR_PATH, 'dir' + str(i), str(i*5 + j)))
 
+
 # Create index from ./data/dirs
 dindex = FilesIndex(os.path.join(DIR_PATH, 'dir*/*'), dirs=True, sort=True)
 # print list of subdirectories
-print("Index:")
+print("\n\n\nDir Index:")
 print(dindex.index)
 
 print("\nSplit")

@@ -5,7 +5,7 @@ def action(method):
     """ Decorator for action methods in Batch classes """
     # TODO: decorator params: parallelization (e.g. threads, processes, async/await, greenlets,...)
     # use __action for class-specific params
-    method._action = True # pylint: disable=protected-access
+    method.action = True
     return method
 
 
@@ -22,31 +22,61 @@ class Preprocessing:
         if hasattr(self.dataset.batch_class, name):
             attr_name = getattr(self.dataset.batch_class, name)
             if callable(attr_name):
-                if hasattr(attr_name, "_action"):
+                if hasattr(attr_name, "action"):
                     self.action_list.append({'name': name})
                 else:
                     raise ValueError("Method %s is not marked with @action decorator" % name)
         else:
             raise AttributeError("Method %s has not been found in Preprocessing and Batch classes" % name)
-        return self.append_action
+        return self._append_action
 
 
-    def append_action(self, *args, **kwargs):
+    @property
+    def index(self):
+        """ Return index of the source dataset """
+        return self.dataset.index
+
+    def __len__(self):
+        """ Return index length """
+        return len(self.index)
+
+
+    def _append_action(self, *args, **kwargs):
         """ Add new action to the log of future actions """
         self.action_list[-1].update({'args': args, 'kwargs': kwargs})
         return self
 
 
     def _exec_all_actions(self, batch):
+        batch_res = self
+        joined_sets = None
         for _action in self.action_list:
-            batch_action = getattr(batch, _action['name'])
-            batch = batch_action(*_action['args'], **_action['kwargs'])
-        return batch
+            if _action['name'] == 'join':
+                joined_sets = _action['datasets']
+            else:
+                batch_action = getattr(batch, _action['name'])
+                if joined_sets is not None:
+                    joined_data = []
+                    if not isinstance(joined_sets, (list, tuple)):
+                        joined_sets = [joined_sets]
+                    for jset in joined_sets:
+                        joined_data.append(jset.create_batch(batch.index))
+                    _action_args = (joined_data,) + _action['args']
+                    joined_sets = None
+                else:
+                    _action_args = _action['args']
+                batch_res = batch_action(*_action_args, **_action['kwargs'])
+        return batch_res
 
+    def join(self, datasets):
+        """ Join other datasets """
+        self.action_list.append({'name': 'join', 'datasets': datasets})
+        return self
 
     def _run_seq(self, gen_batch):
         for batch in gen_batch:
-            self._exec_all_actions(batch)
+            batch_res = self._exec_all_actions(batch)
+        return batch_res
 
 
     def run(self, batch_size, shuffle=False, *args, **kwargs):
@@ -59,10 +89,10 @@ class Preprocessing:
 
 
     def create_batch(self, batch_indices, *args, **kwargs):
-        """ Create a new batch by give indices and execute all previous lazy actions """
+        """ Create a new batch by given indices and execute all previous lazy actions """
         batch = self.dataset.create_batch(batch_indices, *args, **kwargs)
-        batch = self._exec_all_actions(batch)
-        return batch
+        batch_res = self._exec_all_actions(batch)
+        return batch_res
 
 
     def next_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
@@ -71,5 +101,5 @@ class Preprocessing:
             self.batch_generator = self.dataset.gen_batch(batch_size, shuffle=shuffle,
                                                           one_pass=one_pass, *args, **kwargs)
         batch = next(self.batch_generator)
-        batch = self._exec_all_actions(batch)
-        return batch
+        batch_res = self._exec_all_actions(batch)
+        return batch_res

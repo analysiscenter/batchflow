@@ -1,9 +1,13 @@
 [MASTER]
 extension-pkg-whitelist=numpy
 max-line-length=120
+max-attributes=20
 
 [TYPECHECK]
 ignored-modules=numpy
+
+[MESSAGE CONTROL]
+#disable=locally-disabled
 
 [MISCELLANEOUS]
 notes=
