@@ -146,12 +146,33 @@ class FilesIndex(DatasetIndex):
         Create unsorted index of directories through all subdirectories:
         fi = FilesIndex('/path/to/data/archive*/patient*', dirs=True)
     """
-    @staticmethod
-    def build_index(path, dirs=False, sort=False):    # pylint: disable=arguments-differ
+    def __init__(self, *args, **kwargs):
+        self._paths = None
+        super().__init__(*args, **kwargs)
+
+    def build_index(self, path, dirs=False, no_ext=False, sort=False):    # pylint: disable=arguments-differ
         """ Generate index from path """
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path)
-        _index = np.asarray([os.path.basename(fname) for fname in pathlist if check_fn(fname)])
+        _full_index = np.asarray([self.build_key(fname, no_ext) for fname in pathlist if check_fn(fname)])
         if sort:
-            _index = np.sort(_index)
+            _order = np.argsort(_full_index[:, 0])
+        else:
+            _order = slice(None, None)
+        _index = _full_index[_order, 0]
+        _paths = _full_index[_order, 1]
+        self._paths = dict(zip(_index, _paths))
         return _index
+
+    @staticmethod
+    def build_key(fullpathname, no_ext=False):
+        """ Create index item from full path name """
+        if no_ext:
+            key_name = '.'.join(os.path.basename(fullpathname).split('.')[:-1])
+        else:
+            key_name = os.path.basename(fullpathname)
+        return key_name, fullpathname
+
+    def get_fullpath(self, key):
+        """ Return the full path name for an item in the index """
+        return self._paths[key]

@@ -49,9 +49,9 @@ for i in range(NUM_ITERS):
 In other cases it can be the list of domain-specific identificators (e.g. client ids, product codes, serial numbers, timestamps, etc).
 When your data is stored in files it might be convenient to use `FilesIndex`
 ```python
-files_index = FilesIndex("/path/to/some/files/*.csv", dirs=False, order=False)
+files_index = FilesIndex("/path/to/some/files/*.csv", dirs=False, no_ext=True, order=False)
 ```
-Thus `files_index` will contain the list of filenames.
+Thus `files_index` will contain the list of filenames without extensions.
 
 Sometimes you might need to build an index from the list of subdirectories
 ```python
