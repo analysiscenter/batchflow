@@ -73,22 +73,22 @@ K = 5
 
 print("\nGenerating batches")
 for b1, b2 in jds.gen_batch(K, one_pass=True):
-	print(b1.index)
-	print(b2.index)
+	print(b1.indices)
+	print(b2.indices)
 
 
-print("\n\nSplit")
+print("\nSplit")
 jds.cv_split([0.5, 0.35])
 for dsi in [jds.train, jds.test, jds.validation]:
     if dsi is not None:
         print("Joint index:", dsi.index.index)
         b1, b2 = jds.create_batch(dsi.index.index)
-        print("DS1:", b1.index)
-        print("DS2:", b2.index)
+        print("DS1:", b1.indices)
+        print("DS2:", b2.indices)
         print()
 
-print("\n\nTrain batches")
+print("\nTrain batches")
 for b1, b2 in jds.train.gen_batch(3, shuffle=False, one_pass=True):
-    print("DS1:", b1.index)
-    print("DS2:", b2.index)
+    print("DS1:", b1.indices)
+    print("DS2:", b2.indices)
     print()
