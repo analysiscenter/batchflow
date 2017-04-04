@@ -7,13 +7,15 @@ import numpy as np
 import pandas as pd
 import feather
 import dask.dataframe as dd
+from .dsindex import DatasetIndex
 from .preprocess import action
 
 
 class Batch:
     """ Base Batch class """
     def __init__(self, index):
-        self.index = index
+        self._index = index
+        self._index_type = isinstance(index, DatasetIndex)
         self.data = None
 
     @classmethod
@@ -21,6 +23,14 @@ class Batch:
         """ Create batch from given dataset """
         # this is equiv to self.data = data[:]
         return cls(slice(None, None)).load(data)
+
+    @property
+    def index(self):
+        """ Return index """
+        if self._index_type:
+            return self._index.index
+        else:
+            return self._index
 
     @staticmethod
     def make_filename():

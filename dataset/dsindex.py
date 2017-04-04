@@ -10,6 +10,11 @@ class DatasetIndex(Baseset):
     """ Stores an index for a dataset
     The index should be 1-d array-like, e.g. numpy array, pandas Series, etc.
     """
+    @classmethod
+    def from_index(cls, *args, **kwargs):
+        """Create index from another index """
+        return cls(*args, **kwargs)
+
     @staticmethod
     def build_index(index):
         """ Check index type and structure """
@@ -120,7 +125,7 @@ class DatasetIndex(Baseset):
                 yield self.next_batch(batch_size, shuffle, one_pass)
 
 
-    def create_batch(self, batch_indices, pos=True):
+    def create_batch(self, batch_indices, pos=True, as_array=False):   # pylint: disable=arguments-differ
         """ Create a batch from given indices
         if pos is False then batch_indices contains the value of indices
         which should be included in the batch (so expected batch is just the very same batch_indices)
@@ -134,6 +139,8 @@ class DatasetIndex(Baseset):
             batch = self.subset_by_pos(_batch_indices)
         else:
             batch = _batch_indices
+        if not as_array:
+            batch = self.create_subset(batch)
         return batch
 
 
@@ -151,7 +158,7 @@ class FilesIndex(DatasetIndex):
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def from_index(cls, index, paths):
+    def from_index(cls, index, paths):   # pylint: disable=arguments-differ
         """Create index from another FilesIndex """
         return cls(index=index, path=None, paths=paths)
 
