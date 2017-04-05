@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import feather
 import dask.dataframe as dd
+from .dsindex import DatasetIndex
 from .preprocess import action
 
 
@@ -21,6 +22,14 @@ class Batch:
         """ Create batch from given dataset """
         # this is equiv to self.data = data[:]
         return cls(slice(None, None)).load(data)
+
+    @property
+    def indices(self):
+        """ Return index """
+        if isinstance(self.index, DatasetIndex):
+            return self.index.index
+        else:
+            return self.index
 
     @staticmethod
     def make_filename():
@@ -73,7 +82,7 @@ class ArrayBatch(Batch):
         # But put into this batch only part of it (defined by index)
         try:
             # this creates a copy of the source data (perhaps view could be more efficient)
-            self.data = _data[self.index]
+            self.data = _data[self.indices]
         except TypeError:
             raise TypeError('Source is expected to be array-like')
 
@@ -88,7 +97,7 @@ class ArrayBatch(Batch):
 
         if fmt is None:
             # think carefully when dumping to an array
-            dst[self.index] = self.data
+            dst[self.indices] = self.data
         elif fmt == 'blosc':
             packed_array = blosc.pack_array(self.data)
             self._write_file(fullname, 'b', packed_array)
@@ -118,10 +127,10 @@ class DataFrameBatch(Batch):
 
         # But put into this batch only part of it (defined by index)
         if isinstance(dfr, pd.DataFrame):
-            self.data = dfr.loc[self.index]
+            self.data = dfr.loc[self.indices]
         elif isinstance(dfr, dd.DataFrame):
             # dask.DataFrame.loc supports advanced indexing only with lists
-            self.data = dfr.loc[list(self.index)].compute()
+            self.data = dfr.loc[list(self.indices)].compute()
         else:
             raise TypeError("Unknown DataFrame. DataFrameBatch supports only pandas and dask.")
 

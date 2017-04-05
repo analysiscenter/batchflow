@@ -25,7 +25,7 @@ print("\nprint batches:")
 for dsi in [findex.train, findex.test, findex.validation]:
     print("---")
     for b in dsi.gen_batch(2, one_pass=True):
-        print(b)
+        print(b.index)
 
 
 # remove directory with subdirectories
