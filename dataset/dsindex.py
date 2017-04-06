@@ -44,6 +44,7 @@ class DatasetIndex(Baseset):
         return _index
 
     def build_pos(self):
+        """ Create a dictionary with positions in the index """
         pos_dict = dict()
         pos = 0
         for item in self.indices:
