@@ -34,9 +34,9 @@ class Dataset(Baseset):
 
     @staticmethod
     def _is_same_index(index1, index2):
-        return isinstance(index1, type(index2)) and \
-               index1.index.shape == index2.index.shape and \
-               np.all(index1.index == index2.index)
+        return (isinstance(index1, type(index2)) or isinstance(index2, type(index1))) and \
+               index1.indices.shape == index2.indices.shape and \
+               np.all(index1.indices == index2.indices)
 
 
     def create_subset(self, index):
