@@ -27,8 +27,16 @@ class Baseset:
         """ Return the index """
         return self._index
 
+    @property
+    def indices(self):
+        """ Return an array-like with the indices """
+        if isinstance(self.index, Baseset):
+            return self.index.indices
+        else:
+            return self.index
+
     def __len__(self):
-        return len(self.index)
+        return len(self.indices)
 
     @property
     def is_splitted(self):

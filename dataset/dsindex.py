@@ -10,6 +10,15 @@ class DatasetIndex(Baseset):
     """ Stores an index for a dataset
     The index should be 1-d array-like, e.g. numpy array, pandas Series, etc.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._pos = self.build_pos()
+
+    @classmethod
+    def from_index(cls, *args, **kwargs):
+        """Create index from another index """
+        return cls(*args, **kwargs)
+
     @staticmethod
     def build_index(index):
         """ Check index type and structure """
@@ -34,14 +43,26 @@ class DatasetIndex(Baseset):
 
         return _index
 
+    def build_pos(self):
+        """ Create a dictionary with positions in the index """
+        pos_dict = dict()
+        pos = 0
+        for item in self.indices:
+            pos_dict.update({item: pos})
+            pos += 1
+        return pos_dict
+
+    def get_pos(self, index):
+        """ Return position of an item in the index """
+        return self._pos[index]
 
     def subset_by_pos(self, pos):
         """ Return subset of index by given positions in the index """
         return self.index[pos]
 
     def create_subset(self, index):
-        """ Return new DatasetIndex based on the subset of indices given """
-        return DatasetIndex(index)
+        """ Return a new index object based on the subset of indices given """
+        return type(self)(index)
 
     def cv_split(self, shares=0.8, shuffle=False):
         """ Split index into train, test and validation subsets
@@ -120,7 +141,7 @@ class DatasetIndex(Baseset):
                 yield self.next_batch(batch_size, shuffle, one_pass)
 
 
-    def create_batch(self, batch_indices, pos=True):
+    def create_batch(self, batch_indices, pos=True, as_array=False):   # pylint: disable=arguments-differ
         """ Create a batch from given indices
         if pos is False then batch_indices contains the value of indices
         which should be included in the batch (so expected batch is just the very same batch_indices)
@@ -134,6 +155,8 @@ class DatasetIndex(Baseset):
             batch = self.subset_by_pos(_batch_indices)
         else:
             batch = _batch_indices
+        if not as_array:
+            batch = self.create_subset(batch)
         return batch
 
 
@@ -150,8 +173,25 @@ class FilesIndex(DatasetIndex):
         self._paths = None
         super().__init__(*args, **kwargs)
 
-    def build_index(self, path, dirs=False, no_ext=False, sort=False):    # pylint: disable=arguments-differ
-        """ Generate index from path """
+    @classmethod
+    def from_index(cls, index, paths):   # pylint: disable=arguments-differ
+        """Create index from another FilesIndex """
+        return cls(index=index, path=None, paths=paths)
+
+    def build_index(self, index=None, path=None, *args, **kwargs):     # pylint: disable=arguments-differ
+        """ Build index from a path string or an index given """
+        if path is None:
+            return self.build_from_index(index, *args, **kwargs)
+        else:
+            return self.build_from_path(path, *args, **kwargs)
+
+    def build_from_index(self, index, paths):
+        """ Build index from another index for indices given """
+        self._paths = dict((file, paths[file]) for file in index)
+        return index
+
+    def build_from_path(self, path, dirs=False, no_ext=False, sort=False):
+        """ Build index from a path """
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path)
         _full_index = np.asarray([self.build_key(fname, no_ext) for fname in pathlist if check_fn(fname)])
@@ -176,3 +216,7 @@ class FilesIndex(DatasetIndex):
     def get_fullpath(self, key):
         """ Return the full path name for an item in the index """
         return self._paths[key]
+
+    def create_subset(self, index):
+        """ Return a new FilesIndex based on the subset of indices given """
+        return FilesIndex.from_index(index, self._paths)
