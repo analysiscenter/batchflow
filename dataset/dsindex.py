@@ -10,6 +10,10 @@ class DatasetIndex(Baseset):
     """ Stores an index for a dataset
     The index should be 1-d array-like, e.g. numpy array, pandas Series, etc.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._pos = self.build_pos()
+
     @classmethod
     def from_index(cls, *args, **kwargs):
         """Create index from another index """
@@ -39,6 +43,16 @@ class DatasetIndex(Baseset):
 
         return _index
 
+    def build_pos(self):
+        pos_dict = dict()
+        pos = 0
+        for item in self.indices:
+            pos_dict.update({item: pos})
+        return pos_dict
+
+    def get_pos(self, index):
+        """ Return position of an item in the index """
+        return self._pos[index]
 
     def subset_by_pos(self, pos):
         """ Return subset of index by given positions in the index """
