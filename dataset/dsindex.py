@@ -49,6 +49,7 @@ class DatasetIndex(Baseset):
         pos = 0
         for item in self.indices:
             pos_dict.update({item: pos})
+            pos += 1
         return pos_dict
 
     def get_pos(self, index):
