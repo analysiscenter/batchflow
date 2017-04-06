@@ -25,7 +25,7 @@ class Batch:
 
     @property
     def indices(self):
-        """ Return index """
+        """ Return an array-like with the indices """
         if isinstance(self.index, DatasetIndex):
             return self.index.index
         else:
