@@ -9,4 +9,4 @@ from .dsindex import DatasetIndex, FilesIndex
 from .preprocess import Preprocessing, action
 
 if sys.version_info < (3, 4):
-	raise ImportError("Dataset module requires Python 3.4 or higher")
+    raise ImportError("Dataset module requires Python 3.4 or higher")
