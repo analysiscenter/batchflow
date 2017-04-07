@@ -5,8 +5,16 @@ from binascii import hexlify
 import blosc
 import numpy as np
 import pandas as pd
-import feather
-import dask.dataframe as dd
+
+try:
+    import feather
+except ImportError:
+    pass
+try:
+    import dask.dataframe as dd
+except ImportError:
+    pass
+
 from .dsindex import DatasetIndex
 from .preprocess import action
 
