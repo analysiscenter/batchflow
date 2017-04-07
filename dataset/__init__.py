@@ -1,4 +1,7 @@
 """ Dataset module implements Dataset, DatasetIndex, Preprocess and Batch classes"""
+import sys
+if sys.version_info < (3, 4):
+	raise ImportError("Dataset module requires Python 3.4 or higher")
 
 from .base import Baseset
 from .batch import Batch, ArrayBatch, DataFrameBatch
