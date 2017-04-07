@@ -173,11 +173,6 @@ class FilesIndex(DatasetIndex):
         self._paths = None
         super().__init__(*args, **kwargs)
 
-    @classmethod
-    def from_index(cls, index, paths):   # pylint: disable=arguments-differ
-        """Create index from another FilesIndex """
-        return cls(index=index, path=None, paths=paths)
-
     def build_index(self, index=None, path=None, *args, **kwargs):     # pylint: disable=arguments-differ
         """ Build index from a path string or an index given """
         if path is None:
@@ -187,7 +182,10 @@ class FilesIndex(DatasetIndex):
 
     def build_from_index(self, index, paths):
         """ Build index from another index for indices given """
-        self._paths = dict((file, paths[file]) for file in index)
+        if isinstance(paths, dict):
+            self._paths = dict((file, paths[file]) for file in index)
+        else:
+            self._paths = dict((file, paths[pos]) for pos, file in np.ndenumerate(index))
         return index
 
     def build_from_path(self, path, dirs=False, no_ext=False, sort=False):
@@ -238,4 +236,4 @@ class FilesIndex(DatasetIndex):
 
     def create_subset(self, index):
         """ Return a new FilesIndex based on the subset of indices given """
-        return FilesIndex.from_index(index, self._paths)
+        return FilesIndex.from_index(index=index, paths=self._paths)
