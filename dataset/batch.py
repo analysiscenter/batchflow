@@ -2,10 +2,16 @@
 
 import os
 from binascii import hexlify
-import blosc
-import numpy as np
-import pandas as pd
 
+try:
+    import blosc
+except ImportError:
+    pass
+import numpy as np
+try:
+    import pandas as pd
+except ImportError:
+    pass
 try:
     import feather
 except ImportError:
