@@ -22,7 +22,7 @@ except ImportError:
     pass
 
 from .dsindex import DatasetIndex
-from .preprocess import action
+from .pipeline import action
 
 
 class Batch:

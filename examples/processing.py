@@ -68,7 +68,7 @@ BATCH_SIZE = 3
 
 # Load data and take some actions
 print("\nFull preprocessing")
-fp_data = (Preprocessing(ds_data)
+fp_data = (ds_data.pipeline()
             .load(data)
             .action1()
             .action2())
@@ -79,7 +79,7 @@ fp_data.run(BATCH_SIZE, shuffle=False)
 
 print("\nLoad and preprocess target")
 # Define target preprocessing procedure and run it
-fp_target = (Preprocessing(ds_target)
+fp_target = (ds_target.pipeline()
                 .load(target)
                 .add(100)
                 .print()
@@ -90,16 +90,16 @@ print("\nOriginal target left unchanged")
 print(target)
 
 
-fp_t2 = (Preprocessing(ds_target)
+fp_t2 = (ds_target.pipeline()
                 .load(target)
-                .add(100)
+                .add(1000)
                 .print(text="   T2"))
 
-# Now define some processing which will run during training
-lazy_pp_data = (Preprocessing(ds_data)
+# Now define some processing pipeline which will run during training
+lazy_pp_data = (ds_data.pipeline()
                 .load(data)
                 .action1())
-lazy_pp_target = (Preprocessing(ds_target)
+lazy_pp_target = (ds_target.pipeline()
                     .load(target)
                     .add(5)
                     .add(1)
@@ -121,4 +121,4 @@ for i in range(5):
 
 ds_data.cv_split([0.5, 0.3])
 print("\nTrain full preprocessing")
-pp = Preprocessing(ds_data.train).load(data).action1().action2().dump("./data", "csv").run(BATCH_SIZE, shuffle=False)
+pp = ds_data.train.pipeline().load(data).action1().action2().dump("./data", "csv").run(BATCH_SIZE, shuffle=False)

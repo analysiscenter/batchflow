@@ -1,4 +1,4 @@
-""" Preprocessing """
+""" Pipeline classes and decorators """
 
 
 def action(method):
@@ -9,8 +9,8 @@ def action(method):
     return method
 
 
-class Preprocessing:
-    """ Preprocessing """
+class Pipeline:
+    """ Pipeline """
     def __init__(self, dataset):
         self.dataset = dataset
         self.action_list = []
