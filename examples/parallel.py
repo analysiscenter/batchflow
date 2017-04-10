@@ -1,6 +1,7 @@
 # pylint: skip-file
 import os
 import sys
+import asyncio
 import numpy as np
 import pandas as pd
 
@@ -20,17 +21,23 @@ class MyDataFrameBatch(DataFrameBatch):
         print("Parallel:")
         return np.arange(3).reshape(3, -1).tolist()
 
-    def action1_post(self, results, not_done):
-        print("Post:")
-        for item in results:
-            print("  ", item)
+    def action1_post(self, results, not_done=None):
+        print("Post:", results)
         return self
 
     @action
     @within_parallel(init="action1_init", post="action1_post")
     def action1(self, i):
         print("   action 1", i)
-        return self
+        return i
+
+    @action
+    @within_parallel(init="action1_init", post="action1_post", target='async')
+    async def action2(self, i):
+        print("   action 2", i, "started")
+        await asyncio.sleep(1)
+        print("   action 2", i, "ended")
+        return i
 
     @action
     def add(self, inc):
@@ -56,7 +63,7 @@ ds_data, data = pd_data()
 res = (ds_data.pipeline()
         .load(data)
         .print("\nStart batch")
-        .action1()
+        .action2()
         .print("End batch"))
 
 res.run(4, shuffle=False)

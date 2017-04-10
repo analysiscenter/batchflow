@@ -1,5 +1,7 @@
 """ Pipeline decorators """
 import concurrent.futures as cf
+import asyncio
+
 
 def action(method):
     """ Decorator for action methods in Batch classes """
@@ -60,7 +62,7 @@ def within_parallel(init, post=None, target='threads'):
                     else:
                         one_ft = executor.submit(method, self, *margs, **mkwargs)
                     futures.append(one_ft)
-                timeout = kwargs.get('timeout', 1000)
+                timeout = kwargs.get('timeout', None)
                 done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
             if post_fn is None:
@@ -69,6 +71,24 @@ def within_parallel(init, post=None, target='threads'):
                 done_results = [done_f.result() for done_f in done]
                 return post_fn(done_results, not_done)
 
+        def wrap_with_async(self, args, kwargs):
+            """ Run a method in parallel with async / await """
+            loop = kwargs.get('loop', asyncio.get_event_loop())
+            init_fn, post_fn = _check_functions(self)
+
+            futures = []
+            for arg in init_fn(self, *args, **kwargs):
+                margs, mkwargs = _make_args(arg)
+                futures.append(method(self, *margs, **mkwargs))
+
+            timeout = kwargs.get('timeout', None)
+            #done, not_done = yield from asyncio.wait(futures, loop=loop, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
+            done = loop.run_until_complete(asyncio.gather(*futures, loop=loop))
+            if post_fn is None:
+                return self
+            else:
+                return post_fn(done)
+
 
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method in a required parallel engine """
@@ -76,7 +96,8 @@ def within_parallel(init, post=None, target='threads'):
                 return wrap_with_threads(self, args, kwargs)
             elif target == 'nogil':
                 return wrap_with_threads(self, args, kwargs, nogil=True)
-
+            elif target == 'async':
+                return wrap_with_async(self, args, kwargs)
             raise ValueError('Wrong parallelization target:', target)
         return wrapped_method
     return within_parellel_decorator
