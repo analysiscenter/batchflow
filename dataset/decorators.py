@@ -81,8 +81,6 @@ def within_parallel(init, post=None, target='threads'):
                 margs, mkwargs = _make_args(arg)
                 futures.append(method(self, *margs, **mkwargs))
 
-            timeout = kwargs.get('timeout', None)
-            #done, not_done = yield from asyncio.wait(futures, loop=loop, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
             done = loop.run_until_complete(asyncio.gather(*futures, loop=loop))
             if post_fn is None:
                 return self
