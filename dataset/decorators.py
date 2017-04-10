@@ -36,7 +36,7 @@ def within_parallel(init, post=None, target='threads'):
             """ Make args, kwargs tuple """
             if isinstance(args, tuple) and len(args) == 2:
                 margs, mkwargs = args
-            elif isinstance(arg, dict):
+            elif isinstance(args, dict):
                 margs = []
                 mkwargs = args
             else:
