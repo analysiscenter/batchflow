@@ -15,7 +15,7 @@ def within_parallel(init, post=None, target='threads'):
 
     def within_parellel_decorator(method):
         """ Return a decorator which run a method in parallel """
-        def check_functions(self):
+        def _check_functions(self):
             """ Check dcorator's `init` and `post` parameters """
             if init is None:
                 raise ValueError("init cannot be None")
@@ -32,31 +32,33 @@ def within_parallel(init, post=None, target='threads'):
                 post_fn = None
             return init_fn, post_fn
 
-        def make_args(arg):
-            if isinstance(arg, tuple) and len(arg) == 2:
-                margs, mkwargs = arg
+        def _make_args(args):
+            """ Make args, kwargs tuple """
+            if isinstance(args, tuple) and len(args) == 2:
+                margs, mkwargs = args
             elif isinstance(arg, dict):
                 margs = []
-                mkwargs = arg
+                mkwargs = args
             else:
                 mkwargs = dict()
-                margs = arg
+                margs = args
             return margs, mkwargs
 
         def wrap_with_threads(self, args, kwargs, nogil=False):
             """ Run a method in parallel """
-            init_fn, post_fn = check_functions(self)
+            init_fn, post_fn = _check_functions(self)
 
             n_workers = kwargs.get('n_workers', 1)
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
+                if nogil:
+                    nogil_fn = method(self)
                 for arg in init_fn(self, *args, **kwargs):
-                    margs, mkwargs = make_args(arg)
+                    margs, mkwargs = _make_args(arg)
                     if nogil:
-                        nogil_fn = method(self)
-                        one_ft = executor.submit(nogil_fn, *margs, **mkwargs)                        
+                        one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
                     else:
-                        one_ft = executor.submit(method, self, *margs, **mkwargs)                        
+                        one_ft = executor.submit(method, self, *margs, **mkwargs)
                     futures.append(one_ft)
                 timeout = kwargs.get('timeout', 1000)
                 done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
