@@ -40,13 +40,24 @@ for i in range(3):
 # Create index from ./data/dirs
 dindex = FilesIndex(path=os.path.join(DIR_PATH, 'dir*/*'), dirs=True, sort=True)
 # print list of subdirectories
-print("\n\n\nDir Index:")
+print("\n\nDir Index:")
 print(dindex.index)
 
 print("\nSplit")
 dindex.cv_split([0.35, 0.35])
 for dsi in [dindex.train, dindex.test, dindex.validation]:
     if dsi is not None:
-    	for dir in dsi.index:
+    	for dir in dsi.indices:
            print(dir, dindex.get_fullpath(dir))
     print("---")
+
+
+# Create index from several dirs in ./data/dirs
+print("\nSeveral dirs")
+paths = []
+for i in [0, 2]:
+    paths.append(os.path.join(DIR_PATH, 'dir' + str(i), '*'))
+print(paths)
+dindex = FilesIndex(path=paths, dirs=True, sort=True)
+for dir in dindex.indices:
+    print(dir, dindex.get_fullpath(dir))
