@@ -75,10 +75,10 @@ def inbatch_parallel(init, post=None, target='threads'):
                 timeout = kwargs.get('timeout', None)
                 done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
+            done_results = [done_f.result() for done_f in done]
             if post_fn is None:
                 return self
             else:
-                done_results = [done_f.result() for done_f in done]
                 return post_fn(done_results, not_done)
 
         def wrap_with_async(self, args, kwargs):
