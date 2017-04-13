@@ -26,13 +26,13 @@ class MyDataFrameBatch(DataFrameBatch):
         return self
 
     @action
-    @within_parallel(init="action1_init", post="action1_post")
+    @inbatch_parallel(init="action1_init") #, post="action1_post")
     def action1(self, i):
-        print("   action 1", i)
+        print("   action 1", i)        
         return i
 
     @action
-    @within_parallel(init="action1_init", post="action1_post", target='async')
+    @inbatch_parallel(init="action1_init", post="action1_post", target='async')
     async def action2(self, i):
         print("   action 2", i, "started")
         await asyncio.sleep(1)
@@ -63,7 +63,7 @@ ds_data, data = pd_data()
 res = (ds_data.pipeline()
         .load(data)
         .print("\nStart batch")
-        .action2()
+        .action1()
         .print("End batch"))
 
 res.run(4, shuffle=False)

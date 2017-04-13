@@ -1,6 +1,16 @@
 """ Pipeline decorators """
+import os
 import concurrent.futures as cf
 import asyncio
+
+
+def _cpu_count():
+    cpu_count = 0
+    try:
+        cpu_count = len(os.sched_getaffinity(0))
+    except AttributeError:
+        cpu_count = os.cpu_count()
+    return cpu_count
 
 
 def action(method):
@@ -10,12 +20,12 @@ def action(method):
     return method
 
 
-def within_parallel(init, post=None, target='threads'):
-    """ Make within-batch parallel decorator """
+def inbatch_parallel(init, post=None, target='threads'):
+    """ Make in-batch parallel decorator """
     if target not in ['nogil', 'threads', 'mpc', 'async', 'dd']:
         raise ValueError("target should one of 'nogil', threads', 'mpc', 'async', 'dd'")
 
-    def within_parellel_decorator(method):
+    def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
         def _check_functions(self):
             """ Check dcorator's `init` and `post` parameters """
@@ -50,7 +60,7 @@ def within_parallel(init, post=None, target='threads'):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.get('n_workers', 1)
+            n_workers = kwargs.get('n_workers', _cpu_count())
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 if nogil:
@@ -98,4 +108,4 @@ def within_parallel(init, post=None, target='threads'):
                 return wrap_with_async(self, args, kwargs)
             raise ValueError('Wrong parallelization target:', target)
         return wrapped_method
-    return within_parellel_decorator
+    return inbatch_parallel_decorator
