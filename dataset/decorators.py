@@ -52,8 +52,9 @@ def inbatch_parallel(init, post=None, target='threads'):
                 margs = []
                 mkwargs = args
             else:
-                mkwargs = dict()
                 margs = args
+                mkwargs = dict()
+            margs = margs if isinstance(margs, list) else [margs]
             return margs, mkwargs
 
         def wrap_with_threads(self, args, kwargs, nogil=False):

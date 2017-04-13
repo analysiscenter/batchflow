@@ -12,10 +12,10 @@ from dataset import * # pylint: disable=wrong-import-
 
 @njit(nogil=True)
 def numba_fn(k):
-    print("Start:", k)
-    for i in range(k * 10000):
+    print("   action numba", k, "started")
+    for i in range(k * 3000):
         x = np.random.normal(0, 1, size=10000)
-    print("End:", k)
+    print("   action numba", k, "ended")
     return x
 
 
@@ -28,31 +28,33 @@ class MyDataFrameBatch(DataFrameBatch):
         print(self.data)
         return self
 
-    def action1_init(self, *args, **kwargs):
-        print("Parallel:")
-        return np.arange(3).reshape(3, -1).tolist()
+    def parallel_init(self, *args, **kwargs):
+        r = self.indices.tolist()
+        print("Parallel:", r)
+        return r
 
-    def action1_post(self, results, not_done=None):
+    def parallel_post(self, results, not_done=None):
         print("Post:", results)
         return self
 
     @action
-    @inbatch_parallel(init="action1_init") #, post="action1_post")
+    @inbatch_parallel(init="parallel_init") #, post="parallel_post")
     def action1(self, i):
         print("   action 1", i)
         return i
 
+    def action_n_init(self, *args, **kwargs):
+        r = self.indices.astype('int').tolist()
+        print("Parallel:", r)
+        return r
+
     @action
-    @inbatch_parallel(init="action1_init", target="nogil")
+    @inbatch_parallel(init="action_n_init", target="nogil")
     def action_n(self):
         return numba_fn
 
-    def action1(self, i):
-        print("   action 1", i)        
-        return i
-
     @action
-    @inbatch_parallel(init="action1_init", post="action1_post", target='async')
+    @inbatch_parallel(init="parallel_init", post="parallel_post", target='async')
     async def action2(self, i):
         print("   action 2", i, "started")
         await asyncio.sleep(1)
@@ -83,6 +85,8 @@ ds_data, data = pd_data()
 res = (ds_data.pipeline()
         .load(data)
         .print("\nStart batch")
+        .action1()
+        .action2()
         .action_n()
         .print("End batch"))
 
