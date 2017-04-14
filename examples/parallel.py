@@ -11,8 +11,8 @@ from dataset import * # pylint: disable=wrong-import-
 
 
 @njit(nogil=True)
-def numba_fn(k):
-    print("   action numba", k, "started")
+def numba_fn(k, a1=0, a2=0, a3=0):
+    print("   action numba", k, "started", a1, a2, a3)
     for i in range(k * 3000):
         x = np.random.normal(0, 1, size=10000)
     print("   action numba", k, "ended")
@@ -39,8 +39,8 @@ class MyDataFrameBatch(DataFrameBatch):
 
     @action
     @inbatch_parallel(init="parallel_init") #, post="parallel_post")
-    def action1(self, i):
-        print("   action 1", i)
+    def action1(self, i, *args):
+        print("   action 1", i, args)
         return i
 
     def action_n_init(self, *args, **kwargs):
@@ -55,8 +55,8 @@ class MyDataFrameBatch(DataFrameBatch):
 
     @action
     @inbatch_parallel(init="parallel_init", post="parallel_post", target='async')
-    async def action2(self, i):
-        print("   action 2", i, "started")
+    async def action2(self, i, *args):
+        print("   action 2", i, "started", args)
         await asyncio.sleep(1)
         print("   action 2", i, "ended")
         return i
@@ -85,9 +85,9 @@ ds_data, data = pd_data()
 res = (ds_data.pipeline()
         .load(data)
         .print("\nStart batch")
-        .action1()
-        .action2()
-        .action_n()
+        .action1(17, 32, 8)
+        .action2("async")
+        .action_n(100, 200, 300)
         .print("End batch"))
 
 res.run(4, shuffle=False)

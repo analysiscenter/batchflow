@@ -44,17 +44,21 @@ def inbatch_parallel(init, post=None, target='threads'):
                 post_fn = None
             return init_fn, post_fn
 
-        def _make_args(args):
+        def _make_args(init_args, args, kwargs):
             """ Make args, kwargs tuple """
-            if isinstance(args, tuple) and len(args) == 2:
+            if isinstance(init_args, tuple) and len(init_args) == 2:
                 margs, mkwargs = args
-            elif isinstance(args, dict):
+            elif isinstance(init_args, dict):
                 margs = []
-                mkwargs = args
+                mkwargs = init_args
             else:
-                margs = args
+                margs = init_args
                 mkwargs = dict()
             margs = margs if isinstance(margs, list) else [margs]
+            if len(args) > 0:
+                margs += args
+            if len(kwargs) > 0:
+                mkwargs.update(kwargs)
             return margs, mkwargs
 
         def wrap_with_threads(self, args, kwargs, nogil=False):
@@ -67,7 +71,7 @@ def inbatch_parallel(init, post=None, target='threads'):
                 if nogil:
                     nogil_fn = method(self)
                 for arg in init_fn(self, *args, **kwargs):
-                    margs, mkwargs = _make_args(arg)
+                    margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
                         one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
                     else:
@@ -76,10 +80,10 @@ def inbatch_parallel(init, post=None, target='threads'):
                 timeout = kwargs.get('timeout', None)
                 done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
-            done_results = [done_f.result() for done_f in done]
             if post_fn is None:
                 return self
             else:
+                done_results = [done_f.result() for done_f in done]
                 return post_fn(done_results, not_done)
 
         def wrap_with_async(self, args, kwargs):
@@ -89,14 +93,14 @@ def inbatch_parallel(init, post=None, target='threads'):
 
             futures = []
             for arg in init_fn(self, *args, **kwargs):
-                margs, mkwargs = _make_args(arg)
+                margs, mkwargs = _make_args(arg, args, kwargs)
                 futures.append(method(self, *margs, **mkwargs))
 
-            done = loop.run_until_complete(asyncio.gather(*futures, loop=loop))
+            done_results = loop.run_until_complete(asyncio.gather(*futures, loop=loop))
             if post_fn is None:
                 return self
             else:
-                return post_fn(done)
+                return post_fn(done_results)
 
 
         def wrapped_method(self, *args, **kwargs):
