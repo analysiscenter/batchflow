@@ -50,6 +50,7 @@ class Dataset(Baseset):
             which should be included in the batch
             otherwise batch_indices contains positions in the index
         """
+        #print("create dataset batch:", batch_indices)
         batch_ix = self.index.create_batch(batch_indices, pos, *args, **kwargs)
         return self.batch_class(batch_ix, *args, **kwargs)
 
@@ -57,3 +58,7 @@ class Dataset(Baseset):
     def pipeline(self):
         """ Start a data processing workflow """
         return Pipeline(self)
+
+    def p(self):
+        """ A short alias for `pipeline()` """
+        return self.pipeline()
