@@ -3,7 +3,7 @@
 import numpy as np
 from .base import Baseset
 from .dsindex import DatasetIndex
-from .preprocess import Preprocessing
+from .pipeline import Pipeline
 
 
 class Dataset(Baseset):
@@ -54,6 +54,6 @@ class Dataset(Baseset):
         return self.batch_class(batch_ix, *args, **kwargs)
 
 
-    def workflow(self):
+    def pipeline(self):
         """ Start a data processing workflow """
-        return Preprocessing(self)
+        return Pipeline(self)

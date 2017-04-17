@@ -4,19 +4,19 @@ import numpy as np
 from .base import Baseset
 from .dsindex import DatasetIndex
 from .dataset import Dataset
-from .preprocess import Preprocessing
+from .pipeline import Pipeline
 
 
 class JointDataset(Baseset):
     """ Dataset comprising several Datasets """
     def __init__(self, datasets, align='order', *args, **kwargs):
         if not isinstance(datasets, (list, tuple)) or len(datasets) == 0:
-            raise TypeError("Expected a non-empty list-like with instances of Dataset or Preprocessing.")
+            raise TypeError("Expected a non-empty list-like with instances of Dataset or Pipeline.")
         else:
             index_len = None
             for dataset in datasets:
-                if not isinstance(dataset, (Dataset, Preprocessing)):
-                    raise TypeError("Dataset or Preprocessing is expected, but instead %s was given." % type(dataset))
+                if not isinstance(dataset, (Dataset, Pipeline)):
+                    raise TypeError("Dataset or Pipeline is expected, but instead %s was given." % type(dataset))
                 ds_ilen = len(dataset.index)
                 if index_len is None:
                     index_len = ds_ilen

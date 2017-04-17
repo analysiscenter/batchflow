@@ -88,9 +88,9 @@ If `client_index` contains the list of all clients ids, you can easily create a 
 ct_ds = Dataset(client_index, batch_class=ClientTranasactions)
 ```
 
-And then you can define a workflow
+And then you can define a workflow pipeline:
 ```python
-pp_wf = (ct_ds.workflow()
+pp_wf = (ct_ds.pipeline()
               .load(data)
               .print()
               .add()
@@ -109,7 +109,7 @@ Now the dataset is split into batches and then all the actions are executed for 
 
 In the very same way you might define an augmentation workflow
 ```python
-augm_wf = (ct_ds.workflow()
+augm_wf = (ct_ds.pipeline()
                 .load(data)
                 .add(1)
                 .add(5)

@@ -40,7 +40,7 @@ BATCH_SIZE = 3
 
 # Load data and take some actions
 print("\nFull preprocessing")
-fp_data = (Preprocessing(ds)
+fp_data = (ds.pipeline()
             .load(df)
             .action1()
             .print()

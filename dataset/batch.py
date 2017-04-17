@@ -2,13 +2,27 @@
 
 import os
 from binascii import hexlify
-import blosc
+
+try:
+    import blosc
+except ImportError:
+    pass
 import numpy as np
-import pandas as pd
-import feather
-import dask.dataframe as dd
+try:
+    import pandas as pd
+except ImportError:
+    pass
+try:
+    import feather
+except ImportError:
+    pass
+try:
+    import dask.dataframe as dd
+except ImportError:
+    pass
+
 from .dsindex import DatasetIndex
-from .preprocess import action
+from .pipeline import action
 
 
 class Batch:
