@@ -141,7 +141,7 @@ class DatasetIndex(Baseset):
                 yield self.next_batch(batch_size, shuffle, one_pass)
 
 
-    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ
+    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ, unused-argument
         """ Create a batch from given indices
         if pos is False then batch_indices contains the value of indices
         which should be included in the batch (so expected batch is just the very same batch_indices)

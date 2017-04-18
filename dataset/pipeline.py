@@ -1,7 +1,8 @@
 """ Pipeline classes """
 import concurrent.futures as cf
+import asyncio
 import queue as q
-import multiprocessing as mpc
+#import multiprocessing as mpc
 
 
 class Pipeline:
@@ -48,7 +49,9 @@ class Pipeline:
         return self
 
 
-    def _exec_all_actions(self, batch):
+    def _exec_all_actions(self, batch, new_loop=False):
+        if new_loop:
+            asyncio.set_event_loop(asyncio.new_event_loop())
         batch_res = self
         joined_sets = None
         for _action in self.action_list:
@@ -82,39 +85,40 @@ class Pipeline:
 
     def _put_batches_into_queue(self, gen_batch):
         for batch in gen_batch:
-            future = self.executor.submit(self._exec_all_actions, batch)
+            future = self.executor.submit(self._exec_all_actions, batch, True)
             self.prefetch_queue.put(future, block=True)
         self.prefetch_queue.put(None, block=True)
 
-    def _run_batches_from_queue(self):
+    def _run_batches_from_queue(self, loop=None):
         while True:
             future = self.prefetch_queue.get(block=True)
             if future is None:
                 self.prefetch_queue.task_done()
                 break
             else:
-                batch_res = future.result()
+                _ = future.result()
                 self.prefetch_queue.task_done()
         return None
 
 
-    def run(self, batch_size, shuffle=False, one_pass=False, n_epochs=None, prefetch=0, *args, **kwargs):
+    def run(self, batch_size, shuffle=False, one_pass=True, prefetch=0, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
             Batches are created sequentially, one after another, without batch-level parallelism
         """
-        batch_generator = self.dataset.gen_batch(batch_size, shuffle=shuffle, one_pass=one_pass, 
-                                                 n_epochs=n_epochs, *args, **kwargs)
+        batch_generator = self.dataset.gen_batch(batch_size, shuffle=shuffle, one_pass=one_pass, *args, **kwargs)
+
         if prefetch > 0:
             self.prefetch_queue = q.Queue(maxsize=prefetch)
             self.executor = cf.ThreadPoolExecutor(max_workers=prefetch + 2)
             self.executor.submit(self._put_batches_into_queue, batch_generator)
-            future = self.executor.submit(self._run_batches_from_queue)
+            loop = kwargs.get('loop', asyncio.get_event_loop())
+            future = self.executor.submit(self._run_batches_from_queue, loop)
             # wait until all batches have been processed
-            future.result()
+            _ = future.result()
         else:
             self.prefetch_queue = None
             self.executor = None
-            self._run_seq(batch_generator, prefetch)
+            self._run_seq(batch_generator)
         return self
 
 
@@ -126,18 +130,15 @@ class Pipeline:
 
 
     def _next_batch_from_dataset(self, *args, **kwargs):
-        print("   next batch:")
         batch_index = self.index.next_batch(*args, **kwargs)
-        print("             : got indices:", batch_index.indices)
         batch = self.dataset.create_batch(batch_index.indices, *args, **kwargs)
-        print("             :", batch.indices)
         return batch
 
     def next_batch(self, batch_size, shuffle=False, one_pass=False, prefetch=0, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """
         if prefetch > 0:
             if self.prefetch_queue is None or self.prefetch_queue.maxsize != prefetch:
-                # the previous queue with all the batches in it will be lost 
+                # the previous queue with all the batches in it will be lost
                 self.prefetch_queue = q.Queue(maxsize=prefetch + 1)
                 self.executor = cf.ThreadPoolExecutor(max_workers=prefetch+1)
                 self.executor.submit(self._put_batches_into_queue, batch_size, shuffle, one_pass, *args, **kwargs)

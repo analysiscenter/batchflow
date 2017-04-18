@@ -90,4 +90,4 @@ res = (ds_data.pipeline()
         .action_n(100, 200, 300)
         .print("End batch"))
 
-res.run(4, shuffle=False)
+res.run(4, shuffle=False, one_pass=True)

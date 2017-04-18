@@ -33,11 +33,11 @@ class MyArrayBatch(ArrayBatch):
 
     def parallel_init(self, *args, **kwargs):
         r = self.indices.tolist()
-        print("Parallel:", r)
+        print("\n Init:", r)
         return r
 
     def parallel_post(self, results, not_done=None):
-        print("Post:", results)
+        print(" Post:", results)
         return self
 
     @action
@@ -58,9 +58,9 @@ class MyArrayBatch(ArrayBatch):
 
     @action
     @inbatch_parallel(init="parallel_init", post="parallel_post", target='async')
-    async def action2(self, i, *args):
+    async def action2(self, i, *args, **kwargs):
         print("   action 2", i, "started", args)
-        await asyncio.sleep(1)
+        await asyncio.sleep(5)
         print("   action 2", i, "ended")
         return i
 
@@ -88,7 +88,9 @@ ds_data, data = pd_data()
 res = (ds_data.pipeline()
         .load(data)
         .print("\nStart batch")
-        .action1(17, 32, 8)
+        .action1()
+        .action2() #loop=asyncio.get_event_loop())
+        .action_n()
         .print("End batch"))
 
 #res.run(4, shuffle=False)

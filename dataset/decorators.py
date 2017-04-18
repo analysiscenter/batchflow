@@ -88,13 +88,22 @@ def inbatch_parallel(init, post=None, target='threads'):
 
         def wrap_with_async(self, args, kwargs):
             """ Run a method in parallel with async / await """
-            loop = kwargs.get('loop', asyncio.get_event_loop())
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # this is a new thread where there is no loop
+                loop = kwargs.get('loop', None)
+                asyncio.set_event_loop(loop)
+            else:
+                loop = kwargs.get('loop', loop)
+
             init_fn, post_fn = _check_functions(self)
 
             futures = []
             for arg in init_fn(self, *args, **kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
                 futures.append(method(self, *margs, **mkwargs))
+                #futures.append(asyncio.run_coroutine_threadsafe(method(self, *margs, **mkwargs), loop=loop))
 
             done_results = loop.run_until_complete(asyncio.gather(*futures, loop=loop))
             if post_fn is None:
