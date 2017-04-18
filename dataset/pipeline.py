@@ -50,7 +50,7 @@ class Pipeline:
 
     def _exec_all_actions(self, batch, new_loop=False):
         if new_loop:
-            asyncio.set_event_loop(asyncio.new_event_loop())        
+            asyncio.set_event_loop(asyncio.new_event_loop())
 
         joined_sets = None
         for _action in self.action_list:
@@ -87,11 +87,15 @@ class Pipeline:
         batch_generator = self.dataset.gen_batch(batch_size, shuffle=shuffle, one_pass=one_pass, *args, **kwargs)
 
         if prefetch > 0:
-            target = kwargs.get('target', 'threads')
+            if 'target' in kwargs:
+                target = kwargs['target']
+                del kwargs['target']
+            else:
+                target = 'threads'
             if target == 'threads':
                 executor = cf.ThreadPoolExecutor(max_workers=prefetch)
             elif target == 'mpc':
-                executor = cf.ProcessPoolExecutor(max_workers=prefetch)
+                executor = cf.ProcessPoolExecutor(max_workers=prefetch)   # pylint: disable=redefined-variable-type
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
             futures = []
@@ -101,7 +105,6 @@ class Pipeline:
             # wait until all batches have been processed
             _ = [future.result() for future in futures]
         else:
-            self.executor = None
             self._run_seq(batch_generator)
         return self
 

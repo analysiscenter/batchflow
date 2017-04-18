@@ -5,6 +5,7 @@ import asyncio
 import numpy as np
 import pandas as pd
 from numba import njit
+from time import time
 
 sys.path.append("..")
 from dataset import * # pylint: disable=wrong-import-
@@ -94,10 +95,11 @@ if __name__ == "__main__":
             .add(1000)
             .print("End batch"))
 
-    #res.run(4, shuffle=False)
+    #res.run(4, shuffle=False)    
     print("Start iterating...")
-    res.run(1, shuffle=False, one_pass=True, prefetch=3)
-    print("End")
+    t = time()
+    res.run(1, shuffle=False, one_pass=True, prefetch=3, target='threads')
+    print("End:", time() - t)
     """
     i = 0
     for batch_res in res.gen_batch(3, shuffle=False, prefetch=2):
