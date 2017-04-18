@@ -18,6 +18,10 @@ def numba_fn(k, a1=0, a2=0, a3=0):
     print("   action numba", k, "ended")
     return x
 
+def mpc_fn(i, *args):
+    print("   mpc func", i, args)
+    return i
+
 
 # Example of custome Batch class which defines some actions
 class MyDataFrameBatch(DataFrameBatch):
@@ -37,11 +41,12 @@ class MyDataFrameBatch(DataFrameBatch):
         print("Post:", results)
         return self
 
+
     @action
-    @inbatch_parallel(init="parallel_init") #, post="parallel_post")
-    def action1(self, i, *args):
-        print("   action 1", i, args)
-        return i
+    @inbatch_parallel(init="parallel_init", target='mpc') #, post="parallel_post")
+    def action1(self, *args):
+        print("   action 1", args)
+        return mpc_fn
 
     def action_n_init(self, *args, **kwargs):
         r = self.indices.astype('int').tolist()
@@ -50,7 +55,7 @@ class MyDataFrameBatch(DataFrameBatch):
 
     @action
     @inbatch_parallel(init="action_n_init", target="nogil")
-    def action_n(self):
+    def action_n(self, *args, **kwargs):
         return numba_fn
 
     @action
@@ -67,27 +72,28 @@ class MyDataFrameBatch(DataFrameBatch):
         return self
 
 
-# number of items in the dataset
-K = 10
+if __name__ == "__main__":
+    # number of items in the dataset
+    K = 10
 
-# Fill-in dataset with sample data
-def pd_data():
-    ix = np.arange(K).astype('str')
-    data = pd.DataFrame(np.arange(K * 3).reshape(K, -1), index=ix)
-    dsindex = DatasetIndex(data.index)
-    ds = Dataset(index=dsindex, batch_class=MyDataFrameBatch)
-    return ds, data.copy()
+    # Fill-in dataset with sample data
+    def pd_data():
+        ix = np.arange(K).astype('str')
+        data = pd.DataFrame(np.arange(K * 3).reshape(K, -1), index=ix)
+        dsindex = DatasetIndex(data.index)
+        ds = Dataset(index=dsindex, batch_class=MyDataFrameBatch)
+        return ds, data.copy()
 
 
-# Create datasets
-ds_data, data = pd_data()
+    # Create datasets
+    ds_data, data = pd_data()
 
-res = (ds_data.pipeline()
-        .load(data)
-        .print("\nStart batch")
-        .action1(17, 32, 8)
-        .action2("async")
-        .action_n(100, 200, 300)
-        .print("End batch"))
+    res = (ds_data.pipeline()
+            .load(data)
+            .print("\nStart batch")
+            .action2("async")
+            .action_n(123)
+            .action1(17)
+            .print("End batch"))
 
-res.run(4, shuffle=False)
+    res.run(4, shuffle=False)
