@@ -89,7 +89,7 @@ class Pipeline:
             self.prefetch_queue.put(future, block=True)
         self.prefetch_queue.put(None, block=True)
 
-    def _run_batches_from_queue(self, loop=None):
+    def _run_batches_from_queue(self):
         while True:
             future = self.prefetch_queue.get(block=True)
             if future is None:
@@ -112,7 +112,7 @@ class Pipeline:
             self.executor = cf.ThreadPoolExecutor(max_workers=prefetch + 2)
             self.executor.submit(self._put_batches_into_queue, batch_generator)
             loop = kwargs.get('loop', asyncio.get_event_loop())
-            future = self.executor.submit(self._run_batches_from_queue, loop)
+            future = self.executor.submit(self._run_batches_from_queue)
             # wait until all batches have been processed
             _ = future.result()
         else:
