@@ -57,7 +57,7 @@ class MyDataFrameBatch(DataFrameBatch):
     @inbatch_parallel(init="parallel_init", post="parallel_post", target='async')
     async def action2(self, i, *args):
         print("   action 2", i, "started", args)
-        await asyncio.sleep(1)
+        await asyncio.sleep(5)
         print("   action 2", i, "ended")
         return i
 

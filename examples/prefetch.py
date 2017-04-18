@@ -9,7 +9,6 @@ from numba import njit
 sys.path.append("..")
 from dataset import * # pylint: disable=wrong-import-
 
-
 @njit(nogil=True)
 def numba_fn(k, a1=0, a2=0, a3=0):
     print("   action numba", k, "started", a1, a2, a3)
@@ -27,7 +26,7 @@ class MyArrayBatch(ArrayBatch):
     @action
     def print(self, text=None):
         if text is not None:
-            print(text)
+            print("\n====", text, self.indices, "======\n")
         print(self.data)
         return self
 
@@ -43,7 +42,7 @@ class MyArrayBatch(ArrayBatch):
     @action
     @inbatch_parallel(init="parallel_init") #, post="parallel_post")
     def action1(self, i, *args):
-        print("   action 1", i, args)
+        print("   batch", self.indices, "   action 1", i, args)
         return i
 
     def action_n_init(self, *args, **kwargs):
@@ -59,9 +58,9 @@ class MyArrayBatch(ArrayBatch):
     @action
     @inbatch_parallel(init="parallel_init", post="parallel_post", target='async')
     async def action2(self, i, *args, **kwargs):
-        print("   action 2", i, "started", args)
+        print("   batch", self.indices, "action 2", i, "started", args)
         await asyncio.sleep(5)
-        print("   action 2", i, "ended")
+        print("   batch", self.indices, "   action 2", i, "ended")
         return i
 
     @action
@@ -70,37 +69,39 @@ class MyArrayBatch(ArrayBatch):
         return self
 
 
-# number of items in the dataset
-K = 10
+if __name__ == "__main__":
+    # number of items in the dataset
+    K = 10
 
-# Fill-in dataset with sample data
-def pd_data():
-    ix = np.arange(K)
-    data = np.arange(K * 3).reshape(K, -1)
-    dsindex = DatasetIndex(ix)
-    ds = Dataset(index=dsindex, batch_class=MyArrayBatch)
-    return ds, data.copy()
+    # Fill-in dataset with sample data
+    def pd_data():
+        ix = np.arange(K)
+        data = np.arange(K * 3).reshape(K, -1)
+        dsindex = DatasetIndex(ix)
+        ds = Dataset(index=dsindex, batch_class=MyArrayBatch)
+        return ds, data.copy()
 
 
-# Create datasets
-ds_data, data = pd_data()
+    # Create datasets
+    ds_data, data = pd_data()
 
-res = (ds_data.pipeline()
-        .load(data)
-        .print("\nStart batch")
-        .action1()
-        .action2() #loop=asyncio.get_event_loop())
-        .action_n()
-        .print("End batch"))
+    res = (ds_data.pipeline()
+            .load(data)
+            .print("\nStart batch")
+            .action1()
+            .action2() #loop=asyncio.get_event_loop())
+            .action_n()
+            .add(1000)
+            .print("End batch"))
 
-#res.run(4, shuffle=False)
-print("Start iterating...")
-res.run(2, shuffle=False, one_pass=True, prefetch=2)
-print("End")
-"""
-i = 0
-for batch_res in res.gen_batch(3, shuffle=False, prefetch=2):
-    print(" ====== Iteration ", i)
-    print("Batch:", batch_res.indices)
-print(" ====== Stop iteration ===== ")
-"""
+    #res.run(4, shuffle=False)
+    print("Start iterating...")
+    res.run(1, shuffle=False, one_pass=True, prefetch=3)
+    print("End")
+    """
+    i = 0
+    for batch_res in res.gen_batch(3, shuffle=False, prefetch=2):
+        print(" ====== Iteration ", i)
+        print("Batch:", batch_res.indices)
+    print(" ====== Stop iteration ===== ")
+    """
