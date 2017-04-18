@@ -111,7 +111,6 @@ class Pipeline:
             self.prefetch_queue = q.Queue(maxsize=prefetch)
             self.executor = cf.ThreadPoolExecutor(max_workers=prefetch + 2)
             self.executor.submit(self._put_batches_into_queue, batch_generator)
-            loop = kwargs.get('loop', asyncio.get_event_loop())
             future = self.executor.submit(self._run_batches_from_queue)
             # wait until all batches have been processed
             _ = future.result()
