@@ -86,7 +86,7 @@ def inbatch_parallel(init, post=None, target='threads'):
                 done_results = [done_f.result() for done_f in done]
                 return post_fn(done_results, not_done)
 
-        def wrap_with_mpc(self, args, kwargs, nogil=False):
+        def wrap_with_mpc(self, args, kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
