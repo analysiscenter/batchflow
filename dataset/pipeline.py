@@ -100,7 +100,6 @@ class Pipeline:
                 self.prefetch_queue.task_done()
         return None
 
-
     def run(self, batch_size, shuffle=False, one_pass=True, prefetch=0, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
             Batches are created sequentially, one after another, without batch-level parallelism
@@ -120,37 +119,14 @@ class Pipeline:
             self._run_seq(batch_generator)
         return self
 
-
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all previous lazy actions """
         batch = self.dataset.create_batch(batch_index, *args, **kwargs)
         batch_res = self._exec_all_actions(batch)
         return batch_res
 
-
-    def _next_batch_from_dataset(self, *args, **kwargs):
-        batch_index = self.index.next_batch(*args, **kwargs)
-        batch = self.dataset.create_batch(batch_index.indices, *args, **kwargs)
-        return batch
-
-    def next_batch(self, batch_size, shuffle=False, one_pass=False, prefetch=0, *args, **kwargs):
+    def next_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """
-        if prefetch > 0:
-            if self.prefetch_queue is None or self.prefetch_queue.maxsize != prefetch:
-                # the previous queue with all the batches in it will be lost
-                self.prefetch_queue = q.Queue(maxsize=prefetch + 1)
-                self.executor = cf.ThreadPoolExecutor(max_workers=prefetch+1)
-                self.executor.submit(self._put_batches_into_queue, batch_size, shuffle, one_pass, *args, **kwargs)
-        else:
-            self.prefetch_queue = None
-
-        if self.prefetch_queue is None:
-            batch = self._next_batch_from_dataset(batch_size, shuffle, one_pass, *args, **kwargs)
-            batch_res = self._exec_all_actions(batch)
-        else:
-            future = self.prefetch_queue.get(block=True)
-            # wait for all the actions to complete
-            batch_res = future.result()
-            self.prefetch_queue.task_done()
-
+        batch_index = self.index.next_batch(batch_size, shuffle, one_pass, *args, **kwargs)
+        batch_res = self.create_batch(batch_index, *args, **kwargs)
         return batch_res
