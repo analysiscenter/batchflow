@@ -1,6 +1,7 @@
 """ Pipeline classes """
 import concurrent.futures as cf
 import asyncio
+import signal
 import queue as q
 
 
@@ -9,8 +10,10 @@ class Pipeline:
     def __init__(self, dataset):
         self.dataset = dataset
         self.action_list = []
-        self.prefetch_queue = None
-        self.executor = None
+        self._prefetch_queue = None
+        self._batch_queue = None
+        self._executor = None
+        self._batch_generator = None
 
     def __getattr__(self, name, *args, **kwargs):
         """ Check if an unknown attr is an action from the batch class """
@@ -79,57 +82,29 @@ class Pipeline:
         self.action_list.append({'name': 'join', 'datasets': datasets})
         return self
 
-    def _run_seq(self, gen_batch):
-        for batch in gen_batch:
-            _ = self._exec_all_actions(batch)
-
     def _put_batches_into_queue(self, gen_batch):
         for batch in gen_batch:
-            future = self.executor.submit(self._exec_all_actions, batch, True)
-            self.prefetch_queue.put(future, block=True)
-        self.prefetch_queue.put(None, block=True)
+            future = self._executor.submit(self._exec_all_actions, batch, True)
+            self._prefetch_queue.put(future, block=True)
+        self._prefetch_queue.put(None, block=True)
 
     def _run_batches_from_queue(self):
         while True:
-            future = self.prefetch_queue.get(block=True)
+            future = self._prefetch_queue.get(block=True)
             if future is None:
-                self.prefetch_queue.task_done()
+                self._prefetch_queue.task_done()
+                self._batch_queue.put(None)
                 break
             else:
-                _ = future.result()
-                self.prefetch_queue.task_done()
+                self._batch_queue.put(future.result())
+                self._prefetch_queue.task_done()
         return None
 
     def run(self, batch_size, shuffle=False, one_pass=True, prefetch=0, *args, **kwargs):
-        """ Execute all lazy actions for each batch in the dataset
-            Batches are created sequentially, one after another, without batch-level parallelism
-        """
-        if 'target' in kwargs:
-            target = kwargs['target']
-            del kwargs['target']
-        else:
-            target = 'threads'
-
-        batch_generator = self.dataset.gen_batch(batch_size, shuffle, one_pass, *args, **kwargs)
-
-        if prefetch > 0:
-            if target == 'threads':
-                self.executor = cf.ThreadPoolExecutor(max_workers=prefetch)
-            elif target == 'mpc':
-                self.executor = cf.ProcessPoolExecutor(max_workers=prefetch)   # pylint: disable=redefined-variable-type
-            else:
-                raise ValueError("target should be one of ['threads', 'mpc']")
-
-            self.prefetch_queue = q.Queue(maxsize=prefetch)
-            service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            service_executor.submit(self._put_batches_into_queue, batch_generator)
-            future = service_executor.submit(self._run_batches_from_queue)
-            # wait until all batches have been processed
-            _ = future.result()
-        else:
-            self.prefetch_queue = None
-            self.executor = None
-            self._run_seq(batch_generator)
+        """ Execute all lazy actions for each batch in the dataset """
+        batch_generator = self.gen_batch(batch_size, shuffle, one_pass, prefetch, *args, **kwargs)
+        for batch in batch_generator:
+            pass
         return self
 
     def create_batch(self, batch_index, *args, **kwargs):
@@ -138,8 +113,52 @@ class Pipeline:
         batch_res = self._exec_all_actions(batch)
         return batch_res
 
-    def next_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
+    def reset_iter(self):
+        """ Clear all iteration metadata in order to start iterating from scratch """
+        self.dataset.reset_iter()
+        self._prefetch_queue = None
+        self._batch_queue = None
+        self._executor = None
+        self._batch_generator = None
+
+    def gen_batch(self, batch_size, shuffle=False, one_pass=False, prefetch=0, *args, **kwargs):
+        batch_generator = self.dataset.gen_batch(batch_size, shuffle, one_pass, *args, **kwargs)
+
+        if prefetch > 0:
+            target = kwargs.get('target', 'threads')
+            if target == 'threads':
+                self._executor = cf.ThreadPoolExecutor(max_workers=prefetch)
+            elif target == 'mpc':
+                self._executor = cf.ProcessPoolExecutor(max_workers=prefetch)   # pylint: disable=redefined-variable-type
+            else:
+                raise ValueError("target should be one of ['threads', 'mpc']")
+
+            self._prefetch_queue = q.Queue(maxsize=prefetch)
+            self._batch_queue = q.Queue()
+
+            service_executor = cf.ThreadPoolExecutor(max_workers=2)
+            service_executor.submit(self._put_batches_into_queue, batch_generator)
+            future = service_executor.submit(self._run_batches_from_queue)
+            while not future.done():
+                batch_res = self._batch_queue.get(block=True)
+                if batch_res is not None:
+                    self._batch_queue.task_done()
+                    yield batch_res
+        else:
+            self._prefetch_queue = None
+            self._batch_queue = None
+            self._executor = None
+            for batch in batch_generator:
+                yield self._exec_all_actions(batch)
+        return self
+
+    def next_batch(self, batch_size, shuffle=False, one_pass=False, prefetch=0, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """
-        batch_index = self.index.next_batch(batch_size, shuffle, one_pass, *args, **kwargs)
-        batch_res = self.create_batch(batch_index, *args, **kwargs)
+        if prefetch > 0:
+            if self._batch_generator is None:
+                self._batch_generator = self.gen_batch(batch_size, shuffle, one_pass, prefetch, *args, **kwargs)
+            batch_res = next(self._batch_generator)
+        else:
+            batch_index = self.index.next_batch(batch_size, shuffle, one_pass, *args, **kwargs)
+            batch_res = self.create_batch(batch_index, *args, **kwargs)
         return batch_res

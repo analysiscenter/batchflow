@@ -105,6 +105,13 @@ class Baseset:
         if self.index.validation is not None:
             self.validation = self.create_subset(self.index.validation)
 
+    def reset_iter(self):
+        """ Clear all iteration metadata in order to start iterating from scratch """
+        self._start_index = 0
+        self._order = None
+        self._n_epochs = 0
+        self.batch_generator = None
+        self.index.reset_iter()
 
     def gen_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
         """ Generate batches """
@@ -121,4 +128,4 @@ class Baseset:
 
     def create_batch(self, batch_indices, pos=True):
         """ Create batch with indices given """
-        raise NotImplementedError("create_batch should be defined in child classes")
+        raise NotImplementedError("create_batch should be implemented in child classes")
