@@ -125,7 +125,7 @@ class Pipeline:
             service_executor.submit(self._put_batches_into_queue, batch_generator)
             future = service_executor.submit(self._run_batches_from_queue)
             # wait until all batches have been processed
-            _ = future.result()            
+            _ = future.result()
         else:
             self.prefetch_queue = None
             self.executor = None
