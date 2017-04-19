@@ -129,7 +129,7 @@ class DatasetIndex(Baseset):
             return self.create_batch(batch_items, pos=True)
 
 
-    def gen_batch(self, batch_size, shuffle=False, one_pass=False):
+    def gen_batch(self, batch_size, shuffle=False, one_pass=False, drop_last=False):
         """ Generate batches """
         self._start_index = 0
         self._order = None
@@ -138,7 +138,11 @@ class DatasetIndex(Baseset):
             if one_pass and self._n_epochs > _n_epochs:
                 raise StopIteration()
             else:
-                yield self.next_batch(batch_size, shuffle, one_pass)
+                batch = self.next_batch(batch_size, shuffle, one_pass)
+                if drop_last and len(batch) < batch_size:
+                    raise StopIteration()
+                else:
+                    yield batch
 
 
     def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ, unused-argument
