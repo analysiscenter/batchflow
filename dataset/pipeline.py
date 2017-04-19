@@ -8,7 +8,7 @@ class Pipeline:
     """ Pipeline """
     def __init__(self, dataset):
         self.dataset = dataset
-        self.action_list = []
+        self._action_list = []
         self._prefetch_queue = None
         self._batch_queue = None
         self._executor = None
@@ -16,23 +16,20 @@ class Pipeline:
 
     def __getattr__(self, name, *args, **kwargs):
         """ Check if an unknown attr is an action from the batch class """
-        if hasattr(self.dataset.batch_class, name):
-            attr_name = getattr(self.dataset.batch_class, name)
-            if callable(attr_name):
-                if hasattr(attr_name, "action"):
-                    self.action_list.append({'name': name})
-                else:
-                    raise ValueError("Method %s is not marked with @action decorator" % name)
-        else:
-            raise AttributeError("Method %s has not been found in Pipeline and Batch classes" % name)
+        self._action_list.append({'name': name})
         return self._append_action
 
+    def _append_action(self, *args, **kwargs):
+        """ Add new action to the log of future actions """
+        self._action_list[-1].update({'args': args, 'kwargs': kwargs})
+        return self
+
     def __getstate__(self):
-        return {'dataset': self.dataset, 'action_list': self.action_list}
+        return {'dataset': self.dataset, 'action_list': self._action_list}
 
     def __setstate__(self, state):
         self.dataset = state['dataset']
-        self.action_list = state['action_list']
+        self._action_list = state['action_list']
 
     @property
     def index(self):
@@ -48,21 +45,28 @@ class Pipeline:
         """ Return index length """
         return len(self.index)
 
-    def _append_action(self, *args, **kwargs):
-        """ Add new action to the log of future actions """
-        self.action_list[-1].update({'args': args, 'kwargs': kwargs})
-        return self
+    def _get_action_call(self, batch, name):
+        if hasattr(batch, name):
+            attr_name = getattr(batch, name)
+            if callable(attr_name):
+                if hasattr(attr_name, "action"):
+                    batch_action = attr_name
+                else:
+                    raise ValueError("Method %s is not marked with @action decorator" % name)
+        else:
+            raise AttributeError("Method '%s' has not been found in the %s class" % name, type(batch).__name__)
+        return batch_action
 
     def _exec_all_actions(self, batch, new_loop=False):
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
 
         joined_sets = None
-        for _action in self.action_list:
+        for _action in self._action_list:
             if _action['name'] == 'join':
                 joined_sets = _action['datasets']
             else:
-                batch_action = getattr(batch, _action['name'])
+                batch_action = self._get_action_call(batch, _action['name'])
                 if joined_sets is not None:
                     joined_data = []
                     if not isinstance(joined_sets, (list, tuple)):
@@ -78,7 +82,7 @@ class Pipeline:
 
     def join(self, datasets):
         """ Join other datasets """
-        self.action_list.append({'name': 'join', 'datasets': datasets})
+        self._action_list.append({'name': 'join', 'datasets': datasets})
         return self
 
     def _put_batches_into_queue(self, gen_batch):
@@ -99,9 +103,9 @@ class Pipeline:
                 self._prefetch_queue.task_done()
         return None
 
-    def run(self, batch_size, shuffle=False, one_pass=True, prefetch=0, *args, **kwargs):
+    def run(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, prefetch=0, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset """
-        batch_generator = self.gen_batch(batch_size, shuffle, one_pass, prefetch, *args, **kwargs)
+        batch_generator = self.gen_batch(batch_size, shuffle, n_epochs, drop_last, prefetch, *args, **kwargs)
         for _ in batch_generator:
             pass
         return self
@@ -123,7 +127,7 @@ class Pipeline:
     def gen_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
-
+        print('prefetch =', prefetch)
         if prefetch > 0:
             target = kwargs.get('target', 'threads')
             if target == 'threads':

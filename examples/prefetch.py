@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     res = (ds_data.pipeline()
             .load(data)
-            .print("\nStart batch")
+            .print("Start batch")
             .action1()
             .action2() #loop=asyncio.get_event_loop())
             .action_n()
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     #res.run(4, shuffle=False)
     print("Start iterating...")
     t = time()
-    res.run(1, shuffle=False, one_pass=True, prefetch=3, target='threads')
+    res.run(3, shuffle=False, n_epochs=1, drop_last=True, prefetch=3, target='threads')
     print("End:", time() - t)
     """
     i = 0

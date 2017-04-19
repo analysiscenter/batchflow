@@ -84,7 +84,7 @@ ds_data, data = pd_data()
 
 res = (ds_data.pipeline()
         .load(data)
-        .print("\nStart batch")
+        .print("Start batch")
         .action1(17, 32, 8)
         .action2("async")
         .action_n(100, 200, 300)
