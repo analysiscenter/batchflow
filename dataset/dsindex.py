@@ -94,7 +94,7 @@ class DatasetIndex(Baseset):
         self.train = self.create_subset(self.subset_by_pos(train_pos))
 
 
-    def next_batch(self, batch_size, shuffle=False, one_pass=False):
+    def next_batch(self, batch_size, shuffle=False, one_pass=False, drop_last=False):
         """ Return next batch """
         num_items = len(self)
 
@@ -123,6 +123,8 @@ class DatasetIndex(Baseset):
             batch_items = np.concatenate((rest_items, new_items))
 
         if one_pass and rest_items is not None:
+            # not used yet
+            _ = drop_last
             return self.create_batch(rest_items, pos=True)
         else:
             self._start_index += rest_of_batch

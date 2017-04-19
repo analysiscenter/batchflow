@@ -156,7 +156,8 @@ class Pipeline:
         """ Get the next batch and execute all previous lazy actions """
         if prefetch > 0:
             if self._batch_generator is None:
-                self._batch_generator = self.gen_batch(batch_size, shuffle, one_pass, drop_last, prefetch, *args, **kwargs)
+                self._batch_generator = self.gen_batch(batch_size, shuffle, one_pass,
+                                                       drop_last, prefetch, *args, **kwargs)
             batch_res = next(self._batch_generator)
         else:
             batch_index = self.index.next_batch(batch_size, shuffle, one_pass, drop_last, *args, **kwargs)
