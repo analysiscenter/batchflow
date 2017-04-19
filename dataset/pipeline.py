@@ -45,7 +45,8 @@ class Pipeline:
         """ Return index length """
         return len(self.index)
 
-    def _get_action_call(self, batch, name):
+    @staticmethod
+    def _get_action_call(batch, name):
         if hasattr(batch, name):
             attr_name = getattr(batch, name)
             if callable(attr_name):
