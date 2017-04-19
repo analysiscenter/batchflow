@@ -25,7 +25,7 @@ if __name__ == "__main__":
     for drop_last in [False, True]:
         print("Start iterating... drop_last =", drop_last)
         i = 0
-        for batch in ds_data.gen_batch(3, shuffle=False, n_epochs=1, drop_last=drop_last):
+        for batch in ds_data.gen_batch(3, shuffle=0, n_epochs=1, drop_last=drop_last):
             print("batch", i, ":", batch.indices)
             i += 1
         print("End iterating\n")

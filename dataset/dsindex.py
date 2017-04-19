@@ -93,6 +93,18 @@ class DatasetIndex(Baseset):
         train_pos = order[valid_share + test_share:]
         self.train = self.create_subset(self.subset_by_pos(train_pos))
 
+    def _shuffle(self, shuffle):
+        if isinstance(shuffle, bool):
+            if shuffle:
+                np.random.shuffle(self._order)
+        elif isinstance(shuffle, int):
+            # the repetitive shuffle might be non-random for an unknown reason
+            np.random.RandomState(shuffle).shuffle(self._order)
+        elif callable(shuffle):
+            shuffle(self._order)
+        else:
+            raise ValueError("shuffle should be bool or int")
+
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False):
         """ Return next batch """
@@ -101,8 +113,7 @@ class DatasetIndex(Baseset):
         # TODO: make a view not copy whenever possible
         if self._order is None:
             self._order = np.arange(num_items)
-            if shuffle:
-                np.random.shuffle(self._order)
+            self._shuffle(shuffle)
 
         rest_items = None
         if self._start_index + batch_size >= num_items:
@@ -110,8 +121,7 @@ class DatasetIndex(Baseset):
             rest_of_batch = self._start_index + batch_size - num_items
             self._start_index = 0
             self._n_epochs += 1
-            if shuffle:
-                np.random.shuffle(self._order)
+            self._shuffle(shuffle)
         else:
             rest_of_batch = batch_size
 
