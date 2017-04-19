@@ -104,15 +104,15 @@ class Pipeline:
         """ Execute all lazy actions for each batch in the dataset
             Batches are created sequentially, one after another, without batch-level parallelism
         """
-        batch_generator = self.dataset.gen_batch(batch_size, shuffle=shuffle, one_pass=one_pass, *args, **kwargs)
+        if 'target' in kwargs:
+            target = kwargs['target']
+            del kwargs['target']
+        else:
+            target = 'threads'
+
+        batch_generator = self.dataset.gen_batch(batch_size, shuffle, one_pass, *args, **kwargs)
 
         if prefetch > 0:
-            if 'target' in kwargs:
-                target = kwargs['target']
-                del kwargs['target']
-            else:
-                target = 'threads'
-
             if target == 'threads':
                 self.executor = cf.ThreadPoolExecutor(max_workers=prefetch)
             elif target == 'mpc':
