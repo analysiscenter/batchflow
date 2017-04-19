@@ -13,6 +13,7 @@ class DatasetIndex(Baseset):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._pos = self.build_pos()
+        self._random_state = None
 
     @classmethod
     def from_index(cls, *args, **kwargs):
@@ -45,12 +46,7 @@ class DatasetIndex(Baseset):
 
     def build_pos(self):
         """ Create a dictionary with positions in the index """
-        pos_dict = dict()
-        pos = 0
-        for item in self.indices:
-            pos_dict.update({item: pos})
-            pos += 1
-        return pos_dict
+        return dict(zip(self.indices, np.arange(len(self.indices))))
 
     def get_pos(self, index):
         """ Return position of an item in the index """
@@ -98,10 +94,11 @@ class DatasetIndex(Baseset):
             if shuffle:
                 np.random.shuffle(self._order)
         elif isinstance(shuffle, int):
-            # the repetitive shuffle might be non-random for an unknown reason
-            np.random.RandomState(shuffle).shuffle(self._order)
+            if self._random_state is None or self._random_state.seed != shuffle:
+                self._random_state = np.random.RandomState(shuffle)
+            self._random_state.shuffle(self._order)
         elif callable(shuffle):
-            shuffle(self._order)
+            self._order = shuffle(self._order)
         else:
             raise ValueError("shuffle should be bool or int")
 
