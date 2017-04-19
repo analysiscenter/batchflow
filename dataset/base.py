@@ -14,7 +14,7 @@ class Baseset:
         self._start_index = 0
         self._order = None
         self._n_epochs = 0
-        self.batch_generator = None
+        self._batch_generator = None
 
 
     @staticmethod
@@ -110,7 +110,7 @@ class Baseset:
         self._start_index = 0
         self._order = None
         self._n_epochs = 0
-        self.batch_generator = None
+        self._batch_generator = None
         self.index.reset_iter()
 
     def gen_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
@@ -120,10 +120,10 @@ class Baseset:
             yield batch
 
     def next_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
-        """ Return a tuple of batches from all source datasets """
-        if self.batch_generator is None:
-            self.batch_generator = self.gen_batch(batch_size, shuffle=shuffle, one_pass=one_pass, *args, **kwargs)
-        batch = next(self.batch_generator)
+        """ Return a batch """
+        if self._batch_generator is None:
+            self._batch_generator = self.gen_batch(batch_size, shuffle=shuffle, one_pass=one_pass, *args, **kwargs)
+        batch = next(self._batch_generator)
         return batch
 
     def create_batch(self, batch_indices, pos=True):

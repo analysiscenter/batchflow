@@ -1,7 +1,6 @@
 """ Pipeline classes """
 import concurrent.futures as cf
 import asyncio
-import signal
 import queue as q
 
 
@@ -103,7 +102,7 @@ class Pipeline:
     def run(self, batch_size, shuffle=False, one_pass=True, prefetch=0, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset """
         batch_generator = self.gen_batch(batch_size, shuffle, one_pass, prefetch, *args, **kwargs)
-        for batch in batch_generator:
+        for _ in batch_generator:
             pass
         return self
 
@@ -122,6 +121,7 @@ class Pipeline:
         self._batch_generator = None
 
     def gen_batch(self, batch_size, shuffle=False, one_pass=False, prefetch=0, *args, **kwargs):
+        """ Generate batches """
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, one_pass, *args, **kwargs)
 
         if prefetch > 0:
