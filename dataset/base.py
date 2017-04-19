@@ -113,16 +113,16 @@ class Baseset:
         self._batch_generator = None
         self.index.reset_iter()
 
-    def gen_batch(self, batch_size, shuffle=False, one_pass=False, drop_last=False, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, *args, **kwargs):
         """ Generate batches """
-        for ix_batch in self.index.gen_batch(batch_size, shuffle, one_pass, drop_last):
+        for ix_batch in self.index.gen_batch(batch_size, shuffle, n_epochs, drop_last):
             batch = self.create_batch(ix_batch, *args, **kwargs)
             yield batch
 
-    def next_batch(self, batch_size, shuffle=False, one_pass=False, drop_last=False, *args, **kwargs):
+    def next_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, *args, **kwargs):
         """ Return a batch """
         if self._batch_generator is None:
-            self._batch_generator = self.gen_batch(batch_size, shuffle, one_pass, drop_last, *args, **kwargs)
+            self._batch_generator = self.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
         batch = next(self._batch_generator)
         return batch
 

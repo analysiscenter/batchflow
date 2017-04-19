@@ -94,7 +94,7 @@ class DatasetIndex(Baseset):
         self.train = self.create_subset(self.subset_by_pos(train_pos))
 
 
-    def next_batch(self, batch_size, shuffle=False, one_pass=False, drop_last=False):
+    def next_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False):
         """ Return next batch """
         num_items = len(self)
 
@@ -122,7 +122,7 @@ class DatasetIndex(Baseset):
         else:
             batch_items = np.concatenate((rest_items, new_items))
 
-        if one_pass and rest_items is not None:
+        if n_epochs is not None and self._n_epochs >= n_epochs and rest_items is not None:
             # not used yet
             _ = drop_last
             return self.create_batch(rest_items, pos=True)
@@ -131,16 +131,16 @@ class DatasetIndex(Baseset):
             return self.create_batch(batch_items, pos=True)
 
 
-    def gen_batch(self, batch_size, shuffle=False, one_pass=False, drop_last=False):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False):
         """ Generate batches """
         self._start_index = 0
         self._order = None
-        _n_epochs = self._n_epochs
+        self._n_epochs = 0
         while True:
-            if one_pass and self._n_epochs > _n_epochs:
+            if n_epochs is not None and self._n_epochs >= n_epochs:
                 raise StopIteration()
             else:
-                batch = self.next_batch(batch_size, shuffle, one_pass)
+                batch = self.next_batch(batch_size, shuffle, n_epochs)
                 if drop_last and len(batch) < batch_size:
                     raise StopIteration()
                 else:

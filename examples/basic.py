@@ -25,13 +25,13 @@ if __name__ == "__main__":
     for drop_last in [False, True]:
         print("Start iterating... drop_last =", drop_last)
         i = 0
-        for batch in ds_data.gen_batch(3, shuffle=False, one_pass=True, drop_last=drop_last):
+        for batch in ds_data.gen_batch(3, shuffle=False, n_epochs=1, drop_last=drop_last):
             print("batch", i, ":", batch.indices)
             i += 1
         print("End iterating\n")
 
     print("Start iterating...")
     for i in range(K + 5):
-        batch = ds_data.next_batch(3, shuffle=False, one_pass=True, drop_last=True)
+        batch = ds_data.next_batch(3, shuffle=False, n_epochs=2, drop_last=True)
         print("batch", i, ":", batch.indices)
     print("End iterating")
