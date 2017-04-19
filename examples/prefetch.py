@@ -98,7 +98,7 @@ if __name__ == "__main__":
     #res.run(4, shuffle=False)    
     print("Start iterating...")
     t = time()
-    res.run(1, shuffle=False, one_pass=True, prefetch=3, target='threads')
+    res.run(1, shuffle=False, one_pass=True, prefetch=3, target='mpc')
     print("End:", time() - t)
     """
     i = 0

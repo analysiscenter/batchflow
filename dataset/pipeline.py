@@ -1,6 +1,7 @@
 """ Pipeline classes """
 import concurrent.futures as cf
 import asyncio
+import queue as q
 
 
 class Pipeline:
@@ -8,6 +9,8 @@ class Pipeline:
     def __init__(self, dataset):
         self.dataset = dataset
         self.action_list = []
+        self.prefetch_queue = None
+        self.executor = None
 
     def __getattr__(self, name, *args, **kwargs):
         """ Check if an unknown attr is an action from the batch class """
@@ -80,6 +83,23 @@ class Pipeline:
         for batch in gen_batch:
             _ = self._exec_all_actions(batch)
 
+    def _put_batches_into_queue(self, gen_batch):
+        for batch in gen_batch:
+            future = self.executor.submit(self._exec_all_actions, batch, True)
+            self.prefetch_queue.put(future, block=True)
+        self.prefetch_queue.put(None, block=True)
+
+    def _run_batches_from_queue(self):
+        while True:
+            future = self.prefetch_queue.get(block=True)
+            if future is None:
+                self.prefetch_queue.task_done()
+                break
+            else:
+                _ = future.result()
+                self.prefetch_queue.task_done()
+        return None
+
     def run(self, batch_size, shuffle=False, one_pass=True, prefetch=0, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
             Batches are created sequentially, one after another, without batch-level parallelism
@@ -92,19 +112,23 @@ class Pipeline:
                 del kwargs['target']
             else:
                 target = 'threads'
+
             if target == 'threads':
-                executor = cf.ThreadPoolExecutor(max_workers=prefetch)
+                self.executor = cf.ThreadPoolExecutor(max_workers=prefetch)
             elif target == 'mpc':
-                executor = cf.ProcessPoolExecutor(max_workers=prefetch)   # pylint: disable=redefined-variable-type
+                self.executor = cf.ProcessPoolExecutor(max_workers=prefetch)   # pylint: disable=redefined-variable-type
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
-            futures = []
-            for batch in batch_generator:
-                futures.append(executor.submit(self._exec_all_actions, batch, True))
 
+            self.prefetch_queue = q.Queue(maxsize=prefetch)
+            service_executor = cf.ThreadPoolExecutor(max_workers=2)
+            service_executor.submit(self._put_batches_into_queue, batch_generator)
+            future = service_executor.submit(self._run_batches_from_queue)
             # wait until all batches have been processed
-            _ = [future.result() for future in futures]
+            _ = future.result()            
         else:
+            self.prefetch_queue = None
+            self.executor = None
             self._run_seq(batch_generator)
         return self
 
