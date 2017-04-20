@@ -21,6 +21,7 @@ def action(method):
 
 
 def any_action_failed(results):
+    """ Return True if some of the results come from failed Future """
     return any([isinstance(res, Exception) for res in results])
 
 
@@ -56,10 +57,9 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 all_results = []
                 for future in futures:
                     try:
-                        print("Waiting for the result...")
                         result = future.result()
-                    except Exception as e:
-                        result = e
+                    except Exception as exce:  # pylint: disable=broad-except
+                        result = exce
                     finally:
                         all_results += [result]
                 return post_fn(all_results, *args, **kwargs)
