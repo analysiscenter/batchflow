@@ -13,6 +13,9 @@ from dataset import * # pylint: disable=wrong-import-
 @njit(nogil=True)
 def numba_fn(k, a1=0, a2=0, a3=0):
     print("   action numba", k, "started", a1, a2, a3)
+    if k > 8:
+        print(k)
+        y = 12 / np.log(1)
     for i in range(k * 3000):
         x = np.random.normal(0, 1, size=10000)
     print("   action numba", k, "ended")
@@ -20,7 +23,11 @@ def numba_fn(k, a1=0, a2=0, a3=0):
 
 def mpc_fn(i, *args):
     print("   mpc func", i, args)
-    return i
+    if i > '8':
+        y = 12 / np.log(1)
+    else:
+        y = i
+    return y
 
 
 # Example of custome Batch class which defines some actions
@@ -40,13 +47,15 @@ class MyDataFrameBatch(DataFrameBatch):
         print("Parallel:", r)
         return r
 
-    def parallel_post(self, results, not_done=None):
-        print("Post:", results)
+    def parallel_post(self, results, arg):
+        print("Post:")
+        print("   any failed?", any_action_failed(results))
+        print("  ", results)
         return self
 
 
     @action
-    @inbatch_parallel(init="parallel_init", target='threads') #, post="parallel_post")
+    @inbatch_parallel(init="parallel_init", post="parallel_post", target='mpc')
     def action1(self, *args):
         print("   action 1", args)
         return mpc_fn
@@ -57,7 +66,7 @@ class MyDataFrameBatch(DataFrameBatch):
         return r
 
     @action
-    @inbatch_parallel(init="action_n_init", target="nogil")
+    @inbatch_parallel(init="action_n_init", post="parallel_post", target="nogil")
     def action_n(self, *args, **kwargs):
         return numba_fn
 
@@ -65,7 +74,10 @@ class MyDataFrameBatch(DataFrameBatch):
     @inbatch_parallel(init="parallel_init", post="parallel_post", target='async')
     async def action2(self, i, *args):
         print("   action 2", i, "started", args)
-        await asyncio.sleep(1)
+        if i == '2':
+            x = 12 / 0
+        else:
+            await asyncio.sleep(1)
         print("   action 2", i, "ended")
         return i
 

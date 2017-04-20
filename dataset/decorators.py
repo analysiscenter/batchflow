@@ -48,7 +48,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 post_fn = None
             return init_fn, post_fn
 
-        def _call_post_fn(post_fn, futures, args, kwargs):
+        def _call_post_fn(self, post_fn, futures, args, kwargs):
             if post_fn is None:
                 # TODO: process errors in tasks
                 return self
@@ -56,8 +56,9 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 all_results = []
                 for future in futures:
                     try:
+                        print("Waiting for the result...")
                         result = future.result()
-                    except Exception e:
+                    except Exception as e:
                         result = e
                     finally:
                         all_results += [result]
@@ -89,7 +90,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 futures = []
                 if nogil:
                     nogil_fn = method(self, *args, **kwargs)
-                full_kwargs = kwargs.update(dec_kwargs)
+                full_kwargs = {**kwargs, **dec_kwargs}
                 for arg in init_fn(*args, **full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
@@ -100,7 +101,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 timeout = kwargs.get('timeout', None)
                 done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
-            return _call_post_fn(post_fn, futures, *args, **full_kwargs)
+            return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrap_with_mpc(self, args, kwargs):
             """ Run a method in parallel """
@@ -110,7 +111,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
-                full_kwargs = kwargs.update(dec_kwargs)
+                full_kwargs = {**kwargs, **dec_kwargs}
                 for arg in init_fn(*args, **full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
@@ -118,7 +119,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 timeout = kwargs.get('timeout', None)
                 done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
-            return _call_post_fn(post_fn, futures, *args, **full_kwargs)
+            return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrap_with_async(self, args, kwargs):
             """ Run a method in parallel with async / await """
@@ -126,13 +127,14 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             init_fn, post_fn = _check_functions(self)
 
             futures = []
-            full_kwargs = kwargs.update(dec_kwargs)
+            full_kwargs = {**kwargs, **dec_kwargs}
             for arg in init_fn(*args, **full_kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
-                futures.append(method(self, *margs, **mkwargs))
+                futures.append(asyncio.ensure_future(method(self, *margs, **mkwargs)))
 
-            done_results = loop.run_until_complete(asyncio.gather(*futures, loop=loop))
-            return _call_post_fn(post_fn, futures, *args, **full_kwargs)
+            done_results = loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
+
+            return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method in a required parallel engine """
