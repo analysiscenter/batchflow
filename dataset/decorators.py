@@ -70,7 +70,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 futures = []
                 if nogil:
                     nogil_fn = method(self, *args, **kwargs)
-                full_kwargs = kwargs.update(dec_args)
+                full_kwargs = kwargs.update(dec_kwargs)
                 for arg in init_fn(self, *args, **full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
