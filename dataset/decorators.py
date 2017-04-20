@@ -20,7 +20,7 @@ def action(method):
     return method
 
 
-def inbatch_parallel(init, post=None, target='threads'):
+def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
     """ Make in-batch parallel decorator """
     if target not in ['nogil', 'threads', 'mpc', 'async']:
         raise ValueError("target should be one of 'nogil', threads', 'mpc', 'async'")
@@ -70,7 +70,8 @@ def inbatch_parallel(init, post=None, target='threads'):
                 futures = []
                 if nogil:
                     nogil_fn = method(self, *args, **kwargs)
-                for arg in init_fn(self, *args, **kwargs):
+                full_kwargs = kwargs.update(dec_args)
+                for arg in init_fn(self, *args, **full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
                         one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
