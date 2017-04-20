@@ -44,6 +44,14 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 post_fn = None
             return init_fn, post_fn
 
+        def _call_post_fn(post_fn, futures, args, kwargs):
+            if post_fn is None:
+                return self
+            else:
+                done_results = [done_f.result() for done_f in done]
+                return post_fn(self, done_results, not_done)
+
+
         def _make_args(init_args, args, kwargs):
             """ Make args, kwargs tuple """
             if isinstance(init_args, tuple) and len(init_args) == 2:
@@ -71,7 +79,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 if nogil:
                     nogil_fn = method(self, *args, **kwargs)
                 full_kwargs = kwargs.update(dec_kwargs)
-                for arg in init_fn(self, *args, **full_kwargs):
+                for arg in init_fn(*args, **full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
                         one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
@@ -85,7 +93,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 return self
             else:
                 done_results = [done_f.result() for done_f in done]
-                return post_fn(self, done_results, not_done)
+                return post_fn(done_results, not_done)
 
         def wrap_with_mpc(self, args, kwargs):
             """ Run a method in parallel """
