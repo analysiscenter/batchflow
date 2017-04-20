@@ -33,6 +33,9 @@ class MyDataFrameBatch(DataFrameBatch):
         return self
 
     def parallel_init(self, *args, **kwargs):
+        #r = []
+        #for i in self.indices:
+        #    r.append([])
         r = self.indices.tolist()
         print("Parallel:", r)
         return r
@@ -43,13 +46,13 @@ class MyDataFrameBatch(DataFrameBatch):
 
 
     @action
-    @inbatch_parallel(init="parallel_init", target='mpc') #, post="parallel_post")
+    @inbatch_parallel(init="parallel_init", target='threads') #, post="parallel_post")
     def action1(self, *args):
         print("   action 1", args)
         return mpc_fn
 
     def action_n_init(self, *args, **kwargs):
-        r = self.indices.astype('int').tolist()
+        r = self.indices.astype('int') #.tolist()
         print("Parallel:", r)
         return r
 
@@ -92,7 +95,7 @@ if __name__ == "__main__":
             .load(data)
             .print("\nStart batch")
             .action2("async")
-            .action_n(123)
+            .action_n(712)
             .action1(17)
             .print("End batch"))
 

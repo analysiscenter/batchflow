@@ -22,8 +22,8 @@ def action(method):
 
 def inbatch_parallel(init, post=None, target='threads'):
     """ Make in-batch parallel decorator """
-    if target not in ['nogil', 'threads', 'mpc', 'async', 'dd']:
-        raise ValueError("target should one of 'nogil', threads', 'mpc', 'async', 'dd'")
+    if target not in ['nogil', 'threads', 'mpc', 'async']:
+        raise ValueError("target should be one of 'nogil', threads', 'mpc', 'async'")
 
     def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
@@ -47,16 +47,16 @@ def inbatch_parallel(init, post=None, target='threads'):
         def _make_args(init_args, args, kwargs):
             """ Make args, kwargs tuple """
             if isinstance(init_args, tuple) and len(init_args) == 2:
-                margs, mkwargs = args
+                margs, mkwargs = init_args
             elif isinstance(init_args, dict):
-                margs = []
+                margs = list()
                 mkwargs = init_args
             else:
                 margs = init_args
                 mkwargs = dict()
-            margs = margs if isinstance(margs, list) else [margs]
+            margs = margs if hasattr(margs, '__len__') else [margs]
             if len(args) > 0:
-                margs += args
+                margs = list(margs) + list(args)
             if len(kwargs) > 0:
                 mkwargs.update(kwargs)
             return margs, mkwargs
@@ -84,7 +84,7 @@ def inbatch_parallel(init, post=None, target='threads'):
                 return self
             else:
                 done_results = [done_f.result() for done_f in done]
-                return post_fn(done_results, not_done)
+                return post_fn(self, done_results, not_done)
 
         def wrap_with_mpc(self, args, kwargs):
             """ Run a method in parallel """
