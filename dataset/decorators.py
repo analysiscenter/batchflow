@@ -98,8 +98,9 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                     else:
                         one_ft = executor.submit(method, self, *margs, **mkwargs)
                     futures.append(one_ft)
+
                 timeout = kwargs.get('timeout', None)
-                done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
+                cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
@@ -116,8 +117,9 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
                     futures.append(one_ft)
+
                 timeout = kwargs.get('timeout', None)
-                done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
+                cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
@@ -132,7 +134,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
                 futures.append(asyncio.ensure_future(method(self, *margs, **mkwargs)))
 
-            done_results = loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
+            loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
