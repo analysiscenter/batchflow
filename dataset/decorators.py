@@ -20,10 +20,15 @@ def action(method):
     return method
 
 
-def inbatch_parallel(init, post=None, target='threads'):
+def any_action_failed(results):
+    """ Return True if some of the results come from failed Future """
+    return any([isinstance(res, Exception) for res in results])
+
+
+def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
     """ Make in-batch parallel decorator """
-    if target not in ['nogil', 'threads', 'mpc', 'async', 'dd']:
-        raise ValueError("target should one of 'nogil', threads', 'mpc', 'async', 'dd'")
+    if target not in ['nogil', 'threads', 'mpc', 'async']:
+        raise ValueError("target should be one of 'nogil', threads', 'mpc', 'async'")
 
     def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
@@ -34,29 +39,44 @@ def inbatch_parallel(init, post=None, target='threads'):
             else:
                 init_fn = getattr(self, init)
                 if not callable(init_fn):
-                    raise ValueError("init should refer to a method of class", type(self).__name__,
+                    raise ValueError("init should refer to a method of the class", type(self).__name__,
                                      "returning the list of arguments")
             if post is not None:
                 post_fn = getattr(self, post)
                 if not callable(post_fn):
-                    raise ValueError("post should refer to a method of class", type(self).__name__)
+                    raise ValueError("post should refer to a method of the class", type(self).__name__)
             else:
                 post_fn = None
             return init_fn, post_fn
 
+        def _call_post_fn(self, post_fn, futures, args, kwargs):
+            if post_fn is None:
+                # TODO: process errors in tasks
+                return self
+            else:
+                all_results = []
+                for future in futures:
+                    try:
+                        result = future.result()
+                    except Exception as exce:  # pylint: disable=broad-except
+                        result = exce
+                    finally:
+                        all_results += [result]
+                return post_fn(all_results, *args, **kwargs)
+
         def _make_args(init_args, args, kwargs):
             """ Make args, kwargs tuple """
             if isinstance(init_args, tuple) and len(init_args) == 2:
-                margs, mkwargs = args
+                margs, mkwargs = init_args
             elif isinstance(init_args, dict):
-                margs = []
+                margs = list()
                 mkwargs = init_args
             else:
                 margs = init_args
                 mkwargs = dict()
-            margs = margs if isinstance(margs, list) else [margs]
+            margs = margs if hasattr(margs, '__len__') else [margs]
             if len(args) > 0:
-                margs += args
+                margs = list(margs) + list(args)
             if len(kwargs) > 0:
                 mkwargs.update(kwargs)
             return margs, mkwargs
@@ -69,22 +89,39 @@ def inbatch_parallel(init, post=None, target='threads'):
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 if nogil:
-                    nogil_fn = method(self)
-                for arg in init_fn(self, *args, **kwargs):
+                    nogil_fn = method(self, *args, **kwargs)
+                full_kwargs = {**kwargs, **dec_kwargs}
+                for arg in init_fn(*args, **full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
                         one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
                     else:
                         one_ft = executor.submit(method, self, *margs, **mkwargs)
                     futures.append(one_ft)
-                timeout = kwargs.get('timeout', None)
-                done, not_done = cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
-            if post_fn is None:
-                return self
-            else:
-                done_results = [done_f.result() for done_f in done]
-                return post_fn(done_results, not_done)
+                timeout = kwargs.get('timeout', None)
+                cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
+
+            return _call_post_fn(self, post_fn, futures, args, full_kwargs)
+
+        def wrap_with_mpc(self, args, kwargs):
+            """ Run a method in parallel """
+            init_fn, post_fn = _check_functions(self)
+
+            n_workers = kwargs.get('n_workers', _cpu_count())
+            with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
+                futures = []
+                mpc_func = method(self, *args, **kwargs)
+                full_kwargs = {**kwargs, **dec_kwargs}
+                for arg in init_fn(*args, **full_kwargs):
+                    margs, mkwargs = _make_args(arg, args, kwargs)
+                    one_ft = executor.submit(mpc_func, *margs, **mkwargs)
+                    futures.append(one_ft)
+
+                timeout = kwargs.get('timeout', None)
+                cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
+
+            return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrap_with_async(self, args, kwargs):
             """ Run a method in parallel with async / await """
@@ -100,17 +137,14 @@ def inbatch_parallel(init, post=None, target='threads'):
             init_fn, post_fn = _check_functions(self)
 
             futures = []
-            for arg in init_fn(self, *args, **kwargs):
+            full_kwargs = {**kwargs, **dec_kwargs}
+            for arg in init_fn(*args, **full_kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
-                futures.append(method(self, *margs, **mkwargs))
-                #futures.append(asyncio.run_coroutine_threadsafe(method(self, *margs, **mkwargs), loop=loop))
+                futures.append(asyncio.ensure_future(method(self, *margs, **mkwargs)))
 
-            done_results = loop.run_until_complete(asyncio.gather(*futures, loop=loop))
-            if post_fn is None:
-                return self
-            else:
-                return post_fn(done_results)
+            loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
 
+            return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method in a required parallel engine """
@@ -118,6 +152,8 @@ def inbatch_parallel(init, post=None, target='threads'):
                 return wrap_with_threads(self, args, kwargs)
             elif target == 'nogil':
                 return wrap_with_threads(self, args, kwargs, nogil=True)
+            elif target == 'mpc':
+                return wrap_with_mpc(self, args, kwargs)
             elif target == 'async':
                 return wrap_with_async(self, args, kwargs)
             raise ValueError('Wrong parallelization target:', target)
