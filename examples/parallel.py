@@ -2,6 +2,7 @@
 import os
 import sys
 import asyncio
+from functools import partial
 import numpy as np
 import pandas as pd
 from numba import njit
@@ -21,8 +22,8 @@ def numba_fn(k, a1=0, a2=0, a3=0):
     print("   action numba", k, "ended")
     return x
 
-def mpc_fn(i, *args):
-    print("   mpc func", i, args)
+def mpc_fn(i, *args, **kwargs):
+    print("   mpc func", i, args, kwargs)
     if i > '8':
         y = 12 / np.log(1)
     else:
@@ -56,9 +57,9 @@ class MyDataFrameBatch(DataFrameBatch):
 
     @action
     @inbatch_parallel(init="parallel_init", post="parallel_post", target='mpc')
-    def action1(self, *args):
-        print("   action 1", args)
-        return mpc_fn
+    def action1(self, arg1, arg2=12):
+        print("   action 1", arg1, arg2)
+        return partial(mpc_fn, arg2=12)
 
     def action_n_init(self, *args, **kwargs):
         r = self.indices.astype('int') #.tolist()
