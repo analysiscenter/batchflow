@@ -2,6 +2,7 @@
 import concurrent.futures as cf
 import asyncio
 import queue as q
+from .utils import get_del
 
 
 class Pipeline:
@@ -127,10 +128,11 @@ class Pipeline:
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
+        target = get_del(kwargs, 'target', 'threads')
+
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
 
         if prefetch > 0:
-            target = kwargs.get('target', 'threads')
             if target == 'threads':
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
             elif target == 'mpc':
@@ -138,7 +140,7 @@ class Pipeline:
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
 
-            self._prefetch_queue = q.Queue(maxsize=prefetch)
+            self._prefetch_queue = q.Queue(maxsize=prefetch + 1)
             self._batch_queue = q.Queue()
 
             service_executor = cf.ThreadPoolExecutor(max_workers=2)
