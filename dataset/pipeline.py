@@ -1,13 +1,4 @@
-""" Pipeline classes and decorators """
-
-
-def action(method):
-    """ Decorator for action methods in Batch classes """
-    # TODO: decorator params: parallelization (e.g. threads, processes, async/await, greenlets,...)
-    # use __action for class-specific params
-    method.action = True
-    return method
-
+""" Pipeline classes """
 
 class Pipeline:
     """ Pipeline """
