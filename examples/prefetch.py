@@ -41,6 +41,11 @@ class MyArrayBatch(ArrayBatch):
         return self
 
     @action
+    def action0(self, *args):
+        print("   batch", self.indices, "   action 0", args)
+        return self
+
+    @action
     @inbatch_parallel(init="parallel_init") #, post="parallel_post")
     def action1(self, i, *args):
         print("   batch", self.indices, "   action 1", i, args)
@@ -89,10 +94,11 @@ if __name__ == "__main__":
     res = (ds_data.pipeline()
             .load(data)
             .print("Start batch")
-            .action1()
-            .action2() #loop=asyncio.get_event_loop())
-            .action_n()
-            .add(1000)
+            .action0()
+            #.action1()
+            #.action2() #loop=asyncio.get_event_loop())
+            #.action_n()
+            #.add(1000)
             .print("End batch"))
 
     #res.run(4, shuffle=False)
