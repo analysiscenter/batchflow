@@ -128,7 +128,7 @@ class Pipeline:
     def gen_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
-        print('prefetch =', prefetch)
+
         if prefetch > 0:
             target = kwargs.get('target', 'threads')
             if target == 'threads':
