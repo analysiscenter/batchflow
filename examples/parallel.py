@@ -15,15 +15,15 @@ from dataset import * # pylint: disable=wrong-import-
 def numba_fn(k, a1=0, a2=0, a3=0):
     print("   action numba", k, "started", a1, a2, a3)
     if k > 8:
-        print(k)
+        print("         fail:", k)
         y = 12 / np.log(1)
-    for i in range(k * 3000):
+    for i in range((k + 1) * 3000):
         x = np.random.normal(0, 1, size=10000)
     print("   action numba", k, "ended")
     return x
 
-def mpc_fn(i, *args, **kwargs):
-    print("   mpc func", i, args, kwargs)
+def mpc_fn(i, arg2):
+    print("   mpc func", i, arg2)
     if i > '8':
         y = 12 / np.log(1)
     else:
@@ -36,7 +36,7 @@ class MyDataFrameBatch(DataFrameBatch):
     @action
     def print(self, text=None):
         if text is not None:
-            print(text)
+            print("\n=====", text, "=====")
         print(self.data)
         return self
 
@@ -45,10 +45,10 @@ class MyDataFrameBatch(DataFrameBatch):
         #for i in self.indices:
         #    r.append([])
         r = self.indices.tolist()
-        print("Parallel:", r)
+        print("\nParallel:", r)
         return r
 
-    def parallel_post(self, results, arg):
+    def parallel_post(self, results, *args, **kwargs):
         print("Post:")
         print("   any failed?", any_action_failed(results))
         print("  ", results)
@@ -57,13 +57,13 @@ class MyDataFrameBatch(DataFrameBatch):
 
     @action
     @inbatch_parallel(init="parallel_init", post="parallel_post", target='mpc')
-    def action1(self, arg1, arg2=12):
-        print("   action 1", arg1, arg2)
-        return partial(mpc_fn, arg2=12)
+    def action1(self, arg2=12):
+        print("   action 1", arg2)
+        return partial(mpc_fn, arg2=arg2)
 
     def action_n_init(self, *args, **kwargs):
         r = self.indices.astype('int') #.tolist()
-        print("Parallel:", r)
+        print("\nParallel:", r)
         return r
 
     @action
@@ -76,6 +76,7 @@ class MyDataFrameBatch(DataFrameBatch):
     async def action2(self, i, *args):
         print("   action 2", i, "started", args)
         if i == '2':
+            print("   action 2", i, "failed")
             x = 12 / 0
         else:
             await asyncio.sleep(1)
@@ -106,10 +107,10 @@ if __name__ == "__main__":
 
     res = (ds_data.pipeline()
             .load(data)
-            .print("\nStart batch")
+            .print("Start batch")
             .action2("async")
             .action_n(712)
-            .action1(17)
+            .action1(arg2=14)
             .print("End batch"))
 
     res.run(4, shuffle=False)
