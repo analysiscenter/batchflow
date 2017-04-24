@@ -132,9 +132,9 @@ class Pipeline:
         if prefetch > 0:
             target = kwargs.get('target', 'threads')
             if target == 'threads':
-                self._executor = cf.ThreadPoolExecutor(max_workers=prefetch)
+                self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
             elif target == 'mpc':
-                self._executor = cf.ProcessPoolExecutor(max_workers=prefetch)   # pylint: disable=redefined-variable-type
+                self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)   # pylint: disable=redefined-variable-type
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
 
