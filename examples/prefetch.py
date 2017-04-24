@@ -95,21 +95,22 @@ if __name__ == "__main__":
             .load(data)
             .print("Start batch")
             .action0()
-            #.action1()
-            #.action2() #loop=asyncio.get_event_loop())
-            #.action_n()
+            .action1()
+            .action2() #loop=asyncio.get_event_loop())
+            .action_n()
             #.add(1000)
             .print("End batch"))
 
     #res.run(4, shuffle=False)
     print("Start iterating...")
     t = time()
-    res.run(3, shuffle=False, n_epochs=1, drop_last=True, prefetch=3, target='mpc')
+    #res.run(3, shuffle=False, n_epochs=1, drop_last=True, prefetch=3, target='mpc')
     print("End:", time() - t)
-    """
+
     i = 0
-    for batch_res in res.gen_batch(3, shuffle=False, prefetch=2):
-        print(" ====== Iteration ", i)
-        print("Batch:", batch_res.indices)
-    print(" ====== Stop iteration ===== ")
-    """
+    for batch_res in res.gen_batch(3, shuffle=False, n_epochs=1, prefetch=1, target='mpc'):
+        print('-------------------------------------------------')
+        print("====== Iteration ", i, "batch:", batch_res.indices)
+        i += 1
+    print("====== Stop iteration ===== ")
+

@@ -105,7 +105,7 @@ class Pipeline:
                 self._prefetch_queue.task_done()
         return None
 
-    def run(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, prefetch=0, *args, **kwargs):
+    def run(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset """
         batch_generator = self.gen_batch(batch_size, shuffle, n_epochs, drop_last, prefetch, *args, **kwargs)
         for _ in batch_generator:
@@ -126,7 +126,7 @@ class Pipeline:
         self._executor = None
         self._batch_generator = None
 
-    def gen_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, prefetch=0, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
         target = get_del(kwargs, 'target', 'threads')
 
@@ -146,7 +146,7 @@ class Pipeline:
             service_executor = cf.ThreadPoolExecutor(max_workers=2)
             service_executor.submit(self._put_batches_into_queue, batch_generator)
             future = service_executor.submit(self._run_batches_from_queue)
-            while not future.done():
+            while not future.done() or not self._batch_queue.empty():
                 batch_res = self._batch_queue.get(block=True)
                 if batch_res is not None:
                     self._batch_queue.task_done()
@@ -159,7 +159,7 @@ class Pipeline:
                 yield self._exec_all_actions(batch)
         return self
 
-    def next_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False, prefetch=0, *args, **kwargs):
+    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """
         if prefetch > 0:
             if self._batch_generator is None:

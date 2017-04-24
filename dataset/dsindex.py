@@ -103,7 +103,7 @@ class DatasetIndex(Baseset):
             raise ValueError("shuffle should be bool or int")
 
 
-    def next_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False):
+    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
         """ Return next batch """
         num_items = len(self)
 
@@ -138,7 +138,7 @@ class DatasetIndex(Baseset):
             return self.create_batch(batch_items, pos=True)
 
 
-    def gen_batch(self, batch_size, shuffle=False, n_epochs=None, drop_last=False):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
         """ Generate batches """
         self._start_index = 0
         self._order = None
