@@ -38,14 +38,15 @@ The only required argument which contains a method name to be called to initiali
 
 ### post='other_method'
 Optional.
-A method name which is called after all parallelized functions are finished.
+A method name which is called after all parallelized tasks are finished.
+
 ### target='threads'
 Optional.
 Specifies a parallelization engine, should be one of `threads`, `nogil`, `async`, `mpc`.
 
 
 ## Additional decorator arguments
-You can pass any other arguments to the decorator and they will be passed further to init and post functions.
+You can pass any other arguments to the decorator and they will be passed further to `init` and `post` functions.
 
 ```python
 class MyBatch(Batch):
@@ -164,7 +165,7 @@ So the action will be fired as:
 `some_action(self._data, index2, arg1=another_arg, arg2=one_more_arg)`  
 `...`
 
-Thus 2-items tuple is reserved to this situation (1st item is a list of positional arguments and 2nd is a dict of named arguments).
+Thus, 2-items tuple is reserved for this situation (1st item is a list of positional arguments and 2nd is a dict of named arguments).
 
 That is why you cannot pass a tuple of 2 arguments:
 ```python
@@ -180,21 +181,25 @@ Instead make it a list:
 ```
 
 ### Init's additional arguments
-Take into account that all arguments passed into actions are also passed into `init` function. So when you call:
+Take into account that all arguments passed into actions are also passed into the `init` function. So when you call:
 ```python
 some_pipeline.some_parallel_action(10, 12, my_arg=12)
 ```
 The `init` function will be called like that:
 ```python
-init_function(10, 12, my_arg=12, arg_from_parallel_decorator=True)
+init_function(10, 12, my_arg=12)
 ```
 This is convenient when you need to initialize some additional variables depending on the arguments. For instance, to create a numpy array of a certain shape filled with specific values or set up a random state or even pass additional arguments back to action methods.
 
+If you have specified [additional decorator arguments](#additional-decorator-arguments) they are also passed to the `init` function:
+```python
+init_function(10, 12, my_arg=12, arg_from_parallel_decorator=True)
+```
 
 ## Post function
-When all parallelized invocations are finished the `post` function is called.
+When all parallelized tasks are finished, the `post` function is called.
 
-The first argument it receives is the list of results from each parallelized function.
+The first argument it receives is the list of results from each parallel task.
 ```python
 class MyBatch(Batch):
     ...
@@ -216,7 +221,7 @@ Here `_post_default` will be called as
 _post_default([proc_value_from_1, proc_value_from_2, ..., proc_value_from_last])
 ```
 
-If anything went wrong than instead of `proc_value`, there would be an instance of some Exception or Error caught in the parallelized function.
+If anything went wrong than instead of `proc_value`, there would be an instance of some Exception or Error caught in the parallel tasks.
 
 This is where `any_action_failed` might come in handy:
 ```python
@@ -246,13 +251,13 @@ There are four targets available: `threads`, `nogil`, `async`, `mpc`
 
 ### threads
 A method will be parallelized with [concurrent.futures.ThreadPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#threadpoolexecutor).
-Take into account that due to [GIL](https://wiki.python.org/moin/GlobalInterpreterLock) only one python thread will run in any given moment (pseudo-parallelism).
-However, for a function with intesive I/O processing or waiting for some synchronization you might get a considerable performance increase.
+Take into account that due to [GIL](https://wiki.python.org/moin/GlobalInterpreterLock) only one python thread is executed in any given moment (pseudo-parallelism).
+However, a function with intesive I/O processing or waiting for some synchronization might get a considerable performance increase.
 
-This is a default engine which is used if you don't specify `target` in the `inbatch_parallel` decorator.
+This is a default engine which is used if `target` is not specified in the `inbatch_parallel` decorator.
 
 ### nogil
-To get rid of GIL you might write a [cython](http://cython.org/) or [numba](http://numba.pydata.org/) function which will run in parallel.
+To get rid of GIL you might write a [cython](http://cython.org/) or [numba](http://numba.pydata.org/) function which can run in parallel.
 And a decorated method should just return this nogil-function which will be further parallelized.
 
 ```python
@@ -274,20 +279,20 @@ class MyBatch(Batch):
 ```
 
 ### async
-For i/o-intensive processing you might want to consider writing an [`async` method](https://docs.python.org/3/library/asyncio-task.html).
+For I/O-intensive processing you might want to consider writing an [`async` method](https://docs.python.org/3/library/asyncio-task.html).
 ```python
 class MyBatch(Batch):
     ...
     @action
     @inbatch_parallel(init='_init_default', post='_post_default', target='async')
     async def some_action(self, item, some_arg)
-        # do something asynchrounously
+        # do something
         proc_value = await other_async_function(some_arg)
         return proc_value
 ```
 
 ### mpc
-With `mpc` you might run calculations in separate processes thus removing GIL restrictions. For this [concurrent.futures.ProcessPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#processpoolexecutor) will be used. Likewise `nogil` the decorated method should just return a function which will be executed in a separate process.
+With `mpc` you might run calculations in separate processes thus removing GIL restrictions. For this [concurrent.futures.ProcessPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#processpoolexecutor) is used. Likewise `nogil` the decorated method should just return a function which will be executed in a separate process.
 
 ```python
 from dataset import Batch, action, inbatch_parallel
@@ -304,7 +309,7 @@ class MyBatch(Batch):
         # do not process anything, just return a function which will be run as a separate process
         return mpc_fn
 ```
-Multiprocessing requires all code and data to be serialized (with [pickle](https://docs.python.org/3/library/pickle.html)) in order to be sent to another process. And many classes and methods are not so easy (or even impossible) to pickle. That is why we chose to parallelize functions. And with these thoughts in mind you should carefully consider your parallelized function and the arguments it receives.
+Multiprocessing requires all code and data to be serialized (with [pickle](https://docs.python.org/3/library/pickle.html)) in order to be sent to another process. And many classes and methods are not so easy (or even impossible) to pickle. That is why to parallelize functions might be a better choice. Nevertheless, with all these thoughts in mind you should carefully consider your parallelized function and the arguments it receives.
 
 Besides, you might want to implement a thorough logging mechanism as multiprocessing configurations are susceptible to hanging up. Without logging it would be quite hard to understand what happened and then debug your code.
 
@@ -325,7 +330,7 @@ batch.some_action(1, 2)
 However, when you call it this way, the default arguments are not available externally (in particular, in decorators).
 This is the problem for `nogil`/`mpc` parallelism.
 
-The best solutions would be not to use default values at all, but if you really need them you should copy them into parallelized functions:
+The best solutions would be not to use default values at all, but if you really need them, you should copy them into parallelized functions:
 ```python
 def mpc_fn(item, arg1, arg2, arg3=10):
     # ...
@@ -359,3 +364,5 @@ By default each action runs as many parallel tasks as the number of cores your c
 some_pipeline.parallel_action(some_arg, n_workers=3)
 ```
 Here `parallel_action` will have only 3 parallel tasks being executed simultneously. Others will wait in the queue.
+
+**Attention!** You cannot use `n_workers` with `target=async`.

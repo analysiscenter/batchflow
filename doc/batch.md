@@ -5,7 +5,7 @@ Normally, you never create batch instances, as they are created in the `Dataset`
 
 
 ## Index
-`Batch` class stores the index of all data items which belongs to the batch. You can access the index through `self.index`. The sequence of indices is also available as `self.indices`.
+`Batch` class stores the [index](index.md) of all data items which belongs to the batch. You can access the index through `self.index`. The sequence of indices is also available as `self.indices`.
 
 
 ## Data
@@ -17,7 +17,7 @@ There is also a public property `data` defined as:
 def data(self):
     return self._data
 ```
-This approach lets to conceal an internal data structure and allow for a more convenient and (perhaps) more stable public interface for data access.
+This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.
 
 An earlier mentioned batch with images may redefine `data` as:
 ```python
@@ -47,7 +47,7 @@ Take into account that an `action` method should return a batch instance of the 
 If an `action` changes the instance's data directly it may simply return `self`.
 
 ## Running methods in parallel
-As batch can be large it might make sense to parallel the computations.
+As batch can be large it might make sense to parallel the computations. And it is pretty easy to do:
 ```python
 from dataset import Batch, inbatch_parallel, action
 
