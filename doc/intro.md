@@ -1,10 +1,14 @@
 # Working with large datasets
 
-
 ## Dataset
 See [dataset.md](dataset.md)
 
 ## Index
+Index holds a sequence of data item ids. As a dataset is split into batches you should have a mechanism to uniquely address each data item.
+In simple cases it can be just a `numpy.arange`:
+```python
+dataset_index = DatasetIndex(np.arange(my_array.shape[0]))
+```
 See [index.md](index.md)
 
 ## Batch
@@ -23,7 +27,7 @@ class MyBatch(Batch):
     @action
     @inbatch_parallel(init='_init_fn', post='_post_fn', target='threads')
     def some_action(self, item):
-        # process just one item rom the batch
+        # process just one item from the batch
         return some_value
 ```
 See [parallel.md](parallel.md)
