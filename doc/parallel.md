@@ -9,7 +9,7 @@
 1. [Post function](#post-function)
 1. [Targets](#targets)
 1. [Arguments with default values](#arguments-with-default-values)
-1. [Examples](#examples)
+1. [Number of parallel jobs](#number-of-parallel-jobs)
 
 
 ## Basic usage
@@ -306,11 +306,11 @@ class MyBatch(Batch):
 ```
 Multiprocessing requires all code and data to be serialized (with [pickle](https://docs.python.org/3/library/pickle.html)) in order to be sent to another process. And many classes and methods are not so easy (or even impossible) to pickle. That is why we chose to parallelize functions. And with these thoughts in mind you should carefully consider your parallelized function and the arguments it receives.
 
-Besides, you might want to implement a thorough logging mechanism as multiprocessing configurations are susceptible to hanging up. Without logging it would be quite hard to understand what happened and then debug your code. 
+Besides, you might want to implement a thorough logging mechanism as multiprocessing configurations are susceptible to hanging up. Without logging it would be quite hard to understand what happened and then debug your code.
 
 
 ## Arguments with default values
-If you have a function with default arguments, you may call it without passing those arguments. 
+If you have a function with default arguments, you may call it without passing those arguments.
 ```python
 class MyBatch(Batch):
     ...
@@ -323,7 +323,7 @@ class MyBatch(Batch):
 batch.some_action(1, 2)
 ```
 However, when you call it this way, the default arguments are not available externally (in particular, in decorators).
-This is the problem for `nogil`/`mpc` parallelism. 
+This is the problem for `nogil`/`mpc` parallelism.
 
 The best solutions would be not to use default values at all, but if you really need them you should copy them into parallelized functions:
 ```python
@@ -353,5 +353,9 @@ class MyBatch(Batch):
         return partial(mpc_fn, arg3=arg3)
 ```
 
-## Examples
-...
+## Number of parallel jobs
+By default each action runs as many parallel tasks as the number of cores your computer/server has. That is why sometimes you might want to run fewer or more tasks. Then you can specify this number in each action call with `n_workers` option:
+```python
+some_pipeline.parallel_action(some_arg, n_workers=3)
+```
+Here `parallel_action` will have only 3 parallel tasks being executed simultneously. Others will wait in the queue.

@@ -18,6 +18,9 @@ You will rarely need to work with an index directly, but if you want to do somet
 
 ### Public API
 
+#### indices
+Property which provides access to the sequence of index items (as a numpy array).
+
 #### get_pos(item_id)
 Returns the position of the `item_id` in the index sequence.
 ```python
@@ -26,6 +29,7 @@ index = DatasetIndex(['item_01', 'item_02', 'item_03', 'item_04'])
 pos = index.get_pos('item_03')
 # pos will be equal 2
 ```
+As you may guess `self.indices[2]` contains `item_03`.
 
 #### cv_split(shares)
 Split index into train, test and validation subsets. Shuffles index if necessary.
@@ -44,7 +48,7 @@ Split into train / test / validation in 50/30/20 ratio
 index.cv_split([0.5, 0.3, 0.2])
 ```
 
-#### next_batch(batch_size, shuffle, n_epochs, drop_last)
+#### next_batch(batch_size, shuffle=False, n_epochs=1, drop_last=False)
 Returns a batch from the index.
 
 Args:
@@ -58,7 +62,7 @@ Args:
 
 Default - `False`.
 
-`n_epochs` - number of iterations around the whole index. If None, then you will have an infinite sequence of batches. Default value - 1.
+`n_epochs` - number of iterations around the whole index. If `None`, then you will get an infinite sequence of batches. Default value - 1.
 
 `drop_last` - whether to skip the last batch if it has fewer items (for instance, if an index contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the last batch with just 1 item).
 
@@ -71,12 +75,12 @@ for i in range(MAX_ITERS):
     index_batch = index.next_batch(BATCH_SIZE, n_epochs=None)
 ```
 
-#### gen_batch(batch_size, shuffle, n_epochs, drop_last)
+#### gen_batch(batch_size, shuffle=False, n_epochs=1, drop_last=False)
 Returns a batch generator.
 
 Usage:
 ```python
-for index_batch in index.gen_batch(BATCH_SIZE, shuffle=False, n_epochs=1):
+for index_batch in index.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=1):
     # do something
 ```
 
@@ -88,14 +92,14 @@ files_index = FilesIndex("/path/to/some/files/*.csv")
 Thus `files_index` will contain the list of filenames that match a given mask.
 The details of mask specification may be found in the [glob](https://docs.python.org/3/library/glob.html) documentation.
 
-### No extension
+### No file extensions
 When filenames contain extensions which are not a part of the id, then they may be stripped with an option `no_ext`:
 ```python
 dataset_index = FilesIndex("/path/to/some/files/*.csv", no_ext=True)
 ```
 
 ### Sorting
-Since order may be random, you may want to sort your index them:
+Since order may be random, you may want to sort your index items:
 ```python
 dataset_index = FilesIndex("/path/to/some/files/*.csv", sort=True)
 ```
@@ -106,10 +110,10 @@ Sometimes you need directories, not files. For instance, a CT images dataset inc
 ```python
 dirs_index = FilesIndex("/path/to/archive/2016-*/scans/*", dirs=True)
 ```
-Here `dirs_index` will contain an ordered list of all subdirectories names.
+Here `dirs_index` will contain a list of all subdirectories names.
 
 ### Numerous sources
-If files you are interested in are located in different places you may still build an index:
+If files you are interested in are located in different places you may still build one united index:
 ```python
 dataset_index = FilesIndex(["/current/year/data/*", "/path/to/archive/2016/*", "/previous/years/*"])
 ```
@@ -124,3 +128,25 @@ index = FilesIndex(['/some/path/*.csv', '/other/path/data/*'])
 fullpath = index.get_fullpath('item_03')
 ```
 `fullpath` will contain the fully qualified name like `/some/path/item_03.csv`.
+
+
+## Creating your own index class
+
+### Constructor
+We highly recommend to use the following pattern:
+```python
+class MyIndex(DatasetIndex):
+    def __init__(self, index, my_arg, *args, **kwargs):
+        # initialize new properties
+        super().__init__(index, my_arg, *args, **kwargs)
+        # do whatever you need
+```
+So to summarize:
+1. the parent class should `DatasetIndex` or its child
+1. include `*args` and `**kwargs` in the constructor definition
+1. pass all the arguments to the parent constructor
+
+### build_index
+You might want to redefine `build_index` method which actually creates the index.
+It takes all the arguments from the constructor and returns a numpy array with index items.
+This method is called automatically from the `DatasetIndex` constructor.
