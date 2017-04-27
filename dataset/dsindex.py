@@ -211,7 +211,7 @@ class FilesIndex(DatasetIndex):
         _all_index = None
         _all_paths = dict()
         for one_path in paths:
-            _index, _paths = self.build_from_one_path(one_path, dirs, no_ext, sort)
+            _index, _paths = self.build_from_one_path(one_path, dirs, no_ext)
             if _all_index is None:
                 _all_index = _index
             else:
@@ -224,7 +224,7 @@ class FilesIndex(DatasetIndex):
 
         return _all_index
 
-    def build_from_one_path(self, path, dirs=False, no_ext=False, sort=False):
+    def build_from_one_path(self, path, dirs=False, no_ext=False):
         """ Build index from a path/glob """
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path)

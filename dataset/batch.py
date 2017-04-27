@@ -50,6 +50,7 @@ class Batch:
 
     @property
     def data(self):
+        """ Return batch data """
         return self._data
 
     def __getitem__(self, item):
@@ -135,6 +136,7 @@ class ArrayBatch(Batch):
 
     @action
     def save(self, dst, fmt=None):
+        """ Save batch data to a file (an alias for dump method)"""
         return self.dump(dst, fmt)
 
 
