@@ -74,9 +74,10 @@ class DatasetIndex(Baseset):
         _, test_share, valid_share = self.calc_cv_split(shares)
 
         # TODO: make a view not copy if not shuffled
-        order = np.arange(len(self))
         if shuffle:
-            np.random.shuffle(order)
+            order = self._shuffle(shuffle)
+        else:
+            order = np.arange(len(self))
 
         if valid_share > 0:
             validation_pos = order[:valid_share]
@@ -87,32 +88,38 @@ class DatasetIndex(Baseset):
         train_pos = order[valid_share + test_share:]
         self.train = self.create_subset(self.subset_by_pos(train_pos))
 
-    def _shuffle(self, shuffle):
+
+    def _shuffle(self, shuffle, order=None):
+        if order is None:
+            if self._order is None:
+                order = np.arange(len(self))
+            else:
+                order = self._order
+
         if isinstance(shuffle, bool):
             if shuffle:
-                np.random.shuffle(self._order)
+                order = np.random.permutation(order)
         elif isinstance(shuffle, int):
             if self._random_state is None or self._random_state.seed != shuffle:
                 self._random_state = np.random.RandomState(shuffle)
-            self._random_state.shuffle(self._order)
+            order = self._random_state.permutation(order)
         elif isinstance(shuffle, np.random.RandomState):
             if self._random_state != shuffle:
                 self._random_state = shuffle
-            self._random_state.shuffle(self._order)
+            order = self._random_state.permutation(order)
         elif callable(shuffle):
-            self._order = shuffle(self._order)
+            order = shuffle(self.indices)
         else:
-            raise ValueError("shuffle should be bool or int")
+            raise ValueError("shuffle could be bool, int, numpy.random.RandomState or callable")
+        return order
 
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
         """ Return next batch """
-        num_items = len(self)
 
-        # TODO: make a view not copy whenever possible
         if self._order is None:
-            self._order = np.arange(num_items)
-            self._shuffle(shuffle)
+            self._order = self._shuffle(shuffle)
+        num_items = len(self._order)
 
         rest_items = None
         if self._start_index + batch_size >= num_items:
@@ -120,7 +127,7 @@ class DatasetIndex(Baseset):
             rest_of_batch = self._start_index + batch_size - num_items
             self._start_index = 0
             self._n_epochs += 1
-            self._shuffle(shuffle)
+            self._order = self._shuffle(shuffle, self._order)
         else:
             rest_of_batch = batch_size
 

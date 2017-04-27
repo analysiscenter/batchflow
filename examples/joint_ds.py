@@ -52,7 +52,7 @@ for i in range(3):
 
 
 # Create index from ./data/dirs
-dindex = FilesIndex(path=os.path.join(DIR_PATH, 'dir*/*'), dirs=True, sort=True)
+dindex = FilesIndex(path=os.path.join(DIR_PATH, 'dir*/*'), dirs=True, sort=False)
 # print list of subdirectories
 print("Dir Index:")
 print(dindex.index)
@@ -72,7 +72,7 @@ jds = JointDataset((ds1,ds2), align='order' if align else 'same')
 K = 5
 
 print("\nGenerating batches")
-for b1, b2 in jds.gen_batch(K, one_pass=True):
+for b1, b2 in jds.gen_batch(K, n_epochs=1):
 	print(b1.indices)
 	print(b2.indices)
 
@@ -88,7 +88,7 @@ for dsi in [jds.train, jds.test, jds.validation]:
         print()
 
 print("\nTrain batches")
-for b1, b2 in jds.train.gen_batch(3, shuffle=False, one_pass=True):
+for b1, b2 in jds.train.gen_batch(3, shuffle=False, n_epochs=1):
     print("DS1:", b1.indices)
     print("DS2:", b2.indices)
     print()

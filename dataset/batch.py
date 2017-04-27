@@ -161,10 +161,10 @@ class DataFrameBatch(Batch):
 
         # But put into this batch only part of it (defined by index)
         if isinstance(dfr, pd.DataFrame):
-            self.data = dfr.loc[self.indices]
+            self._data = dfr.loc[self.indices]
         elif isinstance(dfr, dd.DataFrame):
             # dask.DataFrame.loc supports advanced indexing only with lists
-            self.data = dfr.loc[list(self.indices)].compute()
+            self._data = dfr.loc[list(self.indices)].compute()
         else:
             raise TypeError("Unknown DataFrame. DataFrameBatch supports only pandas and dask.")
 
