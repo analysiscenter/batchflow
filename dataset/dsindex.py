@@ -29,15 +29,13 @@ class DatasetIndex(Baseset):
             _index = index
 
         if isinstance(_index, DatasetIndex):
-            _index = _index.index
+            _index = _index.indices
         else:
             # index should allow for advance indexing (i.e. subsetting)
-            try:
-                _ = _index[[0]]
-            except TypeError:
-                _index = np.asarray(_index)
-            except IndexError:
-                raise ValueError("Index cannot be empty")
+            _index = np.asarray(_index)
+
+        if len(_index) == 0:
+            raise ValueError("Index cannot be empty")
 
         if len(_index.shape) > 1:
             raise TypeError("Index should be 1-dimensional")
@@ -46,7 +44,7 @@ class DatasetIndex(Baseset):
 
     def build_pos(self):
         """ Create a dictionary with positions in the index """
-        return dict(zip(self.indices, np.arange(len(self.indices))))
+        return dict(zip(self.indices, np.arange(len(self))))
 
     def get_pos(self, index):
         """ Return position of an item in the index """
@@ -97,6 +95,10 @@ class DatasetIndex(Baseset):
             if self._random_state is None or self._random_state.seed != shuffle:
                 self._random_state = np.random.RandomState(shuffle)
             self._random_state.shuffle(self._order)
+        elif isinstance(shuffle, np.random.RandomState):
+            if self._random_state != shuffle:
+                self._random_state = shuffle
+            self._random_state.shuffle(self._order)
         elif callable(shuffle):
             self._order = shuffle(self._order)
         else:
@@ -130,9 +132,10 @@ class DatasetIndex(Baseset):
             batch_items = np.concatenate((rest_items, new_items))
 
         if n_epochs is not None and self._n_epochs >= n_epochs and rest_items is not None:
-            # not used yet
-            _ = drop_last
-            return self.create_batch(rest_items, pos=True)
+            if drop_last and len(rest_items) < batch_size:
+                raise StopIteration("Dataset is over. No more batches left.")
+            else:
+                return self.create_batch(rest_items, pos=True)
         else:
             self._start_index += rest_of_batch
             return self.create_batch(batch_items, pos=True)
@@ -147,11 +150,8 @@ class DatasetIndex(Baseset):
             if n_epochs is not None and self._n_epochs >= n_epochs:
                 raise StopIteration()
             else:
-                batch = self.next_batch(batch_size, shuffle, n_epochs)
-                if drop_last and len(batch) < batch_size:
-                    raise StopIteration()
-                else:
-                    yield batch
+                batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last)
+                yield batch
 
 
     def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ, unused-argument
