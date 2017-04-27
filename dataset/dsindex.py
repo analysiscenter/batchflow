@@ -217,7 +217,11 @@ class FilesIndex(DatasetIndex):
             else:
                 _all_index = np.concatenate((_all_index, _index))
             _all_paths.update(_paths)
+
+        if sort:
+            _all_index = _all_index.sort()
         self._paths = _all_paths
+
         return _all_index
 
     def build_from_one_path(self, path, dirs=False, no_ext=False, sort=False):
@@ -225,12 +229,8 @@ class FilesIndex(DatasetIndex):
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path)
         _full_index = np.asarray([self.build_key(fname, no_ext) for fname in pathlist if check_fn(fname)])
-        if sort:
-            _order = np.argsort(_full_index[:, 0])
-        else:
-            _order = slice(None, None)
-        _index = _full_index[_order, 0]
-        _paths = _full_index[_order, 1]
+        _index = _full_index[:, 0]
+        _paths = _full_index[:, 1]
         _paths = dict(zip(_index, _paths))
         return _index, _paths
 
