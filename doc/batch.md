@@ -43,7 +43,7 @@ class MyBatch(Batch):
         # process your data
         return self
 ```
-Take into account that an `action` method should return an instance of some `Batch`-class: the very same or some other class.
+Take into account that an `action` method should return an instance of some `Batch`-class: the very same one or some other class.
 If an `action` changes the instance's data directly it may simply return `self`.
 
 ## Running methods in parallel
@@ -72,6 +72,8 @@ class MyBatch(Batch):
         super().__init__()
         # process your data
 ```
+It is not so important if you are extremely carefull when calling batch generators and parallelizing actions, so you are absolutly sure that a batch cannot get unexpected arguments.
+But usually it is just easier to add `*args` and `*kwargs` and have a guarantee that your program will not break or hang up (as it most likely will do if you do batch prefetching with multiprocessing).
 
 ### Don't load data in the constructor
 The constructor should just intialize properties.
@@ -107,21 +109,37 @@ class MyBatch(Batch):
 It is just a convenient convention which makes your life more consistent.
 
 ### (optional) Define `__getitem__` method
-If you want to address batch items easily as well as iterate over your batch, you need `__getitem__` method. The default `__getitem__` from a base `Batch` looks like this:
+If you want to address batch items easily as well as iterate over your batch, you need `__getitem__` method. The default `Batch.__getitem__`  just returns an item from `data`:
 ```python
 class MyBatch(Batch):
     ...
-    def __getitem__(self, item):
-        return self.data[item]
+    def some_method(self):
+        ...
+        some_value = self[some_item]  # equals self.data[some_item]
+        ...
 ```
-Thus you will be able to address batch items as `self[index_id]` internally (in the batch class methods) and as `batch[index_id]` externally.
+Thus you are able to address batch items as `self[index_id]` internally (in the batch class methods) and as `batch[index_id]` externally.
+
+If you have defined `data` as a tuple, theb base `__getitem__` will also work:
+```python
+class MyBatch(Batch):
+    ...
+    def data(self):
+        return self._images, self._mask
+...
+for i in range(MAX_ITER):
+    batch = some_pipeline.next_batch(BATCH_SIZE)
+    for image, mask in batch:
+        # process one image and one corresponding mask
+```
+If your data has a more complex structure, you will need to write your own `__getitem__`.
 
 ###  Make all public methods `actions`
 ```python
 class MyBatch(Batch):
     ...
     @action
-    def change_data(self, item, arg1, arg2):
+    def change_data(self, arg1, arg2):
         # process your data
         return self
 ```
@@ -130,6 +148,7 @@ class MyBatch(Batch):
 ### Parallel everyting you can
 If you want a really fast data processing you can't do without `numba` or `cython`.
 And don't forget about input/output operations.
+For more details see [parallel](parallel.md).
 
 ### Make all I/O in `async` methods
 This is extremely important if you read data from many files.
@@ -154,9 +173,9 @@ class MyBatch(Batch):
     def _init_io(self):
         return [[item_id, self.index.get_fullpath(item_id)] for item_id in self.indices]
 
-    def _post_io(self, all_res, source):
+    def _post_io(self, all_res):
         if any_action_failed(all_res):
-            raise IOError("Could not load data from " + source)
+            raise IOError("Could not load data.")
         else:
             self._data = np.conatenate(all_res)
         return self
