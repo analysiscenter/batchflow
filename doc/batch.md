@@ -5,7 +5,7 @@ Normally, you never create batch instances, as they are created in the `Dataset`
 
 
 ## Index
-`Batch` class stores the [index](index.md) of all data items which belongs to the batch. You can access the index through `self.index`. The sequence of indices is also available as `self.indices`.
+`Batch` class stores the [index](index.md) of all data items which belong to the batch. You can access the index through `self.index`. The sequence of indices is also available as `self.indices`.
 
 
 ## Data
@@ -43,11 +43,11 @@ class MyBatch(Batch):
         # process your data
         return self
 ```
-Take into account that an `action` method should return a batch instance of the very same class or some other class.
+Take into account that an `action` method should return an instance of some `Batch`-class: the very same or some other class.
 If an `action` changes the instance's data directly it may simply return `self`.
 
 ## Running methods in parallel
-As batch can be large it might make sense to parallel the computations. And it is pretty easy to do:
+As a batch can be quite large it might make sense to parallel the computations. And it is pretty easy to do:
 ```python
 from dataset import Batch, inbatch_parallel, action
 
@@ -60,3 +60,104 @@ class MyBatch(Batch):
         return some_value
 ```
 For further details how to make parallel actions see [parallel.md](parallel.md).
+
+
+## Writing your own Batch
+
+### Constructor should include `*args` and `*kwargs`
+```python
+class MyBatch(Batch):
+    ...
+    def __init__(self, index, your_param1, your_param2, *args, **kwargs):
+        super().__init__()
+        # process your data
+```
+
+### Don't load data in the constructor
+The constructor should just intialize properties.
+`Action`-method `load` is the best place for reading data from files or other sources.
+
+So DON'T do this:
+```python
+class MyBatch(Batch):
+    ...
+    def __init__(self, index, your_param1, your_param2, *args, **kwargs):
+        super().__init__()
+        ...
+        self._data = read(file)
+```
+
+Instead DO that:
+```python
+class MyBatch(Batch):
+    ...
+    def __init__(self, index, your_param1, your_param2, *args, **kwargs):
+        super().__init__()
+        ...
+
+    @action
+    def load(self, source, format):
+        # load data from source
+        ...
+        self._data = read(file)
+        return self
+```
+
+### (optional) Store your data in `_data` property
+It is just a convenient convention which makes your life more consistent.
+
+### (optional) Define `__getitem__` method
+If you want to address batch items easily as well as iterate over your batch, you need `__getitem__` method. The default `__getitem__` from a base `Batch` looks like this:
+```python
+class MyBatch(Batch):
+    ...
+    def __getitem__(self, item):
+        return self.data[item]
+```
+Thus you will be able to address batch items as `self[index_id]` internally (in the batch class methods) and as `batch[index_id]` externally.
+
+###  Make all public methods `actions`
+```python
+class MyBatch(Batch):
+    ...
+    @action
+    def change_data(self, item, arg1, arg2):
+        # process your data
+        return self
+```
+`Actions` should return an instance of some batch class.
+
+### Parallel everyting you can
+If you want a really fast data processing you can't do without `numba` or `cython`.
+And don't forget about input/output operations.
+
+### Make all I/O in `async` methods
+This is extremely important if you read data from many files.
+```python
+class MyBatch(Batch):
+    ...
+    @action
+    def load(self, format='raw'):
+        if format == 'raw':
+            self._data = self._load_raw()
+        elif format == 'blosc':
+            self._data = self._load_blosc()
+        else:
+            raise ValueError("Unknown format '%s'" % format)
+        return self
+
+    @inbatch_parallel(init='_init_io', post='_post_io', target='async')
+    async def _load_raw(self, item):
+        # load one data item from a raw format file
+        return loaded_item
+
+    def _init_io(self):
+        return [[item_id, self.index.get_fullpath(item_id)] for item_id in self.indices]
+
+    def _post_io(self, all_res, source):
+        if any_action_failed(all_res):
+            raise IOError("Could not load data from " + source)
+        else:
+            self._data = np.conatenate(all_res)
+        return self
+```
