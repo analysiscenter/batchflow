@@ -35,7 +35,7 @@ class Batch:
     def from_data(cls, data):
         """ Create batch from given dataset """
         # this is equiv to self.data = data[:]
-        return cls(slice(None, None)).load(data)
+        return cls(np.arange(len(data))).load(data)
 
     @property
     def indices(self):
