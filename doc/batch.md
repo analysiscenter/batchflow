@@ -30,7 +30,7 @@ Nevertheless, this is just a convention and you are not obliged to follow it.
 
 
 ## Action methods
-`Action` methods form a public API of the batch class which is available in the [pipeline](pipeline.md). If you operate directly with the batch class instances you don't need `action` methods. However, pipelines provide the most convenient interface to process the whole dataset and to separate data processing steps and model training / validation cycles.
+`Action` methods form a public API of the batch class which is available in the [pipeline](pipeline.md). If you operate directly with the batch class instances, you don't need `action` methods. However, pipelines provide the most convenient interface to process the whole dataset and to separate data processing steps and model training / validation cycles.
 
 In order to convert a batch class method to an action you add `@action` decorator:
 ```python
@@ -44,7 +44,7 @@ class MyBatch(Batch):
         return self
 ```
 Take into account that an `action` method should return an instance of some `Batch`-class: the very same one or some other class.
-If an `action` changes the instance's data directly it may simply return `self`.
+If an `action` changes the instance's data directly, it may simply return `self`.
 
 ## Running methods in parallel
 As a batch can be quite large it might make sense to parallel the computations. And it is pretty easy to do:
@@ -118,9 +118,9 @@ class MyBatch(Batch):
         some_value = self[some_item]  # equals self.data[some_item]
         ...
 ```
-Thus you are able to address batch items as `self[index_id]` internally (in the batch class methods) and as `batch[index_id]` externally.
+Thus you are able to address batch items as `self[index_id]` internally (in the batch class methods) or as `batch[index_id]` externally.
 
-If you have defined `data` as a tuple, theb base `__getitem__` will also work:
+If you have defined `data` as a tuple, then base `__getitem__` will also work:
 ```python
 class MyBatch(Batch):
     ...
@@ -129,12 +129,13 @@ class MyBatch(Batch):
 ...
 for i in range(MAX_ITER):
     batch = some_pipeline.next_batch(BATCH_SIZE)
-    for image, mask in batch:
-        # process one image and one corresponding mask
+    image0, mask0 = batch[index0]:
+    # process one image and one corresponding mask
 ```
 If your data has a more complex structure, you will need to write your own `__getitem__`.
 
-###  Make all public methods `actions`
+###  Make `actions` whenever possible
+If you create some method transforming batch data, you might want to call it as a step in the whole dataset processing `pipeline`. So make it an `action`:
 ```python
 class MyBatch(Batch):
     ...
@@ -148,7 +149,7 @@ class MyBatch(Batch):
 ### Parallel everyting you can
 If you want a really fast data processing you can't do without `numba` or `cython`.
 And don't forget about input/output operations.
-For more details see [parallel](parallel.md).
+For more details see [parallel.md](parallel.md).
 
 ### Make all I/O in `async` methods
 This is extremely important if you read data from many files.
@@ -156,13 +157,13 @@ This is extremely important if you read data from many files.
 class MyBatch(Batch):
     ...
     @action
-    def load(self, format='raw'):
-        if format == 'raw':
+    def load(self, fmt='raw'):
+        if fmt == 'raw':
             self._data = self._load_raw()
-        elif format == 'blosc':
+        elif fmt == 'blosc':
             self._data = self._load_blosc()
         else:
-            raise ValueError("Unknown format '%s'" % format)
+            raise ValueError("Unknown format '%s'" % fmt)
         return self
 
     @inbatch_parallel(init='_init_io', post='_post_io', target='async')
