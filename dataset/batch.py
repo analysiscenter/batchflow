@@ -29,7 +29,7 @@ class Batch:
     """ Base Batch class """
     def __init__(self, index):
         self.index = index
-        self.data = None
+        self._data = None
 
     @classmethod
     def from_data(cls, data):
@@ -41,12 +41,23 @@ class Batch:
     def indices(self):
         """ Return an array-like with the indices """
         if isinstance(self.index, DatasetIndex):
-            return self.index.index
+            return self.index.indices
         else:
             return self.index
 
     def __len__(self):
         return len(self.index)
+
+    @property
+    def data(self):
+        return self._data
+
+    def __getitem__(self, item):
+        return self.data[item]
+
+    def __iter__(self):
+        for item in self.indices:
+            yield self[item]
 
     @staticmethod
     def make_filename():
