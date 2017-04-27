@@ -109,8 +109,8 @@ class ArrayBatch(Batch):
 
         # But put into this batch only part of it (defined by index)
         try:
-            # this creates a copy of the source data (perhaps view could be more efficient)
-            self.data = _data[self.indices]
+            # this creates a copy of the source data
+            self._data = _data[self.indices]
         except TypeError:
             raise TypeError('Source is expected to be array-like')
 
@@ -132,6 +132,10 @@ class ArrayBatch(Batch):
         else:
             raise ValueError("Unknown format " + fmt)
         return self
+
+    @action
+    def save(self, dst, fmt=None):
+        return self.dump(dst, fmt)
 
 
 class DataFrameBatch(Batch):
