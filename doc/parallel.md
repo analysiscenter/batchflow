@@ -115,12 +115,12 @@ You may define as many arguments as you need:
 class MyBatch(Batch):
 ...
     def _init_default(self, *args, **kwargs):
-        all = []
+        all_args = []
         for item in self.indices:
             ...
             item_args = [self._data, item, another_arg, one_more_arg]
-            all.append(item_args)
-        return all
+            all_args.append(item_args)
+        return all_args
 ```
 Here the action will be fired as:  
 `some_action(self._data, index1, another_arg, one_more_arg)`  
@@ -136,12 +136,12 @@ You can also pass named arguments:
 class MyBatch(Batch):
 ...
     def _init_default(self, *args, **kwargs):
-        all = []
+        all_args = []
         for item in self.indices:
             ...
             item_args = dict(data=self._data, item=item, arg1=another_arg, arg2=one_more_arg)
-            all.append(item_args)
-        return all
+            all_args.append(item_args)
+        return all_args
 ```
 And the action will be fired as:  
 `some_action(data=self._data, item=index1, arg1=another_arg, arg2=one_more_arg)`  
@@ -153,12 +153,12 @@ And you can also combine positional and named arguments:
 class MyBatch(Batch):
 ...
     def _init_default(self, *args, **kwargs):
-        all = []
+        all_args = []
         for item in self.indices:
             ...
             item_args = tuple(list(self._data, item), dict(arg1=another_arg, arg2=one_more_arg))
-            all.append(item_args)
-        return all
+            all_args.append(item_args)
+        return all_args
 ```
 So the action will be fired as:  
 `some_action(self._data, index1, arg1=another_arg, arg2=one_more_arg)`  
