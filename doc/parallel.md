@@ -21,7 +21,7 @@ from dataset import Batch, inbatch_parallel, action
 class MyBatch(Batch):
     ...
     @action
-    @inbatch_parallel(init='_init_default', post='_post_default', target='threads')
+    @inbatch_parallel(init='_init_fn', post='_post_fn', target='threads')
     def some_action(self, item, arg1, arg2):
         # process just one item
         return some_value
@@ -92,18 +92,15 @@ However, usually you might consider writing specific init / post functions for d
 
 
 ## Init function
-Init function defines how to parallelize the action. It returns a list of arguments for each invocation of the parallelized action.
+Init function defines how to parallelize the decorated method. It returns a list of arguments for each invocation of the parallelized action.
 So if you want to run 10 parallel copies of the method, `init` should return a list of 10 items. Usually you run the method once for each item in the batch. However you might also run one method per 10 or 100 or any other number of items if it is beneficial for your specific circumstances (memory, performance, etc.)
 
 The simplest `init` just returns a sequence of indices:
 ```python
 class MyBatch(Batch):
 ...
-    def _init_default(self, *args, **kwargs):
-        return self.indices
-
     @action
-    @inbatch_parallel(init='_init_default')
+    @inbatch_parallel(init='indices')
     def some_action(self, item_id)
         # process an item and return a value for that item
         return proc_value
@@ -114,7 +111,7 @@ You may define as many arguments as you need:
 ```python
 class MyBatch(Batch):
 ...
-    def _init_default(self, *args, **kwargs):
+    def _init_fn(self, *args, **kwargs):
         all_args = []
         for item in self.indices:
             ...
@@ -135,7 +132,7 @@ You can also pass named arguments:
 ```python
 class MyBatch(Batch):
 ...
-    def _init_default(self, *args, **kwargs):
+    def _init_fn(self, *args, **kwargs):
         all_args = []
         for item in self.indices:
             ...
@@ -152,7 +149,7 @@ And you can also combine positional and named arguments:
 ```python
 class MyBatch(Batch):
 ...
-    def _init_default(self, *args, **kwargs):
+    def _init_fn(self, *args, **kwargs):
         all_args = []
         for item in self.indices:
             ...
@@ -191,7 +188,7 @@ init_function(10, 12, my_arg=12)
 ```
 This is convenient when you need to initialize some additional variables depending on the arguments. For instance, to create a numpy array of a certain shape filled with specific values or set up a random state or even pass additional arguments back to action methods.
 
-If you have specified [additional decorator arguments](#additional-decorator-arguments) they are also passed to the `init` function:
+If you have specified [additional decorator arguments](#additional-decorator-arguments), they are also passed to the `init` function:
 ```python
 init_function(10, 12, my_arg=12, arg_from_parallel_decorator=True)
 ```
@@ -204,7 +201,8 @@ The first argument it receives is the list of results from each parallel task.
 class MyBatch(Batch):
     ...
     def _init_default(self, *args, **kwargs):
-        return self.inidices
+        ...
+        return all_args
 
     def _post_default(self, list_of_res, *args, **kwargs):
         ...
@@ -221,7 +219,7 @@ Here `_post_default` will be called as
 _post_default([proc_value_from_1, proc_value_from_2, ..., proc_value_from_last])
 ```
 
-If anything went wrong than instead of `proc_value`, there would be an instance of some Exception or Error caught in the parallel tasks.
+If anything went wrong, than instead of `proc_value`, there would be an instance of some `Exception` caught in the parallel tasks.
 
 This is where `any_action_failed` might come in handy:
 ```python
@@ -229,7 +227,7 @@ from dataset import Batch, action, inbatch_parallel, any_action_failed
 
 class MyBatch(Batch):
     ...
-    def _post_default(self, list_of_res, *args, **kwargs):
+    def _post_fn(self, list_of_res, *args, **kwargs):
         if any_action_failed(list_of_res):
             # something went wrong
         else:
@@ -237,7 +235,7 @@ class MyBatch(Batch):
         return self
 
     @action
-    @inbatch_parallel(init='_init_default', post='_post_default')
+    @inbatch_parallel(init='indices', post='_post_fn')
     def some_action(self, item_id)
         # process an item and return a value for that item
         return proc_value
@@ -245,6 +243,44 @@ class MyBatch(Batch):
 
 `Post`-function should return an instance of a batch class (not necessarily the same). Most of the time it would be just `self`.
 
+If an action-method changes data directly, you don't need a `post`-function.
+```python
+from dataset import Batch, action, inbatch_parallel, any_action_failed
+
+class MyBatch(Batch):
+    ...
+    @action
+    @inbatch_parallel(init='indices')
+    def some_action(self, item_id)
+        # process an item and return a value for that item
+        self._data[item_id] = new_value
+```
+Don't forget about GIL. A python function with `target=threads` won't give any performance increase, though this might simplify your code.
+However, `numba` or `cython` allow for a real multitherading.
+```python
+from dataset import Batch, action, inbatch_parallel, any_action_failed
+from numba import njit
+
+@njit(nogil=True)
+def change_data(data, index):
+    # data is a numpy array
+    data[index] = new_value
+
+
+class MyBatch(Batch):
+    ...
+    def _init_numba(self, *args, **kwargs):
+        all_args = []
+        for i in self.indices:
+            all_args.append([self.data, i])
+        return all_args
+
+    @action
+    @inbatch_parallel(init='_init_numba', target='nogil')
+    def some_action(self, item_id)
+        return change_data
+```
+Here all batch items will be updated simultaneously.
 
 ## Targets
 There are four targets available: `threads`, `nogil`, `async`, `mpc`
