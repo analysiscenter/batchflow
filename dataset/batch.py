@@ -54,11 +54,21 @@ class Batch:
         return self._data
 
     def __getitem__(self, item):
-        return self.data[item]
+        if isinstance(self.data, tuple):
+            res = []
+            for data_item in self.data:
+                res.append(data_item[item])
+            res = tuple(res)
+        else:
+            res = self.data[item]
+        return res
 
     def __iter__(self):
         for item in self.indices:
             yield self[item]
+
+    def run_once(self, *args, **kwargs):
+        return [[]]
 
     @staticmethod
     def make_filename():
@@ -67,6 +77,7 @@ class Batch:
         # probability of collision is around 2e-10.
         filename = hexlify(random_data.data)[:8]
         return filename.decode("utf-8")
+
 
     @action
     def load(self, src, fmt=None):
