@@ -58,7 +58,7 @@ class Batch:
             res = []
             for data_item in self.data:
                 res.append(data_item[item])
-            res = tuple(res)
+            res = tuple(res)  # pylint: disable=redefined-variable-type
         else:
             res = self.data[item]
         return res
@@ -68,6 +68,10 @@ class Batch:
             yield self[item]
 
     def run_once(self, *args, **kwargs):
+        """ Init function for no parallelism
+        Useful for async action-methods (will wait till the method finishes)
+        """
+        _ = self.data, args, kwargs
         return [[]]
 
     @staticmethod
