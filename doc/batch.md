@@ -151,8 +151,43 @@ If you want a really fast data processing you can't do without `numba` or `cytho
 And don't forget about input/output operations.
 For more details see [parallel.md](parallel.md).
 
+### Define `load` and `dump` action-methods
+`load` and `dump` allows for a convenient and managable data flow.
+```python
+class MyBatch(Batch):
+    ...
+    @action
+    def load(self, src, fmt='raw'):
+        if fmt == 'raw':
+            self._data = ... # load from a raw file
+        elif fmt == 'blosc':
+            self._data = ... # load from a blosc file
+        else:
+            raise ValueError("Unknown format '%s'" % fmt)
+        return self
+
+    @action
+    def dump(self, dst, fmt='raw'):
+        if fmt == 'raw':
+            # write self.data to a raw file
+        elif fmt == 'blosc':
+            # write self.data to a blosc file
+        else:
+            raise ValueError("Unknown format '%s'" % fmt)
+        return self
+```
+This lets you create explicit pipeline workflows:
+```python
+batch
+   .load('/some/path', 'raw')
+   .some_action(param1)
+   .other_action(param2)
+   .one_more_action()
+   .dump('/other/path', 'blosc')
+```
+
 ### Make all I/O in `async` methods
-This is extremely important if you read data from many files.
+This is extremely important if you read batch data from many files.
 ```python
 class MyBatch(Batch):
     ...
@@ -178,6 +213,24 @@ class MyBatch(Batch):
         if any_action_failed(all_res):
             raise IOError("Could not load data.")
         else:
-            self._data = np.conatenate(all_res)
+            self._data = np.concatenate(all_res)
         return self
 ```
+
+### Make all I/O in `async` methods even if there is nothing to parallelize
+```python
+class MyBatch(Batch):
+    ...
+    @inbatch_parallel(init='run_once', target='async')
+    async def read_some_data(self, src, fmt='raw'):
+        ...
+...
+some_pipeline
+    .do_whatever_you_want()
+    .read_some_data(/some/path')
+    .do_something_else()
+```
+Init-function `run_once` runs the decorated method once (so no parallelism whatsoever).
+Besides, the methods does not receive any additional arguments, only those passed to it directly.
+However, an `action` defined as asynchronous will be waited for.
+You may define your own `post`-method in order to check the result and process the exceptions if they arise.
