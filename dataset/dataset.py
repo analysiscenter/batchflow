@@ -1,17 +1,16 @@
 """ Dataset """
 
+import numpy as np
+from .base import Baseset
 from .dsindex import DatasetIndex
+from .pipeline import Pipeline
 
 
-class Dataset:
+class Dataset(Baseset):
     """ Dataset """
-    def __init__(self, index, batch_class=None):
-        self.index = self.build_index(index)
+    def __init__(self, index, batch_class=None, *args, **kwargs):
+        super().__init__(index, *args, **kwargs)
         self.batch_class = batch_class
-
-        self.train = None
-        self.test = None
-        self.validation = None
 
 
     @classmethod
@@ -19,7 +18,7 @@ class Dataset:
         """ Create Dataset from another dataset with new index
             (usually subset of the source dataset index)
         """
-        if (batch_class is None or (batch_class == dataset.batch_class)) and (index == dataset.index):
+        if (batch_class is None or (batch_class == dataset.batch_class)) and cls._is_same_index(index, dataset.index):
             return dataset
         else:
             bcl = batch_class if batch_class is not None else dataset.batch_class
@@ -33,35 +32,28 @@ class Dataset:
         else:
             return DatasetIndex(index)
 
+    @staticmethod
+    def _is_same_index(index1, index2):
+        return (isinstance(index1, type(index2)) or isinstance(index2, type(index1))) and \
+               index1.indices.shape == index2.indices.shape and \
+               np.all(index1.indices == index2.indices)
 
-    def cv_split(self, shares=0.8, shuffle=False):
-        """ Split the dataset into train, test and validation sub-datasets
-        Subsets are available as .train, .test and .validation respectively
 
-        Usage:
-           # split into train / test in 80/20 ratio
-           ds.cv_split()
-           # split into train / test / validation in 60/30/10 ratio
-           ds.cv_split([0.6, 0.3])
-           # split into train / test / validation in 50/30/20 ratio
-           ds.cv_split([0.5, 0.3, 0.2])
+    def create_subset(self, index):
+        """ Create a dataset based on the given subset of indices """
+        return Dataset.from_dataset(self, index)
+
+
+    def create_batch(self, batch_indices, pos=False, *args, **kwargs):
+        """ Create a batch from given indices
+            if pos is False then batch_indices contains the value of indices
+            which should be included in the batch
+            otherwise batch_indices contains positions in the index
         """
-        self.index.cv_split(shares, shuffle)
-
-        self.train = Dataset.from_dataset(self, self.index.train)
-        if self.index.test is not None:
-            self.test = Dataset.from_dataset(self, self.index.test)
-        if self.index.validation is not None:
-            self.validation = Dataset.from_dataset(self, self.index.validation)
+        batch_ix = self.index.create_batch(batch_indices, pos, *args, **kwargs)
+        return self.batch_class(batch_ix, *args, **kwargs)
 
 
-    def create_batch(self, batch_indices, *args, **kwargs):
-        """ Create a batch from given indices """
-        return self.batch_class(batch_indices, *args, **kwargs)
-
-
-    def gen_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
-        """ Return an object of the batch class """
-        for ix_batch in self.index.gen_batch(batch_size, shuffle, one_pass):
-            batch = self.create_batch(ix_batch, *args, **kwargs)
-            yield batch
+    def pipeline(self):
+        """ Start a data processing workflow """
+        return Pipeline(self)

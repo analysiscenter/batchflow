@@ -2,11 +2,27 @@
 
 import os
 from binascii import hexlify
-import blosc
+
+try:
+    import blosc
+except ImportError:
+    pass
 import numpy as np
-import pandas as pd
-import feather
-from .preprocess import action
+try:
+    import pandas as pd
+except ImportError:
+    pass
+try:
+    import feather
+except ImportError:
+    pass
+try:
+    import dask.dataframe as dd
+except ImportError:
+    pass
+
+from .dsindex import DatasetIndex
+from .decorators import action
 
 
 class Batch:
@@ -20,6 +36,14 @@ class Batch:
         """ Create batch from given dataset """
         # this is equiv to self.data = data[:]
         return cls(slice(None, None)).load(data)
+
+    @property
+    def indices(self):
+        """ Return an array-like with the indices """
+        if isinstance(self.index, DatasetIndex):
+            return self.index.index
+        else:
+            return self.index
 
     @staticmethod
     def make_filename():
@@ -72,7 +96,7 @@ class ArrayBatch(Batch):
         # But put into this batch only part of it (defined by index)
         try:
             # this creates a copy of the source data (perhaps view could be more efficient)
-            self.data = _data[self.index]
+            self.data = _data[self.indices]
         except TypeError:
             raise TypeError('Source is expected to be array-like')
 
@@ -87,7 +111,7 @@ class ArrayBatch(Batch):
 
         if fmt is None:
             # think carefully when dumping to an array
-            dst[self.index] = self.data
+            dst[self.indices] = self.data
         elif fmt == 'blosc':
             packed_array = blosc.pack_array(self.data)
             self._write_file(fullname, 'b', packed_array)
@@ -116,7 +140,13 @@ class DataFrameBatch(Batch):
             raise ValueError('Unknown format %s' % fmt)
 
         # But put into this batch only part of it (defined by index)
-        self.data = dfr.loc[self.index]
+        if isinstance(dfr, pd.DataFrame):
+            self.data = dfr.loc[self.indices]
+        elif isinstance(dfr, dd.DataFrame):
+            # dask.DataFrame.loc supports advanced indexing only with lists
+            self.data = dfr.loc[list(self.indices)].compute()
+        else:
+            raise TypeError("Unknown DataFrame. DataFrameBatch supports only pandas and dask.")
 
         return self
 
@@ -125,7 +155,7 @@ class DataFrameBatch(Batch):
     def dump(self, dst, fmt='feather', *args, **kwargs):
         """ Save batch data to disk
             dst should point to a directory where all batches will be stored
-            as separate files named 'batch_id.format', e.g. '1.csv', '2.csv', etc.
+            as separate files named 'batch_id.format', e.g. '6a0b1c35.csv', '32458678.csv', etc.
         """
         filename = self.make_filename()
         fullname = os.path.join(dst, filename + '.' + fmt)

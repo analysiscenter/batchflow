@@ -11,8 +11,14 @@ from dataset import * # pylint: disable=wrong-import-
 # Example of custome Batch class which defines some actions
 class MyDataFrameBatch(DataFrameBatch):
     @action
-    def print(self):
+    def print(self, ds=None, text=None):
+        if text is not None:
+            print(text)
         print(self.data)
+        if ds is not None:
+           print('Joined data')
+           print(ds[0].data)
+        return self
 
     @action
     def action1(self):
@@ -62,7 +68,7 @@ BATCH_SIZE = 3
 
 # Load data and take some actions
 print("\nFull preprocessing")
-fp_data = (Preprocessing(ds_data)
+fp_data = (ds_data.pipeline()
             .load(data)
             .action1()
             .action2())
@@ -73,7 +79,7 @@ fp_data.run(BATCH_SIZE, shuffle=False)
 
 print("\nLoad and preprocess target")
 # Define target preprocessing procedure and run it
-fp_target = (Preprocessing(ds_target)
+fp_target = (ds_target.pipeline()
                 .load(target)
                 .add(100)
                 .print()
@@ -84,15 +90,21 @@ print("\nOriginal target left unchanged")
 print(target)
 
 
-# Now define some processing which will run during training
-lazy_pp_data = (Preprocessing(ds_data)
+fp_t2 = (ds_target.pipeline()
+                .load(target)
+                .add(1000)
+                .print(text="   T2"))
+
+# Now define some processing pipeline which will run during training
+lazy_pp_data = (ds_data.pipeline()
                 .load(data)
                 .action1())
-lazy_pp_target = (Preprocessing(ds_target)
+lazy_pp_target = (ds_target.pipeline()
                     .load(target)
                     .add(5)
                     .add(1)
-                    .print())
+                    .join(fp_t2)
+                    .print(text="   PP Target"))
 # Nothing has been done yet
 
 # Define dataset which is based on lazy processing
@@ -100,7 +112,7 @@ ds_full = FullDataset(lazy_pp_data, lazy_pp_target)
 
 print("\n\nPreproces one batch at a time")
 for i in range(5):
-    print("Next batch")
+    print("\n\nNext batch")
     # all the actions are fired when you call next_batch
     b_data, b_target = ds_full.next_batch(BATCH_SIZE, shuffle=True)
     # Because of one_pass=False all the batches will have equal size
@@ -109,4 +121,4 @@ for i in range(5):
 
 ds_data.cv_split([0.5, 0.3])
 print("\nTrain full preprocessing")
-pp = Preprocessing(ds_data.train).load(data).action1().action2().dump("./data", "csv").run(BATCH_SIZE, shuffle=False)
+pp = ds_data.train.pipeline().load(data).action1().action2().dump("./data", "csv").run(BATCH_SIZE, shuffle=False)
