@@ -39,13 +39,13 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 raise ValueError("init cannot be None")
             else:
                 try:
-                   init_fn = getattr(self, init)
+                    init_fn = getattr(self, init)
                 except AttributeError:
                     raise ValueError("init should refer to a method or property of the class", type(self).__name__,
                                      "returning the list of arguments")
             if post is not None:
                 try:
-                   post_fn = getattr(self, post)
+                    post_fn = getattr(self, post)
                 except AttributeError:
                     raise ValueError("post should refer to a method of the class", type(self).__name__)
                 if not callable(post_fn):
