@@ -45,6 +45,9 @@ class Batch:
         else:
             return self.index
 
+    def __len__(self):
+        return len(self.index)
+
     @staticmethod
     def make_filename():
         """ Generate unique filename for the batch """

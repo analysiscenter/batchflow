@@ -3,6 +3,7 @@ extension-pkg-whitelist=numpy
 max-line-length=120
 max-attributes=20
 max-locals=20
+max-args=8
 
 [TYPECHECK]
 ignored-modules=numpy
