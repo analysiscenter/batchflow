@@ -55,7 +55,7 @@ class Batch:
 
     def __getitem__(self, item):
         if isinstance(self.data, tuple):
-            res = tuple(data_item[item] for item in self.data)
+            res = tuple(data_item[item] for data_item in self.data)
         else:
             res = self.data[item]
         return res
