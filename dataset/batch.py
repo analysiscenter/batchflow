@@ -55,10 +55,7 @@ class Batch:
 
     def __getitem__(self, item):
         if isinstance(self.data, tuple):
-            res = []
-            for data_item in self.data:
-                res.append(data_item[item])
-            res = tuple(res)  # pylint: disable=redefined-variable-type
+            res = tuple(data_item[item] for item in self.data)
         else:
             res = self.data[item]
         return res
