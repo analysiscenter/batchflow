@@ -112,12 +112,7 @@ You may define as many arguments as you need:
 class MyBatch(Batch):
 ...
     def _init_fn(self, *args, **kwargs):
-        all_args = []
-        for item in self.indices:
-            ...
-            item_args = [self._data, item, another_arg, one_more_arg]
-            all_args.append(item_args)
-        return all_args
+        return [[self._data, item, another_arg, one_more_arg] for item in self.indices]
 ```
 Here the action will be fired as:  
 `some_action(self._data, index1, another_arg, one_more_arg)`  
@@ -133,12 +128,7 @@ You can also pass named arguments:
 class MyBatch(Batch):
 ...
     def _init_fn(self, *args, **kwargs):
-        all_args = []
-        for item in self.indices:
-            ...
-            item_args = dict(data=self._data, item=item, arg1=another_arg, arg2=one_more_arg)
-            all_args.append(item_args)
-        return all_args
+        return [dict(data=self._data, item=item, arg1=another_arg, arg2=one_more_arg) for item in self.indices]
 ```
 And the action will be fired as:  
 `some_action(data=self._data, item=index1, arg1=another_arg, arg2=one_more_arg)`  
@@ -150,12 +140,7 @@ And you can also combine positional and named arguments:
 class MyBatch(Batch):
 ...
     def _init_fn(self, *args, **kwargs):
-        all_args = []
-        for item in self.indices:
-            ...
-            item_args = tuple(list(self._data, item), dict(arg1=another_arg, arg2=one_more_arg))
-            all_args.append(item_args)
-        return all_args
+        return [tuple(list(self._data, item), dict(arg1=another_arg, arg2=one_more_arg)) for item in self.indices]
 ```
 So the action will be fired as:  
 `some_action(self._data, index1, arg1=another_arg, arg2=one_more_arg)`  
@@ -270,10 +255,7 @@ def change_data(data, index):
 class MyBatch(Batch):
     ...
     def _init_numba(self, *args, **kwargs):
-        all_args = []
-        for i in self.indices:
-            all_args.append([self.data, i])
-        return all_args
+        return [[self.data, i] for i in self.indices]
 
     @action
     @inbatch_parallel(init='_init_numba', target='nogil')
