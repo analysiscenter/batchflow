@@ -241,7 +241,7 @@ class MyBatch(Batch):
         self._data[item_id] = new_value
 ```
 Don't forget about GIL. A python function with `target=threads` won't give any performance increase, though this might simplify your code.
-However, `numba` or `cython` allow for a real multitherading.
+However, `numba` or `cython` allow for a real multithreading.
 ```python
 from dataset import Batch, action, inbatch_parallel, any_action_failed
 from numba import njit
