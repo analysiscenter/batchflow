@@ -2,6 +2,7 @@
 import os
 import concurrent.futures as cf
 import asyncio
+from .utils import get_del
 
 
 def _cpu_count():
@@ -85,7 +86,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.get('n_workers', _cpu_count())
+            n_workers = get_del(kwargs, 'n_workers', _cpu_count())
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 if nogil:
@@ -108,7 +109,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.get('n_workers', _cpu_count())
+            n_workers = get_del(kwargs, 'n_workers', _cpu_count())
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
@@ -118,14 +119,22 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
                     futures.append(one_ft)
 
-                timeout = kwargs.get('timeout', None)
+                timeout = get_del(kwargs, 'timeout', None)
                 cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrap_with_async(self, args, kwargs):
             """ Run a method in parallel with async / await """
-            loop = kwargs.get('loop', asyncio.get_event_loop())
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # this is a new thread where there is no loop
+                loop = kwargs.get('loop', None)
+                asyncio.set_event_loop(loop)
+            else:
+                loop = kwargs.get('loop', loop)
+
             init_fn, post_fn = _check_functions(self)
 
             futures = []

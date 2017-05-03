@@ -106,9 +106,9 @@ if __name__ == "__main__":
     res = (ds_data.pipeline()
             .load(data)
             .print("\nStart batch")
-            .action2("async")
-            .action_n(712)
+            #.action2("async")
+            #.action_n(712)
             .action1(17)
             .print("End batch"))
 
-    res.run(4, shuffle=False)
+    res.run(4, shuffle=False, n_epochs=1)

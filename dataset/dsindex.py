@@ -13,6 +13,7 @@ class DatasetIndex(Baseset):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._pos = self.build_pos()
+        self._random_state = None
 
     @classmethod
     def from_index(cls, *args, **kwargs):
@@ -45,12 +46,7 @@ class DatasetIndex(Baseset):
 
     def build_pos(self):
         """ Create a dictionary with positions in the index """
-        pos_dict = dict()
-        pos = 0
-        for item in self.indices:
-            pos_dict.update({item: pos})
-            pos += 1
-        return pos_dict
+        return dict(zip(self.indices, np.arange(len(self.indices))))
 
     def get_pos(self, index):
         """ Return position of an item in the index """
@@ -93,16 +89,28 @@ class DatasetIndex(Baseset):
         train_pos = order[valid_share + test_share:]
         self.train = self.create_subset(self.subset_by_pos(train_pos))
 
+    def _shuffle(self, shuffle):
+        if isinstance(shuffle, bool):
+            if shuffle:
+                np.random.shuffle(self._order)
+        elif isinstance(shuffle, int):
+            if self._random_state is None or self._random_state.seed != shuffle:
+                self._random_state = np.random.RandomState(shuffle)
+            self._random_state.shuffle(self._order)
+        elif callable(shuffle):
+            self._order = shuffle(self._order)
+        else:
+            raise ValueError("shuffle should be bool or int")
 
-    def next_batch(self, batch_size, shuffle=False, one_pass=False):
+
+    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
         """ Return next batch """
         num_items = len(self)
 
         # TODO: make a view not copy whenever possible
         if self._order is None:
             self._order = np.arange(num_items)
-            if shuffle:
-                np.random.shuffle(self._order)
+            self._shuffle(shuffle)
 
         rest_items = None
         if self._start_index + batch_size >= num_items:
@@ -110,8 +118,7 @@ class DatasetIndex(Baseset):
             rest_of_batch = self._start_index + batch_size - num_items
             self._start_index = 0
             self._n_epochs += 1
-            if shuffle:
-                np.random.shuffle(self._order)
+            self._shuffle(shuffle)
         else:
             rest_of_batch = batch_size
 
@@ -122,33 +129,39 @@ class DatasetIndex(Baseset):
         else:
             batch_items = np.concatenate((rest_items, new_items))
 
-        if one_pass and rest_items is not None:
+        if n_epochs is not None and self._n_epochs >= n_epochs and rest_items is not None:
+            # not used yet
+            _ = drop_last
             return self.create_batch(rest_items, pos=True)
         else:
             self._start_index += rest_of_batch
             return self.create_batch(batch_items, pos=True)
 
 
-    def gen_batch(self, batch_size, shuffle=False, one_pass=False):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
         """ Generate batches """
         self._start_index = 0
         self._order = None
-        _n_epochs = self._n_epochs
+        self._n_epochs = 0
         while True:
-            if one_pass and self._n_epochs > _n_epochs:
+            if n_epochs is not None and self._n_epochs >= n_epochs:
                 raise StopIteration()
             else:
-                yield self.next_batch(batch_size, shuffle, one_pass)
+                batch = self.next_batch(batch_size, shuffle, n_epochs)
+                if drop_last and len(batch) < batch_size:
+                    raise StopIteration()
+                else:
+                    yield batch
 
 
-    def create_batch(self, batch_indices, pos=True, as_array=False):   # pylint: disable=arguments-differ
+    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ, unused-argument
         """ Create a batch from given indices
         if pos is False then batch_indices contains the value of indices
         which should be included in the batch (so expected batch is just the very same batch_indices)
         otherwise batch_indices contains positions in the index
         """
         if isinstance(batch_indices, DatasetIndex):
-            _batch_indices = batch_indices.index
+            _batch_indices = batch_indices.indices
         else:
             _batch_indices = batch_indices
         if pos:
