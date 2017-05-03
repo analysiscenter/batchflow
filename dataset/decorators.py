@@ -85,7 +85,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             else:
                 margs = init_args
                 mkwargs = dict()
-            margs = margs if hasattr(margs, '__len__') else [margs]
+            margs = margs if isinstance(margs, (list, tuple)) else [margs]
             if len(args) > 0:
                 margs = list(margs) + list(args)
             if len(kwargs) > 0:
