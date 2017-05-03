@@ -133,6 +133,9 @@ class Pipeline:
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
 
         if prefetch > 0:
+            # pool cannot have more than 63 workers
+            prefetch = min(prefetch, 60)
+
             if target == 'threads':
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
             elif target == 'mpc':

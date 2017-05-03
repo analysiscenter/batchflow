@@ -38,17 +38,27 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             if init is None:
                 raise ValueError("init cannot be None")
             else:
-                init_fn = getattr(self, init)
-                if not callable(init_fn):
-                    raise ValueError("init should refer to a method of the class", type(self).__name__,
+                try:
+                    init_fn = getattr(self, init)
+                except AttributeError:
+                    raise ValueError("init should refer to a method or property of the class", type(self).__name__,
                                      "returning the list of arguments")
             if post is not None:
-                post_fn = getattr(self, post)
+                try:
+                    post_fn = getattr(self, post)
+                except AttributeError:
+                    raise ValueError("post should refer to a method of the class", type(self).__name__)
                 if not callable(post_fn):
                     raise ValueError("post should refer to a method of the class", type(self).__name__)
             else:
                 post_fn = None
             return init_fn, post_fn
+
+        def _call_init_fn(init_fn, args, kwargs):
+            if callable(init_fn):
+                return init_fn(*args, **kwargs)
+            else:
+                return init_fn
 
         def _call_post_fn(self, post_fn, futures, args, kwargs):
             if post_fn is None:
@@ -92,7 +102,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 if nogil:
                     nogil_fn = method(self, *args, **kwargs)
                 full_kwargs = {**kwargs, **dec_kwargs}
-                for arg in init_fn(*args, **full_kwargs):
+                for arg in _call_init_fn(init_fn, args, full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
                         one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
@@ -114,7 +124,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
                 full_kwargs = {**kwargs, **dec_kwargs}
-                for arg in init_fn(*args, **full_kwargs):
+                for arg in _call_init_fn(init_fn, args, full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
                     futures.append(one_ft)
@@ -139,7 +149,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
             futures = []
             full_kwargs = {**kwargs, **dec_kwargs}
-            for arg in init_fn(*args, **full_kwargs):
+            for arg in _call_init_fn(init_fn, args, full_kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
                 futures.append(asyncio.ensure_future(method(self, *margs, **mkwargs)))
 

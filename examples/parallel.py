@@ -55,7 +55,7 @@ class MyDataFrameBatch(DataFrameBatch):
 
 
     @action
-    @inbatch_parallel(init="parallel_init", post="parallel_post", target='mpc')
+    @inbatch_parallel(init="indices", post="parallel_post", target='mpc')
     def action1(self, *args):
         print("   action 1", args)
         return mpc_fn
@@ -106,8 +106,8 @@ if __name__ == "__main__":
     res = (ds_data.pipeline()
             .load(data)
             .print("\nStart batch")
-            #.action2("async")
-            #.action_n(712)
+            .action2("async")
+            .action_n(712)
             .action1(17)
             .print("End batch"))
 
