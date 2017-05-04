@@ -36,7 +36,10 @@ class Baseset:
             return self.index
 
     def __len__(self):
-        return len(self.indices)
+        if self.indices is None:
+            return 0
+        else:
+            return len(self.indices)
 
     @property
     def is_splitted(self):

@@ -44,7 +44,10 @@ class DatasetIndex(Baseset):
 
     def build_pos(self):
         """ Create a dictionary with positions in the index """
-        return dict(zip(self.indices, np.arange(len(self))))
+        if self.indices is None:
+            return dict()
+        else:
+            return dict(zip(self.indices, np.arange(len(self))))
 
     def get_pos(self, index):
         """ Return position of an item in the index """
@@ -226,7 +229,7 @@ class FilesIndex(DatasetIndex):
             _all_paths.update(_paths)
 
         if sort:
-            _all_index = _all_index.sort()
+            _all_index.sort()
         self._paths = _all_paths
 
         return _all_index
@@ -236,8 +239,11 @@ class FilesIndex(DatasetIndex):
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path)
         _full_index = np.asarray([self.build_key(fname, no_ext) for fname in pathlist if check_fn(fname)])
-        _index = _full_index[:, 0]
-        _paths = _full_index[:, 1]
+        if _full_index.shape[0] > 0:
+            _index = _full_index[:, 0]
+            _paths = _full_index[:, 1]
+        else:
+            _index, _paths = [], []
         _paths = dict(zip(_index, _paths))
         return _index, _paths
 
