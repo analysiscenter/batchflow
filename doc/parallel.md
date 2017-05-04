@@ -285,7 +285,7 @@ There are four targets available: `threads`, `nogil`, `async`, `mpc`
 ### threads
 A method will be parallelized with [concurrent.futures.ThreadPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#threadpoolexecutor).
 Take into account that due to [GIL](https://wiki.python.org/moin/GlobalInterpreterLock) only one python thread is executed in any given moment (pseudo-parallelism).
-However, a function with intesive I/O processing or waiting for some synchronization might get a considerable performance increase.
+However, a function with intensive I/O processing or waiting for some synchronization might get a considerable performance increase.
 
 This is a default engine which is used if `target` is not specified in the `inbatch_parallel` decorator.
 
