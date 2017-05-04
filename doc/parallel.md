@@ -189,7 +189,7 @@ class MyBatch(Batch):
 ...
 some_pipeline
     .do_whatever_you_want()
-    .read_some_data(/some/path')
+    .read_some_data('/some/path')
     .do_something_else()
 ```
 

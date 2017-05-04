@@ -227,7 +227,7 @@ class MyBatch(Batch):
 ...
 some_pipeline
     .do_whatever_you_want()
-    .read_some_data(/some/path')
+    .read_some_data('/some/path')
     .do_something_else()
 ```
 Init-function `run_once` runs the decorated method once (so no parallelism whatsoever).
