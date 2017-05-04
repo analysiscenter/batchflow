@@ -178,6 +178,21 @@ If you have specified [additional decorator arguments](#additional-decorator-arg
 init_function(10, 12, my_arg=12, arg_from_parallel_decorator=True)
 ```
 
+### `run_once` for no parallelism
+You cannot call an `async` action in pipelines, because `async`-methods should be `awaited` for. This is where `@inbatch_parallel` might be helpful without any parallelism whatsoever. All you need is `run_once` init-function:
+```python
+class MyBatch(Batch):
+    ...
+    @inbatch_parallel(init='run_once', target='async')
+    async def read_some_data(self, src, fmt='raw'):
+        ...
+...
+some_pipeline
+    .do_whatever_you_want()
+    .read_some_data(/some/path')
+    .do_something_else()
+```
+
 ## Post function
 When all parallelized tasks are finished, the `post` function is called.
 
