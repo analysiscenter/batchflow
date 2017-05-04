@@ -75,6 +75,7 @@ batch #3 is created
 ```
 Batch #2 is created immediately after batch #1. Then all the actions are executed for all running batches.
 As actions execution time might vary between batches, the actual sequence might look different in your case.
+
 However, the main principle remains the same - `prefetch` parameter indicates how many additional batches should be processed in advance, before you need them. As a consequence, when you need them, they will be returned much faster or even almost immediately (if all the actions have been executed already).
 
 You can use `prefetch` in `next_batch`, `gen_batch` and `run`.
