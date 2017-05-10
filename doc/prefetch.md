@@ -1,12 +1,12 @@
 # Inter-batch parallelism
 
-For long-running [pipelines](pipeline.md) you might employ a `prefetch` feature which allows for a parallel batches processing.
+For long-running [pipelines](pipeline.md) you might employ a `prefetch` feature which allows for a parallel batch processing.
 ```python
 batch = some_pipeline.next_batch(BATCH_SIZE, prefetch=3)
 ```
 This line states that 3 additional batches should be processed in the background.
-Take into account that all batches will be processed simultaneously without any prioritization.
-However, the order of batches is preserved, i.e. batch #2 will be returned after batch #1 even if all the actions for batch #2 finished earlier. This statement is correct even for shuffled order, though it might seem illogical.
+Take into account that all the batches will be processed simultaneously without any prioritization.
+However, the order of batches is preserved, i.e. batch #2 would be returned after batch #1 even if all the actions for batch #2 finished earlier. This statement is correct even for shuffled order (though it might seem illogical to some people).
 
 Let's look at an example. Here is a simple pipeline:
 ```python

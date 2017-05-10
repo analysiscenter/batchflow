@@ -142,7 +142,7 @@ class MyIndex(DatasetIndex):
         # do whatever you need
 ```
 So to summarize:
-1. the parent class should `DatasetIndex` or its child
+1. the parent class should be `DatasetIndex` or its child
 1. include `*args` and `**kwargs` in the constructor definition
 1. pass all the arguments to the parent constructor
 
