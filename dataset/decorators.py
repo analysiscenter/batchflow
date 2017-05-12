@@ -2,7 +2,6 @@
 import os
 import concurrent.futures as cf
 import asyncio
-from .utils import get_del
 
 
 def _cpu_count():
@@ -96,7 +95,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = get_del(kwargs, 'n_workers', _cpu_count())
+            n_workers = kwargs.pop('n_workers', _cpu_count())
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 if nogil:
@@ -119,7 +118,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = get_del(kwargs, 'n_workers', _cpu_count())
+            n_workers = kwargs.pop('n_workers', _cpu_count())
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
@@ -129,7 +128,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
                     futures.append(one_ft)
 
-                timeout = get_del(kwargs, 'timeout', None)
+                timeout = kwargs.pop('timeout', None)
                 cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)

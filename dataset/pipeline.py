@@ -2,7 +2,6 @@
 import concurrent.futures as cf
 import asyncio
 import queue as q
-from .utils import get_del
 
 
 class Pipeline:
@@ -128,7 +127,7 @@ class Pipeline:
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
-        target = get_del(kwargs, 'target', 'threads')
+        target = kwargs.pop('target', 'threads')
 
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
 
