@@ -2,6 +2,10 @@
 import concurrent.futures as cf
 import asyncio
 import queue as q
+try:
+    import tensorflow as tf
+except ImportError:
+    pass
 
 
 class Pipeline:
@@ -13,6 +17,7 @@ class Pipeline:
         self._batch_queue = None
         self._executor = None
         self._batch_generator = None
+        self.disable_tf_queue()
 
     def __getattr__(self, name, *args, **kwargs):
         """ Check if an unknown attr is an action from the batch class """
@@ -86,6 +91,26 @@ class Pipeline:
         self._action_list.append({'name': 'join', 'datasets': datasets})
         return self
 
+    def enable_tf_queue(self, sess, queue):
+        """ Turn on batch queuing in a given tf session """
+        self._tf_queue = queue
+        self._tf_session = sess
+        self._tf_enqueue_op = None
+        self._tf_placeholders = None
+        return self
+
+    def disable_tf_queue(self):
+        """ Turn off batch queuing in a given tf session """
+        self._tf_session = None
+        self._tf_queue = None
+        self._tf_enqueue_op = None
+        self._tf_placeholders = None
+        return self
+
+    def _put_batch_into_tf_queue(self, batch):
+        tensors = batch.get_tensor()
+        self._tf_session.run(self._tf_enqueue_op, feed_dict=dict(zip(self._tf_placeholders, tensors)))
+
     def _put_batches_into_queue(self, gen_batch):
         for batch in gen_batch:
             future = self._executor.submit(self._exec_all_actions, batch, True)
@@ -100,7 +125,13 @@ class Pipeline:
                 self._batch_queue.put(None)
                 break
             else:
-                self._batch_queue.put(future.result())
+                batch = future.result()
+                if self._tf_queue:
+                    if not self._tf_placeholders:
+                        self._tf_placeholders = [tf.placeholder(dtype=tensor.dtype) for tensor in batch.get_tensor()]
+                        self._tf_enqueue_op = self._tf_queue.enqueue([self._tf_placeholders])
+                    self._put_batch_into_tf_queue(batch)
+                self._batch_queue.put(batch)
                 self._prefetch_queue.task_done()
         return None
 

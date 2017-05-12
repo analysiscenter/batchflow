@@ -79,6 +79,9 @@ class Batch:
         filename = hexlify(random_data.data)[:8]
         return filename.decode("utf-8")
 
+    def get_tensor(self):
+        """ Return a tensor (e.g. numpy array) which can be fed into ML models """
+        return self.data
 
     @action
     def load(self, src, fmt=None):
