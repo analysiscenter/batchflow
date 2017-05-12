@@ -17,7 +17,11 @@ class Pipeline:
         self._batch_queue = None
         self._executor = None
         self._batch_generator = None
-        self.disable_tf_queue()
+
+        self._tf_session = None
+        self._tf_queue = None
+        self._tf_enqueue_op = None
+        self._tf_placeholders = None
 
     def __getattr__(self, name, *args, **kwargs):
         """ Check if an unknown attr is an action from the batch class """
