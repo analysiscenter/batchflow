@@ -123,16 +123,19 @@ class Pipeline:
 
     def _create_tf_queue(self, tensors):
         maxsize = 1 if self._prefetch_queue is None else self._prefetch_queue.maxsize
-        self._tf_queue = tf.FIFOQueue(capacity=maxsize, dtypes=self._get_dtypes(tensors))
+        with self._tf_session.graph.as_default():
+            self._tf_queue = tf.FIFOQueue(capacity=maxsize, dtypes=self._get_dtypes(tensors))
 
     def _get_tf_placeholders(self, tensors):
         tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
-        return [tf.placeholder(dtype=tensor.dtype) for tensor in tensors]
+        with self._tf_session.graph.as_default():
+            placeholders = [tf.placeholder(dtype=tensor.dtype) for tensor in tensors]
+        return placeholders
 
     def _put_batch_into_tf_queue(self, batch):
         tensors = batch.get_tensor()
         tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
-        if self._tf_queue < 0:
+        if not isinstance(self._tf_queue, tf.QueueBase):
             self._create_tf_queue(tensors)
         if not self._tf_placeholders:
             self._tf_placeholders = self._get_tf_placeholders(tensors)
