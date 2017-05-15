@@ -119,6 +119,7 @@ class Pipeline:
 
     @property
     def tf_queue(self):
+        """ Return tensorflow queue """
         return self._tf_queue
 
     def _create_tf_queue(self, tensors):
