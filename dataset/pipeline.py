@@ -161,9 +161,9 @@ class Pipeline:
             else:
                 try:
                     batch = future.result()
-                except:
+                except Exception:   # pylint: disable=broad-except
                     print("Exception in a thread:", future.exception())
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    _, _, exc_traceback = sys.exc_info()
                     traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)
                 self._batch_queue.put(batch)
                 self._prefetch_queue.task_done()
