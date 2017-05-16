@@ -19,9 +19,6 @@ class Pipeline:
         self._batch_generator = None
 
         self._tf_session = None
-        self._tf_queue = None
-        self._tf_enqueue_op = None
-        self._tf_placeholders = None
 
     def __getattr__(self, name, *args, **kwargs):
         """ Check if an unknown attr is an action from the batch class """
@@ -88,6 +85,9 @@ class Pipeline:
                 else:
                     _action_args = _action['args']
                 batch = batch_action(*_action_args, **_action['kwargs'])
+
+                if 'tf_queue' in _action:
+                    _put_batch_into_tf_queue(batch, _action)
         return batch
 
     def join(self, datasets):
@@ -95,53 +95,48 @@ class Pipeline:
         self._action_list.append({'name': 'join', 'datasets': datasets})
         return self
 
-    def enable_tf_queue(self, sess, queue=-1):
-        """ Turn on batch queuing in a given tf session """
-        self._tf_session = sess
-        self._tf_queue = queue
-        self._tf_enqueue_op = None
-        self._tf_placeholders = None
+    def tf_queue(self, queue=None, capacity=None, session=None):
+        """ Insert a tensorflow queue before the next action"""
+        if len(self._action_list) > 0:
+            action = dict()
+            action['tf_session'] = session
+            action['tf_queue'] = queue
+            action['tf_queue_capacity'] = capacity
+            action['tf_enqueue_op'] = None
+            action['tf_placeholders'] = None
+            self._action_list[-1].update(action)
+        else:
+            raise RuntimError('tf_queue should be precedeed by at least one action')
         return self
 
-    def disable_tf_queue(self):
-        """ Turn off batch queuing in a given tf session """
-        self._tf_session = None
-        self._tf_queue = None
-        self._tf_enqueue_op = None
-        self._tf_placeholders = None
-        return self
-
-    def _get_dtypes(self, tensors=None):
+    def _get_dtypes(self, tensors=None, action=None):
         if tensors:
             return [tensor.dtype for tensor in tensors]
         else:
-            return [placeholder.dtype for placeholder in self._tf_placeholders]
+            return [placeholder.dtype for placeholder in action['tf_placeholders']]
 
-    @property
-    def tf_queue(self):
-        """ Return tensorflow queue """
-        return self._tf_queue
-
-    def _create_tf_queue(self, tensors):
+    def _create_tf_queue(self, tensors, action):
+        if action['tf_session'] is None:
+            action['tf_session'] = self._tf_session
         maxsize = 1 if self._prefetch_queue is None else self._prefetch_queue.maxsize
-        with self._tf_session.graph.as_default():
-            self._tf_queue = tf.FIFOQueue(capacity=maxsize, dtypes=self._get_dtypes(tensors))
+        with action['tf_session'].graph.as_default():
+            action['tf_queue'] = tf.FIFOQueue(capacity=maxsize, dtypes=self._get_dtypes(tensors, action))
 
-    def _get_tf_placeholders(self, tensors):
+    def _get_tf_placeholders(self, tensors, action):
         tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
-        with self._tf_session.graph.as_default():
+        with action['tf_session'].graph.as_default():
             placeholders = [tf.placeholder(dtype=tensor.dtype) for tensor in tensors]
         return placeholders
 
-    def _put_batch_into_tf_queue(self, batch):
+    def _put_batch_into_tf_queue(self, batch, action):
         tensors = batch.get_tensor()
         tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
-        if not isinstance(self._tf_queue, tf.QueueBase):
-            self._create_tf_queue(tensors)
-        if not self._tf_placeholders:
-            self._tf_placeholders = self._get_tf_placeholders(tensors)
-            self._tf_enqueue_op = self.tf_queue.enqueue(self._tf_placeholders)
-        self._tf_session.run(self._tf_enqueue_op, feed_dict=dict(zip(self._tf_placeholders, tensors)))
+        if action['tf_queue'] is None:
+            self._create_tf_queue(tensors, action)
+        if action['tf_placeholders'] is None:
+            action['tf_placeholders'] = self._get_tf_placeholders(tensors, action)
+            action['tf_enqueue_op'] = action['tf_queue'].enqueue(action['tf_placeholders'])
+        action['tf_session'].run(action['tf_enqueue_op'], feed_dict=dict(zip(action['tf_placeholders'], tensors)))
 
 
     def _put_batches_into_queue(self, gen_batch):
@@ -158,16 +153,18 @@ class Pipeline:
                 self._batch_queue.put(None)
                 break
             else:
-                batch = future.result()
-                if self.tf_queue is not None:
-                    self._put_batch_into_tf_queue(batch)
+                try:
+                    batch = future.result()
+                except:
+                    print(future.exception())
+                    break
                 self._batch_queue.put(batch)
                 self._prefetch_queue.task_done()
         return None
 
-    def run(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+    def run(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, tf_session=None, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset """
-        batch_generator = self.gen_batch(batch_size, shuffle, n_epochs, drop_last, prefetch, *args, **kwargs)
+        batch_generator = self.gen_batch(batch_size, shuffle, n_epochs, drop_last, prefetch, tf_session, *args, **kwargs)
         for _ in batch_generator:
             pass
         return self
@@ -186,9 +183,10 @@ class Pipeline:
         self._executor = None
         self._batch_generator = None
 
-    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, tf_session=None, *args, **kwargs):
         """ Generate batches """
         target = kwargs.pop('target', 'threads')
+        self._tf_session = tf_session
 
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
 
@@ -222,12 +220,12 @@ class Pipeline:
                 yield self._exec_all_actions(batch)
         return self
 
-    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, tf_session=None, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """
         if prefetch > 0:
             if self._batch_generator is None:
                 self._batch_generator = self.gen_batch(batch_size, shuffle, n_epochs,
-                                                       drop_last, prefetch, *args, **kwargs)
+                                                       drop_last, prefetch, tf_session, *args, **kwargs)
             batch_res = next(self._batch_generator)
         else:
             batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
