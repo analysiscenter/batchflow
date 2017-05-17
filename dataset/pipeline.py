@@ -16,7 +16,7 @@ class Pipeline:
     def __init__(self, dataset):
         self.dataset = dataset
         self._action_list = []
-        self._action_lock = threading.Lock()
+        self._action_lock = None
         self._prefetch_queue = None
         self._batch_queue = None
         self._executor = None
@@ -108,6 +108,8 @@ class Pipeline:
             action['tf_enqueue_op'] = None
             action['tf_placeholders'] = None
             self._action_list[-1].update(action)
+            if self._action_lock is None:
+                self._action_lock = threading.Lock()
         else:
             raise RuntimeError('tf_queue should be precedeed by at least one action')
         return self
@@ -122,6 +124,8 @@ class Pipeline:
     def _create_tf_queue(self, tensors, action):
         if action['tf_session'] is None:
             action['tf_session'] = self._tf_session
+        if action['tf_session'] is None:
+            raise ValueError("Tensorflow session cannot be None")
         maxsize = 1 if self._prefetch_queue is None else self._prefetch_queue.maxsize
         with action['tf_session'].graph.as_default():
             action['tf_queue'] = tf.FIFOQueue(capacity=maxsize, dtypes=self._get_dtypes(tensors, action))
@@ -136,12 +140,15 @@ class Pipeline:
     def _put_batch_into_tf_queue(self, batch, action):
         tensors = batch.get_tensor()
         tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
-        with self._action_lock:
-            if action['tf_queue'] is None:
-                self._create_tf_queue(tensors, action)
-            if action['tf_placeholders'] is None:
-                action['tf_placeholders'] = self._get_tf_placeholders(tensors, action)
-                action['tf_enqueue_op'] = action['tf_queue'].enqueue(action['tf_placeholders'])
+        if action['tf_queue'] is None:
+            with self._action_lock:
+                if action['tf_queue'] is None:
+                    self._create_tf_queue(tensors, action)
+        if action['tf_placeholders'] is None:
+            with self._action_lock:
+                if action['tf_placeholders'] is None:
+                    action['tf_placeholders'] = self._get_tf_placeholders(tensors, action)
+                    action['tf_enqueue_op'] = action['tf_queue'].enqueue(action['tf_placeholders'])
         action['tf_session'].run(action['tf_enqueue_op'], feed_dict=dict(zip(action['tf_placeholders'], tensors)))
 
 
