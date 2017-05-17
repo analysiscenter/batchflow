@@ -13,6 +13,49 @@ def _cpu_count():
     return cpu_count
 
 
+class model:
+    """ Decorator for model definition methods in Batch classes """
+    models = dict()
+
+    def __init__(self, type='static', engine='tf'):
+        self.type = type
+        self.engine = engine
+        self.method = None
+
+    def run_model(self):
+        """ Run and compile a model """
+        get_tensor_name, input, model = self.method()
+        model_spec = dict(get_tensor_name=get_tensor_name, input=input, model=model)
+        models.update({self.method: model_spec})
+
+    def __call__(self, method):
+        self.method = method
+        if self.type == 'static':
+            self.run_model()
+
+        def method_call(*args, **kwargs):
+            """ Do nothing if the method is called explicitly """
+            return None
+        method_call.__model_method__ = method
+        return method_call
+
+
+class action_model:
+    """ Decorator for Batch class actions based on a given model """
+    def __init__(self, model):
+        self.model_name = model
+
+    def __call__(self, method):
+        self.action = method
+
+        def action_call(action_self, *args, **kwargs):
+            self.model_method = getattr(method_self, self.model_name).__model_method__
+            model_params = model.models[self.model_method]
+            return method(action_self, *args, **kwargs)
+        method.action = True
+        return action_call
+
+
 def action(method):
     """ Decorator for action methods in Batch classes """
     # use __action for class-specific params
