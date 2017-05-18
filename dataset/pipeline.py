@@ -213,7 +213,7 @@ class Pipeline:
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
         target = kwargs.pop('target', 'threads')
-        self._tf_session = kwargs.get('tf_session', None)
+        self._tf_session = kwargs.pop('tf_session', None)
 
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
 

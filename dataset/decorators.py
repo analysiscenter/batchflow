@@ -49,7 +49,14 @@ class action_model:
         self.action = method
 
         def action_call(action_self, *args, **kwargs):
-            self.model_method = getattr(method_self, self.model_name).__model_method__
+            if hasattr(action_self, self.model_name):
+                try:
+                    self.model_method = getattr(action_self, self.model_name).__model_method__
+                except AttributeError:
+                    raise ValueError("The method '%s' is not marked with @model" % self.model_name)
+            else:
+                raise ValueError("There is no such method '%s'" % self.model_name)
+
             model_params = model.models[self.model_method]
             return method(action_self, *args, **kwargs)
         method.action = True
