@@ -9,6 +9,7 @@ try:
     import tensorflow as tf
 except ImportError:
     pass
+from .batch import Batch
 
 
 class Pipeline:
@@ -24,10 +25,22 @@ class Pipeline:
 
         self._tf_session = None
 
+
+    @staticmethod
+    def _is_batch_method(name, cls=None):
+        cls = Batch if cls is None else cls
+        if hasattr(cls, name):
+            return True
+        else:
+            return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
+
     def __getattr__(self, name, *args, **kwargs):
         """ Check if an unknown attr is an action from the batch class """
-        self._action_list.append({'name': name})
-        return self._append_action
+        if self._is_batch_method(name):
+            self._action_list.append({'name': name})
+            return self._append_action
+        else:
+            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def _append_action(self, *args, **kwargs):
         """ Add new action to the log of future actions """
