@@ -29,7 +29,7 @@ class Pipeline:
     @staticmethod
     def _is_batch_method(name, cls=None):
         cls = Batch if cls is None else cls
-        if hasattr(cls, name):
+        if hasattr(cls, name) and callable(getattr(cls, name)):
             return True
         else:
             return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
@@ -68,18 +68,30 @@ class Pipeline:
         """ Return index length """
         return len(self.index)
 
+
     @staticmethod
-    def _get_action_call(batch, name):
+    def _get_action_spec(batch, name):
         if hasattr(batch, name):
             attr_name = getattr(batch, name)
             if callable(attr_name):
-                if hasattr(attr_name, "action"):
-                    batch_action = attr_name
+                if hasattr(attr_name, 'action'):
+                    action_spec = getattr(attr_name, 'action')
+                    if action_spec['has_model']:
+                        get_model_spec = attr_name
+                        model_spec = get_model_spec(batch)
+                    else:
+                        model_spec = None
                 else:
                     raise ValueError("Method %s is not marked with @action decorator" % name)
+            else:
+                raise TypeError("%s is not a method" % name)
         else:
             raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
-        return batch_action
+        return action_spec, model_spec
+
+    def _get_model_call(self, model_spec):
+        if model_spec['source_is_queue']:
+
 
     def _exec_all_actions(self, batch, new_loop=False):
         if new_loop:
@@ -90,7 +102,9 @@ class Pipeline:
             if _action['name'] == 'join':
                 joined_sets = _action['datasets']
             else:
-                batch_action = self._get_action_call(batch, _action['name'])
+                action_spec, model_spec = self._get_action_spec(batch, _action['name'])
+                batch_action = action_spec['method']
+
                 if joined_sets is not None:
                     joined_data = []
                     if not isinstance(joined_sets, (list, tuple)):
@@ -101,7 +115,13 @@ class Pipeline:
                     joined_sets = None
                 else:
                     _action_args = _action['args']
-                batch = batch_action(*_action_args, **_action['kwargs'])
+
+                if model_spec is None:
+                    # an ordinary action method
+                    batch = batch_action(*_action_args, **_action['kwargs'])
+                else:
+                    # an action method based on a model
+                    pass
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)

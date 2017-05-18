@@ -1,7 +1,12 @@
 """ Pipeline decorators """
 import os
+import inspect
 import concurrent.futures as cf
 import asyncio
+try:
+    import tensorflow as tf
+except importError:
+    pass
 
 
 def _cpu_count():
@@ -13,20 +18,44 @@ def _cpu_count():
     return cpu_count
 
 
-class model:
+def make_method_key(module_name, method_name):
+    return module_name + '.' + method_name
+
+def get_method_key(method):
+    return make_method_key(inspect.getmodule(method).__name__, method.__qualname__)
+
+def infer_method_key(action_method, model_name):
+    return make_method_key(inspect.getmodule(action_method).__name__,
+                           action_method.__qualname__.rsplit('.', 1)[0] + '.' + model_name)
+
+
+class ModelDecorator:
     """ Decorator for model definition methods in Batch classes """
     models = dict()
 
-    def __init__(self, type='static', engine='tf'):
-        self.type = type
+    def __init__(self, mode='static', engine='tf'):
+        self.mode = mode
         self.engine = engine
         self.method = None
 
+    @staticmethod
+    def get_model(method):
+        full_method_name = get_method_key(method)
+        return ModelDecorator.models[full_method_name]
+
+    @staticmethod
+    def add_model(method, model_spec):
+        full_method_name = get_method_key(method)
+        ModelDecorator.models.update({full_method_name: model_spec})
+
     def run_model(self):
         """ Run and compile a model """
-        get_tensor_name, input, model = self.method()
-        model_spec = dict(get_tensor_name=get_tensor_name, input=input, model=model)
-        models.update({self.method: model_spec})
+        get_tensor_name, source, model = self.method()
+
+        model_spec = dict(get_tensor_name=get_tensor_name, source=source, model=model, method=self.method)
+        model_spec['source_is_queue'] = isinstance(model_spec['source'], tf.QueueBase)
+
+        self.add_model(self.method, model_spec)
 
     def __call__(self, method):
         self.method = method
@@ -36,43 +65,98 @@ class model:
         def method_call(*args, **kwargs):
             """ Do nothing if the method is called explicitly """
             return None
-        method_call.__model_method__ = method
+        method_call.model_method = self.method
         return method_call
 
+def model(*args, **kwargs):
+    return ModelDecorator(*args, **kwargs)
 
-class action_model:
-    """ Decorator for Batch class actions based on a given model """
-    def __init__(self, model):
-        self.model_name = model
 
-    def __call__(self, method):
-        self.action = method
+class ActionDecorator:
+    """ Decorator for Batch class actions """
+    actions = dict()
 
-        def action_call(action_self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        self.method = None
+        self.model_name = None
+
+        if len(args) == 1 and callable(args[0]):
+            # @action without arguments
+            self.method = args[0]
+            self.add_action(self.method)
+        else:
+            # @action with arguments
+            self.model_name = kwargs.pop('model', None)
+            if not isinstance(self.model_name, str):
+                raise ValueError("Decorator should be specified as @action(model='model_method_name')")
+
+    def add_action(self, method):
+        full_method_name = get_method_key(method)
+        if self.model_name is None:
+            full_model_name = None
+        else:
+            full_model_name = infer_method_key(method, self.model_name)
+
+        action = dict(method=method, full_method_name=full_method_name,
+                      has_model=self.model_name is not None,
+                      model_name=self.model_name, full_model_name=full_model_name)
+        self.mark_as_action(method, action)
+        ActionDecorator.actions.update({full_method_name: action})
+
+    @staticmethod
+    def get_action(method):
+        full_method_name = get_method_key(method)
+        return ActionDecorator.actions[full_method_name]
+
+    def mark_as_action(self, method, action):
+        """ Mark a decorated method as an action """
+        method.action = action
+
+    def _action_with_model(self, method):
+        def get_module_spec(action_self, **kwargs):
             if hasattr(action_self, self.model_name):
                 try:
-                    self.model_method = getattr(action_self, self.model_name).__model_method__
+                    self.model_method = getattr(action_self, self.model_name).model_method
                 except AttributeError:
                     raise ValueError("The method '%s' is not marked with @model" % self.model_name)
             else:
                 raise ValueError("There is no such method '%s'" % self.model_name)
 
-            model_params = model.models[self.model_method]
-            return method(action_self, *args, **kwargs)
-        method.action = True
-        return action_call
+            model_spec = ModelDecorator.get_model(self.model_method)
+            return model_spec
+        return get_module_spec
+
+    def __call__(self, method_or_arg, *args, **kwargs):
+        if self.method is None:
+            # @action with arguments
+            self.method = method_or_arg
+            self.add_action(self.method)
+            # return a function that will be called when a decorated method is called
+            return self._action_with_model(method_or_arg)
+        else:
+            # @action without arguments
+            # just call a method
+            return self.method(method_or_arg, *args, **kwargs)
 
 
-def action(method):
-    """ Decorator for action methods in Batch classes """
-    # use __action for class-specific params
-    method.action = True
-    return method
+def action(*args, **kwargs):
+    """ Decorator for action methods in Batch classes
+
+    Usage:
+        @action
+        def some_action(self, arg1, arg2):
+            ...
+
+        @action(model='some_model')
+        def train_model(self, model, feed_dict, another_arg):
+            ...
+    """
+    return ActionDecorator(*args, **kwargs)
 
 
 def any_action_failed(results):
-    """ Return True if some of the results come from failed Future """
-    return any([isinstance(res, Exception) for res in results])
+    """ Return True if some parallelized invocations threw exceptions """
+    return any(isinstance(res, Exception) for res in results)
 
 
 def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
