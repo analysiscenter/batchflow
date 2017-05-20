@@ -49,17 +49,13 @@ class ModelDecorator:
         ModelDecorator.models.update({full_method_name: model_spec})
 
     def run_model(self):
-        """ Run and compile a model """
-        get_tensor_name, source, model = self.method()
-
-        model_spec = dict(get_tensor_name=get_tensor_name, source=source, model=model, method=self.method)
-        model_spec['source_is_queue'] = isinstance(model_spec['source'], tf.QueueBase)
-
+        """ Run the model method and save the model """
+        model = self.method()
         self.add_model(self.method, model_spec)
 
     def __call__(self, method):
         self.method = method
-        if self.type == 'static':
+        if self.mode == 'static':
             self.run_model()
 
         def method_call(*args, **kwargs):
@@ -82,8 +78,7 @@ class ActionDecorator:
 
         if len(args) == 1 and callable(args[0]):
             # @action without arguments
-            self.method = args[0]
-            self.add_action(self.method)
+            self.add_action(args[0])
         else:
             # @action with arguments
             self.model_name = kwargs.pop('model', None)
@@ -91,16 +86,17 @@ class ActionDecorator:
                 raise ValueError("Decorator should be specified as @action(model='model_method_name')")
 
     def add_action(self, method):
-        full_method_name = get_method_key(method)
+        self.method = method
+        full_method_name = get_method_key(self.method)
         if self.model_name is None:
             full_model_name = None
         else:
-            full_model_name = infer_method_key(method, self.model_name)
+            full_model_name = infer_method_key(self.method, self.model_name)
 
-        action = dict(method=method, full_method_name=full_method_name,
+        action = dict(method=self.method, full_method_name=full_method_name,
                       has_model=self.model_name is not None,
                       model_name=self.model_name, full_model_name=full_model_name)
-        self.mark_as_action(method, action)
+        self.method.action = action
         ActionDecorator.actions.update({full_method_name: action})
 
     @staticmethod
@@ -108,11 +104,7 @@ class ActionDecorator:
         full_method_name = get_method_key(method)
         return ActionDecorator.actions[full_method_name]
 
-    def mark_as_action(self, method, action):
-        """ Mark a decorated method as an action """
-        method.action = action
-
-    def _action_with_model(self, method):
+    def _action_with_model(self):
         def get_module_spec(action_self, **kwargs):
             if hasattr(action_self, self.model_name):
                 try:
@@ -126,17 +118,21 @@ class ActionDecorator:
             return model_spec
         return get_module_spec
 
-    def __call__(self, method_or_arg, *args, **kwargs):
+    def __call__(self, *args, **kwargs):
         if self.method is None:
             # @action with arguments
-            self.method = method_or_arg
-            self.add_action(self.method)
+            self.add_action(args[0])
             # return a function that will be called when a decorated method is called
-            return self._action_with_model(method_or_arg)
+            return self._action_with_model()
         else:
             # @action without arguments
             # just call a method
-            return self.method(method_or_arg, *args, **kwargs)
+            return self.method(self.action_self, *args, **kwargs)
+
+    def __get__(self, instance, owner):
+        self.action_class = owner
+        self.action_self = instance
+        return self.__call__
 
 
 def action(*args, **kwargs):
@@ -148,7 +144,7 @@ def action(*args, **kwargs):
             ...
 
         @action(model='some_model')
-        def train_model(self, model, feed_dict, another_arg):
+        def train_model(self, model, another_arg):
             ...
     """
     return ActionDecorator(*args, **kwargs)
