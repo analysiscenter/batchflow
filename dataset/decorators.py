@@ -51,7 +51,7 @@ class ModelDecorator:
     def run_model(self):
         """ Run the model method and save the model """
         model = self.method()
-        self.add_model(self.method, model_spec)
+        self.add_model(self.method, model)
 
     def __call__(self, method):
         self.method = method
@@ -105,7 +105,7 @@ class ActionDecorator:
         return ActionDecorator.actions[full_method_name]
 
     def _action_with_model(self):
-        def get_module_spec(action_self, **kwargs):
+        def get_model_spec(action_self, **kwargs):
             if hasattr(action_self, self.model_name):
                 try:
                     self.model_method = getattr(action_self, self.model_name).model_method
@@ -116,7 +116,7 @@ class ActionDecorator:
 
             model_spec = ModelDecorator.get_model(self.model_method)
             return model_spec
-        return get_module_spec
+        return get_model_spec
 
     def __call__(self, *args, **kwargs):
         if self.method is None:

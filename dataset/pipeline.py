@@ -89,9 +89,6 @@ class Pipeline:
             raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
         return action_spec, model_spec
 
-    def _get_model_call(self, model_spec):
-        if model_spec['source_is_queue']:
-
 
     def _exec_all_actions(self, batch, new_loop=False):
         if new_loop:
@@ -103,7 +100,6 @@ class Pipeline:
                 joined_sets = _action['datasets']
             else:
                 action_spec, model_spec = self._get_action_spec(batch, _action['name'])
-                batch_action = action_spec['method']
 
                 if joined_sets is not None:
                     joined_data = []
@@ -116,12 +112,13 @@ class Pipeline:
                 else:
                     _action_args = _action['args']
 
+                batch_action = action_spec['method']
                 if model_spec is None:
                     # an ordinary action method
                     batch = batch_action(*_action_args, **_action['kwargs'])
                 else:
                     # an action method based on a model
-                    pass
+                    batch = batch_action(model_spec, *_action_args, **_action['kwargs'])
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)
