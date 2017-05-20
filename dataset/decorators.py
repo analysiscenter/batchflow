@@ -115,7 +115,7 @@ class ActionDecorator:
                 raise ValueError("There is no such method '%s'" % self.model_name)
 
             model_spec = ModelDecorator.get_model(self.model_method)
-            return model_spec
+            return model_spec, self.method
         return get_model_spec
 
     def __call__(self, *args, **kwargs):

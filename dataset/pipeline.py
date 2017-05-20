@@ -73,9 +73,17 @@ class Pipeline:
     def _get_action_spec(batch, name):
         if hasattr(batch, name):
             attr_name = getattr(batch, name)
-            if callable(attr_name):
-                if hasattr(attr_name, 'action'):
-                    action_spec = getattr(attr_name, 'action')
+            if attr_name.__self__ == batch:
+                # action with model
+                get_model_spec = attr_name
+                model_spec, action_method = get_model_spec()
+            else:
+                # action wihout model
+                action_method = attr_name.__self__.method
+                model_spec = None
+            if callable(action_method):
+                if hasattr(action_method, 'action'):
+                    action_spec = getattr(action_method, 'action')
                     if action_spec['has_model']:
                         get_model_spec = attr_name
                         model_spec = get_model_spec(batch)
@@ -115,10 +123,10 @@ class Pipeline:
                 batch_action = action_spec['method']
                 if model_spec is None:
                     # an ordinary action method
-                    batch = batch_action(*_action_args, **_action['kwargs'])
+                    batch = batch_action(batch, *_action_args, **_action['kwargs'])
                 else:
                     # an action method based on a model
-                    batch = batch_action(model_spec, *_action_args, **_action['kwargs'])
+                    batch = batch_action(batch, model_spec, *_action_args, **_action['kwargs'])
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)
