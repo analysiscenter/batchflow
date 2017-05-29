@@ -72,23 +72,20 @@ class Pipeline:
     @staticmethod
     def _get_action_spec(batch, name):
         if hasattr(batch, name):
-            attr_name = getattr(batch, name)
-            if attr_name.__self__ == batch:
+            attr = getattr(batch, name)
+            if attr.__self__ == batch:
                 # action with model
-                get_model_spec = attr_name
+                get_model_spec = attr
+                # get_model_spec is bounded to the batch (so it is sent as self)
                 model_spec, action_method = get_model_spec()
             else:
                 # action wihout model
-                action_method = attr_name.__self__.method
+                action_method = attr.__self__.method
                 model_spec = None
+
             if callable(action_method):
                 if hasattr(action_method, 'action'):
                     action_spec = getattr(action_method, 'action')
-                    if action_spec['has_model']:
-                        get_model_spec = attr_name
-                        model_spec = get_model_spec(batch)
-                    else:
-                        model_spec = None
                 else:
                     raise ValueError("Method %s is not marked with @action decorator" % name)
             else:
@@ -120,13 +117,13 @@ class Pipeline:
                 else:
                     _action_args = _action['args']
 
-                batch_action = action_spec['method']
+                action_method = action_spec['method']
                 if model_spec is None:
                     # an ordinary action method
-                    batch = batch_action(batch, *_action_args, **_action['kwargs'])
+                    batch = action_method(batch, *_action_args, **_action['kwargs'])
                 else:
                     # an action method based on a model
-                    batch = batch_action(batch, model_spec, *_action_args, **_action['kwargs'])
+                    batch = action_method(batch, model_spec, *_action_args, **_action['kwargs'])
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)

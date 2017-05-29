@@ -33,7 +33,7 @@ class ModelDecorator:
     """ Decorator for model definition methods in Batch classes """
     models = dict()
 
-    def __init__(self, mode='static', engine='tf'):
+    def __init__(self, mode='global', engine='tf'):
         self.mode = mode
         self.engine = engine
         self.method = None
@@ -55,7 +55,7 @@ class ModelDecorator:
 
     def __call__(self, method):
         self.method = method
-        if self.mode == 'static':
+        if self.mode == 'global':
             self.run_model()
 
         def method_call(*args, **kwargs):
@@ -70,8 +70,6 @@ def model(*args, **kwargs):
 
 class ActionDecorator:
     """ Decorator for Batch class actions """
-    actions = dict()
-
     def __init__(self, *args, **kwargs):
         self.method = None
         self.model_name = None
@@ -97,12 +95,6 @@ class ActionDecorator:
                       has_model=self.model_name is not None,
                       model_name=self.model_name, full_model_name=full_model_name)
         self.method.action = action
-        ActionDecorator.actions.update({full_method_name: action})
-
-    @staticmethod
-    def get_action(method):
-        full_method_name = get_method_key(method)
-        return ActionDecorator.actions[full_method_name]
 
     def _action_with_model(self):
         def get_model_spec(action_self, **kwargs):
@@ -126,8 +118,8 @@ class ActionDecorator:
             return self._action_with_model()
         else:
             # @action without arguments
-            # just call a method
-            return self.method(self.action_self, *args, **kwargs)
+            # this branch never executes as a pipeline directly calls action.__self__.method
+            return None
 
     def __get__(self, instance, owner):
         self.action_class = owner
