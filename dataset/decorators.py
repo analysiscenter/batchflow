@@ -67,6 +67,14 @@ class ModelDecorator:
         return method_call
 
 def model(*args, **kwargs):
+    """ Decorator for model methods
+
+    Usage:
+        @model()
+        def some_model():
+            ...
+            return my_model
+    """
     return ModelDecorator(*args, **kwargs)
 
 
@@ -98,8 +106,8 @@ class ActionDecorator:
             full_model_name = infer_method_key(self.method, self.model_name)
 
         action_spec = dict(method=self.method, full_method_name=full_method_name,
-                      has_model=self.model_name is not None,
-                      model_name=self.model_name, full_model_name=full_model_name)
+                           has_model=self.model_name is not None,
+                           model_name=self.model_name, full_model_name=full_model_name)
         self.method.action = action_spec
 
     def _action_with_model(self):
