@@ -3,10 +3,6 @@ import os
 import inspect
 import concurrent.futures as cf
 import asyncio
-try:
-    import tensorflow as tf
-except importError:
-    pass
 
 
 def _cpu_count():
@@ -19,12 +15,15 @@ def _cpu_count():
 
 
 def make_method_key(module_name, method_name):
+    """ Build a full method name 'module.method' """
     return module_name + '.' + method_name
 
 def get_method_key(method):
+    """ Retrieve a full method name from a callable """
     return make_method_key(inspect.getmodule(method).__name__, method.__qualname__)
 
 def infer_method_key(action_method, model_name):
+    """ Infer a full model method name from a given action method and a model name """
     return make_method_key(inspect.getmodule(action_method).__name__,
                            action_method.__qualname__.rsplit('.', 1)[0] + '.' + model_name)
 
@@ -40,18 +39,20 @@ class ModelDecorator:
 
     @staticmethod
     def get_model(method):
+        """ Return a model specification for a given model method """
         full_method_name = get_method_key(method)
         return ModelDecorator.models[full_method_name]
 
     @staticmethod
     def add_model(method, model_spec):
+        """ Add a model specification into the model directory """
         full_method_name = get_method_key(method)
         ModelDecorator.models.update({full_method_name: model_spec})
 
     def run_model(self):
-        """ Run the model method and save the model """
-        model = self.method()
-        self.add_model(self.method, model)
+        """ Run the model method and save the model into the model directory """
+        model_spec = self.method()
+        self.add_model(self.method, model_spec)
 
     def __call__(self, method):
         self.method = method
@@ -60,6 +61,7 @@ class ModelDecorator:
 
         def method_call(*args, **kwargs):
             """ Do nothing if the method is called explicitly """
+            _ = args, kwargs
             return None
         method_call.model_method = self.method
         return method_call
@@ -70,9 +72,12 @@ def model(*args, **kwargs):
 
 class ActionDecorator:
     """ Decorator for Batch class actions """
+    # pylint: disable=too-few-public-methods
     def __init__(self, *args, **kwargs):
         self.method = None
         self.model_name = None
+        self.model_method = None
+        self.action_self = None
 
         if len(args) == 1 and callable(args[0]):
             # @action without arguments
@@ -84,6 +89,7 @@ class ActionDecorator:
                 raise ValueError("Decorator should be specified as @action(model='model_method_name')")
 
     def add_action(self, method):
+        """ Add an action specification into an action method """
         self.method = method
         full_method_name = get_method_key(self.method)
         if self.model_name is None:
@@ -91,13 +97,16 @@ class ActionDecorator:
         else:
             full_model_name = infer_method_key(self.method, self.model_name)
 
-        action = dict(method=self.method, full_method_name=full_method_name,
+        action_spec = dict(method=self.method, full_method_name=full_method_name,
                       has_model=self.model_name is not None,
                       model_name=self.model_name, full_model_name=full_model_name)
-        self.method.action = action
+        self.method.action = action_spec
 
     def _action_with_model(self):
+        """ Return a callable for a decorator call """
         def get_model_spec(action_self, **kwargs):
+            """ Return a model specification for a give action method """
+            _ = kwargs
             if hasattr(action_self, self.model_name):
                 try:
                     self.model_method = getattr(action_self, self.model_name).model_method
@@ -122,7 +131,7 @@ class ActionDecorator:
             return None
 
     def __get__(self, instance, owner):
-        self.action_class = owner
+        _ = owner
         self.action_self = instance
         return self.__call__
 
