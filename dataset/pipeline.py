@@ -170,6 +170,7 @@ class Pipeline:
             placeholders = [tf.placeholder(dtype=tensor.dtype) for tensor in tensors]
         return placeholders
 
+    @staticmethod
     def _get_tensor(batch, action):
         if action['get_tensor'] is None:
             return batch.data
