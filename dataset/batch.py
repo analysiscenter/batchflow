@@ -79,10 +79,6 @@ class Batch:
         filename = hexlify(random_data.data)[:8]
         return filename.decode("utf-8")
 
-    def get_tensor(self):
-        """ Return a tensor (e.g. a numpy array) which can be fed into ML models """
-        return self.data
-
     def infer_dtype(self, data=None):
         """ Detect dtype of batch data """
         if data is None:
