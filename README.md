@@ -16,8 +16,6 @@ Main features:
 ## Basic usage
 
 ```python
-NUM_ITERS = 1000
-
 my_workflow = my_dataset.pipeline()
               .load('/some/path')
               .do_something()
@@ -27,6 +25,7 @@ my_workflow = my_dataset.pipeline()
 ```
 The trick here is that all the processing actions are lazy. They are not executed until their results are needed, e.g. when you request a preprocessed batch:
 ```python
+NUM_ITERS = 1000
 for i in range(NUM_ITERS):
     processed_batch = my_workflow.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
     # only now the actions are fired and data is changed with the workflow defined earlier
