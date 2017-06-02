@@ -30,8 +30,20 @@ For more advanced cases and detailed API see [the documentation](doc/intro.md)
 ## Installation
 
 ### Git submodule
+In many cases it is much more convenient to install `dataset` as a submodule in your project repository than a system python package.
 ```
 git submodule add https://github.com/analysiscenter/dataset.git
 git submodule init
 git submodule update
+```
+After that you can import it as python module:
+```python
+import dataset as ds
+```
+
+If a python file is located in a subdirectory, you might need to add a path to `dataset`:
+```python
+import sys
+sys.path.append("..")
+import dataset as ds
 ```
