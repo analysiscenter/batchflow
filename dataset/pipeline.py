@@ -106,11 +106,9 @@ class Pipeline:
 
                 if joined_sets is not None:
                     joined_data = []
-                    if not isinstance(joined_sets, (list, tuple)):
-                        joined_sets = [joined_sets]
                     for jset in joined_sets:
                         joined_data.append(jset.create_batch(batch.index))
-                    _action_args = (joined_data,) + _action['args']
+                    _action_args = tuple(joined_data) + _action['args']
                     joined_sets = None
                 else:
                     _action_args = _action['args']
@@ -127,12 +125,12 @@ class Pipeline:
                     self._put_batch_into_tf_queue(batch, _action)
         return batch
 
-    def join(self, datasets):
+    def join(self, *datasets):
         """ Join other datasets """
         self._action_list.append({'name': 'join', 'datasets': datasets})
         return self
 
-    def tf_queue(self, session=None, queue=None, get_tensor=None):
+    def put_into_tf_queue(self, session=None, queue=None, get_tensor=None):
         """ Insert a tensorflow queue after the action"""
         if len(self._action_list) > 0:
             action = dict()
