@@ -29,6 +29,10 @@ For more advanced cases and detailed API see [the documentation](doc/intro.md)
 
 ## Installation
 
+------
+`Dataset` module is in the beta stage. Your suggestions and improvements are very welcome.
+------
+
 ### Git submodule
 In many cases it is much more convenient to install `dataset` as a submodule in your project repository than a system python package.
 ```
