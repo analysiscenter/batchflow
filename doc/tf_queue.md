@@ -32,7 +32,7 @@ Take a look at `get_tensor` method. It should return a numpy array that will be 
 
 Create a queue:
 ```python
-input_queue = tf.FIFOQueue(capacity=5)
+input_queue = tf.FIFOQueue(capacity=5, dtypes='float')
 ```
 
 Define a tensorflow model:
@@ -64,7 +64,7 @@ sess.run(tf.initialize_all_variables())
 And now let's iterate over batches and train the model:
 ```python
 for i in range(MAX_ITER):
-    batch = my_pipeline.next_batch(BATCH_SIZE, n_epochs=None, prefetch=5, tf_session=sess)
+    batch = my_pipeline.next_batch(BATCH_SIZE, n_epochs=None, prefetch=4, tf_session=sess)
     # run one optimization step for the current batch
     sess.run([optimizer])
 ```
