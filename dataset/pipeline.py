@@ -106,7 +106,7 @@ class Pipeline:
 
                 if joined_sets is not None:
                     joined_data = []
-                    for jset in joined_sets:
+                    for jset in joined_sets:   # pylint: disable=not-an-iterable
                         joined_data.append(jset.create_batch(batch.index))
                     _action_args = tuple(joined_data) + _action['args']
                     joined_sets = None
