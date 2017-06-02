@@ -1,15 +1,23 @@
 # Dataset
 
+`Dataset` helps you conveniently work with random or sequential batches of your data
+and define processing workflows even for datasets that do not fit into memory.
+
+Main features:
+- flexible batch generaton
+- multi-stage pipelines
+- datasets and pipelines joins
+- processing actions and model definitions
+- within batch parallelism
+- parallel batch prefetching
+- feeding batches into TensorFlow queues.
+
+
 ## Basic usage
 
-`Dataset` helps you conveniently work with random or sequential batches of your data:
 ```python
 NUM_ITERS = 1000
-for batch in my_dataset.gen_batch(BATCH_SIZE, shuffle=False, n_epochs=1):
-    # ...
-```
-and define processing workflows even for datasets that do not fit into memory:
-```python
+
 my_workflow = my_dataset.pipeline()
               .load('/some/path')
               .do_something()
@@ -24,7 +32,7 @@ for i in range(NUM_ITERS):
     # only now the actions are fired and data is changed with the workflow defined earlier
 ```
 
-For more advanced cases and detailed API see [the documentation](doc/intro.md)
+For more advanced cases and detailed API see [the documentation](doc/intro.md).
 
 
 ## Installation
@@ -33,18 +41,18 @@ For more advanced cases and detailed API see [the documentation](doc/intro.md)
 
 
 ### Git submodule
-In many cases it is much more convenient to install `dataset` as a submodule in your project repository than a system python package.
+In many cases it is much more convenient to install `dataset` as a submodule in your project repository than as a system python package.
 ```
 git submodule add https://github.com/analysiscenter/dataset.git
 git submodule init
 git submodule update
 ```
-After that you can import it as python module:
+After that you can import it as a python module:
 ```python
 import dataset as ds
 ```
 
-If a python file is located in a subdirectory, you might need to add a path to `dataset`:
+If your python file is located in a subdirectory, you might need to add a path to `dataset`:
 ```python
 import sys
 sys.path.append("..")
