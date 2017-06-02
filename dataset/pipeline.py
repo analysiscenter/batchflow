@@ -182,9 +182,9 @@ class Pipeline:
             with action['tf_action_lock']:
                 if action['tf_queue'] is None:
                     self._create_tf_queue(tensors, action)
-        if action['tf_placeholders'] is None:
+        if action['tf_enqueue_op'] is None:
             with action['tf_action_lock']:
-                if action['tf_placeholders'] is None:
+                if action['tf_enqueue_op'] is None:
                     action['tf_placeholders'] = self._get_tf_placeholders(tensors, action)
                     action['tf_enqueue_op'] = action['tf_queue'].enqueue(action['tf_placeholders'])
         action['tf_session'].run(action['tf_enqueue_op'], feed_dict=dict(zip(action['tf_placeholders'], tensors)))
