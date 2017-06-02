@@ -3,6 +3,7 @@ import os
 import sys
 from time import time
 import numpy as np
+import tensorflow as tf
 
 sys.path.append('..')
 from dataset import *
@@ -13,46 +14,30 @@ class MyArrayBatch(ArrayBatch):
     def __init__(self, index, *args, **kwargs):
         super().__init__(index)
 
-    @action
-    def print(self, text=None):
-        if text is not None:
-            print("\n====", text, self.indices, "======\n")
-        print(self.data)
-        return self
-
-    def parallel_post(self, results, not_done=None):
-        print(" Post:", results)
-        return self
-
-    @action
-    def action0(self, *args):
-        print("   batch", self.indices, "   action 0", args)
-        return self
-
     @model()
-    def sm(self):
-        return [1,2,3]
+    def basic_model():
+        input_data = tf.placeholder('float', [None, 3])
+        model_output = tf.square(tf.reduce_sum(input_data))
+        return [input_data, model_output]
 
-    @action
-    def action_m(self, model, arg=5):
-        print("   batch", self.indices, "   action m", model, arg)
+    @action(model='basic_model')
+    def action_m(self, model, session):
+        print("        action m", model)
+        input_data, model_output = model
+        res = session.run(model_output, feed_dict={input_data: self.data})
+        print("        ", int(res))
         return self
-
-    @action
-    @inbatch_parallel(init="indices") #, post="parallel_post")
-    def action1(self, i, *args):
-        print("   batch", self.indices, "   action 1", i, args)
-        return i
 
 
 # number of items in the dataset
 K = 100
+Q = 10
 
 
 # Fill-in dataset with sample data
 def pd_data():
     ix = np.arange(K)
-    data = np.arange(K * 3).reshape(K, -1).astype("float")
+    data = np.arange(K * 3).reshape(K, -1).astype("float32")
     dsindex = DatasetIndex(ix)
     ds = Dataset(index=dsindex, batch_class=MyArrayBatch)
     return ds, data.copy()
@@ -61,22 +46,21 @@ def pd_data():
 # Create datasets
 ds_data, data = pd_data()
 
+# Create tf session
+sess = tf.Session()
+sess.run(tf.initialize_all_variables())
 
 # Create pipeline
 res = (ds_data.pipeline()
         .load(data)
-        .action0()
-        .action_m(3)
-        .action1()
+        .action_m(sess)
 )
-
 
 print("Start iterating...")
 t = time()
 t1 = t
-for batch in res.gen_batch(2, shuffle=False, n_epochs=1, drop_last=True, prefetch=Q*2, tf_session=sess, target='threads'):
+for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*2):
     print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
-    pass
 
 print("Stop iterating:", time() - t)
