@@ -124,8 +124,8 @@ If you have a pipeline `images` and a pipeline `labels`, you might join them for
 ```python
 images_with_labels = images.p.
                            .load(...)
-                           .resize(256, 256)
-                           .random_rotate(-pi/2, pi/2)
+                           .resize(shape=(256, 256))
+                           .random_rotate(angle=(-pi/4, pi/4))
                            .join(labels)
                            .some_action()
 ```
