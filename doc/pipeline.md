@@ -140,10 +140,10 @@ class ImagesBatch(Batch):
     def load(self, src, fmt):
         ...
 
-    def resize(self, x, y):
+    def resize(self, shape):
         ...
 
-    def random_rotate(self, from, to):
+    def random_rotate(self, angle):
         ...
 
     def some_actions(self, labels_batch):
@@ -154,8 +154,8 @@ You can join several sources:
 ```python
 full_images = images.p.
                     .load(...)
-                    .resize(256, 256)
-                    .random_rotate(-pi/2, pi/2)
+                    .resize(shape=(256, 256))
+                    .random_rotate(angle=(-pi/4, pi/4))
                     .join(labels, masks)
                     .some_action()
 ```
