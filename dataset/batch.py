@@ -79,6 +79,18 @@ class Batch:
         filename = hexlify(random_data.data)[:8]
         return filename.decode("utf-8")
 
+    def infer_dtype(self, data=None):
+        """ Detect dtype of batch data """
+        if data is None:
+            data = self.data
+        return np.asarray(data).dtype.name
+
+    def get_dtypes(self):
+        """ Return dtype for batch data """
+        if isinstance(self.data, tuple):
+            return tuple(self.infer_dtype(item) for item in self.data)
+        else:
+            return self.infer_dtype(self.data)
 
     @action
     def load(self, src, fmt=None):
@@ -89,6 +101,11 @@ class Batch:
     def dump(self, dst, fmt=None):
         """ Save batch data to disk """
         raise NotImplementedError()
+
+    @action
+    def save(self, dst, fmt=None):
+        """ Save batch data to a file (an alias for dump method)"""
+        return self.dump(dst, fmt)
 
 
 class ArrayBatch(Batch):
@@ -145,11 +162,6 @@ class ArrayBatch(Batch):
         else:
             raise ValueError("Unknown format " + fmt)
         return self
-
-    @action
-    def save(self, dst, fmt=None):
-        """ Save batch data to a file (an alias for dump method)"""
-        return self.dump(dst, fmt)
 
 
 class DataFrameBatch(Batch):

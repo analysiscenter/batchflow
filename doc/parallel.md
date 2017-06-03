@@ -13,7 +13,7 @@
 
 
 ## Basic usage
-In order to run a method in parallel you need to add `inbatch_parallel` decorator :
+The `inbatch_parallel` decorator allows to run a method in parallel:
 
 ```python
 from dataset import Batch, inbatch_parallel, action
@@ -396,6 +396,6 @@ By default each action runs as many parallel tasks as the number of cores your c
 ```python
 some_pipeline.parallel_action(some_arg, n_workers=3)
 ```
-Here `parallel_action` will have only 3 parallel tasks being executed simultneously. Others will wait in the queue.
+Here `parallel_action` will have only 3 parallel tasks being executed simultaneously. Others will wait in the queue.
 
 **Attention!** You cannot use `n_workers` with `target=async`.

@@ -1,8 +1,8 @@
 """ Pipeline decorators """
 import os
+import inspect
 import concurrent.futures as cf
 import asyncio
-from .utils import get_del
 
 
 def _cpu_count():
@@ -14,16 +14,154 @@ def _cpu_count():
     return cpu_count
 
 
-def action(method):
-    """ Decorator for action methods in Batch classes """
-    # use __action for class-specific params
-    method.action = True
-    return method
+def make_method_key(module_name, method_name):
+    """ Build a full method name 'module.method' """
+    return module_name + '.' + method_name
+
+def get_method_key(method):
+    """ Retrieve a full method name from a callable """
+    return make_method_key(inspect.getmodule(method).__name__, method.__qualname__)
+
+def infer_method_key(action_method, model_name):
+    """ Infer a full model method name from a given action method and a model name """
+    return make_method_key(inspect.getmodule(action_method).__name__,
+                           action_method.__qualname__.rsplit('.', 1)[0] + '.' + model_name)
+
+
+class ModelDecorator:
+    """ Decorator for model definition methods in Batch classes """
+    models = dict()
+
+    def __init__(self, mode='global', engine='tf'):
+        self.mode = mode
+        self.engine = engine
+        self.method = None
+
+    @staticmethod
+    def get_model(method):
+        """ Return a model specification for a given model method """
+        full_method_name = get_method_key(method)
+        return ModelDecorator.models[full_method_name]
+
+    @staticmethod
+    def add_model(method, model_spec):
+        """ Add a model specification into the model directory """
+        full_method_name = get_method_key(method)
+        ModelDecorator.models.update({full_method_name: model_spec})
+
+    def run_model(self):
+        """ Run the model method and save the model into the model directory """
+        model_spec = self.method()
+        self.add_model(self.method, model_spec)
+
+    def __call__(self, method):
+        self.method = method
+        if self.mode == 'global':
+            self.run_model()
+
+        def method_call(*args, **kwargs):
+            """ Do nothing if the method is called explicitly """
+            _ = args, kwargs
+            return None
+        method_call.model_method = self.method
+        return method_call
+
+def model(*args, **kwargs):
+    """ Decorator for model methods
+
+    Usage:
+        @model()
+        def some_model():
+            ...
+            return my_model
+    """
+    return ModelDecorator(*args, **kwargs)
+
+
+class ActionDecorator:
+    """ Decorator for Batch class actions """
+    # pylint: disable=too-few-public-methods
+    def __init__(self, *args, **kwargs):
+        self.method = None
+        self.model_name = None
+        self.model_method = None
+        self.action_self = None
+
+        if len(args) == 1 and callable(args[0]):
+            # @action without arguments
+            self.add_action(args[0])
+        else:
+            # @action with arguments
+            self.model_name = kwargs.pop('model', None)
+            if not isinstance(self.model_name, str):
+                raise ValueError("Decorator should be specified as @action(model='model_method_name')")
+
+    def add_action(self, method):
+        """ Add an action specification into an action method """
+        self.method = method
+        full_method_name = get_method_key(self.method)
+        if self.model_name is None:
+            full_model_name = None
+        else:
+            full_model_name = infer_method_key(self.method, self.model_name)
+
+        action_spec = dict(method=self.method, full_method_name=full_method_name,
+                           has_model=self.model_name is not None,
+                           model_name=self.model_name, full_model_name=full_model_name)
+        self.method.action = action_spec
+
+    def _action_with_model(self):
+        """ Return a callable for a decorator call """
+        def get_model_spec(action_self, **kwargs):
+            """ Return a model specification for a give action method """
+            _ = kwargs
+            if hasattr(action_self, self.model_name):
+                try:
+                    self.model_method = getattr(action_self, self.model_name).model_method
+                except AttributeError:
+                    raise ValueError("The method '%s' is not marked with @model" % self.model_name)
+            else:
+                raise ValueError("There is no such method '%s'" % self.model_name)
+
+            model_spec = ModelDecorator.get_model(self.model_method)
+            return model_spec, self.method
+        return get_model_spec
+
+    def __call__(self, *args, **kwargs):
+        if self.method is None:
+            # @action with arguments
+            self.add_action(args[0])
+            # return a function that will be called when a decorated method is called
+            return self._action_with_model()
+        else:
+            # @action without arguments
+            # this branch never executes as a pipeline directly calls action.__self__.method
+            return None
+
+    def __get__(self, instance, owner):
+        _ = owner
+        self.action_self = instance
+        return self.__call__
+
+
+def action(*args, **kwargs):
+    """ Decorator for action methods in Batch classes
+
+    Usage:
+        @action
+        def some_action(self, arg1, arg2):
+            ...
+
+        @action(model='some_model')
+        def train_model(self, model, another_arg):
+            ...
+    """
+    return ActionDecorator(*args, **kwargs)
 
 
 def any_action_failed(results):
-    """ Return True if some of the results come from failed Future """
-    return any([isinstance(res, Exception) for res in results])
+    """ Return True if some parallelized invocations threw exceptions """
+    return any(isinstance(res, Exception) for res in results)
 
 
 def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
@@ -96,7 +234,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = get_del(kwargs, 'n_workers', _cpu_count())
+            n_workers = kwargs.pop('n_workers', _cpu_count())
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 if nogil:
@@ -119,7 +257,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = get_del(kwargs, 'n_workers', _cpu_count())
+            n_workers = kwargs.pop('n_workers', _cpu_count())
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
@@ -129,7 +267,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
                     futures.append(one_ft)
 
-                timeout = get_del(kwargs, 'timeout', None)
+                timeout = kwargs.pop('timeout', None)
                 cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)

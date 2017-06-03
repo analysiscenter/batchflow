@@ -1,8 +1,15 @@
 """ Pipeline classes """
+import sys
+import traceback
 import concurrent.futures as cf
+import threading
 import asyncio
 import queue as q
-from .utils import get_del
+try:
+    import tensorflow as tf
+except ImportError:
+    pass
+from .batch import Batch
 
 
 class Pipeline:
@@ -14,11 +21,24 @@ class Pipeline:
         self._batch_queue = None
         self._executor = None
         self._batch_generator = None
+        self._tf_session = None
+
+
+    @staticmethod
+    def _is_batch_method(name, cls=None):
+        cls = Batch if cls is None else cls
+        if hasattr(cls, name) and callable(getattr(cls, name)):
+            return True
+        else:
+            return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
 
     def __getattr__(self, name, *args, **kwargs):
         """ Check if an unknown attr is an action from the batch class """
-        self._action_list.append({'name': name})
-        return self._append_action
+        if self._is_batch_method(name):
+            self._action_list.append({'name': name})
+            return self._append_action
+        else:
+            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def _append_action(self, *args, **kwargs):
         """ Add new action to the log of future actions """
@@ -46,18 +66,32 @@ class Pipeline:
         """ Return index length """
         return len(self.index)
 
+
     @staticmethod
-    def _get_action_call(batch, name):
+    def _get_action_spec(batch, name):
         if hasattr(batch, name):
-            attr_name = getattr(batch, name)
-            if callable(attr_name):
-                if hasattr(attr_name, "action"):
-                    batch_action = attr_name
+            attr = getattr(batch, name)
+            if attr.__self__ == batch:
+                # action with model
+                get_model_spec = attr
+                # get_model_spec is bounded to the batch (so it is sent as self)
+                model_spec, action_method = get_model_spec()
+            else:
+                # action wihout model
+                action_method = attr.__self__.method
+                model_spec = None
+
+            if callable(action_method):
+                if hasattr(action_method, 'action'):
+                    action_spec = getattr(action_method, 'action')
                 else:
                     raise ValueError("Method %s is not marked with @action decorator" % name)
+            else:
+                raise TypeError("%s is not a method" % name)
         else:
-            raise AttributeError("Method '%s' has not been found in the %s class" % name, type(batch).__name__)
-        return batch_action
+            raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
+        return action_spec, model_spec
+
 
     def _exec_all_actions(self, batch, new_loop=False):
         if new_loop:
@@ -68,24 +102,93 @@ class Pipeline:
             if _action['name'] == 'join':
                 joined_sets = _action['datasets']
             else:
-                batch_action = self._get_action_call(batch, _action['name'])
+                action_spec, model_spec = self._get_action_spec(batch, _action['name'])
+
                 if joined_sets is not None:
                     joined_data = []
-                    if not isinstance(joined_sets, (list, tuple)):
-                        joined_sets = [joined_sets]
-                    for jset in joined_sets:
+                    for jset in joined_sets:   # pylint: disable=not-an-iterable
                         joined_data.append(jset.create_batch(batch.index))
-                    _action_args = (joined_data,) + _action['args']
+                    _action_args = tuple(joined_data) + _action['args']
                     joined_sets = None
                 else:
                     _action_args = _action['args']
-                batch = batch_action(*_action_args, **_action['kwargs'])
+
+                action_method = action_spec['method']
+                if model_spec is None:
+                    # an ordinary action method
+                    batch = action_method(batch, *_action_args, **_action['kwargs'])
+                else:
+                    # an action method based on a model
+                    batch = action_method(batch, model_spec, *_action_args, **_action['kwargs'])
+
+                if 'tf_queue' in _action:
+                    self._put_batch_into_tf_queue(batch, _action)
         return batch
 
-    def join(self, datasets):
+    def join(self, *datasets):
         """ Join other datasets """
         self._action_list.append({'name': 'join', 'datasets': datasets})
         return self
+
+    def put_into_tf_queue(self, session=None, queue=None, get_tensor=None):
+        """ Insert a tensorflow queue after the action"""
+        if len(self._action_list) > 0:
+            action = dict()
+            action['tf_session'] = session
+            action['tf_queue'] = queue
+            action['get_tensor'] = get_tensor
+            action['tf_enqueue_op'] = None
+            action['tf_placeholders'] = None
+            action['tf_action_lock'] = threading.Lock()
+            self._action_list[-1].update(action)
+        else:
+            raise RuntimeError('tf_queue should be precedeed by at least one action')
+        return self
+
+    @staticmethod
+    def _get_dtypes(tensors=None, action=None):
+        if tensors:
+            return [tensor.dtype for tensor in tensors]
+        else:
+            return [placeholder.dtype for placeholder in action['tf_placeholders']]
+
+    def _create_tf_queue(self, tensors, action):
+        if action['tf_session'] is None:
+            action['tf_session'] = self._tf_session
+        if action['tf_session'] is None:
+            raise ValueError("Tensorflow session cannot be None")
+        maxsize = 1 if self._prefetch_queue is None else self._prefetch_queue.maxsize
+        with action['tf_session'].graph.as_default():
+            action['tf_queue'] = tf.FIFOQueue(capacity=maxsize, dtypes=self._get_dtypes(tensors, action))
+
+    @staticmethod
+    def _get_tf_placeholders(tensors, action):
+        tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
+        with action['tf_session'].graph.as_default():
+            placeholders = [tf.placeholder(dtype=tensor.dtype) for tensor in tensors]
+        return placeholders
+
+    @staticmethod
+    def _get_tensor(batch, action):
+        if action['get_tensor'] is None:
+            return batch.data
+        else:
+            return action['get_tensor'](batch)
+
+    def _put_batch_into_tf_queue(self, batch, action):
+        tensors = self._get_tensor(batch, action)
+        tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
+        if action['tf_queue'] is None:
+            with action['tf_action_lock']:
+                if action['tf_queue'] is None:
+                    self._create_tf_queue(tensors, action)
+        if action['tf_enqueue_op'] is None:
+            with action['tf_action_lock']:
+                if action['tf_enqueue_op'] is None:
+                    action['tf_placeholders'] = self._get_tf_placeholders(tensors, action)
+                    action['tf_enqueue_op'] = action['tf_queue'].enqueue(action['tf_placeholders'])
+        action['tf_session'].run(action['tf_enqueue_op'], feed_dict=dict(zip(action['tf_placeholders'], tensors)))
+
 
     def _put_batches_into_queue(self, gen_batch):
         for batch in gen_batch:
@@ -101,7 +204,13 @@ class Pipeline:
                 self._batch_queue.put(None)
                 break
             else:
-                self._batch_queue.put(future.result())
+                try:
+                    batch = future.result()
+                except Exception:   # pylint: disable=broad-except
+                    print("Exception in a thread:", future.exception())
+                    _, _, exc_traceback = sys.exc_info()
+                    traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)
+                self._batch_queue.put(batch)
                 self._prefetch_queue.task_done()
         return None
 
@@ -128,7 +237,8 @@ class Pipeline:
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
-        target = get_del(kwargs, 'target', 'threads')
+        target = kwargs.pop('target', 'threads')
+        self._tf_session = kwargs.pop('tf_session', None)
 
         batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
 

@@ -115,3 +115,58 @@ The same as:
 for _ in my_pipeline.gen_batch(...):
     pass
 ```
+
+### `join(another_source, one_more_source, ...)`
+Joins corresponding batches from several sources (datasets or pipelines).
+
+If you have a pipeline `images` and a pipeline `labels`, you might join them for a more convenient processing:
+
+```python
+images_with_labels = (images.p
+                            .load(...)
+                            .resize(shape=(256, 256))
+                            .random_rotate(angle=(-pi/4, pi/4))
+                            .join(labels)
+                            .some_action())
+```
+When this pipeline is run, the following will happen for each batch of `images`:
+- the actions `load`, `resize` and `random_rotate` will be executed
+- a batch of `labels` with the same index will be created
+- the `labels` batch will be passed into `some_action` as a first argument (after `self`, of course).
+
+So, images batch class should look as follows:
+```python
+class ImagesBatch(Batch):
+    def load(self, src, fmt):
+        ...
+
+    def resize(self, shape):
+        ...
+
+    def random_rotate(self, angle):
+        ...
+
+    def some_actions(self, labels_batch):
+        ...
+```
+
+You can join several sources:
+```python
+full_images = (images.p
+                     .load(...)
+                     .resize(shape=(256, 256))
+                     .random_rotate(angle=(-pi/4, pi/4))
+                     .join(labels, masks)
+                     .some_action())
+```
+Thus, the batches from `labels` and `masks` will be passed into `some_action` as the first and the second arguments (as always, after `self`).
+
+### `put_into_tf_queue(session, queue, get_tensor)`
+Puts the batches into a tensorflow queue.
+
+Arguments:
+    session: a tensorflow session in which a graph with the queue is executed
+    queue:   the queue where the tensors will be put
+    get_tensor: a callable which receives a batch as an argument and returns a tensor to put into the queue
+
+For a detailed exlpanation see [Working with tensorflow queues](tf_queue.md).

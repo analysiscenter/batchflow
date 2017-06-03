@@ -46,6 +46,28 @@ class MyBatch(Batch):
 Take into account that an `action` method should return an instance of some `Batch`-class: the very same one or some other class.
 If an `action` changes the instance's data directly, it may simply return `self`.
 
+
+## Model definitions and model-based actions
+Models and model training methods can also be a part of a batch class.
+
+```python
+class MyArrayBatch(ArrayBatch):
+    ...
+    @model()
+    def basic_model():
+        input_data = tf.placeholder('float', [None, 28])
+        model_output = ...
+        return [input_data, model_output]
+
+    @action(model='basic_model')
+    def train_model(self, model):
+        input_data, optimizer = model
+        # update gradients
+        return self
+```
+For details see [Working with models](models.md).
+
+
 ## Running methods in parallel
 As a batch can be quite large it might make sense to parallel the computations. And it is pretty easy to do:
 ```python
@@ -60,6 +82,8 @@ class MyBatch(Batch):
         return some_value
 ```
 For further details how to make parallel actions see [parallel.md](parallel.md).
+
+
 
 
 ## Writing your own Batch
