@@ -4,7 +4,7 @@ A batch class might also include model definitions.
 
 ## Model definition
 A model definition method
-- is marked with a @model decorator
+- is marked with a `@model` decorator
 - does not take any arguments (even `self`)
 - returns a model descriptor.
 
@@ -23,7 +23,10 @@ It is for you to decide what the model descriptor is. It might be:
 - a list of TensorFlow placeholders, optimizers and other variables you need (e.g. a loss function value or a graph).
 - a Keras model
 - an mxnet module
-or anything else. Later you will get back this descriptor in a model-based actions method. So you have to include in it everything you need to train and evaulate the model.
+
+or anything else.
+
+Later you will get back this descriptor in a model-based actions method. So you have to include in it everything you need to train and evaulate the model.
 
 Important notes:
 1. Do not forget parenthesis in a decorator - `@model()`, not `@model`.
@@ -50,4 +53,25 @@ full_workflow = my_dataset.p
                           .some_preprocessing()
                           .some_augmentation()
                           .train_model(session=sess)
+```
+You do not need to pass a model into this action. The model is saved in an internal model directory and then passed to all actions based on this model.
+
+You might have several actions based on the very same model.
+```python
+class MyArrayBatch(ArrayBatch):
+    ...
+    @action(model='basic_model')
+    def train_model(self, model, session):
+        ...
+
+    @action(model='basic_model')
+    def evaluate_model(self, model, session):
+        ...
+
+full_workflow = my_dataset.p
+                          .load('/some/path')
+                          .some_preprocessing()
+                          .some_augmentation()
+                          .train_model(session=sess)
+                          .evaluate_model(session=sess)
 ```
