@@ -35,7 +35,7 @@ if __name__ == "__main__":
     model_output = tf.square(tf.reduce_sum(next_batch_tensor))
 
     sess = tf.Session()
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
 
 
     # Fill-in dataset with sample data

@@ -49,7 +49,7 @@ class MyDataFrameBatch(DataFrameBatch):
 
     @action
     @inbatch_parallel(init="indices", post="parallel_post", target='mpc')
-    def action1(self, *args):
+    def action1(self, *args, **kwargs):
         print("   action 1", args)
         return mpc_fn
 
