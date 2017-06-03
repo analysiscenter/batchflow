@@ -38,6 +38,8 @@ For more advanced cases and detailed API see [the documentation](doc/intro.md).
 
 > `Dataset` module is in the beta stage. Your suggestions and improvements are very welcome.
 
+> `Dataset` supports python 3.5 or higher.
+
 
 ### Git submodule
 In many cases it is much more convenient to install `dataset` as a submodule in your project repository than as a system python package.
