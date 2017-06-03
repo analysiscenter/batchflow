@@ -37,7 +37,7 @@ class MyDataFrameBatch(DataFrameBatch):
 
     @action
     def add(self, inc):
-        self.data += inc
+        self._data += inc
         return self
 
 # number of items in the dataset
@@ -114,8 +114,8 @@ print("\n\nPreproces one batch at a time")
 for i in range(5):
     print("\n\nNext batch")
     # all the actions are fired when you call next_batch
-    b_data, b_target = ds_full.next_batch(BATCH_SIZE, shuffle=True)
-    # Because of one_pass=False all the batches will have equal size
+    b_data, b_target = ds_full.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
+    # Because of `n_epochs=None` all the batches will have equal size
     # and shuffle dictates randomly change the order of items
 
 

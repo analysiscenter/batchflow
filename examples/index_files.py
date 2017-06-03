@@ -24,7 +24,7 @@ for dsi in [findex.train, findex.test, findex.validation]:
 print("\nprint batches:")
 for dsi in [findex.train, findex.test, findex.validation]:
     print("---")
-    for b in dsi.gen_batch(2, one_pass=True):
+    for b in dsi.gen_batch(2, n_epochs=1):
         print(b.index)
 
 
@@ -38,7 +38,9 @@ for i in range(3):
 
 
 # Create index from ./data/dirs
-dindex = FilesIndex(path=os.path.join(DIR_PATH, 'dir*/*'), dirs=True, sort=True)
+p = os.path.join(DIR_PATH, 'dir*/*')
+print(p)
+dindex = FilesIndex(path=p, dirs=True, sort=True)
 # print list of subdirectories
 print("\n\nDir Index:")
 print(dindex.index)
@@ -61,3 +63,10 @@ print(paths)
 dindex = FilesIndex(path=paths, dirs=True, sort=True)
 for dir in dindex.indices:
     print(dir, dindex.get_fullpath(dir))
+
+
+# Create index from non-existent dir
+findex = FilesIndex(path='sadfsdf/*')
+# print list of subdirectories
+print("\n\nIndex:")
+print(findex.index)

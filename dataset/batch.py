@@ -29,21 +29,47 @@ class Batch:
     """ Base Batch class """
     def __init__(self, index):
         self.index = index
-        self.data = None
+        self._data = None
 
     @classmethod
     def from_data(cls, data):
         """ Create batch from given dataset """
         # this is equiv to self.data = data[:]
-        return cls(slice(None, None)).load(data)
+        return cls(np.arange(len(data))).load(data)
 
     @property
     def indices(self):
         """ Return an array-like with the indices """
         if isinstance(self.index, DatasetIndex):
-            return self.index.index
+            return self.index.indices
         else:
             return self.index
+
+    def __len__(self):
+        return len(self.index)
+
+    @property
+    def data(self):
+        """ Return batch data """
+        return self._data
+
+    def __getitem__(self, item):
+        if isinstance(self.data, tuple):
+            res = tuple(data_item[item] for data_item in self.data)
+        else:
+            res = self.data[item]
+        return res
+
+    def __iter__(self):
+        for item in self.indices:
+            yield self[item]
+
+    def run_once(self, *args, **kwargs):
+        """ Init function for no parallelism
+        Useful for async action-methods (will wait till the method finishes)
+        """
+        _ = self.data, args, kwargs
+        return [[]]
 
     @staticmethod
     def make_filename():
@@ -52,6 +78,7 @@ class Batch:
         # probability of collision is around 2e-10.
         filename = hexlify(random_data.data)[:8]
         return filename.decode("utf-8")
+
 
     @action
     def load(self, src, fmt=None):
@@ -95,8 +122,8 @@ class ArrayBatch(Batch):
 
         # But put into this batch only part of it (defined by index)
         try:
-            # this creates a copy of the source data (perhaps view could be more efficient)
-            self.data = _data[self.indices]
+            # this creates a copy of the source data
+            self._data = _data[self.indices]
         except TypeError:
             raise TypeError('Source is expected to be array-like')
 
@@ -118,6 +145,11 @@ class ArrayBatch(Batch):
         else:
             raise ValueError("Unknown format " + fmt)
         return self
+
+    @action
+    def save(self, dst, fmt=None):
+        """ Save batch data to a file (an alias for dump method)"""
+        return self.dump(dst, fmt)
 
 
 class DataFrameBatch(Batch):
@@ -141,10 +173,10 @@ class DataFrameBatch(Batch):
 
         # But put into this batch only part of it (defined by index)
         if isinstance(dfr, pd.DataFrame):
-            self.data = dfr.loc[self.indices]
+            self._data = dfr.loc[self.indices]
         elif isinstance(dfr, dd.DataFrame):
             # dask.DataFrame.loc supports advanced indexing only with lists
-            self.data = dfr.loc[list(self.indices)].compute()
+            self._data = dfr.loc[list(self.indices)].compute()
         else:
             raise TypeError("Unknown DataFrame. DataFrameBatch supports only pandas and dask.")
 

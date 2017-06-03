@@ -57,3 +57,8 @@ class Dataset(Baseset):
     def pipeline(self):
         """ Start a data processing workflow """
         return Pipeline(self)
+
+    @property
+    def p(self):   # pylint: disable=invalid-name
+        """ A short alias for `pipeline()` """
+        return self.pipeline()

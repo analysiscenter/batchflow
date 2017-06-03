@@ -2,6 +2,7 @@
 import os
 import concurrent.futures as cf
 import asyncio
+from .utils import get_del
 
 
 def _cpu_count():
@@ -37,17 +38,27 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             if init is None:
                 raise ValueError("init cannot be None")
             else:
-                init_fn = getattr(self, init)
-                if not callable(init_fn):
-                    raise ValueError("init should refer to a method of the class", type(self).__name__,
+                try:
+                    init_fn = getattr(self, init)
+                except AttributeError:
+                    raise ValueError("init should refer to a method or property of the class", type(self).__name__,
                                      "returning the list of arguments")
             if post is not None:
-                post_fn = getattr(self, post)
+                try:
+                    post_fn = getattr(self, post)
+                except AttributeError:
+                    raise ValueError("post should refer to a method of the class", type(self).__name__)
                 if not callable(post_fn):
                     raise ValueError("post should refer to a method of the class", type(self).__name__)
             else:
                 post_fn = None
             return init_fn, post_fn
+
+        def _call_init_fn(init_fn, args, kwargs):
+            if callable(init_fn):
+                return init_fn(*args, **kwargs)
+            else:
+                return init_fn
 
         def _call_post_fn(self, post_fn, futures, args, kwargs):
             if post_fn is None:
@@ -74,7 +85,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             else:
                 margs = init_args
                 mkwargs = dict()
-            margs = margs if hasattr(margs, '__len__') else [margs]
+            margs = margs if isinstance(margs, (list, tuple)) else [margs]
             if len(args) > 0:
                 margs = list(margs) + list(args)
             if len(kwargs) > 0:
@@ -85,13 +96,13 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.get('n_workers', _cpu_count())
+            n_workers = get_del(kwargs, 'n_workers', _cpu_count())
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 if nogil:
                     nogil_fn = method(self, *args, **kwargs)
                 full_kwargs = {**kwargs, **dec_kwargs}
-                for arg in init_fn(*args, **full_kwargs):
+                for arg in _call_init_fn(init_fn, args, full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
                         one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
@@ -108,29 +119,37 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.get('n_workers', _cpu_count())
+            n_workers = get_del(kwargs, 'n_workers', _cpu_count())
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
                 full_kwargs = {**kwargs, **dec_kwargs}
-                for arg in init_fn(*args, **full_kwargs):
+                for arg in _call_init_fn(init_fn, args, full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
                     futures.append(one_ft)
 
-                timeout = kwargs.get('timeout', None)
+                timeout = get_del(kwargs, 'timeout', None)
                 cf.wait(futures, timeout=timeout, return_when=cf.ALL_COMPLETED)
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrap_with_async(self, args, kwargs):
             """ Run a method in parallel with async / await """
-            loop = kwargs.get('loop', asyncio.get_event_loop())
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # this is a new thread where there is no loop
+                loop = kwargs.get('loop', None)
+                asyncio.set_event_loop(loop)
+            else:
+                loop = kwargs.get('loop', loop)
+
             init_fn, post_fn = _check_functions(self)
 
             futures = []
             full_kwargs = {**kwargs, **dec_kwargs}
-            for arg in init_fn(*args, **full_kwargs):
+            for arg in _call_init_fn(init_fn, args, full_kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
                 futures.append(asyncio.ensure_future(method(self, *margs, **mkwargs)))
 

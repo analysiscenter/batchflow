@@ -40,14 +40,6 @@ class MyDataFrameBatch(DataFrameBatch):
         print(self.data)
         return self
 
-    def parallel_init(self, *args, **kwargs):
-        #r = []
-        #for i in self.indices:
-        #    r.append([])
-        r = self.indices.tolist()
-        print("\nParallel:", r)
-        return r
-
     def parallel_post(self, results, *args, **kwargs):
         print("Post:")
         print("   any failed?", any_action_failed(results))
@@ -56,10 +48,10 @@ class MyDataFrameBatch(DataFrameBatch):
 
 
     @action
-    @inbatch_parallel(init="parallel_init", post="parallel_post", target='mpc')
-    def action1(self, arg2=12):
-        print("   action 1", arg2)
-        return partial(mpc_fn, arg2=arg2)
+    @inbatch_parallel(init="indices", post="parallel_post", target='mpc')
+    def action1(self, *args):
+        print("   action 1", args)
+        return mpc_fn
 
     def action_n_init(self, *args, **kwargs):
         r = self.indices.astype('int') #.tolist()
@@ -72,7 +64,7 @@ class MyDataFrameBatch(DataFrameBatch):
         return numba_fn
 
     @action
-    @inbatch_parallel(init="parallel_init", post="parallel_post", target='async')
+    @inbatch_parallel(init="indices", post="parallel_post", target='async')
     async def action2(self, i, *args):
         print("   action 2", i, "started", args)
         if i == '2':
@@ -113,4 +105,4 @@ if __name__ == "__main__":
             .action1(arg2=14)
             .print("End batch"))
 
-    res.run(4, shuffle=False)
+    res.run(4, shuffle=False, n_epochs=1)

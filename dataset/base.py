@@ -14,11 +14,11 @@ class Baseset:
         self._start_index = 0
         self._order = None
         self._n_epochs = 0
-        self.batch_generator = None
+        self._batch_generator = None
 
 
     @staticmethod
-    def build_index(index):
+    def build_index(index, *args, **kwargs):   # pylint: disable=unused-argument
         """ Create the index. Child classes should generate index from the arguments given """
         return index
 
@@ -36,7 +36,10 @@ class Baseset:
             return self.index
 
     def __len__(self):
-        return len(self.indices)
+        if self.indices is None:
+            return 0
+        else:
+            return len(self.indices)
 
     @property
     def is_splitted(self):
@@ -105,20 +108,27 @@ class Baseset:
         if self.index.validation is not None:
             self.validation = self.create_subset(self.index.validation)
 
+    def reset_iter(self):
+        """ Clear all iteration metadata in order to start iterating from scratch """
+        self._start_index = 0
+        self._order = None
+        self._n_epochs = 0
+        self._batch_generator = None
+        self.index.reset_iter()
 
-    def gen_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, *args, **kwargs):
         """ Generate batches """
-        for ix_batch in self.index.gen_batch(batch_size, shuffle, one_pass):
+        for ix_batch in self.index.gen_batch(batch_size, shuffle, n_epochs, drop_last):
             batch = self.create_batch(ix_batch, *args, **kwargs)
             yield batch
 
-    def next_batch(self, batch_size, shuffle=False, one_pass=False, *args, **kwargs):
-        """ Return a tuple of batches from all source datasets """
-        if self.batch_generator is None:
-            self.batch_generator = self.gen_batch(batch_size, shuffle=shuffle, one_pass=one_pass, *args, **kwargs)
-        batch = next(self.batch_generator)
+    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, *args, **kwargs):
+        """ Return a batch """
+        if self._batch_generator is None:
+            self._batch_generator = self.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
+        batch = next(self._batch_generator)
         return batch
 
     def create_batch(self, batch_indices, pos=True):
         """ Create batch with indices given """
-        raise NotImplementedError("create_batch should be defined in child classes")
+        raise NotImplementedError("create_batch should be implemented in child classes")
