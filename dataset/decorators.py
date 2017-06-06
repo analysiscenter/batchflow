@@ -310,4 +310,4 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
     return inbatch_parallel_decorator
 
 
-parallel = inbatch_parallel
+parallel = inbatch_parallel  # pylint: disable=invalid-name
