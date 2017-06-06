@@ -229,11 +229,20 @@ class Pipeline:
 
     def reset_iter(self):
         """ Clear all iteration metadata in order to start iterating from scratch """
-        self.dataset.reset_iter()
+        if self._prefetch_queue is not None:
+            self._prefetch_queue.put(None, block=True)
+        if self._batch_queue is not None:
+            self._batch_queue.put(None, block=True)
+        if self._executor is not None:
+            self._executor.shutdown()
+            self._executor = None
+        if self._service_executor is not None:
+            self._service_executor.shutdown()
+            self._service_executor = None
         self._prefetch_queue = None
         self._batch_queue = None
-        self._executor = None
         self._batch_generator = None
+        self.dataset.reset_iter()
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """

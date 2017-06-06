@@ -135,8 +135,9 @@ class ActionDecorator:
             return self._action_with_model()
         else:
             # @action without arguments
-            # this branch never executes as a pipeline directly calls action.__self__.method
-            return None
+            # this branch executes only with direct action calls on batch
+            # pipelines directly calls action.__self__.method
+            return self.method(self.action_self, *args, **kwargs)
 
     def __get__(self, instance, owner):
         _ = owner
@@ -162,7 +163,6 @@ def action(*args, **kwargs):
 def any_action_failed(results):
     """ Return True if some parallelized invocations threw exceptions """
     return any(isinstance(res, Exception) for res in results)
-
 
 def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
     """ Make in-batch parallel decorator """
@@ -308,3 +308,6 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             raise ValueError('Wrong parallelization target:', target)
         return wrapped_method
     return inbatch_parallel_decorator
+
+
+parallel = inbatch_parallel

@@ -27,15 +27,16 @@ from .decorators import action
 
 class Batch:
     """ Base Batch class """
-    def __init__(self, index):
+    def __init__(self, index, preloaded=None):
         self.index = index
         self._data = None
+        self._preloaded = preloaded
 
     @classmethod
     def from_data(cls, data):
         """ Create batch from given dataset """
         # this is equiv to self.data = data[:]
-        return cls(np.arange(len(data))).load(data)
+        return cls(np.arange(len(data)), preloaded=data)
 
     @property
     def indices(self):
@@ -51,6 +52,8 @@ class Batch:
     @property
     def data(self):
         """ Return batch data """
+        if self._data is None and self._preloaded is not None:
+            self.load(self._preloaded)
         return self._data
 
     def __getitem__(self, item):
@@ -103,9 +106,9 @@ class Batch:
         raise NotImplementedError()
 
     @action
-    def save(self, dst, fmt=None):
+    def save(self, *args, **kwargs):
         """ Save batch data to a file (an alias for dump method)"""
-        return self.dump(dst, fmt)
+        return self.dump(*args, **kwargs)
 
 
 class ArrayBatch(Batch):
@@ -213,3 +216,10 @@ class DataFrameBatch(Batch):
         else:
             raise ValueError('Unknown format %s' % fmt)
         return self
+
+
+class ImagesBatch(ArrayBatch):
+    """ Batch class for 2D images """
+    @action
+    def load(self, src, fmt=None):
+        return super().load(src, fmt)

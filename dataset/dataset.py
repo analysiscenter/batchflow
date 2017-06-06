@@ -8,9 +8,10 @@ from .pipeline import Pipeline
 
 class Dataset(Baseset):
     """ Dataset """
-    def __init__(self, index, batch_class=None, *args, **kwargs):
+    def __init__(self, index, batch_class=None, preloaded=None, *args, **kwargs):
         super().__init__(index, *args, **kwargs)
         self.batch_class = batch_class
+        self.preloaded = preloaded
 
 
     @classmethod
@@ -22,7 +23,7 @@ class Dataset(Baseset):
             return dataset
         else:
             bcl = batch_class if batch_class is not None else dataset.batch_class
-            return cls(index, batch_class=bcl)
+            return cls(index, batch_class=bcl, preloaded=dataset.preloaded)
 
     @staticmethod
     def build_index(index):
@@ -41,7 +42,7 @@ class Dataset(Baseset):
 
     def create_subset(self, index):
         """ Create a dataset based on the given subset of indices """
-        return Dataset.from_dataset(self, index)
+        return type(self).from_dataset(self, index)
 
 
     def create_batch(self, batch_indices, pos=False, *args, **kwargs):
@@ -51,11 +52,11 @@ class Dataset(Baseset):
             otherwise batch_indices contains positions in the index
         """
         batch_ix = self.index.create_batch(batch_indices, pos, *args, **kwargs)
-        return self.batch_class(batch_ix, *args, **kwargs)
+        return self.batch_class(batch_ix, preloaded=self.preloaded, **kwargs)
 
 
     def pipeline(self):
-        """ Start a data processing workflow """
+        """ Start a new data processing workflow """
         return Pipeline(self)
 
     @property

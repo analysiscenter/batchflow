@@ -6,7 +6,8 @@ from .batch import Batch, ArrayBatch, DataFrameBatch
 from .dataset import Dataset
 from .jointdataset import JointDataset, FullDataset
 from .dsindex import DatasetIndex, FilesIndex
-from .decorators import action, inbatch_parallel, any_action_failed, model
+from .decorators import action, inbatch_parallel, parallel, any_action_failed, model
+
 
 if sys.version_info < (3, 5):
     raise ImportError("Dataset module requires Python 3.5 or higher")
