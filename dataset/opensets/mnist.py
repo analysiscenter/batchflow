@@ -13,7 +13,7 @@ from ..batch import Batch, ImagesBatch, ArrayBatch
 from ..decorators import parallel, any_action_failed, action
 
 
-
+# pylint: disable=unsubscriptable-object
 class MNIST_Batch(Batch):
     """ A batch of MNIST images and labels """
     @property
