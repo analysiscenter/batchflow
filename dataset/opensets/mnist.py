@@ -31,13 +31,19 @@ class MNIST_Batch(Batch):
         """ Load data from a preloaded dataset """
         self._data = src[0][self.indices], src[1][self.indices]
 
+    @action
+    def dump(self, dst, fmt=None):
+        """ Saves data to a file or array """
+        _ = dst, fmt
+        return self
+
 
 #
 #  _read32, extract_images, extract_labels are taken from tensorflow
 #
 def _read32(bytestream):
-    dt = np.dtype(np.uint32).newbyteorder('>')
-    return np.frombuffer(bytestream.read(4), dtype=dt)[0]
+    dtype = np.dtype(np.uint32).newbyteorder('>')
+    return np.frombuffer(bytestream.read(4), dtype=dtype)[0]
 
 
 def _extract_images(f):
@@ -111,6 +117,7 @@ class BaseMNIST:
 
     @parallel(init='_get_from_urls', post='_gather_data')
     def download(self, url, content):
+        """ Load data from a web site """
         tmpdir = tempfile.gettempdir()
         filename = os.path.basename(url)
         localname = os.path.join(tmpdir, filename)
@@ -154,7 +161,8 @@ class JointMNIST(BaseMNIST):
                 elif len(batch_class) == 0:
                     batch_class = None
                 else:
-                    raise ValueError("batch_class should not have more than 2 items, but it has %s: %s" % (len(batch_class), batch_class))
+                    raise ValueError("batch_class should not have more than 2 items, but it has %s: %s"
+                                     % (len(batch_class), batch_class))
         if batch_class is None:
             images_batch_class, labels_batch_class = ImagesBatch, ArrayBatch
         self._check_batch_class(images_batch_class)
@@ -166,11 +174,11 @@ class JointMNIST(BaseMNIST):
         self.train = JointDataset(datasets=(train_images_ds, train_labels_ds), align='same')
 
         test_index = DatasetIndex(np.arange(len(self._test_images)))
-        test_images_ds = Dataset(train_index, batch_class=images_batch_class, preloaded=self._test_images)
-        test_labels_ds = Dataset(train_index, batch_class=labels_batch_class, preloaded=self._test_labels)
+        test_images_ds = Dataset(test_index, batch_class=images_batch_class, preloaded=self._test_images)
+        test_labels_ds = Dataset(test_index, batch_class=labels_batch_class, preloaded=self._test_labels)
         self.test = JointDataset(datasets=(test_images_ds, test_labels_ds), align='same')
 
-        @staticmethod
-        def _check_batch_class(batch_class):
-            if isinstance(batch_class, Batch):
-                raise TypeError("batch_class should be a subclass of Batch, not %s" % type(batch_class))
+    @staticmethod
+    def _check_batch_class(batch_class):
+        if isinstance(batch_class, Batch):
+            raise TypeError("batch_class should be a subclass of Batch, not %s" % type(batch_class))

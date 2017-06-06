@@ -19,6 +19,7 @@ class Pipeline:
         self._action_list = []
         self._prefetch_queue = None
         self._batch_queue = None
+        self._service_executor = None
         self._executor = None
         self._batch_generator = None
         self._tf_session = None
