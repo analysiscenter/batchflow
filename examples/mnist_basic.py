@@ -35,7 +35,7 @@ if __name__ == "__main__":
     print()
     print("Start training...")
     i = 0
-    for batch in mnist.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=1)
+    for batch in mnist.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=1):
         i += 1
         _, loss = sess.run([optimizer, cost], feed_dict={input_images: batch.images, input_labels: batch.labels})
         if i % 100 == 0:
