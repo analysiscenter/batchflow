@@ -103,7 +103,7 @@ class Pipeline:
             if _action['name'] == 'join':
                 joined_sets = _action['datasets']
             else:
-                action_method, action_spec = self._get_action_method(batch, _action['name'])
+                action_method, _ = self._get_action_method(batch, _action['name'])
 
                 if joined_sets is not None:
                     joined_data = []
