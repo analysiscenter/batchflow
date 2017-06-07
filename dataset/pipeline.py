@@ -265,21 +265,22 @@ class Pipeline:
 
             self._prefetch_queue = q.Queue(maxsize=prefetch + 1)
             self._batch_queue = q.Queue()
-
-            service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            service_executor.submit(self._put_batches_into_queue, batch_generator)
-            future = service_executor.submit(self._run_batches_from_queue)
-            while not future.done() or not self._batch_queue.empty():
+            self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
+            self._service_executor.submit(self._run_batches_from_queue)
+            is_end = False
+            while not is_end:
                 batch_res = self._batch_queue.get(block=True)
                 if batch_res is not None:
                     self._batch_queue.task_done()
                     yield batch_res
+                else:
+                    is_end = True
         else:
-            self._prefetch_queue = None
-            self._batch_queue = None
-            self._executor = None
             for batch in batch_generator:
                 yield self._exec_all_actions(batch)
+
+        self.reset_iter()
         return self
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
