@@ -134,6 +134,7 @@ class ActionDecorator:
         """ Return a callable for a decorator call """
         def get_action_spec(action_self, *args, **kwargs):
             """ Just run an action method """
+            _ = action_self, args, kwargs
             return None, self.method
         return get_action_spec
 

@@ -85,7 +85,7 @@ You can use `prefetch` in `next_batch`, `gen_batch` and `run`.
 For no obvious reasons `next_batch` might hang when `prefetch`ing. So try to avoid it and use `gen_batch` instead.
 
 ### Singleton
-Sometimes you might want to guarantee that only one call of a specific action is executed simultaneously, e.g. race condition or dependence on some external resources. To make this happen mark an action as a singleton:
+Sometimes you might want to guarantee that only one call of a specific action is executed simultaneously, e.g. due to race condition or dependence on some external resources. To make this happen mark an action as a singleton:
 ```python
 class MyBatch(Batch):
     ...
