@@ -73,12 +73,12 @@ class Pipeline:
         if hasattr(batch, name):
             attr = getattr(batch, name)
             if attr.__self__ == batch:
-                # action with model
+                # action decorator with argumnets
                 get_model_spec = attr
                 # get_model_spec is bounded to the batch (so it is sent as self)
                 model_spec, action_method = get_model_spec()
             else:
-                # action wihout model
+                # action decorator wihout arguments
                 action_method = attr.__self__.method
                 model_spec = None
 
@@ -115,12 +115,18 @@ class Pipeline:
                     _action_args = _action['args']
 
                 action_method = action_spec['method']
+                if action_spec['singleton']:
+                    action_spec['singleton_lock'].acquire(blocking=True)
+
                 if model_spec is None:
                     # an ordinary action method
                     batch = action_method(batch, *_action_args, **_action['kwargs'])
                 else:
                     # an action method based on a model
                     batch = action_method(batch, model_spec, *_action_args, **_action['kwargs'])
+
+                if action_spec['singleton']:
+                    action_spec['singleton_lock'].release()
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)

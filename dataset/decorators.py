@@ -1,6 +1,7 @@
 """ Pipeline decorators """
 import os
 import inspect
+import threading
 import concurrent.futures as cf
 import asyncio
 
@@ -86,15 +87,15 @@ class ActionDecorator:
         self.model_name = None
         self.model_method = None
         self.action_self = None
+        self.singleton = False
 
         if len(args) == 1 and callable(args[0]):
             # @action without arguments
             self.add_action(args[0])
         else:
             # @action with arguments
+            self.singleton = kwargs.pop('singleton', False)
             self.model_name = kwargs.pop('model', None)
-            if not isinstance(self.model_name, str):
-                raise ValueError("Decorator should be specified as @action(model='model_method_name')")
 
     def add_action(self, method):
         """ Add an action specification into an action method """
@@ -105,7 +106,9 @@ class ActionDecorator:
         else:
             full_model_name = infer_method_key(self.method, self.model_name)
 
+        singleton_lock = None if not self.singleton else threading.Lock()
         action_spec = dict(method=self.method, full_method_name=full_method_name,
+                           singleton=self.singleton, singleton_lock=singleton_lock,
                            has_model=self.model_name is not None,
                            model_name=self.model_name, full_model_name=full_model_name)
         self.method.action = action_spec
@@ -113,7 +116,7 @@ class ActionDecorator:
     def _action_with_model(self):
         """ Return a callable for a decorator call """
         def get_model_spec(action_self, **kwargs):
-            """ Return a model specification for a give action method """
+            """ Return a model specification for a given action method """
             _ = kwargs
             if hasattr(action_self, self.model_name):
                 try:
@@ -127,17 +130,30 @@ class ActionDecorator:
             return model_spec, self.method
         return get_model_spec
 
+    def _action_wo_model(self):
+        """ Return a callable for a decorator call """
+        def get_action_spec(action_self, *args, **kwargs):
+            """ Just run an action method """
+            return None, self.method
+        return get_action_spec
+
+    def _action_simple(self, args, kwargs):
+        return self.method(self.action_self, *args, **kwargs)
+
     def __call__(self, *args, **kwargs):
         if self.method is None:
             # @action with arguments
             self.add_action(args[0])
-            # return a function that will be called when a decorated method is called
-            return self._action_with_model()
+            if self.model_name is not None:
+                # return a function that will be called when a decorated method is called
+                return self._action_with_model()
+            else:
+                return self._action_wo_model()
         else:
             # @action without arguments
             # this branch executes only with direct action calls on batch
-            # pipelines directly calls action.__self__.method
-            return self.method(self.action_self, *args, **kwargs)
+            # pipelines never ger here as they directly call action.__self__.method
+            return self._action_simple(args, kwargs)
 
     def __get__(self, instance, owner):
         _ = owner
