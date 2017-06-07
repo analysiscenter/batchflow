@@ -69,29 +69,29 @@ class Pipeline:
 
 
     @staticmethod
-    def _get_action_spec(batch, name):
+    def _get_action_method(batch, name):
         if hasattr(batch, name):
             attr = getattr(batch, name)
             if attr.__self__ == batch:
-                # action decorator with argumnets
-                get_model_spec = attr
-                # get_model_spec is bounded to the batch (so it is sent as self)
-                model_spec, action_method = get_model_spec()
+                # action decorator with arguments
+                # attr is bounded to the batch
+                action_method = attr
+                action_attr = attr
             else:
                 # action decorator wihout arguments
-                action_method = attr.__self__.method
-                model_spec = None
+                action_method = attr
+                action_attr = attr.__self__
 
-            if callable(action_method):
-                if hasattr(action_method, 'action'):
-                    action_spec = getattr(action_method, 'action')
+            if callable(action_attr):
+                if hasattr(action_attr, 'action'):
+                    action_spec = getattr(action_attr, 'action')
                 else:
                     raise ValueError("Method %s is not marked with @action decorator" % name)
             else:
                 raise TypeError("%s is not a method" % name)
         else:
             raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
-        return action_spec, model_spec
+        return action_method, action_spec
 
 
     def _exec_all_actions(self, batch, new_loop=False):
@@ -103,7 +103,7 @@ class Pipeline:
             if _action['name'] == 'join':
                 joined_sets = _action['datasets']
             else:
-                action_spec, model_spec = self._get_action_spec(batch, _action['name'])
+                action_method, action_spec = self._get_action_method(batch, _action['name'])
 
                 if joined_sets is not None:
                     joined_data = []
@@ -114,19 +114,7 @@ class Pipeline:
                 else:
                     _action_args = _action['args']
 
-                action_method = action_spec['method']
-                if action_spec['singleton']:
-                    action_spec['singleton_lock'].acquire(blocking=True)
-
-                if model_spec is None:
-                    # an ordinary action method
-                    batch = action_method(batch, *_action_args, **_action['kwargs'])
-                else:
-                    # an action method based on a model
-                    batch = action_method(batch, model_spec, *_action_args, **_action['kwargs'])
-
-                if action_spec['singleton']:
-                    action_spec['singleton_lock'].release()
+                batch = action_method(*_action_args, **_action['kwargs'])
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)
