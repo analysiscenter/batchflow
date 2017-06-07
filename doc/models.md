@@ -77,4 +77,4 @@ full_workflow = my_dataset.p
 ```
 
 **Important notes**
-- Do not [prefetch](prefetch.md) whith actions based on Tensorflow models as TF variables are not shared between threads.
+- Do not [prefetch](prefetch.md) with actions based on Tensorflow models as TF variables are not shared between threads.
