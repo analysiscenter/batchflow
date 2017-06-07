@@ -280,36 +280,15 @@ class MyBatch(Batch):
 Here all batch items will be updated simultaneously.
 
 ## Targets
-There are four targets available: `threads`, `nogil`, `async`, `mpc`
+There are 3 targets available: `threads`, `async`, `mpc`.
 
 ### threads
 A method will be parallelized with [concurrent.futures.ThreadPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#threadpoolexecutor).
-Take into account that due to [GIL](https://wiki.python.org/moin/GlobalInterpreterLock) only one python thread is executed in any given moment (pseudo-parallelism).
+Take into account that due to [GIL](https://wiki.python.org/moin/GlobalInterpreterLock) only one python thread is executed in any given moment (pseudo-parallelism). [Cython](http://cython.org/) and [numba](http://numba.pydata.org/) might help overcome this limitation.
 However, a function with intensive I/O processing or waiting for some synchronization might get a considerable performance increase.
 
 This is a default engine which is used if `target` is not specified in the `inbatch_parallel` decorator.
 
-### nogil
-To get rid of GIL you might write a [cython](http://cython.org/) or [numba](http://numba.pydata.org/) function which can run in parallel.
-And a decorated method should just return this nogil-function which will be further parallelized.
-
-```python
-from numba import njit
-from dataset import Batch, action, inbatch_parallel
-
-@njit(nogil=True)
-def numba_fn(data, index, arg):
-    # do something
-    return new_data
-
-class MyBatch(Batch):
-    ...
-    @action
-    @inbatch_parallel(init='_init_default', post='_post_default', target='nogil')
-    def some_action(self, arg)
-        # do not process anything, just return nogil-function
-        return numba_fn
-```
 
 ### async
 For I/O-intensive processing you might want to consider writing an [`async` method](https://docs.python.org/3/library/asyncio-task.html).
