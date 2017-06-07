@@ -76,5 +76,20 @@ full_workflow = my_dataset.p
                           .evaluate_model(session=sess)
 ```
 
-**Important notes**
-- Do not [prefetch](prefetch.md) with actions based on Tensorflow models as TF variables are not shared between threads.
+### Parallel training with TensorFlow
+If you [prefetch](prefetch.md) with actions based on Tensorflow models you might encounter that your model hardly learns anything. The reason is that TF variables do not update concurrently. A simple lock might solve this problem:
+```python
+import threading
+
+session_lock = threading.Lock()
+
+class MyBatch:
+    ...
+    @action(model='some_model')
+    def train_it(self, model, sess):
+        input_images, input_labels = model[0]
+        optimizer, cost, accuracy = model[1]
+        with session_lock:
+            _, loss = sess.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
+        return self
+```

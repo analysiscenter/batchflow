@@ -1,12 +1,16 @@
 # pylint: skip-file
 import os
 import sys
+import threading
 import numpy as np
 import tensorflow as tf
 
 sys.path.append("..")
 from dataset import action, model
 from dataset.opensets import MNIST, MNIST_Batch
+
+
+session_lock = threading.Lock()
 
 
 class MyMNIST(MNIST_Batch):
@@ -34,7 +38,8 @@ class MyMNIST(MNIST_Batch):
     def train_nn(self, model, sess):
         input_images, input_labels = model[0]
         optimizer, cost, accuracy = model[1]
-        _, loss = sess.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
+        with session_lock:
+            _, loss = sess.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
         return self
 
     @action(model='simple_nn')
@@ -56,7 +61,6 @@ if __name__ == "__main__":
 
     print()
     print("Start training...")
-    # don't use prefetching, otherwise the model hardly learn (tensorflow specific)
     mnist.train.p.train_nn(sess).run(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True)
     print("End training")
 
