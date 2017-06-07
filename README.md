@@ -31,7 +31,7 @@ for i in range(NUM_ITERS):
     # only now the actions are fired and data is changed with the workflow defined earlier
 ```
 
-For more advanced cases and detailed API see [the documentation](doc/intro.md).
+For more advanced cases and detailed API see [the documentation](doc/README.md).
 
 
 ## Installation
