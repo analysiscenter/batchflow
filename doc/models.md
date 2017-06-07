@@ -15,8 +15,8 @@ class MyArrayBatch(ArrayBatch):
     def basic_model():
         input_data = tf.placeholder('float', [None, 28])
         model_output = ...
-		    cost = tf.reduce_mean(tf.square(data - model_output))
-		    optimizer = tf.train.AdamOptimizer().minimize(cost)
+        cost = tf.reduce_mean(tf.square(data - model_output))
+        optimizer = tf.train.AdamOptimizer().minimize(cost)
         return [input_data, optimizer]
 ```
 It is for you to decide what the model descriptor is. It might be:
