@@ -34,11 +34,13 @@ if __name__ == "__main__":
 
     print()
     print("Start training...")
-    for i in range(N_ITERS):
-        batch = mnist.train.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
+    i = 0
+    for batch in mnist.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=1)
+        i += 1
         _, loss = sess.run([optimizer, cost], feed_dict={input_images: batch.images, input_labels: batch.labels})
-        if (i + 1) % 100 == 0:
-            print("Iteration", i + 1, "loss =", loss)
+        if i % 100 == 0:
+            print("Iteration", i, "loss =", loss)
+    print("Iteration", i, "loss =", loss)
     print("End training")
 
     print()
