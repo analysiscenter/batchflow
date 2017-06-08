@@ -38,7 +38,7 @@ class BaseCIFAR:
             return pickle.load(archive_file.extractfile(member), encoding='bytes')
 
         def _gather_extracted(all_res):
-            images = np.concatenate([res[b'data'] for res in all_res]).reshape(-1, 32, 32, 3)
+            images = np.concatenate([res[b'data'] for res in all_res]).reshape(-1, 3, 32, 32).transpose((0, 2, 3, 1))
             labels = np.concatenate([res[self.LABELS_KEY] for res in all_res])
             return images, labels
 
