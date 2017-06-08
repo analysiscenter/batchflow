@@ -1,4 +1,4 @@
-""" Contains MNIST dataset """
+""" Contains CIFAR datasets """
 
 import os
 import tempfile
@@ -7,31 +7,17 @@ import pickle
 import tarfile
 import numpy as np
 
-from .. import Dataset, DatasetIndex, ImagesBatch
+from . import ImagesOpenset
 
 
-class BaseCIFAR:
-    """ CIFAR dataset """
+class BaseCIFAR(ImagesOpenset):
+    """ The base class for the CIFAR dataset """
     SOURCE_URL = None
     LABELS_KEY = None
     TRAIN_NAME_ID = None
     TEST_NAME_ID = None
 
-    def __init__(self, batch_class=None):
-        train, test = self.download(self.SOURCE_URL)
-        self._train_images, self._train_labels = train
-        self._test_images, self._test_labels = test
-
-        batch_class = batch_class if batch_class is not None else ImagesBatch
-
-        train_index = DatasetIndex(np.arange(len(self._train_images)))
-        self.train = Dataset(train_index, batch_class, preloaded=(self._train_images, self._train_labels))
-
-        test_index = DatasetIndex(np.arange(len(self._test_images)))
-        self.test = Dataset(test_index, batch_class, preloaded=(self._test_images, self._test_labels))
-
-
-    def download(self, url):
+    def download(self):
         """ Load data from a web site and extract into numpy arrays """
 
         def _extract(archive_file, member):
@@ -43,7 +29,7 @@ class BaseCIFAR:
             return images, labels
 
         tmpdir = tempfile.gettempdir()
-        filename = os.path.basename(url)
+        filename = os.path.basename(self.SOURCE_URL)
         localname = os.path.join(tmpdir, filename)
         if not os.path.isfile(localname):
             print("Downloading", filename, "...")
@@ -56,14 +42,13 @@ class BaseCIFAR:
 
             data_files = [one_file for one_file in files_in_archive if self.TRAIN_NAME_ID in one_file.name]
             all_res = [_extract(archive_file, one_file) for one_file in data_files]
-            train = _gather_extracted(all_res)
+            train_data = _gather_extracted(all_res)
 
             test_files = [one_file for one_file in files_in_archive if self.TEST_NAME_ID in one_file.name]
             all_res = [_extract(archive_file, one_file) for one_file in test_files]
-            test = _gather_extracted(all_res)
+            test_data = _gather_extracted(all_res)
         print("Extracted")
-
-        return train, test
+        return train_data, test_data
 
 
 class CIFAR10(BaseCIFAR):
