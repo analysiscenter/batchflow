@@ -33,7 +33,7 @@ class BaseCIFAR(ImagesOpenset):
         localname = os.path.join(tmpdir, filename)
         if not os.path.isfile(localname):
             print("Downloading", filename, "...")
-            urllib.request.urlretrieve(url, localname)
+            urllib.request.urlretrieve(self.SOURCE_URL, localname)
             print("Downloaded", filename)
 
         print("Extracting...")

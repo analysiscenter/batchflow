@@ -1,9 +1,5 @@
 """ Contains MNIST dataset """
 
-import os
-import tempfile
-import urllib
-import gzip
 import numpy as np
 
 from .. import Dataset, DatasetIndex, ImagesBatch
@@ -19,10 +15,11 @@ class Openset:
         self.create_datasets(preloaded=self._data is not None)
 
     def download(self):
-    	""" Download a dataset from the source web-site """
-    	return None
+        """ Download a dataset from the source web-site """
+        return None
 
-    def create_datasets(self):
+    def create_datasets(self, preloaded=False):
+        """ Create train, test and other sub-datasets """
         raise NotImplementedError()
 
 
@@ -30,6 +27,10 @@ class ImagesOpenset(Openset):
     """ The base class for open datasets with images """
     def __init__(self, batch_class=ImagesBatch):
         super().__init__(batch_class)
+
+    def download(self):
+        """ Download a dataset from the source web-site """
+        return None, None
 
     def create_datasets(self, preloaded=False):
         """ Create train and test datasets """

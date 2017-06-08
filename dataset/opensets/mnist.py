@@ -32,7 +32,7 @@ class MNIST(ImagesOpenset):
         return train_data, test_data
 
     @parallel(init='_get_from_urls', post='_gather_data')
-    def download(self, url, content):
+    def download(self, url, content):    # pylint:disable=arguments-differ
         """ Load data from the web site """
         tmpdir = tempfile.gettempdir()
         filename = os.path.basename(url)
