@@ -6,36 +6,7 @@ import urllib
 import gzip
 import numpy as np
 
-from ..jointdataset import JointDataset
-from ..dataset import Dataset
-from ..dsindex import DatasetIndex
-from ..batch import Batch, ImagesBatch, ArrayBatch
-from ..decorators import parallel, any_action_failed, action
-
-
-# pylint: disable=unsubscriptable-object
-class MNIST_Batch(Batch):
-    """ A batch of MNIST images and labels """
-    @property
-    def images(self):
-        """ Images of digits """
-        return self.data[0]
-
-    @property
-    def labels(self):
-        """ Labels for images """
-        return self.data[1]
-
-    @action
-    def load(self, src, fmt=None):
-        """ Load data from a preloaded dataset """
-        self._data = src[0][self.indices], src[1][self.indices]
-
-    @action
-    def dump(self, dst, fmt=None):
-        """ Saves data to a file or array """
-        _ = dst, fmt
-        return self
+from .. import JointDataset, Dataset, DatasetIndex, ImagesBatch, parallel, any_action_failed, action
 
 
 #
@@ -136,7 +107,7 @@ class MNIST(BaseMNIST):
     def __init__(self, batch_class=None):
         super().__init__()
 
-        batch_class = batch_class if batch_class is not None else MNIST_Batch
+        batch_class = batch_class if batch_class is not None else ImagesBatch
 
         train_index = DatasetIndex(np.arange(len(self._train_images)))
         self.train = Dataset(train_index, batch_class, preloaded=(self._train_images, self._train_labels))

@@ -58,7 +58,7 @@ class Batch:
 
     def __getitem__(self, item):
         if isinstance(self.data, tuple):
-            res = tuple(data_item[item] for data_item in self.data)
+            res = tuple(data_item[item] if data_item is not None else None for data_item in self.data)
         else:
             res = self.data[item]
         return res
@@ -218,8 +218,37 @@ class DataFrameBatch(Batch):
         return self
 
 
-class ImagesBatch(ArrayBatch):
+class ImagesBatch(Batch):
     """ Batch class for 2D images """
+    @property
+    def images(self):
+        """ Images """
+        return self.data[0] if self.data is not None else None
+
+    @property
+    def labels(self):
+        """ Labels for images """
+        return self.data[1] if self.data is not None else None
+
+    @property
+    def masks(self):
+        """ Masks for images """
+        return self.data[2] if self.data is not None else None
+
     @action
     def load(self, src, fmt=None):
-        return super().load(src, fmt)
+        """ Load data """
+        if fmt is None:
+            if isinstance(src, tuple):
+                self._data = tuple(src[i][self.indices] if len(src) > i else None for i in range(3))
+            else:
+                self._data = src[self.indices], None, None
+        else:
+            raise ValueError("Unsupported format:", fmt)
+        return self
+
+    @action
+    def dump(self, dst, fmt=None):
+        """ Saves data to a file or array """
+        _ = dst, fmt
+        return self

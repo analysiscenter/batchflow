@@ -2,7 +2,7 @@
 import sys
 
 from .base import Baseset
-from .batch import Batch, ArrayBatch, DataFrameBatch
+from .batch import Batch, ArrayBatch, DataFrameBatch, ImagesBatch
 from .dataset import Dataset
 from .jointdataset import JointDataset, FullDataset
 from .dsindex import DatasetIndex, FilesIndex

@@ -1,19 +1,15 @@
 # pylint: skip-file
 import os
 import sys
-import threading
 import numpy as np
 import tensorflow as tf
 
 sys.path.append("..")
-from dataset import action, model
-from dataset.opensets import MNIST, MNIST_Batch
+from dataset import action, model, ImagesBatch
+from dataset.opensets import MNIST
 
 
-session_lock = threading.Lock()
-
-
-class MyMNIST(MNIST_Batch):
+class MyMNIST(ImagesBatch):
     @model()
     def simple_nn():
         input_images = tf.placeholder("uint8", [None, 28, 28, 1])
@@ -34,12 +30,11 @@ class MyMNIST(MNIST_Batch):
 
         return [[input_images, input_labels], [optimizer, cost, accuracy]]
 
-    @action(model='simple_nn')
+    @action(model='simple_nn', singleton=True)
     def train_nn(self, model, sess):
         input_images, input_labels = model[0]
         optimizer, cost, accuracy = model[1]
-        with session_lock:
-            _, loss = sess.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
+        _, loss = sess.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
         return self
 
     @action(model='simple_nn')
