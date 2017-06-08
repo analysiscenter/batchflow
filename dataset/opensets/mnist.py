@@ -103,7 +103,7 @@ class BaseMNIST:
 
 
 class MNIST(BaseMNIST):
-    """ MNIST as a Dataset """
+    """ MNIST as an images dataset """
     def __init__(self, batch_class=None):
         super().__init__()
 
