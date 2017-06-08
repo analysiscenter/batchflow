@@ -9,7 +9,7 @@ max-args=8
 ignored-modules=numpy
 
 [MESSAGE CONTROL]
-disable=no-value-for-parameter,no-self-use,too-few-public-methods,unsubscriptable-object
+disable=no-value-for-parameter,no-self-use,too-few-public-methods,unsubscriptable-object,duplicate-code
 
 [BASIC]
 class-rgx=[A-Z_][a-zA-Z0-9_]+$
