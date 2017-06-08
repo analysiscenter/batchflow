@@ -6,7 +6,7 @@ import urllib
 import gzip
 import numpy as np
 
-from .. import JointDataset, Dataset, DatasetIndex, ImagesBatch, parallel, any_action_failed, action
+from .. import JointDataset, Dataset, DatasetIndex, Batch, ArrayBatch, ImagesBatch, parallel, any_action_failed
 
 
 #

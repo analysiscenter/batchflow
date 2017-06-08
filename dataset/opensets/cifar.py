@@ -18,6 +18,7 @@ class BaseCIFAR:
     TEST_NAME_ID = None
 
     def __init__(self, batch_class=None):
+        # pylint: disable=duplicate-code
         train, test = self.download(self.SOURCE_URL)
         self._train_images, self._train_labels = train
         self._test_images, self._test_labels = test
