@@ -27,15 +27,16 @@ from .decorators import action
 
 class Batch:
     """ Base Batch class """
-    def __init__(self, index):
+    def __init__(self, index, preloaded=None):
         self.index = index
         self._data = None
+        self._preloaded = preloaded
 
     @classmethod
     def from_data(cls, data):
         """ Create batch from given dataset """
         # this is equiv to self.data = data[:]
-        return cls(np.arange(len(data))).load(data)
+        return cls(np.arange(len(data)), preloaded=data)
 
     @property
     def indices(self):
@@ -51,11 +52,13 @@ class Batch:
     @property
     def data(self):
         """ Return batch data """
+        if self._data is None and self._preloaded is not None:
+            self.load(self._preloaded)
         return self._data
 
     def __getitem__(self, item):
         if isinstance(self.data, tuple):
-            res = tuple(data_item[item] for data_item in self.data)
+            res = tuple(data_item[item] if data_item is not None else None for data_item in self.data)
         else:
             res = self.data[item]
         return res
@@ -103,9 +106,9 @@ class Batch:
         raise NotImplementedError()
 
     @action
-    def save(self, dst, fmt=None):
+    def save(self, *args, **kwargs):
         """ Save batch data to a file (an alias for dump method)"""
-        return self.dump(dst, fmt)
+        return self.dump(*args, **kwargs)
 
 
 class ArrayBatch(Batch):
@@ -212,4 +215,40 @@ class DataFrameBatch(Batch):
             self.data.to_csv(fullname, *args, **kwargs)
         else:
             raise ValueError('Unknown format %s' % fmt)
+        return self
+
+
+class ImagesBatch(Batch):
+    """ Batch class for 2D images """
+    @property
+    def images(self):
+        """ Images """
+        return self.data[0] if self.data is not None else None
+
+    @property
+    def labels(self):
+        """ Labels for images """
+        return self.data[1] if self.data is not None else None
+
+    @property
+    def masks(self):
+        """ Masks for images """
+        return self.data[2] if self.data is not None else None
+
+    @action
+    def load(self, src, fmt=None):
+        """ Load data """
+        if fmt is None:
+            if isinstance(src, tuple):
+                self._data = tuple(src[i][self.indices] if len(src) > i else None for i in range(3))
+            else:
+                self._data = src[self.indices], None, None
+        else:
+            raise ValueError("Unsupported format:", fmt)
+        return self
+
+    @action
+    def dump(self, dst, fmt=None):
+        """ Saves data to a file or array """
+        _ = dst, fmt
         return self

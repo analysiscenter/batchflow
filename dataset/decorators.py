@@ -1,6 +1,7 @@
 """ Pipeline decorators """
 import os
 import inspect
+import threading
 import concurrent.futures as cf
 import asyncio
 
@@ -86,15 +87,16 @@ class ActionDecorator:
         self.model_name = None
         self.model_method = None
         self.action_self = None
+        self.singleton = False
+        self.singleton_lock = None
 
         if len(args) == 1 and callable(args[0]):
             # @action without arguments
             self.add_action(args[0])
         else:
             # @action with arguments
+            self.singleton = kwargs.pop('singleton', False)
             self.model_name = kwargs.pop('model', None)
-            if not isinstance(self.model_name, str):
-                raise ValueError("Decorator should be specified as @action(model='model_method_name')")
 
     def add_action(self, method):
         """ Add an action specification into an action method """
@@ -105,16 +107,17 @@ class ActionDecorator:
         else:
             full_model_name = infer_method_key(self.method, self.model_name)
 
+        self.singleton_lock = None if not self.singleton else threading.Lock()
         action_spec = dict(method=self.method, full_method_name=full_method_name,
+                           singleton=self.singleton, singleton_lock=self.singleton_lock,
                            has_model=self.model_name is not None,
                            model_name=self.model_name, full_model_name=full_model_name)
-        self.method.action = action_spec
+        self.action = action_spec
 
     def _action_with_model(self):
         """ Return a callable for a decorator call """
-        def get_model_spec(action_self, **kwargs):
-            """ Return a model specification for a give action method """
-            _ = kwargs
+        def _call_with_model(action_self, *args, **kwargs):
+            """ Call an action with a model specification """
             if hasattr(action_self, self.model_name):
                 try:
                     self.model_method = getattr(action_self, self.model_name).model_method
@@ -124,19 +127,41 @@ class ActionDecorator:
                 raise ValueError("There is no such method '%s'" % self.model_name)
 
             model_spec = ModelDecorator.get_model(self.model_method)
-            return model_spec, self.method
-        return get_model_spec
+            return self.call_action(action_self, model_spec, *args, **kwargs)
+        _call_with_model.action = self.action
+        return _call_with_model
+
+    def _action_wo_model(self):
+        """ Return a callable for a decorator call """
+        def _call_action(action_self, *args, **kwargs):
+            return self.call_action(action_self, *args, **kwargs)
+        _call_action.action = self.action
+        return _call_action
+
+    def call_action(self, action_self, *args, **kwargs):
+        """ Call an action """
+        if self.singleton_lock is not None:
+            self.singleton_lock.acquire(blocking=True)
+
+        res = self.method(action_self, *args, **kwargs)
+
+        if self.singleton_lock is not None:
+            self.singleton_lock.release()
+
+        return res
 
     def __call__(self, *args, **kwargs):
         if self.method is None:
             # @action with arguments
             self.add_action(args[0])
-            # return a function that will be called when a decorated method is called
-            return self._action_with_model()
+            if self.model_name is not None:
+                # return a function that will be called when a decorated method is called
+                return self._action_with_model()
+            else:
+                return self._action_wo_model()
         else:
             # @action without arguments
-            # this branch never executes as a pipeline directly calls action.__self__.method
-            return None
+            return self.call_action(self.action_self, *args, **kwargs)
 
     def __get__(self, instance, owner):
         _ = owner
@@ -162,7 +187,6 @@ def action(*args, **kwargs):
 def any_action_failed(results):
     """ Return True if some parallelized invocations threw exceptions """
     return any(isinstance(res, Exception) for res in results)
-
 
 def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
     """ Make in-batch parallel decorator """
@@ -308,3 +332,6 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             raise ValueError('Wrong parallelization target:', target)
         return wrapped_method
     return inbatch_parallel_decorator
+
+
+parallel = inbatch_parallel  # pylint: disable=invalid-name

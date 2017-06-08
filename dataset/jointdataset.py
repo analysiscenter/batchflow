@@ -49,7 +49,7 @@ class JointDataset(Baseset):
         ds_set = list()
         ds_index = self.index.create_batch(index, pos=self.align)
         for dataset in self.datasets:
-            ds_set.append(Dataset.from_dataset(dataset, ds_index))
+            ds_set.append(type(dataset).from_dataset(dataset, ds_index))
         return JointDataset(ds_set, align='same')
 
 

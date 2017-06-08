@@ -19,6 +19,7 @@ class Pipeline:
         self._action_list = []
         self._prefetch_queue = None
         self._batch_queue = None
+        self._service_executor = None
         self._executor = None
         self._batch_generator = None
         self._tf_session = None
@@ -68,29 +69,29 @@ class Pipeline:
 
 
     @staticmethod
-    def _get_action_spec(batch, name):
+    def _get_action_method(batch, name):
         if hasattr(batch, name):
             attr = getattr(batch, name)
             if attr.__self__ == batch:
-                # action with model
-                get_model_spec = attr
-                # get_model_spec is bounded to the batch (so it is sent as self)
-                model_spec, action_method = get_model_spec()
+                # action decorator with arguments
+                # attr is bounded to the batch
+                action_method = attr
+                action_attr = attr
             else:
-                # action wihout model
-                action_method = attr.__self__.method
-                model_spec = None
+                # action decorator wihout arguments
+                action_method = attr
+                action_attr = attr.__self__
 
-            if callable(action_method):
-                if hasattr(action_method, 'action'):
-                    action_spec = getattr(action_method, 'action')
+            if callable(action_attr):
+                if hasattr(action_attr, 'action'):
+                    action_spec = getattr(action_attr, 'action')
                 else:
                     raise ValueError("Method %s is not marked with @action decorator" % name)
             else:
                 raise TypeError("%s is not a method" % name)
         else:
             raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
-        return action_spec, model_spec
+        return action_method, action_spec
 
 
     def _exec_all_actions(self, batch, new_loop=False):
@@ -102,7 +103,7 @@ class Pipeline:
             if _action['name'] == 'join':
                 joined_sets = _action['datasets']
             else:
-                action_spec, model_spec = self._get_action_spec(batch, _action['name'])
+                action_method, _ = self._get_action_method(batch, _action['name'])
 
                 if joined_sets is not None:
                     joined_data = []
@@ -113,13 +114,7 @@ class Pipeline:
                 else:
                     _action_args = _action['args']
 
-                action_method = action_spec['method']
-                if model_spec is None:
-                    # an ordinary action method
-                    batch = action_method(batch, *_action_args, **_action['kwargs'])
-                else:
-                    # an action method based on a model
-                    batch = action_method(batch, model_spec, *_action_args, **_action['kwargs'])
+                batch = action_method(*_action_args, **_action['kwargs'])
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)
@@ -229,11 +224,20 @@ class Pipeline:
 
     def reset_iter(self):
         """ Clear all iteration metadata in order to start iterating from scratch """
-        self.dataset.reset_iter()
+        if self._prefetch_queue is not None:
+            self._prefetch_queue.put(None, block=True)
+        if self._batch_queue is not None:
+            self._batch_queue.put(None, block=True)
+        if self._executor is not None:
+            self._executor.shutdown()
+            self._executor = None
+        if self._service_executor is not None:
+            self._service_executor.shutdown()
+            self._service_executor = None
         self._prefetch_queue = None
         self._batch_queue = None
-        self._executor = None
         self._batch_generator = None
+        self.dataset.reset_iter()
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
@@ -255,21 +259,22 @@ class Pipeline:
 
             self._prefetch_queue = q.Queue(maxsize=prefetch + 1)
             self._batch_queue = q.Queue()
-
-            service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            service_executor.submit(self._put_batches_into_queue, batch_generator)
-            future = service_executor.submit(self._run_batches_from_queue)
-            while not future.done() or not self._batch_queue.empty():
+            self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
+            self._service_executor.submit(self._run_batches_from_queue)
+            is_end = False
+            while not is_end:
                 batch_res = self._batch_queue.get(block=True)
                 if batch_res is not None:
                     self._batch_queue.task_done()
                     yield batch_res
+                else:
+                    is_end = True
         else:
-            self._prefetch_queue = None
-            self._batch_queue = None
-            self._executor = None
             for batch in batch_generator:
                 yield self._exec_all_actions(batch)
+
+        self.reset_iter()
         return self
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):

@@ -15,8 +15,8 @@ class MyArrayBatch(ArrayBatch):
     def basic_model():
         input_data = tf.placeholder('float', [None, 28])
         model_output = ...
-		cost = tf.reduce_mean(tf.square(data - model_output))
-		optimizer = tf.train.AdamOptimizer().minimize(cost)
+        cost = tf.reduce_mean(tf.square(data - model_output))
+        optimizer = tf.train.AdamOptimizer().minimize(cost)
         return [input_data, optimizer]
 ```
 It is for you to decide what the model descriptor is. It might be:
@@ -74,4 +74,17 @@ full_workflow = my_dataset.p
                           .some_augmentation()
                           .train_model(session=sess)
                           .evaluate_model(session=sess)
+```
+
+### Parallel training with TensorFlow
+If you [prefetch](prefetch.md) with actions based on Tensorflow models you might encounter that your model hardly learns anything. The reason is that TF variables do not update concurrently. To solve this problem make an action `a singleton` which allows only one concurrent execution:
+```python
+class MyBatch:
+    ...
+    @action(model='some_model', singleton=True)
+    def train_it(self, model, sess):
+        input_images, input_labels = model[0]
+        optimizer, cost, accuracy = model[1]
+        _, loss = sess.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
+        return self
 ```

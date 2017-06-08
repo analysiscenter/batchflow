@@ -84,7 +84,7 @@ class Baseset:
 
 
     def create_subset(self, index):
-        """ Create a new subset based on the give index subset """
+        """ Create a new subset based on the given index subset """
         raise NotImplementedError("create_subset should be defined in child classes")
 
 
@@ -114,7 +114,8 @@ class Baseset:
         self._order = None
         self._n_epochs = 0
         self._batch_generator = None
-        self.index.reset_iter()
+        if hasattr(self.index, 'reset_iter'):
+            self.index.reset_iter()
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, *args, **kwargs):
         """ Generate batches """
