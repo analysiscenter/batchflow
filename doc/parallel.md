@@ -304,7 +304,7 @@ class MyBatch(Batch):
 ```
 
 ### mpc
-With `mpc` you might run calculations in separate processes thus removing GIL restrictions. For this [concurrent.futures.ProcessPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#processpoolexecutor) is used. Likewise `nogil` the decorated method should just return a function which will be executed in a separate process.
+With `mpc` you might run calculations in separate processes thus removing GIL restrictions. For this [concurrent.futures.ProcessPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#processpoolexecutor) is used. The decorated method should just return a function which will be executed in a separate process.
 
 ```python
 from dataset import Batch, action, inbatch_parallel
