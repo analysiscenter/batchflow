@@ -35,7 +35,7 @@ class ImagesOpenset(Openset):
     def create_datasets(self, preloaded=False):
         """ Create train and test datasets """
         if isinstance(self._data, tuple) and len(self._data) == 2:
-            train_data, test_data = self._data
+            train_data, test_data = self._data   # pylint:disable=unpacking-non-sequence
             train_index = DatasetIndex(np.arange(len(train_data[0])))
             train_preloaded = train_data if preloaded else None
             self.train = Dataset(train_index, self.batch_class, preloaded=train_preloaded)
