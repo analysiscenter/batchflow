@@ -15,7 +15,7 @@ if __name__ == "__main__":
     N_ITERS = 1000
 
     cifar = CIFAR10()
-    N_CLASSES = len(np.unique(cifar._train_labels))
+    N_CLASSES = len(np.unique(cifar._data[0][1]))
 
 
     input_images = tf.placeholder("uint8", [None, 32, 32, 3])
