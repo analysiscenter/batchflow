@@ -1,8 +1,6 @@
 """ Contains the base class for open datasets """
 
-import numpy as np
-
-from .. import Dataset, DatasetIndex, ImagesBatch
+from .. import Dataset, ImagesBatch
 
 
 class Openset(Dataset):
@@ -12,7 +10,7 @@ class Openset(Dataset):
         self._train_index, self._test_index = None, None
         self._data = self.download()
         preloaded = self._data if not train_test else None
-        super().__init__(index, batch_class, preloaded=self._data)
+        super().__init__(index, batch_class, preloaded=preloaded)
 
     @staticmethod
     def build_index(index):
@@ -26,13 +24,13 @@ class Openset(Dataset):
         """ Download a dataset from the source web-site """
         return None
 
-    def cv_split(self, shares=0.8):
+    def cv_split(self, shares=0.8, shuffle=False):
         if self.train_test:
-            train_data, test_data = self._data
+            train_data, test_data = self._data  # pylint:disable=unpacking-non-sequence
             self.train = Dataset(self._train_index, self.batch_class, preloaded=train_data)
             self.test = Dataset(self._test_index, self.batch_class, preloaded=test_data)
         else:
-            super().cv_split(shares)
+            super().cv_split(shares, shuffle)
 
 
 class ImagesOpenset(Openset):
