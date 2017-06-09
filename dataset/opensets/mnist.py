@@ -7,7 +7,7 @@ import gzip
 import numpy as np
 
 from . import ImagesOpenset
-from .. import parallel, any_action_failed
+from .. import DatasetIndex, parallel, any_action_failed
 
 
 class MNIST(ImagesOpenset):
@@ -17,6 +17,10 @@ class MNIST(ImagesOpenset):
     TEST_IMAGES_URL = "http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz"
     TEST_LABELS_URL = "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz"
     ALL_URLS = [TRAIN_IMAGES_URL, TRAIN_LABELS_URL, TEST_IMAGES_URL, TEST_LABELS_URL]
+
+    def __init__(self):
+        super().__init__(train_test=True)
+        self.cv_split()
 
     @property
     def _get_from_urls(self):
@@ -29,6 +33,8 @@ class MNIST(ImagesOpenset):
         else:
             train_data = all_res[0], all_res[1]
             test_data = all_res[2], all_res[3]
+            self._train_index = DatasetIndex(np.arange(len(train_data[0])))
+            self._test_index = DatasetIndex(np.arange(len(test_data[0])))
         return train_data, test_data
 
     @parallel(init='_get_from_urls', post='_gather_data')

@@ -7,6 +7,7 @@ import pickle
 import tarfile
 import numpy as np
 
+from .. import DatasetIndex
 from . import ImagesOpenset
 
 
@@ -16,6 +17,10 @@ class BaseCIFAR(ImagesOpenset):
     LABELS_KEY = None
     TRAIN_NAME_ID = None
     TEST_NAME_ID = None
+
+    def __init__(self):
+        super().__init__(train_test=True)
+        self.cv_split()
 
     def download(self):
         """ Load data from a web site and extract into numpy arrays """
@@ -48,6 +53,10 @@ class BaseCIFAR(ImagesOpenset):
             all_res = [_extract(archive_file, one_file) for one_file in test_files]
             test_data = _gather_extracted(all_res)
         print("Extracted")
+
+        self._train_index = DatasetIndex(np.arange(len(train_data[0])))
+        self._test_index = DatasetIndex(np.arange(len(test_data[0])))
+
         return train_data, test_data
 
 
