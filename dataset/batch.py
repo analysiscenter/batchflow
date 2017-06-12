@@ -21,8 +21,7 @@ try:
 except ImportError:
     pass
 
-from .dsindex import DatasetIndex
-from .decorators import action
+from . import DatasetIndex, action
 
 
 class Batch:
@@ -94,6 +93,11 @@ class Batch:
             return tuple(self.infer_dtype(item) for item in self.data)
         else:
             return self.infer_dtype(self.data)
+
+    def get_errors(self, all_res):
+        """ Return a list of errors from a parallel action """
+        all_errors = [error for error in all_res if isinstance(error, Exception)]
+        return all_errors if len(all_errors) > 0 else None
 
     @action
     def load(self, src, fmt=None):
@@ -215,40 +219,4 @@ class DataFrameBatch(Batch):
             self.data.to_csv(fullname, *args, **kwargs)
         else:
             raise ValueError('Unknown format %s' % fmt)
-        return self
-
-
-class ImagesBatch(Batch):
-    """ Batch class for 2D images """
-    @property
-    def images(self):
-        """ Images """
-        return self.data[0] if self.data is not None else None
-
-    @property
-    def labels(self):
-        """ Labels for images """
-        return self.data[1] if self.data is not None else None
-
-    @property
-    def masks(self):
-        """ Masks for images """
-        return self.data[2] if self.data is not None else None
-
-    @action
-    def load(self, src, fmt=None):
-        """ Load data """
-        if fmt is None:
-            if isinstance(src, tuple):
-                self._data = tuple(src[i][self.indices] if len(src) > i else None for i in range(3))
-            else:
-                self._data = src[self.indices], None, None
-        else:
-            raise ValueError("Unsupported format:", fmt)
-        return self
-
-    @action
-    def dump(self, dst, fmt=None):
-        """ Saves data to a file or array """
-        _ = dst, fmt
         return self
