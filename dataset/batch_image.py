@@ -1,9 +1,9 @@
 """ Contains Batch classes for images """
 
-import os
+import os   # pylint: disable=unused-import
 
 try:
-    import blosc
+    import blosc   # pylint: disable=unused-import
 except ImportError:
     pass
 import numpy as np
@@ -18,7 +18,7 @@ class ImagesBatch(Batch):
     @property
     def data(self):
         data = super().data
-        return data if data is not None else tuple([None])
+        return data if data is not None else tuple([None, None, None])
 
     @property
     def images(self):
@@ -27,6 +27,7 @@ class ImagesBatch(Batch):
 
     @images.setter
     def images(self, value):
+        """ Set images """
         data = list(self.data)
         data[0] = value
         self._data = data
@@ -38,7 +39,10 @@ class ImagesBatch(Batch):
 
     @labels.setter
     def labels(self, value):
-        self._data[1] = value
+        """ Set labels """
+        data = list(self.data)
+        data[1] = value
+        self._data = data
 
     @property
     def masks(self):
@@ -47,22 +51,46 @@ class ImagesBatch(Batch):
 
     @masks.setter
     def masks(self, value):
-        self._data[3] = value
+        """ Set masks """
+        data = list(self.data)
+        data[3] = value
+        self._data = data
 
     def get_image(self, *args, **kwargs):
+        _ = args, kwargs
         return [self.images[i] for i in range(len(self.indices))]
 
     def _assemble_batch(self, all_res, *args, **kwargs):
+        _ = args, kwargs
         if any_action_failed(all_res):
             raise ValueError("Could not assemble the batch", self.get_errors(all_res))
-        self.images = np.concatenate(all_res)
+
+        if isinstance(all_res[0], PIL.Image.Image):
+            self.images = all_res
+        else:
+            self.images = np.transpose(np.dstack(all_res), (2, 0, 1))
         return self
 
     @inbatch_parallel(init='get_image', post='_assemble_batch')
-    def resize(self, image, shape):
+    def resize(self, image, shape, method=None):
         """ Resize all images in the batch
-        Uses a very fast implementation from Pillow-SIMD """
-        return PIL.Image.fromarray(image).resize(shape, PIL.Image.ANTIALIAS)
+        if batch contains PIL images or if method is 'PIL',
+        uses PIL.Image.resize, otherwise scipy.ndimage.zoom
+        We recommend to install a very fast Pillow-SIMD fork """
+        if isinstance(image, PIL.Image.Image):
+            return image.resize(shape, PIL.Image.ANTIALIAS)
+        else:
+            if method == 'PIL'
+                new_image = PIL.Image.fromarray(image).resize(shape, PIL.Image.ANTIALIAS)
+                new_arr = np.fromstring(new_image.tobytes(), dtype=image.dtype)
+                if len(image.shape) == 2:
+                    new_arr = new_arr.reshape(new_image.height, new_image.width)
+                elif len(image.shape) == 3:
+                    new_arr = new_arr.reshape(new_image.height, new_image.width, -1)
+                return new_arr
+            else:
+                factor = 1. * np.asarray(shape) / np.asarray(image.shape)
+                return scipy.ndimage.zoom(image, factor, order=3)
 
     @action
     def load(self, src, fmt=None):
@@ -80,4 +108,12 @@ class ImagesBatch(Batch):
     def dump(self, dst, fmt=None):
         """ Saves data to a file or array """
         _ = dst, fmt
+        return self
+
+    @action
+    @inbatch_parallel(init='indices')
+    def apply_transform(self, ix, dst, fn, *args, **kwargs):
+        dst_attr = getattr(self, dst)
+        pos = self.index.get_pos(ix)
+        dst_attr[pos] = fn(dst_attr[pos], *args, **kwargs)
         return self

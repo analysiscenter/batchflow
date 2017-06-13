@@ -24,7 +24,7 @@ class MyImages(ImagesBatch):
     @action
     @inbatch_parallel(init='get_image', post='_assemble_batch')
     def convert_to_PIL(self, image):
-            return PIL.Image.fromarray(image)
+            return PIL.Image.fromarray(image.astype('unit8'))
 
     def _assemble_batch(self, all_res, *args, **kwargs):
         if any_action_failed(all_res):
