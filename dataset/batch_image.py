@@ -8,6 +8,7 @@ except ImportError:
     pass
 import numpy as np
 import PIL.Image
+import scipy.ndimage
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel, any_action_failed
@@ -56,10 +57,6 @@ class ImagesBatch(Batch):
         data[3] = value
         self._data = data
 
-    def get_image(self, *args, **kwargs):
-        _ = args, kwargs
-        return [self.images[i] for i in range(len(self.indices))]
-
     def _assemble_batch(self, all_res, *args, **kwargs):
         _ = args, kwargs
         if any_action_failed(all_res):
@@ -71,7 +68,7 @@ class ImagesBatch(Batch):
             self.images = np.transpose(np.dstack(all_res), (2, 0, 1))
         return self
 
-    @inbatch_parallel(init='get_image', post='_assemble_batch')
+    @inbatch_parallel(init='images', post='_assemble_batch')
     def resize(self, image, shape, method=None):
         """ Resize all images in the batch
         if batch contains PIL images or if method is 'PIL',
@@ -113,6 +110,7 @@ class ImagesBatch(Batch):
     @action
     @inbatch_parallel(init='indices')
     def apply_transform(self, ix, dst, fn, *args, **kwargs):
+        """ Apply a function to each item of the batch """
         dst_attr = getattr(self, dst)
         pos = self.index.get_pos(ix)
         dst_attr[pos] = fn(dst_attr[pos], *args, **kwargs)

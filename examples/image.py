@@ -22,7 +22,7 @@ class MyImages(ImagesBatch):
             return src[ix]
 
     @action
-    @inbatch_parallel(init='get_image', post='_assemble_batch')
+    @inbatch_parallel(init='images', post='_assemble_batch')
     def convert_to_PIL(self, image):
             return PIL.Image.fromarray(image.astype('unit8'))
 
@@ -36,7 +36,7 @@ class MyImages(ImagesBatch):
         return self
 
     @action
-    @inbatch_parallel(init='get_image', post='_assemble_batch')
+    @inbatch_parallel(init='images', post='_assemble_batch')
     def resize(self, image, shape):
         if isinstance(image, PIL.Image.Image):
             return image.resize(shape, PIL.Image.ANTIALIAS)
@@ -45,7 +45,7 @@ class MyImages(ImagesBatch):
             return scipy.ndimage.zoom(image, factor, order=3)
 
     @action
-    @inbatch_parallel(init='get_image', post='_assemble_batch')
+    @inbatch_parallel(init='images', post='_assemble_batch')
     def presize(self, image, shape):
         return PIL.Image.fromarray(image).resize(shape, PIL.Image.ANTIALIAS)
 
