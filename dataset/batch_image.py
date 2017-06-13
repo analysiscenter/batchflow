@@ -7,8 +7,18 @@ try:
 except ImportError:
     pass
 import numpy as np
-import PIL.Image
-import scipy.ndimage
+try:
+    import PIL.Image
+except ImportError:
+    pass
+try:
+    import scipy.ndimage
+except ImportError:
+    pass
+try:
+    import cv2
+except ImportError:
+    pass
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel, any_action_failed
@@ -57,18 +67,28 @@ class ImagesBatch(Batch):
         data[3] = value
         self._data = data
 
-    def _assemble_batch(self, all_res, *args, **kwargs):
+    def assemble(self, all_res, *args, **kwargs):
         _ = args, kwargs
         if any_action_failed(all_res):
             raise ValueError("Could not assemble the batch", self.get_errors(all_res))
 
+        dst = kwargs.get('dst', 'images')
         if isinstance(all_res[0], PIL.Image.Image):
-            self.images = all_res
+            setattr(self, dst, all_res)
         else:
-            self.images = np.transpose(np.dstack(all_res), (2, 0, 1))
+            setattr(self, dst, np.transpose(np.dstack(all_res), (2, 0, 1)))
         return self
 
-    @inbatch_parallel(init='images', post='_assemble_batch')
+    @action
+    def convert_to_PIL(self, dst='images'):
+        """ Convert batch data to PIL.Image format """
+        self._new_attr = list(None for _ in self.indices)
+        self.apply_transform(dst, '_new_attr', PIL.Image.fromarray)
+        setattr(self, dst, self._new_attr)
+        return self
+
+    @action
+    @inbatch_parallel(init='images', post='assemble')
     def resize(self, image, shape, method=None):
         """ Resize all images in the batch
         if batch contains PIL images or if method is 'PIL',
@@ -85,6 +105,9 @@ class ImagesBatch(Batch):
                 elif len(image.shape) == 3:
                     new_arr = new_arr.reshape(new_image.height, new_image.width, -1)
                 return new_arr
+            elif method == 'cv2':
+                new_shape = shape[1], shape[0]
+                return cv2.resize(image, new_shape, interpolation=cv2.INTER_CUBIC)
             else:
                 factor = 1. * np.asarray(shape) / np.asarray(image.shape)
                 return scipy.ndimage.zoom(image, factor, order=3)
@@ -109,9 +132,9 @@ class ImagesBatch(Batch):
 
     @action
     @inbatch_parallel(init='indices')
-    def apply_transform(self, ix, dst, fn, *args, **kwargs):
+    def apply_transform(self, ix, src, dst, func, *args, **kwargs):
         """ Apply a function to each item of the batch """
+        src_attr = getattr(self, src)
         dst_attr = getattr(self, dst)
         pos = self.index.get_pos(ix)
-        dst_attr[pos] = fn(dst_attr[pos], *args, **kwargs)
-        return self
+        dst_attr[pos] = func(src_attr[pos], *args, **kwargs)
