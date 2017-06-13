@@ -40,7 +40,7 @@ if __name__ == "__main__":
     print("Generating...")
     ds_data, data = gen_data()
 
-    res = ds_data.p.load(data).convert_to_PIL(dst='images').resize((384, 384))
+    res = ds_data.p.load(data).convert_to_PIL('images').resize((384, 384))
     #res = ds_data.p.load(data).resize((384, 384), method='PIL')
 
     print("Start...")
