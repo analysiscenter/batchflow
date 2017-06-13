@@ -9,11 +9,17 @@ except ImportError:
 import numpy as np
 import PIL.Image
 
-from . import action, inbatch_parallel
+from .batch import Batch
+from .decorators import action, inbatch_parallel, any_action_failed
 
 
 class ImagesBatch(Batch):
     """ Batch class for 2D images """
+    @property
+    def data(self):
+        data = super().data
+        return data if data is not None else tuple([None])
+
     @property
     def images(self):
         """ Images """
@@ -21,7 +27,9 @@ class ImagesBatch(Batch):
 
     @images.setter
     def images(self, value):
-        self._data[0] = value
+        data = list(self.data)
+        data[0] = value
+        self._data = data
 
     @property
     def labels(self):
@@ -42,7 +50,7 @@ class ImagesBatch(Batch):
         self._data[3] = value
 
     def get_image(self, *args, **kwargs):
-        return [self.images[i] for i in range(self.indices)]
+        return [self.images[i] for i in range(len(self.indices))]
 
     def _assemble_batch(self, all_res, *args, **kwargs):
         if any_action_failed(all_res):

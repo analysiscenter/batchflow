@@ -21,7 +21,8 @@ try:
 except ImportError:
     pass
 
-from . import DatasetIndex, action
+from .dsindex import DatasetIndex
+from .decorators import action
 
 
 class Batch:
