@@ -80,7 +80,7 @@ class ImagesBatch(Batch):
         if isinstance(image, PIL.Image.Image):
             return image.resize(shape, PIL.Image.ANTIALIAS)
         else:
-            if method == 'PIL'
+            if method == 'PIL':
                 new_image = PIL.Image.fromarray(image).resize(shape, PIL.Image.ANTIALIAS)
                 new_arr = np.fromstring(new_image.tobytes(), dtype=image.dtype)
                 if len(image.shape) == 2:
