@@ -6,7 +6,7 @@ max-locals=20
 max-args=8
 
 [TYPECHECK]
-ignored-modules=numpy
+ignored-modules=numpy,cv2
 
 [MESSAGE CONTROL]
 disable=no-value-for-parameter,no-self-use,too-few-public-methods,unsubscriptable-object,duplicate-code
