@@ -1,4 +1,5 @@
 """ Contains the base batch class """
+from binascii import hexlify
 import numpy as np
 from .decorators import action
 

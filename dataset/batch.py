@@ -1,7 +1,6 @@
 """ Contains basic Batch classes """
 
 import os
-from binascii import hexlify
 
 try:
     import blosc
@@ -63,13 +62,13 @@ class Batch(BaseBatch):
 
     @property
     def components(self):
+        """ Return data components names """
         return None
 
     @property
     def _components(self):
         """ Set names for data components """
-        comps = self.components
-        return dict(zip(comps, np.arange(len(comps)))) if comps is not None else None
+        return dict(zip(comps, np.arange(len(comps)))) if comps is not None else None  # pylint:disable=not-an-iterable
 
     def __getattr__(self, name):
         if self._components is not None and name in self._components:
