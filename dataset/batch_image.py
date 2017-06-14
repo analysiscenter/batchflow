@@ -156,4 +156,4 @@ class ImagesBatch(Batch):
         else:
             src_attr = getattr(self, src)
             all_args = tuple(src_attr, *args)
-        setattr(self, dst_attr, func(*all_args, **kwargs))
+        setattr(self, dst, func(*all_args, **kwargs))
