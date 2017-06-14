@@ -24,10 +24,11 @@ except ImportError:
 from .dsindex import DatasetIndex
 from .decorators import action
 from .dataset import Dataset
+from .batch_base import BaseBatch
 
 
-class Batch:
-    """ Base Batch class """
+class Batch(BaseBatch):
+    """ The core Batch class """
     def __init__(self, index, preloaded=None):
         self.index = index
         self._data = None
