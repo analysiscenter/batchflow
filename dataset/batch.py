@@ -79,14 +79,6 @@ class Batch(BaseBatch):
         _ = self.data, args, kwargs
         return [[]]
 
-    @staticmethod
-    def make_filename():
-        """ Generate unique filename for the batch """
-        random_data = np.random.uniform(0, 1, size=10) * 123456789
-        # probability of collision is around 2e-10.
-        filename = hexlify(random_data.data)[:8]
-        return filename.decode("utf-8")
-
     def infer_dtype(self, data=None):
         """ Detect dtype of batch data """
         if data is None:
