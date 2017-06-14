@@ -108,17 +108,12 @@ class Batch(BaseBatch):
     @action
     def load(self, src, fmt=None):
         """ Load data from a file or another data source """
-        raise NotImplementedError()
+        return self
 
     @action
     def dump(self, dst, fmt=None):
         """ Save batch data to disk """
-        raise NotImplementedError()
-
-    @action
-    def save(self, *args, **kwargs):
-        """ Save batch data to a file (an alias for dump method)"""
-        return self.dump(*args, **kwargs)
+        return self
 
 
 class ArrayBatch(Batch):
