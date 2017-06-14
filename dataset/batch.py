@@ -40,6 +40,7 @@ class Batch(BaseBatch):
         return cls(np.arange(len(data)), preloaded=data)
 
     def as_dataset(self, dataset_class=Dataset):
+        """ Makes a new dataset from batch data """
         return dataset_class(self.index, preloaded=self.data)
 
     @property
