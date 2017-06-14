@@ -31,39 +31,8 @@ class ImagesBatch(Batch):
         self._new_attr = None
 
     @property
-    def data(self):
-        data = super().data
-        return data if data is not None else tuple([None, None, None])
-
-    @property
-    def images(self):
-        """ Images """
-        return self._get_data(0)
-
-    @images.setter
-    def images(self, value):
-        """ Set images """
-        self._set_data(0, value)
-
-    @property
-    def labels(self):
-        """ Labels for images """
-        return self._get_data(1)
-
-    @labels.setter
-    def labels(self, value):
-        """ Set labels """
-        self._set_data(1, value)
-
-    @property
-    def masks(self):
-        """ Masks for images """
-        return self._get_data(2)
-
-    @masks.setter
-    def masks(self, value):
-        """ Set masks """
-        self._set_data(2, value)
+    def components(self):
+        return "images", "labels", "masks"
 
     def assemble(self, all_res, *args, **kwargs):
         """ Assemble the batch after a parallel action """

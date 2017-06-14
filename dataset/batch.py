@@ -22,7 +22,7 @@ except ImportError:
     pass
 
 from .dsindex import DatasetIndex
-from .decorators import action
+from .decorators import action, inbatch_parallel
 from .dataset import Dataset
 from .batch_base import BaseBatch
 
@@ -59,19 +59,33 @@ class Batch(BaseBatch):
         """ Return batch data """
         if self._data is None and self._preloaded is not None:
             self.load(self._preloaded)
-        return self._data
+        return self._data if self._data is not None else tuple(None for _ in self.components)
 
-    def _get_data(self, i, value):
-        """ Return i-th component of a data tuple
-        Do not call if self.data is not a tuple """
-        return self.data[i] if self.data is not None else None
+    @property
+    def components(self):
+        return None
 
-    def _set_data(self, i, value):
-        """ Put a new value into i-th component of a data tuple
-        Do not call if self._data is not a tuple """
-        data = list(self.data)
-        data[i] = value
-        self._data = tuple(data)
+    @property
+    def _components(self):
+        """ Set names for data components """
+        comps = self.components
+        return dict(zip(comps, np.arange(len(comps)))) if comps is not None else None
+
+    def __getattr__(self, name):
+        if self._components is not None and name in self._components:
+            pos = self._components[name]
+            return self.data[pos] if self.data is not None else None
+        else:
+            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+
+    def __setattr__(self, name, value):
+        if self._components is not None and name in self._components:
+            pos = self._components[name]
+            data = list(self.data)
+            data[pos] = value
+            self._data = tuple(data)
+        else:
+            return super().__setattr__(name, value)
 
     def __getitem__(self, item):
         if isinstance(self.data, tuple):
@@ -136,7 +150,7 @@ class Batch(BaseBatch):
             all_args = args
         else:
             src_attr = getattr(self, src)
-            all_args = tuple(src_attr[pos], *args)
+            all_args = tuple([src_attr[pos], *args])
         dst_attr[pos] = func(*all_args, **kwargs)
 
     @action
@@ -146,7 +160,7 @@ class Batch(BaseBatch):
             all_args = args
         else:
             src_attr = getattr(self, src)
-            all_args = tuple(src_attr, *args)
+            all_args = tuple([src_attr, *args])
         setattr(self, dst, func(*all_args, **kwargs))
         return self
 
