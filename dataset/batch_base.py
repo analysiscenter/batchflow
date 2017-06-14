@@ -4,8 +4,8 @@ from .decorators import action
 
 
 class BaseBatch:
-    """ Basr class for batches
-    Required to solve circulal module dependencies
+    """ Base class for batches
+    Required to solve circular module dependencies
     """
     def __init__(self, index):
         self.index = index

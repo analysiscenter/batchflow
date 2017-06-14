@@ -61,6 +61,18 @@ class Batch(BaseBatch):
             self.load(self._preloaded)
         return self._data
 
+    def _get_data(self, i, value):
+        """ Return i-th component of a data tuple
+        Do not call if self.data is not a tuple """
+        return self.data[i] if self.data is not None else None
+
+    def _set_data(self, i, value):
+        """ Put a new value into i-th component of a data tuple
+        Do not call if self._data is not a tuple """
+        data = list(self.data)
+        data[i] = value
+        self._data = tuple(data)
+
     def __getitem__(self, item):
         if isinstance(self.data, tuple):
             res = tuple(data_item[item] if data_item is not None else None for data_item in self.data)
@@ -100,11 +112,42 @@ class Batch(BaseBatch):
     @action
     def load(self, src, fmt=None):
         """ Load data from a file or another data source """
+        if fmt is None:
+            if isinstance(src, tuple):
+                self._data = tuple(src[i][self.indices] for i in range(len(src)))
+            else:
+                self._data = src[self.indices]
+        else:
+            raise ValueError("Unsupported format:", fmt)
         return self
 
     @action
     def dump(self, dst, fmt=None):
         """ Save batch data to disk """
+        return self
+
+    @action
+    @inbatch_parallel(init='indices')
+    def apply_transform(self, ix, src, dst, func, *args, **kwargs):
+        """ Apply a function to each item of the batch """
+        dst_attr = getattr(self, dst)
+        pos = self.index.get_pos(ix)
+        if src is None:
+            all_args = args
+        else:
+            src_attr = getattr(self, src)
+            all_args = tuple(src_attr[pos], *args)
+        dst_attr[pos] = func(*all_args, **kwargs)
+
+    @action
+    def apply_transform_all(self, src, dst, func, *args, **kwargs):
+        """ Apply a function all item of the batch """
+        if src is None:
+            all_args = args
+        else:
+            src_attr = getattr(self, src)
+            all_args = tuple(src_attr, *args)
+        setattr(self, dst, func(*all_args, **kwargs))
         return self
 
 

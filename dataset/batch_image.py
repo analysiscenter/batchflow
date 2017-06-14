@@ -38,38 +38,32 @@ class ImagesBatch(Batch):
     @property
     def images(self):
         """ Images """
-        return self.data[0] if self.data is not None else None
+        return self._get_data(0)
 
     @images.setter
     def images(self, value):
         """ Set images """
-        data = list(self.data)
-        data[0] = value
-        self._data = data
+        self._set_data(0, value)
 
     @property
     def labels(self):
         """ Labels for images """
-        return self.data[1] if self.data is not None else None
+        return self._get_data(1)
 
     @labels.setter
     def labels(self, value):
         """ Set labels """
-        data = list(self.data)
-        data[1] = value
-        self._data = data
+        self._set_data(1, value)
 
     @property
     def masks(self):
         """ Masks for images """
-        return self.data[2] if self.data is not None else None
+        return self._get_data(2)
 
     @masks.setter
     def masks(self, value):
         """ Set masks """
-        data = list(self.data)
-        data[3] = value
-        self._data = data
+        self._set_data(2, value)
 
     def assemble(self, all_res, *args, **kwargs):
         """ Assemble the batch after a parallel action """
@@ -131,29 +125,6 @@ class ImagesBatch(Batch):
 
     @action
     def dump(self, dst, fmt=None):
-        """ Saves data to a file or array """
+        """ Saves data to a file or a memory object """
         _ = dst, fmt
         return self
-
-    @action
-    @inbatch_parallel(init='indices')
-    def apply_transform(self, ix, src, dst, func, *args, **kwargs):
-        """ Apply a function to each item of the batch """
-        dst_attr = getattr(self, dst)
-        pos = self.index.get_pos(ix)
-        if src is None:
-            all_args = args
-        else:
-            src_attr = getattr(self, src)
-            all_args = tuple(src_attr[pos], *args)
-        dst_attr[pos] = func(*all_args, **kwargs)
-
-    @action
-    def apply_transform_all(self, src, dst, func, *args, **kwargs):
-        """ Apply a function all item of the batch """
-        if src is None:
-            all_args = args
-        else:
-            src_attr = getattr(self, src)
-            all_args = tuple(src_attr, *args)
-        setattr(self, dst, func(*all_args, **kwargs))
