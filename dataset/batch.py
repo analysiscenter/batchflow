@@ -58,7 +58,7 @@ class Batch(BaseBatch):
         """ Return batch data """
         if self._data is None and self._preloaded is not None:
             self.load(self._preloaded)
-        return self._data if self._data is not None else tuple(None for _ in self.components)
+        return self._data if self._data is not None else tuple(None for _ in self.components) # pylint:disable=not-an-iterable
 
     @property
     def components(self):
@@ -68,7 +68,8 @@ class Batch(BaseBatch):
     @property
     def _components(self):
         """ Set names for data components """
-        return dict(zip(comps, np.arange(len(comps)))) if comps is not None else None  # pylint:disable=not-an-iterable
+        comps = self.components
+        return dict(zip(comps, np.arange(len(comps)))) if comps is not None else None
 
     def __getattr__(self, name):
         if self._components is not None and name in self._components:
