@@ -139,13 +139,13 @@ class ImagesBatch(Batch):
     @inbatch_parallel(init='indices')
     def apply_transform(self, ix, src, dst, func, *args, **kwargs):
         """ Apply a function to each item of the batch """
+        dst_attr = getattr(self, dst)
+        pos = self.index.get_pos(ix)
         if src is None:
             all_args = args
         else:
             src_attr = getattr(self, src)
             all_args = tuple(src_attr[pos], *args)
-        dst_attr = getattr(self, dst)
-        pos = self.index.get_pos(ix)
         dst_attr[pos] = func(*all_args, **kwargs)
 
     @action
@@ -156,5 +156,4 @@ class ImagesBatch(Batch):
         else:
             src_attr = getattr(self, src)
             all_args = tuple(src_attr, *args)
-        dst_attr = getattr(self, dst)
-        dst_attr = func(*all_args, **kwargs)
+        setattr(self, dst_attr, func(*all_args, **kwargs))

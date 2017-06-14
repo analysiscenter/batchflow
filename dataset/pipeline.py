@@ -26,8 +26,8 @@ class Pipeline:
 
 
     @staticmethod
-    def _is_batch_method(name, cls=BaseBatch):
-        #cls = BaseBatch if cls is None else cls
+    def _is_batch_method(name, cls=None):
+        cls = BaseBatch if cls is None else cls
         if hasattr(cls, name) and callable(getattr(cls, name)):
             return True
         else:

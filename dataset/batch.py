@@ -30,8 +30,7 @@ from .batch_base import BaseBatch
 class Batch(BaseBatch):
     """ The core Batch class """
     def __init__(self, index, preloaded=None):
-        self.index = index
-        self._data = None
+        super().__init__(index)
         self._preloaded = preloaded
 
     @classmethod
