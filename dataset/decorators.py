@@ -224,7 +224,9 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
         def _call_post_fn(self, post_fn, futures, args, kwargs):
             if post_fn is None:
-                # TODO: process errors in tasks
+                if any_action_failed(all_res):
+                    all_errors = [error for error in all_res if isinstance(error, Exception)]
+                    print(all_errors)
                 return self
             else:
                 all_results = []
