@@ -23,6 +23,7 @@ except ImportError:
 
 from .dsindex import DatasetIndex
 from .decorators import action
+from .dataset import Dataset
 
 
 class Batch:
@@ -37,6 +38,9 @@ class Batch:
         """ Create batch from given dataset """
         # this is equiv to self.data = data[:]
         return cls(np.arange(len(data)), preloaded=data)
+
+    def as_dataset(self, dataset_class=Dataset):
+        return dataset_class(self.index, preloaded=self.data)
 
     @property
     def indices(self):
