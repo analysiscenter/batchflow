@@ -122,6 +122,14 @@ class Batch(BaseBatch):
         else:
             super().__setattr__(name, value)
 
+    def put_into_data(self, data, items):
+        """ Loads data into _data property """
+        if self.components is None:
+            _src = data
+        else:
+            _src = data if isinstance(src, tuple) else tuple([data])
+        self._data = self._getitem(items, _src, True)
+
     def get_item(self, item, data, many):
         """ Return one data item from a data source """
         _ = many
@@ -181,11 +189,7 @@ class Batch(BaseBatch):
     def load(self, src, fmt=None):
         """ Load data from a source """
         if fmt is None:
-            if self.components is None:
-                self._data = src[self.indices]
-            else:
-                _src = src if isinstance(src, tuple) else tuple([src])
-                self._data = tuple(self._getitem(self.indices, _src, True))
+            self.put_into_data(_src, self.indices, _src)
         else:
             raise ValueError("Unknown format:", fmt)
         return self
