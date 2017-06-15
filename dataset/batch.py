@@ -115,7 +115,7 @@ class Batch(BaseBatch):
     def __setattr__(self, name, value):
         if self._components is not None and name in self._components:
             arg = {name: value}
-            data = self.data._replace(**arg)
+            data = self.data._replace(**arg)  # pylint:disable=no-member
             self._data = tuple(data)
         else:
             super().__setattr__(name, value)
@@ -303,9 +303,9 @@ class DataFrameBatch(Batch):
         if fmt == 'feather':
             feather.write_dataframe(self.data, fullname, *args, **kwargs)
         elif fmt == 'hdf5':
-            self.data.to_hdf(fullname, *args, **kwargs)
+            self.data.to_hdf(fullname, *args, **kwargs)   # pylint:disable=no-member
         elif fmt == 'csv':
-            self.data.to_csv(fullname, *args, **kwargs)
+            self.data.to_csv(fullname, *args, **kwargs)   # pylint:disable=no-member
         else:
             raise ValueError('Unknown format %s' % fmt)
         return self
