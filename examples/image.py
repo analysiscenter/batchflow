@@ -61,15 +61,19 @@ class MyImages(ImagesBatch):
 
     @action
     def print(self):
-        print("shape:", self.images.shape)
-        print(np.all(self.images[0] == self[self.indices[0]].images))
-        print(np.all(self.data.images[0] == self[self.indices[0]].images))
-        print(self.images[0])
+        print("data len", len(self.data))
+        print("images", not self.images is None)
+        print("masks", not self.masks is None)
+        print("shape:", "No" if self.images is None else self.images.shape)
+        #print(np.all(self.images[0] == self[self.indices[0]].images))
+        #print(np.all(self.data.images[0] == self[self.indices[0]].images))
+        #print(self.images[0])
+        return self
 
 
 if __name__ == "__main__":
     # number of items in the dataset
-    K = 1000000
+    K = 10
     S = 12
 
     # Fill-in dataset with sample data
@@ -92,5 +96,5 @@ if __name__ == "__main__":
 
     print("Start...")
     t = time()
-    res.run(100, n_epochs=1, prefetch=60)
+    res.run(5, n_epochs=1, prefetch=0)
     print("End", time() - t)

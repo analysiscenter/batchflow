@@ -78,7 +78,8 @@ class Batch(BaseBatch):
             if self._data is None:
                 return self._empty_data
             elif isinstance(self._data, tuple):
-                return self._item_class(*self._data)
+                # return self._item_class(*self._data)
+                return self._data
             else:
                 raise TypeError("_data should be a tuple when components are defined")
 
@@ -95,7 +96,7 @@ class Batch(BaseBatch):
 
     @property
     def _item_class(self):
-        if self.components is not None:
+        if self._components is not None:
             item_class = namedtuple(self.__class__.__name__ + 'Item', self.components)
             item_class.__new__.__defaults__ = (None,) * len(self.components)
             return item_class
@@ -104,33 +105,36 @@ class Batch(BaseBatch):
 
     @property
     def _empty_data(self):
-        if self.components is None:
-            return None
-        else:
-            return self._item_class()
+        return self._item_class() if self._components is not None else None
 
     def __getattr__(self, name):
         if self._components is not None and name in self._components:
-            return getattr(self.data, name)
+            pos = self._components[name]
+            return self.data[pos]
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
         if self._components is not None and name in self._components:
             arg = {name: value}
-            data = self.data._replace(**arg)  # pylint:disable=no-member
+            data = self._item_class(*self.data)._replace(**arg)  # pylint:disable=no-member
             self._data = tuple(data)
         else:
             super().__setattr__(name, value)
 
-    def _getitem(self, item, data=None):
+    def get_item(self, item, data, many):
+        """ Return one data item from a data source """
+        _ = many
+        return tuple(data_item[item] if data_item is not None else None for data_item in data)
+
+    def _getitem(self, item, data=None, many=False):
         if data is None:
             data = self.data
             pos = self.index.get_pos(item)
         else:
             pos = item
         if isinstance(data, tuple):
-            res = tuple(data_item[pos] if data_item is not None else None for data_item in self.data)
+            res = self.get_item(pos, data, many)
             if self.components is not None:
                 res = self._item_class(*res)
         else:
@@ -143,6 +147,10 @@ class Batch(BaseBatch):
     def __iter__(self):
         for item in self.indices:
             yield self[item]
+
+    def items(self):
+        """ Init function for batch items parallelism """
+        return [[self[ix]] for ix in self.indices]
 
     def run_once(self, *args, **kwargs):
         """ Init function for no parallelism
@@ -177,7 +185,9 @@ class Batch(BaseBatch):
                 self._data = src[self.indices]
             else:
                 _src = src if isinstance(src, tuple) else tuple([src])
-                self._data = tuple(self._getitem(self.indices, _src))
+                self._data = tuple(self._getitem(self.indices, _src, True))
+        else:
+            raise ValueError("Unknown format:", fmt)
         return self
 
     @action

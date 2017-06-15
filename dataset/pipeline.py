@@ -285,6 +285,8 @@ class Pipeline:
                                                        drop_last, prefetch, *args, **kwargs)
             batch_res = next(self._batch_generator)
         else:
+            # target is not used here, but people tend to forget removing it when set prefetch to 0
+            target = kwargs.pop('target', 'threads')
             batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
             batch_res = self.create_batch(batch_index, *args, **kwargs)
         return batch_res
