@@ -1,6 +1,7 @@
 """ Contains basic Batch classes """
 
 import os
+from collections import namedtuple
 
 try:
     import blosc
@@ -34,12 +35,25 @@ class Batch(BaseBatch):
 
     @classmethod
     def from_data(cls, data):
-        """ Create batch from given dataset """
-        # this is equiv to self.data = data[:]
+        """ Create batch from a given dataset """
+        # this is roughly equivalent to self.data = data
         return cls(np.arange(len(data)), preloaded=data)
 
-    def as_dataset(self, dataset_class=Dataset):
-        """ Makes a new dataset from batch data """
+    def as_dataset(self, dataset=None):
+        """ Makes a new dataset from batch data
+        Args:
+            dataset: could be a dataset or a Dataset class
+        Output:
+            an instance of a class specified by `dataset` arg, preloaded with this batch data
+        """
+        if dataset is None:
+            dataset_class = Dataset
+        elif isinstance(dataset, Dataset):
+            dataset_class = dataset.__class__
+        elif isinstance(dataset, type):
+            dataset_class = dataset
+        else:
+            raise TypeError("dataset should be an instance of some Dataset class or some Dataset class or None")
         return dataset_class(self.index, preloaded=self.data)
 
     @property
@@ -58,7 +72,15 @@ class Batch(BaseBatch):
         """ Return batch data """
         if self._data is None and self._preloaded is not None:
             self.load(self._preloaded)
-        return self._data if self._data is not None else tuple(None for _ in self.components) # pylint:disable=not-an-iterable
+        if self.components is None:
+            return self._data
+        else:
+            if self._data is None:
+                return self._empty_data
+            elif isinstance(self._data, tuple):
+                return self._item_class(*self._data)
+            else:
+                raise TypeError("_data should be a tuple when components are defined")
 
     @property
     def components(self):
@@ -67,29 +89,43 @@ class Batch(BaseBatch):
 
     @property
     def _components(self):
-        """ Set names for data components """
+        """ Set a data components dictionary (name -> pos) """
         comps = self.components
-        return dict(zip(comps, np.arange(len(comps)))) if comps is not None else None
+        return dict(zip(comps, range(len(comps)))) if comps is not None else None
+
+    @property
+    def _item_class(self):
+        if self.components is not None:
+            item_class = namedtuple(self.__class__.__name__ + 'Item', self.components)
+            item_class.__new__.__defaults__ = (None,) * len(self.components)
+            return item_class
+        else:
+            raise AttributeError('components are not defined')
+
+    @property
+    def _empty_data(self):
+        return self._item_class()
 
     def __getattr__(self, name):
         if self._components is not None and name in self._components:
-            pos = self._components[name]
-            return self.data[pos] if self.data is not None else None
+            return getattr(self.data, name)
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
         if self._components is not None and name in self._components:
-            pos = self._components[name]
-            data = list(self.data)
-            data[pos] = value
+            arg = {name: value}
+            data = self.data._replace(**arg)
             self._data = tuple(data)
         else:
-            return super().__setattr__(name, value)
+            super().__setattr__(name, value)
 
     def __getitem__(self, item):
         if isinstance(self.data, tuple):
-            res = tuple(data_item[item] if data_item is not None else None for data_item in self.data)
+            pos = self.index.get_pos(item)
+            res = tuple(data_item[pos] if data_item is not None else None for data_item in self.data)
+            if self.components is not None:
+                res = self._item_class(*res)
         else:
             res = self.data[item]
         return res
@@ -125,14 +161,17 @@ class Batch(BaseBatch):
 
     @action
     def load(self, src, fmt=None):
-        """ Load data from a file or another data source """
+        """ Load data from a source """
         if fmt is None:
-            if isinstance(src, tuple):
-                self._data = tuple(src[i][self.indices] for i in range(len(src)))
-            else:
+            if self.components is None:
                 self._data = src[self.indices]
-        else:
-            raise ValueError("Unsupported format:", fmt)
+            else:
+                if isinstance(src, tuple):
+                    _src = src
+                else:
+                    _src = tuple([src])
+                _src = tuple(_src[i] if i < len(_src) else None for i in range(len(self.components)))
+                self._data = tuple(_cmp[self.indices] if _cmp is not None else None for _cmp in _src)
         return self
 
     @action
@@ -142,26 +181,26 @@ class Batch(BaseBatch):
 
     @action
     @inbatch_parallel(init='indices')
-    def apply_transform(self, ix, src, dst, func, *args, **kwargs):
-        """ Apply a function to each item of the batch """
+    def apply_transform(self, ix, dst, src, func, *args, **kwargs):
+        """ Apply a function to each item in the batch """
+        if src is None:
+            _args = args
+        else:
+            src_attr = getattr(self[ix], src)
+            _args = tuple([src_attr, *args])
         dst_attr = getattr(self, dst)
         pos = self.index.get_pos(ix)
-        if src is None:
-            all_args = args
-        else:
-            src_attr = getattr(self, src)
-            all_args = tuple([src_attr[pos], *args])
-        dst_attr[pos] = func(*all_args, **kwargs)
+        dst_attr[pos] = func(*_args, **kwargs)
 
     @action
-    def apply_transform_all(self, src, dst, func, *args, **kwargs):
-        """ Apply a function all item of the batch """
+    def apply_transform_all(self, dst, src, func, *args, **kwargs):
+        """ Apply a function the whole batch at once """
         if src is None:
-            all_args = args
+            _args = args
         else:
             src_attr = getattr(self, src)
-            all_args = tuple([src_attr, *args])
-        setattr(self, dst, func(*all_args, **kwargs))
+            _args = tuple([src_attr, *args])
+        setattr(self, dst, func(*_args, **kwargs))
         return self
 
 

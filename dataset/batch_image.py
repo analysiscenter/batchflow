@@ -1,6 +1,7 @@
 """ Contains Batch classes for images """
 
 import os   # pylint: disable=unused-import
+import traceback
 
 try:
     import blosc   # pylint: disable=unused-import
@@ -38,7 +39,10 @@ class ImagesBatch(Batch):
         """ Assemble the batch after a parallel action """
         _ = args, kwargs
         if any_action_failed(all_res):
-            raise ValueError("Could not assemble the batch", self.get_errors(all_res))
+            all_errors = self.get_errors(all_res)
+            print(all_errors)
+            traceback.print_tb(all_errors[0].__traceback__)
+            raise RuntimeError("Could not assemble the batch")
 
         attr = kwargs.get('attr', 'images')
         if isinstance(all_res[0], PIL.Image.Image):
@@ -51,7 +55,7 @@ class ImagesBatch(Batch):
     def convert_to_PIL(self, attr='images'):   # pylint: disable=invalid-name
         """ Convert batch data to PIL.Image format """
         self._new_attr = list(None for _ in self.indices)
-        self.apply_transform(attr, '_new_attr', PIL.Image.fromarray)
+        self.apply_transform('_new_attr', attr, PIL.Image.fromarray)
         setattr(self, attr, self._new_attr)
         return self
 
@@ -83,14 +87,7 @@ class ImagesBatch(Batch):
     @action
     def load(self, src, fmt=None):
         """ Load data """
-        if fmt is None:
-            if isinstance(src, tuple):
-                self._data = tuple(src[i][self.indices] if len(src) > i else None for i in range(3))
-            else:
-                self._data = src[self.indices], None, None
-        else:
-            raise ValueError("Unsupported format:", fmt)
-        return self
+        return super().load(src, fmt)
 
     @action
     def dump(self, dst, fmt=None):
