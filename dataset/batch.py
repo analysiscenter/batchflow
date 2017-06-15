@@ -1,7 +1,7 @@
 """ Contains basic Batch classes """
 
 import os
-from binascii import hexlify
+from collections import namedtuple
 
 try:
     import blosc
@@ -22,21 +22,39 @@ except ImportError:
     pass
 
 from .dsindex import DatasetIndex
-from .decorators import action
+from .decorators import action, inbatch_parallel
+from .dataset import Dataset
+from .batch_base import BaseBatch
 
 
-class Batch:
-    """ Base Batch class """
+class Batch(BaseBatch):
+    """ The core Batch class """
     def __init__(self, index, preloaded=None):
-        self.index = index
-        self._data = None
+        super().__init__(index)
         self._preloaded = preloaded
 
     @classmethod
     def from_data(cls, data):
-        """ Create batch from given dataset """
-        # this is equiv to self.data = data[:]
+        """ Create batch from a given dataset """
+        # this is roughly equivalent to self.data = data
         return cls(np.arange(len(data)), preloaded=data)
+
+    def as_dataset(self, dataset=None):
+        """ Makes a new dataset from batch data
+        Args:
+            dataset: could be a dataset or a Dataset class
+        Output:
+            an instance of a class specified by `dataset` arg, preloaded with this batch data
+        """
+        if dataset is None:
+            dataset_class = Dataset
+        elif isinstance(dataset, Dataset):
+            dataset_class = dataset.__class__
+        elif isinstance(dataset, type):
+            dataset_class = dataset
+        else:
+            raise TypeError("dataset should be an instance of some Dataset class or some Dataset class or None")
+        return dataset_class(self.index, preloaded=self.data)
 
     @property
     def indices(self):
@@ -54,18 +72,93 @@ class Batch:
         """ Return batch data """
         if self._data is None and self._preloaded is not None:
             self.load(self._preloaded)
-        return self._data
+        if self.components is None:
+            return self._data
+        else:
+            if self._data is None:
+                return self._empty_data
+            elif isinstance(self._data, tuple):
+                # return self._item_class(*self._data)
+                return self._data
+            else:
+                raise TypeError("_data should be a tuple when components are defined")
+
+    @property
+    def components(self):
+        """ Return data components names """
+        return None
+
+    @property
+    def _components(self):
+        """ Set a data components dictionary (name -> pos) """
+        comps = self.components
+        return dict(zip(comps, range(len(comps)))) if comps is not None else None
+
+    @property
+    def _item_class(self):
+        if self._components is not None:
+            item_class = namedtuple(self.__class__.__name__ + 'Item', self.components)
+            item_class.__new__.__defaults__ = (None,) * len(self.components)
+            return item_class
+        else:
+            raise AttributeError('components are not defined')
+
+    @property
+    def _empty_data(self):
+        return self._item_class() if self._components is not None else None
+
+    def __getattr__(self, name):
+        if self._components is not None and name in self._components:
+            pos = self._components[name]
+            return self.data[pos]
+        else:
+            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+
+    def __setattr__(self, name, value):
+        if self._components is not None and name in self._components:
+            arg = {name: value}
+            data = self._item_class(*self.data)._replace(**arg)  # pylint:disable=no-member
+            self._data = tuple(data)
+        else:
+            super().__setattr__(name, value)
+
+    def put_into_data(self, data, items):
+        """ Loads data into _data property """
+        if self.components is None:
+            _src = data
+        else:
+            _src = data if isinstance(data, tuple) else tuple([data])
+        self._data = self._getitem(items, _src, True)
+
+    def get_item(self, item, data, many):
+        """ Return one data item from a data source """
+        _ = many
+        return tuple(data_item[item] if data_item is not None else None for data_item in data)
+
+    def _getitem(self, item, data=None, many=False):
+        if data is None:
+            data = self.data
+            pos = self.index.get_pos(item)
+        else:
+            pos = item
+        if isinstance(data, tuple):
+            res = self.get_item(pos, data, many)
+            if self.components is not None:
+                res = self._item_class(*res)
+        else:
+            res = data[item]
+        return res
 
     def __getitem__(self, item):
-        if isinstance(self.data, tuple):
-            res = tuple(data_item[item] if data_item is not None else None for data_item in self.data)
-        else:
-            res = self.data[item]
-        return res
+        return self._getitem(item)
 
     def __iter__(self):
         for item in self.indices:
             yield self[item]
+
+    def items(self):
+        """ Init function for batch items parallelism """
+        return [[self[ix]] for ix in self.indices]
 
     def run_once(self, *args, **kwargs):
         """ Init function for no parallelism
@@ -73,14 +166,6 @@ class Batch:
         """
         _ = self.data, args, kwargs
         return [[]]
-
-    @staticmethod
-    def make_filename():
-        """ Generate unique filename for the batch """
-        random_data = np.random.uniform(0, 1, size=10) * 123456789
-        # probability of collision is around 2e-10.
-        filename = hexlify(random_data.data)[:8]
-        return filename.decode("utf-8")
 
     def infer_dtype(self, data=None):
         """ Detect dtype of batch data """
@@ -95,20 +180,48 @@ class Batch:
         else:
             return self.infer_dtype(self.data)
 
+    def get_errors(self, all_res):
+        """ Return a list of errors from a parallel action """
+        all_errors = [error for error in all_res if isinstance(error, Exception)]
+        return all_errors if len(all_errors) > 0 else None
+
     @action
     def load(self, src, fmt=None):
-        """ Load data from a file or another data source """
-        raise NotImplementedError()
+        """ Load data from a source """
+        if fmt is None:
+            self.put_into_data(src, self.indices)
+        else:
+            raise ValueError("Unknown format:", fmt)
+        return self
 
     @action
     def dump(self, dst, fmt=None):
         """ Save batch data to disk """
-        raise NotImplementedError()
+        return self
 
     @action
-    def save(self, *args, **kwargs):
-        """ Save batch data to a file (an alias for dump method)"""
-        return self.dump(*args, **kwargs)
+    @inbatch_parallel(init='indices')
+    def apply_transform(self, ix, dst, src, func, *args, **kwargs):
+        """ Apply a function to each item in the batch """
+        if src is None:
+            _args = args
+        else:
+            src_attr = getattr(self[ix], src)
+            _args = tuple([src_attr, *args])
+        dst_attr = getattr(self, dst)
+        pos = self.index.get_pos(ix)
+        dst_attr[pos] = func(*_args, **kwargs)
+
+    @action
+    def apply_transform_all(self, dst, src, func, *args, **kwargs):
+        """ Apply a function the whole batch at once """
+        if src is None:
+            _args = args
+        else:
+            src_attr = getattr(self, src)
+            _args = tuple([src_attr, *args])
+        setattr(self, dst, func(*_args, **kwargs))
+        return self
 
 
 class ArrayBatch(Batch):
@@ -210,45 +323,9 @@ class DataFrameBatch(Batch):
         if fmt == 'feather':
             feather.write_dataframe(self.data, fullname, *args, **kwargs)
         elif fmt == 'hdf5':
-            self.data.to_hdf(fullname, *args, **kwargs)
+            self.data.to_hdf(fullname, *args, **kwargs)   # pylint:disable=no-member
         elif fmt == 'csv':
-            self.data.to_csv(fullname, *args, **kwargs)
+            self.data.to_csv(fullname, *args, **kwargs)   # pylint:disable=no-member
         else:
             raise ValueError('Unknown format %s' % fmt)
-        return self
-
-
-class ImagesBatch(Batch):
-    """ Batch class for 2D images """
-    @property
-    def images(self):
-        """ Images """
-        return self.data[0] if self.data is not None else None
-
-    @property
-    def labels(self):
-        """ Labels for images """
-        return self.data[1] if self.data is not None else None
-
-    @property
-    def masks(self):
-        """ Masks for images """
-        return self.data[2] if self.data is not None else None
-
-    @action
-    def load(self, src, fmt=None):
-        """ Load data """
-        if fmt is None:
-            if isinstance(src, tuple):
-                self._data = tuple(src[i][self.indices] if len(src) > i else None for i in range(3))
-            else:
-                self._data = src[self.indices], None, None
-        else:
-            raise ValueError("Unsupported format:", fmt)
-        return self
-
-    @action
-    def dump(self, dst, fmt=None):
-        """ Saves data to a file or array """
-        _ = dst, fmt
         return self

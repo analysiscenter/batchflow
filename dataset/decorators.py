@@ -1,6 +1,7 @@
 """ Pipeline decorators """
 import os
 import inspect
+import traceback
 import threading
 import concurrent.futures as cf
 import asyncio
@@ -223,18 +224,22 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 return init_fn
 
         def _call_post_fn(self, post_fn, futures, args, kwargs):
+            all_results = []
+            for future in futures:
+                try:
+                    result = future.result()
+                except Exception as exce:  # pylint: disable=broad-except
+                    result = exce
+                finally:
+                    all_results += [result]
+
             if post_fn is None:
-                # TODO: process errors in tasks
+                if any_action_failed(all_results):
+                    all_errors = [error for error in all_results if isinstance(error, Exception)]
+                    print(all_errors)
+                    traceback.print_tb(all_errors[0].__traceback__)
                 return self
             else:
-                all_results = []
-                for future in futures:
-                    try:
-                        result = future.result()
-                    except Exception as exce:  # pylint: disable=broad-except
-                        result = exce
-                    finally:
-                        all_results += [result]
                 return post_fn(all_results, *args, **kwargs)
 
         def _make_args(init_args, args, kwargs):
@@ -258,7 +263,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.pop('n_workers', _cpu_count())
+            n_workers = kwargs.pop('n_workers', _cpu_count() * 4)
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 if nogil:
@@ -281,7 +286,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.pop('n_workers', _cpu_count())
+            n_workers = kwargs.pop('n_workers', _cpu_count() * 4)
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)

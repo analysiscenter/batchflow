@@ -9,7 +9,7 @@ try:
     import tensorflow as tf
 except ImportError:
     pass
-from .batch import Batch
+from .batch_base import BaseBatch
 
 
 class Pipeline:
@@ -27,7 +27,7 @@ class Pipeline:
 
     @staticmethod
     def _is_batch_method(name, cls=None):
-        cls = Batch if cls is None else cls
+        cls = BaseBatch if cls is None else cls
         if hasattr(cls, name) and callable(getattr(cls, name)):
             return True
         else:
@@ -285,6 +285,8 @@ class Pipeline:
                                                        drop_last, prefetch, *args, **kwargs)
             batch_res = next(self._batch_generator)
         else:
+            # target is not used here, but people tend to forget removing it when set prefetch to 0
+            _ = kwargs.pop('target', 'threads')
             batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
             batch_res = self.create_batch(batch_index, *args, **kwargs)
         return batch_res
