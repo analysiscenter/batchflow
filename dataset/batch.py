@@ -104,7 +104,10 @@ class Batch(BaseBatch):
 
     @property
     def _empty_data(self):
-        return self._item_class()
+        if self.components is None:
+            return None
+        else:
+            return self._item_class()
 
     def __getattr__(self, name):
         if self._components is not None and name in self._components:
@@ -120,15 +123,22 @@ class Batch(BaseBatch):
         else:
             super().__setattr__(name, value)
 
-    def __getitem__(self, item):
-        if isinstance(self.data, tuple):
+    def _getitem(self, item, data=None):
+        if data is None:
+            data = self.data
             pos = self.index.get_pos(item)
+        else:
+            pos = item
+        if isinstance(data, tuple):
             res = tuple(data_item[pos] if data_item is not None else None for data_item in self.data)
             if self.components is not None:
                 res = self._item_class(*res)
         else:
-            res = self.data[item]
+            res = data[item]
         return res
+
+    def __getitem__(self, item):
+        return self._getitem(item)
 
     def __iter__(self):
         for item in self.indices:
@@ -166,12 +176,8 @@ class Batch(BaseBatch):
             if self.components is None:
                 self._data = src[self.indices]
             else:
-                if isinstance(src, tuple):
-                    _src = src
-                else:
-                    _src = tuple([src])
-                _src = tuple(_src[i] if i < len(_src) else None for i in range(len(self.components)))
-                self._data = tuple(_cmp[self.indices] if _cmp is not None else None for _cmp in _src)
+                _src = src if isinstance(src, tuple) else tuple([src])
+                self._data = tuple(self._getitem(self.indices, _src))
         return self
 
     @action
