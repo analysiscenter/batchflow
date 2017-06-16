@@ -32,6 +32,7 @@ class Batch(BaseBatch):
     def __init__(self, index, preloaded=None):
         super().__init__(index)
         self._preloaded = preloaded
+        self._data_named = None
 
     @classmethod
     def from_data(cls, data):
@@ -73,7 +74,8 @@ class Batch(BaseBatch):
         if self._data is None and self._preloaded is not None:
             # load data the first time it's requested
             self.load(self._preloaded)
-        return self._data if self._data is not None else self._empty_data
+        res = self._data if self._components is None else self._data_named
+        return res if res is not None else self._empty_data
 
     @property
     def components(self):
@@ -149,10 +151,19 @@ class Batch(BaseBatch):
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
-        if self._components is not None and name in self._components:
-            arg = {name: value}
-            data = self._item_class(*self.data)._replace(**arg)  # pylint:disable=no-member
-            self._data = tuple(data)
+        if self._components is not None:
+            if name == "_data":
+                super().__setattr__(name, value)
+                if self._data is None:
+                    self._data_named = self._item_class()
+                else:
+                    self._data_named = self._item_class(*self._data)
+            elif name in self._components:
+                arg = {name: value}
+                data = self._item_class(*self.data)._replace(**arg)  # pylint:disable=no-member
+                self._data = tuple(data)
+            else:
+                super().__setattr__(name, value)
         else:
             super().__setattr__(name, value)
 
