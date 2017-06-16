@@ -32,6 +32,7 @@ class Batch(BaseBatch):
     def __init__(self, index, preloaded=None):
         super().__init__(index)
         self._preloaded = preloaded
+        self._data_named = None
 
     @classmethod
     def from_data(cls, data):
@@ -71,17 +72,10 @@ class Batch(BaseBatch):
     def data(self):
         """ Return batch data """
         if self._data is None and self._preloaded is not None:
+            # load data the first time it's requested
             self.load(self._preloaded)
-        if self.components is None:
-            return self._data
-        else:
-            if self._data is None:
-                return self._empty_data
-            elif isinstance(self._data, tuple):
-                # return self._item_class(*self._data)
-                return self._data
-            else:
-                raise TypeError("_data should be a tuple when components are defined")
+        res = self._data if self._components is None else self._data_named
+        return res if res is not None else self._empty_data
 
     @property
     def components(self):
@@ -90,9 +84,51 @@ class Batch(BaseBatch):
 
     @property
     def _components(self):
-        """ Set a data components dictionary (name -> pos) """
+        """ Return data components names """
         comps = self.components
         return dict(zip(comps, range(len(comps)))) if comps is not None else None
+
+    def get_pos(self, data, component, index):
+        """ Return a position in data for a given index
+
+        Parameters:
+            data: if None, get_pos should return a position in self.data
+            components: could be one of [None, int or string]
+                None: data has no components (e.g. just an array or pandas.DataFrame)
+                int: a position of a data component, when components names are not defined
+                str: a name of a data component
+            index: an index
+        Returns:
+            int - a position in a batch data where an item with a given index is stored
+        It is used to read / write data in a given component:
+            batch_data = data.component[pos]
+            data.component[pos] = new_data
+
+        Examples:
+            if self.data holds a numpy array, then get_pos(None, None, index) should
+            just return self.index.get_pos(index)
+            if self.data.images contains BATCH_SIZE images as a numpy array,
+                then get_pos(None, 'images', index) should return self.index.get_pos(index)
+            if self.data.labels is a dict {index: label}, then get_pos(None, 'labels', index) should return index.
+
+            if data is not None, then you need to know in advance how to get a position for a given index.
+            For instance, data is a large numpy array, a batch is a subset of this array and
+            batch.index holds row numbers from a large arrays.
+            Thus, get_pos(data, None, index) should just return index.
+
+            A more complicated example of data:
+            - batch represent small crops of large images
+            - self.data.source holds a few large images (e.g just 5 items)
+            - self.data.coords holds coordinates for crops (e.g. it contains 100 items)
+            - self.data.image_no holds an array of image numbers for each crop (so it also contains 100 items)
+            then get_pos(None, 'source', index) should return self.data.image_no[self.index.get_pos(index)].
+            Whilst, get_pos(data, 'source', index) should return data.image_no[index].
+        """
+        _ = component
+        if data is None:
+            return self.index.get_pos(index)
+        else:
+            return index
 
     @property
     def _item_class(self):
@@ -105,7 +141,7 @@ class Batch(BaseBatch):
 
     @property
     def _empty_data(self):
-        return self._item_class() if self._components is not None else None
+        return None if self._components is None else self._item_class()
 
     def __getattr__(self, name):
         if self._components is not None and name in self._components:
@@ -115,47 +151,55 @@ class Batch(BaseBatch):
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
-        if self._components is not None and name in self._components:
-            arg = {name: value}
-            data = self._item_class(*self.data)._replace(**arg)  # pylint:disable=no-member
-            self._data = tuple(data)
+        if self._components is not None:
+            if name == "_data":
+                super().__setattr__(name, value)
+                if self._data is None:
+                    self._data_named = self._item_class()
+                else:
+                    self._data_named = self._item_class(*self._data)
+            elif name in self._components:
+                arg = {name: value}
+                data = self._item_class(*self.data)._replace(**arg)  # pylint:disable=no-member
+                self._data = tuple(data)
+            else:
+                super().__setattr__(name, value)
         else:
             super().__setattr__(name, value)
 
     def put_into_data(self, data, items):
         """ Loads data into _data property """
-        if self.components is None:
+        if self._components is None:
             _src = data
         else:
             _src = data if isinstance(data, tuple) else tuple([data])
-        self._data = self._getitem(items, _src, True)
+        self._data = self.get_items(items, _src)
 
-    def get_item(self, item, data, many):
-        """ Return one data item from a data source """
-        _ = many
-        return tuple(data_item[item] if data_item is not None else None for data_item in data)
-
-    def _getitem(self, item, data=None, many=False):
+    def get_items(self, index, data=None):
+        """ Return one or several data items from a data source """
         if data is None:
-            data = self.data
-            pos = self.index.get_pos(item)
+            _data = self.data
         else:
-            pos = item
-        if isinstance(data, tuple):
-            res = self.get_item(pos, data, many)
+            _data = data if self.components is None else self._item_class(*data)
+
+        if isinstance(_data, tuple):
+            comps = self.components if self.components is not None else range(len(_data))
+            res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
+                        for comp, data_item in zip(comps, _data))
             if self.components is not None:
                 res = self._item_class(*res)
         else:
-            res = data[item]
+            res = _data[self.get_pos(data, None, index)]
         return res
 
     def __getitem__(self, item):
-        return self._getitem(item)
+        return self.get_items(item)
 
     def __iter__(self):
         for item in self.indices:
             yield self[item]
 
+    @property
     def items(self):
         """ Init function for batch items parallelism """
         return [[self[ix]] for ix in self.indices]
@@ -208,8 +252,9 @@ class Batch(BaseBatch):
         else:
             src_attr = getattr(self[ix], src)
             _args = tuple([src_attr, *args])
+
         dst_attr = getattr(self, dst)
-        pos = self.index.get_pos(ix)
+        pos = self.get_pos(None, dst, ix)
         dst_attr[pos] = func(*_args, **kwargs)
 
     @action

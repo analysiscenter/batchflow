@@ -7,7 +7,7 @@ import pandas as pd
 from numba import njit
 from time import time
 
-sys.path.append("..")
+sys.path.append("../..")
 from dataset import * # pylint: disable=wrong-import-
 
 @njit(nogil=True)

@@ -5,7 +5,7 @@ from time import time
 import numpy as np
 import tensorflow as tf
 
-sys.path.append('..')
+sys.path.append("../..")
 from dataset import *
 
 

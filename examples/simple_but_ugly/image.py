@@ -7,7 +7,7 @@ import PIL.Image
 import scipy.ndimage
 from time import time
 
-sys.path.append("..")
+sys.path.append("../..")
 from dataset import DatasetIndex, Dataset, ImagesBatch, action, inbatch_parallel, any_action_failed
 
 @njit(nogil=True)

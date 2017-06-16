@@ -2,7 +2,9 @@
 
 import os
 import glob
+from collections import Iterable
 import numpy as np
+
 from .base import Baseset
 
 
@@ -51,7 +53,14 @@ class DatasetIndex(Baseset):
 
     def get_pos(self, index):
         """ Return position of an item in the index """
-        return self._pos[index]
+        if isinstance(index, slice):
+            start = self._pos[index.start] if index.start is not None else None
+            stop = self._pos[index.stop] if index.stop is not None else None
+            return slice(start, stop, index.step)
+        elif isinstance(index, Iterable):
+            return np.asarray([self._pos[ix] for ix in index])
+        else:
+            return self._pos[index]
 
     def subset_by_pos(self, pos):
         """ Return subset of index by given positions in the index """
