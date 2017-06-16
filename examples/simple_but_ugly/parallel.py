@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-sys.path.append("..")
+sys.path.append("../..")
 from dataset import * # pylint: disable=wrong-import-
 
 

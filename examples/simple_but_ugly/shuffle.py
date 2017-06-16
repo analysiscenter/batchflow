@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-sys.path.append("..")
+sys.path.append("../..")
 from dataset import * # pylint: disable=wrong-import-
 
 def my_shuffle(indices):

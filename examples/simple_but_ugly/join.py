@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-sys.path.append("..")
+sys.path.append("../..")
 from dataset import *
 
 # Example of custome Batch class which defines some actions

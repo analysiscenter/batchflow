@@ -5,7 +5,7 @@ import numpy as np
 from numba import njit
 from time import time
 
-sys.path.append("..")
+sys.path.append("../..")
 from dataset import DatasetIndex, Dataset, Batch, action, inbatch_parallel, any_action_failed
 
 

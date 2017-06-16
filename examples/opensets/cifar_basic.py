@@ -6,7 +6,7 @@ import tensorflow as tf
 from time import time
 import threading
 
-sys.path.append("..")
+sys.path.append("../..")
 from dataset.opensets import CIFAR10
 
 
@@ -16,7 +16,6 @@ if __name__ == "__main__":
 
     cifar = CIFAR10()
     N_CLASSES = len(np.unique(cifar._data[0][1]))
-
 
     input_images = tf.placeholder("uint8", [None, 32, 32, 3])
     input_labels = tf.placeholder("uint8", [None])
@@ -63,4 +62,4 @@ if __name__ == "__main__":
         batch = cifar.test.next_batch(BATCH_SIZE * 10, shuffle=False, n_epochs=None)
         acc = sess.run(accuracy, feed_dict={input_images: batch.images, input_labels: batch.labels})
         print("Batch", i, "accuracy =", acc)
-    print("End validating\n")
+    print("End validating")

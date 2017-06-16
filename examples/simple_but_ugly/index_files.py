@@ -5,7 +5,7 @@ import shutil
 import numpy as np
 import pandas as pd
 
-sys.path.append('..')
+sys.path.append("../..")
 from dataset import * # pylint: disable=wildcard-import
 
 

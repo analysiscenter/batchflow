@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import tensorflow as tf
 
-sys.path.append("..")
+sys.path.append("../..")
 from dataset.opensets import MNIST
 
 if __name__ == "__main__":
@@ -49,4 +49,3 @@ if __name__ == "__main__":
         acc = sess.run(accuracy, feed_dict={input_images: batch.images, input_labels: batch.labels})
         print("Batch", i, "accuracy =", acc)
     print("End validating")
-
