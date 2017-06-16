@@ -180,7 +180,7 @@ class Batch(BaseBatch):
         if data is None:
             _data = self.data
         else:
-            _data = data
+            _data = data if self.components is None else self._item_class(*data)
 
         if isinstance(_data, tuple):
             comps = self.components if self.components is not None else range(len(_data))
