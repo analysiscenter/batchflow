@@ -32,8 +32,6 @@ class Batch(BaseBatch):
     def __init__(self, index, preloaded=None):
         super().__init__(index)
         self._preloaded = preloaded
-        comps = self.components
-        self._components = dict(zip(comps, range(len(comps)))) if comps is not None else None
 
     @classmethod
     def from_data(cls, data):
@@ -82,13 +80,20 @@ class Batch(BaseBatch):
         """ Return data components names """
         return None
 
-    def get_pos(self, component, index):
+    @property
+    def _components(self):
+        """ Return data components names """
+        comps = self.components
+        return dict(zip(comps, range(len(comps)))) if comps is not None else None
+
+    def get_pos(self, data, component, index):
         """ Return a position in data for a given index
 
         Parameters:
+            data: if None, get_pos should return a position in self.data
             components: could be one of [None, int or string]
-                None: data has no components (i.e. self.data is just an array)
-                int: a position of a data component, when components names are not defined (see components)
+                None: data has no components (e.g. just an array or pandas.DataFrame)
+                int: a position of a data component, when components names are not defined
                 str: a name of a data component
             index: an index
         Returns:
@@ -98,21 +103,28 @@ class Batch(BaseBatch):
             data.component[pos] = new_data
 
         Examples:
-            if data holds a numpy array, then get_pos(None, index) should just return self.index.get_pos(index)
-            if data.images contains BATCH_SIZE images as a numpy array,
-                then get_pos('images', index) should return self.index.get_pos(index)
+            if self.data holds a numpy array, then get_pos(None, None, index) should just return self.index.get_pos(index)
+            if self.data.images contains BATCH_SIZE images as a numpy array,
+                then get_pos(None, 'images', index) should return self.index.get_pos(index)
+            if self.data.labels is a dict {index: label}, then get_pos(None, 'labels', index) should return index
 
-            if data.labels is a dict {index: label}, then get_pos('labels', index) should return index
+            if data is not None, then you need to know in advance how to get a position for a given index.
+            For instance, data is a large numpy array, a batch is a subset of this array and
+            batch.index holds row numbers from a large arrays. Thus, get_pos(data, None, index) should just return index.
 
             A more complicated example of data:
                 - batch represent small crops of large images
-                - data.source holds a few large images (e.g just 5 items)
-                - data.coords holds coordinates for crops (e.g. it contains 100 items)
-                - data.source_pos holds n arrays of source image id for each crop (so it also contains 100 items)
-            then get_pos('source', index) should return data.source_pos[self.index.get_pos(index)]
+                - self.data.source holds a few large images (e.g just 5 items)
+                - self.data.coords holds coordinates for crops (e.g. it contains 100 items)
+                - self.data.image_no holds an array of image numbers for each crop (so it also contains 100 items)
+            then get_pos(None, 'source', index) should return self.data.image_no[self.index.get_pos(index)].
+            Whilst, get_pos(data, 'source', index) should return data.image_no[index].
         """
         _ = component
-        return self.index.get_pos(index)
+        if data is None:
+            return self.index.get_pos(index)
+        else:
+            return index
 
     @property
     def _item_class(self):
@@ -144,7 +156,7 @@ class Batch(BaseBatch):
 
     def put_into_data(self, data, items):
         """ Loads data into _data property """
-        if self.components is None:
+        if self._components is None:
             _src = data
         else:
             _src = data if isinstance(data, tuple) else tuple([data])
@@ -153,18 +165,18 @@ class Batch(BaseBatch):
     def get_items(self, index, data=None):
         """ Return one or several data items from a data source """
         if data is None:
-            data = self.data
-            get_pos = self.get_pos
+            _data = self.data
         else:
-            get_pos = lambda component, index: index
+            _data = data
 
-        if isinstance(data, tuple):
-            comps = self.components if self.components is not None else range(len(data))
-            res = tuple(data_item[get_pos(comp, index)] if data_item is not None else None for comp, data_item in zip(comps, data))
+        if isinstance(_data, tuple):
+            comps = self.components if self.components is not None else range(len(_data))
+            res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
+                        for comp, data_item in zip(comps, _data))
             if self.components is not None:
                 res = self._item_class(*res)
         else:
-            res = data[get_pos(None, index)]
+            res = _data[self.get_pos(data, None, index)]
         return res
 
     def __getitem__(self, item):
@@ -229,7 +241,7 @@ class Batch(BaseBatch):
             _args = tuple([src_attr, *args])
 
         dst_attr = getattr(self, dst)
-        pos = self.get_pos(dst, ix)
+        pos = self.get_pos(None, dst, ix)
         dst_attr[pos] = func(*_args, **kwargs)
 
     @action
