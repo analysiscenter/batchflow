@@ -103,20 +103,22 @@ class Batch(BaseBatch):
             data.component[pos] = new_data
 
         Examples:
-            if self.data holds a numpy array, then get_pos(None, None, index) should just return self.index.get_pos(index)
+            if self.data holds a numpy array, then get_pos(None, None, index) should
+            just return self.index.get_pos(index)
             if self.data.images contains BATCH_SIZE images as a numpy array,
                 then get_pos(None, 'images', index) should return self.index.get_pos(index)
-            if self.data.labels is a dict {index: label}, then get_pos(None, 'labels', index) should return index
+            if self.data.labels is a dict {index: label}, then get_pos(None, 'labels', index) should return index.
 
             if data is not None, then you need to know in advance how to get a position for a given index.
             For instance, data is a large numpy array, a batch is a subset of this array and
-            batch.index holds row numbers from a large arrays. Thus, get_pos(data, None, index) should just return index.
+            batch.index holds row numbers from a large arrays.
+            Thus, get_pos(data, None, index) should just return index.
 
             A more complicated example of data:
-                - batch represent small crops of large images
-                - self.data.source holds a few large images (e.g just 5 items)
-                - self.data.coords holds coordinates for crops (e.g. it contains 100 items)
-                - self.data.image_no holds an array of image numbers for each crop (so it also contains 100 items)
+            - batch represent small crops of large images
+            - self.data.source holds a few large images (e.g just 5 items)
+            - self.data.coords holds coordinates for crops (e.g. it contains 100 items)
+            - self.data.image_no holds an array of image numbers for each crop (so it also contains 100 items)
             then get_pos(None, 'source', index) should return self.data.image_no[self.index.get_pos(index)].
             Whilst, get_pos(data, 'source', index) should return data.image_no[index].
         """
