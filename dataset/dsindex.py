@@ -2,7 +2,7 @@
 
 import os
 import glob
-from collection import Iterable
+from collections import Iterable
 import numpy as np
 
 from .base import Baseset
