@@ -8,13 +8,12 @@ sys.path.append("../..")
 from dataset import Dataset, DatasetIndex, ArrayBatch
 
 
-# Make a dataset with sample data
+# Make a dataset without data
 def gen_data(num_items):
     ix = np.arange(num_items)
-    data = np.arange(num_items * 3).reshape(num_items, -1)
     dsindex = DatasetIndex(ix)
-    ds = Dataset(index=dsindex, batch_class=ArrayBatch)
-    return ds, data
+    dataset = Dataset(index=dsindex, batch_class=ArrayBatch)
+    return dataset
 
 
 if __name__ == "__main__":
@@ -23,11 +22,11 @@ if __name__ == "__main__":
     BATCH_SIZE = 3
 
     # Create datasets
-    ds_data, data = gen_data(NUM_ITEMS)
+    dataset = gen_data(NUM_ITEMS)
 
     print("Start iterating...")
     i = 0
-    for batch in ds_data.gen_batch(BATCH_SIZE, n_epochs=1):
+    for batch in dataset.gen_batch(BATCH_SIZE, n_epochs=1):
         i += 1
         print("batch", i, " contains items", batch.indices)
     print("End iterating")
@@ -36,7 +35,7 @@ if __name__ == "__main__":
     print("And now with drop_last=True")
     print("Start iterating...")
     i = 0
-    for batch in ds_data.gen_batch(BATCH_SIZE, n_epochs=1, drop_last=True):
+    for batch in dataset.gen_batch(BATCH_SIZE, n_epochs=1, drop_last=True):
         i += 1
         print("batch", i, " contains items", batch.indices)
     print("End iterating")
@@ -45,6 +44,20 @@ if __name__ == "__main__":
     print("And one more time, but with next_batch(...) and too many iterations, so will get a StopIteration")
     print("Start iterating...")
     for i in range(NUM_ITEMS * 3):
-        batch = ds_data.next_batch(BATCH_SIZE, n_epochs=2)
+        try:
+            batch = dataset.next_batch(BATCH_SIZE, n_epochs=2, drop_last=True)
+            print("batch", i + 1, "contains items", batch.indices)
+        except StopIteration:
+            print("got StopIteration")
+            break
+    print("End iterating")
+
+    print()
+    print("And finally with shuffle and n_epochs=None")
+    print("Start iterating...")
+    # don't forget to reset iterator to start next_batch'ing from scratch
+    dataset.reset_iter()
+    for i in range(NUM_ITEMS * 3):
+        batch = dataset.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
         print("batch", i + 1, "contains items", batch.indices)
     print("End iterating")

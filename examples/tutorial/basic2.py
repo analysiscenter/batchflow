@@ -1,0 +1,37 @@
+# pylint: skip-file
+import os
+import sys
+import numpy as np
+import pandas as pd
+
+sys.path.append("../..")
+from dataset import Dataset, DatasetIndex, ArrayBatch
+
+
+# Make a dataset with sample data
+def gen_data(num_items):
+    ix = np.arange(num_items)
+    data = np.arange(num_items * 3).reshape(num_items, -1)
+    dsindex = DatasetIndex(ix)
+    # when your data fits into memory, just preload it
+    dataset = Dataset(index=dsindex, batch_class=ArrayBatch, preloaded=data)
+    return dataset
+
+
+if __name__ == "__main__":
+    # number of items in the dataset
+    NUM_ITEMS = 10
+    BATCH_SIZE = 3
+
+    # Create datasets
+    dataset = gen_data(NUM_ITEMS)
+
+    print("Start iterating...")
+    i = 0
+    for batch in dataset.gen_batch(BATCH_SIZE, n_epochs=1):
+        i += 1
+        print()
+        print("batch", i, " contains items", batch.indices)
+        print("and batch data is")
+        print(batch.data)
+    print("End iterating")
