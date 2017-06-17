@@ -47,5 +47,5 @@ if __name__ == "__main__":
         print()
         print("    You can iterate over batch items:")
         for item in batch:
-            print("      item features:", item.features, "item label:", item.labels)
+            print("      item features:", item.features, "    item label:", item.labels)
     print("End iterating")
