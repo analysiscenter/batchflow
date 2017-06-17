@@ -271,4 +271,4 @@ class FilesIndex(DatasetIndex):
 
     def create_subset(self, index):
         """ Return a new FilesIndex based on the subset of indices given """
-        return FilesIndex.from_index(index=index, paths=self._paths)
+        return type(self).from_index(index=index, paths=self._paths)
