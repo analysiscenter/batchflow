@@ -10,11 +10,10 @@ from dataset import Dataset, DatasetIndex, ArrayBatch
 
 # Make a dataset with sample data
 def gen_data(num_items):
-    ix = np.arange(num_items)
+    index = np.arange(num_items)
     data = np.arange(num_items * 3).reshape(num_items, -1)
-    dsindex = DatasetIndex(ix)
     # when your data fits into memory, just preload it
-    dataset = Dataset(index=dsindex, batch_class=ArrayBatch, preloaded=data)
+    dataset = Dataset(index=index, batch_class=ArrayBatch, preloaded=data)
     return dataset
 
 
