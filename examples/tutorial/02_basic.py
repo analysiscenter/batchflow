@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.append("../..")
-from dataset import Dataset, DatasetIndex, ArrayBatch
+from dataset import Dataset, ArrayBatch
 
 
 # Make a dataset with sample data
