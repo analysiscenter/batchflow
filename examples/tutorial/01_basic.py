@@ -5,14 +5,13 @@ import numpy as np
 import pandas as pd
 
 sys.path.append("../..")
-from dataset import Dataset, DatasetIndex, ArrayBatch
+from dataset import Dataset, ArrayBatch
 
 
 # Make a dataset without data
 def gen_data(num_items):
-    ix = np.arange(num_items)
-    dsindex = DatasetIndex(ix)
-    dataset = Dataset(index=dsindex, batch_class=ArrayBatch)
+    index = np.arange(num_items)
+    dataset = Dataset(index=index, batch_class=ArrayBatch)
     return dataset
 
 
