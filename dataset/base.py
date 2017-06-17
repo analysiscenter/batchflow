@@ -113,7 +113,6 @@ class Baseset:
         self._start_index = 0
         self._order = None
         self._n_epochs = 0
-        self._batch_generator = None
         if hasattr(self.index, 'reset_iter'):
             self.index.reset_iter()
 
@@ -125,9 +124,8 @@ class Baseset:
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, *args, **kwargs):
         """ Return a batch """
-        if self._batch_generator is None:
-            self._batch_generator = self.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
-        batch = next(self._batch_generator)
+        batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
+        batch = self.create_batch(batch_index, *args, **kwargs)
         return batch
 
     def create_batch(self, batch_indices, pos=True):
