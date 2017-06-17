@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.append("../..")
-from dataset import Dataset, DatasetIndex, Batch
+from dataset import Dataset, Batch
 
 
 class MyBatch(Batch):
@@ -20,9 +20,9 @@ def gen_data(num_items):
     labels_array = np.random.choice(10, size=num_items)
     data = features_array, labels_array
 
-    dsindex = DatasetIndex(np.arange(num_items))
+    index = np.arange(num_items)
     # when your data fits into memory, just preload it
-    dataset = Dataset(index=dsindex, batch_class=MyBatch, preloaded=data)
+    dataset = Dataset(index=index, batch_class=MyBatch, preloaded=data)
     return dataset
 
 
