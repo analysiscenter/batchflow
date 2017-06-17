@@ -41,7 +41,7 @@ if __name__ == "__main__":
     print("End iterating")
 
     print()
-    print("And one more time, but with next_batch(...) and too many iterations, so will get a StopIteration")
+    print("And one more time, but with next_batch(...) and too many iterations, so we will get a StopIteration")
     print("Start iterating...")
     for i in range(NUM_ITEMS * 3):
         try:
@@ -53,11 +53,11 @@ if __name__ == "__main__":
     print("End iterating")
 
     print()
-    print("And finally with shuffle and n_epochs=None")
+    print("And finally with shuffle, n_epochs=None and variable batch size")
     print("Start iterating...")
     # don't forget to reset iterator to start next_batch'ing from scratch
     dataset.reset_iter()
-    for i in range(NUM_ITEMS * 3):
-        batch = dataset.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
+    for i in range(int(NUM_ITEMS * 1.3)):
+        batch = dataset.next_batch(BATCH_SIZE + (-1)**i * i % 3, shuffle=True, n_epochs=None)
         print("batch", i + 1, "contains items", batch.indices)
     print("End iterating")
