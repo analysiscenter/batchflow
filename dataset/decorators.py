@@ -82,7 +82,6 @@ def model(*args, **kwargs):
 
 class ActionDecorator:
     """ Decorator for Batch class actions """
-    # pylint: disable=too-few-public-methods
     def __init__(self, *args, **kwargs):
         self.method = None
         self.model_name = None

@@ -18,8 +18,9 @@ class Baseset:
 
 
     @staticmethod
-    def build_index(index, *args, **kwargs):   # pylint: disable=unused-argument
+    def build_index(index, *args, **kwargs):
         """ Create the index. Child classes should generate index from the arguments given """
+        _ = args, kwargs
         return index
 
     @property
