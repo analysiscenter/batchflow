@@ -34,4 +34,9 @@ if __name__ == "__main__":
         print("batch", i, " contains items", batch.indices)
         print("and batch data is")
         print(batch.data)
+
+        print()
+        print("  You can iterate over batch items:")
+        for item in batch:
+            print("      ", item)
     print("End iterating")
