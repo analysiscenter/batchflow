@@ -54,7 +54,7 @@ if __name__ == "__main__":
     i = 0
     for batch in cifar.train.gen_batch(BATCH_SIZE, shuffle=False, n_epochs=2):
         i += 1
-        _, loss = sess.run([optimizer, cost], feed_dict={input_images: batch.images, input_labels: batch.labels, is_training: True})
+        _, loss = sess.run([train_op, cost], feed_dict={input_images: batch.images, input_labels: batch.labels, is_training: True})
         if (i + 1) % 50 == 0:
             print("Iteration", i + 1, "loss =", loss)
     print("Iteration", i + 1, "loss =", loss)
