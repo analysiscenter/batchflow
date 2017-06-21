@@ -46,6 +46,11 @@ class ModelDecorator:
         return ModelDecorator.models[full_method_name]
 
     @staticmethod
+    def get_model_by_name(instance, model_name):
+        method = getattr(instance, model_name)
+        return ModelDecorator.get_model(method)
+
+    @staticmethod
     def add_model(method, model_spec):
         """ Add a model specification into the model directory """
         full_method_name = get_method_key(method)

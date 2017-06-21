@@ -224,6 +224,10 @@ class Batch(BaseBatch):
         else:
             return self.infer_dtype(self.data)
 
+    def get_model_by_name(self, model_name):
+        """ Return a model specification given its name """
+        return ModelDecorator.get_model_by_name(self, model_name)
+
     def get_errors(self, all_res):
         """ Return a list of errors from a parallel action """
         all_errors = [error for error in all_res if isinstance(error, Exception)]
