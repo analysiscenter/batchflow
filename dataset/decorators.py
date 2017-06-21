@@ -34,7 +34,7 @@ def infer_method_key(action_method, model_name):
                             action_method.__qualname__.rsplit('.', 1)[0], model_name)
 
 def infer_bound_method_key(method, model_name):
-    return make_method_key3(inspect.getmodule(method).__name__,
+    return make_method_key3(inspect.getmodule(method.__self__).__name__,
                             method.__self__.__class__.__name__, model_name)
 
 
