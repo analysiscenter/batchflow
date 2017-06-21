@@ -33,10 +33,14 @@ def infer_method_key(action_method, model_name):
     return make_method_key3(inspect.getmodule(action_method).__name__,
                             action_method.__qualname__.rsplit('.', 1)[0], model_name)
 
-def infer_bound_method_key(method, model_name):
+def infer_bound_method_key(instance_or_method, model_name):
     """ Infer a full model method name from a given bound method and a model name """
-    return make_method_key3(inspect.getmodule(method.__self__).__name__,
-                            method.__self__.__class__.__name__, model_name)
+    if hasattr(instance_or_method, '__self__'):
+        instance = instance_or_method.__self__
+    else:
+        instance = instance_or_method
+    return make_method_key3(inspect.getmodule(instance).__name__,
+                            instance.__class__.__name__, model_name)
 
 
 class ModelDecorator:
@@ -57,9 +61,16 @@ class ModelDecorator:
     @staticmethod
     def get_model_by_name(instance, model_name):
         """ Return a model specification given its name """
-        method = getattr(instance, model_name)
-        full_model_name = infer_bound_method_key(method, model_name)
+        # method = getattr(instance, model_name)
+        full_model_name = infer_bound_method_key(instance, model_name)
         return ModelDecorator.models[full_model_name]
+
+    @staticmethod
+    def get_all_model_names(instance):
+        """ Return all model names for a given batch instance """
+        full_model_pattern = infer_bound_method_key(instance, '')
+        all_models = [m.rsplit('.')[-1] for m in ModelDecorator.models if full_model_pattern in m]
+        return all_models
 
     @staticmethod
     def add_model(method, model_spec):

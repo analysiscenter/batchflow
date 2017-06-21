@@ -228,6 +228,10 @@ class Batch(BaseBatch):
         """ Return a model specification given its name """
         return ModelDecorator.get_model_by_name(self, model_name)
 
+    def get_all_model_names(self, model_name):
+        """ Return all model names for a given batch instance """
+        return ModelDecorator.get_all_model_names(self)
+
     def get_errors(self, all_res):
         """ Return a list of errors from a parallel action """
         all_errors = [error for error in all_res if isinstance(error, Exception)]
