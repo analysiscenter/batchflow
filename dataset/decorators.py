@@ -30,8 +30,8 @@ def get_method_key(method):
 
 def infer_method_key(action_method, model_name):
     """ Infer a full model method name from a given action method and a model name """
-    return make_method_key2(inspect.getmodule(action_method).__name__,
-                            action_method.__qualname__.rsplit('.', 1)[0] + '.' + model_name)
+    return make_method_key3(inspect.getmodule(action_method).__name__,
+                            action_method.__self__.__class__.__name__, model_name)
 
 
 class ModelDecorator:
