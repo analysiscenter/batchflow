@@ -16,13 +16,17 @@ def _cpu_count():
     return cpu_count
 
 
-def make_method_key(module_name, method_name):
+def make_method_key2(module_name, qual_name):
     """ Build a full method name 'module.method' """
-    return module_name + '.' + method_name
+    return module_name + '.' + qual_name
+
+def make_method_key3(module_name, class_name, method_name):
+    """ Build a full method name 'module.method' """
+    return make_method_key2(module_name, class_name + '.' + method_name)
 
 def get_method_key(method):
     """ Retrieve a full method name from a callable """
-    return make_method_key(inspect.getmodule(method).__name__, method.__qualname__)
+    return make_method_key2(inspect.getmodule(method).__name__, method.__qualname__)
 
 def infer_method_key(action_method, model_name):
     """ Infer a full model method name from a given action method and a model name """
@@ -48,7 +52,8 @@ class ModelDecorator:
     @staticmethod
     def get_model_by_name(instance, model_name):
         method = getattr(instance, model_name)
-        return ModelDecorator.get_model(method)
+        key = infer_method_key(method, model_name)
+        return ModelDecorator.models[full_method_name]
 
     @staticmethod
     def add_model(method, model_spec):
