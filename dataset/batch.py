@@ -22,7 +22,7 @@ except ImportError:
     pass
 
 from .dsindex import DatasetIndex
-from .decorators import action, inbatch_parallel
+from .decorators import action, inbatch_parallel, ModelDecorator
 from .dataset import Dataset
 from .batch_base import BaseBatch
 
