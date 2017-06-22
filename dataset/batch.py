@@ -261,8 +261,12 @@ class Batch(BaseBatch):
             src_attr = getattr(self[ix], src)
             _args = tuple([src_attr, *args])
 
-        dst_attr = getattr(self, dst)
-        pos = self.get_pos(None, dst, ix)
+        if isinstance(dst, str):
+            dst_attr = getattr(self, dst)
+            pos = self.get_pos(None, dst, ix)
+        else:
+            dst_attr = dst
+            pos = self.get_pos(None, src, ix)
         dst_attr[pos] = func(*_args, **kwargs)
 
     @action
