@@ -87,11 +87,11 @@ class ImagesBatch(Batch):
         return new_images
 
     @inbatch_parallel('indices')
-    def _convert_from_pil(self, ix, component, dtype=np.unit8):
+    def _convert_from_pil(self, ix, component, dtype=np.uint8):
         """ Convert images from PIL.Image format to an array """
         return self._convert_from_pil_one(ix, component, dtype)
 
-    def _convert_from_pil_one(self, ix, component, dtype=np.unit8):
+    def _convert_from_pil_one(self, ix, component, dtype=np.uint8):
         if isinstance(ix, PIL.Image):
             image = ix
         else:
@@ -182,7 +182,8 @@ class ImagesBatch(Batch):
         """ Rotate each image in the batch at a random angle """
         angle = angle if angle is not None else (-np.pi, np.pi)
         _angle = np.random.uniform(angle[0], angle[1])
-        return self._rotate_one(ix, component, _angle, preserve_shape=True, **kwargs)
+        preserve_shape = kwargs.pop('preserve_shape', True)
+        return self._rotate_one(ix, component, _angle, preserve_shape=preserve_shape, **kwargs)
 
     @action
     def crop(self, component='images', origin=None, shape=None):

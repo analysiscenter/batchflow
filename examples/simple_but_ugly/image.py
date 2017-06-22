@@ -27,7 +27,7 @@ def embarassingly_parallel_all(images):
 class MyImages(ImagesBatch):
     @action
     @inbatch_parallel(init='indices', post='assemble')
-    def load(self, ix, src, fmt=None):
+    def fload(self, ix, src, fmt=None):
         if fmt == 'PIL':
             return PIL.Image.fromarray(src[ix])
         else:
@@ -77,22 +77,25 @@ if __name__ == "__main__":
     S = 12
 
     # Fill-in dataset with sample data
-    def gen_data():
-        ix = np.arange(K)
-        data = np.random.randint(0, 255, size=K*S*S).reshape(K, S, S).astype('uint8')
-        dsindex = DatasetIndex(ix)
-        ds = Dataset(index=dsindex, batch_class=MyImages)
+    def gen_data(num_items, shape):
+        index = np.arange(num_items)
+        data = np.random.randint(0, 255, size=num_items * shape[0] * shape[1])
+        data = data.reshape(num_items, shape[0], shape[1]).astype('uint8')
+        ds = Dataset(index=index, batch_class=MyImages)
         return ds, data
 
 
     # Create datasets
     print("Generating...")
-    ds_data, data = gen_data()
+    dataset, data = gen_data(K, (S, S))
 
-    #res = ds_data.p.load(data).convert_to_PIL('images').resize((384, 384))
-    #res = ds_data.p.load(data).resize((384, 384), method='cv2')
-    res = ds_data.p.load(data).epi_one()
-    #res = ds_data.p.load(data).transform(embarassingly_parallel_one)
+    res = (dataset.p
+            .load((data,))
+            .convert_to_pil('images')
+            .resize(shape=(384, 384))
+            .random_rotate(angle=(-np.pi/4, np.pi/4), preserve_shape=True)
+            .crop(shape=(256, 256))
+    )
 
     print("Start...")
     t = time()
