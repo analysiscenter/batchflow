@@ -201,7 +201,7 @@ class ImagesBatch(Batch):
     def _crop_pil_one(self, ix, component='images', origin, shape=None):
         image = self.get(ix, component)
         origin_x, origin_y = origin
-        shape = shape is shape is not None else (image.width - origin_x, image.height - origin_y)
+        shape = shape if shape is not None else (image.width - origin_x, image.height - origin_y)
         box = origin_x, origin_y, origin_x + shape[0], origin_y + shape[1]
         return image.crop(box).load()
 
