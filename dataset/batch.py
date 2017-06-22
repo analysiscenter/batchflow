@@ -228,8 +228,8 @@ class Batch(BaseBatch):
         """ Return a model specification given its name """
         return ModelDecorator.get_model_by_name(self, model_name)
 
-    def get_all_model_names(self, model_name):
-        """ Return all model names for a given batch instance """
+    def get_all_model_names(self):
+        """ Return all model names in the batch class """
         return ModelDecorator.get_all_model_names(self)
 
     def get_errors(self, all_res):
