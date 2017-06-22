@@ -34,7 +34,7 @@ def crop_numba(images, origin, shape=None):
     """ Fill-in new_images with crops from images """
     if shape is None:
         shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
-    if np.array(origin) + np.array(shape) > np.array(images.shape[1:3])
+    if np.array(origin) + np.array(shape) > np.array(images.shape[1:3]):
         shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
     new_images = np.zeros_like(images)
     x = slice(origin[0], origin[0] + shape[0])
