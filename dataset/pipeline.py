@@ -1,5 +1,4 @@
 """ Pipeline classes """
-import sys
 import traceback
 import concurrent.futures as cf
 import threading
