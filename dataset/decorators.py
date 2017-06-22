@@ -7,13 +7,13 @@ import concurrent.futures as cf
 import asyncio
 
 
-def _cpu_count():
+def _workers_count():
     cpu_count = 0
     try:
         cpu_count = len(os.sched_getaffinity(0))
     except AttributeError:
         cpu_count = os.cpu_count()
-    return cpu_count
+    return cpu_count * 4
 
 
 def make_method_key2(module_name, qual_name):
@@ -289,7 +289,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.pop('n_workers', _cpu_count() * 4)
+            n_workers = kwargs.pop('n_workers', _workers_count())
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 if nogil:
@@ -312,7 +312,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.pop('n_workers', _cpu_count() * 4)
+            n_workers = kwargs.pop('n_workers', _workers_count())
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
