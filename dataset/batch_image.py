@@ -112,6 +112,7 @@ class ImagesBatch(Batch):
     @action
     @inbatch_parallel(init='indices', post='assemble')
     def resize(self, ix, component='images', shape=(64, 64), method=None):
+        """ Resize all images in the batch to the given shape """
         return self._resize_one(ix, component, shape, method)
 
     def _resize_one(self, ix, component='images', shape=(64, 64), method=None):
@@ -126,7 +127,7 @@ class ImagesBatch(Batch):
         else:
             if method == 'PIL':
                 new_image = PIL.Image.fromarray(image).resize(shape, PIL.Image.ANTIALIAS)
-                return self._convert_from_pil_one(new_image, shape=shape)
+                return self._convert_from_pil_one(new_image)
             elif method == 'cv2':
                 new_shape = shape[1], shape[0]
                 return cv2.resize(image, new_shape, interpolation=cv2.INTER_CUBIC)
@@ -136,16 +137,16 @@ class ImagesBatch(Batch):
 
     @action
     @inbatch_parallel(init='indices', post='assemble')
-    def random_scale(self, ix, component='images', factor=(0.9, 1.1), preserve_shape=True, method=None, **kwargs):
+    def random_scale(self, ix, component='images', factor=(0.9, 1.1), preserve_shape=True, method=None):
         """ Scale the content of each image in the batch with a random scale factor """
-        _factor = np.random.unifor(factor[0], factor[1])
+        _factor = np.random.uniform(factor[0], factor[1])
 
         image = self.get(ix, component)
         if isinstance(image, PIL.Image):
             shape = image.width, image.height
         else:
             shape = image.shape[1:3]
-        shape = np.asarray(shape) * factor
+        shape = np.asarray(shape) * _factor
         new_image = self._resize_one(ix, component, shape, method)
 
         if preserve_shape:
@@ -187,7 +188,7 @@ class ImagesBatch(Batch):
     def crop(self, component='images', origin=None, shape=None):
         """ Crop all images in the batch """
         if origin is not None or shape is not None:
-            origin = origin if origin is not None else (0,0)
+            origin = origin if origin is not None else (0, 0)
             images = self.get(None, component)
             if isinstance(images[0], PIL.Image.Image):
                 new_images = self._crop_pil(component, origin, shape)
@@ -198,7 +199,7 @@ class ImagesBatch(Batch):
             setattr(self, component, new_images)
         return self
 
-    def _crop_pil_one(self, ix, component='images', origin=(0,0), shape=None):
+    def _crop_pil_one(self, ix, component='images', origin=(0, 0), shape=None):
         image = self.get(ix, component)
         origin_x, origin_y = origin
         shape = shape if shape is not None else (image.width - origin_x, image.height - origin_y)
@@ -206,7 +207,7 @@ class ImagesBatch(Batch):
         return image.crop(box).load()
 
     @inbatch_parallel('indices')
-    def _crop_pil(self, ix, component='images', origin=(0,0), shape=None):
+    def _crop_pil(self, ix, component='images', origin=(0, 0), shape=None):
         return self._crop_pil_one(ix, component, origin, shape)
 
     @action
@@ -225,7 +226,7 @@ class ImagesBatch(Batch):
         image = self.get(ix, component)
         origin_x = np.random.randint(0, image.width - shape[0])
         origin_y = np.random.randint(0, image.height - shape[1])
-        return self._crop_pil_one(ix, component,(origin_x, origin_y), shape)
+        return self._crop_pil_one(ix, component, (origin_x, origin_y), shape)
 
     @action
     def load(self, src, fmt=None):
