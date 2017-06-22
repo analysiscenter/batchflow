@@ -255,10 +255,17 @@ class Batch(BaseBatch):
     @inbatch_parallel(init='indices')
     def apply_transform(self, ix, dst, src, func, *args, **kwargs):
         """ Apply a function to each item in the batch """
+        if not isinstance(dst, str) and not isinstance(src, str):
+            raise TypeError("At least of of dst and src should be attribute names, not arrays")
+
         if src is None:
             _args = args
         else:
-            src_attr = getattr(self[ix], src)
+            if isinstance(src, str):
+                src_attr = getattr(self[ix], src)
+            else:
+                pos = self.get_pos(None, dst, ix)
+                src_attr = src[pos]
             _args = tuple([src_attr, *args])
 
         if isinstance(dst, str):
@@ -272,12 +279,23 @@ class Batch(BaseBatch):
     @action
     def apply_transform_all(self, dst, src, func, *args, **kwargs):
         """ Apply a function the whole batch at once """
+        if not isinstance(dst, str) and not isinstance(src, str):
+            raise TypeError("At least of of dst and src should be attribute names, not arrays")
+
         if src is None:
             _args = args
         else:
-            src_attr = getattr(self, src)
+            if isinstance(src, str):
+                src_attr = getattr(self, src)
+            else:
+                src_attr = src
             _args = tuple([src_attr, *args])
-        setattr(self, dst, func(*_args, **kwargs))
+
+        tr_res = func(*_args, **kwargs)
+        if isinstance(dst, str):
+            setattr(self, dst, tr_res)
+        else:
+            dst[:] = tr_res
         return self
 
 

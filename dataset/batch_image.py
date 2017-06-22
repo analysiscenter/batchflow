@@ -29,7 +29,6 @@ class ImagesBatch(Batch):
     """ Batch class for 2D images """
     def __init__(self, index, preloaded=None):
         super().__init__(index, preloaded)
-        self._new_attr = None
 
     @property
     def components(self):
@@ -54,9 +53,9 @@ class ImagesBatch(Batch):
     @action
     def convert_to_PIL(self, attr='images'):   # pylint: disable=invalid-name
         """ Convert batch data to PIL.Image format """
-        self._new_attr = list(None for _ in self.indices)
-        self.apply_transform('_new_attr', attr, PIL.Image.fromarray)
-        setattr(self, attr, self._new_attr)
+        new_images = list(None for _ in self.indices)
+        self.apply_transform(new_images, attr, PIL.Image.fromarray)
+        setattr(self, attr, new_images)
         return self
 
     @action
