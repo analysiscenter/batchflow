@@ -198,7 +198,7 @@ class ImagesBatch(Batch):
             setattr(self, component, new_images)
         return self
 
-    def _crop_pil_one(self, ix, component='images', origin, shape=None):
+    def _crop_pil_one(self, ix, component='images', origin=(0,0), shape=None):
         image = self.get(ix, component)
         origin_x, origin_y = origin
         shape = shape if shape is not None else (image.width - origin_x, image.height - origin_y)
@@ -206,7 +206,7 @@ class ImagesBatch(Batch):
         return image.crop(box).load()
 
     @inbatch_parallel('indices')
-    def _crop_pil(self, ix, component='images', origin=None, shape=None):
+    def _crop_pil(self, ix, component='images', origin=(0,0), shape=None):
         return self._crop_pil_one(ix, component, origin, shape)
 
     @action
