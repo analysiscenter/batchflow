@@ -38,5 +38,5 @@ if __name__ == "__main__":
 
     print("Start...")
     t = time()
-    pipeline.run(5, n_epochs=1, prefetch=0)
+    pipeline.run(K//10, n_epochs=1, prefetch=5, target='mpc')
     print("End", time() - t)

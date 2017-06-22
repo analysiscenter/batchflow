@@ -90,7 +90,7 @@ class ImagesBatch(Batch):
 
     @action
     @inbatch_parallel('indices', post='assemble')
-    def convert_from_pil(self, ix, component, dtype=np.uint8):
+    def convert_from_pil(self, ix, component='images', dtype=np.uint8):
         """ Convert images from PIL.Image format to an array """
         return self._convert_from_pil_one(ix, component, dtype)
 
