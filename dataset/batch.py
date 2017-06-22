@@ -192,6 +192,15 @@ class Batch(BaseBatch):
             res = _data[self.get_pos(data, None, index)]
         return res
 
+    def get(self, item=None, component=None):
+        """ Return an item from the batch or the component """
+        if item is None:
+            if component is None:
+                raise TypeError("item and component cannot be both None")
+            return getattr(self, component)
+        else:
+            return self[item] if component is None else getattr(self[item], component)
+
     def __getitem__(self, item):
         return self.get_items(item)
 
@@ -238,6 +247,12 @@ class Batch(BaseBatch):
         return all_errors if len(all_errors) > 0 else None
 
     @action
+    def do_nothing(self, *args, **kwargs):
+        """ An empty action (might be convenient in complicated pipelines) """
+        _ = args, kwargs
+        return self
+
+    @action
     def load(self, src, fmt=None):
         """ Load data from a source """
         if fmt is None:
@@ -262,14 +277,14 @@ class Batch(BaseBatch):
             _args = args
         else:
             if isinstance(src, str):
-                src_attr = getattr(self[ix], src)
+                src_attr = self.get(ix, src)
             else:
                 pos = self.get_pos(None, dst, ix)
                 src_attr = src[pos]
             _args = tuple([src_attr, *args])
 
         if isinstance(dst, str):
-            dst_attr = getattr(self, dst)
+            dst_attr = self.get(component=dst)
             pos = self.get_pos(None, dst, ix)
         else:
             dst_attr = dst
@@ -286,7 +301,7 @@ class Batch(BaseBatch):
             _args = args
         else:
             if isinstance(src, str):
-                src_attr = getattr(self, src)
+                src_attr = self.get(component=src)
             else:
                 src_attr = src
             _args = tuple([src_attr, *args])
