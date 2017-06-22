@@ -1,5 +1,4 @@
 """ Pipeline classes """
-import sys
 import traceback
 import concurrent.futures as cf
 import threading
@@ -202,9 +201,9 @@ class Pipeline:
                 try:
                     batch = future.result()
                 except Exception:   # pylint: disable=broad-except
-                    print("Exception in a thread:", future.exception())
-                    _, _, exc_traceback = sys.exc_info()
-                    traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)
+                    exc = future.exception()
+                    print("Exception in a thread:", exc)
+                    traceback.print_tb(exc.__traceback__)
                 self._batch_queue.put(batch)
                 self._prefetch_queue.task_done()
         return None
