@@ -34,9 +34,9 @@ def crop_numba(images, origin, shape=None):
     """ Fill-in new_images with crops from images """
     if shape is None:
         shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
-    if np.array(origin) + np.array(shape) > np.array(images.shape[1:3]):
+    if np.all(np.array(origin) + np.array(shape) > np.array(images.shape[1:3])):
         shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
-    new_images = np.zeros_like(images)
+    new_images = np.zeros((images.shape[0],) + shape, dtype=images.dtype)
     x = slice(origin[0], origin[0] + shape[0])
     y = slice(origin[1], origin[1] + shape[1])
     new_images[:] = images[:, y, x]
@@ -77,22 +77,25 @@ class ImagesBatch(Batch):
         if isinstance(all_res[0], PIL.Image.Image):
             setattr(self, component, all_res)
         else:
-            setattr(self, component, np.transpose(np.dstack(all_res), (2, 0, 1)))
+            try:
+                new_images = np.stack(all_res)
+            except ValueError as e:
+                message = str(e)
+                if "must have the same shape" in message:
+                    min_shape = np.array([x.shape for x in all_res]).min(axis=0)
+                    all_res = [arr[:min_shape[0], :min_shape[1]].copy() for arr in all_res]
+                    new_images = np.stack(all_res)
+            setattr(self, component, new_images)
         return self
 
-    def _convert_to_pil(self, component):
-        """ Convert images to PIL.Image format """
-        new_images = list(None for _ in self.indices)
-        self.apply_transform(new_images, component, PIL.Image.fromarray)
-        return new_images
-
-    @inbatch_parallel('indices')
-    def _convert_from_pil(self, ix, component, dtype=np.uint8):
+    @action
+    @inbatch_parallel('indices', post='assemble')
+    def convert_from_pil(self, ix, component, dtype=np.uint8):
         """ Convert images from PIL.Image format to an array """
         return self._convert_from_pil_one(ix, component, dtype)
 
     def _convert_from_pil_one(self, ix, component, dtype=np.uint8):
-        if isinstance(ix, PIL.Image):
+        if isinstance(ix, PIL.Image.Image):
             image = ix
         else:
             image = self.get(ix, component)
@@ -102,6 +105,12 @@ class ImagesBatch(Batch):
         else:
             arr = arr.reshape(image.height, image.width, -1)
         return arr
+
+    def _convert_to_pil(self, component):
+        """ Convert images to PIL.Image format """
+        new_images = list(None for _ in self.indices)
+        self.apply_transform(new_images, component, PIL.Image.fromarray)
+        return new_images
 
     @action
     def convert_to_pil(self, component='images'):
@@ -142,7 +151,7 @@ class ImagesBatch(Batch):
         _factor = np.random.uniform(factor[0], factor[1])
 
         image = self.get(ix, component)
-        if isinstance(image, PIL.Image):
+        if isinstance(image, PIL.Image.Image):
             shape = image.width, image.height
         else:
             shape = image.shape[1:3]
@@ -150,7 +159,7 @@ class ImagesBatch(Batch):
         new_image = self._resize_one(ix, component, shape, method)
 
         if preserve_shape:
-            if isinstance(image, PIL.Image):
+            if isinstance(image, PIL.Image.Image):
                 box = 0, 0, image.width, image.height
                 new_image = new_image.crop(box).load()
             else:
@@ -216,7 +225,7 @@ class ImagesBatch(Batch):
         """ Crop all images to a given shape and a random origin """
         if shape is not None:
             images = self.get(None, component)
-            if isinstance(images[0], PIL.Image):
+            if isinstance(images[0], PIL.Image.Image):
                 self._random_crop_pil(component, shape)
             else:
                 random_crop_numba(images, shape)

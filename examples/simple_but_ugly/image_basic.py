@@ -2,6 +2,7 @@
 import os
 import sys
 import numpy as np
+import scipy.ndimage
 from time import time
 
 sys.path.append("../..")
@@ -23,13 +24,15 @@ if __name__ == "__main__":
 
     # Create a dataset
     print("Generating...")
-    dataset, data = gen_data(K, (S, S))
+    dataset, images = gen_data(K, (S, S))
 
     pipeline = (dataset.p
-                .load((data,))
+                .load((images,))
                 .convert_to_pil()
                 .resize(shape=(384, 384))
                 .random_rotate(angle=(-np.pi/4, np.pi/4), preserve_shape=True)
+                .convert_from_pil()
+                .apply_transform('images', 'images', scipy.ndimage.filters.gaussian_filter, sigma=3)
                 .crop(shape=(256, 256))
     )
 
