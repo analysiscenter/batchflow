@@ -135,6 +135,7 @@ class Batch(BaseBatch):
         if self._components is not None:
             item_class = namedtuple(self.__class__.__name__ + 'Item', self.components)
             item_class.__new__.__defaults__ = (None,) * len(self.components)
+            globals()[item_class.__name__] = item_class
             return item_class
         else:
             raise AttributeError('components are not defined')
