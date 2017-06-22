@@ -5,29 +5,28 @@ Normally, you never create batch instances, as they are created in the `Dataset`
 
 
 ## Index
-`Batch` class stores the [index](index.md) of all data items which belong to the batch. You can access the index through `self.index`. The sequence of indices is also available as `self.indices`.
+`Batch` class stores the [index](index.md) of all data items which belong to the batch. You can access the index through `self.index` (it is an instance of [DatasetIndex](index.md) or its child). The sequence of indices is also available as `self.indices`.
 
 
 ## Data
-The base `Batch` class has a private property `_data` which you can use to store your data in. So you can access the data within batch class methods through `self._data`. But you may also create new properties for your specific data. For example, an image batch class for segmentation purposes may have properties `_images` and `_masks` which point to corresponding image arrays.
+The base `Batch` class has a private property `_data` which you can use to store your data in. So you can access the data within batch class methods through `self._data`. However, to read data use a public property `data`. This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.
 
-There is also a public property `data` defined as:
+Even though this is just a convention and you are not obliged to follow it, it a useful and convenient convention which makes your life easier.
+
+### Data components
+Not infrequently, the batch stores a more complex data structures, e.g. features and labels or images, masks, bounding boxes and labels. To work with these you might employ data components. Just define a property as follows:
 ```python
-@property
-def data(self):
-    return self._data
+    @property
+    def components(self):
+        return 'images', 'masks', 'labels'
 ```
-This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.
-
-An earlier mentioned batch with images may redefine `data` as:
+And this allows you to address components to read and write data:
 ```python
-@property
-def data(self):
-    return self._images, self._masks
+image_5 = batch.images[5]
+batch.images[i] = new_image
+label_k = batch[k].labels
+batch[4].masks[:] = new_mask
 ```
-
-Nevertheless, this is just a convention and you are not obliged to follow it.
-
 
 ## Action methods
 `Action` methods form a public API of the batch class which is available in the [pipeline](pipeline.md). If you operate directly with the batch class instances, you don't need `action` methods. However, pipelines provide the most convenient interface to process the whole dataset and to separate data processing steps and model training / validation cycles.

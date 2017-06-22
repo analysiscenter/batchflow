@@ -75,8 +75,8 @@ Also since actions are executed in different threads, a TensorFlow session shoul
 ### Attention!
 
 1. There is not much point in using TensorFlow queues without batch `prefetch`ing.
-1. For a greater performance put `next_batch` and `sess.run([optimizer])` into different threads.
-1. As actions are fired in parallel and asyncronously, the order of batches in the queue cannot be preserved.
+1. For a greater performance put `next_batch`/`gen_batch`  and `sess.run([optimizer])` into different threads.
+1. As actions are fired in parallel and asynchronously, the order of batches in the queue cannot be preserved.
 More specificaly, in the example above `optimizer` might be evalated on another batch, not the one stored in the `batch` variable.
 This is one more reason to separate `next_batch` and `sess.run(...)` into different threads.
 1. If you don't separate batch generation and model evaluation in different threads, than you should be aware that a pipeline will eventually hang up if `prefetch` is equal or greater then a queue capacity. So you should not prefetch more batches than the queue might accomodate.

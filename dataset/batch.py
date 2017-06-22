@@ -22,7 +22,7 @@ except ImportError:
     pass
 
 from .dsindex import DatasetIndex
-from .decorators import action, inbatch_parallel
+from .decorators import action, inbatch_parallel, ModelDecorator
 from .dataset import Dataset
 from .batch_base import BaseBatch
 
@@ -223,6 +223,14 @@ class Batch(BaseBatch):
             return tuple(self.infer_dtype(item) for item in self.data)
         else:
             return self.infer_dtype(self.data)
+
+    def get_model_by_name(self, model_name):
+        """ Return a model specification given its name """
+        return ModelDecorator.get_model_by_name(self, model_name)
+
+    def get_all_model_names(self):
+        """ Return all model names in the batch class """
+        return ModelDecorator.get_all_model_names(self)
 
     def get_errors(self, all_res):
         """ Return a list of errors from a parallel action """

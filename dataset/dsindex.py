@@ -173,12 +173,13 @@ class DatasetIndex(Baseset):
                 yield batch
 
 
-    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ, unused-argument
+    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ
         """ Create a batch from given indices
         if pos is False then batch_indices contains the value of indices
         which should be included in the batch (so expected batch is just the very same batch_indices)
         otherwise batch_indices contains positions in the index
         """
+        _ = args, kwargs
         if isinstance(batch_indices, DatasetIndex):
             _batch_indices = batch_indices.indices
         else:
@@ -271,4 +272,4 @@ class FilesIndex(DatasetIndex):
 
     def create_subset(self, index):
         """ Return a new FilesIndex based on the subset of indices given """
-        return FilesIndex.from_index(index=index, paths=self._paths)
+        return type(self).from_index(index=index, paths=self._paths)

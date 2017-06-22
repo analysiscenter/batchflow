@@ -60,6 +60,6 @@ class Dataset(Baseset):
         return Pipeline(self)
 
     @property
-    def p(self):   # pylint: disable=invalid-name
+    def p(self):
         """ A short alias for `pipeline()` """
         return self.pipeline()

@@ -16,18 +16,31 @@ def _cpu_count():
     return cpu_count
 
 
-def make_method_key(module_name, method_name):
+def make_method_key2(module_name, qual_name):
     """ Build a full method name 'module.method' """
-    return module_name + '.' + method_name
+    return module_name + '.' + qual_name
+
+def make_method_key3(module_name, class_name, method_name):
+    """ Build a full method name 'module.method' """
+    return make_method_key2(module_name, class_name + '.' + method_name)
 
 def get_method_key(method):
     """ Retrieve a full method name from a callable """
-    return make_method_key(inspect.getmodule(method).__name__, method.__qualname__)
+    return make_method_key2(inspect.getmodule(method).__name__, method.__qualname__)
 
 def infer_method_key(action_method, model_name):
     """ Infer a full model method name from a given action method and a model name """
-    return make_method_key(inspect.getmodule(action_method).__name__,
-                           action_method.__qualname__.rsplit('.', 1)[0] + '.' + model_name)
+    return make_method_key3(inspect.getmodule(action_method).__name__,
+                            action_method.__qualname__.rsplit('.', 1)[0], model_name)
+
+def infer_bound_method_key(instance_or_method, model_name):
+    """ Infer a full model method name from a given bound method and a model name """
+    if hasattr(instance_or_method, '__self__'):
+        instance = instance_or_method.__self__
+    else:
+        instance = instance_or_method
+    return make_method_key3(inspect.getmodule(instance).__name__,
+                            instance.__class__.__name__, model_name)
 
 
 class ModelDecorator:
@@ -44,6 +57,20 @@ class ModelDecorator:
         """ Return a model specification for a given model method """
         full_method_name = get_method_key(method)
         return ModelDecorator.models[full_method_name]
+
+    @staticmethod
+    def get_model_by_name(instance, model_name):
+        """ Return a model specification given its name """
+        # method = getattr(instance, model_name)
+        full_model_name = infer_bound_method_key(instance, model_name)
+        return ModelDecorator.models[full_model_name]
+
+    @staticmethod
+    def get_all_model_names(instance):
+        """ Return all model names for a given batch instance """
+        full_model_pattern = infer_bound_method_key(instance, '')
+        all_models = [m.rsplit('.')[-1] for m in ModelDecorator.models if full_model_pattern in m]
+        return all_models
 
     @staticmethod
     def add_model(method, model_spec):
@@ -82,7 +109,6 @@ def model(*args, **kwargs):
 
 class ActionDecorator:
     """ Decorator for Batch class actions """
-    # pylint: disable=too-few-public-methods
     def __init__(self, *args, **kwargs):
         self.method = None
         self.model_name = None
