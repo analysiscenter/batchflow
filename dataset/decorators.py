@@ -352,14 +352,14 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method in a required parallel engine """
+            if asyncio.iscoroutinefunction(method) or target == 'async':
+                return wrap_with_async(self, args, kwargs)
             if target == 'threads':
                 return wrap_with_threads(self, args, kwargs)
             elif target == 'nogil':
                 return wrap_with_threads(self, args, kwargs, nogil=True)
             elif target == 'mpc':
                 return wrap_with_mpc(self, args, kwargs)
-            elif target == 'async':
-                return wrap_with_async(self, args, kwargs)
             raise ValueError('Wrong parallelization target:', target)
         return wrapped_method
     return inbatch_parallel_decorator
