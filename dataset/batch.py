@@ -270,7 +270,19 @@ class Batch(BaseBatch):
     @action
     @inbatch_parallel(init='indices')
     def apply_transform(self, ix, dst, src, func, *args, **kwargs):
-        """ Apply a function to each item in the batch """
+        """ Apply a function to each item in the batch
+
+        Args:
+            dst: string - a destination component name, e.g. 'images' or 'masks'
+            src: string - a source component name
+            func: a callable - a function to apply to each item in the source component
+        Returns:
+            self
+
+        apply_transform does the following:
+            for item in batch:
+                self.dst[item] = func(self.src[item], *args, **kwargs)
+        """
         if not isinstance(dst, str) and not isinstance(src, str):
             raise TypeError("At least of of dst and src should be attribute names, not arrays")
 
@@ -294,7 +306,19 @@ class Batch(BaseBatch):
 
     @action
     def apply_transform_all(self, dst, src, func, *args, **kwargs):
-        """ Apply a function the whole batch at once """
+        """ Apply a function the whole batch at once
+
+        Args:
+            dst: string - a destination component name, e.g. 'images' or 'masks'
+            src: string - a source component name
+            func: a callable - a function to apply to each item in the source component
+        Returns:
+            self
+
+        apply_transform_all does the following:
+            self.dst = func(self.src, *args, **kwargs)
+        """
+
         if not isinstance(dst, str) and not isinstance(src, str):
             raise TypeError("At least of of dst and src should be attribute names, not arrays")
 
