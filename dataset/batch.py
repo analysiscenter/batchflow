@@ -197,7 +197,7 @@ class Batch(BaseBatch):
         """ Return an item from the batch or the component """
         if item is None:
             if component is None:
-                raise TypeError("item and component cannot be both None")
+                raise ValueError("item and component cannot be both None")
             return getattr(self, component)
         else:
             return self[item] if component is None else getattr(self[item], component)
