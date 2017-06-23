@@ -276,8 +276,6 @@ class Batch(BaseBatch):
             dst: string - a destination component name, e.g. 'images' or 'masks'
             src: string - a source component name
             func: a callable - a function to apply to each item in the source component
-        Returns:
-            self
 
         apply_transform does the following:
             for item in batch:
@@ -312,8 +310,6 @@ class Batch(BaseBatch):
             dst: string - a destination component name, e.g. 'images' or 'masks'
             src: string - a source component name
             func: a callable - a function to apply to each item in the source component
-        Returns:
-            self
 
         apply_transform_all does the following:
             self.dst = func(self.src, *args, **kwargs)
