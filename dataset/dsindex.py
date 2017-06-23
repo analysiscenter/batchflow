@@ -57,6 +57,8 @@ class DatasetIndex(Baseset):
             start = self._pos[index.start] if index.start is not None else None
             stop = self._pos[index.stop] if index.stop is not None else None
             return slice(start, stop, index.step)
+        elif isinstance(index, str):
+            return self._pos[index]
         elif isinstance(index, Iterable):
             return np.asarray([self._pos[ix] for ix in index])
         else:
