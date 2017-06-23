@@ -302,6 +302,9 @@ class MyBatch(Batch):
         proc_value = await other_async_function(some_arg)
         return proc_value
 ```
+Specifying `target='async'` for methods declared as `async` is not necessary,
+since in this case the decorator can determine that you need an `async`-parallelism.
+However, for a not `async` method returning awaitable objects you have to explicitly use `target='async'`.
 
 ### mpc
 With `mpc` you might run calculations in separate processes thus removing GIL restrictions. For this [concurrent.futures.ProcessPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#processpoolexecutor) is used. The decorated method should just return a function which will be executed in a separate process.
