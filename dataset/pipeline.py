@@ -16,6 +16,8 @@ class Pipeline:
     def __init__(self, dataset):
         self.dataset = dataset
         self._action_list = []
+        self._stop_flag = False
+        self._prefetch_count = None
         self._prefetch_queue = None
         self._batch_queue = None
         self._service_executor = None
@@ -185,13 +187,19 @@ class Pipeline:
 
 
     def _put_batches_into_queue(self, gen_batch):
-        for batch in gen_batch:
-            future = self._executor.submit(self._exec_all_actions, batch, True)
-            self._prefetch_queue.put(future, block=True)
+        while not self._stop_flag:
+            self._prefetch_count.put(1, block=True)
+            try:
+                batch = next(gen_batch)
+            except StopIteration:
+                break
+            else:
+                future = self._executor.submit(self._exec_all_actions, batch, new_loop=True)
+                self._prefetch_queue.put(future, block=True)
         self._prefetch_queue.put(None, block=True)
 
     def _run_batches_from_queue(self):
-        while True:
+        while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
             if future is None:
                 self._prefetch_queue.task_done()
@@ -204,7 +212,7 @@ class Pipeline:
                     exc = future.exception()
                     print("Exception in a thread:", exc)
                     traceback.print_tb(exc.__traceback__)
-                self._batch_queue.put(batch)
+                self._batch_queue.put(batch, block=True)
                 self._prefetch_queue.task_done()
         return None
 
@@ -221,22 +229,37 @@ class Pipeline:
         batch_res = self._exec_all_actions(batch)
         return batch_res
 
+
     def reset_iter(self):
         """ Clear all iteration metadata in order to start iterating from scratch """
-        if self._prefetch_queue is not None:
-            self._prefetch_queue.put(None, block=True)
-        if self._batch_queue is not None:
-            self._batch_queue.put(None, block=True)
-        if self._executor is not None:
-            self._executor.shutdown()
-            self._executor = None
-        if self._service_executor is not None:
-            self._service_executor.shutdown()
-            self._service_executor = None
+        def _clear_queue(queue):
+            if queue is not None:
+                while not queue.empty():
+                    queue.get(block=True)
+                    queue.task_done()
+
+        def _stop_executor(executor):
+            if executor is not None:
+                executor.shutdown()
+
+        self._stop_flag = True
+
+        _clear_queue(self._prefetch_queue)
+        _clear_queue(self._batch_queue)
+        _clear_queue(self._prefetch_count)
+
+        _stop_executor(self._executor)
+        _stop_executor(self._service_executor)
+
+        self._executor = None
+        self._service_executor = None
+        self._prefetch_count = None
         self._prefetch_queue = None
         self._batch_queue = None
         self._batch_generator = None
         self.dataset.reset_iter()
+        self._stop_flag = False
+
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
@@ -247,7 +270,7 @@ class Pipeline:
 
         if prefetch > 0:
             # pool cannot have more than 63 workers
-            prefetch = min(prefetch, 60)
+            prefetch = min(prefetch, 63)
 
             if target == 'threads':
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
@@ -256,17 +279,20 @@ class Pipeline:
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
 
-            self._prefetch_queue = q.Queue(maxsize=prefetch + 1)
-            self._batch_queue = q.Queue()
+            self._prefetch_count = q.Queue(maxsize=prefetch + 1)
+            self._prefetch_queue = q.Queue(maxsize=prefetch)
+            self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
             self._service_executor.submit(self._put_batches_into_queue, batch_generator)
             self._service_executor.submit(self._run_batches_from_queue)
             is_end = False
             while not is_end:
                 batch_res = self._batch_queue.get(block=True)
+                self._batch_queue.task_done()
                 if batch_res is not None:
-                    self._batch_queue.task_done()
                     yield batch_res
+                    self._prefetch_count.get(block=True)
+                    self._prefetch_count.task_done()
                 else:
                     is_end = True
         else:

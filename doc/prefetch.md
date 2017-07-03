@@ -81,8 +81,6 @@ However, the main principle remains the same - `prefetch` parameter indicates ho
 
 You can use `prefetch` in `next_batch`, `gen_batch` and `run`.
 
-### Be aware of `next_batch`!
-For no obvious reasons `next_batch` might hang when `prefetch`ing. So try to avoid it and use `gen_batch` instead.
 
 ### Singleton
 Sometimes you might want to guarantee that only one call of a specific action is executed simultaneously, e.g. due to race condition or dependence on some external resources. To make this happen mark an action as a singleton:

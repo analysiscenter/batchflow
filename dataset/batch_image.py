@@ -170,7 +170,13 @@ class ImagesBatch(Batch):
     @action
     @inbatch_parallel(init='indices', post='assemble')
     def rotate(self, ix, component='images', angle=0, preserve_shape=True, method=None, **kwargs):
-        """ Rotate all images in the batch at the given angle """
+        """ Rotate all images in the batch at the given angle
+        Args:
+            component: string - a component name which data should be rotated
+            angle: float - in radians
+            preserve_shape: bool - whether to keep shape after rotating
+                                   (always True for images as arrays, can be False for PIL.Images)
+        """
         return self._rotate_one(ix, component, angle, preserve_shape, method, **kwargs)
 
     def _rotate_one(self, ix, component='images', angle=0, preserve_shape=True, method=None, **kwargs):
@@ -188,7 +194,11 @@ class ImagesBatch(Batch):
     @action
     @inbatch_parallel(init='indices', post='assemble')
     def random_rotate(self, ix, component='images', angle=None, **kwargs):
-        """ Rotate each image in the batch at a random angle """
+        """ Rotate each image in the batch at a random angle
+        Args:
+            component: string - a component name which data should be rotated
+            angle: tuple - an angle range in the form of (min_angle, max_angle), in radians
+        """
         angle = angle if angle is not None else (-np.pi, np.pi)
         _angle = np.random.uniform(angle[0], angle[1])
         preserve_shape = kwargs.pop('preserve_shape', True)
@@ -196,7 +206,12 @@ class ImagesBatch(Batch):
 
     @action
     def crop(self, component='images', origin=None, shape=None):
-        """ Crop all images in the batch """
+        """ Crop all images in the batch
+        Args:
+            component: string - a component name which data should be cropped
+            origin: tuple - a starting point in the form of (x, y)
+            shape: tuple - a crop size in the form of (width, height)
+        """
         if origin is not None or shape is not None:
             origin = origin if origin is not None else (0, 0)
             images = self.get(None, component)
@@ -222,7 +237,13 @@ class ImagesBatch(Batch):
 
     @action
     def random_crop(self, component='images', shape=None):
-        """ Crop all images to a given shape and a random origin """
+        """ Crop all images to a given shape and a random origin
+        Args:
+            component: string - a component name which data should be cropped
+            shape: tuple - a crop size in the form of (width, height)
+
+        Origin will be chosen at random to fit the required shape
+        """
         if shape is not None:
             images = self.get(None, component)
             if isinstance(images[0], PIL.Image.Image):
