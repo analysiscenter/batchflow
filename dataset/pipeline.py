@@ -99,6 +99,7 @@ class Pipeline:
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
 
+        batch.pipeline = self
         joined_sets = None
         for _action in self._action_list:
             if _action['name'] == 'join':
@@ -116,6 +117,7 @@ class Pipeline:
                     _action_args = _action['args']
 
                 batch = action_method(*_action_args, **_action['kwargs'])
+                batch.pipeline = self
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)
@@ -270,7 +272,7 @@ class Pipeline:
 
         if prefetch > 0:
             # pool cannot have more than 63 workers
-            prefetch = min(prefetch, 63)
+            prefetch = min(prefetch, 62)
 
             if target == 'threads':
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)

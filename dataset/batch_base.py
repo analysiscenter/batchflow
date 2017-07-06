@@ -11,6 +11,7 @@ class BaseBatch:
     def __init__(self, index):
         self.index = index
         self._data = None
+        self.pipeline = None
 
     @staticmethod
     def make_filename():
