@@ -11,6 +11,7 @@ class Baseset:
         self.test = None
         self.validation = None
 
+        self._stop_iter = False
         self._start_index = 0
         self._order = None
         self._n_epochs = 0
@@ -111,6 +112,7 @@ class Baseset:
 
     def reset_iter(self):
         """ Clear all iteration metadata in order to start iterating from scratch """
+        self._stop_iter = False
         self._start_index = 0
         self._order = None
         self._n_epochs = 0
@@ -119,9 +121,11 @@ class Baseset:
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, *args, **kwargs):
         """ Generate batches """
+        self.reset_iter()
         for ix_batch in self.index.gen_batch(batch_size, shuffle, n_epochs, drop_last):
             batch = self.create_batch(ix_batch, *args, **kwargs)
             yield batch
+        self.reset_iter()
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, *args, **kwargs):
         """ Return a batch """

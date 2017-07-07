@@ -130,6 +130,8 @@ class DatasetIndex(Baseset):
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
         """ Return next batch """
+        if self._stop_iter:
+            raise StopIteration("Dataset is over. No more batches left.")
 
         if self._order is None:
             self._order = self._shuffle(shuffle)
@@ -156,6 +158,7 @@ class DatasetIndex(Baseset):
             if drop_last and len(rest_items) < batch_size:
                 raise StopIteration("Dataset is over. No more batches left.")
             else:
+                self._stop_iter = True
                 return self.create_batch(rest_items, pos=True)
         else:
             self._start_index += rest_of_batch
@@ -164,15 +167,14 @@ class DatasetIndex(Baseset):
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
         """ Generate batches """
-        self._start_index = 0
-        self._order = None
-        self._n_epochs = 0
+        self.reset_iter()
         while True:
             if n_epochs is not None and self._n_epochs >= n_epochs:
                 raise StopIteration()
             else:
                 batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last)
                 yield batch
+        self.reset_iter()
 
 
     def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ

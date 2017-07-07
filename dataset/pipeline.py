@@ -302,7 +302,6 @@ class Pipeline:
                 yield self._exec_all_actions(batch)
 
         self.reset_iter()
-        return self
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """
