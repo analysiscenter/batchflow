@@ -406,7 +406,7 @@ class DataFrameBatch(Batch):
         elif fmt == 'hdf5':
             dfr = pd.read_hdf(src, *args, **kwargs) # pylint: disable=redefined-variable-type
         elif fmt == 'csv':
-            dfr = pd.read_csv(src, *args, **kwargs)
+            dfr = pd.read_csv(src, *args, **kwargs) # pylint: disable=redefined-variable-type
         else:
             raise ValueError('Unknown format %s' % fmt)
 

@@ -8,7 +8,9 @@ try:
     import tensorflow as tf
 except ImportError:
     pass
+
 from .batch_base import BaseBatch
+from .exceptions import SkipBatchException
 
 
 class Pipeline:
@@ -99,6 +101,7 @@ class Pipeline:
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
 
+        batch.pipeline = self
         joined_sets = None
         for _action in self._action_list:
             if _action['name'] == 'join':
@@ -116,6 +119,7 @@ class Pipeline:
                     _action_args = _action['args']
 
                 batch = action_method(*_action_args, **_action['kwargs'])
+                batch.pipeline = self
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)
@@ -199,6 +203,7 @@ class Pipeline:
         self._prefetch_queue.put(None, block=True)
 
     def _run_batches_from_queue(self):
+        skip_batch = False
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
             if future is None:
@@ -208,12 +213,17 @@ class Pipeline:
             else:
                 try:
                     batch = future.result()
+                except SkipBatchException:
+                    skip_batch = True
                 except Exception:   # pylint: disable=broad-except
                     exc = future.exception()
                     print("Exception in a thread:", exc)
                     traceback.print_tb(exc.__traceback__)
-                self._batch_queue.put(batch, block=True)
-                self._prefetch_queue.task_done()
+                finally:
+                    if not skip_batch:
+                        self._batch_queue.put(batch, block=True)
+                        skip_batch = False
+                    self._prefetch_queue.task_done()
         return None
 
     def run(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
@@ -270,7 +280,7 @@ class Pipeline:
 
         if prefetch > 0:
             # pool cannot have more than 63 workers
-            prefetch = min(prefetch, 63)
+            prefetch = min(prefetch, 62)
 
             if target == 'threads':
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
@@ -297,10 +307,14 @@ class Pipeline:
                     is_end = True
         else:
             for batch in batch_generator:
-                yield self._exec_all_actions(batch)
+                try:
+                    batch_res = self._exec_all_actions(batch)
+                except SkipBatchException:
+                    pass
+                else:
+                    yield batch_res
 
         self.reset_iter()
-        return self
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """
