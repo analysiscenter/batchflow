@@ -8,6 +8,7 @@ from .dataset import Dataset
 from .jointdataset import JointDataset, FullDataset
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, model
+from .exceptions import SkipBatchExcetion
 
 
 if sys.version_info < (3, 5):

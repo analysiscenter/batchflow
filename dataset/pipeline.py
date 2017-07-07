@@ -8,7 +8,9 @@ try:
     import tensorflow as tf
 except ImportError:
     pass
+
 from .batch_base import BaseBatch
+from .exceptions import SkipBatchException
 
 
 class Pipeline:
@@ -201,6 +203,7 @@ class Pipeline:
         self._prefetch_queue.put(None, block=True)
 
     def _run_batches_from_queue(self):
+        skip_batch = False
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
             if future is None:
@@ -210,12 +213,17 @@ class Pipeline:
             else:
                 try:
                     batch = future.result()
+                except SkipBatchException:
+                    skip_batch = True
                 except Exception:   # pylint: disable=broad-except
                     exc = future.exception()
                     print("Exception in a thread:", exc)
                     traceback.print_tb(exc.__traceback__)
-                self._batch_queue.put(batch, block=True)
-                self._prefetch_queue.task_done()
+                finally:
+                    if not skip_batch:
+                        self._batch_queue.put(batch, block=True)
+                        skip_batch = False
+                    self._prefetch_queue.task_done()
         return None
 
     def run(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
@@ -299,7 +307,12 @@ class Pipeline:
                     is_end = True
         else:
             for batch in batch_generator:
-                yield self._exec_all_actions(batch)
+                try:
+                    batch_res = self._exec_all_actions(batch)
+                except SkipBatchException:
+                    pass
+                else:
+                    yield batch_res
 
         self.reset_iter()
 
