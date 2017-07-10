@@ -17,10 +17,10 @@ class ComponentDescriptor:
             return instance.data[self._component][pos]
 
     def __set__(self, instance, value):
-        if instance._pos is None:
+        if instance.pos is None:
             new_data = list(instance.data) if instance.data is not None else list()
             new_data[self._component] = value
-            instance._data = tuple(new_data)
+            instance.data = tuple(new_data)
         else:
             pos = instance.pos[self._component]
             instance.data[self._component][pos] = value
