@@ -1,7 +1,6 @@
 """ Contains basic Batch classes """
 
 import os
-from collections import namedtuple
 
 try:
     import blosc
@@ -154,7 +153,7 @@ class Batch(BaseBatch):
                 super().__setattr__(name, value)
                 self._data_named = self._item_class(data=self._data)
             elif name in self._components:
-                setattr(self._data_named, attr, value)
+                setattr(self._data_named, name, value)
             else:
                 super().__setattr__(name, value)
         else:
@@ -176,7 +175,7 @@ class Batch(BaseBatch):
             _data = data if self.components is None else self._item_class(data=data)
 
         if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(_data, comp, index) for comp in self.components]
+            pos = [self.get_pos(_data, comp, index) for comp in self._components]
             res = self._item_class(data=self._data, pos=pos)
         elif isinstance(_data, tuple):
             comps = self.components if self.components is not None else range(len(_data))
@@ -401,7 +400,7 @@ class DataFrameBatch(Batch):
         elif fmt == 'hdf5':
             dfr = pd.read_hdf(src, *args, **kwargs) # pylint: disable=redefined-variable-type
         elif fmt == 'csv':
-            dfr = pd.read_csv(src, *args, **kwargs)
+            dfr = pd.read_csv(src, *args, **kwargs) # pylint: disable=redefined-variable-type
         else:
             raise ValueError('Unknown format %s' % fmt)
 
