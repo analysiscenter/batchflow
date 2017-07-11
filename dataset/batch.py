@@ -30,8 +30,8 @@ from .components import MetaComponentsTuple
 class Batch(BaseBatch):
     """ The core Batch class """
     def __init__(self, index, preloaded=None):
-        super().__init__(index)
         self._item_class = self._make_item_class()
+        super().__init__(index)
         self._preloaded = preloaded
         self._data_named = None
 
@@ -135,7 +135,7 @@ class Batch(BaseBatch):
         if self._components is None:
             return None
         else:
-            return MetaComponentsTuple(self.__class__.__name__ + 'Item', self.components)
+            return MetaComponentsTuple(self.__class__.__name__ + 'Components', components=self.components)
 
     @property
     def _empty_data(self):
@@ -172,17 +172,15 @@ class Batch(BaseBatch):
         if data is None:
             _data = self.data
         else:
-            _data = data if self.components is None else self._item_class(data=data)
+            _data = data
 
         if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(_data, comp, index) for comp in self._components]
-            res = self._item_class(data=self._data, pos=pos)
+            pos = [self.get_pos(None, comp, index) for comp in self._components]
+            res = self._item_class(data=_data, pos=pos)
         elif isinstance(_data, tuple):
             comps = self.components if self.components is not None else range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
-            if self.components is not None:
-                res = self._item_class(data=res)
         else:
             res = _data[self.get_pos(data, None, index)]
         return res

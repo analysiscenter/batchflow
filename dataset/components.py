@@ -14,7 +14,8 @@ class ComponentDescriptor:
             return instance.data[self._component]
         else:
             pos = instance.pos[self._component]
-            return instance.data[self._component][pos]
+            data = instance.data[self._component]
+            return data[pos] if data is not None else None
 
     def __set__(self, instance, value):
         if instance.pos is None:
@@ -35,16 +36,19 @@ class BaseComponentsTuple:
             pos = [pos for _ in self.components]
         self.pos = pos
 
+    def __getitem__(self, item):
+        return self.data[item] if self.data is not None else None
+
 
 class MetaComponentsTuple(type):
     """ Class factory for a component tuple """
     def __init__(cls, *args, **kwargs):
         _ = kwargs
-        super().__init__(*args)
+        super().__init__(*args, (BaseComponentsTuple,), {})
 
     def __new__(mcs, name, components):
         comp_class = super().__new__(mcs, name, (BaseComponentsTuple,), {})
         comp_class.components = components
-        for i, cmp in enumerate(components):
-            setattr(comp_class, cmp, ComponentDescriptor(i))
+        for i, comp in enumerate(components):
+            setattr(comp_class, comp, ComponentDescriptor(i))
         return comp_class

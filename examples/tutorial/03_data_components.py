@@ -48,4 +48,11 @@ if __name__ == "__main__":
         print("    You can iterate over batch items:")
         for item in batch:
             print("      item features:", item.features, "    item label:", item.labels)
+
+        print()
+        print("    You can change batch data, even scalars:")
+        item = batch[batch.indices[0]]
+        item.labels = 100
+        print("     ", batch.labels)
+
     print("End iterating")
