@@ -1,7 +1,6 @@
 """ Contains basic Batch classes """
 
 import os
-from collections import namedtuple
 
 try:
     import blosc
@@ -25,11 +24,13 @@ from .dsindex import DatasetIndex
 from .decorators import action, inbatch_parallel, ModelDecorator
 from .dataset import Dataset
 from .batch_base import BaseBatch
+from .components import MetaComponentsTuple
 
 
 class Batch(BaseBatch):
     """ The core Batch class """
     def __init__(self, index, preloaded=None):
+        self._item_class = self._make_item_class()
         super().__init__(index)
         self._preloaded = preloaded
         self._data_named = None
@@ -130,15 +131,11 @@ class Batch(BaseBatch):
         else:
             return index
 
-    @property
-    def _item_class(self):
-        if self._components is not None:
-            item_class = namedtuple(self.__class__.__name__ + 'Item', self.components)
-            item_class.__new__.__defaults__ = (None,) * len(self.components)
-            globals()[item_class.__name__] = item_class
-            return item_class
+    def _make_item_class(self):
+        if self._components is None:
+            return None
         else:
-            raise AttributeError('components are not defined')
+            return MetaComponentsTuple(self.__class__.__name__ + 'Components', components=self.components)
 
     @property
     def _empty_data(self):
@@ -146,8 +143,7 @@ class Batch(BaseBatch):
 
     def __getattr__(self, name):
         if self._components is not None and name in self._components:
-            pos = self._components[name]
-            return self.data[pos]
+            return getattr(self.data, name)
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
@@ -155,14 +151,9 @@ class Batch(BaseBatch):
         if self._components is not None:
             if name == "_data":
                 super().__setattr__(name, value)
-                if self._data is None:
-                    self._data_named = self._item_class()
-                else:
-                    self._data_named = self._item_class(*self._data)
+                self._data_named = self._item_class(data=self._data)
             elif name in self._components:
-                arg = {name: value}
-                data = self._item_class(*self.data)._replace(**arg)  # pylint:disable=no-member
-                self._data = tuple(data)
+                setattr(self._data_named, name, value)
             else:
                 super().__setattr__(name, value)
         else:
@@ -181,14 +172,15 @@ class Batch(BaseBatch):
         if data is None:
             _data = self.data
         else:
-            _data = data if self.components is None else self._item_class(*data)
+            _data = data
 
-        if isinstance(_data, tuple):
+        if self._item_class is not None and isinstance(_data, self._item_class):
+            pos = [self.get_pos(None, comp, index) for comp in self._components]
+            res = self._item_class(data=_data, pos=pos)
+        elif isinstance(_data, tuple):
             comps = self.components if self.components is not None else range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
-            if self.components is not None:
-                res = self._item_class(*res)
         else:
             res = _data[self.get_pos(data, None, index)]
         return res
