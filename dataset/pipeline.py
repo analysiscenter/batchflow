@@ -4,6 +4,7 @@ import concurrent.futures as cf
 import threading
 import asyncio
 import queue as q
+import numpy as np
 try:
     import tensorflow as tf
 except ImportError:
@@ -11,11 +12,28 @@ except ImportError:
 from .batch_base import BaseBatch
 
 
+PIPELINE_ID = '#_pipeline'
+JOIN_ID = '#_join'
+
+
 class Pipeline:
     """ Pipeline """
-    def __init__(self, dataset):
-        self.dataset = dataset
-        self._action_list = []
+    def __init__(self, dataset=None, pipeline=None, proba=None):
+        if pipeline is None:
+            self.dataset = dataset
+            self._action_list = []
+            self.proba = proba
+        else:
+            self.dataset = pipeline.dataset
+            self._action_list = pipeline._action_list[:]
+            self.proba = None
+            if self.num_actions > 1:
+                self.proba = pipeline.proba if proba is None else proba
+            elif self.num_actions == 1:
+                self._action_list[-1]['proba'] = proba
+            else:
+                raise ValueError("Cannot add probability to en empty pipeline")
+
         self._stop_flag = False
         self._prefetch_count = None
         self._prefetch_queue = None
@@ -25,6 +43,52 @@ class Pipeline:
         self._batch_generator = None
         self._tf_session = None
 
+    def __enter__(self):
+        """ Create a context and return an empty pipeline non-bound to any dataset """
+        return type(self)()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+
+    @classmethod
+    def from_pipeline(cls, pipeline, proba=None):
+        new_p = cls(pipeline.dataset)
+        new_p._action_list = pipeline._action_list[:]
+        new_p.proba = pipeline.proba
+        return new_p
+
+    @classmethod
+    def concat(cls, pipeline1, pipeline2):
+        if not (pipeline1.dataset is None or pipeline2.dataset is None) or \
+           (pipeline1.dataset != pipeline2.dataset):
+            raise ValueError("Cannot add pipelines with different datasets")
+        dataset = pipeline1.dataset or pipeline2.dataset
+        new_p = cls(dataset)
+        new_p._action_list = pipeline1._action_list[:] + pipeline2._action_list[:]
+        return new_p
+
+    def __add__(self, other):
+        if not isinstance(other, Pipeline):
+            raise TypeError("Both operands should be Pipelines")
+        if (self.proba is None and other.proba is None) or np.allclose(self.proba, other.proba):
+            new_p = self.concat(self, other)
+        else:
+            new_p = self.from_pipeline(pipeline=self)
+            new_p._append_pipeline(other, proba=new_p.proba)
+        return new_p
+
+    def __matmul__(self, other):
+        if self.num_actions == 0:
+            raise ValueError("Cannot add probability to en empty pipeline")
+        if not isinstance(other, float) and other not in [0, 1]:
+            raise TypeError("Probability should be float or 0 or 1")
+        other = float(other) if int(other) != 1 else None
+        return self.from_pipeline(pipeline=self, proba=other)
+
+    def __lshift__(self, other):
+        new_p = self.from_pipeline(self)
+        new_p.dataset = other
+        return new_p
 
     @staticmethod
     def _is_batch_method(name, cls=None):
@@ -42,10 +106,21 @@ class Pipeline:
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
+    @property
+    def num_actions(self):
+        """ Return index length """
+        return len(self._action_list)
+
     def _append_action(self, *args, **kwargs):
         """ Add new action to the log of future actions """
-        self._action_list[-1].update({'args': args, 'kwargs': kwargs})
-        return self
+        new_p = self.from_pipeline(self)
+        new_p._action_list[-1].update({'args': args, 'kwargs': kwargs, 'proba': None})
+        self._action_list = self._action_list[:-1]
+        return new_p
+
+    def _append_pipeline(self, pipeline, proba=None):
+        """ Add a nested pipeline to the log of future actions """
+        self._action_list.append({'name': PIPELINE_ID, 'pipeline': pipeline, 'proba': proba})
 
     def __getstate__(self):
         return {'dataset': self.dataset, 'action_list': self._action_list}
@@ -67,7 +142,6 @@ class Pipeline:
     def __len__(self):
         """ Return index length """
         return len(self.index)
-
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -102,7 +176,7 @@ class Pipeline:
         batch.pipeline = self
         joined_sets = None
         for _action in self._action_list:
-            if _action['name'] == 'join':
+            if _action['name'] == JOIN_ID:
                 joined_sets = _action['datasets']
             else:
                 action_method, _ = self._get_action_method(batch, _action['name'])
@@ -125,7 +199,7 @@ class Pipeline:
 
     def join(self, *datasets):
         """ Join other datasets """
-        self._action_list.append({'name': 'join', 'datasets': datasets})
+        self._action_list.append({'name': JOIN_ID, 'datasets': datasets, 'proba': None})
         return self
 
     def put_into_tf_queue(self, session=None, queue=None, get_tensor=None):
