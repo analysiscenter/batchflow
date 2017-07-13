@@ -9,30 +9,39 @@ try:
     import tensorflow as tf
 except ImportError:
     pass
-from .batch_base import BaseBatch
 
+from .batch_base import BaseBatch
+from .base import Baseset
 
 PIPELINE_ID = '#_pipeline'
 JOIN_ID = '#_join'
 
 
+def mult_option(a, b):
+    return a * b if a is not None and b is not None else a if a is not None else b
+
 class Pipeline:
     """ Pipeline """
-    def __init__(self, dataset=None, pipeline=None, proba=None):
+    def __init__(self, dataset=None, pipeline=None, proba=None, repeat=None):
         if pipeline is None:
             self.dataset = dataset
             self._action_list = []
             self.proba = proba
+            self.repeat = repeat
         else:
             self.dataset = pipeline.dataset
-            self._action_list = pipeline._action_list[:]
-            self.proba = None
-            if self.num_actions > 1:
-                self.proba = pipeline.proba if proba is None else proba
-            elif self.num_actions == 1:
-                self._action_list[-1]['proba'] = proba
-            else:
-                raise ValueError("Cannot add probability to en empty pipeline")
+            self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
+            self.proba = mult_option(proba, pipeline.proba)
+            self.repeat = mult_option(repeat, pipeline.repeat)
+            if self.num_actions == 1:
+                if proba is not None:
+                    if self._action_list[-1]['repeat'] is None:
+                        self._action_list[-1]['proba'] = mult_option(self.proba, self._action_list[-1]['proba'])
+                        self.proba = None
+                elif repeat is not None:
+                    if self._action_list[-1]['proba'] is None:
+                        self._action_list[-1]['repeat'] = mult_option(self.repeat, self._action_list[-1]['repeat'])
+                        self.repeat = None
 
         self._stop_flag = False
         self._prefetch_count = None
@@ -47,34 +56,54 @@ class Pipeline:
         """ Create a context and return an empty pipeline non-bound to any dataset """
         return type(self)()
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, trback):
         pass
 
     @classmethod
-    def from_pipeline(cls, pipeline, proba=None):
-        new_p = cls(pipeline.dataset)
-        new_p._action_list = pipeline._action_list[:]
-        new_p.proba = pipeline.proba
+    def from_pipeline(cls, pipeline, proba=None, repeat=None):
+        """ Create a pipeline from another pipeline """
+        if proba is None:
+            if repeat is None:
+                new_p = cls(pipeline=pipeline)
+            else:
+                if pipeline.proba is None:
+                    new_p = cls(pipeline=pipeline, repeat=repeat)
+                else:
+                    new_p = cls()
+                    new_p.append_pipeline(pipeline, repeat=repeat)
+        else:
+            if pipeline.repeat is None:
+                new_p = cls(pipeline=pipeline, proba=proba)
+            else:
+                new_p = cls()
+                new_p.append_pipeline(pipeline, proba=proba)
         return new_p
 
     @classmethod
     def concat(cls, pipeline1, pipeline2):
-        if not (pipeline1.dataset is None or pipeline2.dataset is None) or \
-           (pipeline1.dataset != pipeline2.dataset):
+        """ Create a new pipeline concatenating two given pipelines """
+        # pylint: disable=protected-access
+        if pipeline1.dataset != pipeline2.dataset and pipeline1.dataset is not None and pipeline2.dataset is not None:
             raise ValueError("Cannot add pipelines with different datasets")
-        dataset = pipeline1.dataset or pipeline2.dataset
-        new_p = cls(dataset)
-        new_p._action_list = pipeline1._action_list[:] + pipeline2._action_list[:]
-        return new_p
+
+        new_p1 = cls.from_pipeline(pipeline1)
+        new_p2 = cls.from_pipeline(pipeline2)
+        new_p1._action_list += new_p2._action_list[:]
+        new_p1.dataset = pipeline1.dataset or pipeline2.dataset
+        return new_p1
 
     def __add__(self, other):
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
-        if (self.proba is None and other.proba is None) or np.allclose(self.proba, other.proba):
+        sproba, oproba = self.proba or 1, other.proba or 1
+        srepeat, orepeat = self.repeat or 1, other.repeat or 1
+        #if (self.num_actions == 1 and other.num_actions == 1 and np.allclose(sproba, oproba) and srepeat == orepeat) or \
+        if np.allclose(sproba, oproba) and srepeat == orepeat:
             new_p = self.concat(self, other)
         else:
-            new_p = self.from_pipeline(pipeline=self)
-            new_p._append_pipeline(other, proba=new_p.proba)
+            new_p = self.from_pipeline(None)
+            new_p.append_pipeline(self)
+            new_p.append_pipeline(other)
         return new_p
 
     def __matmul__(self, other):
@@ -83,9 +112,26 @@ class Pipeline:
         if not isinstance(other, float) and other not in [0, 1]:
             raise TypeError("Probability should be float or 0 or 1")
         other = float(other) if int(other) != 1 else None
-        return self.from_pipeline(pipeline=self, proba=other)
+        return self.from_pipeline(self, proba=other)
+
+    def __mul__(self, other):
+        if other < 0:
+            raise ValueError("Repeat count cannot be negative. Use as pipeline * positive_number")
+        elif isinstance(other, int):
+            new_p = self.from_pipeline(self, repeat=other)
+        elif isinstance(other, float):
+            repeat = int(other)
+            proba = other - repeat
+            new_p = self
+            if repeat > 0:
+                new_p = self.from_pipeline(self, repeat=repeat)
+            if not np.allclose(proba, 0.0):
+                new_p = new_p @ proba
+        return new_p
 
     def __lshift__(self, other):
+        if not isinstance(other, Baseset):
+            raise TypeError("Pipelines might take only Datasets. Use as pipeline << dataset")
         new_p = self.from_pipeline(self)
         new_p.dataset = other
         return new_p
@@ -99,10 +145,10 @@ class Pipeline:
             return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
 
     def __getattr__(self, name, *args, **kwargs):
-        """ Check if an unknown attr is an action from the batch class """
+        """ Check if an unknown attr is an action from some batch class """
         if self._is_batch_method(name):
             self._action_list.append({'name': name})
-            return self._append_action
+            return self.append_action
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
@@ -111,23 +157,27 @@ class Pipeline:
         """ Return index length """
         return len(self._action_list)
 
-    def _append_action(self, *args, **kwargs):
+    def append_action(self, *args, **kwargs):
         """ Add new action to the log of future actions """
+        self._action_list[-1].update({'args': args, 'kwargs': kwargs, 'proba': None, 'repeat': None})
         new_p = self.from_pipeline(self)
-        new_p._action_list[-1].update({'args': args, 'kwargs': kwargs, 'proba': None})
         self._action_list = self._action_list[:-1]
         return new_p
 
-    def _append_pipeline(self, pipeline, proba=None):
+    def append_pipeline(self, pipeline, proba=None, repeat=None):
         """ Add a nested pipeline to the log of future actions """
-        self._action_list.append({'name': PIPELINE_ID, 'pipeline': pipeline, 'proba': proba})
+        self._action_list.append({'name': PIPELINE_ID, 'pipeline': pipeline,
+                                  'proba': proba, 'repeat': repeat})
 
     def __getstate__(self):
-        return {'dataset': self.dataset, 'action_list': self._action_list}
+        return {'dataset': self.dataset, 'action_list': self._action_list,
+                'proba': self.proba, 'repeat': self.repeat}
 
     def __setstate__(self, state):
         self.dataset = state['dataset']
         self._action_list = state['action_list']
+        self.proba = state['proba']
+        self.repeat = state['repeat']
 
     @property
     def index(self):
@@ -178,6 +228,8 @@ class Pipeline:
         for _action in self._action_list:
             if _action['name'] == JOIN_ID:
                 joined_sets = _action['datasets']
+            elif _action['name'] == PIPELINE_ID:
+                pass
             else:
                 action_method, _ = self._get_action_method(batch, _action['name'])
 
