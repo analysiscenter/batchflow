@@ -18,6 +18,7 @@ JOIN_ID = '#_join'
 
 
 def mult_option(a, b):
+    """ Multiply even if any arg is None """
     return a * b if a is not None and b is not None else a if a is not None else b
 
 class Pipeline:
@@ -80,16 +81,16 @@ class Pipeline:
         return new_p
 
     @classmethod
-    def concat(cls, pipeline1, pipeline2):
+    def concat(cls, pipe1, pipe2):
         """ Create a new pipeline concatenating two given pipelines """
         # pylint: disable=protected-access
-        if pipeline1.dataset != pipeline2.dataset and pipeline1.dataset is not None and pipeline2.dataset is not None:
+        if pipe1.dataset != pipe2.dataset and pipe1.dataset is not None and pipe2.dataset is not None:
             raise ValueError("Cannot add pipelines with different datasets")
 
-        new_p1 = cls.from_pipeline(pipeline1)
-        new_p2 = cls.from_pipeline(pipeline2)
+        new_p1 = cls.from_pipeline(pipe1)
+        new_p2 = cls.from_pipeline(pipe2)
         new_p1._action_list += new_p2._action_list[:]
-        new_p1.dataset = pipeline1.dataset or pipeline2.dataset
+        new_p1.dataset = pipe1.dataset or pipe2.dataset
         return new_p1
 
     def __add__(self, other):
@@ -97,7 +98,6 @@ class Pipeline:
             raise TypeError("Both operands should be Pipelines")
         sproba, oproba = self.proba or 1, other.proba or 1
         srepeat, orepeat = self.repeat or 1, other.repeat or 1
-        #if (self.num_actions == 1 and other.num_actions == 1 and np.allclose(sproba, oproba) and srepeat == orepeat) or \
         if np.allclose(sproba, oproba) and srepeat == orepeat:
             new_p = self.concat(self, other)
         else:
