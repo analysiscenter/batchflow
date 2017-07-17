@@ -188,7 +188,10 @@ class ActionDecorator:
                 return self._action_wo_model()
         else:
             # @action without arguments
-            return self.call_action(self.action_self, *args, **kwargs)
+            res = self.call_action(self.action_self, *args, **kwargs)
+            # ensure that there is no hidden ref to the batch
+            self.action_self = None
+            return res
 
     def __get__(self, instance, owner):
         _ = owner
