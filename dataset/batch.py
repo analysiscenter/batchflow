@@ -33,7 +33,6 @@ class Batch(BaseBatch):
         self._item_class = self._make_item_class()
         super().__init__(index)
         self._preloaded = preloaded
-        self._data_named = None
 
     @classmethod
     def from_data(cls, data):
