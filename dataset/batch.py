@@ -174,7 +174,7 @@ class Batch(BaseBatch):
             _data = data
 
         if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(None, comp, index) for comp in self.components]
+            pos = [self.get_pos(None, comp, index) for comp in self.components]   # pylint: disable=not-an-iterable
             res = self._item_class(data=_data, pos=pos)
         elif isinstance(_data, tuple):
             comps = self.components if self.components is not None else range(len(_data))
