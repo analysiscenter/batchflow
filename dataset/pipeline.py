@@ -28,22 +28,16 @@ class Pipeline:
         if pipeline is None:
             self.dataset = dataset
             self._action_list = []
-            self.proba = proba
-            self.repeat = repeat
         else:
             self.dataset = pipeline.dataset
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
-            self.proba = mult_option(proba, pipeline.proba)
-            self.repeat = mult_option(repeat, pipeline.repeat)
             if self.num_actions == 1:
                 if proba is not None:
-                    if self._action_list[-1]['repeat'] is None:
-                        self._action_list[-1]['proba'] = mult_option(self.proba, self._action_list[-1]['proba'])
-                        self.proba = None
+                    if self.get_last_action_repeat() is None:
+                        self._action_list[-1]['proba'] = mult_option(proba, self._action_list[-1]['proba'])
                 elif repeat is not None:
-                    if self._action_list[-1]['proba'] is None:
-                        self._action_list[-1]['repeat'] = mult_option(self.repeat, self._action_list[-1]['repeat'])
-                        self.repeat = None
+                    if self.get_last_action_proba() is None:
+                        self._action_list[-1]['repeat'] = mult_option(repeat, self._action_list[-1]['repeat'])
 
         self._stop_flag = False
         self._prefetch_count = None
@@ -68,13 +62,13 @@ class Pipeline:
             if repeat is None:
                 new_p = cls(pipeline=pipeline)
             else:
-                if pipeline.proba is None:
+                if pipeline.num_actions == 1 and pipeline.get_last_action_proba() is None:
                     new_p = cls(pipeline=pipeline, repeat=repeat)
                 else:
                     new_p = cls()
                     new_p.append_pipeline(pipeline, repeat=repeat)
         else:
-            if pipeline.repeat is None:
+            if pipeline.num_actions == 1 and pipeline.get_last_action_repeat() is None:
                 new_p = cls(pipeline=pipeline, proba=proba)
             else:
                 new_p = cls()
@@ -94,18 +88,16 @@ class Pipeline:
         new_p1.dataset = pipe1.dataset or pipe2.dataset
         return new_p1
 
+    def get_last_action_proba(self):
+        return self._action_list[-1]['proba']
+
+    def get_last_action_repeat(self):
+        return self._action_list[-1]['repeat']
+
     def __add__(self, other):
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
-        sproba, oproba = self.proba or 1, other.proba or 1
-        srepeat, orepeat = self.repeat or 1, other.repeat or 1
-        if np.allclose(sproba, oproba) and srepeat == orepeat:
-            new_p = self.concat(self, other)
-        else:
-            new_p = self.from_pipeline(None)
-            new_p.append_pipeline(self)
-            new_p.append_pipeline(other)
-        return new_p
+        return self.concat(self, other)
 
     def __matmul__(self, other):
         if self.num_actions == 0:
@@ -171,14 +163,11 @@ class Pipeline:
                                   'proba': proba, 'repeat': repeat})
 
     def __getstate__(self):
-        return {'dataset': self.dataset, 'action_list': self._action_list,
-                'proba': self.proba, 'repeat': self.repeat}
+        return {'dataset': self.dataset, 'action_list': self._action_list}
 
     def __setstate__(self, state):
         self.dataset = state['dataset']
         self._action_list = state['action_list']
-        self.proba = state['proba']
-        self.repeat = state['repeat']
 
     @property
     def index(self):
@@ -220,64 +209,54 @@ class Pipeline:
         return action_method, action_spec
 
     def _exec_one_action(self, batch, action, args, kwargs):
-        if self._needs_exec(action['proba']):
-            repeat = action['repeat'] or 1
-            for _ in range(repeat):
+        if self._needs_exec(action):
+            for _ in range(action['repeat'] or 1):
                 action_method, _ = self._get_action_method(batch, action['name'])
                 batch.pipeline = self
                 batch = action_method(*args, **kwargs)
         return batch
 
     def _exec_nested_pipeline(self, batch, action):
-        if self._needs_exec(action['proba']):
+        if self._needs_exec(action):
             for _ in range(action['repeat'] or 1):
-                if self._needs_exec(action['pipeline'].proba):
-                    for _ in range(action['pipeline'].repeat or 1):
-                        batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
+                batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
         return batch
 
     def _exec_all_actions(self, batch, action_list=None):
         joined_sets = None
         action_list = action_list or self._action_list
         for _action in action_list:
-            if self._needs_exec(_action['proba']):
-                if _action['name'] == JOIN_ID:
-                    joined_sets = _action['datasets']
-                elif _action['name'] == PIPELINE_ID:
-                    batch = self._exec_nested_pipeline(batch, _action)
+            if _action['name'] == JOIN_ID:
+                joined_sets = _action['datasets']
+            elif _action['name'] == PIPELINE_ID:
+                batch = self._exec_nested_pipeline(batch, _action)
+            else:
+                if joined_sets is not None:
+                    joined_data = []
+                    for jset in joined_sets:   # pylint: disable=not-an-iterable
+                        jbatch = jset.create_batch(batch.index)
+                        joined_data.append(jbatch)
+                    _action_args = tuple(joined_data) + _action['args']
+                    joined_sets = None
                 else:
-                    if joined_sets is not None:
-                        joined_data = []
-                        for jset in joined_sets:   # pylint: disable=not-an-iterable
-                            jbatch = jset.create_batch(batch.index)
-                            joined_data.append(jbatch)
-                        _action_args = tuple(joined_data) + _action['args']
-                        joined_sets = None
-                    else:
-                        _action_args = _action['args']
+                    _action_args = _action['args']
 
-                    batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
+                batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
 
-                    if 'tf_queue' in _action:
-                        self._put_batch_into_tf_queue(batch, _action)
+                if 'tf_queue' in _action:
+                    self._put_batch_into_tf_queue(batch, _action)
         return batch
 
-    def _needs_exec(self, proba=None):
-        if proba is None:
+    def _needs_exec(self, action):
+        if action['proba'] is None:
             return True
         else:
-            return np.random.binomial(1, proba) == 1
-
+            return np.random.binomial(1, action['proba']) == 1
 
     def _exec(self, batch, new_loop=False):
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
-        if self._needs_exec(self.proba):
-            for _ in range(self.repeat or 1):
-                res = self._exec_all_actions(batch)
-        else:
-            res = None
-        return res
+        return self._exec_all_actions(batch)
 
     def join(self, *datasets):
         """ Join other datasets """

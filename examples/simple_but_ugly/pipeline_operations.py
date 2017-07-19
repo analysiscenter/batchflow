@@ -62,8 +62,8 @@ BATCH_SIZE = 3
 # Load data and take some actions
 print("\nFull preprocessing")
 with Pipeline() as p:
-    pipe1 = p.action1() @ .7 * 2 + p.action2() * 2 @ 0.5 * 3
-    pipe1 = p.action1() @ .7 + p.action2() * 2 @ 0.5 * 3
+    pipe1 = p.action1().action2() @ .5 + p.action3() * 2 @ .5 + p.action3() * 3 @ .2
+    #pipe1 = p.action1() @ .7 + p.action2() * 2 @ 0.5 * 3
     #pipe2 = p.action2() @ .3 * 3 * 2 + p.action3() * 4 @ .4
     pipe = pipe1
     #pipe = pipe1 * 2  + pipe2
@@ -73,7 +73,7 @@ fp_data = pipe << ds_data
 
 
 def print_pipe(level, pipe):
-    print("  " * level, pipe.proba, pipe.repeat)
+    #print("  " * level, pipe.proba, pipe.repeat)
     for a in pipe._action_list:
         if 'pipeline' in a:
             print("  " * level, a)
@@ -89,6 +89,3 @@ print_pipe(0, pipe)
 # Now run the actions once for each batch
 fp_data.run(BATCH_SIZE, shuffle=False)
 # The last batch has fewer items as run makes only one pass through the dataset
-
-help(MyBatch.action2)
-print(MyBatch.action2.__doc__)
