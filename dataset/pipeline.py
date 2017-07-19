@@ -228,12 +228,13 @@ class Pipeline:
                 batch = action_method(*args, **kwargs)
         return batch
 
-    def _exec_nested_pipeline(self, action):
+    def _exec_nested_pipeline(self, batch, action):
         if self._needs_exec(action['proba']):
             for _ in range(action['repeat'] or 1):
                 if self._needs_exec(action['pipeline'].proba):
                     for _ in range(action['pipeline'].repeat or 1):
                         batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
+        return batch
 
     def _exec_all_actions(self, batch, action_list=None):
         joined_sets = None
@@ -243,7 +244,7 @@ class Pipeline:
                 if _action['name'] == JOIN_ID:
                     joined_sets = _action['datasets']
                 elif _action['name'] == PIPELINE_ID:
-                    self._exec_nested_pipeline(_action)
+                    batch = self._exec_nested_pipeline(batch, _action)
                 else:
                     if joined_sets is not None:
                         joined_data = []
@@ -255,7 +256,7 @@ class Pipeline:
                     else:
                         _action_args = _action['args']
 
-                    self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
+                    batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
 
                     if 'tf_queue' in _action:
                         self._put_batch_into_tf_queue(batch, _action)
