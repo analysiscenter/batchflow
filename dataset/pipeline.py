@@ -222,11 +222,18 @@ class Pipeline:
     def _exec_one_action(self, batch, action, args, kwargs):
         if self._needs_exec(action['proba']):
             repeat = action['repeat'] or 1
-            for i in range(repeat):
+            for _ in range(repeat):
                 action_method, _ = self._get_action_method(batch, action['name'])
                 batch.pipeline = self
                 batch = action_method(*args, **kwargs)
         return batch
+
+    def _exec_nested_pipeline(self, action):
+        if self._needs_exec(action['proba']):
+            for _ in range(action['repeat'] or 1):
+                if self._needs_exec(action['pipeline'].proba):
+                    for _ in range(action['pipeline'].repeat or 1):
+                        batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
 
     def _exec_all_actions(self, batch, action_list=None):
         joined_sets = None
@@ -236,11 +243,7 @@ class Pipeline:
                 if _action['name'] == JOIN_ID:
                     joined_sets = _action['datasets']
                 elif _action['name'] == PIPELINE_ID:
-                    if self._needs_exec(_action['proba']):
-                        for i in range(_action['repeat'] or 1):
-                            if self._needs_exec(_action['pipeline'].proba):
-                                for i in range(_action['pipeline'].repeat or 1):
-                                    batch = self._exec_all_actions(batch, _action['pipeline']._action_list)
+                    self._exec_nested_pipeline(_action)
                 else:
                     if joined_sets is not None:
                         joined_data = []
@@ -269,7 +272,7 @@ class Pipeline:
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
         if self._needs_exec(self.proba):
-            for i in range(self.repeat or 1):
+            for _ in range(self.repeat or 1):
                 res = self._exec_all_actions(batch)
         else:
             res = None
