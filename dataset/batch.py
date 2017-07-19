@@ -33,7 +33,6 @@ class Batch(BaseBatch):
         self._item_class = self._make_item_class()
         super().__init__(index)
         self._preloaded = preloaded
-        self._data_named = None
 
     @classmethod
     def from_data(cls, data):
@@ -175,7 +174,7 @@ class Batch(BaseBatch):
             _data = data
 
         if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(None, comp, index) for comp in self._components]
+            pos = [self.get_pos(None, comp, index) for comp in self.components]
             res = self._item_class(data=_data, pos=pos)
         elif isinstance(_data, tuple):
             comps = self.components if self.components is not None else range(len(_data))

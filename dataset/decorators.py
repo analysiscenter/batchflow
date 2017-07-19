@@ -5,6 +5,7 @@ import traceback
 import threading
 import concurrent.futures as cf
 import asyncio
+import functools
 
 
 def _workers_count():
@@ -188,7 +189,10 @@ class ActionDecorator:
                 return self._action_wo_model()
         else:
             # @action without arguments
-            return self.call_action(self.action_self, *args, **kwargs)
+            res = self.call_action(self.action_self, *args, **kwargs)
+            # ensure that there is no hidden ref to the batch
+            self.action_self = None
+            return res
 
     def __get__(self, instance, owner):
         _ = owner
@@ -350,6 +354,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
+        @functools.wraps(method)
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method in a required parallel engine """
             if asyncio.iscoroutinefunction(method) or target == 'async':

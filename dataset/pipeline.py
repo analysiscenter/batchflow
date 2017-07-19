@@ -12,6 +12,7 @@ except ImportError:
 
 from .batch_base import BaseBatch
 from .base import Baseset
+from .exceptions import SkipBatchException
 
 PIPELINE_ID = '#_pipeline'
 JOIN_ID = '#_join'
@@ -218,41 +219,66 @@ class Pipeline:
             raise AttributeError("Method '%s' has not been found in the %s class" % (name, type(batch).__name__))
         return action_method, action_spec
 
+    def _exec_one_action(self, batch, action, args, kwargs):
+        if self._needs_exec(action['proba']):
+            repeat = action['repeat'] or 1
+            for i in range(repeat):
+                action_method, _ = self._get_action_method(batch, action['name'])
+                batch.pipeline = self
+                batch = action_method(*args, **kwargs)
+        return batch
 
-    def _exec_all_actions(self, batch, new_loop=False):
+    def _exec_all_actions(self, batch, action_list=None):
+        joined_sets = None
+        action_list = action_list or self._action_list
+        for _action in action_list:
+            if self._needs_exec(_action['proba']):
+                if _action['name'] == JOIN_ID:
+                    joined_sets = _action['datasets']
+                elif _action['name'] == PIPELINE_ID:
+                    if self._needs_exec(_action['proba']):
+                        for i in range(_action['repeat'] or 1):
+                            if self._needs_exec(_action['pipeline'].proba):
+                                for i in range(_action['pipeline'].repeat or 1):
+                                    batch = self._exec_all_actions(batch, _action['pipeline']._action_list)
+                else:
+                    if joined_sets is not None:
+                        joined_data = []
+                        for jset in joined_sets:   # pylint: disable=not-an-iterable
+                            jbatch = jset.create_batch(batch.index)
+                            joined_data.append(jbatch)
+                        _action_args = tuple(joined_data) + _action['args']
+                        joined_sets = None
+                    else:
+                        _action_args = _action['args']
+
+                    self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
+
+                    if 'tf_queue' in _action:
+                        self._put_batch_into_tf_queue(batch, _action)
+        return batch
+
+    def _needs_exec(self, proba=None):
+        if proba is None:
+            return True
+        else:
+            return np.random.binomial(1, proba) == 1
+
+
+    def _exec(self, batch, new_loop=False):
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
-
-        batch.pipeline = self
-        joined_sets = None
-        for _action in self._action_list:
-            if _action['name'] == JOIN_ID:
-                joined_sets = _action['datasets']
-            elif _action['name'] == PIPELINE_ID:
-                pass
-            else:
-                action_method, _ = self._get_action_method(batch, _action['name'])
-
-                if joined_sets is not None:
-                    joined_data = []
-                    for jset in joined_sets:   # pylint: disable=not-an-iterable
-                        joined_data.append(jset.create_batch(batch.index))
-                    _action_args = tuple(joined_data) + _action['args']
-                    joined_sets = None
-                else:
-                    _action_args = _action['args']
-
-                batch = action_method(*_action_args, **_action['kwargs'])
-                batch.pipeline = self
-
-                if 'tf_queue' in _action:
-                    self._put_batch_into_tf_queue(batch, _action)
-        return batch
+        if self._needs_exec(self.proba):
+            for i in range(self.repeat or 1):
+                res = self._exec_all_actions(batch)
+        else:
+            res = None
+        return res
 
     def join(self, *datasets):
         """ Join other datasets """
-        self._action_list.append({'name': JOIN_ID, 'datasets': datasets, 'proba': None})
-        return self
+        self._action_list.append({'name': JOIN_ID, 'datasets': datasets})
+        return self.append_action()
 
     def put_into_tf_queue(self, session=None, queue=None, get_tensor=None):
         """ Insert a tensorflow queue after the action"""
@@ -322,11 +348,12 @@ class Pipeline:
             except StopIteration:
                 break
             else:
-                future = self._executor.submit(self._exec_all_actions, batch, new_loop=True)
+                future = self._executor.submit(self._exec, batch, new_loop=True)
                 self._prefetch_queue.put(future, block=True)
         self._prefetch_queue.put(None, block=True)
 
     def _run_batches_from_queue(self):
+        skip_batch = False
         while not self._stop_flag:
             future = self._prefetch_queue.get(block=True)
             if future is None:
@@ -336,12 +363,17 @@ class Pipeline:
             else:
                 try:
                     batch = future.result()
+                except SkipBatchException:
+                    skip_batch = True
                 except Exception:   # pylint: disable=broad-except
                     exc = future.exception()
                     print("Exception in a thread:", exc)
                     traceback.print_tb(exc.__traceback__)
-                self._batch_queue.put(batch, block=True)
-                self._prefetch_queue.task_done()
+                finally:
+                    if not skip_batch:
+                        self._batch_queue.put(batch, block=True)
+                        skip_batch = False
+                    self._prefetch_queue.task_done()
         return None
 
     def run(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
@@ -354,7 +386,7 @@ class Pipeline:
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all previous lazy actions """
         batch = self.dataset.create_batch(batch_index, *args, **kwargs)
-        batch_res = self._exec_all_actions(batch)
+        batch_res = self._exec(batch)
         return batch_res
 
 
@@ -425,10 +457,14 @@ class Pipeline:
                     is_end = True
         else:
             for batch in batch_generator:
-                yield self._exec_all_actions(batch)
+                try:
+                    batch_res = self._exec(batch)
+                except SkipBatchException:
+                    pass
+                else:
+                    yield batch_res
 
         self.reset_iter()
-        return self
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """

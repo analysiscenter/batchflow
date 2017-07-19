@@ -4,7 +4,7 @@ import sys
 import numpy as np
 
 sys.path.append("../..")
-from dataset import Dataset, Batch, Pipeline, action
+from dataset import Dataset, Batch, Pipeline, action, inbatch_parallel
 
 
 # Example of custome Batch class which defines some actions
@@ -26,12 +26,19 @@ class MyBatch(Batch):
 
     @action
     def action2(self):
-        print("action 2", self.indices)
+        """ action2 """
+        print("  action 2", self.indices)
         return self
 
     @action
     def action3(self):
         print("action 3", self.indices)
+        return self
+
+    #@action
+    @inbatch_parallel('indices')
+    def par(self):
+        """ Parallel like nobody's watching """
         return self
 
 # number of items in the dataset
@@ -55,18 +62,14 @@ BATCH_SIZE = 3
 # Load data and take some actions
 print("\nFull preprocessing")
 with Pipeline() as p:
-    pipe1 = p.action1() @ .2 * 3 @ .3 + p.action2() @ 0.012
+    pipe1 = p.action1() @ .7 * 2 + p.action2() * 2 @ 0.5 * 3
+    pipe1 = p.action1() @ .7 + p.action2() * 2 @ 0.5 * 3
     #pipe2 = p.action2() @ .3 * 3 * 2 + p.action3() * 4 @ .4
     pipe = pipe1
     #pipe = pipe1 * 2  + pipe2
     #pipe = p.action1() @ .3 * 2 + p.action2()
 
 fp_data = pipe << ds_data
-
-# nothing has been done yet, all the actions are lazy
-# Now run the actions once for each batch
-fp_data.run(BATCH_SIZE, shuffle=False)
-# The last batch has fewer items as run makes only one pass through the dataset
 
 
 def print_pipe(level, pipe):
@@ -80,3 +83,12 @@ def print_pipe(level, pipe):
 
 print_pipe(0, pipe)
 #ds_data.p.action1().action2().run(BATCH_SIZE)
+
+
+# nothing has been done yet, all the actions are lazy
+# Now run the actions once for each batch
+fp_data.run(BATCH_SIZE, shuffle=False)
+# The last batch has fewer items as run makes only one pass through the dataset
+
+help(MyBatch.action2)
+print(MyBatch.action2.__doc__)

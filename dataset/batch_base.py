@@ -10,6 +10,7 @@ class BaseBatch:
     """
     def __init__(self, index):
         self.index = index
+        self._data_named = None
         self._data = None
         self.pipeline = None
 
