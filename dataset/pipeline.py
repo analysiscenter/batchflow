@@ -89,9 +89,11 @@ class Pipeline:
         return new_p1
 
     def get_last_action_proba(self):
+        """ Return a probability of the last action """
         return self._action_list[-1]['proba']
 
     def get_last_action_repeat(self):
+        """ Return a repeat count of the last action """
         return self._action_list[-1]['repeat']
 
     def __add__(self, other):
