@@ -10,8 +10,8 @@ from dataset import Dataset, ImagesBatch
 
 if __name__ == "__main__":
     # number of items in the dataset
-    K = 1000
-    S = 128
+    K = 6
+    S = 10
 
     # Fill-in dataset with sample data
     def gen_data(num_items, shape):
@@ -27,16 +27,24 @@ if __name__ == "__main__":
     dataset, images = gen_data(K, (S, S))
 
     pipeline = (dataset.p
-                .load((images,))
+                .load((images, None, None))
+                .resize(shape=(384, 384))
+                .crop(shape=(300, 300))
+                .rotate(angle=np.pi/8, preserve_shape=True)
+                .random_rotate(angle=(-np.pi/4, np.pi/4), preserve_shape=True)
+                .random_crop(shape=(200, 200))
                 .convert_to_pil()
+                .rotate(angle=np.pi/8, preserve_shape=True)
                 .resize(shape=(384, 384))
                 .random_rotate(angle=(-np.pi/4, np.pi/4), preserve_shape=True)
-                .convert_from_pil()
+                .crop(shape=(300, 300))
+                .random_crop(shape=(200, 200))
+                .convert_to_array()
                 .apply_transform('images', 'images', scipy.ndimage.filters.gaussian_filter, sigma=3)
-                .crop(shape=(256, 256))
+                .crop(shape=(128, 128))
     )
 
     print("Start...")
     t = time()
-    pipeline.run(K//10, n_epochs=1, prefetch=5, target='mpc')
+    pipeline.run(K//3, n_epochs=1, prefetch=0) #, target='mpc')
     print("End", time() - t)
