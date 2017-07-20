@@ -5,6 +5,7 @@ import traceback
 import threading
 import concurrent.futures as cf
 import asyncio
+import functools
 
 
 def _workers_count():
@@ -353,6 +354,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
+        @functools.wraps(method)
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method in a required parallel engine """
             if asyncio.iscoroutinefunction(method) or target == 'async':
