@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 try:
-    from numba import njit, jit
+    from numba import njit
 except ImportError:
     pass
 
