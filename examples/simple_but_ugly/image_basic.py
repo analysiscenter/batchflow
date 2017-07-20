@@ -28,12 +28,20 @@ if __name__ == "__main__":
 
     pipeline = (dataset.p
                 .load((images, None, None))
+                .resize(shape=(384, 384))
+                .crop(shape=(300, 300))
+                .rotate(angle=np.pi/8, preserve_shape=True)
+                .random_rotate(angle=(-np.pi/4, np.pi/4), preserve_shape=True)
+                .random_crop(shape=(200, 200))
                 .convert_to_pil()
+                .rotate(angle=np.pi/8, preserve_shape=True)
                 .resize(shape=(384, 384))
                 .random_rotate(angle=(-np.pi/4, np.pi/4), preserve_shape=True)
+                .crop(shape=(300, 300))
+                .random_crop(shape=(200, 200))
                 .convert_to_array()
                 .apply_transform('images', 'images', scipy.ndimage.filters.gaussian_filter, sigma=3)
-                #.crop(shape=(256, 256))
+                .crop(shape=(128, 128))
     )
 
     print("Start...")

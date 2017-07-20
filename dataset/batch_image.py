@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 try:
-    from numba import njit
+    from numba import njit, jit
 except ImportError:
     pass
 
@@ -45,12 +45,18 @@ def crop_numba(images, origin, shape=None):
 @njit(nogil=True)
 def random_crop_numba(images, shape):
     """ Fill-in new_images with random crops from images """
-    new_images = np.zeros_like(images)
-    origin_x = np.random.randint(0, images.shape[2] - shape[0], size=images.shape[0])
-    origin_y = np.random.randint(0, images.shape[1] - shape[1], size=images.shape[0])
+    new_images = np.zeros((images.shape[0],) + shape, dtype=images.dtype)
+    if images.shape[2] - shape[0] > 0:
+        origin_x = np.random.randint(0, images.shape[2] - shape[0], size=images.shape[0])
+    else:
+        origin_x = np.zeros(images.shape[0], dtype=np.array(images.shape).dtype)
+    if images.shape[1] - shape[1] > 0:
+        origin_y = np.random.randint(0, images.shape[1] - shape[1], size=images.shape[0])
+    else:
+        origin_y = np.zeros(images.shape[0], dtype=np.array(images.shape).dtype)
     for i in range(images.shape[0]):
-        x = slice(origin_x[0], origin_x[0] + shape[0])
-        y = slice(origin_y[1], origin_y[1] + shape[1])
+        x = slice(origin_x[i], origin_x[i] + shape[0])
+        y = slice(origin_y[i], origin_y[i] + shape[1])
         new_images[i, :, :] = images[i, y, x]
     return new_images
 
@@ -207,8 +213,10 @@ class ImagesBatch(BasicImagesBatch):
         """
         if shape is not None:
             images = self.get(None, component)
-            random_crop_numba(images, shape)
+            new_images = random_crop_numba(images, shape)
+            setattr(self, component, new_images)
         return self
+
 
 
 class ImagesPILBatch(BasicImagesBatch):
@@ -233,13 +241,13 @@ class ImagesPILBatch(BasicImagesBatch):
         if self.images is not None:
             new_images = list(None for _ in self.indices)
             self.apply_transform(new_images, 'images', self._convert_to_array_one, dtype=dtype)
-            new_images = np.concatenate(new_images)
+            new_images = np.stack(new_images)
         else:
             new_images = None
         if self.masks is not None:
             new_masks = list(None for _ in self.indices)
             self.apply_transform(new_masks, 'masks', self._convert_to_array_one, dtype=dtype)
-            new_masks = np.concatenate(new_images)
+            new_masks = np.stack(new_images)
         else:
             new_masks = None
         new_data = new_images, self.labels, new_masks
@@ -259,10 +267,7 @@ class ImagesPILBatch(BasicImagesBatch):
         return new_image
 
     def _resize_one(self, ix, component='images', shape=(64, 64), **kwargs):
-        """ Resize all images in the batch
-        if batch contains PIL images or if method is 'PIL',
-        uses PIL.Image.resize, otherwise scipy.ndimage.zoom
-        We recommend to install a very fast Pillow-SIMD fork """
+        """ Resize all images in the batch """
         _ = kwargs
         image = self.get(ix, component)
         new_image = image.resize(shape, PIL.Image.ANTIALIAS)
@@ -333,8 +338,7 @@ class ImagesPILBatch(BasicImagesBatch):
         """
         if origin is not None or shape is not None:
             origin = origin if origin is not None else (0, 0)
-            new_images = self._crop(component, origin, shape)
-            setattr(self, component, new_images)
+            self._crop(component, origin, shape)
         return self
 
     def _crop_one(self, ix, component='images', origin=(0, 0), shape=None):
@@ -342,9 +346,9 @@ class ImagesPILBatch(BasicImagesBatch):
         origin_x, origin_y = origin
         shape = shape if shape is not None else (image.width - origin_x, image.height - origin_y)
         box = origin_x, origin_y, origin_x + shape[0], origin_y + shape[1]
-        return image.crop(box).load()
+        return image.crop(box)
 
-    @inbatch_parallel('indices')
+    @inbatch_parallel('indices', post='assemble')
     def _crop(self, ix, component='images', origin=(0, 0), shape=None):
         return self._crop_one(ix, component, origin, shape)
 
@@ -361,9 +365,9 @@ class ImagesPILBatch(BasicImagesBatch):
             self._random_crop(component, shape)
         return self
 
-    @inbatch_parallel('indices')
+    @inbatch_parallel('indices', post='assemble')
     def _random_crop(self, ix, component='images', shape=None):
         image = self.get(ix, component)
         origin_x = np.random.randint(0, image.width - shape[0])
         origin_y = np.random.randint(0, image.height - shape[1])
-        return self._crop_pil_one(ix, component, (origin_x, origin_y), shape)
+        return self._crop_one(ix, component, (origin_x, origin_y), shape)
