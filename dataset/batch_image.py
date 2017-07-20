@@ -232,13 +232,13 @@ class ImagesPILBatch(BasicImagesBatch):
         """ Convert images from PIL.Image format to an array """
         if self.images is not None:
             new_images = list(None for _ in self.indices)
-            self.apply_transform(new_images, 'images', self._convert_to_array_one)
+            self.apply_transform(new_images, 'images', self._convert_to_array_one, dtype=dtype)
             new_images = np.concatenate(new_images)
         else:
             new_images = None
         if self.masks is not None:
             new_masks = list(None for _ in self.indices)
-            self.apply_transform(new_masks, 'masks', self._convert_to_array_one)
+            self.apply_transform(new_masks, 'masks', self._convert_to_array_one, dtype=dtype)
             new_masks = np.concatenate(new_images)
         else:
             new_masks = None
@@ -284,7 +284,7 @@ class ImagesPILBatch(BasicImagesBatch):
         image = self.get(ix, component)
         shape = image.width, image.height
         shape = np.asarray(shape) * _factor
-        new_image = self._resize_one(ix, component, shape, method, **kwargs)
+        new_image = self._resize_one(ix, component, shape, **kwargs)
 
         if preserve_shape:
             box = 0, 0, image.width, image.height
@@ -333,12 +333,11 @@ class ImagesPILBatch(BasicImagesBatch):
         """
         if origin is not None or shape is not None:
             origin = origin if origin is not None else (0, 0)
-            images = self.get(None, component)
-            new_images = self._crop_pil(component, origin, shape)
+            new_images = self._crop(component, origin, shape)
             setattr(self, component, new_images)
         return self
 
-    def _crop_pil_one(self, ix, component='images', origin=(0, 0), shape=None):
+    def _crop_one(self, ix, component='images', origin=(0, 0), shape=None):
         image = self.get(ix, component)
         origin_x, origin_y = origin
         shape = shape if shape is not None else (image.width - origin_x, image.height - origin_y)
@@ -346,8 +345,8 @@ class ImagesPILBatch(BasicImagesBatch):
         return image.crop(box).load()
 
     @inbatch_parallel('indices')
-    def _crop_pil(self, ix, component='images', origin=(0, 0), shape=None):
-        return self._crop_pil_one(ix, component, origin, shape)
+    def _crop(self, ix, component='images', origin=(0, 0), shape=None):
+        return self._crop_one(ix, component, origin, shape)
 
     @action
     def random_crop(self, component='images', shape=None):
@@ -359,12 +358,11 @@ class ImagesPILBatch(BasicImagesBatch):
         Origin will be chosen at random to fit the required shape
         """
         if shape is not None:
-            images = self.get(None, component)
-            self._random_crop_pil(component, shape)
+            self._random_crop(component, shape)
         return self
 
     @inbatch_parallel('indices')
-    def _random_crop_pil(self, ix, component='images', shape=None):
+    def _random_crop(self, ix, component='images', shape=None):
         image = self.get(ix, component)
         origin_x = np.random.randint(0, image.width - shape[0])
         origin_y = np.random.randint(0, image.height - shape[1])
