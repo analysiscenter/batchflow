@@ -35,10 +35,12 @@ class Batch(BaseBatch):
         self._preloaded = preloaded
 
     @classmethod
-    def from_data(cls, data):
+    def from_data(cls, index, data):
         """ Create batch from a given dataset """
         # this is roughly equivalent to self.data = data
-        return cls(np.arange(len(data)), preloaded=data)
+        if index is None:
+            index = np.arange(len(data))
+        return cls(index, preloaded=data)
 
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
@@ -158,7 +160,7 @@ class Batch(BaseBatch):
         else:
             super().__setattr__(name, value)
 
-    def put_into_data(self, data, items):
+    def put_into_data(self, items, data):
         """ Loads data into _data property """
         if self._components is None:
             _src = data
@@ -180,6 +182,8 @@ class Batch(BaseBatch):
             comps = self.components if self.components is not None else range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
+        elif isinstance(_data, dict):
+            res = dict(zip(_data.keys(), (_data[comp][self.get_pos(data, comp, index)] for comp in _data)))
         else:
             res = _data[self.get_pos(data, None, index)]
         return res
@@ -191,7 +195,12 @@ class Batch(BaseBatch):
                 raise ValueError("item and component cannot be both None")
             return getattr(self, component)
         else:
-            return self[item] if component is None else getattr(self[item], component)
+            if component is None:
+                res = self[item]
+            else:
+                res = self[item]
+                res = getattr(res, component)
+            return res
 
     def __getitem__(self, item):
         return self.get_items(item)
@@ -248,7 +257,7 @@ class Batch(BaseBatch):
     def load(self, src, fmt=None):
         """ Load data from a source """
         if fmt is None:
-            self.put_into_data(src, self.indices)
+            self.put_into_data(self.indices, src)
         else:
             raise ValueError("Unknown format:", fmt)
         return self

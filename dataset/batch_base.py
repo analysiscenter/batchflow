@@ -1,7 +1,9 @@
 """ Contains the base batch class """
 from binascii import hexlify
 import numpy as np
+
 from .decorators import action
+from .dsindex import DatasetIndex
 
 
 class BaseBatch:
@@ -9,7 +11,10 @@ class BaseBatch:
     Required to solve circular module dependencies
     """
     def __init__(self, index):
-        self.index = index
+        if isinstance(index, DatasetIndex):
+            self.index = index
+        else:
+            self.index = DatasetIndex(index)
         self._data_named = None
         self._data = None
         self.pipeline = None

@@ -29,15 +29,10 @@ class MyBatch(Batch):
 
     def get_items(self, index, data=None):
         item = super().get_items(index, data)
-        l, t, w, h = *item.corners, *item.shapes
-        item = item._replace(images=item.images[l:l+w, t:t+h], corners=(0,0), image_no=0)
+        if item.images.ndim == 2:
+            l, t, w, h = *item.corners, *item.shapes
+            item = self._item_class((item.images[l:l+w, t:t+h], (0, 0), (h, w), 0))
         return item
-
-    @action
-    def load(self, src, fmt=None):
-        print("load")
-        self._data = src
-        return self
 
     @action
     @inbatch_parallel('indices')
@@ -48,7 +43,7 @@ class MyBatch(Batch):
     @action
     @inbatch_parallel('items')
     def some(self, item):
-        print(item)
+        print("some:", item.corners, item.shapes)
 
     @action
     @inbatch_parallel('indices')
