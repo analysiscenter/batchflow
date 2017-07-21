@@ -17,10 +17,6 @@ try:
 except ImportError:
     pass
 try:
-    import cv2
-except ImportError:
-    pass
-try:
     from numba import njit
 except ImportError:
     pass
@@ -247,7 +243,7 @@ class ImagesBatch(BasicImagesBatch):
         return self
 
     def _crop_image(self, image, origin, shape):
-        return new_image[origin[1]:origin[1] + image.shape[1], origin[0]:origin[1] + image.shape[0]].copy()
+        return image[origin[1]:origin[1] + shape[1], origin[0]:origin[1] + shape[0]].copy()
 
     def _random_crop(self, component='images', shape=None):
         if shape is not None:
@@ -258,14 +254,16 @@ class ImagesBatch(BasicImagesBatch):
 
     @action
     def fliplr(self, component='images'):
+        """ Flip image horizontaly (left / right) """
         images = self.get(component)
-        setattr(self, component, images[:,:,::-1])
+        setattr(self, component, images[:, :, ::-1])
         return self
 
     @action
     def flipud(self, component='images'):
+        """ Flip image verticaly (up / down) """
         images = self.get(component)
-        setattr(self, component, images[:,::-1])
+        setattr(self, component, images[:, ::-1])
         return self
 
 
@@ -349,11 +347,13 @@ class ImagesPILBatch(BasicImagesBatch):
     @action
     @inbatch_parallel('indices', post='assemble')
     def fliplr(self, ix, component='images'):
+        """ Flip image horizontaly (left / right) """
         image = self.get(ix, component)
         return image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
 
     @action
     @inbatch_parallel('indices', post='assemble')
     def flipud(self, ix, component='images'):
+        """ Flip image verticaly (up / down) """
         image = self.get(ix, component)
         return image.transpose(PIL.Image.FLIP_TOP_BOTTOM)
