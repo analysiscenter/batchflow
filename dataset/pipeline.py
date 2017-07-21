@@ -112,16 +112,10 @@ class Pipeline:
     def __mul__(self, other):
         if other < 0:
             raise ValueError("Repeat count cannot be negative. Use as pipeline * positive_number")
+        elif isinstance(other, float):
+            raise ValueError("Repeat count cannot be float. Use as pipeline * integer")
         elif isinstance(other, int):
             new_p = self.from_pipeline(self, repeat=other)
-        elif isinstance(other, float):
-            repeat = int(other)
-            proba = other - repeat
-            new_p = self
-            if repeat > 0:
-                new_p = self.from_pipeline(self, repeat=repeat)
-            if not np.allclose(proba, 0.0):
-                new_p = new_p @ proba
         return new_p
 
     def __lshift__(self, other):
