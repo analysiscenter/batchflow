@@ -34,10 +34,10 @@ class Pipeline:
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
-                        self._action_list[-1]['proba'] = mult_option(proba, self._action_list[-1]['proba'])
+                        self._action_list[-1]['proba'] = mult_option(proba, self.get_last_action_proba())
                 elif repeat is not None:
                     if self.get_last_action_proba() is None:
-                        self._action_list[-1]['repeat'] = mult_option(repeat, self._action_list[-1]['repeat'])
+                        self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
 
         self._stop_flag = False
         self._prefetch_count = None
@@ -99,11 +99,14 @@ class Pipeline:
     def __add__(self, other):
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
-        return self.concat(self, other)
+        if other.num_actions > 0:
+            return self.concat(self, other)
+        else:
+            return self
 
     def __matmul__(self, other):
         if self.num_actions == 0:
-            raise ValueError("Cannot add probability to en empty pipeline")
+            raise ValueError("Cannot add probability to an empty pipeline")
         if not isinstance(other, float) and other not in [0, 1]:
             raise TypeError("Probability should be float or 0 or 1")
         other = float(other) if int(other) != 1 else None
