@@ -220,7 +220,7 @@ class ImagesBatch(BasicImagesBatch):
     def _resize_one(self, ix, component='images', shape=(64, 64)):
         """ Resize one image """
         image = self.get(ix, component)
-        factor = 1. * np.asarray(shape[1], shape[]) / np.asarray(image.shape[:2])
+        factor = 1. * np.asarray([shape[1], shape[0]]) / np.asarray(image.shape[:2])
         return scipy.ndimage.interpolation.zoom(image, factor, order=3)
 
     def _rotate_one(self, ix, component='images', angle=0, preserve_shape=True, **kwargs):
