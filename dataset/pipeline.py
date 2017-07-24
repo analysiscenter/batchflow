@@ -400,7 +400,6 @@ class Pipeline:
         self._batch_queue = None
         self._batch_generator = None
         self.dataset.reset_iter()
-        self._stop_flag = False
 
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
@@ -421,14 +420,15 @@ class Pipeline:
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
 
+            self._stop_flag = False
             self._prefetch_count = q.Queue(maxsize=prefetch + 1)
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
             self._service_executor.submit(self._put_batches_into_queue, batch_generator)
             self._service_executor.submit(self._run_batches_from_queue)
-            is_end = False
-            while not is_end:
+
+            while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
                 self._batch_queue.task_done()
                 if batch_res is not None:
@@ -436,7 +436,7 @@ class Pipeline:
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
                 else:
-                    is_end = True
+                    self._stop_flag = True
         else:
             for batch in batch_generator:
                 try:
