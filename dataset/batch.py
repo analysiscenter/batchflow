@@ -29,8 +29,10 @@ from .components import MetaComponentsTuple
 
 class Batch(BaseBatch):
     """ The core Batch class """
+    _item_class = None
     def __init__(self, index, preloaded=None):
-        self._item_class = self._make_item_class()
+        if Batch._item_class is None:
+            Batch._item_class = self._make_item_class()
         super().__init__(index)
         self._preloaded = preloaded
 
