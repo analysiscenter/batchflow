@@ -89,6 +89,7 @@ class Batch(BaseBatch):
 
     def make_item_class(self):
         """ Create a class to handle data components """
+        # pylint: disable=protected-access
         if self.components is None:
             type(self)._item_class = None
         elif type(self)._item_class is None:
@@ -103,7 +104,7 @@ class Batch(BaseBatch):
 
     @property
     def _empty_data(self):
-        return None if self.components is None else self._item_class()
+        return None if self.components is None else self._item_class()   # pylint: disable=not-callable
 
     def get_pos(self, data, component, index):
         """ Return a position in data for a given index
@@ -148,7 +149,7 @@ class Batch(BaseBatch):
             return index
 
     def __getattr__(self, name):
-        if self.components is not None and name in self.components:
+        if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
             return getattr(self.data, name)
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
@@ -159,8 +160,8 @@ class Batch(BaseBatch):
                 super().__setattr__(name, value)
                 if self._item_class is None:
                     self.make_item_class()
-                self._data_named = self._item_class(data=self._data)
-            elif name in self.components:
+                self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
+            elif name in self.components:    # pylint: disable=unsupported-membership-test
                 setattr(self._data_named, name, value)
             else:
                 super().__setattr__(name, value)
@@ -184,7 +185,7 @@ class Batch(BaseBatch):
 
         if self._item_class is not None and isinstance(_data, self._item_class):
             pos = [self.get_pos(None, comp, index) for comp in self.components]   # pylint: disable=not-an-iterable
-            res = self._item_class(data=_data, pos=pos)
+            res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
             comps = self.components if self.components is not None else range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
@@ -375,7 +376,7 @@ class ArrayBatch(Batch):
         try:
             # this creates a copy of the source data
             self._data = _data[self.indices]
-        except TypeError as e:
+        except TypeError:
             raise TypeError('Source is expected to be array-like')
 
         return self
