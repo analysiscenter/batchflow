@@ -34,10 +34,10 @@ class Pipeline:
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
-                        self._action_list[-1]['proba'] = mult_option(proba, self._action_list[-1]['proba'])
+                        self._action_list[-1]['proba'] = mult_option(proba, self.get_last_action_proba())
                 elif repeat is not None:
                     if self.get_last_action_proba() is None:
-                        self._action_list[-1]['repeat'] = mult_option(repeat, self._action_list[-1]['repeat'])
+                        self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
 
         self._stop_flag = False
         self._prefetch_count = None
@@ -99,11 +99,14 @@ class Pipeline:
     def __add__(self, other):
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
-        return self.concat(self, other)
+        if other.num_actions > 0:
+            return self.concat(self, other)
+        else:
+            return self
 
     def __matmul__(self, other):
         if self.num_actions == 0:
-            raise ValueError("Cannot add probability to en empty pipeline")
+            raise ValueError("Cannot add probability to an empty pipeline")
         if not isinstance(other, float) and other not in [0, 1]:
             raise TypeError("Probability should be float or 0 or 1")
         other = float(other) if int(other) != 1 else None
@@ -112,16 +115,10 @@ class Pipeline:
     def __mul__(self, other):
         if other < 0:
             raise ValueError("Repeat count cannot be negative. Use as pipeline * positive_number")
+        elif isinstance(other, float):
+            raise ValueError("Repeat count cannot be float. Use as pipeline * integer")
         elif isinstance(other, int):
             new_p = self.from_pipeline(self, repeat=other)
-        elif isinstance(other, float):
-            repeat = int(other)
-            proba = other - repeat
-            new_p = self
-            if repeat > 0:
-                new_p = self.from_pipeline(self, repeat=repeat)
-            if not np.allclose(proba, 0.0):
-                new_p = new_p @ proba
         return new_p
 
     def __lshift__(self, other):
@@ -403,7 +400,6 @@ class Pipeline:
         self._batch_queue = None
         self._batch_generator = None
         self.dataset.reset_iter()
-        self._stop_flag = False
 
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
@@ -424,14 +420,15 @@ class Pipeline:
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
 
+            self._stop_flag = False
             self._prefetch_count = q.Queue(maxsize=prefetch + 1)
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
             self._service_executor.submit(self._put_batches_into_queue, batch_generator)
             self._service_executor.submit(self._run_batches_from_queue)
-            is_end = False
-            while not is_end:
+
+            while not self._stop_flag:
                 batch_res = self._batch_queue.get(block=True)
                 self._batch_queue.task_done()
                 if batch_res is not None:
@@ -439,7 +436,7 @@ class Pipeline:
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
                 else:
-                    is_end = True
+                    self._stop_flag = True
         else:
             for batch in batch_generator:
                 try:

@@ -29,8 +29,11 @@ from .components import MetaComponentsTuple
 
 class Batch(BaseBatch):
     """ The core Batch class """
+    _item_class = None
+
     def __init__(self, index, preloaded=None):
-        self._item_class = self._make_item_class()
+        if  self.components is not None and not isinstance(self.components, tuple):
+            raise TypeError("components should be a tuple of strings with components names")
         super().__init__(index)
         self._preloaded = preloaded
 
@@ -56,7 +59,7 @@ class Batch(BaseBatch):
         elif isinstance(dataset, type):
             dataset_class = dataset
         else:
-            raise TypeError("dataset should be an instance of some Dataset class or some Dataset class or None")
+            raise TypeError("dataset should be some Dataset class or an instance of some Dataset class or None")
         return dataset_class(self.index, preloaded=self.data)
 
     @property
@@ -76,7 +79,7 @@ class Batch(BaseBatch):
         if self._data is None and self._preloaded is not None:
             # load data the first time it's requested
             self.load(self._preloaded)
-        res = self._data if self._components is None else self._data_named
+        res = self._data if self.components is None else self._data_named
         return res if res is not None else self._empty_data
 
     @property
@@ -84,11 +87,24 @@ class Batch(BaseBatch):
         """ Return data components names """
         return None
 
+    def make_item_class(self):
+        """ Create a class to handle data components """
+        # pylint: disable=protected-access
+        if self.components is None:
+            type(self)._item_class = None
+        elif type(self)._item_class is None:
+            comp_class = MetaComponentsTuple(type(self).__name__ + 'Components', components=self.components)
+            globals()[comp_class.__name__] = comp_class
+            type(self)._item_class = comp_class
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop('_data_named')
+        return state
+
     @property
-    def _components(self):
-        """ Return data components names """
-        comps = self.components
-        return dict(zip(comps, range(len(comps)))) if comps is not None else None
+    def _empty_data(self):
+        return None if self.components is None else self._item_class()   # pylint: disable=not-callable
 
     def get_pos(self, data, component, index):
         """ Return a position in data for a given index
@@ -132,28 +148,20 @@ class Batch(BaseBatch):
         else:
             return index
 
-    def _make_item_class(self):
-        if self._components is None:
-            return None
-        else:
-            return MetaComponentsTuple(self.__class__.__name__ + 'Components', components=self.components)
-
-    @property
-    def _empty_data(self):
-        return None if self._components is None else self._item_class()
-
     def __getattr__(self, name):
-        if self._components is not None and name in self._components:
+        if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
             return getattr(self.data, name)
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
-        if self._components is not None:
+        if self.components is not None:
             if name == "_data":
                 super().__setattr__(name, value)
-                self._data_named = self._item_class(data=self._data)
-            elif name in self._components:
+                if self._item_class is None:
+                    self.make_item_class()
+                self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
+            elif name in self.components:    # pylint: disable=unsupported-membership-test
                 setattr(self._data_named, name, value)
             else:
                 super().__setattr__(name, value)
@@ -162,7 +170,7 @@ class Batch(BaseBatch):
 
     def put_into_data(self, items, data):
         """ Loads data into _data property """
-        if self._components is None:
+        if self.components is None:
             _src = data
         else:
             _src = data if isinstance(data, tuple) else tuple([data])
@@ -177,7 +185,7 @@ class Batch(BaseBatch):
 
         if self._item_class is not None and isinstance(_data, self._item_class):
             pos = [self.get_pos(None, comp, index) for comp in self.components]   # pylint: disable=not-an-iterable
-            res = self._item_class(data=_data, pos=pos)
+            res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
             comps = self.components if self.components is not None else range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None

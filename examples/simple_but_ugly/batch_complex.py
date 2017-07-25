@@ -86,5 +86,5 @@ if __name__ == "__main__":
 
     print("Start...")
     t = time()
-    res.run(2, n_epochs=1, prefetch=0)
+    res.run(2, n_epochs=1, prefetch=1, target='mpc')
     print("End", time() - t)

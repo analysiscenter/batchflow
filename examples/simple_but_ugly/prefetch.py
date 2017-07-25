@@ -24,11 +24,15 @@ class MyArrayBatch(ArrayBatch):
     def __init__(self, index, *args, **kwargs):
         super().__init__(index)
 
+    @property
+    def components(self):
+        return "images", "labels"
+
     @action
     def print(self, text=None):
         if text is not None:
             print("\n====", text, self.indices, "======\n")
-        print(self.data)
+        print("data:", type(self.data))
         return self
 
     def parallel_init(self, *args, **kwargs):
@@ -108,7 +112,7 @@ if __name__ == "__main__":
     print("End:", time() - t)
 
     i = 0
-    for batch_res in res.gen_batch(3, shuffle=False, n_epochs=1, prefetch=1, target='mpc'):
+    for batch_res in res.gen_batch(3, shuffle=False, n_epochs=1, prefetch=1): #, target='mpc'):
         print('-------------------------------------------------')
         print("====== Iteration ", i, "batch:", batch_res.indices)
         i += 1
