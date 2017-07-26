@@ -319,8 +319,12 @@ class Batch(BaseBatch):
         """ Apply a function the whole batch at once
 
         Args:
-            dst: string - a destination component name, e.g. 'images' or 'masks'
-            src: string - a source component name
+            dst: the destination to put the result in, can be:
+                 - a string - a component name, e.g. 'images' or 'masks'
+                 - an array-like - a numpy-array, list, etc
+            src: the source to get data from, can be:
+                 - a string - a component name, e.g. 'images' or 'masks'
+                 - an array-like - a numpy-array, a list, etc
             func: a callable - a function to apply to each item in the source component
 
         apply_transform_all does the following:
