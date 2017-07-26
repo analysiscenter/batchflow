@@ -26,19 +26,6 @@ from .decorators import action, inbatch_parallel, any_action_failed
 
 
 @njit(nogil=True)
-def crop_numba(images, origin, shape=None):
-    """ Fill-in new_images with crops from images """
-    if shape is None:
-        shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
-    if np.all(np.array(origin) + np.array(shape) > np.array(images.shape[1:3])):
-        shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
-    new_images = np.zeros((images.shape[0],) + shape, dtype=images.dtype)
-    x = slice(origin[0], origin[0] + shape[0])
-    y = slice(origin[1], origin[1] + shape[1])
-    new_images[:] = images[:, y, x]
-    return new_images
-
-@njit(nogil=True)
 def random_crop_numba(images, shape):
     """ Fill-in new_images with random crops from images """
     new_images = np.zeros((images.shape[0],) + shape, dtype=images.dtype)
@@ -236,11 +223,16 @@ class ImagesBatch(BasicImagesBatch):
         if origin is not None or shape is not None:
             origin = origin if origin is not None else (0, 0)
             images = self.get(None, component)
+
             if shape is None:
                 shape = images.shape[2], images.shape[1]
-            new_images = crop_numba(images, origin, shape)
+            if np.all(np.array(origin) + np.array(shape) > np.array(images.shape[1:3])):
+                shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
+
+            x = slice(origin[0], origin[0] + shape[0])
+            y = slice(origin[1], origin[1] + shape[1])
+            new_images = images[:, y, x].copy()
             setattr(self, component, new_images)
-        return self
 
     def _crop_image(self, image, origin, shape):
         return image[origin[1]:origin[1] + shape[1], origin[0]:origin[1] + shape[0]].copy()
@@ -314,7 +306,6 @@ class ImagesPILBatch(BasicImagesBatch):
         image = self.get(ix, component)
         new_image = image.resize(shape, PIL.Image.ANTIALIAS)
         return new_image
-
 
     def _rotate_one(self, ix, component='images', angle=0, preserve_shape=True, **kwargs):
         """ Rotate one image """
