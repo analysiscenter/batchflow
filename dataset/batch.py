@@ -31,10 +31,10 @@ class Batch(BaseBatch):
     """ The core Batch class """
     _item_class = None
 
-    def __init__(self, index, preloaded=None):
+    def __init__(self, index, preloaded=None, *args, **kwargs):
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
-        super().__init__(index)
+        super().__init__(index, *args, **kwargs)
         self._preloaded = preloaded
 
     @classmethod

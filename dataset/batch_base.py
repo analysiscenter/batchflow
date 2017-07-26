@@ -10,7 +10,8 @@ class BaseBatch:
     """ Base class for batches
     Required to solve circular module dependencies
     """
-    def __init__(self, index):
+    def __init__(self, index, *args, **kwargs):
+        _ = args, kwargs
         if isinstance(index, DatasetIndex):
             self.index = index
         else:
