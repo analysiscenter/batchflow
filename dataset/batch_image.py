@@ -50,7 +50,7 @@ def random_crop_numba(images, shape):
 
 @njit(nogil=True)
 def calc_origin(image_coord, shape_coord, crop):
-    """ """
+    """ Return origin for preserve_shape """
     if crop == CROP_00:
         origin = 0
     elif crop == CROP_CENTER:
@@ -59,7 +59,7 @@ def calc_origin(image_coord, shape_coord, crop):
 
 @njit(nogil=True)
 def calc_coords(image_coord, shape_coord, crop):
-    """ """
+    """ Return coords for preserve_shape """
     if image_coord < shape_coord:
         new_image_origin = calc_origin(image_coord, shape_coord, crop)
         image_origin = 0
@@ -73,14 +73,14 @@ def calc_coords(image_coord, shape_coord, crop):
 @njit(nogil=True)
 def preserve_shape_numba(image_shape, shape, crop=CROP_CENTER):
     """ Change the image shape by cropping and adding empty pixels to fit the given shape """
-    x, nx, lx = calc_coords(image_shape[0], shape[0], crop)
-    y, ny, ly = calc_coords(image_shape[1], shape[1], crop)
-    nx = nx, nx + lx
-    x = x, x + lx
-    ny = ny, ny + ly
-    y = y, y + ly
+    x, new_x, len_x = calc_coords(image_shape[0], shape[0], crop)
+    y, new_y, len_y = calc_coords(image_shape[1], shape[1], crop)
+    new_x = new_x, new_x + len_x
+    x = x, x + len_x
+    new_y = new_y, new_y + len_y
+    y = y, y + len_y
 
-    return nx, ny, x, y
+    return new_x, new_y, x, y
 
 
 
@@ -175,12 +175,12 @@ class BasicImagesBatch(Batch):
             shape = np.round(np.array(image_size) * _factor).astype(np.int16)
             new_image = self._resize_one(ix, component, shape)
             if preserve_shape:
-                new_image = self._preserve_shape(new_image, image_size)
+                new_image = self._preserve_shape(new_image, image_size, crop)
         else:
             new_image = image
         return new_image
 
-    def preserve_shape(self, image, shape):
+    def _preserve_shape(self, image, shape):
         """ Change the image shape by cropping and adding empty pixels to fit the given shape """
         raise NotImplementedError()
 
@@ -283,10 +283,10 @@ class ImagesBatch(BasicImagesBatch):
     def _preserve_shape(self, image, shape, crop=CROP_CENTER):
         """ Change the image shape by cropping and/or adding empty pixels to fit the given shape """
         image_size = self.get_image_size(image)
-        nx, ny, x, y = preserve_shape_numba(image_size, shape, crop)
+        new_x, new_y, x, y = preserve_shape_numba(image_size, shape, crop)
         new_image_shape = shape[::-1] + image.shape[2:]
         new_image = np.zeros(new_image_shape, dtype=image.dtype)
-        new_image[slice(*ny), slice(*nx)] = image[slice(*y), slice(*x)]
+        new_image[slice(*new_y), slice(*new_x)] = image[slice(*y), slice(*x)]
         return new_image
 
     def _rotate_one(self, ix, component='images', angle=0, preserve_shape=True, **kwargs):
@@ -403,14 +403,11 @@ class ImagesPILBatch(BasicImagesBatch):
         return new_image
 
     def _preserve_shape(self, image, shape, crop=CROP_CENTER):
-        nx, ny, x, y = preserve_shape_numba(image.size, shape, crop)
+        new_x, new_y, x, y = preserve_shape_numba(image.size, shape, crop)
         new_image = PIL.Image.new(image.mode, shape)
         box = x[0], y[0], x[1], y[1]
-        new_image.paste(image.crop(box), (nx[0], ny[0]))
+        new_image.paste(image.crop(box), (new_x[0], new_y[0]))
         return new_image
-
-        shape
-        new_image
 
     def _rotate_one(self, ix, component='images', angle=0, preserve_shape=True, **kwargs):
         """ Rotate one image """
