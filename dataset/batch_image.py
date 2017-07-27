@@ -180,7 +180,7 @@ class BasicImagesBatch(Batch):
             new_image = image
         return new_image
 
-    def _preserve_shape(self, image, shape):
+    def _preserve_shape(self, image, shape, crop=CROP_CENTER):
         """ Change the image shape by cropping and adding empty pixels to fit the given shape """
         raise NotImplementedError()
 
