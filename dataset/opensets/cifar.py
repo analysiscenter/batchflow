@@ -18,8 +18,8 @@ class BaseCIFAR(ImagesOpenset):
     TRAIN_NAME_ID = None
     TEST_NAME_ID = None
 
-    def __init__(self):
-        super().__init__(train_test=True)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, train_test=True, **kwargs)
         self.cv_split()
 
     def download(self):

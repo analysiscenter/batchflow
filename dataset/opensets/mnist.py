@@ -18,8 +18,8 @@ class MNIST(ImagesOpenset):
     TEST_LABELS_URL = "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz"
     ALL_URLS = [TRAIN_IMAGES_URL, TRAIN_LABELS_URL, TEST_IMAGES_URL, TEST_LABELS_URL]
 
-    def __init__(self):
-        super().__init__(train_test=True)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, train_test=True, **kwargs)
         self.cv_split()
 
     @property

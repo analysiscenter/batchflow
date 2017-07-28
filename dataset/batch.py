@@ -31,10 +31,10 @@ class Batch(BaseBatch):
     """ The core Batch class """
     _item_class = None
 
-    def __init__(self, index, preloaded=None):
+    def __init__(self, index, preloaded=None, *args, **kwargs):
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
-        super().__init__(index)
+        super().__init__(index, *args, **kwargs)
         self._preloaded = preloaded
 
     @classmethod
@@ -281,16 +281,20 @@ class Batch(BaseBatch):
         """ Apply a function to each item in the batch
 
         Args:
-            dst: string - a destination component name, e.g. 'images' or 'masks'
-            src: string - a source component name
-            func: a callable - a function to apply to each item in the source component
+            dst: the destination to put the result in, can be:
+                 - a string - a component name, e.g. 'images' or 'masks'
+                 - an array-like - a numpy-array, list, etc
+            src: the source to get data from, can be:
+                 - a string - a component name, e.g. 'images' or 'masks'
+                 - an array-like - a numpy-array, a list, etc
+            func: a callable - a function to apply to each item from the source
 
         apply_transform does the following:
             for item in batch:
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
         if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least of of dst and src should be attribute names, not arrays")
+            raise TypeError("At least one of dst and src should be attribute names, not arrays")
 
         if src is None:
             _args = args
@@ -315,8 +319,12 @@ class Batch(BaseBatch):
         """ Apply a function the whole batch at once
 
         Args:
-            dst: string - a destination component name, e.g. 'images' or 'masks'
-            src: string - a source component name
+            dst: the destination to put the result in, can be:
+                 - a string - a component name, e.g. 'images' or 'masks'
+                 - an array-like - a numpy-array, list, etc
+            src: the source to get data from, can be:
+                 - a string - a component name, e.g. 'images' or 'masks'
+                 - an array-like - a numpy-array, a list, etc
             func: a callable - a function to apply to each item in the source component
 
         apply_transform_all does the following:

@@ -5,7 +5,8 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append("../..")
-from dataset import action, model, ImagesBatch
+from dataset import action, model
+from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 
 
