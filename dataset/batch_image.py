@@ -190,7 +190,7 @@ class BasicImagesBatch(Batch):
         """ Rotate all images in the batch at the given angle
         Args:
             component: string - a component name which data should be rotated
-            angle: float - in radians
+            angle: float - the rotation angle in degrees.
             preserve_shape: bool - whether to keep shape after rotating
                                    (always True for images as arrays, can be False for PIL.Images)
         """
@@ -207,7 +207,7 @@ class BasicImagesBatch(Batch):
             angle: tuple - an angle range in the form of (min_angle, max_angle), in radians
         """
         if np.random.binomial(1, p) > 0:
-            angle = angle or (-np.pi, np.pi)
+            angle = angle or (-45., 45.)
             _angle = np.random.uniform(*angle)
             preserve_shape = kwargs.pop('preserve_shape', True)
             return self._rotate_one(ix, component, _angle, preserve_shape=preserve_shape, **kwargs)
@@ -215,6 +215,7 @@ class BasicImagesBatch(Batch):
             image = self.get(ix, component)
             return image
 
+    @action
     def flip(self, axis=None):
         """ Flip images
         Args:
@@ -338,14 +339,14 @@ class ImagesBatch(BasicImagesBatch):
     @action
     def fliplr(self, component='images'):
         """ Flip image horizontaly (left / right) """
-        images = self.get(component)
+        images = self.get(None, component)
         setattr(self, component, images[:, :, ::-1])
         return self
 
     @action
     def flipud(self, component='images'):
         """ Flip image verticaly (up / down) """
-        images = self.get(component)
+        images = self.get(None, component)
         setattr(self, component, images[:, ::-1])
         return self
 
