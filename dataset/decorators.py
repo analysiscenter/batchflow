@@ -221,8 +221,8 @@ def any_action_failed(results):
 
 def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
     """ Make in-batch parallel decorator """
-    if target not in ['nogil', 'threads', 'mpc', 'async']:
-        raise ValueError("target should be one of 'nogil', threads', 'mpc', 'async'")
+    if target not in ['nogil', 'threads', 'mpc', 'async', 'for']:
+        raise ValueError("target should be one of 'nogil', threads', 'mpc', 'async', 'for'")
 
     def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
@@ -257,7 +257,10 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             all_results = []
             for future in futures:
                 try:
-                    result = future.result()
+                    if isinstance(future, (cf.Future, asyncio.Task)):
+                        result = future.result()
+                    else:
+                        result = future
                 except Exception as exce:  # pylint: disable=broad-except
                     result = exce
                 finally:
@@ -354,6 +357,25 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
+        def wrap_with_for(self, args, kwargs):
+            """ Run a method in parallel """
+            init_fn, post_fn = _check_functions(self)
+
+            n_workers = kwargs.pop('n_workers', _workers_count())
+            futures = []
+            full_kwargs = {**kwargs, **dec_kwargs}
+            for arg in _call_init_fn(init_fn, args, full_kwargs):
+                margs, mkwargs = _make_args(arg, args, kwargs)
+                try:
+                    one_ft = method(self, *margs, **mkwargs)
+                    if callable(one_ft):
+                        one_ft = one_ft(*margs, **mkwargs)
+                except Exception as e:   # pylint: disable: broad-except
+                    one_ft = e
+                futures.append(one_ft)
+
+            return _call_post_fn(self, post_fn, futures, args, full_kwargs)
+
         @functools.wraps(method)
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method in a required parallel engine """
@@ -365,6 +387,8 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 return wrap_with_threads(self, args, kwargs, nogil=True)
             elif target == 'mpc':
                 return wrap_with_mpc(self, args, kwargs)
+            elif target == 'for':
+                return wrap_with_for(self, args, kwargs)
             raise ValueError('Wrong parallelization target:', target)
         return wrapped_method
     return inbatch_parallel_decorator
