@@ -361,7 +361,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
-            n_workers = kwargs.pop('n_workers', _workers_count())
+            _ = kwargs.pop('n_workers', _workers_count())
             futures = []
             full_kwargs = {**kwargs, **dec_kwargs}
             for arg in _call_init_fn(init_fn, args, full_kwargs):
@@ -370,7 +370,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                     one_ft = method(self, *margs, **mkwargs)
                     if callable(one_ft):
                         one_ft = one_ft(*margs, **mkwargs)
-                except Exception as e:   # pylint: disable: broad-except
+                except Exception as e:   # pylint: disable=broad-except
                     one_ft = e
                 futures.append(one_ft)
 
