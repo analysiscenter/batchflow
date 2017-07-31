@@ -59,9 +59,9 @@ class MyDataFrameBatch(DataFrameBatch):
         return r
 
     @action
-    @inbatch_parallel(init="action_n_init", post="parallel_post", target="nogil")
+    @inbatch_parallel(init="action_n_init", post="parallel_post", target="threads")
     def action_n(self, *args, **kwargs):
-        return numba_fn
+        return numba_fn(*args, **kwargs)
 
     @action
     @inbatch_parallel(init="indices", post="parallel_post", target='async')
