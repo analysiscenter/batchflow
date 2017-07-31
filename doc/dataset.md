@@ -29,11 +29,12 @@ for i in range(NUM_ITERS):
 
 ## Public API
 
-### `__init__(index, batch_class)`
+### `__init__(index, batch_class, preloaded=None)`
 Creates a dataset with given `index` and `batch_class`.
 ```python
 my_dataset = Dataset(some_index, batch_class=MyBatchClass)
 ```
+If `preloaded` is specified than each created batch will preload data from this argument.
 
 ### `next_batch(batch_size, shuffle=False, n_epochs=1, drop_last=False)`
 Returns a batch from the index.

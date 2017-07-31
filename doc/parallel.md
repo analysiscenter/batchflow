@@ -42,7 +42,7 @@ A method name which is called after all parallelized tasks are finished.
 
 ### target='threads'
 Optional.
-Specifies a parallelization engine, should be one of `threads`, `nogil`, `async`, `mpc`.
+Specifies a parallelization engine, should be one of `threads`, `async`, `mpc`, `for`.
 
 
 ## Additional decorator arguments
@@ -193,6 +193,39 @@ some_pipeline
     .do_something_else()
 ```
 
+### Standard init functions
+Most of the times you don't need to write your own init function as you might use standard ones:
+
+#### `indices`
+```python
+    @inbatch_parallel(init='indices')
+    def some_method(self, ix, arg1, arg2):
+```
+The first argument (after `self`) contains an id (from index) of each data item.
+
+#### `items`
+```python
+    @inbatch_parallel(init='items')
+    def some_method(self, item, arg1, arg2):
+```
+The first argument (after `self`) contains an item itself (i.e. i-th element of batch - `batch[i]`).
+
+#### `run_once`
+```python
+    @inbatch_parallel(init='run_once')
+    def some_method(self, rg1, arg2):
+```
+No additional arguments is passed and `some_method` will be exectuted only once.
+
+#### data components
+If data components are defined, they might be used as init-functions:
+```python
+    @inbatch_parallel(init='images')
+    def some_method(self, image, arg1, arg2):
+```
+The first argument (after `self`) contains an i-th image (i.e. `batch.images[i]`).
+
+
 ## Post function
 When all parallelized tasks are finished, the `post` function is called.
 
@@ -219,7 +252,7 @@ Here `_post_default` will be called as
 _post_default([proc_value_from_1, proc_value_from_2, ..., proc_value_from_last])
 ```
 
-If anything went wrong, than instead of `proc_value`, there would be an instance of some `Exception` caught in the parallel tasks.
+If anything went wrong, then instead of `proc_value`, there would be an instance of some `Exception` caught in the parallel tasks.
 
 This is where `any_action_failed` might come in handy:
 ```python
@@ -273,14 +306,14 @@ class MyBatch(Batch):
         return [[self.data, i] for i in self.indices]
 
     @action
-    @inbatch_parallel(init='_init_numba', target='nogil')
-    def some_action(self, item_id)
-        return change_data
+    @inbatch_parallel(init='_init_numba', target='threads')
+    def some_action(self, data, item_id)
+        return change_data(data, item_id)
 ```
 Here all batch items will be updated simultaneously.
 
 ## Targets
-There are 3 targets available: `threads`, `async`, `mpc`.
+There are 4 targets available: `threads`, `async`, `mpc`, `for`.
 
 ### threads
 A method will be parallelized with [concurrent.futures.ThreadPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html#threadpoolexecutor).
@@ -328,6 +361,12 @@ Multiprocessing requires all code and data to be serialized (with [pickle](https
 
 Besides, you might want to implement a thorough logging mechanism as multiprocessing configurations are susceptible to hanging up. Without logging it would be quite hard to understand what happened and then debug your code.
 
+### for
+When parallelism is not needed at all, you might still create actions which process single items, but they will be called one after another in a simple loop.
+This is not only convenient but also might have a much better performance than `mpc`-parallelism (e.g. when data is small a lot of time is wasted to inter-process data flows).
+
+It is also useful for debugging: you can replace `mpc` or `threads` with `for` in order to debug the code in a simple single-thread fasion and then switch to parallel invocations.
+
 
 ## Arguments with default values
 If you have a function with default arguments, you may call it without passing those arguments.
@@ -343,7 +382,7 @@ class MyBatch(Batch):
 batch.some_action(1, 2)
 ```
 However, when you call it this way, the default arguments are not available externally (in particular, in decorators).
-This is the problem for `nogil`/`mpc` parallelism.
+This is the problem for `mpc` parallelism.
 
 The best solutions would be not to use default values at all, but if you really need them, you should copy them into parallelized functions:
 ```python
@@ -379,5 +418,7 @@ By default each action runs as many parallel tasks as the number of cores your c
 some_pipeline.parallel_action(some_arg, n_workers=3)
 ```
 Here `parallel_action` will have only 3 parallel tasks being executed simultaneously. Others will wait in the queue.
+
+However, implicitly specifying `n_workers` is rarely needed in practice and thus highly discouraged.
 
 **Attention!** You cannot use `n_workers` with `target=async`.

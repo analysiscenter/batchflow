@@ -13,6 +13,21 @@ The base `Batch` class has a private property `_data` which you can use to store
 
 Even though this is just a convention and you are not obliged to follow it, it a useful and convenient convention which makes your life easier.
 
+### preloaded
+To fill in the batch with preloaded data you might initialize it with `preloaded` argument:
+```python
+batch = MyBatch(index, preloaded=data)
+```
+So `batch.data` will contain data right after batch creation and you don't need to call `load()` action.
+
+You also might initialize the whole dataset:
+```python
+dataset = Dataset(index, batch_class=Mybatch, preloaded=data)
+```
+Thus `gen_batch` and `next_batch` will create batches that contain preloaded data.
+
+`preloaded` is equivalent to `batch.load(data, fmt=None)`.
+
 ### Data components
 Not infrequently, the batch stores a more complex data structures, e.g. features and labels or images, masks, bounding boxes and labels. To work with these you might employ data components. Just define a property as follows:
 ```python
@@ -25,7 +40,7 @@ And this allows you to address components to read and write data:
 image_5 = batch.images[5]
 batch.images[i] = new_image
 label_k = batch[k].labels
-batch[4].masks[:] = new_mask
+batch[4].masks = new_masks
 ```
 
 ## Action methods
@@ -59,8 +74,8 @@ class MyArrayBatch(ArrayBatch):
         return [input_data, model_output]
 
     @action(model='basic_model')
-    def train_model(self, model):
-        input_data, optimizer = model
+    def train_model(self, model_spec):
+        input_data, optimizer = model_spec
         # update gradients
         return self
 ```
@@ -81,7 +96,6 @@ class MyBatch(Batch):
         return some_value
 ```
 For further details how to make parallel actions see [parallel.md](parallel.md).
-
 
 
 
@@ -130,32 +144,6 @@ class MyBatch(Batch):
 
 ### (optional) Store your data in `_data` property
 It is just a convenient convention which makes your life more consistent.
-
-### (optional) Define `__getitem__` method
-If you want to address batch items easily as well as iterate over your batch, you need `__getitem__` method. The default `Batch.__getitem__`  just returns an item from `data`:
-```python
-class MyBatch(Batch):
-    ...
-    def some_method(self):
-        ...
-        some_value = self[some_item]  # equals self.data[some_item]
-        ...
-```
-Thus you are able to address batch items as `self[index_id]` internally (in the batch class methods) or as `batch[index_id]` externally.
-
-If you have defined `data` as a tuple, then base `__getitem__` will also work:
-```python
-class MyBatch(Batch):
-    ...
-    def data(self):
-        return self._images, self._mask
-...
-for i in range(MAX_ITER):
-    batch = some_pipeline.next_batch(BATCH_SIZE)
-    image0, mask0 = batch[index0]:
-    # process one image and one corresponding mask
-```
-If your data has a more complex structure, you will need to write your own `__getitem__`.
 
 ###  Make `actions` whenever possible
 If you create some method transforming batch data, you might want to call it as a step in the whole dataset processing `pipeline`. So make it an `action`:
