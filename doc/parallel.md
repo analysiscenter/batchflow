@@ -215,7 +215,7 @@ The first argument (after `self`) contains an item itself (i.e. i-th element of 
     @inbatch_parallel(init='run_once')
     def some_method(self, rg1, arg2):
 ```
-No additional arguments is passed and `some_method` will be exectuted only once.
+No additional arguments is passed and `some_method` will be executed only once.
 
 #### data components
 If data components are defined, they might be used as init-functions:
@@ -233,16 +233,12 @@ The first argument it receives is the list of results from each parallel task.
 ```python
 class MyBatch(Batch):
     ...
-    def _init_default(self, *args, **kwargs):
-        ...
-        return all_args
-
     def _post_default(self, list_of_res, *args, **kwargs):
         ...
         return self
 
     @action
-    @inbatch_parallel(init='_init_default', post='_post_default')
+    @inbatch_parallel(init='indices', post='_post_default')
     def some_action(self, item_id)
         # process an item and return a value for that item
         return proc_value
@@ -362,10 +358,10 @@ Multiprocessing requires all code and data to be serialized (with [pickle](https
 Besides, you might want to implement a thorough logging mechanism as multiprocessing configurations are susceptible to hanging up. Without logging it would be quite hard to understand what happened and then debug your code.
 
 ### for
-When parallelism is not needed at all, you might still create actions which process single items, but they will be called one after another in a simple loop.
-This is not only convenient but also might have a much better performance than `mpc`-parallelism (e.g. when data is small a lot of time is wasted to inter-process data flows).
+When parallelism is not needed at all, you might still create actions which process single items, but they will be called one after another in a loop.
+This is not only convenient but also might have a much better performance than `mpc`-parallelism (e.g. when data is small, a lot of time is wasted to inter-process data flows).
 
-It is also useful for debugging: you can replace `mpc` or `threads` with `for` in order to debug the code in a simple single-thread fasion and then switch to parallel invocations.
+It is also useful for debugging: you can replace `mpc` or `threads` with `for` in order to debug the code in a simple single-threaded fasion and then switch to parallel invocations.
 
 
 ## Arguments with default values
