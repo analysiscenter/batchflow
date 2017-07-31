@@ -39,8 +39,8 @@ After a model is defined, you might use it to train, evaluate or predict.
 class MyArrayBatch(ArrayBatch):
     ...
     @action(model='basic_model')
-    def train_model(self, model, session):
-        input_data, optimizer = model
+    def train_model(self, model_spec, session):
+        input_data, optimizer = model_spec
         session.run([optimizer], feed_dict={input_data: self.data})
         return self
 ```
@@ -65,7 +65,7 @@ class MyArrayBatch(ArrayBatch):
         ...
 
     @action(model='basic_model')
-    def evaluate_model(self, model, session):
+    def evaluate_model(self, model_spec, session):
         ...
 
 full_workflow = my_dataset.p
@@ -82,9 +82,9 @@ If you [prefetch](prefetch.md) with actions based on Tensorflow models you might
 class MyBatch:
     ...
     @action(model='some_model', singleton=True)
-    def train_it(self, model, sess):
-        input_images, input_labels = model[0]
-        optimizer, cost, accuracy = model[1]
+    def train_it(self, model_spec, sess):
+        input_images, input_labels = model_spec[0]
+        optimizer, cost, accuracy = model_spec[1]
         _, loss = sess.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
         return self
 ```
