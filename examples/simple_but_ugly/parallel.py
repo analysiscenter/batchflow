@@ -4,7 +4,6 @@ import sys
 import asyncio
 from functools import partial
 import numpy as np
-import pandas as pd
 from numba import njit
 
 sys.path.append("../..")
@@ -32,7 +31,7 @@ def mpc_fn(i, arg2):
 
 
 # Example of custome Batch class which defines some actions
-class MyDataFrameBatch(DataFrameBatch):
+class MyBatch(Batch):
     @action
     def print(self, text=None):
         if text is not None:
@@ -46,20 +45,20 @@ class MyDataFrameBatch(DataFrameBatch):
         print("  ", results)
         return self
 
-
     @action
     @inbatch_parallel(init="indices", post="parallel_post", target='mpc')
     def action1(self, *args, **kwargs):
         print("   action 1", args)
         return mpc_fn
 
-    def action_n_init(self, *args, **kwargs):
-        r = self.indices.astype('int') #.tolist()
-        print("\nParallel:", r)
-        return r
+    @action
+    @inbatch_parallel(init="items")
+    def action_i(self, item, *args, **kwargs):
+        print("   action items", type(item))
+        return self
 
     @action
-    @inbatch_parallel(init="action_n_init", post="parallel_post", target="threads")
+    @inbatch_parallel(init="indices", post="parallel_post", target="threads")
     def action_n(self, *args, **kwargs):
         return numba_fn(*args, **kwargs)
 
@@ -86,23 +85,22 @@ if __name__ == "__main__":
     K = 10
 
     # Fill-in dataset with sample data
-    def pd_data():
-        ix = np.arange(K).astype('str')
-        data = pd.DataFrame(np.arange(K * 3).reshape(K, -1), index=ix)
-        dsindex = DatasetIndex(data.index)
-        ds = Dataset(index=dsindex, batch_class=MyDataFrameBatch)
-        return ds, data.copy()
+    def gen_data():
+        ix = np.arange(K)
+        data = np.arange(K * 3).reshape(K, -1)
+        ds = Dataset(index=ix, batch_class=MyBatch)
+        return ds, data
 
 
     # Create datasets
-    ds_data, data = pd_data()
+    ds_data, data = gen_data()
 
     res = (ds_data.pipeline()
             .load(data)
             .print("Start batch")
             .action2("async")
-            .action_n(712)
-            .action1(arg2=14)
+            .action_i(712)
+            #.action1(arg2=14)
             .print("End batch"))
 
     res.run(4, shuffle=False, n_epochs=1)

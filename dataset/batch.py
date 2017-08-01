@@ -45,6 +45,11 @@ class Batch(BaseBatch):
             index = np.arange(len(data))
         return cls(index, preloaded=data)
 
+    @classmethod
+    def from_batch(cls, batch):
+        """ Create batch from another batch """
+        return cls(batch.index, preloaded=batch._data)  # pylint: disable=protected-access
+
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
         Args:
@@ -144,9 +149,10 @@ class Batch(BaseBatch):
         """
         _ = component
         if data is None:
-            return self.index.get_pos(index)
+            pos = self.index.get_pos(index)
         else:
-            return index
+            pos = index
+        return pos
 
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
@@ -193,7 +199,8 @@ class Batch(BaseBatch):
         elif isinstance(_data, dict):
             res = dict(zip(_data.keys(), (_data[comp][self.get_pos(data, comp, index)] for comp in _data)))
         else:
-            res = _data[self.get_pos(data, None, index)]
+            ix = self.get_pos(data, None, index)
+            res = _data[ix]
         return res
 
     def get(self, item=None, component=None):
@@ -409,7 +416,6 @@ class ArrayBatch(Batch):
 
 class DataFrameBatch(Batch):
     """ Base Batch class for datasets stored in pandas DataFrames """
-
     @action
     def load(self, src, fmt=None, *args, **kwargs):
         """ Load batch from a dataframe """

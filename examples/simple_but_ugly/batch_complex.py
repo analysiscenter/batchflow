@@ -17,48 +17,59 @@ class MyBatch(Batch):
 
     def get_pos(self, data, component, index):
         if data is None:
-            data = self.data
+            _data = self.data
             pos = self.index.get_pos(index)
         else:
+            _data = data
             pos = index
 
-        if component == 'images':
+        if data is None and component == 'images':
             return data.image_no[pos]
         else:
             return pos
 
     def get_items(self, index, data=None):
         item = super().get_items(index, data)
-        if item.images.ndim == 2:
+        if data is None and item.images.ndim == 2:
             l, t, w, h = *item.corners, *item.shapes
             item = self._item_class((item.images[l:l+w, t:t+h], (0, 0), (h, w), 0))
         return item
 
     @action
-    @inbatch_parallel('indices')
-    def sto(self, ix):
-        self.images[self.image_no[ix]] = np.diag(np.diag(self.images[self.image_no[ix]]))
-        pass
+    def print(self):
+        print(self.items)
+        return self
 
     @action
-    @inbatch_parallel('items')
+    @inbatch_parallel('indices')
+    def sto(self, ix):
+        pos = self.get_pos(None, 'image_no', ix)
+        self.images[self.image_no[pos]] = np.diag(np.diag(self.images[self.image_no[pos]]))
+
+    @action
+    @inbatch_parallel('items', target='for')
     def some(self, item):
-        print("some:", item.corners, item.shapes)
+        print("some:", type(item), "len:", len(item.images)) #, item.corners, item.shapes)
+
+    @action
+    @inbatch_parallel('indices')
+    def some2(self, ix):
+        print("some:") #, type(self[ix])) #, item.corners, item.shapes)
 
     @action
     @inbatch_parallel('indices')
     def other(self, ix):
         item = self[ix]
         print()
-        print("item")
+        print("item", ix)
         print("    ", type(item))
         print("image")
-        print("     ", item.images) #s[self.image_no[ix]])
+        print("     len: ", len(item.images)) #, item.image_no)
 
 
 if __name__ == "__main__":
     # number of items in the dataset
-    K = 12
+    K = 8
     S = 12
 
     # Fill-in dataset with sample data
@@ -70,8 +81,8 @@ if __name__ == "__main__":
         pos = np.random.choice(range(len(images)), replace=True, size=K)
         data = images, top, size, pos
 
-        dsindex = DatasetIndex(ix)
-        ds = Dataset(index=dsindex, batch_class=MyBatch)
+        #dsindex = DatasetIndex(ix)
+        ds = Dataset(index=ix, batch_class=MyBatch)
         return ds, data
 
 
@@ -79,12 +90,9 @@ if __name__ == "__main__":
     print("Generating...")
     ds_data, data = gen_data()
 
-    #res = ds_data.p.load(data).convert_to_PIL('images').resize((384, 384))
-    #res = ds_data.p.load(data).resize((384, 384), method='cv2')
-    res = ds_data.p.load(data).some().other().sto().some()
-    #res = ds_data.p.load(data).transform(embarassingly_parallel_one)
+    res = ds_data.p.load(data).print().other() #.other() #.sto().some()
 
     print("Start...")
     t = time()
-    res.run(2, n_epochs=1, prefetch=1, target='mpc')
+    res.run(2, n_epochs=1, prefetch=0, target='threads')
     print("End", time() - t)
