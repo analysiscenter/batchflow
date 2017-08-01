@@ -31,7 +31,10 @@ class BaseComponentsTuple:
     """ Base class for a component tuple """
     components = None
     def __init__(self, data=None, pos=None):
-        self.data = data
+        if isinstance(data, BaseComponentsTuple):
+            self.data = data.data
+        else:
+            self.data = data
         if pos is not None and not isinstance(pos, list):
             pos = [pos for _ in self.components]
         self.pos = pos
