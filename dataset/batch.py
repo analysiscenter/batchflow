@@ -48,7 +48,7 @@ class Batch(BaseBatch):
     @classmethod
     def from_batch(cls, batch):
         """ Create batch from another batch """
-        return cls(batch.index, preloaded=batch._data)
+        return cls(batch.index, preloaded=batch._data)  # pylint: disable=protected-access
 
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
