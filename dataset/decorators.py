@@ -221,8 +221,8 @@ def any_action_failed(results):
 
 def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
     """ Make in-batch parallel decorator """
-    if target not in ['nogil', 'threads', 'mpc', 'async', 'for']:
-        raise ValueError("target should be one of 'nogil', threads', 'mpc', 'async', 'for'")
+    if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
+        raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
 
     def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
@@ -381,13 +381,13 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Wrap a method in a required parallel engine """
             if asyncio.iscoroutinefunction(method) or target == 'async':
                 return wrap_with_async(self, args, kwargs)
-            if target == 'threads':
+            if target in ['threads', 't']:
                 return wrap_with_threads(self, args, kwargs)
             elif target == 'nogil':
                 return wrap_with_threads(self, args, kwargs, nogil=True)
-            elif target == 'mpc':
+            elif target in ['mpc', 'm']:
                 return wrap_with_mpc(self, args, kwargs)
-            elif target == 'for':
+            elif target in ['for', 'f']:
                 return wrap_with_for(self, args, kwargs)
             raise ValueError('Wrong parallelization target:', target)
         return wrapped_method

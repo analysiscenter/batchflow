@@ -54,4 +54,5 @@ class MetaComponentsTuple(type):
         comp_class.components = components
         for i, comp in enumerate(components):
             setattr(comp_class, comp, ComponentDescriptor(i))
+        globals()[comp_class.__name__] = comp_class
         return comp_class

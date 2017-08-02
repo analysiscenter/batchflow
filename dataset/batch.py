@@ -99,7 +99,6 @@ class Batch(BaseBatch):
             type(self)._item_class = None
         elif type(self)._item_class is None:
             comp_class = MetaComponentsTuple(type(self).__name__ + 'Components', components=self.components)
-            globals()[comp_class.__name__] = comp_class
             type(self)._item_class = comp_class
 
     def __getstate__(self):
