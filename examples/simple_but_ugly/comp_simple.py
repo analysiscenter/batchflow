@@ -2,10 +2,18 @@
 import os
 import sys
 import numpy as np
+import dill
 from time import time
 
 sys.path.append("../..")
 from dataset import DatasetIndex, Dataset, Batch, action, inbatch_parallel, any_action_failed
+
+
+def mpc_some(item):
+    print("some:",)
+    dill.dumps(item)
+    #print(type(item), item.images.ndim)
+
 
 
 # Example of custom Batch class which defines some actions
@@ -28,9 +36,11 @@ class MyBatch(Batch):
 
 
     @action
-    @inbatch_parallel('items', target='for')
-    def some(self, item):
+    @inbatch_parallel('items', target='t')
+    def some(self, item=None):
         print("some:", type(item), item.images.ndim)
+        dill.dumps(item)
+        return mpc_some
 
 
 if __name__ == "__main__":
@@ -57,5 +67,5 @@ if __name__ == "__main__":
 
     print("Start...")
     t = time()
-    res.run(2, n_epochs=1, prefetch=0, target='threads')
+    res.run(2, n_epochs=1, prefetch=1, target='t')
     print("End", time() - t)

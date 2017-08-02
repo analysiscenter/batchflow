@@ -431,9 +431,9 @@ class Pipeline:
             # pool cannot have more than 63 workers
             prefetch = min(prefetch, 62)
 
-            if target == 'threads' or target == 't':
+            if target in ['threads', 't']:
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
-            elif target == 'mpc' or target == 'm':
+            elif target in ['mpc', 'm']:
                 self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)   # pylint: disable=redefined-variable-type
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
