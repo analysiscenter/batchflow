@@ -2,6 +2,7 @@
 import traceback
 import concurrent.futures as cf
 import threading
+import multiprocessing as mpc
 import asyncio
 import queue as q
 import numpy as np
@@ -39,6 +40,7 @@ class Pipeline:
                     if self.get_last_action_proba() is None:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
 
+        self.variables = dict() #mpc.Manager().dict()
         self._stop_flag = False
         self._prefetch_count = None
         self._prefetch_queue = None
@@ -162,11 +164,12 @@ class Pipeline:
                                   'proba': proba, 'repeat': repeat})
 
     def __getstate__(self):
-        return {'dataset': self.dataset, 'action_list': self._action_list}
+        return {'dataset': self.dataset, 'action_list': self._action_list, 'variables': self.variables}
 
     def __setstate__(self, state):
         self.dataset = state['dataset']
         self._action_list = state['action_list']
+        self.variables = state['variables']
 
     @property
     def index(self):
@@ -181,6 +184,18 @@ class Pipeline:
     def __len__(self):
         """ Return index length """
         return len(self.index)
+
+    def get_variable(self, name):
+        res = self.variables.get(name, None)
+        print("get var", name, res)
+        return res
+
+    def init_variable(self, name, value):
+        if name not in self.variables:
+            self.variables[name] = value
+
+    def set_variable(self, name, value):
+        self.variables[name] = value
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -400,10 +415,13 @@ class Pipeline:
         self._batch_queue = None
         self._batch_generator = None
         self.dataset.reset_iter()
+        self.variables = dict() #mpc.Manager().dict()
 
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
+        self.reset_iter()
+
         target = kwargs.pop('target', 'threads')
         self._tf_session = kwargs.pop('tf_session', None)
 
@@ -413,9 +431,9 @@ class Pipeline:
             # pool cannot have more than 63 workers
             prefetch = min(prefetch, 62)
 
-            if target == 'threads':
+            if target == 'threads' or target == 't':
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
-            elif target == 'mpc':
+            elif target == 'mpc' or target == 'm':
                 self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)   # pylint: disable=redefined-variable-type
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
@@ -446,7 +464,6 @@ class Pipeline:
                 else:
                     yield batch_res
 
-        self.reset_iter()
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions """
@@ -458,6 +475,11 @@ class Pipeline:
         else:
             # target is not used here, but people tend to forget removing it when set prefetch to 0
             _ = kwargs.pop('target', 'threads')
-            batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
-            batch_res = self.create_batch(batch_index, *args, **kwargs)
+            batch_res = None
+            while batch_res is None:
+                batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
+                try:
+                    batch_res = self.create_batch(batch_index, *args, **kwargs)
+                except SkipBatchException:
+                    pass
         return batch_res
