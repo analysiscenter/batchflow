@@ -453,6 +453,10 @@ class ArrayBatch(Batch):
 
 class DataFrameBatch(Batch):
     """ Base Batch class for datasets stored in pandas DataFrames """
+    def _assemble_load(self, all_res, *args, **kwargs):
+        """ Build the batch data after loading data from files """
+        return self
+
     @action
     def dump(self, dst, fmt='feather', *args, **kwargs):
         """ Save batch data to disk
