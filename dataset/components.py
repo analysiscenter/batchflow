@@ -39,9 +39,6 @@ class BaseComponentsTuple:
             pos = [pos for _ in self.components]
         self.pos = pos
 
-    def __getitem__(self, item):
-        return self.data[item] if self.data is not None else None
-
 
 class MetaComponentsTuple(type):
     """ Class factory for a component tuple """
