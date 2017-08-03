@@ -208,6 +208,7 @@ class FilesIndex(DatasetIndex):
     """
     def __init__(self, *args, **kwargs):
         self._paths = None
+        self.dirs = False
         super().__init__(*args, **kwargs)
 
     def build_index(self, index=None, path=None, *args, **kwargs):     # pylint: disable=arguments-differ
@@ -223,6 +224,7 @@ class FilesIndex(DatasetIndex):
             self._paths = dict((file, paths[file]) for file in index)
         else:
             self._paths = dict((file, paths[pos]) for pos, file in np.ndenumerate(index))
+        self.dirs = index.dirs
         return index
 
     def build_from_path(self, path, dirs=False, no_ext=False, sort=False):
@@ -245,6 +247,7 @@ class FilesIndex(DatasetIndex):
         if sort:
             _all_index.sort()
         self._paths = _all_paths
+        self.dirs = dirs
 
         return _all_index
 
