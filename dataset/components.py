@@ -47,6 +47,7 @@ class BaseComponentsTuple:
         return s
 
     def as_tuple(self, components=None):
+        """ Return components data as a tuple """
         components = tuple(components or self.components)
         return tuple(getattr(self, comp) for comp in components)
 

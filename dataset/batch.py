@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 
-from .dsindex import DatasetIndex
+from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, ModelDecorator, any_action_failed
 from .dataset import Dataset
 from .batch_base import BaseBatch
@@ -269,11 +269,6 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def dump(self, dst, fmt=None):
-        """ Save batch data to disk """
-        return self
-
-    @action
     @inbatch_parallel(init='indices')
     def apply_transform(self, ix, dst, src, func, *args, **kwargs):
         """ Apply a function to each item in the batch
@@ -413,7 +408,7 @@ class Batch(BaseBatch):
             setattr(self, comp, _data.iloc[:, i].values)
 
     @action
-    def load(self, src=None, fmt=None, components=None, *args, **kwargs):
+    def load(self, src=None, fmt=None, components=None, *args, **kwargs):  #pylint: disable=arguments-differ
         """ Load data from another array or a file """
         if fmt is None:
             self.put_into_data(self.indices, src)
@@ -426,7 +421,7 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def dump(self, dst=None, fmt=None, components=None):
+    def dump(self, dst=None, fmt=None, components=None):    #pylint: disable=arguments-differ
         """ Load data from another array or a file """
         if fmt is None:
             dst[self.indices] = self.data
@@ -447,7 +442,7 @@ class ArrayBatch(Batch):
             raise RuntimeError("Cannot assemble the batch", all_res)
 
         if self.components is None:
-            self._data = np.stack([res[i] for res in all_res])
+            self._data = np.stack([res[0] for res in all_res])
         else:
             components = tuple(kwargs.get('components', None) or self.components)
             for i, comp in enumerate(components):

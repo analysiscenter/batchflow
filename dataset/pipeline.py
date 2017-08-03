@@ -186,15 +186,17 @@ class Pipeline:
         return len(self.index)
 
     def get_variable(self, name):
+        """ Return a variable value """
         res = self.variables.get(name, None)
-        print("get var", name, res)
         return res
 
     def init_variable(self, name, value):
+        """ Create a variable if not exists """
         if name not in self.variables:
             self.variables[name] = value
 
     def set_variable(self, name, value):
+        """ Set a variable value """
         self.variables[name] = value
 
     @staticmethod
