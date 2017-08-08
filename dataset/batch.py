@@ -51,6 +51,11 @@ class Batch(BaseBatch):
         """ Create batch from another batch """
         return cls(batch.index, preloaded=batch._data)  # pylint: disable=protected-access
 
+    @classmethod
+    def merge(cls, batches, batch_size):
+        """ Merge several batches to form a new batch of a given size """
+        raise NotImplementedError("merge method should be implemented in children batch classes")
+
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
         Args:
@@ -360,7 +365,7 @@ class Batch(BaseBatch):
     def _assemble_load(self, all_res, *args, **kwargs):
         raise NotImplementedError("_assemble_load should be implemented in the child batch class")
 
-    @inbatch_parallel('indices', post='_assemble_load', target='f')
+    @inbatch_parallel('indices', post='_assemble', target='f')
     def _load_blosc(self, ix, src=None, components=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src, 'blosc')
@@ -437,7 +442,50 @@ class ArrayBatch(Batch):
     Batch data is a numpy array.
     If components are defined, then each component data is a numpy array
     """
-    def _assemble_load(self, all_res, *args, **kwargs):
+    @classmethod
+    def merge(cls, batches, batch_size=None):
+        """ Merge several batches to form a new batch of a given size """
+        def get_data(data, component=None):
+            return batch.data if component is None else getattr(batch, component)
+
+        def make_index(data):
+            return DatasetIndex(np.arange(data.shape[0])) if data.shape[0] > 0 else None
+
+        def merge_data(data):
+            components = self.components or (None,)
+            new_data = list(None for _ in components)
+            rest_data = list(None for _ in components)
+            for comp in components:
+                new_comp = [get_data(b, comp) for b in batches[:break_point-1]] + \
+                           [get_data(batches[break_point], comp)[:last_batch_len]]
+                new_data[i] = np.concatenate(new_comp)
+                rest_comp = [get_data(batches[break_point], comp)[last_batch_len:] + \
+                            [get_data(b, comp) for b in batches[break_point:]]]
+                rest_data[i] = np.concatenate(rest_comp)
+            new_index = make_index(new_data[0])
+            rest_index = make_index(rest_data[0])
+
+
+        break_point = -1
+        last_batch_len = 0
+        cur_size = 0
+        for i, b in enumerate(batches):
+            cur_batch_len = len(b)
+            if cur_size + cur_batch_len >= batch_size:
+                break_point = i
+                last_batch_len = batch_size - cur_size
+                break
+            else:
+                cur_size += cur_batch_len
+                last_batch_len = cur_batch_len
+
+        new_batch = cls(new_index, preloaded=new_data) if new_index is not None else None
+        rest_batch = cls(rest_index, preloaded=rest_data) if rest_index is not None else None
+
+        return new_batch, rest_batch
+
+
+    def _assemble(self, all_res, *args, **kwargs):
         if any_action_failed(all_res):
             raise RuntimeError("Cannot assemble the batch", all_res)
 
@@ -453,7 +501,7 @@ class ArrayBatch(Batch):
 
 class DataFrameBatch(Batch):
     """ Base Batch class for datasets stored in pandas DataFrames """
-    def _assemble_load(self, all_res, *args, **kwargs):
+    def _assemble(self, all_res, *args, **kwargs):
         """ Build the batch data after loading data from files """
         return self
 

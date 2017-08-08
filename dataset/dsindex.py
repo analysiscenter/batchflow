@@ -22,6 +22,10 @@ class DatasetIndex(Baseset):
         """Create index from another index """
         return cls(*args, **kwargs)
 
+    def concat(cls, *index_list):
+        """ Create index by concatenating other indices """
+        return DatasetIndex(np.concatenate([i.index for i in index_list]))
+
     @staticmethod
     def build_index(index):
         """ Check index type and structure """
@@ -129,7 +133,34 @@ class DatasetIndex(Baseset):
 
 
     def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
-        """ Return next batch """
+        """ Return next batch
+        Args:
+            batch_size: int - desired number of items in the batch (the actual batch could contain fewer items)
+
+            shuffle: specifies the order of items, could be:
+                bool: False - items from the dataset go sequentionally, one after another as they appear in the index
+                      True - items are shuffled randomly before each epoch
+                int: seed number for a random shuffle
+                an instance of np.random.RandomState object for a random shuffle
+                callable: your function which takes an array of item indices in the initial order
+                          (as they appear in the index) and returns the order of items
+
+            n_epochs: int - the number of epochs required
+
+            drop_last: bool - if True, drops the last batch (in each epoch) if it contains fewer than batch_size items.
+            If False, than the last batch in each epoch could contain repeting indices (which might be a problem)
+            and the very last batch could contain fewer than batch_size items.
+            For instance, next_batch(3, shuffle=False, n_epochs=2, drop_last=False) for a dataset with 4 items returns
+            indices [0,1,2], [3,0,1], [2,3].
+            While next_batch(3, shuffle=False, n_epochs=2, drop_last=True) returns indices [0,1,2], [0,1,2].
+
+            Take into account that next_batch(3, shuffle=True, n_epochs=2, drop_last=False) could return batches
+            [3,0,1], [2,0,2], [1,3]. Here the second batch contains two items with the same index "2".
+            This might become a problem if some action uses batch.get_pos or batch.index.get_pos methods so that
+            one of the identical items will be missed.
+            However, there is nothing to worry about if you don't iterate over batch items explicitly
+            (i.e. for item in batch) or implicitly (through batch[ix]).
+        """
         if self._stop_iter:
             raise StopIteration("Dataset is over. No more batches left.")
 
@@ -141,6 +172,10 @@ class DatasetIndex(Baseset):
         if self._start_index + batch_size >= num_items:
             rest_items = np.copy(self._order[self._start_index:])
             rest_of_batch = self._start_index + batch_size - num_items
+            if rest_of_batch > 0:
+                if drop_last:
+                    rest_items = None
+                    rest_of_batch = batch_size
             self._start_index = 0
             self._n_epochs += 1
             self._order = self._shuffle(shuffle, self._order)
