@@ -445,42 +445,50 @@ class ArrayBatch(Batch):
     @classmethod
     def merge(cls, batches, batch_size=None):
         """ Merge several batches to form a new batch of a given size """
-        def get_data(data, component=None):
+        def get_data(batch, component=None):
             return batch.data if component is None else getattr(batch, component)
 
         def make_index(data):
-            return DatasetIndex(np.arange(data.shape[0])) if data.shape[0] > 0 else None
+            return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
 
-        def merge_data(data):
-            components = self.components or (None,)
-            new_data = list(None for _ in components)
-            rest_data = list(None for _ in components)
-            for comp in components:
+
+        if batch_size is None:
+            break_point = len(batches)
+            last_batch_len = len(batches[-1])
+        else:
+            break_point = -1
+            last_batch_len = 0
+            cur_size = 0
+            for i, b in enumerate(batches):
+                cur_batch_len = len(b)
+                if cur_size + cur_batch_len >= batch_size:
+                    break_point = i
+                    last_batch_len = batch_size - cur_size
+                    break
+                else:
+                    cur_size += cur_batch_len
+                    last_batch_len = cur_batch_len
+
+        components = batches[0].components or (None,)
+        new_data = list(None for _ in components)
+        rest_data = list(None for _ in components)
+        for i, comp in enumerate(components):
+            if batch_size is None:
+                new_comp = [get_data(b, comp) for b in batches[:break_point]]
+            else:
                 new_comp = [get_data(b, comp) for b in batches[:break_point-1]] + \
                            [get_data(batches[break_point], comp)[:last_batch_len]]
-                new_data[i] = np.concatenate(new_comp)
-                rest_comp = [get_data(batches[break_point], comp)[last_batch_len:] + \
-                            [get_data(b, comp) for b in batches[break_point:]]]
+            new_data[i] = np.concatenate(new_comp)
+
+            if batch_size is not None:
+                rest_comp = [get_data(batches[break_point], comp)[last_batch_len:]] + \
+                            [get_data(b, comp) for b in batches[break_point:]]
                 rest_data[i] = np.concatenate(rest_comp)
-            new_index = make_index(new_data[0])
-            rest_index = make_index(rest_data[0])
+        new_index = make_index(new_data[0])
+        rest_index = make_index(rest_data[0])
 
-
-        break_point = -1
-        last_batch_len = 0
-        cur_size = 0
-        for i, b in enumerate(batches):
-            cur_batch_len = len(b)
-            if cur_size + cur_batch_len >= batch_size:
-                break_point = i
-                last_batch_len = batch_size - cur_size
-                break
-            else:
-                cur_size += cur_batch_len
-                last_batch_len = cur_batch_len
-
-        new_batch = cls(new_index, preloaded=new_data) if new_index is not None else None
-        rest_batch = cls(rest_index, preloaded=rest_data) if rest_index is not None else None
+        new_batch = cls(new_index, preloaded=tuple(new_data)) if new_index is not None else None
+        rest_batch = cls(rest_index, preloaded=tuple(rest_data)) if rest_index is not None else None
 
         return new_batch, rest_batch
 

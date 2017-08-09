@@ -260,9 +260,9 @@ class Pipeline:
 
                 if _action['name'] == MERGE_ID:
                     if _action['merge_fn'] is None:
-                        batch, _ = batch.merge(join_batches)
+                        batch, _ = batch.merge([batch] + join_batches)
                     else:
-                        batch, _ = _action['merge_fn'](join_batches)
+                        batch, _ = _action['merge_fn']([batch] + join_batches)
                     join_batches = None
             elif _action['name'] == REBATCH_ID:
                 if self._rest_batch is None:

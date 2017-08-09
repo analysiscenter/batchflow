@@ -17,14 +17,17 @@ class MyBatch(ArrayBatch):
         return "images", "labels"
 
     @classmethod
-    def ferge(cls, batches, batch_size=None):
+    def merge(cls, batches, batch_size=None):
+        batch, rest = super().merge(batches, batch_size)
         print("merge")
         for b in batches:
             print("   ", b.indices)
-        return None, None
+        print(batch.indices)
+        return batch, rest
 
     @action
     def print(self, txt=None):
+        print("--------------------")
         if txt is not None:
             print(txt)
         for i in self:
@@ -68,26 +71,28 @@ if __name__ == "__main__":
 
     # Create datasets
     print("Generating...")
-    ds_data, data = gen_data()
+    ds1, data1 = gen_data()
+    ds2, data2 = gen_data()
 
-    res1 = (ds_data.p
-            .load(data)
+    res1 = (ds1.p
+            .load(data1)
             .print('res1')
             .some()
-            .run(2, lazy=True)
+            .run(2, shuffle=False, lazy=True)
     )
 
-    res2 = (ds_data.p
-            .load(data)
-            .print('res1')
+    res2 = (ds1.p
+            .load(data1)
+            .print('res2')
             .other()
             .merge(res1)
-            .run(2, lazy=True)
+            .print("after merge")
+            .run(2, shuffle=False, lazy=True)
     )
 
     print("Start...")
     t = time()
-    res2.run()
+    res2.run() #2, shuffle=False)
     print("======================")
     #res2.run(2, n_epochs=1, prefetch=0, target='t')
     print("End", time() - t)
