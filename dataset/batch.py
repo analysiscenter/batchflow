@@ -362,10 +362,10 @@ class Batch(BaseBatch):
             file_name = os.path.join(os.path.abspath(src), str(ix) + '.' + ext)
         return file_name
 
-    def _assemble(self, all_res, *args, **kwargs):
+    def _assemble_load(self, all_res, *args, **kwargs):
         raise NotImplementedError("_assemble_load should be implemented in the child batch class")
 
-    @inbatch_parallel('indices', post='_assemble', target='f')
+    @inbatch_parallel('indices', post='_assemble_load', target='f')
     def _load_blosc(self, ix, src=None, components=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src, 'blosc')
@@ -490,7 +490,7 @@ class ArrayBatch(Batch):
         return new_batch, rest_batch
 
 
-    def _assemble(self, all_res, *args, **kwargs):
+    def _assemble_load(self, all_res, *args, **kwargs):
         _ = args
         if any_action_failed(all_res):
             raise RuntimeError("Cannot assemble the batch", all_res)
@@ -507,7 +507,11 @@ class ArrayBatch(Batch):
 
 class DataFrameBatch(Batch):
     """ Base Batch class for datasets stored in pandas DataFrames """
-    def _assemble(self, all_res, *args, **kwargs):
+    @classmethod
+    def merge(cls, batches, batch_size=None):
+        return None, None
+
+    def _assemble_load(self, all_res, *args, **kwargs):
         """ Build the batch data after loading data from files """
         _ = all_res, args, kwargs
         return self

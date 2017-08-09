@@ -92,10 +92,12 @@ class BasicImagesBatch(Batch):
 
     def assemble(self, all_res, *args, **kwargs):
         """ Assemble the batch after a parallel action """
+        _ = all_res, args, kwargs
         raise NotImplementedError("Use ImagesBatch")
 
     def _assemble_load(self, all_res, *args, **kwargs):
         """ Build the batch data after loading data from files """
+        _ = all_res, args, kwargs
         return self
 
     @action

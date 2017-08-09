@@ -330,7 +330,7 @@ class Pipeline:
     def rebatch(self, batch_size, merge_fn=None):
         """ Set the output batch size """
         new_p = type(self)()
-        new_p._action_list.append({'name': REBATCH_ID, 'batch_size': batch_size,
+        new_p._action_list.append({'name': REBATCH_ID, 'batch_size': batch_size,  # pylint: disable=protected-access
                                    'pipeline': self, 'merge_fn': merge_fn})
         return new_p.append_action()
 
