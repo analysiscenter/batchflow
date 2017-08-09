@@ -44,7 +44,7 @@ if __name__ == "__main__":
     print("Start iterating...")
     for i in range(NUM_ITEMS * 3):
         try:
-            batch = dataset.next_batch(BATCH_SIZE, n_epochs=2, drop_last=True)
+            batch = dataset.next_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True)
             print("batch", i + 1, "contains items", batch.indices)
         except StopIteration:
             print("got StopIteration")

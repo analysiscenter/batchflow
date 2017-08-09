@@ -286,7 +286,7 @@ class Pipeline:
                 if join_batches is None:
                     _action_args = _action['args']
                 else:
-                    _action_args = tuple(joined_batches) + _action['args']
+                    _action_args = tuple(join_batches) + _action['args']
                     join_batches = None
 
                 batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
@@ -513,7 +513,7 @@ class Pipeline:
 
     def next_batch(self, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions
-        next_batch(self, batch_size=None, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+        next_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """
         if len(args) == 0 and len(kwargs) == 0:
             if self._lazy_run is None:
@@ -542,14 +542,13 @@ class Pipeline:
 
     def run(self, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
-        run(self, batch_size=None, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+        run(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
         else:
             if len(args) == 0 and len(kwargs) == 0:
                 args, kwargs = self._lazy_run
-            batch_generator = self.gen_batch(*args, **kwargs)
-            for _ in batch_generator:
+            for _ in self.gen_batch(*args, **kwargs):
                 pass
         return self

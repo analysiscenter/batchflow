@@ -107,24 +107,26 @@ class DatasetIndex(Baseset):
         self.train = self.create_subset(self.subset_by_pos(train_pos))
 
 
-    def _shuffle(self, shuffle, order=None):
-        if order is None:
-            if self._order is None:
-                order = np.arange(len(self))
-            else:
-                order = self._order
+    def _shuffle(self, shuffle, iter_params=None):
+        if iter_params is None:
+            iter_params = self._iter_params
+
+        if iter_params['_order'] is None:
+            order = np.arange(len(self))
+        else:
+            order = iter_params['_order']
 
         if isinstance(shuffle, bool):
             if shuffle:
                 order = np.random.permutation(order)
         elif isinstance(shuffle, int):
-            if self._random_state is None or self._random_state.seed != shuffle:
-                self._random_state = np.random.RandomState(shuffle)
-            order = self._random_state.permutation(order)
+            if iter_params['_random_state'] is None or iter_params['_random_state'].seed != shuffle:
+                iter_params['_random_state'] = np.random.RandomState(shuffle)
+            order = iter_params['_random_state'].permutation(order)
         elif isinstance(shuffle, np.random.RandomState):
-            if self._random_state != shuffle:
-                self._random_state = shuffle
-            order = self._random_state.permutation(order)
+            if iter_params['_random_state'] != shuffle:
+                iter_params['_random_state'] = shuffle
+            order = iter_params['_random_state'].permutation(order)
         elif callable(shuffle):
             order = shuffle(self.indices)
         else:
@@ -132,7 +134,7 @@ class DatasetIndex(Baseset):
         return order
 
 
-    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
+    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, iter_params=None):
         """ Return next batch
         Args:
             batch_size: int - desired number of items in the batch (the actual batch could contain fewer items)
@@ -161,55 +163,57 @@ class DatasetIndex(Baseset):
             However, there is nothing to worry about if you don't iterate over batch items explicitly
             (i.e. for item in batch) or implicitly (through batch[ix]).
         """
-        if self._stop_iter:
+        if iter_params is None:
+            iter_params = self._iter_params
+
+        if iter_params['_stop_iter']:
             raise StopIteration("Dataset is over. No more batches left.")
 
-        if self._order is None:
-            self._order = self._shuffle(shuffle)
-        num_items = len(self._order)
+        if iter_params['_order'] is None:
+            iter_params['_order'] = self._shuffle(shuffle, iter_params)
+        num_items = len(iter_params['_order'])
 
         rest_items = None
-        if self._start_index + batch_size >= num_items:
-            rest_items = np.copy(self._order[self._start_index:])
-            rest_of_batch = self._start_index + batch_size - num_items
+        if iter_params['_start_index'] + batch_size >= num_items:
+            rest_items = np.copy(iter_params['_order'][iter_params['_start_index']:])
+            rest_of_batch = iter_params['_start_index'] + batch_size - num_items
             if rest_of_batch > 0:
                 if drop_last:
                     rest_items = None
                     rest_of_batch = batch_size
-            self._start_index = 0
-            self._n_epochs += 1
-            self._order = self._shuffle(shuffle, self._order)
+            iter_params['_start_index'] = 0
+            iter_params['_n_epochs'] += 1
+            iter_params['_order'] = self._shuffle(shuffle, iter_params)
         else:
             rest_of_batch = batch_size
 
-        new_items = self._order[self._start_index : self._start_index + rest_of_batch]
+        new_items = iter_params['_order'][iter_params['_start_index'] : iter_params['_start_index'] + rest_of_batch]
         # TODO: concat not only numpy arrays
         if rest_items is None:
             batch_items = new_items
         else:
             batch_items = np.concatenate((rest_items, new_items))
 
-        if n_epochs is not None and self._n_epochs >= n_epochs and rest_items is not None:
-            if drop_last and len(rest_items) < batch_size:
+        if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs: # and rest_items is not None:
+            if drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             else:
-                self._stop_iter = True
+                iter_params['_stop_iter'] = True
                 return self.create_batch(rest_items, pos=True)
         else:
-            self._start_index += rest_of_batch
+            iter_params['_start_index'] += rest_of_batch
             return self.create_batch(batch_items, pos=True)
 
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
         """ Generate batches """
-        self.reset_iter()
+        iter_params = self.get_default_iter_params()
         while True:
-            if n_epochs is not None and self._n_epochs >= n_epochs:
+            if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
                 raise StopIteration()
             else:
-                batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last)
+                batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
                 yield batch
-        self.reset_iter()
 
 
     def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ

@@ -72,7 +72,6 @@ if __name__ == "__main__":
     # Create datasets
     print("Generating...")
     ds1, data1 = gen_data()
-    ds2, data2 = gen_data()
 
     res1 = (ds1.p
             .load(data1)
