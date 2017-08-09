@@ -2,7 +2,7 @@
 import traceback
 import concurrent.futures as cf
 import threading
-import multiprocessing as mpc
+#import multiprocessing as mpc
 import asyncio
 import queue as q
 import numpy as np
@@ -17,6 +17,8 @@ from .exceptions import SkipBatchException
 
 PIPELINE_ID = '#_pipeline'
 JOIN_ID = '#_join'
+MERGE_ID = '#_merge'
+REBATCH_ID = '#_rebatch'
 
 
 def mult_option(a, b):
@@ -41,14 +43,20 @@ class Pipeline:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
 
         self.variables = dict() #mpc.Manager().dict()
+        self._tf_session = None
+
         self._stop_flag = False
+        self._executor = None
+        self._service_executor = None
         self._prefetch_count = None
         self._prefetch_queue = None
         self._batch_queue = None
-        self._service_executor = None
-        self._executor = None
         self._batch_generator = None
-        self._tf_session = None
+
+        self._rest_batch = None
+        self._lazy_run = None
+        self.reset_iter()
+
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -138,7 +146,7 @@ class Pipeline:
         else:
             return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
 
-    def __getattr__(self, name, *args, **kwargs):
+    def __getattr__(self, name):
         """ Check if an unknown attr is an action from some batch class """
         if self._is_batch_method(name):
             self._action_list.append({'name': name})
@@ -186,15 +194,17 @@ class Pipeline:
         return len(self.index)
 
     def get_variable(self, name):
+        """ Return a variable value """
         res = self.variables.get(name, None)
-        print("get var", name, res)
         return res
 
     def init_variable(self, name, value):
+        """ Create a variable if not exists """
         if name not in self.variables:
             self.variables[name] = value
 
     def set_variable(self, name, value):
+        """ Set a variable value """
         self.variables[name] = value
 
     @staticmethod
@@ -237,23 +247,49 @@ class Pipeline:
         return batch
 
     def _exec_all_actions(self, batch, action_list=None):
-        joined_sets = None
+        # pylint: disable=too-many-branches
+        join_batches = None
         action_list = action_list or self._action_list
         for _action in action_list:
-            if _action['name'] == JOIN_ID:
-                joined_sets = _action['datasets']
+            if _action['name'] in [JOIN_ID, MERGE_ID]:
+                join_batches = []
+                for pipe in _action['pipelines']:   # pylint: disable=not-an-iterable
+                    if _action['mode'] == 'i':
+                        jbatch = pipe.create_batch(batch.index)
+                    elif _action['mode'] == 'n':
+                        jbatch = pipe.next_batch()
+                    join_batches.append(jbatch)
+
+                if _action['name'] == MERGE_ID:
+                    if _action['merge_fn'] is None:
+                        batch, _ = batch.merge([batch] + join_batches)
+                    else:
+                        batch, _ = _action['merge_fn']([batch] + join_batches)
+                    join_batches = None
+            elif _action['name'] == REBATCH_ID:
+                if self._rest_batch is None:
+                    cur_len = 0
+                    batches = []
+                else:
+                    cur_len = len(self._rest_batch)
+                    batches = [self._rest_batch]
+                    self._rest_batch = None
+                while cur_len < _action['batch_size']:
+                    new_batch = _action['pipeline'].next_batch(*self._lazy_run[0], **self._lazy_run[1])
+                    batches.append(new_batch)
+                    cur_len += len(new_batch)
+                if _action['merge_fn'] is None:
+                    batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
+                else:
+                    batch, self._rest_batch = _action['merge_fn'](batches, batch_size=_action['batch_size'])
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
             else:
-                if joined_sets is not None:
-                    joined_data = []
-                    for jset in joined_sets:   # pylint: disable=not-an-iterable
-                        jbatch = jset.create_batch(batch.index)
-                        joined_data.append(jbatch)
-                    _action_args = tuple(joined_data) + _action['args']
-                    joined_sets = None
-                else:
+                if join_batches is None:
                     _action_args = _action['args']
+                else:
+                    _action_args = tuple(join_batches) + _action['args']
+                    join_batches = None
 
                 batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
 
@@ -272,10 +308,31 @@ class Pipeline:
             asyncio.set_event_loop(asyncio.new_event_loop())
         return self._exec_all_actions(batch)
 
-    def join(self, *datasets):
-        """ Join other datasets """
-        self._action_list.append({'name': JOIN_ID, 'datasets': datasets})
+    def join(self, *pipelines):
+        """ Join pipelines
+        Args:
+            one or several pipelines
+            mode:
+                - 'i' - by index, i.e. get from each pipeline batches with the same indices
+                - 'r' - by lazy run, i.e. get the next batch from each pipeline.
+                        In this mode batches could have different size and non-matching indices.
+                        For this to work pipelines must end with run(..., lazy=True).
+        """
+        self._action_list.append({'name': JOIN_ID, 'pipelines': pipelines, 'mode': 'i'})
         return self.append_action()
+
+    def merge(self, *pipelines, merge_fn=None):
+        """ Merge pipelines """
+        self._action_list.append({'name': MERGE_ID, 'pipelines': pipelines,    # pylint: disable=protected-access
+                                  'mode': 'n', 'merge_fn': merge_fn})
+        return self.append_action()
+
+    def rebatch(self, batch_size, merge_fn=None):
+        """ Set the output batch size """
+        new_p = type(self)()
+        new_p._action_list.append({'name': REBATCH_ID, 'batch_size': batch_size,  # pylint: disable=protected-access
+                                   'pipeline': self, 'merge_fn': merge_fn})
+        return new_p.append_action()
 
     def put_into_tf_queue(self, session=None, queue=None, get_tensor=None):
         """ Insert a tensorflow queue after the action"""
@@ -373,13 +430,6 @@ class Pipeline:
                     self._prefetch_queue.task_done()
         return None
 
-    def run(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
-        """ Execute all lazy actions for each batch in the dataset """
-        batch_generator = self.gen_batch(batch_size, shuffle, n_epochs, drop_last, prefetch, *args, **kwargs)
-        for _ in batch_generator:
-            pass
-        return self
-
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all previous lazy actions """
         batch = self.dataset.create_batch(batch_index, *args, **kwargs)
@@ -418,7 +468,7 @@ class Pipeline:
         self.variables = dict() #mpc.Manager().dict()
 
 
-    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
         self.reset_iter()
 
@@ -464,22 +514,44 @@ class Pipeline:
                 else:
                     yield batch_res
 
-
-    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
-        """ Get the next batch and execute all previous lazy actions """
-        if prefetch > 0:
+    def next_batch(self, *args, **kwargs):
+        """ Get the next batch and execute all previous lazy actions
+        next_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+        """
+        if len(args) == 0 and len(kwargs) == 0:
+            if self._lazy_run is None:
+                raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
+            batch_res = self.next_batch(*self._lazy_run[0], **self._lazy_run[1])
+        elif kwargs.get('prefetch', 0) > 0:
             if self._batch_generator is None:
-                self._batch_generator = self.gen_batch(batch_size, shuffle, n_epochs,
-                                                       drop_last, prefetch, *args, **kwargs)
+                self._lazy_run = args, kwargs
+                self._batch_generator = self.gen_batch(*args, **kwargs)
             batch_res = next(self._batch_generator)
         else:
+            self._lazy_run = args, kwargs
+            _kwargs = kwargs.copy()
             # target is not used here, but people tend to forget removing it when set prefetch to 0
-            _ = kwargs.pop('target', 'threads')
+            _ = _kwargs.pop('target', 'threads')
+            # prefetch could be 0
+            _ = _kwargs.pop('prefetch', 0)
             batch_res = None
             while batch_res is None:
-                batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
+                batch_index = self.index.next_batch(*args, **_kwargs)
                 try:
-                    batch_res = self.create_batch(batch_index, *args, **kwargs)
+                    batch_res = self.create_batch(batch_index, **_kwargs)
                 except SkipBatchException:
                     pass
         return batch_res
+
+    def run(self, *args, **kwargs):
+        """ Execute all lazy actions for each batch in the dataset
+        run(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+        """
+        if kwargs.pop('lazy', False):
+            self._lazy_run = args, kwargs
+        else:
+            if len(args) == 0 and len(kwargs) == 0:
+                args, kwargs = self._lazy_run
+            for _ in self.gen_batch(*args, **kwargs):
+                pass
+        return self

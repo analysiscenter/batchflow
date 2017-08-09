@@ -92,18 +92,23 @@ class BasicImagesBatch(Batch):
 
     def assemble(self, all_res, *args, **kwargs):
         """ Assemble the batch after a parallel action """
+        _ = all_res, args, kwargs
         raise NotImplementedError("Use ImagesBatch")
 
-    @action
-    def load(self, src, fmt=None):
-        """ Load data """
-        return super().load(src, fmt)
+    def _assemble_load(self, all_res, *args, **kwargs):
+        """ Build the batch data after loading data from files """
+        _ = all_res, args, kwargs
+        return self
 
     @action
-    def dump(self, dst, fmt=None):
-        """ Saves data to a file or a memory object """
-        _ = dst, fmt
-        return self
+    def load(self, src, fmt=None, components=None, *args, **kwargs):
+        """ Load data """
+        return super().load(src, fmt, components, *args, **kwargs)
+
+    @action
+    def dump(self, dst, fmt=None, components=None, *args, **kwargs):
+        """ Save data to a file or a memory object """
+        return super().dump(dst, fmt, components=None, *args, **kwargs)
 
     @action
     def noop(self):

@@ -9,21 +9,25 @@ sys.path.append("../..")
 from dataset import DatasetIndex, Dataset, ArrayBatch, action, inbatch_parallel, any_action_failed
 
 
-def mpc_some(item):
-    print("some:",)
-    dill.dumps(item)
-    #print(type(item), item.images.ndim)
-
-
 
 # Example of custom Batch class which defines some actions
 class MyBatch(ArrayBatch):
     @property
     def components(self):
-        return "images", "labels", "masks", "targets"
+        return "images", "labels"
+
+    @classmethod
+    def merge(cls, batches, batch_size=None):
+        batch, rest = super().merge(batches, batch_size)
+        print("merge")
+        for b in batches:
+            print("   ", b.indices)
+        print(batch.indices)
+        return batch, rest
 
     @action
     def print(self, txt=None):
+        print("--------------------")
         if txt is not None:
             print(txt)
         for i in self:
@@ -44,8 +48,7 @@ class MyBatch(ArrayBatch):
     def some(self, item=None):
         print("some:", type(item))
         print(item)
-        print("len", len(dill.dumps(item.as_tuple())))
-        return mpc_some
+        return None
 
 
 if __name__ == "__main__":
@@ -68,26 +71,27 @@ if __name__ == "__main__":
 
     # Create datasets
     print("Generating...")
-    ds_data, data = gen_data()
+    ds1, data1 = gen_data()
 
-    #res = ds_data.p.print().other().some()
-    res = (ds_data.p
-            .load(data)
-            .print('before dump')
-            .dump('../data/data2', 'blosc')
+    res1 = (ds1.p
+            .load(data1)
+            .print('res1')
+            .some()
+            .run(2, shuffle=False, lazy=True)
     )
 
-    res2 = (ds_data.p
-            .load('../data/data2', 'blosc', components=['images'])
-            .print('after loading images')
-            .load('../data/targets.csv', 'csv', components=['targets', 'masks'], header=0, index_col=False, names=['Target', 'N'])
-            #.load('../data/data2', 'blosc', components=['masks', 'targets'])
-            .print('after targets')
+    res2 = (ds1.p
+            .load(data1)
+            .print('res2')
+            .other()
+            .merge(res1)
+            .print("after merge")
+            .run(2, shuffle=False, lazy=True)
     )
 
     print("Start...")
     t = time()
-    res.run(2, n_epochs=1, prefetch=0, target='t')
+    res2.run() #2, shuffle=False)
     print("======================")
-    res2.run(2, n_epochs=1, prefetch=0, target='t')
+    #res2.run(2, n_epochs=1, prefetch=0, target='t')
     print("End", time() - t)

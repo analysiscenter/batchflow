@@ -3,6 +3,7 @@
 import os
 
 try:
+    import dill
     import blosc
 except ImportError:
     pass
@@ -20,8 +21,8 @@ try:
 except ImportError:
     pass
 
-from .dsindex import DatasetIndex
-from .decorators import action, inbatch_parallel, ModelDecorator
+from .dsindex import DatasetIndex, FilesIndex
+from .decorators import action, inbatch_parallel, ModelDecorator, any_action_failed
 from .dataset import Dataset
 from .batch_base import BaseBatch
 from .components import MetaComponentsTuple
@@ -49,6 +50,11 @@ class Batch(BaseBatch):
     def from_batch(cls, batch):
         """ Create batch from another batch """
         return cls(batch.index, preloaded=batch._data)  # pylint: disable=protected-access
+
+    @classmethod
+    def merge(cls, batches, batch_size):
+        """ Merge several batches to form a new batch of a given size """
+        raise NotImplementedError("merge method should be implemented in children batch classes")
 
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
@@ -268,20 +274,6 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def load(self, src, fmt=None):
-        """ Load data from a source """
-        if fmt is None:
-            self.put_into_data(self.indices, src)
-        else:
-            raise ValueError("Unknown format:", fmt)
-        return self
-
-    @action
-    def dump(self, dst, fmt=None):
-        """ Save batch data to disk """
-        return self
-
-    @action
     @inbatch_parallel(init='indices')
     def apply_transform(self, ix, dst, src, func, *args, **kwargs):
         """ Apply a function to each item in the batch
@@ -356,92 +348,173 @@ class Batch(BaseBatch):
             dst[:] = tr_res
         return self
 
+    def _get_file_name(self, ix, src, ext):
+        if src is None:
+            if isinstance(self.index, FilesIndex):
+                src = self.index.get_fullpath(ix)
+                if self.index.dirs:
+                    file_name = os.path.join(src, 'data.' + ext)
+                else:
+                    file_name = src + '.' + ext
+            else:
+                raise ValueError("File locations must be specified to dump/load data")
+        else:
+            file_name = os.path.join(os.path.abspath(src), str(ix) + '.' + ext)
+        return file_name
 
-class ArrayBatch(Batch):
-    """ Base Batch class for array-like datasets """
+    def _assemble_load(self, all_res, *args, **kwargs):
+        raise NotImplementedError("_assemble_load should be implemented in the child batch class")
 
-    @staticmethod
-    def _read_file(path, attr):
-        with open(path, 'r' + attr) as file:
-            data = file.read()
-        return data
+    @inbatch_parallel('indices', post='_assemble_load', target='f')
+    def _load_blosc(self, ix, src=None, components=None):
+        """ Load data from a blosc packed file """
+        file_name = self._get_file_name(ix, src, 'blosc')
+        with open(file_name, 'rb') as f:
+            data = dill.loads(blosc.decompress(f.read()))
+            if self.components is None:
+                components = (data.keys()[0],)
+            else:
+                components = tuple(components or self.components)
+            item = tuple(data[i] for i in components)
+        return item
 
+    @inbatch_parallel('indices', target='f')
+    def _dump_blosc(self, ix, dst, components=None):
+        """ Save blosc packed data to file """
+        file_name = self._get_file_name(ix, dst, 'blosc')
+        with open(file_name, 'w+b') as f:
+            if self.components is None:
+                components = (None,)
+                item = (self[ix],)
+            else:
+                components = tuple(components or self.components)
+                item = self[ix].as_tuple(components)
+            data = dict(zip(components, item))
+            f.write(blosc.compress(dill.dumps(data)))
 
-    @staticmethod
-    def _write_file(path, attr, data):
-        with open(path, 'w' + attr) as file:
-            file.write(data)
+    def _load_table(self, src, fmt, components=None, *args, **kwargs):
+        """ Load data from table formats: csv, hdf5, feather """
+        for i, comp in enumerate(tuple(components)):
+            if fmt == 'csv':
+                dfr = pd.read_csv(src, *args, **kwargs)
+            elif fmt == 'feather':
+                dfr = feather.read_dataframe(src, *args, **kwargs)  # pylint: disable=redefined-variable-type
+            elif fmt == 'hdf5':
+                dfr = pd.read_hdf(src, *args, **kwargs)             # pylint: disable=redefined-variable-type
 
+            # Put into this batch only part of it (defined by index)
+            if isinstance(dfr, pd.DataFrame):
+                _data = dfr.loc[self.indices]
+            elif isinstance(dfr, dd.DataFrame):
+                # dask.DataFrame.loc supports advanced indexing only with lists
+                _data = dfr.loc[list(self.indices)].compute()
+            else:
+                raise TypeError("Unknown DataFrame. DataFrameBatch supports only pandas and dask.")
+            setattr(self, comp, _data.iloc[:, i].values)
 
     @action
-    def load(self, src, fmt=None):
+    def load(self, src=None, fmt=None, components=None, *args, **kwargs):  #pylint: disable=arguments-differ
         """ Load data from another array or a file """
-
-        # Read the whole source
         if fmt is None:
-            _data = src
+            self.put_into_data(self.indices, src)
         elif fmt == 'blosc':
-            packed_array = self._read_file(src, 'b')
-            _data = blosc.unpack_array(packed_array)
+            self._load_blosc(src, components=components, **kwargs)
+        elif fmt in ['csv', 'hdf5', 'feather']:
+            self._load_table(src, fmt, components, *args, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
+        return self
 
-        # But put into this batch only part of it (defined by index)
-        try:
-            # this creates a copy of the source data
-            self._data = _data[self.indices]
-        except TypeError:
-            raise TypeError('Source is expected to be array-like')
-
+    @action
+    def dump(self, dst=None, fmt=None, components=None):    #pylint: disable=arguments-differ
+        """ Load data from another array or a file """
+        if fmt is None:
+            dst[self.indices] = self.data
+        elif fmt == 'blosc':
+            self._dump_blosc(dst, components=components)
+        else:
+            raise ValueError("Unknown format " + fmt)
         return self
 
 
-    @action
-    def dump(self, dst, fmt=None):
-        """ Save batch data to a file or into another array """
-        filename = self.make_filename()
-        fullname = os.path.join(dst, filename + '.' + fmt)
+class ArrayBatch(Batch):
+    """ Base Batch class for array-like datasets
+    Batch data is a numpy array.
+    If components are defined, then each component data is a numpy array
+    """
+    @classmethod
+    def merge(cls, batches, batch_size=None):
+        """ Merge several batches to form a new batch of a given size """
+        def make_index(data):
+            """ Creates a new index for a merged batch """
+            return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
 
-        if fmt is None:
-            # think carefully when dumping to an array
-            dst[self.indices] = self.data
-        elif fmt == 'blosc':
-            packed_array = blosc.pack_array(self.data)
-            self._write_file(fullname, 'b', packed_array)
+        if batch_size is None:
+            break_point = len(batches)
+            last_batch_len = len(batches[-1])
         else:
-            raise ValueError("Unknown format " + fmt)
+            break_point = -1
+            last_batch_len = 0
+            cur_size = 0
+            for i, b in enumerate(batches):
+                cur_batch_len = len(b)
+                if cur_size + cur_batch_len >= batch_size:
+                    break_point = i
+                    last_batch_len = batch_size - cur_size
+                    break
+                else:
+                    cur_size += cur_batch_len
+                    last_batch_len = cur_batch_len
+
+        components = batches[0].components or (None,)
+        new_data = list(None for _ in components)
+        rest_data = list(None for _ in components)
+        for i, comp in enumerate(components):
+            if batch_size is None:
+                new_comp = [b.get(component=comp) for b in batches[:break_point]]
+            else:
+                new_comp = [b.get(component=comp) for b in batches[:break_point-1]] + \
+                           [batches[break_point].get(component=comp)[:last_batch_len]]
+            new_data[i] = np.concatenate(new_comp)
+
+            if batch_size is not None:
+                rest_comp = [batches[break_point].get(component=comp)[last_batch_len:]] + \
+                            [b.get(component=comp) for b in batches[break_point:]]
+                rest_data[i] = np.concatenate(rest_comp)
+        new_index = make_index(new_data[0])
+        rest_index = make_index(rest_data[0])
+
+        new_batch = cls(new_index, preloaded=tuple(new_data)) if new_index is not None else None
+        rest_batch = cls(rest_index, preloaded=tuple(rest_data)) if rest_index is not None else None
+
+        return new_batch, rest_batch
+
+
+    def _assemble_load(self, all_res, *args, **kwargs):
+        _ = args
+        if any_action_failed(all_res):
+            raise RuntimeError("Cannot assemble the batch", all_res)
+
+        if self.components is None:
+            self._data = np.stack([res[0] for res in all_res])
+        else:
+            components = tuple(kwargs.get('components', None) or self.components)
+            for i, comp in enumerate(components):
+                _data = np.stack([res[i] for res in all_res])
+                setattr(self, comp, _data)
         return self
 
 
 class DataFrameBatch(Batch):
     """ Base Batch class for datasets stored in pandas DataFrames """
-    @action
-    def load(self, src, fmt=None, *args, **kwargs):
-        """ Load batch from a dataframe """
-        # pylint: disable=no-member
-        # Read the whole source
-        if fmt is None:
-            dfr = src
-        elif fmt == 'feather':
-            dfr = feather.read_dataframe(src, *args, **kwargs)
-        elif fmt == 'hdf5':
-            dfr = pd.read_hdf(src, *args, **kwargs) # pylint: disable=redefined-variable-type
-        elif fmt == 'csv':
-            dfr = pd.read_csv(src, *args, **kwargs) # pylint: disable=redefined-variable-type
-        else:
-            raise ValueError('Unknown format %s' % fmt)
+    @classmethod
+    def merge(cls, batches, batch_size=None):
+        return None, None
 
-        # But put into this batch only part of it (defined by index)
-        if isinstance(dfr, pd.DataFrame):
-            self._data = dfr.loc[self.indices]
-        elif isinstance(dfr, dd.DataFrame):
-            # dask.DataFrame.loc supports advanced indexing only with lists
-            self._data = dfr.loc[list(self.indices)].compute()
-        else:
-            raise TypeError("Unknown DataFrame. DataFrameBatch supports only pandas and dask.")
-
+    def _assemble_load(self, all_res, *args, **kwargs):
+        """ Build the batch data after loading data from files """
+        _ = all_res, args, kwargs
         return self
-
 
     @action
     def dump(self, dst, fmt='feather', *args, **kwargs):
