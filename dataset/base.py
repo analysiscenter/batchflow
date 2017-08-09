@@ -107,6 +107,7 @@ class Baseset:
             self.validation = self.create_subset(self.index.validation)
 
     def get_default_iter_params(self):
+        """ Return iteration params with default values to start iteration from scratch """
         return dict(_stop_iter=False, _start_index=0, _order=None, _n_epochs=0, _random_state=None)
 
     def reset_iter(self):
@@ -121,9 +122,9 @@ class Baseset:
             batch = self.create_batch(ix_batch, *args, **kwargs)
             yield batch
 
-    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, *args, **kwargs):
+    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, iter_params=None, *args, **kwargs):
         """ Return a batch """
-        batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
+        batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
         batch = self.create_batch(batch_index, *args, **kwargs)
         return batch
 

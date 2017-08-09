@@ -362,7 +362,7 @@ class Batch(BaseBatch):
             file_name = os.path.join(os.path.abspath(src), str(ix) + '.' + ext)
         return file_name
 
-    def _assemble_load(self, all_res, *args, **kwargs):
+    def _assemble(self, all_res, *args, **kwargs):
         raise NotImplementedError("_assemble_load should be implemented in the child batch class")
 
     @inbatch_parallel('indices', post='_assemble', target='f')
@@ -445,12 +445,9 @@ class ArrayBatch(Batch):
     @classmethod
     def merge(cls, batches, batch_size=None):
         """ Merge several batches to form a new batch of a given size """
-        def get_data(batch, component=None):
-            return batch.data if component is None else getattr(batch, component)
-
         def make_index(data):
+            """ Creates a new index for a merged batch """
             return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
-
 
         if batch_size is None:
             break_point = len(batches)
@@ -474,15 +471,15 @@ class ArrayBatch(Batch):
         rest_data = list(None for _ in components)
         for i, comp in enumerate(components):
             if batch_size is None:
-                new_comp = [get_data(b, comp) for b in batches[:break_point]]
+                new_comp = [b.get(component=comp) for b in batches[:break_point]]
             else:
-                new_comp = [get_data(b, comp) for b in batches[:break_point-1]] + \
-                           [get_data(batches[break_point], comp)[:last_batch_len]]
+                new_comp = [b.get(component=comp) for b in batches[:break_point-1]] + \
+                           [batches[break_point].get(component=comp)[:last_batch_len]]
             new_data[i] = np.concatenate(new_comp)
 
             if batch_size is not None:
-                rest_comp = [get_data(batches[break_point], comp)[last_batch_len:]] + \
-                            [get_data(b, comp) for b in batches[break_point:]]
+                rest_comp = [batches[break_point].get(component=comp)[last_batch_len:]] + \
+                            [b.get(component=comp) for b in batches[break_point:]]
                 rest_data[i] = np.concatenate(rest_comp)
         new_index = make_index(new_data[0])
         rest_index = make_index(rest_data[0])
@@ -494,6 +491,7 @@ class ArrayBatch(Batch):
 
 
     def _assemble(self, all_res, *args, **kwargs):
+        _ = args
         if any_action_failed(all_res):
             raise RuntimeError("Cannot assemble the batch", all_res)
 
@@ -511,6 +509,7 @@ class DataFrameBatch(Batch):
     """ Base Batch class for datasets stored in pandas DataFrames """
     def _assemble(self, all_res, *args, **kwargs):
         """ Build the batch data after loading data from files """
+        _ = all_res, args, kwargs
         return self
 
     @action

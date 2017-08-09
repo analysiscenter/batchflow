@@ -45,6 +45,7 @@ class Pipeline:
         self.variables = dict() #mpc.Manager().dict()
         self._tf_session = None
 
+        self._stop_flag = False
         self._executor = None
         self._service_executor = None
         self._prefetch_count = None
@@ -246,6 +247,7 @@ class Pipeline:
         return batch
 
     def _exec_all_actions(self, batch, action_list=None):
+        # pylint: disable=too-many-branches
         join_batches = None
         action_list = action_list or self._action_list
         for _action in action_list:
@@ -321,7 +323,8 @@ class Pipeline:
 
     def merge(self, *pipelines, merge_fn=None):
         """ Merge pipelines """
-        self._action_list.append({'name': MERGE_ID, 'pipelines': pipelines, 'mode': 'n', 'merge_fn': merge_fn})
+        self._action_list.append({'name': MERGE_ID, 'pipelines': pipelines,    # pylint: disable=protected-access
+                                  'mode': 'n', 'merge_fn': merge_fn})
         return self.append_action()
 
     def rebatch(self, batch_size, merge_fn=None):

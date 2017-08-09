@@ -22,6 +22,7 @@ class DatasetIndex(Baseset):
         """Create index from another index """
         return cls(*args, **kwargs)
 
+    @classmethod
     def concat(cls, *index_list):
         """ Create index by concatenating other indices """
         return DatasetIndex(np.concatenate([i.index for i in index_list]))
@@ -163,6 +164,7 @@ class DatasetIndex(Baseset):
             However, there is nothing to worry about if you don't iterate over batch items explicitly
             (i.e. for item in batch) or implicitly (through batch[ix]).
         """
+        # pylint: disable=too-many-branches
         if iter_params is None:
             iter_params = self._iter_params
 
