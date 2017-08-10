@@ -259,13 +259,13 @@ class FilesIndex(DatasetIndex):
         else:
             return self.build_from_path(path, *args, **kwargs)
 
-    def build_from_index(self, index, paths):
+    def build_from_index(self, index, paths, dirs):
         """ Build index from another index for indices given """
         if isinstance(paths, dict):
             self._paths = dict((file, paths[file]) for file in index)
         else:
             self._paths = dict((file, paths[pos]) for pos, file in np.ndenumerate(index))
-        self.dirs = index.dirs
+        self.dirs = dirs
         return index
 
     def build_from_path(self, path, dirs=False, no_ext=False, sort=False):
@@ -320,4 +320,4 @@ class FilesIndex(DatasetIndex):
 
     def create_subset(self, index):
         """ Return a new FilesIndex based on the subset of indices given """
-        return type(self).from_index(index=index, paths=self._paths)
+        return type(self).from_index(index=index, paths=self._paths, dirs=self.dirs)
