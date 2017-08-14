@@ -52,8 +52,8 @@ class Pipeline:
         self._prefetch_queue = None
         self._batch_queue = None
         self._batch_generator = None
-
         self._rest_batch = None
+
         self._lazy_run = None
         self.reset_iter()
 
@@ -267,21 +267,7 @@ class Pipeline:
                         batch, _ = _action['merge_fn']([batch] + join_batches)
                     join_batches = None
             elif _action['name'] == REBATCH_ID:
-                if self._rest_batch is None:
-                    cur_len = 0
-                    batches = []
-                else:
-                    cur_len = len(self._rest_batch)
-                    batches = [self._rest_batch]
-                    self._rest_batch = None
-                while cur_len < _action['batch_size']:
-                    new_batch = _action['pipeline'].next_batch(*self._lazy_run[0], **self._lazy_run[1])
-                    batches.append(new_batch)
-                    cur_len += len(new_batch)
-                if _action['merge_fn'] is None:
-                    batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
-                else:
-                    batch, self._rest_batch = _action['merge_fn'](batches, batch_size=_action['batch_size'])
+                pass
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
             else:
@@ -329,7 +315,7 @@ class Pipeline:
 
     def rebatch(self, batch_size, merge_fn=None):
         """ Set the output batch size """
-        new_p = type(self)()
+        new_p = type(self)(self.dataset)
         new_p._action_list.append({'name': REBATCH_ID, 'batch_size': batch_size,  # pylint: disable=protected-access
                                    'pipeline': self, 'merge_fn': merge_fn})
         return new_p.append_action()
@@ -430,13 +416,6 @@ class Pipeline:
                     self._prefetch_queue.task_done()
         return None
 
-    def create_batch(self, batch_index, *args, **kwargs):
-        """ Create a new batch by given indices and execute all previous lazy actions """
-        batch = self.dataset.create_batch(batch_index, *args, **kwargs)
-        batch_res = self._exec(batch)
-        return batch_res
-
-
     def reset_iter(self):
         """ Clear all iteration metadata in order to start iterating from scratch """
         def _clear_queue(queue):
@@ -464,18 +443,52 @@ class Pipeline:
         self._prefetch_queue = None
         self._batch_queue = None
         self._batch_generator = None
+        self._rest_batch = None
+
         self.dataset.reset_iter()
         self.variables = dict() #mpc.Manager().dict()
 
 
+    def gen_rebatch(self, *args, **kwargs):
+        """ Generate batches for rebatch operation """
+        _action = self._action_list[0]
+        self._rest_batch = None
+        while True:
+            if self._rest_batch is None:
+                cur_len = 0
+                batches = []
+            else:
+                cur_len = len(self._rest_batch)
+                batches = [self._rest_batch]
+                self._rest_batch = None
+            while cur_len < _action['batch_size']:
+                try:
+                    new_batch = _action['pipeline'].next_batch(*args, **kwargs)
+                except StopIteration:
+                    break
+                else:
+                    batches.append(new_batch)
+                    cur_len += len(new_batch)
+            if len(batches) == 0:
+                break
+            else:
+                if _action['merge_fn'] is None:
+                    batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
+                else:
+                    batch, self._rest_batch = _action['merge_fn'](batches, batch_size=_action['batch_size'])
+                yield batch
+
+
     def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
-        self.reset_iter()
 
         target = kwargs.pop('target', 'threads')
         self._tf_session = kwargs.pop('tf_session', None)
 
-        batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
+        if len(self._action_list) > 0 and self._action_list[0]['name'] == REBATCH_ID:
+            batch_generator = self.gen_rebatch(batch_size, shuffle, n_epochs, drop_last, prefetch, *args, **kwargs)
+        else:
+            batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
 
         if prefetch > 0:
             # pool cannot have more than 63 workers
@@ -514,6 +527,12 @@ class Pipeline:
                 else:
                     yield batch_res
 
+    def create_batch(self, batch_index, *args, **kwargs):
+        """ Create a new batch by given indices and execute all previous lazy actions """
+        batch = self.dataset.create_batch(batch_index, *args, **kwargs)
+        batch_res = self._exec(batch)
+        return batch_res
+
     def next_batch(self, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions
         next_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
@@ -522,7 +541,7 @@ class Pipeline:
             if self._lazy_run is None:
                 raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
             batch_res = self.next_batch(*self._lazy_run[0], **self._lazy_run[1])
-        elif kwargs.get('prefetch', 0) > 0:
+        elif True or kwargs.get('prefetch', 0) > 0:
             if self._batch_generator is None:
                 self._lazy_run = args, kwargs
                 self._batch_generator = self.gen_batch(*args, **kwargs)

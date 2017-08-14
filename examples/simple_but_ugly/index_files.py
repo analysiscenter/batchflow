@@ -10,7 +10,7 @@ from dataset import * # pylint: disable=wildcard-import
 
 
 # Create index from ./data
-findex = FilesIndex(path='./data/data/*', no_ext=True)
+findex = FilesIndex(path='../data/data/*', no_ext=True)
 # print list of files
 print("File Index:")
 print(findex.index)
@@ -29,7 +29,7 @@ for dsi in [findex.train, findex.test, findex.validation]:
 
 
 # remove directory with subdirectories
-DIR_PATH = './data/dirs'
+DIR_PATH = '../data/dirs'
 shutil.rmtree(DIR_PATH, ignore_errors=True)
 # create new dirs
 for i in range(3):
