@@ -108,7 +108,7 @@ def model(*args, **kwargs):
     return ModelDecorator(*args, **kwargs)
 
 
-def _make_action_wrapper_with_args(model=None, singleton=False):
+def _make_action_wrapper_with_args(model=None, singleton=False):    # pylint: disable=redefined-outer-name
     return functools.partial(_make_action_wrapper, _model_name=model, _singleton=singleton)
 
 def _make_action_wrapper(action_method, _model_name=None, _singleton=False):
