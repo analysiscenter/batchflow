@@ -247,7 +247,6 @@ class Pipeline:
         return batch
 
     def _exec_all_actions(self, batch, action_list=None):
-        # pylint: disable=too-many-branches
         join_batches = None
         action_list = action_list or self._action_list
         for _action in action_list:
