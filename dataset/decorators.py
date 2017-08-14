@@ -108,97 +108,38 @@ def model(*args, **kwargs):
     return ModelDecorator(*args, **kwargs)
 
 
-class ActionDecorator:
-    """ Decorator for Batch class actions """
-    def __init__(self, *args, **kwargs):
-        self.method = None
-        self.model_name = None
-        self.model_method = None
-        self.action_self = None
-        self.singleton = False
-        self.singleton_lock = None
+def _make_action_wrapper_with_args(model=None, singleton=False):    # pylint: disable=redefined-outer-name
+    return functools.partial(_make_action_wrapper, _model_name=model, _singleton=singleton)
 
-        if len(args) == 1 and callable(args[0]):
-            # @action without arguments
-            self.add_action(args[0])
+def _make_action_wrapper(action_method, _model_name=None, _singleton=False):
+    _singleton_lock = None if not _singleton else threading.Lock()
+
+    @functools.wraps(action_method)
+    def action_wrapper(action_self, *args, **kwargs):
+        """ Call the action method """
+        if _singleton_lock is not None:
+            _singleton_lock.acquire(blocking=True)
+
+        if _model_name is None:
+            _res = action_method(action_self, *args, **kwargs)
         else:
-            # @action with arguments
-            self.singleton = kwargs.pop('singleton', False)
-            self.model_name = kwargs.pop('model', None)
-
-    def add_action(self, method):
-        """ Add an action specification into an action method """
-        self.method = method
-        full_method_name = get_method_key(self.method)
-        if self.model_name is None:
-            full_model_name = None
-        else:
-            full_model_name = infer_method_key(self.method, self.model_name)
-
-        self.singleton_lock = None if not self.singleton else threading.Lock()
-        action_spec = dict(method=self.method, full_method_name=full_method_name,
-                           singleton=self.singleton, singleton_lock=self.singleton_lock,
-                           has_model=self.model_name is not None,
-                           model_name=self.model_name, full_model_name=full_model_name)
-        self.action = action_spec
-
-    def _action_with_model(self):
-        """ Return a callable for a decorator call """
-        def _call_with_model(action_self, *args, **kwargs):
-            """ Call an action with a model specification """
-            if hasattr(action_self, self.model_name):
+            if hasattr(action_self, _model_name):
                 try:
-                    self.model_method = getattr(action_self, self.model_name).model_method
+                    _model_method = getattr(action_self, _model_name).model_method
                 except AttributeError:
-                    raise ValueError("The method '%s' is not marked with @model" % self.model_name)
+                    raise ValueError("The method '%s' is not marked with @model" % _model_name)
             else:
-                raise ValueError("There is no such method '%s'" % self.model_name)
+                raise ValueError("There is no such method '%s'" % _model_name)
 
-            model_spec = ModelDecorator.get_model(self.model_method)
-            return self.call_action(action_self, model_spec, *args, **kwargs)
-        _call_with_model.action = self.action
-        return _call_with_model
+            _model_spec = ModelDecorator.get_model(_model_method)
+            _res = action_method(action_self, _model_spec, *args, **kwargs)
 
-    def _action_wo_model(self):
-        """ Return a callable for a decorator call """
-        def _call_action(action_self, *args, **kwargs):
-            return self.call_action(action_self, *args, **kwargs)
-        _call_action.action = self.action
-        return _call_action
+        if _singleton_lock is not None:
+            _singleton_lock.release()
+        return _res
 
-    def call_action(self, action_self, *args, **kwargs):
-        """ Call an action """
-        if self.singleton_lock is not None:
-            self.singleton_lock.acquire(blocking=True)
-
-        res = self.method(action_self, *args, **kwargs)
-
-        if self.singleton_lock is not None:
-            self.singleton_lock.release()
-
-        return res
-
-    def __call__(self, *args, **kwargs):
-        if self.method is None:
-            # @action with arguments
-            self.add_action(args[0])
-            if self.model_name is not None:
-                # return a function that will be called when a decorated method is called
-                return self._action_with_model()
-            else:
-                return self._action_wo_model()
-        else:
-            # @action without arguments
-            res = self.call_action(self.action_self, *args, **kwargs)
-            # ensure that there is no hidden ref to the batch
-            self.action_self = None
-            return res
-
-    def __get__(self, instance, owner):
-        _ = owner
-        self.action_self = instance
-        return self.__call__
-
+    action_wrapper.action = True
+    return action_wrapper
 
 def action(*args, **kwargs):
     """ Decorator for action methods in Batch classes
@@ -212,7 +153,12 @@ def action(*args, **kwargs):
         def train_model(self, model, another_arg):
             ...
     """
-    return ActionDecorator(*args, **kwargs)
+    if len(args) == 1 and callable(args[0]):
+        # action without arguments
+        return _make_action_wrapper(action_method=args[0])
+    else:
+        # action with arguments
+        return _make_action_wrapper_with_args(*args, **kwargs)
 
 
 def any_action_failed(results):
