@@ -27,7 +27,7 @@ def mult_option(a, b):
 
 class Pipeline:
     """ Pipeline """
-    def __init__(self, dataset=None, pipeline=None, proba=None, repeat=None):
+    def __init__(self, dataset=None, config=None, pipeline=None, proba=None, repeat=None):
         if pipeline is None:
             self.dataset = dataset
             self._action_list = []
@@ -42,6 +42,7 @@ class Pipeline:
                     if self.get_last_action_proba() is None:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
 
+        self.config = config
         self.variables = dict() #mpc.Manager().dict()
         self._tf_session = None
 
@@ -464,7 +465,8 @@ class Pipeline:
         self._prefetch_queue = None
         self._batch_queue = None
         self._batch_generator = None
-        self.dataset.reset_iter()
+        if self.dataset is not None:
+            self.dataset.reset_iter()
         self.variables = dict() #mpc.Manager().dict()
 
 
