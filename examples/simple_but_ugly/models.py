@@ -14,8 +14,9 @@ class MyArrayBatch(ArrayBatch):
     def __init__(self, index, *args, **kwargs):
         super().__init__(index)
 
-    @model()
-    def basic_model():
+    @model(mode='dynamic')
+    def basic_model(self):
+        print("Building a model with shape", self.data.shape)
         input_data = tf.placeholder('float', [None, 3])
         model_output = tf.square(tf.reduce_sum(input_data))
         return [input_data, model_output]
@@ -48,7 +49,7 @@ ds_data, data = pd_data()
 
 # Create tf session
 sess = tf.Session()
-sess.run(tf.initialize_all_variables())
+sess.run(tf.global_variables_initializer())
 
 # Create pipeline
 res = (ds_data.pipeline()
