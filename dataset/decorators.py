@@ -1,6 +1,5 @@
 """ Pipeline decorators """
 import os
-import inspect
 import traceback
 import threading
 import concurrent.futures as cf
@@ -48,9 +47,9 @@ class ModelDirectory:
         return ModelDirectory.models[mode][pipeline][model_method]
 
     @staticmethod
-    def get_model_by_name(batch_instance, model_name):
+    def get_model_by_name(batch, model_name):
         """ Return a model specification given its name """
-        method = getattr(batch_instance, model_name)
+        method = getattr(batch, model_name)
         pipeline = method.__self__.pipeline if hasattr(method, "__self__") else None
         method_spec = method.method_spec
         if method_spec['mode'] == 'dynamic':
@@ -58,8 +57,9 @@ class ModelDirectory:
         return ModelDirectory.get_model(method_spec)
 
     @staticmethod
-    def get_all_model_names(instance):
+    def get_all_model_names(batch):
         """ Return all model names for a given batch instance """
+        _ = batch
         return []
 
 
