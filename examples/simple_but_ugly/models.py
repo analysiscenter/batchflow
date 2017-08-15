@@ -14,16 +14,31 @@ class MyArrayBatch(ArrayBatch):
     def __init__(self, index, *args, **kwargs):
         super().__init__(index)
 
-    @model(mode='dynamic')
-    def basic_model(self):
-        print("Building a model with shape", self.data.shape)
+    @model(mode='static')
+    def static_model():
+        print("Building a static model")
         input_data = tf.placeholder('float', [None, 3])
         model_output = tf.square(tf.reduce_sum(input_data))
         return [input_data, model_output]
 
-    @action(model='basic_model')
-    def action_m(self, model, session):
-        print("        action m", model)
+    @action(model='static_model')
+    def train_static(self, model, session):
+        print("        action for a static model", model)
+        input_data, model_output = model
+        res = session.run(model_output, feed_dict={input_data: self.data})
+        print("        ", int(res))
+        return self
+
+    @model(mode='dynamic')
+    def dynamic_model(self):
+        print("Building a dynamic model with shape", self.data.shape)
+        input_data = tf.placeholder('float', [None, 3])
+        model_output = tf.square(tf.reduce_sum(input_data))
+        return [input_data, model_output]
+
+    @action(model='dynamic_model')
+    def train_dynamic(self, model, session):
+        print("        action for a dynamic model", model)
         input_data, model_output = model
         res = session.run(model_output, feed_dict={input_data: self.data})
         print("        ", int(res))
@@ -54,7 +69,8 @@ sess.run(tf.global_variables_initializer())
 # Create pipeline
 res = (ds_data.pipeline()
         .load(data)
-        .action_m(sess)
+        .train_static(sess)
+        .train_dynamic(sess)
 )
 
 print("Start iterating...")
