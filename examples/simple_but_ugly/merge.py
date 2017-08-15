@@ -53,7 +53,7 @@ class MyBatch(ArrayBatch):
 
 if __name__ == "__main__":
     # number of items in the dataset
-    K = 4
+    K = 6
     S = 3
 
     # Fill-in dataset with sample data
@@ -89,9 +89,17 @@ if __name__ == "__main__":
             .run(2, shuffle=False, lazy=True)
     )
 
+    res3 = (ds1.p
+            .load(data1)
+            .print('res3')
+            .rebatch(2)
+            .print("after merge")
+            .run(4, shuffle=False, lazy=True)
+    )
+
     print("Start...")
     t = time()
-    res2.run() #2, shuffle=False)
+    res3.run() #2, shuffle=False)
     print("======================")
     #res2.run(2, n_epochs=1, prefetch=0, target='t')
     print("End", time() - t)
