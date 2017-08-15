@@ -535,13 +535,17 @@ class ArrayBatch(Batch):
             if batch_size is None:
                 new_comp = [b.get(component=comp) for b in batches[:break_point]]
             else:
-                new_comp = [b.get(component=comp) for b in batches[:break_point-1]] + \
-                           [batches[break_point].get(component=comp)[:last_batch_len]]
+                new_comp = []
+                if break_point > 1:
+                    new_comp += [b.get(component=comp) for b in batches[:break_point-1]]
+                new_comp += [batches[break_point].get(component=comp)[:last_batch_len]]
             new_data[i] = np.concatenate(new_comp)
 
             if batch_size is not None:
-                rest_comp = [batches[break_point].get(component=comp)[last_batch_len:]] + \
-                            [b.get(component=comp) for b in batches[break_point:]]
+                rest_comp = [batches[break_point].get(component=comp)[last_batch_len:]]
+                rest_comp = [] if len(rest_comp) == 0 else rest_comp
+                if break_point > 0:
+                    rest_comp += [b.get(component=comp) for b in batches[break_point:]]
                 rest_data[i] = np.concatenate(rest_comp)
         new_index = make_index(new_data[0])
         rest_index = make_index(rest_data[0])

@@ -18,11 +18,11 @@ class MyBatch(ArrayBatch):
 
     @classmethod
     def merge(cls, batches, batch_size=None):
+        print("merge", batch_size)
         batch, rest = super().merge(batches, batch_size)
-        print("merge")
         for b in batches:
             print("   ", b.indices)
-        print(batch.indices)
+        print(batch.indices, rest.indices if rest is not None else None)
         return batch, rest
 
     @action
@@ -93,7 +93,7 @@ if __name__ == "__main__":
             .load(data1)
             .print('res3')
             .rebatch(2)
-            .print("after merge")
+            .print("after rebatch")
             .run(4, shuffle=False, lazy=True)
     )
 
