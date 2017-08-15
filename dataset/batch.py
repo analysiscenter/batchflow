@@ -62,12 +62,11 @@ class Batch(BaseBatch):
         Return:
             a tuple of two batches
         """
-        def make_index(data):
-            """ Creates a new index for a merged batch """
+        def _make_index(data):
             return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
 
-        def make_batch(data):
-            index = make_index(data[0])
+        def _make_batch(data):
+            index = _make_index(data[0])
             return cls(index, preloaded=tuple(data)) if index is not None else None
 
         if batch_size is None:
@@ -105,13 +104,15 @@ class Batch(BaseBatch):
                             [b.get(component=comp) for b in batches[break_point:]]
                 rest_data[i] = cls.merge_component(comp, rest_comp)
 
-        new_batch = make_batch(new_data)
-        rest_batch = make_batch(rest_data)
+        new_batch = _make_batch(new_data)
+        rest_batch = _make_batch(rest_data)
 
         return new_batch, rest_batch
 
     @classmethod
     def merge_component(cls, component=None, data=None):
+        """ Merge the same component data from several batches """
+        _ = component
         if isinstance(data[0], np.ndarray):
             return np.concatenate(data)
         else:
