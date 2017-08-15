@@ -17,86 +17,53 @@ def _workers_count():
     return cpu_count * 4
 
 
-def make_method_key2(module_name, qual_name):
-    """ Build a full method name 'module.method' """
-    return module_name + '.' + qual_name
-
-def make_method_key3(module_name, class_name, method_name):
-    """ Build a full method name 'module.method' """
-    return make_method_key2(module_name, class_name + '.' + method_name)
-
-def get_method_key(method):
-    """ Retrieve a full method name from a callable """
-    return make_method_key2(inspect.getmodule(method).__name__, method.__qualname__)
-
-def infer_method_key(action_method, model_name):
-    """ Infer a full model method name from a given action method and a model name """
-    return make_method_key3(inspect.getmodule(action_method).__name__,
-                            action_method.__qualname__.rsplit('.', 1)[0], model_name)
-
-def infer_bound_method_key(instance_or_method, model_name):
-    """ Infer a full model method name from a given bound method and a model name """
-    if hasattr(instance_or_method, '__self__'):
-        instance = instance_or_method.__self__
-    else:
-        instance = instance_or_method
-    return make_method_key3(inspect.getmodule(instance).__name__,
-                            instance.__class__.__name__, model_name)
-
-
-class ModelDecorator:
-    """ Decorator for model definition methods in Batch classes """
-    models = dict()
-
-    def __init__(self, mode='global', engine='tf'):
-        self.mode = mode
-        self.engine = engine
-        self.method = None
+class ModelDirectory:
+    """ Directory of model definition methods in Batch classes """
+    models = dict(static=dict(), dynamic=dict())
 
     @staticmethod
-    def get_model(method):
+    def add_model(method_spec, model_spec):
+        """ Add a model specification into the model directory """
+        mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        if pipeline not in ModelDirectory.models[mode]:
+            ModelDirectory.models[mode][pipeline] = dict()
+        ModelDirectory.models[mode][pipeline].update({model_method: model_spec})
+
+    @staticmethod
+    def model_exists(method_spec):
+        """ Check if a model specification exists in the model directory """
+        mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        return pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]
+
+    @staticmethod
+    def del_model(method_spec):
+        """ Remove a model specification from the model directory """
+        mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        ModelDirectory.models[mode][pipeline].pop(model_method, None)
+
+    @staticmethod
+    def get_model(method_spec):
         """ Return a model specification for a given model method """
-        full_method_name = get_method_key(method)
-        return ModelDecorator.models[full_method_name]
+        mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        return ModelDirectory.models[mode][pipeline][model_method]
 
     @staticmethod
-    def get_model_by_name(instance, model_name):
+    def get_model_by_name(batch_instance, model_name):
         """ Return a model specification given its name """
-        # method = getattr(instance, model_name)
-        full_model_name = infer_bound_method_key(instance, model_name)
-        return ModelDecorator.models[full_model_name]
+        method = getattr(batch_instance, model_name)
+        pipeline = method.__self__.pipeline if hasattr(method, "__self__") else None
+        method_spec = method.method_spec
+        if method_spec['mode'] == 'dynamic':
+            method_spec = {**method.method_spec, 'pipeline': pipeline}
+        return ModelDirectory.get_model(method_spec)
 
     @staticmethod
     def get_all_model_names(instance):
         """ Return all model names for a given batch instance """
-        full_model_pattern = infer_bound_method_key(instance, '')
-        all_models = [m.rsplit('.')[-1] for m in ModelDecorator.models if full_model_pattern in m]
-        return all_models
+        return []
 
-    @staticmethod
-    def add_model(method, model_spec):
-        """ Add a model specification into the model directory """
-        full_method_name = get_method_key(method)
-        ModelDecorator.models.update({full_method_name: model_spec})
 
-    def run_model(self):
-        """ Run the model method and save the model into the model directory """
-        model_spec = self.method()
-        self.add_model(self.method, model_spec)
-
-    def __call__(self, method):
-        self.method = method
-        if self.mode == 'global':
-            self.run_model()
-
-        def method_call(*args, **kwargs):
-            """ Do nothing if the method is called explicitly """
-            _ = args, kwargs
-            return None
-        method_call.model_method = self.method
-        return method_call
-
-def model(*args, **kwargs):
+def model(mode='static', engine='tf'):
     """ Decorator for model methods
 
     Usage:
@@ -104,8 +71,43 @@ def model(*args, **kwargs):
         def some_model():
             ...
             return my_model
+
+        @model(mode='dynamic')
+        def some_model(self):
+            ...
+            return my_model
     """
-    return ModelDecorator(*args, **kwargs)
+    def _model_decorator(method):
+
+        def _get_method_spec():
+            pipeline = method.__self__.pipeline if hasattr(method, "__self__") else None
+            method_spec = dict(mode=mode, engine=engine, method=method, pipeline=pipeline)
+            return method_spec
+
+        def _add_model(model_spec):
+            method_spec = _get_method_spec()
+            ModelDirectory.add_model(method_spec, model_spec)
+
+        @functools.wraps(method)
+        def _model_wrapper(self, *args, **kwargs):
+            if mode == 'static':
+                model_spec = ModelDirectory.get_model(_get_method_spec())
+            elif mode == 'dynamic':
+                if ModelDirectory.model_exists(_get_method_spec()):
+                    model_spec = ModelDirectory.get_model(_get_method_spec())
+                else:
+                    model_spec = method(self, *args, **kwargs)
+                    _add_model(model_spec)
+            return model_spec
+
+        if mode == 'static':
+            model_spec = method()
+            _add_model(model_spec)
+        _model_wrapper.model_method = method
+        _model_wrapper.method_spec = _get_method_spec()
+        return _model_wrapper
+    return _model_decorator
+
 
 
 def _make_action_wrapper_with_args(model=None, singleton=False):    # pylint: disable=redefined-outer-name
@@ -115,7 +117,7 @@ def _make_action_wrapper(action_method, _model_name=None, _singleton=False):
     _singleton_lock = None if not _singleton else threading.Lock()
 
     @functools.wraps(action_method)
-    def action_wrapper(action_self, *args, **kwargs):
+    def _action_wrapper(action_self, *args, **kwargs):
         """ Call the action method """
         if _singleton_lock is not None:
             _singleton_lock.acquire(blocking=True)
@@ -125,21 +127,21 @@ def _make_action_wrapper(action_method, _model_name=None, _singleton=False):
         else:
             if hasattr(action_self, _model_name):
                 try:
-                    _model_method = getattr(action_self, _model_name).model_method
+                    _ = getattr(action_self, _model_name).model_method
                 except AttributeError:
                     raise ValueError("The method '%s' is not marked with @model" % _model_name)
             else:
                 raise ValueError("There is no such method '%s'" % _model_name)
 
-            _model_spec = ModelDecorator.get_model(_model_method)
+            _model_spec = ModelDirectory.get_model_by_name(action_self, _model_name)
             _res = action_method(action_self, _model_spec, *args, **kwargs)
 
         if _singleton_lock is not None:
             _singleton_lock.release()
         return _res
 
-    action_wrapper.action = True
-    return action_wrapper
+    _action_wrapper.action = dict(method=action_method)
+    return _action_wrapper
 
 def action(*args, **kwargs):
     """ Decorator for action methods in Batch classes
