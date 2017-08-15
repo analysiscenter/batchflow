@@ -22,7 +22,7 @@ except ImportError:
     pass
 
 from .dsindex import DatasetIndex, FilesIndex
-from .decorators import action, inbatch_parallel, ModelDecorator, any_action_failed
+from .decorators import action, inbatch_parallel, ModelDirectory, any_action_failed
 from .dataset import Dataset
 from .batch_base import BaseBatch
 from .components import MetaComponentsTuple
@@ -51,10 +51,71 @@ class Batch(BaseBatch):
         """ Create batch from another batch """
         return cls(batch.index, preloaded=batch._data)  # pylint: disable=protected-access
 
+
     @classmethod
-    def merge(cls, batches, batch_size):
-        """ Merge several batches to form a new batch of a given size """
-        return None, None
+    def merge(cls, batches, batch_size=None):
+        """ Merge several batches to form a new batch of a given size
+        Args:
+            batches - a tuple of batches to merge
+            batch_size - if None, just merge all batches into one batch (the rest will be None),
+                         if an integer, then make one batch of batch_size and a batch with the rest of data
+        Return:
+            a tuple of two batches
+        """
+        def make_index(data):
+            """ Creates a new index for a merged batch """
+            return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
+
+        def make_batch(data):
+            index = make_index(data[0])
+            return cls(index, preloaded=tuple(data)) if index is not None else None
+
+        if batch_size is None:
+            break_point = len(batches)
+            last_batch_len = len(batches[-1])
+        else:
+            break_point = -1
+            last_batch_len = 0
+            cur_size = 0
+            for i, b in enumerate(batches):
+                cur_batch_len = len(b)
+                if cur_size + cur_batch_len >= batch_size:
+                    break_point = i
+                    last_batch_len = batch_size - cur_size
+                    break
+                else:
+                    cur_size += cur_batch_len
+                    last_batch_len = cur_batch_len
+
+        components = batches[0].components or (None,)
+        new_data = list(None for _ in components)
+        rest_data = list(None for _ in components)
+        for i, comp in enumerate(components):
+            if batch_size is None:
+                new_comp = [b.get(component=comp) for b in batches[:break_point]]
+            else:
+                b = batches[break_point]
+                last_batch_len = b.get_pos(None, comp, b.indices[last_batch_len])
+                new_comp = [b.get(component=comp) for b in batches[:break_point-1]] + \
+                           [batches[break_point].get(component=comp)[:last_batch_len]]
+            new_data[i] = cls.merge_component(comp, new_comp)
+
+            if batch_size is not None:
+                rest_comp = [batches[break_point].get(component=comp)[last_batch_len:]] + \
+                            [b.get(component=comp) for b in batches[break_point:]]
+                rest_data[i] = cls.merge_component(comp, rest_comp)
+
+        new_batch = make_batch(new_data)
+        rest_batch = make_batch(rest_data)
+
+        return new_batch, rest_batch
+
+    @classmethod
+    def merge_component(cls, component=None, data=None):
+        if isinstance(data[0], np.ndarray):
+            return np.concatenate(data)
+        else:
+            raise TypeError("Unknown data type", type(data[0]))
 
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
@@ -256,11 +317,11 @@ class Batch(BaseBatch):
 
     def get_model_by_name(self, model_name):
         """ Return a model specification given its name """
-        return ModelDecorator.get_model_by_name(self, model_name)
+        return ModelDirectory.get_model_by_name(self, model_name)
 
     def get_all_model_names(self):
         """ Return all model names in the batch class """
-        return ModelDecorator.get_all_model_names(self)
+        return ModelDirectory.get_all_model_names(self)
 
     def get_errors(self, all_res):
         """ Return a list of errors from a parallel action """
