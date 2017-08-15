@@ -54,7 +54,7 @@ class Batch(BaseBatch):
     @classmethod
     def merge(cls, batches, batch_size):
         """ Merge several batches to form a new batch of a given size """
-        raise NotImplementedError("merge method should be implemented in children batch classes")
+        return None, None
 
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
@@ -363,7 +363,8 @@ class Batch(BaseBatch):
         return file_name
 
     def _assemble_load(self, all_res, *args, **kwargs):
-        raise NotImplementedError("_assemble_load should be implemented in the child batch class")
+        _ = all_res, args, kwargs
+        return self
 
     @inbatch_parallel('indices', post='_assemble_load', target='f')
     def _load_blosc(self, ix, src=None, components=None):
