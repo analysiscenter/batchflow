@@ -59,7 +59,7 @@ res = (ds_data.pipeline()
 print("Start iterating...")
 t = time()
 t1 = t
-for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*2):
+for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*2*0):
     print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
 

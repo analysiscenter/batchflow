@@ -53,7 +53,7 @@ class MyBatch(ArrayBatch):
 
 if __name__ == "__main__":
     # number of items in the dataset
-    K = 4
+    K = 6
     S = 3
 
     # Fill-in dataset with sample data
@@ -94,7 +94,7 @@ if __name__ == "__main__":
             .print('res3')
             .rebatch(2)
             .print("after rebatch")
-            .run(K, shuffle=False, lazy=True)
+            .run(4, shuffle=False, lazy=True)
     )
 
     print("Start...")
