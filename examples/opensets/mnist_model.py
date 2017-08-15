@@ -12,7 +12,7 @@ from dataset.opensets import MNIST
 
 class MyMNIST(ImagesBatch):
     @model()
-    def simple_nn():
+    def static_nn():
         input_images = tf.placeholder("uint8", [None, 28, 28, 1])
         input_labels = tf.placeholder("uint8", [None])
 
@@ -31,14 +31,14 @@ class MyMNIST(ImagesBatch):
 
         return [[input_images, input_labels], [optimizer, cost, accuracy]]
 
-    @action(model='simple_nn', singleton=True)
+    @action(model='static_nn', singleton=True)
     def train_nn(self, model, sess):
         input_images, input_labels = model[0]
         optimizer, cost, accuracy = model[1]
         _, loss = sess.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
         return self
 
-    @action(model='simple_nn')
+    @action(model='static_nn')
     def print_accuracy(self, model, sess):
         input_images, input_labels = model[0]
         optimizer, cost, accuracy = model[1]

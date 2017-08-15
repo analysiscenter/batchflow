@@ -56,12 +56,6 @@ class ModelDirectory:
             method_spec = {**method.method_spec, 'pipeline': pipeline}
         return ModelDirectory.get_model(method_spec)
 
-    @staticmethod
-    def get_all_model_names(batch):
-        """ Return all model names for a given batch instance """
-        _ = batch
-        return []
-
 
 def model(mode='static', engine='tf'):
     """ Decorator for model methods
@@ -79,6 +73,8 @@ def model(mode='static', engine='tf'):
     """
     def _model_decorator(method):
 
+        _dynamic_model_lock = threading.Lock()
+
         def _get_method_spec():
             pipeline = method.__self__.pipeline if hasattr(method, "__self__") else None
             method_spec = dict(mode=mode, engine=engine, method=method, pipeline=pipeline)
@@ -93,11 +89,12 @@ def model(mode='static', engine='tf'):
             if mode == 'static':
                 model_spec = ModelDirectory.get_model(_get_method_spec())
             elif mode == 'dynamic':
-                if ModelDirectory.model_exists(_get_method_spec()):
-                    model_spec = ModelDirectory.get_model(_get_method_spec())
-                else:
-                    model_spec = method(self, *args, **kwargs)
-                    _add_model(model_spec)
+                with _dynamic_model_lock:
+                    if ModelDirectory.model_exists(_get_method_spec()):
+                        model_spec = ModelDirectory.get_model(_get_method_spec())
+                    else:
+                        model_spec = method(self, *args, **kwargs)
+                        _add_model(model_spec)
             return model_spec
 
         if mode == 'static':
@@ -127,13 +124,14 @@ def _make_action_wrapper(action_method, _model_name=None, _singleton=False):
         else:
             if hasattr(action_self, _model_name):
                 try:
-                    _ = getattr(action_self, _model_name).model_method
+                    _model_method = getattr(action_self, _model_name)
+                    _ = _model_method.model_method
                 except AttributeError:
                     raise ValueError("The method '%s' is not marked with @model" % _model_name)
             else:
                 raise ValueError("There is no such method '%s'" % _model_name)
 
-            _model_spec = ModelDirectory.get_model_by_name(action_self, _model_name)
+            _model_spec = _model_method()
             _res = action_method(action_self, _model_spec, *args, **kwargs)
 
         if _singleton_lock is not None:
