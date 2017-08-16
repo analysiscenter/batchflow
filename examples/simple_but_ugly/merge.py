@@ -94,6 +94,7 @@ if __name__ == "__main__":
             .print('res3')
             .rebatch(2)
             .print("after rebatch")
+            .dump('./data.csv', fmt='csv', components='labels', mode='a', header=False, index=False)
             .run(4, shuffle=False, lazy=True)
     )
 
