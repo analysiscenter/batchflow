@@ -94,14 +94,14 @@ class Batch(BaseBatch):
                 new_comp = [b.get(component=comp) for b in batches[:break_point]]
             else:
                 b = batches[break_point]
-                last_batch_len = b.get_pos(None, comp, b.indices[last_batch_len])
-                new_comp = [b.get(component=comp) for b in batches[:break_point-1]] + \
-                           [batches[break_point].get(component=comp)[:last_batch_len]]
+                last_batch_len_ = b.get_pos(None, comp, b.indices[last_batch_len - 1])
+                new_comp = [b.get(component=comp) for b in batches[:break_point]] + \
+                           [batches[break_point].get(component=comp)[:last_batch_len_ + 1]]
             new_data[i] = cls.merge_component(comp, new_comp)
 
             if batch_size is not None:
-                rest_comp = [batches[break_point].get(component=comp)[last_batch_len:]] + \
-                            [b.get(component=comp) for b in batches[break_point:]]
+                rest_comp = [batches[break_point].get(component=comp)[last_batch_len_ + 1:]] + \
+                            [b.get(component=comp) for b in batches[break_point + 1:]]
                 rest_data[i] = cls.merge_component(comp, rest_comp)
 
         new_batch = _make_batch(new_data)
@@ -241,13 +241,19 @@ class Batch(BaseBatch):
         else:
             super().__setattr__(name, value)
 
-    def put_into_data(self, items, data):
-        """ Loads data into _data property """
+    def put_into_data(self, items, data, components=None):
+        """ Load data into _data property """
         if self.components is None:
             _src = data
         else:
             _src = data if isinstance(data, tuple) else tuple([data])
-        self._data = self.get_items(items, _src)
+        _src = self.get_items(items, _src)
+        if components is None:
+            self._data = _src
+        else:
+            components = [components] if isinstance(components, str) else components
+            for i, comp in enumerate(components):
+                setattr(self, comp, _src[i])
 
     def get_items(self, index, data=None):
         """ Return one or several data items from a data source """
@@ -274,15 +280,16 @@ class Batch(BaseBatch):
         """ Return an item from the batch or the component """
         if item is None:
             if component is None:
-                raise ValueError("item and component cannot be both None")
-            return getattr(self, component)
+                res = self.data
+            else:
+                res = getattr(self, component)
         else:
             if component is None:
                 res = self[item]
             else:
                 res = self[item]
                 res = getattr(res, component)
-            return res
+        return res
 
     def __getitem__(self, item):
         return self.get_items(item)
@@ -456,30 +463,71 @@ class Batch(BaseBatch):
             f.write(blosc.compress(dill.dumps(data)))
 
     def _load_table(self, src, fmt, components=None, *args, **kwargs):
-        """ Load data from table formats: csv, hdf5, feather """
-        for i, comp in enumerate(tuple(components)):
-            if fmt == 'csv':
-                dfr = pd.read_csv(src, *args, **kwargs)
-            elif fmt == 'feather':
-                dfr = feather.read_dataframe(src, *args, **kwargs)  # pylint: disable=redefined-variable-type
-            elif fmt == 'hdf5':
-                dfr = pd.read_hdf(src, *args, **kwargs)             # pylint: disable=redefined-variable-type
+        """ Load a data frame from table formats: csv, hdf5, feather """
+        if fmt == 'csv':
+            _data = pd.read_csv(src, *args, **kwargs)
+        elif fmt == 'feather':
+            _data = feather.read_dataframe(src, *args, **kwargs)  # pylint: disable=redefined-variable-type
+        elif fmt == 'hdf5':
+            _data = pd.read_hdf(src, *args, **kwargs)         # pylint: disable=redefined-variable-type
 
-            # Put into this batch only part of it (defined by index)
-            if isinstance(dfr, pd.DataFrame):
-                _data = dfr.loc[self.indices]
-            elif isinstance(dfr, dd.DataFrame):
-                # dask.DataFrame.loc supports advanced indexing only with lists
-                _data = dfr.loc[list(self.indices)].compute()
-            else:
-                raise TypeError("Unknown DataFrame. DataFrameBatch supports only pandas and dask.")
+        # Put into this batch only part of it (defined by index)
+        if isinstance(_data, pd.DataFrame):
+            _data = _data.loc[self.indices]
+        elif isinstance(_data, dd.DataFrame):
+            # dask.DataFrame.loc supports advanced indexing only with lists
+            _data = _data.loc[list(self.indices)].compute()
+
+        components = tuple(components or self.components)
+        for i, comp in enumerate(components):
             setattr(self, comp, _data.iloc[:, i].values)
+
+    def _dump_table(self, dst, fmt='feather', components=None, *args, **kwargs):
+        """ Save batch data to table formats
+        Args:
+          dst: str - a path to dump into
+          fmt: str - format: feather, hdf5, csv
+          components: str or tuple - one or several component names
+        """
+        filename = dst
+        components = tuple(components or self.components)
+        data_dict = {}
+        for comp in components:
+            comp_data = self.get(component=comp)
+            if isinstance(comp_data, pd.DataFrame):
+                data_dict.update(comp_data.to_dict('series'))
+            elif isinstance(comp_data, np.ndarray):
+                if comp_data.ndim > 1:
+                    columns = [comp + str(i) for i in range(comp_data.shape[1])]
+                    comp_dict = zip(columns, (comp_data[:, i] for i in range(comp_data.shape[1])))
+                    data_dict.update({comp: comp_dict})
+                else:
+                    data_dict.update({comp: comp_data})
+            else:
+                data_dict.update({comp: comp_data})
+        _data = pd.DataFrame(data_dict)
+
+        if fmt == 'feather':
+            feather.write_dataframe(_data, filename, *args, **kwargs)
+        elif fmt == 'hdf5':
+            _data.to_hdf(filename, *args, **kwargs)   # pylint:disable=no-member
+        elif fmt == 'csv':
+            _data.to_csv(filename, *args, **kwargs)   # pylint:disable=no-member
+        else:
+            raise ValueError('Unknown format %s' % fmt)
+        return self
+
+    @action(singleton=True)
+    def _dump_table_singleton(self, *args, **kwargs):
+        return self._dump_table(*args, **kwargs)
+
 
     @action
     def load(self, src=None, fmt=None, components=None, *args, **kwargs):  #pylint: disable=arguments-differ
         """ Load data from another array or a file """
+        components = [components] if isinstance(components, str) else components
         if fmt is None:
-            self.put_into_data(self.indices, src)
+            self.put_into_data(self.indices, src, components)
         elif fmt == 'blosc':
             self._load_blosc(src, components=components, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:
@@ -489,12 +537,22 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def dump(self, dst=None, fmt=None, components=None):    #pylint: disable=arguments-differ
+    def dump(self, dst=None, fmt=None, components=None, singleton=False, *args, **kwargs):    #pylint: disable=arguments-differ
         """ Load data from another array or a file """
+        components = [components] if isinstance(components, str) else components
         if fmt is None:
-            dst[self.indices] = self.data
+            if components is not None and len(components) > 1:
+                raise ValueError("Only one component can be dumped into a memory array: components =", components)
+            components = components[0] if component is not None else None
+            dst[self.indices] = self.get(component=components)
         elif fmt == 'blosc':
             self._dump_blosc(dst, components=components)
+        elif fmt in ['csv', 'hdf5', 'feather']:
+            if singleton:
+                _dump_table = self._dump_table_singleton
+            else:
+                _dump_table = self._dump_table
+            _dump_table(dst, fmt, components, *args, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
         return self
@@ -505,58 +563,6 @@ class ArrayBatch(Batch):
     Batch data is a numpy array.
     If components are defined, then each component data is a numpy array
     """
-    @classmethod
-    def merge(cls, batches, batch_size=None):
-        """ Merge several batches to form a new batch of a given size """
-        def make_index(data):
-            """ Creates a new index for a merged batch """
-            return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
-
-        if batch_size is None:
-            break_point = len(batches)
-            last_batch_len = len(batches[-1])
-        else:
-            break_point = -1
-            last_batch_len = 0
-            cur_size = 0
-            for i, b in enumerate(batches):
-                cur_batch_len = len(b)
-                if cur_size + cur_batch_len >= batch_size:
-                    break_point = i
-                    last_batch_len = batch_size - cur_size
-                    break
-                else:
-                    cur_size += cur_batch_len
-                    last_batch_len = cur_batch_len
-
-        components = batches[0].components or (None,)
-        new_data = list(None for _ in components)
-        rest_data = list(None for _ in components)
-        for i, comp in enumerate(components):
-            if batch_size is None:
-                new_comp = [b.get(component=comp) for b in batches[:break_point]]
-            else:
-                new_comp = []
-                if break_point > 1:
-                    new_comp += [b.get(component=comp) for b in batches[:break_point-1]]
-                new_comp += [batches[break_point].get(component=comp)[:last_batch_len]]
-            new_data[i] = np.concatenate(new_comp)
-
-            if batch_size is not None:
-                rest_comp = [batches[break_point].get(component=comp)[last_batch_len:]]
-                rest_comp = [] if len(rest_comp) == 0 else rest_comp
-                if break_point > 0:
-                    rest_comp += [b.get(component=comp) for b in batches[break_point:]]
-                rest_data[i] = np.concatenate(rest_comp)
-        new_index = make_index(new_data[0])
-        rest_index = make_index(rest_data[0])
-
-        new_batch = cls(new_index, preloaded=tuple(new_data)) if new_index is not None else None
-        rest_batch = cls(rest_index, preloaded=tuple(rest_data)) if rest_index is not None else None
-
-        return new_batch, rest_batch
-
-
     def _assemble_load(self, all_res, *args, **kwargs):
         _ = args
         if any_action_failed(all_res):
@@ -574,30 +580,7 @@ class ArrayBatch(Batch):
 
 class DataFrameBatch(Batch):
     """ Base Batch class for datasets stored in pandas DataFrames """
-    @classmethod
-    def merge(cls, batches, batch_size=None):
-        return None, None
-
     def _assemble_load(self, all_res, *args, **kwargs):
         """ Build the batch data after loading data from files """
         _ = all_res, args, kwargs
-        return self
-
-    @action
-    def dump(self, dst, fmt='feather', *args, **kwargs):
-        """ Save batch data to disk
-            dst should point to a directory where all batches will be stored
-            as separate files named 'batch_id.format', e.g. '6a0b1c35.csv', '32458678.csv', etc.
-        """
-        filename = self.make_filename()
-        fullname = os.path.join(dst, filename + '.' + fmt)
-
-        if fmt == 'feather':
-            feather.write_dataframe(self.data, fullname, *args, **kwargs)
-        elif fmt == 'hdf5':
-            self.data.to_hdf(fullname, *args, **kwargs)   # pylint:disable=no-member
-        elif fmt == 'csv':
-            self.data.to_csv(fullname, *args, **kwargs)   # pylint:disable=no-member
-        else:
-            raise ValueError('Unknown format %s' % fmt)
         return self
