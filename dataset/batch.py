@@ -543,7 +543,7 @@ class Batch(BaseBatch):
         if fmt is None:
             if components is not None and len(components) > 1:
                 raise ValueError("Only one component can be dumped into a memory array: components =", components)
-            components = components[0] if component is not None else None
+            components = components[0] if components is not None else None
             dst[self.indices] = self.get(component=components)
         elif fmt == 'blosc':
             self._dump_blosc(dst, components=components)
