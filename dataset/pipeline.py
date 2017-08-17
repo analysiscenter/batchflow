@@ -240,7 +240,7 @@ class Pipeline:
             value - a value for the variable
         """
         if name not in self._variables:
-            logging.warning("Pipeline variable '%s' was not initialized" % name)
+            logging.warning("Pipeline variable '%s' was not initialized", name)
         self._variables[name] = value
 
     def del_variable(self, name):
@@ -250,7 +250,7 @@ class Pipeline:
             name: string - a name of the variable
         """
         if name not in self._variables:
-            logging.warning("Pipeline variable '%s' does not exist" % name)
+            logging.warning("Pipeline variable '%s' does not exist", name)
         else:
             self._variables.pop(name)
 
