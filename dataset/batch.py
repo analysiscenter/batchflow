@@ -482,6 +482,7 @@ class Batch(BaseBatch):
         for i, comp in enumerate(components):
             setattr(self, comp, _data.iloc[:, i].values)
 
+    @action(use_lock='__dump_table_lock')
     def _dump_table(self, dst, fmt='feather', components=None, *args, **kwargs):
         """ Save batch data to table formats
         Args:
@@ -490,6 +491,7 @@ class Batch(BaseBatch):
           components: str or tuple - one or several component names
         """
         filename = dst
+
         components = tuple(components or self.components)
         data_dict = {}
         for comp in components:
@@ -515,11 +517,8 @@ class Batch(BaseBatch):
             _data.to_csv(filename, *args, **kwargs)   # pylint:disable=no-member
         else:
             raise ValueError('Unknown format %s' % fmt)
-        return self
 
-    @action(singleton=True)
-    def _dump_table_singleton(self, *args, **kwargs):
-        return self._dump_table(*args, **kwargs)
+        return self
 
 
     @action
@@ -537,7 +536,7 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def dump(self, dst=None, fmt=None, components=None, singleton=False, *args, **kwargs):    #pylint: disable=arguments-differ
+    def dump(self, dst=None, fmt=None, components=None, *args, **kwargs):    #pylint: disable=arguments-differ
         """ Load data from another array or a file """
         components = [components] if isinstance(components, str) else components
         if fmt is None:
@@ -548,11 +547,7 @@ class Batch(BaseBatch):
         elif fmt == 'blosc':
             self._dump_blosc(dst, components=components)
         elif fmt in ['csv', 'hdf5', 'feather']:
-            if singleton:
-                _dump_table = self._dump_table_singleton
-            else:
-                _dump_table = self._dump_table
-            _dump_table(dst, fmt, components, *args, **kwargs)
+            self._dump_table(dst, fmt, components, *args, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
         return self

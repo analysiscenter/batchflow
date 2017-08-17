@@ -4,6 +4,7 @@ import concurrent.futures as cf
 import threading
 #import multiprocessing as mpc
 import asyncio
+import logging
 import queue as q
 import numpy as np
 try:
@@ -43,7 +44,9 @@ class Pipeline:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
 
         self.config = config
-        self.variables = dict() #mpc.Manager().dict()
+        self._variables = None
+        self._variables_lock = threading.Lock()
+        self.delete_all_variables()
         self._tf_session = None
 
         self._stop_flag = False
@@ -173,12 +176,12 @@ class Pipeline:
                                   'proba': proba, 'repeat': repeat})
 
     def __getstate__(self):
-        return {'dataset': self.dataset, 'action_list': self._action_list, 'variables': self.variables}
+        return {'dataset': self.dataset, 'action_list': self._action_list, 'variables': self._variables}
 
     def __setstate__(self, state):
         self.dataset = state['dataset']
         self._action_list = state['action_list']
-        self.variables = state['variables']
+        self._variables = state['variables']
 
     @property
     def index(self):
@@ -194,19 +197,66 @@ class Pipeline:
         """ Return index length """
         return len(self.index)
 
-    def get_variable(self, name):
-        """ Return a variable value """
-        res = self.variables.get(name, None)
-        return res
+    def has_variable(self, name):
+        """ Check if a variable exists
+        Args:
+            name: string - a name of the variable
+        Return:
+            True if the variable exists
+        """
+        return name in self._variables
+
+    def get_variable(self, name, default=None):
+        """ Return a variable value
+        If the variable does not exists, it will be created and initialized with the default value
+        Args:
+            name: string - a name of the variable
+            default - a value for the variable if it does not exists
+        Return:
+            a value of the variable
+        """
+        if name not in self._variables:
+            self.init_variable(name, default)
+        return self._variables.get(name, default)
 
     def init_variable(self, name, value):
-        """ Create a variable if not exists """
-        if name not in self.variables:
-            self.variables[name] = value
+        """ Create a variable if not exists.
+        If the variable exists, does nothing.
+        Args:
+            name: string - a name of the variable
+            value - an initial value for the variable
+        """
+        if name not in self._variables:
+            with self._variables_lock:
+                if name not in self._variables:
+                    self._variables[name] = value
 
     def set_variable(self, name, value):
-        """ Set a variable value """
-        self.variables[name] = value
+        """ Set a variable value
+        If the variable does not exists, it will be created, however, the warning will be displayed that
+        the variable was not initialized.
+        Args:
+            name: string - a name of the variable
+            value - a value for the variable
+        """
+        if name not in self._variables:
+            logging.warning("Pipeline variable '%s' was not initialized", name)
+        self._variables[name] = value
+
+    def del_variable(self, name):
+        """ Delete a variable
+        If the variable does not exists, the warning will be issued.
+        Args:
+            name: string - a name of the variable
+        """
+        if name not in self._variables:
+            logging.warning("Pipeline variable '%s' does not exist", name)
+        else:
+            self._variables.pop(name)
+
+    def delete_all_variables(self):
+        """ Delete all variables """
+        self._variables = dict()
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -447,8 +497,6 @@ class Pipeline:
 
         if self.dataset is not None:
             self.dataset.reset_iter()
-
-        self.variables = dict() #mpc.Manager().dict()
 
 
     def gen_rebatch(self, *args, **kwargs):
