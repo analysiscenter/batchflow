@@ -37,7 +37,7 @@ class Pipeline:
         else:
             self.dataset = pipeline.dataset
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
-            self._variables = pipeline._variables
+            self._variables = pipeline._variables         # pylint: disable=protected-access
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
@@ -247,7 +247,7 @@ class Pipeline:
                     self.set_variable(name, default if init is None else init())
         return self
 
-    def init_variables(self, vars):
+    def init_variables(self, variables):
         """ Create several variables
         Args:
             vars: dict - key: string - a variable name,
@@ -262,7 +262,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        for name, var in vars.items():
+        for name, var in variables.items():
             self.init_variable(name, **var)
         return self
 
