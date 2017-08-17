@@ -89,12 +89,12 @@ def model(mode='static', engine='tf'):
             if mode == 'static':
                 model_spec = ModelDirectory.get_model(_get_method_spec())
             elif mode == 'dynamic':
-                with _dynamic_model_lock:
-                    if ModelDirectory.model_exists(_get_method_spec()):
-                        model_spec = ModelDirectory.get_model(_get_method_spec())
-                    else:
-                        model_spec = method(self, *args, **kwargs)
-                        _add_model(model_spec)
+                if not ModelDirectory.model_exists(_get_method_spec()):
+                    with _dynamic_model_lock:
+                        if not ModelDirectory.model_exists(_get_method_spec()):
+                            model_spec = method(self, *args, **kwargs)
+                            _add_model(model_spec)
+                model_spec = ModelDirectory.get_model(_get_method_spec())
             return model_spec
 
         if mode == 'static':
@@ -107,17 +107,17 @@ def model(mode='static', engine='tf'):
 
 
 
-def _make_action_wrapper_with_args(model=None, singleton=False):    # pylint: disable=redefined-outer-name
-    return functools.partial(_make_action_wrapper, _model_name=model, _singleton=singleton)
+def _make_action_wrapper_with_args(model=None, single=False):    # pylint: disable=redefined-outer-name
+    return functools.partial(_make_action_wrapper, _model_name=model, _single=single)
 
-def _make_action_wrapper(action_method, _model_name=None, _singleton=False):
-    _singleton_lock = None if not _singleton else threading.Lock()
+def _make_action_wrapper(action_method, _model_name=None, _single=False):
+    _single_lock = None if not _single else threading.Lock()
 
     @functools.wraps(action_method)
     def _action_wrapper(action_self, *args, **kwargs):
         """ Call the action method """
-        if _singleton_lock is not None:
-            _singleton_lock.acquire(blocking=True)
+        if _single_lock is not None:
+            _single_lock.acquire(blocking=True)
 
         if _model_name is None:
             _res = action_method(action_self, *args, **kwargs)
@@ -134,8 +134,8 @@ def _make_action_wrapper(action_method, _model_name=None, _singleton=False):
             _model_spec = _model_method()
             _res = action_method(action_self, _model_spec, *args, **kwargs)
 
-        if _singleton_lock is not None:
-            _singleton_lock.release()
+        if _single_lock is not None:
+            _single_lock.release()
         return _res
 
     _action_wrapper.action = dict(method=action_method)

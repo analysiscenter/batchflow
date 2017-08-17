@@ -194,9 +194,9 @@ class Pipeline:
         """ Return index length """
         return len(self.index)
 
-    def get_variable(self, name):
+    def get_variable(self, name, default=None):
         """ Return a variable value """
-        res = self.variables.get(name, None)
+        res = self.variables.get(name, default)
         return res
 
     def init_variable(self, name, value):

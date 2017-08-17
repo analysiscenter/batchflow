@@ -517,8 +517,8 @@ class Batch(BaseBatch):
             raise ValueError('Unknown format %s' % fmt)
         return self
 
-    @action(singleton=True)
-    def _dump_table_singleton(self, *args, **kwargs):
+    @action(single=True)
+    def _dump_table_single(self, *args, **kwargs):
         return self._dump_table(*args, **kwargs)
 
 
