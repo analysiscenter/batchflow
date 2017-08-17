@@ -45,6 +45,7 @@ class Pipeline:
 
         self.config = config
         self._variables = None
+        self._variables_lock = threading.Lock()
         self.delete_all_variables()
         self._tf_session = None
 
@@ -196,6 +197,15 @@ class Pipeline:
         """ Return index length """
         return len(self.index)
 
+    def has_variable(self, name):
+        """ Check if a variable exists
+        Args:
+            name: string - a name of the variable
+        Return:
+            True if the variable exists
+        """
+        return name in self._variables
+
     def get_variable(self, name, default=None):
         """ Return a variable value
         If the variable does not exists, it will be created and initialized with the default value
@@ -210,15 +220,16 @@ class Pipeline:
         return self._variables.get(name, default)
 
     def init_variable(self, name, value):
-        """ Create a variable if not exists
-        If the variable already exists, the warning will be issued.
+        """ Create a variable if not exists.
+        If the variable exists, does nothing.
         Args:
             name: string - a name of the variable
-            value - a value for the variable
+            value - an initial value for the variable
         """
-        if name in self._variables:
-            logging.warning("Pipeline variable '%s' was already initialized" % name)
-        self._variables[name] = value
+        if name not in self._variables:
+            with self._variables_lock:
+                if name not in self._variables:
+                    self._variables[name] = value
 
     def set_variable(self, name, value):
         """ Set a variable value

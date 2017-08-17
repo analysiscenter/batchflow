@@ -9,7 +9,7 @@ import tensorflow as tf
 sys.path.append("../..")
 from dataset import *
 
-lock = threading.Lock()
+
 
 # Example of custome Batch class which defines some actions
 class MyArrayBatch(ArrayBatch):
@@ -57,18 +57,18 @@ class MyArrayBatch(ArrayBatch):
             with tf.variable_scope("dynamic"):
                 input_data = tf.placeholder('float', [None, self.data.shape[1]])
                 model_output = tf.square(tf.reduce_sum(input_data))
-        print("\n ================= define dynamic ======================== ")
+        print("\n ***************** define dynamic *******************")
         print("----- default graph")
         print(tf.get_default_graph().get_operations())
         print()
         return [input_data, model_output]
 
-    @action(model='dynamic_model')
+    @action(model='dynamic_model', use_lock='__train_dynamic')
     def train_dynamic(self, model_spec):
         #print("        action for a dynamic model", model_spec)
         session = self.pipeline.get_variable("session")
-        with lock:
-            print("\n\n train dynamic --------------------")
+        with self.pipeline.get_variable("print lock"):
+            print("\n\n ================= train dynamic ====================")
             print("----- default graph")
             print(tf.get_default_graph().get_operations())
             print("----- session graph")
@@ -110,12 +110,15 @@ sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
 res.init_variable("session", sess)
+res.init_variable("print lock", threading.Lock())
+
 
 print("Start iterating...")
 t = time()
 t1 = t
-for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*1):
-    print("Batch", batch.indices, "is ready in", time() - t1)
+for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
+    with res.get_variable("print lock"):
+        print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
 
 print("Stop iterating:", time() - t)
