@@ -95,7 +95,7 @@ if __name__ == "__main__":
             .rebatch(2)
             .print("after rebatch")
             .dump('./data.csv', fmt='csv', components='labels', mode='a', header=False, index=False)
-            .run(4, shuffle=False, lazy=True)
+            .run(4, shuffle=False, prefetch=4, lazy=True)
     )
 
     print("Start...")

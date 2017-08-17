@@ -32,9 +32,12 @@ class Pipeline:
         if pipeline is None:
             self.dataset = dataset
             self._action_list = []
+            self._variables = None
+            self.delete_all_variables()
         else:
             self.dataset = pipeline.dataset
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
+            self._variables = pipeline._variables         # pylint: disable=protected-access
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
@@ -44,9 +47,7 @@ class Pipeline:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
 
         self.config = config
-        self._variables = None
         self._variables_lock = threading.Lock()
-        self.delete_all_variables()
         self._tf_session = None
 
         self._stop_flag = False
@@ -99,6 +100,7 @@ class Pipeline:
         new_p1 = cls.from_pipeline(pipe1)
         new_p2 = cls.from_pipeline(pipe2)
         new_p1._action_list += new_p2._action_list[:]
+        new_p1._variables = {**pipe1._variables, **pipe2._variables}
         new_p1.dataset = pipe1.dataset or pipe2.dataset
         return new_p1
 
@@ -217,19 +219,57 @@ class Pipeline:
         """
         if name not in self._variables:
             self.init_variable(name, default)
-        return self._variables.get(name, default)
+        var = self._variables.get(name)
+        return var.get('value', default)
 
-    def init_variable(self, name, value):
+    def init_variable(self, name, default=None, init=None, init_on_each_run=False):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
         Args:
             name: string - a name of the variable
-            value - an initial value for the variable
+            default - an initial value for the variable
+            init: callable - a function which returns the default value
+            init_on_each_run: bool - whether to initialize the variable before each run / gen_batch
+        Return:
+            self - in order to use it in the pipeline chains
+
+        Examples:
+            pp = dataset.p.
+                    .init_variable("loss_history", init=list, init_on_each_run=True)
+                    .init_variable("accuracy", default=0)
+                    .load('/some/path', fmt='blosc')
+                    .train_resnet()
         """
         if name not in self._variables:
             with self._variables_lock:
                 if name not in self._variables:
-                    self._variables[name] = value
+                    self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run)
+                    self.set_variable(name, default if init is None else init())
+        return self
+
+    def init_variables(self, variables):
+        """ Create several variables
+        Args:
+            vars: dict - key: string - a variable name,
+                         value: dict -  a variable value and params (see `init_variable`)
+        Return:
+            self - in order to use it in the pipeline chains
+
+        Examples:
+            pp = dataset.p.
+                    .init_variables({"loss_history": dict(init=list, init_on_each_run=True),
+                                     "accuracy", dict(default=0)})
+                    .load('/some/path', fmt='blosc')
+                    .train_resnet()
+        """
+        for name, var in variables.items():
+            self.init_variable(name, **var)
+        return self
+
+    def _init_variables_before_run(self):
+        for name, var in self._variables.items():
+            if var['init_on_each_run']:
+                self.set_variable(name, var['default'] if var['init'] is None else var['init']())
 
     def set_variable(self, name, value):
         """ Set a variable value
@@ -238,21 +278,32 @@ class Pipeline:
         Args:
             name: string - a name of the variable
             value - a value for the variable
+        Return:
+            self - in order to use it in the pipeline chains
         """
         if name not in self._variables:
             logging.warning("Pipeline variable '%s' was not initialized", name)
-        self._variables[name] = value
+        self._variables[name].update({'value': value})
+        return self
 
     def del_variable(self, name):
         """ Delete a variable
         If the variable does not exists, the warning will be issued.
         Args:
             name: string - a name of the variable
+                  iterable - several variable names
+        Return:
+            self - in order to use it in the pipeline chains
         """
         if name not in self._variables:
             logging.warning("Pipeline variable '%s' does not exist", name)
         else:
-            self._variables.pop(name)
+            if isinstance(name, str):
+                self._variables.pop(name)
+            else:
+                for var in name:
+                    self._variables.pop(var)
+        return self
 
     def delete_all_variables(self):
         """ Delete all variables """
@@ -498,6 +549,8 @@ class Pipeline:
         if self.dataset is not None:
             self.dataset.reset_iter()
 
+        self._init_variables_before_run()
+
 
     def gen_rebatch(self, *args, **kwargs):
         """ Generate batches for rebatch operation """
@@ -531,6 +584,7 @@ class Pipeline:
 
     def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
+        self.reset_iter()
 
         target = kwargs.pop('target', 'threads')
         self._tf_session = kwargs.pop('tf_session', None)

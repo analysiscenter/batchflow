@@ -75,6 +75,7 @@ class MyArrayBatch(ArrayBatch):
             print(session.graph.get_operations())
         input_data, model_output = model_spec
         res = session.run(model_output, feed_dict={input_data: self.data})
+        self.pipeline.get_variable("loss history").append(res)
         #print("        ", int(res))
         return self
 
@@ -96,8 +97,14 @@ def pd_data():
 # Create datasets
 ds_data, data = pd_data()
 
+# Create tf session
+sess = tf.Session()
+
 # Create pipeline
 res = (ds_data.pipeline()
+        .init_variable("session", sess)
+        .init_variable("loss history", init=list, init_on_each_run=True)
+        .init_variable("print lock", threading.Lock())
         .load(data)
         #.train_static()
         #.train_static2()
@@ -105,12 +112,7 @@ res = (ds_data.pipeline()
 )
 
 
-# Create tf session
-sess = tf.Session()
 sess.run(tf.global_variables_initializer())
-
-res.init_variable("session", sess)
-res.init_variable("print lock", threading.Lock())
 
 
 print("Start iterating...")
@@ -122,3 +124,12 @@ for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
     t1 = time()
 
 print("Stop iterating:", time() - t)
+
+print(res.get_variable("loss history"))
+
+for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
+    with res.get_variable("print lock"):
+        print("Batch", batch.indices, "is ready in", time() - t1)
+    t1 = time()
+
+print(res.get_variable("loss history"))
