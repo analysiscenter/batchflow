@@ -286,7 +286,7 @@ class Pipeline:
         self._variables[name].update({'value': value})
         return self
 
-    def del_variable(self, name):
+    def delete_variable(self, name):
         """ Delete a variable
         If the variable does not exists, the warning will be issued.
         Args:
@@ -304,6 +304,12 @@ class Pipeline:
                 for var in name:
                     self._variables.pop(var)
         return self
+
+    def del_variable(self, name):
+        """ Delete a variable
+        Same as `delete_variable(name)`
+        """
+        return self.delete_variable(name)
 
     def delete_all_variables(self):
         """ Delete all variables """
@@ -375,7 +381,7 @@ class Pipeline:
                 if join_batches is None:
                     _action_args = _action['args']
                 else:
-                    _action_args = tuple(join_batches) + _action['args']
+                    _action_args = tuple([tuple(join_batches), *_action['args']])
                     join_batches = None
 
                 batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])

@@ -1,5 +1,15 @@
 # Pipeline
 
+## Content
+1. [Introduction](#introduction)
+1. [Algebra of pipelines](#algebra-of-pipelines)
+1. [Running pipelines](#running-pipelines)
+1. [Pipeline variables](#pipeline-variables)
+1. [Join and merge](#join-and-merge)
+1. [Public API](#public-api)
+
+
+## Introduction
 Quite often you can't just use the data itself. You need to preprocess it beforehand. And not too rarely you end up with several processing workflows which you have to use simultaneously. That is the situation when pipelines might come in handy.
 
 ```python
@@ -42,12 +52,13 @@ Now the dataset is split into batches and then all the actions are executed for 
 
 In the very same way you can define an augmentation workflow
 ```python
-aug_wf = (image_ds.pipeline()
+augm_wf = (image_dataset.pipeline()
             .load('/some/path')
-            .random_rotate(angle=(-pi/4, pi/4))
+            .random_rotate(angle=(-30, 30))
             .random_resize(factor=(0.8, 1.2))
             .random_crop(factor=(0.5, 0.8))
-            .resize(shape=(256, 256)))
+            .resize(shape=(256, 256))
+)
 ```
 And again, no action is executed until its result is needed.
 ```python
@@ -56,71 +67,172 @@ for i in range(NUM_ITERS):
     image_batch = augm_wf.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
     # only now the actions are fired and data is changed with the workflow defined earlier
 ```
-The original data stored in `image_ds` is left unchanged. You can call `image_ds.next_batch` in order to iterate over the source dataset without any augmentation.
 
-## Public API
+## Algebra of pipelines
+There are two ways to define a pipeline:
+- chain of actions
+- pipeline algebra
 
-Pipelines are created from datasets.
+Action chains is a concise and convenient way to write pipelines. But sometimes it's not enough, for instance, when you want manipulate with many pipelines adding them or multiplying as if they were numbers or matrices. And that's what we call `a pipeline algebra`.
+
+There are 5 operations available: `+`, `*`, `@`, `<<` , `>>`.
+
+### +
+Add two pipelines by concatenating them, so the actions from the first pipeline will be executed before actions from the second one.
+`p.resize(shape=(256, 256)) + p.rotate(angle=45)`
+
+### *
+Repeat the pipeline several times.
+`p.random_rotate(angle=(-30, 30)) * 3`
+
+### @
+Execute the pipeline with the given probability.
+`p.random_rotate(angle=(-30, 30)) @ 0.5`
+
+### `>>` and `<<`
+Apply a pipeline to a dataset.
+`dataset >> pipeline` or `pipeline << dataset`
+
+The complete example:
 ```python
-my_pipeline = my_dataset.pipeline()
+from dataset import Pipeline
+
+with Pipeline() as p:
+    preprocessing_pipeline = p.load('/some/path') +
+                             p.resize(shape=(256, 256)) +
+                             p.random_rotate(angle=(-30, 30)) @ .8 +
+                             p.random_transform() * 3 +
+                             p.random_crop(shape=(128, 128))
+images_prepocessing = preprocessing_pipeline << images_dataset
 ```
-or the shorter version:
+
+## Running pipelines
+There are 4 ways to execute a pipeline.
+
+### Batch generator
+```python
+for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
+    # do whatever you want
+```
+`batch` will be the batch returned from the very last action of the pipeline.
+
+The important note:  
+`BATCH_SIZE` is a size of the batch taken from the dataset. Actions might change the size of the batch and thus
+the batch you will get from the pipeline might have a different size.
+
+### Next batch function
+```python
+for i in range(MAX_ITER):
+    batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True)
+    # do whatever you want
+```
+
+### Run
+```python
+my_pipeline = (dataset.p
+                  .some_action()
+                  .other_action()
+                  .yet_another_action()
+                  .run(BATCH_SIZE, n_epochs=2, drop_last=True))
+```
+
+### Lazy run
+```python
+my_pipeline = (dataset.p
+                  .some_action()
+                  .other_action()
+                  .yet_another_action()
+                  .run(BATCH_SIZE, n_epochs=None, drop_last=True, lazy=True)
+)
+
+for i in range(MAX_ITER):
+    batch = my_pipeline.next_batch()
+    # do whatever you want
+```
+You can add `run` with `lazy=True` as the last action in the pipeline and then call `run()` or `next_batch()` without arguments at all.
+
+
+## Pipeline variables
+Sometimes batches can be processed in a "do and forget" manner: when you take a batch, make some data transformations and then switch to another batch.
+However, not infrequently you might need to remember some parameters or intermediate results (e.g. a value of loss function or accuracy on every batch
+to draw a graph later). This is why you might need pipeline variables.
+
+### Initializing a variable
 ```python
 my_pipeline = my_dataset.p
+                 .init_variable("my_variable", 100)
+                 .init_variable("some_counter", 0, init_on_each_run=True)
+                 .init_variable("var with init function", init=my_init_function)
+                 .init_variable("loss_history", init=list, init_on_each_run=True)
+                 .first_action()
+                 .second_action()
+                 ...
 ```
+To initialize a variable just add to a pipeline `init_variable(...)` with a variable name and a default value.
+Variables might be initialized once in a lifetime (e.g. some global state or a configuration parameter) or before each run
+(like counters and local history stores).
 
-### `next_batch(batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0)`
-Gets a batch from the dataset, executes all the actions defined in the pipeline and then returns the result of the last action.
+Sometimes it is more convenient to initialize variables indirectly through some function. For instance, `loss_history` cannot be initialized with `[]`
+as it makes a global variable which won't be cleared on every run. What you actually need is a call to `list()` on each run.
 
-Args:
-`batch_size` - number of items in each batch.
+Init functions are also a good place for some complex logic or randomization.
 
-`shuffle` - whether to randomize items order before splitting into batches. Can be  
-- `bool`: `True` / `False`
-- a `RandomState` object which has an inplace shuffle method (see [numpy.random.RandomState](https://docs.scipy.org/doc/numpy/reference/generated/numpy.random.RandomState.html)):
-- `int` - a random seed number which will be used internally to create a `numpy.random.RandomState` object
-- `sample function` - any callable which gets an order and returns a shuffled order.
+### Updating a variable
+Each batch instance have a pointer to the pipeline it was created in (or `None` if the batch was created manually).
 
-Default - `False`.
-
-`n_epochs` - number of iterations around the whole index. If `None`, then you will get an infinite sequence of batches. Default value - 1.
-
-`drop_last` - whether to skip the last batch if it has fewer items (for instance, if an index contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the last batch with just 1 item).
-
-`prefetch` - the number of batches processed in advance (see [details](prefetch.md))
-
-Returns:
-an instance of the batch class returned from the last action in the pipeline
-
-Usage:
+So getting an access to a variable is easy:
 ```python
-for i in range(MAX_ITERS):
-    batch = my_pipeline.next_batch(BATCH_SIZE, n_epochs=None)
+class MyBatch(Batch):
+    ...
+    @action
+    def some_action(self):
+        var_value = self.pipeline.get_variable("variable_name")
+        ...
 ```
 
-### `gen_batch(batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0)`
-Returns a batch generator.
-
-Usage:
+To change a variable value call `set_variable`:
 ```python
-for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=1):
-    # do something
+class MyBatch(Batch):
+    ...
+    @action
+    def some_action(self):
+        ...
+        self.pipeline.set_variable("variable_name", new_value)
+        ...
 ```
 
-### `run(batch_size, shuffle=False, n_epochs=1, drop_last=False, prefetch=0)`
-Runs a pipeline.
+### Deleting a variable
+Just call `pipeline.delete_variable("variable_name")` or `pipeline.del_variable("variable_name")`.
 
-The same as:
+### Deleting all variables
+As simple as `pipeline.delete_all_variables()`
+
+### Variables as locks
+If you use multi-threading [prefetching](prefetch.md) or [in-batch parallelism](parallel.md),
+than you might require synchronization when accessing some shared resource.
+And pipeline variables might be a handy place to store locks.
 ```python
-for _ in my_pipeline.gen_batch(...):
-    pass
+class MyBatch(Batch):
+    ...
+    @action
+    def some_action(self):
+        ...
+        with self.pipeline.get_variable("my lock"):
+            # only one some_action will be executing at this point
+    ...
+
+my_pipeline = my_dataset.p
+                .init_variable("my lock", init=threading.Lock, init_on_each_run=True)
+                .some_action()
+                ...
+
 ```
 
-### `join(another_source, one_more_source, ...)`
-Joins corresponding batches from several sources (datasets or pipelines).
 
+## Join and merge
+
+### Joining pipelines
 If you have a pipeline `images` and a pipeline `labels`, you might join them for a more convenient processing:
-
 ```python
 images_with_labels = (images.p
                             .load(...)
@@ -155,11 +267,148 @@ You can join several sources:
 full_images = (images.p
                      .load(...)
                      .resize(shape=(256, 256))
-                     .random_rotate(angle=(-pi/4, pi/4))
+                     .random_rotate(angle=(-30, 30))
                      .join(labels, masks)
                      .some_action())
 ```
-Thus, the batches from `labels` and `masks` will be passed into `some_action` as the first and the second arguments (as always, after `self`).
+Thus, the tuple of batches from `labels` and `masks` will be passed into `some_action` as the first arguments (as always, after `self`).
+
+Mostly, `join` is used as follows:
+```python
+full_images = (images.p
+                     .load(...)
+                     .resize(shape=(256, 256))
+                     .join(labels, masks)
+                     .load(components=['labels', 'masks']))
+```
+See [batch.load](#batch.md#load) for more details.
+
+
+### Merging pipelines
+You can also merge data from two pipelines (this is not the same as [concatenating pipelines](#algebra-of-pipelines).
+```python
+images_with_augmentation = (images_dataset.p
+                               .load(...)
+                               .resize(shape=(256, 256))
+                               .random_rotate(angle=(-30, 30))
+                               .random_crop(shape=(128, 128))
+                               .run(batch_size=16, epochs=None, shuffle=True, drop_last=True, lazy=True)
+
+all_images = (images_dataset.p
+                   .load(...)
+                   .resize(shape=(128, 128))
+                   .merge(images_with_augmentation)
+                   .run(batch_size=16, epochs=3, shuffle=True, drop_last=True)
+```
+What will happen here is
+- `images_with_augmentation` will generate batches of size 16
+- `all_images` before merge will generate batches of size 16
+- `merge` will combine both batches in some way.
+
+Pipeline's `merge` calls `batch_class.merge([batche_from_pipe1, batch_from_pipe2])`.
+
+The default `Batch.merge` just concatenate data from both batches, thus making a batch of double size.
+
+Take into account that the default `merge` also changes index to `numpy.arange(new_size)`.
+
+
+## Rebatch
+When actions change the batch size (for instance, dropping some bad or skipping incomplete data),
+you might end up in a situation when you don't know the batch size and, what is sometimes much worse,
+batch size differs. To solve this problem, just call `rebatch`:
+```python
+images_pipeline = (images_dataset.p
+                       .load(...)
+                       .random_rotate(angle=(-30, 30))
+                       .skip_black_images()
+                       .skip_too_noisy_images()
+                       .rebatch(32)
+```
+Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works properly for your specific data and write your own `merge` if needed.
+
+
+## Public API
+
+Pipelines are created from datasets.
+```python
+my_pipeline = my_dataset.pipeline()
+```
+or the shorter version:
+```python
+my_pipeline = my_dataset.p
+```
+
+### `gen_batch(batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0)`
+Returns a batch generator.
+
+Usage:
+```python
+for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=1):
+    # do something
+```
+
+### `next_batch(batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0)`
+Gets a batch from the dataset, executes all the actions defined in the pipeline and then returns the result of the last action.
+
+Args:
+`batch_size` - number of items in each batch.
+
+`shuffle` - whether to randomize items order before splitting into batches. Can be  
+- `bool`: `True` / `False`
+- a `RandomState` object which has an inplace shuffle method (see [numpy.random.RandomState](https://docs.scipy.org/doc/numpy/reference/generated/numpy.random.RandomState.html)):
+- `int` - a random seed number which will be used internally to create a `numpy.random.RandomState` object
+- `sample function` - any callable which gets an order and returns a shuffled order.
+
+Default - `False`.
+
+`n_epochs` - number of iterations around the whole index. If `None`, then you will get an infinite sequence of batches. Default value - 1.
+
+`drop_last` - whether to skip the last batch if it has fewer items (for instance, if an index contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the last batch with just 1 item).
+
+`prefetch` - the number of batches processed in advance (see [details](prefetch.md))
+
+Returns:
+an instance of the batch class returned from the last action in the pipeline
+
+Usage:
+```python
+for i in range(MAX_ITERS):
+    batch = my_pipeline.next_batch(BATCH_SIZE, n_epochs=None)
+```
+
+### `run(batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, lazy=False)`
+Runs a pipeline.
+However, when `lazy=True`, just remembers parameters for a later `run()` or `next_batch()` without arguments.
+
+If `lazy=False`, `run` is:
+```python
+for _ in my_pipeline.gen_batch(...):
+    pass
+```
+
+### `join(another_source, one_more_source, ...)`
+Joins corresponding batches from several sources (datasets or pipelines).
+
+### `merge(another_source, one_more_source, ...)`
+Merges batches from several sources (datasets or pipelines).
+
+### `rebatch(batch_size)`
+Splits and merges batches coming from the previous actions to form a batch of a given size.
+
+### `init_variable(name, default=None, init=None, init_on_each_run=False)`
+Creates a variable with the default value or init function.
+
+### `get_variable(name)`
+Returns a value of the variable with a given name.
+
+### `set_variable(name, value)`
+Sets a new value for a variable.
+
+### `del_variable(name)`
+Deletes a variable with a given name.
+
+### `delete_variable(name)`
+Deletes a variable with a given name.
 
 ### `put_into_tf_queue(session, queue, get_tensor)`
 Puts the batches into a tensorflow queue.

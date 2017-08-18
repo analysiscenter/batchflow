@@ -2,6 +2,13 @@
 
 A dataset may be so large that it does not fit into memory and thus you cannot process it at once. That is why each data item in the `Dataset` should have an unique id. It does not have to be meaningful (like a card number or a transaction id), sometimes it may be just a hash or an ordered number. However, each index item should address exactly one data item (which in turn can have a complex structure, like a list, an array, a dataframe, or even a graph).
 
+The value of ids in the index is important only in 2 situations:
+
+- in `load` [action-method](batch.md#action-methods), when batch gets data from some external source like `batch._data = external_source[batch.indices]` and thus the external source should contain those indices, otherwise `load` will fail. Similarly, when data is loaded from files, indices usually point to these files as their full path should contain indices (see [FilesIndex](#FilesIndex) below).
+- in item selection - `batch[some_item_id]` - so the index should contain the id you're referring to.
+
+Evereywhere else the particular id value is pretty meaningless as all operations use position of the item in the index, not its id.
+
 ## DatasetIndex
 
 `DatasetIndex` is a base index class which stores a sequence of unique ids for your data items. In the simplest case it might be just an ordered sequence of numbers (0, 1, 2, 3,..., e.g. `numpy.arange(len(dataset))`).
@@ -31,10 +38,25 @@ pos = index.get_pos('item_03')
 ```
 As you may guess `self.indices[2]` contains `item_03`.
 
-#### cv_split(shares)
+#### cv_split(shares=0.8, shuffle=False)
 Split index into train, test and validation subsets. Shuffles index if necessary.
 Subsets are also `DatasetIndex` objects and are available as attributes `.train`, `.test` and `.validation` respectively.
 
+Args:
+`shares` - a split percentage. Can be  
+- `float` in (0,1) - to split into train / test so that `train` will contain `shares` share of indices and test will have (1 - `shares`) share of indices.
+- a sequence of 2 `float`s - [train_share, test_share]. If they don't sum to 1, then validation will contain the rest indices.
+- a sequence of 3 `float`s - [train_share, test_share, validation_share].
+
+`shuffle` - whether to randomize items order before splitting into batches. Can be  
+- `bool`: `False` - to make batches in the order of indices in the index, `True` - to make batches with random indices.
+- a `RandomState` object which has an inplace shuffle method (see [numpy.random.RandomState](https://docs.scipy.org/doc/numpy/reference/generated/numpy.random.RandomState.html)):
+- `int` - a random seed number which will be used internally to create a `numpy.random.RandomState` object
+- `sample function` - any callable which gets an order and returns a shuffled order.
+
+Returns: nothing
+
+##### Examples
 Split into train / test in 80/20 ratio (default)
 ```python
 index.cv_split()
@@ -64,7 +86,7 @@ Default - `False`.
 
 `n_epochs` - number of iterations around the whole index. If `None`, then you will get an infinite sequence of batches. Default value - 1.
 
-`drop_last` - whether to skip the last batch if it has fewer items (for instance, if an index contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the last batch with just 1 item).
+`drop_last` - whether to skip the last batch if it has fewer items (for instance, if an index contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the 4th batch with just 1 item. The last batch will be skipped if `drop_last=True`).
 
 Returns:
 an instance of DatasetIndex holding a subset of the original index
