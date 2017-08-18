@@ -4,7 +4,7 @@ A dataset may be so large that it does not fit into memory and thus you cannot p
 
 The value of ids in the index is important only in 2 situations:
 
-- in `load` [action-method](batch.md#action-methods), when batch gets data from some external source like `batch._data = external_source[batch.indices]` and thus the external source should contain those indices, otherwise `load` will fail. Similarly, when data is loaded from files, indices usually point to these files as their full path should contain indices (see [FilesIndex](#FilesIndex) below).
+- in `load` [action-method](batch.md#action-methods), when batch gets data from some external source like `batch._data = external_source[batch.indices]` and thus the external source should contain those indices, otherwise `load` will fail. Similarly, when data is loaded from files, indices usually point to these files as their full path should contain indices (see [FilesIndex](#filesindex) below).
 - in item selection - `batch[some_item_id]` - so the index should contain the id you're referring to.
 
 Evereywhere else the particular id value is pretty meaningless as all operations use position of the item in the index, not its id.
