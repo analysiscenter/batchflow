@@ -133,7 +133,7 @@ def model(mode='static', engine='tf'):
                     with _dynamic_model_lock:
                         if not ModelDirectory.model_exists(_method_spec):
                             model_spec = method(self, *args, **kwargs)
-                            _add_model(model_spec, self)
+                            _add_model(model_spec)
                 model_spec = ModelDirectory.get_model(_method_spec)
             return model_spec
 

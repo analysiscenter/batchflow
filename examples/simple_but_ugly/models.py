@@ -130,7 +130,7 @@ sess.run(tf.global_variables_initializer())
 print("Start iterating...")
 t = time()
 t1 = t
-for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
+for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
@@ -146,7 +146,7 @@ res2 = (ds_data.pipeline()
                .test_dynamic()
 )
 
-for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
+for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
