@@ -34,25 +34,25 @@ Creates a dataset with given `index` and `batch_class`.
 ```python
 my_dataset = Dataset(some_index, batch_class=MyBatchClass)
 ```
-If `preloaded` is specified than each created batch will preload data from this argument.
+If `preloaded` is specified, than each created batch will preload data from this argument.
 
 ### `next_batch(batch_size, shuffle=False, n_epochs=1, drop_last=False)`
-Returns a batch from the index.
+Returns the next batch from the dataset
 
 Args:
-`batch_size` - number of items in each batch.
+`batch_size` - number of items in the batch.
 
 `shuffle` - whether to randomize items order before splitting into batches. Can be  
-- `bool`: `True` / `False`
+- `bool`: `False` - to make batches in the order of indices in the index, `True` - to make batches with random indices.
 - a `RandomState` object which has an inplace shuffle method (see [numpy.random.RandomState](https://docs.scipy.org/doc/numpy/reference/generated/numpy.random.RandomState.html)):
 - `int` - a random seed number which will be used internally to create a `numpy.random.RandomState` object
 - `sample function` - any callable which gets an order and returns a shuffled order.
 
 Default - `False`.
 
-`n_epochs` - number of iterations around the whole index. If `None`, then you will get an infinite sequence of batches. Default value - 1.
+`n_epochs` - number of iterations around the whole dataset. If `None`, then you will get an infinite sequence of batches. Default value - 1.
 
-`drop_last` - whether to skip the last batch if it has fewer items (for instance, if an index contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the last batch with just 1 item).
+`drop_last` - whether to skip the last batch if it has fewer items (for instance, if a dataset contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the 4th batch with just 1 item. The last batch will be skipped if `drop_last=True`).
 
 Returns:
 an instance of the batch class
