@@ -50,11 +50,7 @@ class ModelDirectory:
     def get_model_by_name(batch, model_name):
         """ Return a model specification given its name """
         method = getattr(batch, model_name)
-        pipeline = method.__self__.pipeline if hasattr(method, "__self__") else None
-        method_spec = method.method_spec
-        if method_spec['mode'] == 'dynamic':
-            method_spec = {**method.method_spec, 'pipeline': pipeline}
-        return ModelDirectory.get_model(method_spec)
+        return method()
 
 
 def model(mode='static', engine='tf'):
