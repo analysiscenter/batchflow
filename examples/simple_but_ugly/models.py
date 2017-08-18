@@ -80,6 +80,11 @@ class MyArrayBatch(ArrayBatch):
         #print("        ", int(res))
         return self
 
+    @action
+    def test_dynamic(self):
+        model_spec = self.get_model_by_name("dynamic_model")
+        print("========== test dynamic =============")
+        return self
 
 # number of items in the dataset
 K = 100
@@ -128,7 +133,13 @@ print("Stop iterating:", time() - t)
 
 print(res.get_variable("loss history"))
 
-for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
+
+res2 = (ds_data.pipeline()
+               .import_model("dynamic_model", res)
+               .test_dynamic()
+)
+
+for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()

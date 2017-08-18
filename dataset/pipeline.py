@@ -15,6 +15,8 @@ except ImportError:
 from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
+from .decorators import ModelDirectory
+
 
 PIPELINE_ID = '#_pipeline'
 JOIN_ID = '#_join'
@@ -401,15 +403,23 @@ class Pipeline:
             asyncio.set_event_loop(asyncio.new_event_loop())
         return self._exec_all_actions(batch)
 
+    def import_model(self, model_name, pipeline):
+        """ Import a model from another pipeline
+        Args:
+            model_name: string - a name of the model to import
+            pipeline - a pipeline that holds a model
+        """
+        model_method = getattr(self.dataset.batch_class, model_name)
+        method_spec = model_method.method_spec
+        model_spec = ModelDirectory.get_model(method_spec)
+        method_spec = {**method_spec, **dict(pipeline=pipeline)}
+        ModelDirectory.add_model(method_spec, model_spec)
+        return self
+
     def join(self, *pipelines):
         """ Join pipelines
         Args:
             one or several pipelines
-            mode:
-                - 'i' - by index, i.e. get from each pipeline batches with the same indices
-                - 'r' - by lazy run, i.e. get the next batch from each pipeline.
-                        In this mode batches could have different size and non-matching indices.
-                        For this to work pipelines must end with run(..., lazy=True).
         """
         self._action_list.append({'name': JOIN_ID, 'pipelines': pipelines, 'mode': 'i'})
         return self.append_action()
