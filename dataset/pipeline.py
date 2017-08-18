@@ -22,6 +22,7 @@ PIPELINE_ID = '#_pipeline'
 JOIN_ID = '#_join'
 MERGE_ID = '#_merge'
 REBATCH_ID = '#_rebatch'
+IMPORT_MODEL_ID = '#_import_model'
 
 
 def mult_option(a, b):
@@ -379,6 +380,8 @@ class Pipeline:
                 pass
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
+            elif _action['name'] == IMPORT_MODEL_ID:
+                ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
             else:
                 if join_batches is None:
                     _action_args = _action['args']
@@ -409,12 +412,8 @@ class Pipeline:
             model_name: string - a name of the model to import
             pipeline - a pipeline that holds a model
         """
-        model_method = getattr(self.dataset.batch_class, model_name)
-        method_spec = model_method.method_spec
-        model_spec = ModelDirectory.get_model(method_spec)
-        method_spec = {**method_spec, **dict(pipeline=pipeline)}
-        ModelDirectory.add_model(method_spec, model_spec)
-        return self
+        self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': model_name, 'pipeline': pipeline})
+        return self.append_action()
 
     def join(self, *pipelines):
         """ Join pipelines

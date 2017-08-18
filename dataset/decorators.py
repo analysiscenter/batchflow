@@ -29,10 +29,48 @@ class ModelDirectory:
         ModelDirectory.models[mode][pipeline].update({model_method: model_spec})
 
     @staticmethod
+    def find_model_by_name(model_name, pipeline=None):
+        """ Search a model by its name """
+        def _name_ok(model_name, method_spec):
+            return method_spec['name'] == model_name or method_spec['name'].rsplit('.', 1)[1] == model_name
+        mode = 'static' if pipeline is None else 'dynamic'
+        models_dict = ModelDirectory.models[mode][pipeline]
+        models_with_same_name = [model_method for model_method in models_dict
+                                 if _name_ok(model_name, model_method.method_spec)]
+        return models_with_same_name if len(models_with_same_name) > 0 else None
+
+    @staticmethod
+    def import_model(model_name, from_pipeline, to_pipeline):
+        """ Import a model from another pipeline """
+        models = ModelDirectory.find_model_by_name(model_name, from_pipeline)
+        if models is None:
+            raise RuntimeError("Model '%s' does not exist in the pipeline %s" % (model_name, from_pipeline))
+        if len(models) > 1:
+            raise RuntimeError("There are a few models with the name '%s' in the pipeline %s"
+                                 % (model_name, from_pipeline))
+
+        model_method = models[0]
+        if hasattr(model_method, 'method_spec'):
+            method_spec = model_method.method_spec
+        else:
+            raise RuntimeError("Method %s is not decorated with @model" % model_name)
+
+        model_spec = ModelDirectory.get_model(method_spec)
+        method_spec = {**method_spec, **dict(pipeline=to_pipeline)}
+        ModelDirectory.add_model(method_spec, model_spec)
+
+    @staticmethod
     def model_exists(method_spec):
         """ Check if a model specification exists in the model directory """
         mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
-        return pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]
+        if pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]:
+            model_spec = ModelDirectory.models[mode][pipeline][model_method]
+            if isinstance(model_spec, dict) and len(model_spec) == 0:
+                return False
+            else:
+                return True
+        else:
+            return False
 
     @staticmethod
     def del_model(method_spec):
@@ -44,7 +82,10 @@ class ModelDirectory:
     def get_model(method_spec):
         """ Return a model specification for a given model method """
         mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
-        return ModelDirectory.models[mode][pipeline][model_method]
+        if pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]:
+            return ModelDirectory.models[mode][pipeline][model_method]
+        else:
+            raise RuntimeError("Model '%s' not found" % method_spec['name'])
 
     @staticmethod
     def get_model_by_name(batch, model_name):
@@ -70,34 +111,39 @@ def model(mode='static', engine='tf'):
     def _model_decorator(method):
 
         _dynamic_model_lock = threading.Lock()
+        _method_spec = dict()
 
-        def _get_method_spec():
-            pipeline = method.__self__.pipeline if hasattr(method, "__self__") else None
-            method_spec = dict(mode=mode, engine=engine, method=method, pipeline=pipeline)
-            return method_spec
+        def _get_method_spec(batch=None):
+            pipeline = batch.pipeline if batch is not None else None
+            if len(_method_spec) == 0:
+                _method_spec.update(dict(mode=mode, engine=engine, method=method,
+                                         name=method.__qualname__, pipeline=pipeline))
+            return _method_spec
 
         def _add_model(model_spec):
-            method_spec = _get_method_spec()
-            ModelDirectory.add_model(method_spec, model_spec)
+            ModelDirectory.add_model(_method_spec, model_spec)
 
         @functools.wraps(method)
         def _model_wrapper(self, *args, **kwargs):
             if mode == 'static':
-                model_spec = ModelDirectory.get_model(_get_method_spec())
+                model_spec = ModelDirectory.get_model(_method_spec)
             elif mode == 'dynamic':
-                if not ModelDirectory.model_exists(_get_method_spec()):
+                _get_method_spec(self)
+                if not ModelDirectory.model_exists(_method_spec):
                     with _dynamic_model_lock:
-                        if not ModelDirectory.model_exists(_get_method_spec()):
+                        if not ModelDirectory.model_exists(_method_spec):
                             model_spec = method(self, *args, **kwargs)
                             _add_model(model_spec)
-                model_spec = ModelDirectory.get_model(_get_method_spec())
+                model_spec = ModelDirectory.get_model(_method_spec)
             return model_spec
 
         if mode == 'static':
+            _get_method_spec()
             model_spec = method()
             _add_model(model_spec)
         _model_wrapper.model_method = method
-        _model_wrapper.method_spec = _get_method_spec()
+        _model_wrapper.method_spec = _method_spec
+        method.method_spec = _method_spec
         return _model_wrapper
     return _model_decorator
 
