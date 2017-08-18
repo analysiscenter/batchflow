@@ -65,13 +65,14 @@ class MyArrayBatch(ArrayBatch):
 
     @action(use_lock='__train_dynamic')
     def train_dynamic(self):
+        print("inside train")
         model_spec = self.get_model_by_name("dynamic_model")
         #print("        action for a dynamic model", model_spec)
         session = self.pipeline.get_variable("session")
         with self.pipeline.get_variable("print lock"):
             print("\n\n ================= train dynamic ====================")
             print("----- default graph")
-            print(tf.get_default_graph().get_operations())
+            #print(tf.get_default_graph().get_operations())
             print("----- session graph")
             print(session.graph.get_operations())
         input_data, model_output = model_spec
@@ -84,6 +85,10 @@ class MyArrayBatch(ArrayBatch):
     def test_dynamic(self):
         model_spec = self.get_model_by_name("dynamic_model")
         print("========== test dynamic =============")
+        input_data, model_output = model_spec
+        session = self.pipeline.get_variable("session")
+        res = session.run(model_output, feed_dict={input_data: self.data})
+        print(int(res), self.data.sum() ** 2)
         return self
 
 # number of items in the dataset
@@ -110,12 +115,13 @@ sess = tf.Session()
 res = (ds_data.pipeline()
         .init_variable("session", sess)
         .init_variable("loss history", init=list, init_on_each_run=True)
-        .init_variable("print lock", threading.Lock())
+        .init_variable("print lock", init=threading.Lock)
         .load(data)
         #.train_static()
         #.train_static2()
         .train_dynamic()
 )
+
 
 
 sess.run(tf.global_variables_initializer())
@@ -124,7 +130,7 @@ sess.run(tf.global_variables_initializer())
 print("Start iterating...")
 t = time()
 t1 = t
-for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
+for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
@@ -133,13 +139,14 @@ print("Stop iterating:", time() - t)
 
 print(res.get_variable("loss history"))
 
-
 res2 = (ds_data.pipeline()
+               .init_variable("session", sess)
                .import_model("dynamic_model", res)
+               .load(data)
                .test_dynamic()
 )
 
-for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
+for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
