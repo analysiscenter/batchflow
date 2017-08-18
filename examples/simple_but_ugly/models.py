@@ -63,8 +63,9 @@ class MyArrayBatch(ArrayBatch):
         print()
         return [input_data, model_output]
 
-    @action(model='dynamic_model', use_lock='__train_dynamic')
-    def train_dynamic(self, model_spec):
+    @action(use_lock='__train_dynamic')
+    def train_dynamic(self):
+        model_spec = self.get_model_by_name("dynamic_model")
         #print("        action for a dynamic model", model_spec)
         session = self.pipeline.get_variable("session")
         with self.pipeline.get_variable("print lock"):
