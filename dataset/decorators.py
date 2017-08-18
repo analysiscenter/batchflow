@@ -41,11 +41,13 @@ class ModelDirectory:
 
     @staticmethod
     def import_model(model_name, from_pipeline, to_pipeline):
+        """ Import a model from another pipeline """
         models = ModelDirectory.find_model_by_name(model_name, from_pipeline)
         if models is None:
             raise RuntimeError("Model '%s' does not exist in the pipeline %s" % (model_name, from_pipeline))
         if len(models) > 1:
-            raise RuntimeError("There are a few models with the name '%s' in the pipeline %s" % (model_name, from_pipeline))
+            raise RuntimeError("There are a few models with the name '%s' in the pipeline %s"
+                                 % (model_name, from_pipeline))
 
         model_method = models[0]
         if hasattr(model_method, 'method_spec'):
@@ -114,10 +116,11 @@ def model(mode='static', engine='tf'):
         def _get_method_spec(batch=None):
             pipeline = batch.pipeline if batch is not None else None
             if len(_method_spec) == 0:
-                _method_spec.update(dict(mode=mode, engine=engine, method=method, name=method.__qualname__, pipeline=pipeline))
+                _method_spec.update(dict(mode=mode, engine=engine, method=method,
+                                         name=method.__qualname__, pipeline=pipeline))
             return _method_spec
 
-        def _add_model(model_spec, batch=None):
+        def _add_model(model_spec):
             ModelDirectory.add_model(_method_spec, model_spec)
 
         @functools.wraps(method)
