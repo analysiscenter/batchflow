@@ -47,7 +47,7 @@ class ModelDirectory:
             raise RuntimeError("Model '%s' does not exist in the pipeline %s" % (model_name, from_pipeline))
         if len(models) > 1:
             raise RuntimeError("There are a few models with the name '%s' in the pipeline %s"
-                                 % (model_name, from_pipeline))
+                               % (model_name, from_pipeline))
 
         model_method = models[0]
         if hasattr(model_method, 'method_spec'):
