@@ -15,6 +15,10 @@ def _workers_count():
         cpu_count = os.cpu_count()
     return cpu_count * 4
 
+def get_method_fullname(method):
+    """ Return a method name in the format module_name.class_name.func_name """
+    return method.__module__ + '.' + method.__qualname__
+
 
 class ModelDirectory:
     """ Directory of model definition methods in Batch classes """
@@ -29,17 +33,21 @@ class ModelDirectory:
         ModelDirectory.models[mode][pipeline].update({model_method: model_spec})
 
     @staticmethod
+    def equal_names(model_name, model_ref):
+        """ Check if model_name equals a full model name stored in model_ref """
+        return model_ref[-len(model_name):] == model_name
+
+    @staticmethod
     def find_model_method_by_name(model_name, pipeline=None):
         """ Search a model method by its name """
-        def _name_ok(model_name, method_spec):
-            return method_spec['name'][-len(model_name):] == model_name
+
         mode = 'static' if pipeline is None else 'dynamic'
         if pipeline in ModelDirectory.models[mode]:
             models_dict = ModelDirectory.models[mode][pipeline]
         else:
             models_dict = []
         models_with_same_name = [model_method for model_method in models_dict
-                                 if _name_ok(model_name, model_method.method_spec)]
+                                 if ModelDirectory.equal_names(model_name, model_method.method_spec['name'])]
         return models_with_same_name if len(models_with_same_name) > 0 else None
 
     @staticmethod
@@ -168,7 +176,7 @@ def model(mode='static', engine='tf'):
             pipeline = batch.pipeline if batch is not None else None
             if len(_method_spec) == 0:
                 _method_spec.update(dict(mode=mode, engine=engine, method=method,
-                                         name=method.__qualname__, pipeline=pipeline))
+                                         name=get_method_fullname(method), pipeline=pipeline))
             return _method_spec
 
         def _add_model(model_spec):
@@ -183,7 +191,25 @@ def model(mode='static', engine='tf'):
                 if not ModelDirectory.model_exists(_method_spec):
                     with _dynamic_model_lock:
                         if not ModelDirectory.model_exists(_method_spec):
-                            model_spec = method(self, *args, **kwargs)
+
+                            config = None
+                            if self.pipeline is not None:
+                                full_config = self.pipeline.config
+                                full_model_name = get_method_fullname(method)
+                                if full_config is not None:
+                                    model_names = [model_key for model_key in full_config
+                                                   if ModelDirectory.equal_names(model_key, full_model_name)]
+                                    if len(model_names) > 1:
+                                        raise ValueError("Ambigous config contains several keys" +
+                                                         " with similar names", model_names)
+                                    if len(model_names) == 1:
+                                        config = full_config[model_names[0]]
+
+                            if config is None:
+                                model_spec = method(self, *args, **kwargs)
+                            else:
+                                model_spec = method(self, *args, **kwargs, config=config)
+
                             _add_model(model_spec)
                 model_spec = ModelDirectory.get_model(_method_spec)
             else:
@@ -228,6 +254,7 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
                 raise ValueError("There is no such method '%s'" % _model_name)
 
             _model_spec = _model_method()
+
             _res = action_method(action_self, _model_spec, *args, **kwargs)
 
         if _use_lock is not None:

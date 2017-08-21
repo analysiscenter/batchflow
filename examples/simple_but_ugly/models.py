@@ -51,8 +51,9 @@ class MyArrayBatch(ArrayBatch):
         return self
 
     @model(mode='dynamic')
-    def dynamic_model(self):
+    def dynamic_model(self, config=None):
         print("Building a dynamic model with shape", self.data.shape)
+        print("Model config", config)
         with self.pipeline.get_variable("session").graph.as_default():
             with tf.variable_scope("dynamic"):
                 input_data = tf.placeholder('float', [None, self.data.shape[1]])
@@ -111,8 +112,10 @@ ds_data, data = pd_data()
 # Create tf session
 sess = tf.Session()
 
+config = dict(dynamic_model=dict(arg1=0, arg2=0))
+
 # Create pipeline
-res = (ds_data.pipeline()
+res = (ds_data.pipeline(config)
         .init_variable("session", sess)
         .init_variable("loss history", init=list, init_on_each_run=True)
         .init_variable("print lock", init=threading.Lock)
