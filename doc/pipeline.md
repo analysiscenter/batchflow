@@ -74,7 +74,7 @@ There are two ways to define a pipeline:
 - a chain of actions
 - a pipeline algebra
 
-An action chain is a concise and convenient way to write pipelines. But sometimes it's not enough, for instance, when you want manipulate with many pipelines adding them or multiplying as if they were numbers or matrices. And that's what we call `a pipeline algebra`.
+An action chain is a concise and convenient way to write pipelines. But sometimes it's not enough, for instance, when you want to manipulate with many pipelines adding them or multiplying as if they were numbers or matrices. And that's what we call `a pipeline algebra`.
 
 There are 5 operations available: `+`, `*`, `@`, `<<` , `>>`.
 
@@ -91,7 +91,7 @@ Execute the pipeline with the given probability.
 `p.random_rotate(angle=(-30, 30)) @ 0.5`
 
 ### `>>` and `<<`
-Apply a pipeline to a dataset.
+Link a pipeline to a dataset.
 `dataset >> pipeline` or `pipeline << dataset`
 
 The complete example:
