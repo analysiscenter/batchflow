@@ -325,7 +325,7 @@ class Batch(BaseBatch):
 
     def get_model_by_name(self, model_name):
         """ Return a model specification given its name """
-        return ModelDirectory.get_model_by_name(self, model_name)
+        return ModelDirectory.get_model_by_name(model_name, batch=self)
 
     def get_all_model_names(self):
         """ Return all model names in the batch class """

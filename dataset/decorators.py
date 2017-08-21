@@ -29,10 +29,10 @@ class ModelDirectory:
         ModelDirectory.models[mode][pipeline].update({model_method: model_spec})
 
     @staticmethod
-    def find_model_by_name(model_name, pipeline=None):
-        """ Search a model by its name """
+    def find_model_method_by_name(model_name, pipeline=None):
+        """ Search a model method by its name """
         def _name_ok(model_name, method_spec):
-            return method_spec['name'] == model_name or method_spec['name'].rsplit('.', 1)[1] == model_name
+            return method_spec['name'][-len(model_name):] == model_name
         mode = 'static' if pipeline is None else 'dynamic'
         models_dict = ModelDirectory.models[mode][pipeline]
         models_with_same_name = [model_method for model_method in models_dict
@@ -40,14 +40,28 @@ class ModelDirectory:
         return models_with_same_name if len(models_with_same_name) > 0 else None
 
     @staticmethod
+    def find_model_by_name(model_name, pipeline=None, only_first=False):
+        """ Search a model by its name """
+        static_model_methods = ModelDirectory.find_model_method_by_name(model_name) or []
+        if pipeline is not None:
+            # look for a dynamic model
+            dynamic_model_methods = ModelDirectory.find_model_method_by_name(model_name, pipeline) or []
+        all_model_methods = static_model_methods + dynamic_model_methods
+
+        method_specs = [model_method.method_spec for model_method in all_model_methods
+                        if hasattr(model_method, 'method_spec')]
+        model_specs = [ModelDirectory.get_model(method_spec) for method_spec in method_specs]
+        return model_specs if not only_first else model_specs[0] if len(model_specs) > 0 else None
+
+    @staticmethod
     def import_model(model_name, from_pipeline, to_pipeline):
         """ Import a model from another pipeline """
-        models = ModelDirectory.find_model_by_name(model_name, from_pipeline)
+        models = ModelDirectory.find_model_method_by_name(model_name, from_pipeline)
         if models is None:
             raise RuntimeError("Model '%s' does not exist in the pipeline %s" % (model_name, from_pipeline))
         if len(models) > 1:
             raise RuntimeError("There are a few models with the name '%s' in the pipeline %s"
-                                 % (model_name, from_pipeline))
+                               % (model_name, from_pipeline))
 
         model_method = models[0]
         if hasattr(model_method, 'method_spec'):
@@ -80,18 +94,46 @@ class ModelDirectory:
 
     @staticmethod
     def get_model(method_spec):
-        """ Return a model specification for a given model method """
+        """ Return a model specification for a given model method
+        Return:
+            a model specification or a list of model specifications
+        Raises:
+            ValueError if a model has not been found
+        """
         mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
         if pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]:
             return ModelDirectory.models[mode][pipeline][model_method]
         else:
-            raise RuntimeError("Model '%s' not found" % method_spec['name'])
+            raise ValueError("Model '%s' not found" % method_spec['name'])
 
     @staticmethod
-    def get_model_by_name(batch, model_name):
-        """ Return a model specification given its name """
-        method = getattr(batch, model_name)
-        return method()
+    def get_model_by_name(model_name, batch=None, pipeline=None):
+        """ Return a model specification given its name
+        Args:
+            model_name: str - a name of the model
+            batch - an instance of the batch class where to look for a model or None
+            pipeline - a pipeline where to look for a model or None
+        Return:
+            a model specification or a list of model specifications
+        Raises:
+            ValueError if a model has not been found
+        """
+        if batch is None:
+            # this can return a list of model specs or None if not found
+            model_spec = ModelDirectory.find_model_by_name(model_name, pipeline)
+
+            if model_spec is None:
+                if pipeline is None:
+                    raise ValueError("Model '%s' not found" % model_name)
+                else:
+                    raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
+        else:
+            if not hasattr(batch, model_name):
+                raise ValueError("Model '%s' not found in the batch class %s"
+                                 % (model_name, batch.__class__.__name__))
+            method = getattr(batch, model_name)
+            model_spec = method()
+        return model_spec
 
 
 def model(mode='static', engine='tf'):
@@ -135,6 +177,8 @@ def model(mode='static', engine='tf'):
                             model_spec = method(self, *args, **kwargs)
                             _add_model(model_spec)
                 model_spec = ModelDirectory.get_model(_method_spec)
+            else:
+                raise ValueError("Unknown mode", mode)
             return model_spec
 
         if mode == 'static':

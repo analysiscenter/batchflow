@@ -289,6 +289,12 @@ class Pipeline:
         self._variables[name].update({'value': value})
         return self
 
+    def assign_variable(self, name, value):
+        """ Assign a value to a variable
+        Same as `set_variable(name, value)`.
+        """
+        return self.set_variable(name, value)
+
     def delete_variable(self, name):
         """ Delete a variable
         If the variable does not exists, the warning will be issued.
@@ -317,6 +323,11 @@ class Pipeline:
     def delete_all_variables(self):
         """ Delete all variables """
         self._variables = dict()
+
+    def get_model_by_name(self, model_name):
+        """ Get a model specification by its name """
+        models = ModelDirectory.get_model_by_name(model_name, pipeline=self)
+        return models
 
     @staticmethod
     def _get_action_method(batch, name):

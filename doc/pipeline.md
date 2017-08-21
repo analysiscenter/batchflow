@@ -3,6 +3,7 @@
 ## Content
 1. [Introduction](#introduction)
 1. [Algebra of pipelines](#algebra-of-pipelines)
+1. [Creating pipelines](#creating-pipelines)
 1. [Running pipelines](#running-pipelines)
 1. [Pipeline variables](#pipeline-variables)
 1. [Join and merge](#join-and-merge)
@@ -73,7 +74,7 @@ There are two ways to define a pipeline:
 - a chain of actions
 - a pipeline algebra
 
-An action chain is a concise and convenient way to write pipelines. But sometimes it's not enough, for instance, when you want manipulate with many pipelines adding them or multiplying as if they were numbers or matrices. And that's what we call `a pipeline algebra`.
+An action chain is a concise and convenient way to write pipelines. But sometimes it's not enough, for instance, when you want to manipulate with many pipelines adding them or multiplying as if they were numbers or matrices. And that's what we call `a pipeline algebra`.
 
 There are 5 operations available: `+`, `*`, `@`, `<<` , `>>`.
 
@@ -90,7 +91,7 @@ Execute the pipeline with the given probability.
 `p.random_rotate(angle=(-30, 30)) @ 0.5`
 
 ### `>>` and `<<`
-Apply a pipeline to a dataset.
+Link a pipeline to a dataset.
 `dataset >> pipeline` or `pipeline << dataset`
 
 The complete example:
@@ -106,6 +107,46 @@ with Pipeline() as p:
 images_prepocessing = preprocessing_pipeline << images_dataset
 ```
 
+## Creating pipelines
+Pipelines can be created from scratch or from a dataset.
+
+### A template pipeline
+```python
+from dataset import Pipeline
+
+my_pipeline = Pipeline()
+                .some_action()
+                .another_action()
+```
+Or through a context manager with pipeline algebra:
+```python
+from dataset import Pipeline
+
+with Pipeline() as p:
+    my_pipeline = p.some_action() +
+                  p.another_action()
+```
+However, you cannot execute this pipeline as it doesn't linked to any dataset.
+On the other hand, such pipelines might be applied to many datasets:
+```python
+cifar10_pipeline = template_preprocessing_pipeline << cifar10_dataset
+mnist_pipeline = template_preprocessing_pipeline << mnist_dataset
+```
+
+### A dataset pipeline
+```python
+my_pipeline = my_dataset.pipeline()
+                .some_action()
+                .another_action()
+```
+Or a shorter version:
+```python
+my_pipeline = my_dataset.p
+                .some_action()
+                .another_action()
+```
+Every call to `dataset.pipeline()` or `dataset.p` creates a new pipeline.
+
 ## Running pipelines
 There are 4 ways to execute a pipeline.
 
@@ -120,7 +161,7 @@ The important note:
 `BATCH_SIZE` is a size of the batch taken from the dataset. Actions might change the size of the batch and thus
 the batch you will get from the pipeline might have a different size.
 
-### Next batch function
+### next_batch function
 ```python
 for i in range(MAX_ITER):
     batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True)
@@ -172,8 +213,8 @@ To initialize a variable just add to a pipeline `init_variable(...)` with a vari
 Variables might be initialized once in a lifetime (e.g. some global state or a configuration parameter) or before each run
 (like counters and local history stores).
 
-Sometimes it is more convenient to initialize variables indirectly through some function. For instance, `loss_history` cannot be initialized with `[]`
-as it makes a global variable which won't be cleared on every run. What you actually need is a call to `list()` on each run.
+Sometimes it is more convenient to initialize variables indirectly through a function. For instance, `loss_history` cannot be initialized with `[]`
+as it would make a global variable which won't be cleared on every run. What you actually need is a call to `list()` on each run.
 
 Init functions are also a good place for some complex logic or randomization.
 
@@ -329,15 +370,6 @@ Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works pr
 
 ## Public API
 
-Pipelines are created from datasets.
-```python
-my_pipeline = my_dataset.pipeline()
-```
-or the shorter version:
-```python
-my_pipeline = my_dataset.p
-```
-
 ### `gen_batch(batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0)`
 Returns a batch generator.
 
@@ -403,6 +435,13 @@ Returns a value of the variable with a given name.
 
 ### `set_variable(name, value)`
 Sets a new value for a variable.
+
+Same as `assign_variable()`
+
+### `assign_variable(name, value)`
+Sets a new value for a variable.
+
+Same as `set_variable()`
 
 ### `del_variable(name)`
 Deletes a variable with a given name.
