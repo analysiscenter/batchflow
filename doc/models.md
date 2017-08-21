@@ -14,8 +14,8 @@ There are two modes of model definitions:
 A static model is compiled at a class compilation time, so even before any other code is run.
 As a result, it has no access to any variable or code outside itself even to `self` argument.
 
-A dynamic model is compiled each time a pipeline is run, when some action requests a model descriptor.
-As a result it has access to everything else (including a `self` argument) thus allowing to build models adapting to shapes and data sizes.
+A dynamic model exists within a pipeline and is compiled each time the pipeline is run, when some action requests a model descriptor.
+As a result it has access to everything else (including a batch `self` argument) thus allowing to build models adapting to shapes and data sizes.
 
 ```python
 class MyBatch(Batch):
@@ -49,7 +49,7 @@ or any other model specification you need.
 
 Later you will get back this descriptor in a model-based actions method. So you have to include in it everything you need to train and evaulate the model.
 
-**Important notes:**  
+**Important note:**  
 You should never call model definition methods. They are called internally.
 
 ## Model-based actions
@@ -114,6 +114,29 @@ my_pipeline = my_dataset.p
                  .train_model("resnet50")
 ```
 
+
+## Model import
+Dynamic models exist within pipelines. This is not a problem if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you train a model in one pipeline and later use it in an inference pipeline.
+
+This can be easily achieved with a model import.
+
+```python
+train_pipeline = (images_dataset.p
+                       .load(...)
+                       .random_rotate(angle=(-30, 30))
+                       .train_classifier(model_name="resnet50")
+                       .run(BATCH_SIZE, shuffle=True, n_epochs=10)
+
+inference_pipeline_template = (Pipeline()
+                                  .resize(shape=(256, 256))
+                                  .normalize()
+                                  .import_model("resnet50", train_pipeline)
+                                  .get_prediction(model_name="resnet50")
+)
+```
+When `inference_pipeline_template` is run, the model descriptor `resnet50` from `train_pipeline` will be imported.
+
+For this to work `images_dataset`'s batch class should contain an action `train_classifier` and [a model definition method](#model-definition-method) named "resnet50".
 
 
 ## Parallel training
