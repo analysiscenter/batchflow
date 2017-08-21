@@ -151,4 +151,4 @@ for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
 
-print(res.get_variable("loss history"))
+print(res2.get_model_by_name("dynamic_model"))

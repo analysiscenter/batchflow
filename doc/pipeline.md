@@ -213,8 +213,8 @@ To initialize a variable just add to a pipeline `init_variable(...)` with a vari
 Variables might be initialized once in a lifetime (e.g. some global state or a configuration parameter) or before each run
 (like counters and local history stores).
 
-Sometimes it is more convenient to initialize variables indirectly through some function. For instance, `loss_history` cannot be initialized with `[]`
-as it makes a global variable which won't be cleared on every run. What you actually need is a call to `list()` on each run.
+Sometimes it is more convenient to initialize variables indirectly through a function. For instance, `loss_history` cannot be initialized with `[]`
+as it would make a global variable which won't be cleared on every run. What you actually need is a call to `list()` on each run.
 
 Init functions are also a good place for some complex logic or randomization.
 

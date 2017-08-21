@@ -324,6 +324,11 @@ class Pipeline:
         """ Delete all variables """
         self._variables = dict()
 
+    def get_model_by_name(self, model_name):
+        """ Get a model specification by its name """
+        models = ModelDirectory.get_model_by_name(model_name, pipeline=self)
+        return models
+
     @staticmethod
     def _get_action_method(batch, name):
         if hasattr(batch, name):
