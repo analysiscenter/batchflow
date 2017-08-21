@@ -82,12 +82,12 @@ However, the main principle remains the same - `prefetch` parameter indicates ho
 You can use `prefetch` in `next_batch`, `gen_batch` and `run`.
 
 
-### Singleton
-Sometimes you might want to guarantee that only one call of a specific action is executed simultaneously, e.g. due to race condition or dependence on some external resources. To make this happen mark an action as a singleton:
+### Blocked method
+Sometimes you might want to guarantee that only one call of a specific action is executed simultaneously, e.g. due to race condition or dependence on some external resources. To make this happen provide a lock to an action:
 ```python
 class MyBatch(Batch):
     ...
-    @action(singleton=True)
+    @action(use_lock="unique_lock_name")
     def only_one(self):
         ...
 ```

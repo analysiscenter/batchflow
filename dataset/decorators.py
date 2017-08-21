@@ -51,7 +51,13 @@ class ModelDirectory:
         method_specs = [model_method.method_spec for model_method in all_model_methods
                         if hasattr(model_method, 'method_spec')]
         model_specs = [ModelDirectory.get_model(method_spec) for method_spec in method_specs]
-        return model_specs if not only_first else model_specs[0] if len(model_specs) > 0 else None
+
+        if len(model_specs) == 0:
+            return None
+        elif len(model_specs) == 1 or only_first:
+            return model_specs[0]
+        else:
+            return model_specs
 
     @staticmethod
     def import_model(model_name, from_pipeline, to_pipeline):
