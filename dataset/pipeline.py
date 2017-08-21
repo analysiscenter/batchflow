@@ -289,6 +289,12 @@ class Pipeline:
         self._variables[name].update({'value': value})
         return self
 
+    def assign_variable(self, name, value):
+        """ Assign a value to a variable
+        Same as `set_variable(name, value)`.
+        """
+        return self.set_variable(name, value)
+
     def delete_variable(self, name):
         """ Delete a variable
         If the variable does not exists, the warning will be issued.
