@@ -7,6 +7,7 @@
 1. [Running pipelines](#running-pipelines)
 1. [Pipeline variables](#pipeline-variables)
 1. [Join and merge](#join-and-merge)
+1. [Model import](#model-import)
 1. [Public API](#public-api)
 
 
@@ -127,7 +128,7 @@ with Pipeline() as p:
                   p.another_action()
 ```
 However, you cannot execute this pipeline as it doesn't linked to any dataset.
-On the other hand, such pipelines might be applied to many datasets:
+On the other hand, such pipelines might be applied to different datasets:
 ```python
 cifar10_pipeline = template_preprocessing_pipeline << cifar10_dataset
 mnist_pipeline = template_preprocessing_pipeline << mnist_dataset
@@ -326,7 +327,7 @@ See [batch.load](batch.md#load) for more details.
 
 
 ### Merging pipelines
-You can also merge data from two pipelines (this is not the same as [concatenating pipelines](#algebra-of-pipelines).
+You can also merge data from two pipelines (this is not the same as [concatenating pipelines](#algebra-of-pipelines)).
 ```python
 images_with_augmentation = (images_dataset.p
                                .load(...)
@@ -366,6 +367,30 @@ images_pipeline = (images_dataset.p
                        .rebatch(32)
 ```
 Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works properly for your specific data and write your own `merge` if needed.
+
+
+## Shared models
+Dynamic models exist within pipelines. This is not a problem if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you might train a model in one pipeline and later use it in an inference pipeline.
+
+This can be easily achieved with a model import.
+
+```python
+train_pipeline = (images_dataset.p
+                       .load(...)
+                       .random_rotate(angle=(-30, 30))
+                       .train_classifier(model_name="resnet50")
+                       .run(BATCH_SIZE, shuffle=True, n_epochs=10)
+
+inference_pipeline_template = (Pipeline()
+                                  .resize(shape=(256, 256))
+                                  .normalize()
+                                  .import_model("resnet50", train_pipeline)
+                                  .get_prediction(model_name="resnet50")
+)
+```
+When `inference_pipeline_template` is run, the model descriptor `resnet50` from `train_pipeline` will be imported.
+
+For this to work `images_dataset`'s batch class should contain an action `train_classifier` and [a model method](model.md) named "resnet50".
 
 
 ## Public API
