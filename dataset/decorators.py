@@ -34,7 +34,10 @@ class ModelDirectory:
         def _name_ok(model_name, method_spec):
             return method_spec['name'][-len(model_name):] == model_name
         mode = 'static' if pipeline is None else 'dynamic'
-        models_dict = ModelDirectory.models[mode][pipeline]
+        if pipeline in ModelDirectory.models[mode]:
+            models_dict = ModelDirectory.models[mode][pipeline]
+        else:
+            models_dict = []
         models_with_same_name = [model_method for model_method in models_dict
                                  if _name_ok(model_name, model_method.method_spec)]
         return models_with_same_name if len(models_with_same_name) > 0 else None
