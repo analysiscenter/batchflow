@@ -1,13 +1,14 @@
 # Working with models
 
-A batch class might also include model definitions.
+A batch class might also include model methods.
 
-## Model definition
+## Model definition method
 A model definition method
 - is marked with a `@model` decorator
-- does not take any arguments (even `self`)
 - returns a model descriptor.
 
+There are two modes of model definitions:
+- static
 ```python
 class MyArrayBatch(ArrayBatch):
     ...
