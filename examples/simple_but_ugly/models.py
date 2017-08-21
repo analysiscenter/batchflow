@@ -130,7 +130,7 @@ sess.run(tf.global_variables_initializer())
 print("Start iterating...")
 t = time()
 t1 = t
-for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
+for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
@@ -139,6 +139,8 @@ print("Stop iterating:", time() - t)
 
 print(res.get_variable("loss history"))
 
+print(res.get_model_by_name("static_model"))
+
 res2 = (ds_data.pipeline()
                .init_variable("session", sess)
                .import_model("dynamic_model", res)
@@ -146,9 +148,12 @@ res2 = (ds_data.pipeline()
                .test_dynamic()
 )
 
-for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*5):
+for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
 
 print(res2.get_model_by_name("dynamic_model"))
+
+print(res2.get_model_by_name("static_model"))
+
