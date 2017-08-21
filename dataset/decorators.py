@@ -124,7 +124,7 @@ class ModelDirectory:
             raise ValueError("Model '%s' not found" % method_spec['name'])
 
     @staticmethod
-    def get_model_by_name(model_name, batch=None, pipeline=None, config=None):
+    def get_model_by_name(model_name, batch=None, pipeline=None):
         """ Return a model specification given its name
         Args:
             model_name: str - a name of the model
