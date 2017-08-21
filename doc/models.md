@@ -11,13 +11,14 @@ There are two modes of model definitions:
 - static
 - dynamic
 
-Static model is compiled at a class compilation time, so even before any other code is run.
-As a result, it has no access to any variable or code outside itself.
+A static model is compiled at a class compilation time, so even before any other code is run.
+As a result, it has no access to any variable or code outside itself even to `self` argument.
 
-Dynamic model is compiled each time a pipeline is run, when some action requests a model descriptor.
+A dynamic model is compiled each time a pipeline is run, when some action requests a model descriptor.
+As a result it has access to everything else (including a `self` argument) thus allowing to build models adapting to shapes and data sizes.
 
 ```python
-class MyArrayBatch(ArrayBatch):
+class MyBatch(Batch):
     ...
     @model(mode='static')
     def basic_model():
@@ -48,14 +49,14 @@ or any other model specification you need.
 
 Later you will get back this descriptor in a model-based actions method. So you have to include in it everything you need to train and evaulate the model.
 
-Important notes:  
+**Important notes:**  
 You should never call model definition methods. They are called internally.
 
 ## Model-based actions
 After a model is defined, you might use it to train, evaluate or predict.
 
 ```python
-class MyArrayBatch(ArrayBatch):
+class MyBatch(Batch):
     ...
     @action(model='basic_model')
     def train_model(self, model_spec, session):
@@ -65,7 +66,7 @@ class MyArrayBatch(ArrayBatch):
 ```
 You add to an `@action` decorator an argument `model` with a model definition method name.
 
-Train method might be added to a pipeline:
+A train method might be added to a pipeline:
 ```python
 full_workflow = my_dataset.p
                           .load('/some/path')
@@ -77,10 +78,11 @@ You do not need to pass a model into this action. The model is saved in an inter
 
 You might have several actions based on the very same model.
 ```python
-class MyArrayBatch(ArrayBatch):
+class MyBatch(Batch):
     ...
     @action(model='basic_model')
     def train_model(self, model_spec):
+        session = self.pipeline.get_variable("session")
         ...
 
     @action(model='basic_model')
@@ -96,8 +98,26 @@ full_workflow = my_dataset.p
                           .evaluate_model()
 ```
 
+You don't need to write train and test methods for every model as there is a convenient `get_model_by_name` function:
+```python
+class MyBatch(Batch):
+    ...
+    @action
+    def train_model(self, model_name):
+        model_spec = self.get_model_by_name(model_name)
+        ...
+
+my_pipeline = my_dataset.p
+                 .one_action()
+                 .another_action()
+                 .train_model("vgg19")
+                 .train_model("resnet50")
+```
+
+
+
 ## Parallel training
-If you [prefetch](prefetch.md) with actions based on not-thread-safe models you might encounter that your model hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock can be added to an action to allow for only one concurrent execution:
+If you [prefetch](prefetch.md) with actions based on non-thread-safe models you might encounter that your model hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock can be added to an action to allow for only one concurrent execution:
 ```python
 class MyBatch:
     ...
