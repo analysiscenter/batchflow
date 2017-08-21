@@ -48,7 +48,8 @@ class ModelDirectory:
             dynamic_model_methods = ModelDirectory.find_model_method_by_name(model_name, pipeline) or []
         all_model_methods = static_model_methods + dynamic_model_methods
 
-        method_specs = [model_method.method_spec for model_method in all_model_methods if hasattr(model_method, 'method_spec')]
+        method_specs = [model_method.method_spec for model_method in all_model_methods
+                        if hasattr(model_method, 'method_spec')]
         model_specs = [ModelDirectory.get_model(method_spec) for method_spec in method_specs]
         return model_specs if not only_first else model_specs[0] if len(model_specs) > 0 else None
 
@@ -119,20 +120,20 @@ class ModelDirectory:
         """
         if batch is None:
             # this can return a list of model specs or None if not found
-            model = ModelDirectory.find_model_by_name(model_name, pipeline)
+            model_spec = ModelDirectory.find_model_by_name(model_name, pipeline)
 
-            if model is None:
+            if model_spec is None:
                 if pipeline is None:
                     raise ValueError("Model '%s' not found" % model_name)
                 else:
-                    raise ValueError("Model '%s' not found in the pipeline" % (model_name, pipeline))
+                    raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
         else:
             if not hasattr(batch, model_name):
-                raise ValueError("Model '%s' not found in the batch class"
+                raise ValueError("Model '%s' not found in the batch class %s"
                                  % (model_name, batch.__class__.__name__))
             method = getattr(batch, model_name)
-            model = method()
-        return model
+            model_spec = method()
+        return model_spec
 
 
 def model(mode='static', engine='tf'):

@@ -145,7 +145,7 @@ my_pipeline = my_dataset.p
                 .some_action()
                 .another_action()
 ```
-Every call to `dataset.pipeline()` or `dataset.p` will create a new pipeline.
+Every call to `dataset.pipeline()` or `dataset.p` creates a new pipeline.
 
 ## Running pipelines
 There are 4 ways to execute a pipeline.
