@@ -55,9 +55,9 @@ class Dataset(Baseset):
         return self.batch_class(batch_ix, preloaded=self.preloaded, **kwargs)
 
 
-    def pipeline(self):
+    def pipeline(self, config=None):
         """ Start a new data processing workflow """
-        return Pipeline(self)
+        return Pipeline(self, config=config)
 
     @property
     def p(self):

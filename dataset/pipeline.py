@@ -34,11 +34,13 @@ class Pipeline:
     def __init__(self, dataset=None, config=None, pipeline=None, proba=None, repeat=None):
         if pipeline is None:
             self.dataset = dataset
+            self.config = config
             self._action_list = []
             self._variables = None
             self.delete_all_variables()
         else:
             self.dataset = pipeline.dataset
+            self.config = pipeline.config
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
             self._variables = pipeline._variables         # pylint: disable=protected-access
             if self.num_actions == 1:
@@ -49,7 +51,6 @@ class Pipeline:
                     if self.get_last_action_proba() is None:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
 
-        self.config = config
         self._variables_lock = threading.Lock()
         self._tf_session = None
 
