@@ -52,7 +52,7 @@ class ModelDirectory:
                         if hasattr(model_method, 'method_spec')]
         model_specs = [ModelDirectory.get_model(method_spec) for method_spec in method_specs]
 
-        if len(model_spec) == 0:
+        if len(model_specs) == 0:
             return None
         elif len(model_specs) == 1 or only_first:
             return model_specs[0]
