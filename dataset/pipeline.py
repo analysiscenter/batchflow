@@ -213,17 +213,19 @@ class Pipeline:
         """
         return name in self._variables
 
-    def get_variable(self, name, default=None):
+    def get_variable(self, name, default=None, init=None, init_on_each_run=False):
         """ Return a variable value
-        If the variable does not exists, it will be created and initialized with the default value
+        If the variable does not exists, it will be created and initialized (see `init_variable` below)
         Args:
             name: string - a name of the variable
             default - a value for the variable if it does not exists
+            init: callable - a function which returns the default value
+            init_on_each_run: bool - whether to initialize the variable before each run / gen_batch
         Return:
             a value of the variable
         """
         if name not in self._variables:
-            self.init_variable(name, default)
+            self.init_variable(name, default, init, init_on_each_run)
         var = self._variables.get(name)
         return var.get('value', default)
 
