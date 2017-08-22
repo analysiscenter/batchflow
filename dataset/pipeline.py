@@ -38,6 +38,7 @@ class Pipeline:
             self._action_list = []
             self._variables = None
             self.delete_all_variables()
+            self._lazy_run = None
         else:
             self.dataset = pipeline.dataset
             self.config = pipeline.config
@@ -50,6 +51,7 @@ class Pipeline:
                 elif repeat is not None:
                     if self.get_last_action_proba() is None:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
+            self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
 
         self._variables_lock = threading.Lock()
         self._tf_session = None
@@ -63,7 +65,6 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
 
-        self._lazy_run = None
         self.reset_iter()
 
 
