@@ -231,6 +231,7 @@ class MyBatch(Batch):
         var_value = self.pipeline.get_variable("variable_name")
         ...
 ```
+If a variable does not exist, it will be created and initialized. For a flexible initialization `default`, `init` and `init_on_each_run` might be passed to `get_variable()`.
 
 To change a variable value call `set_variable`:
 ```python
@@ -455,8 +456,8 @@ Splits and merges batches coming from the previous actions to form a batch of a 
 ### `init_variable(name, default=None, init=None, init_on_each_run=False)`
 Creates a variable with the default value or init function.
 
-### `get_variable(name)`
-Returns a value of the variable with a given name.
+### `get_variable(name, default=None, init=None, init_on_each_run=False)`
+Returns a value of the variable with a given name (creates a variable if it does not exist)
 
 ### `set_variable(name, value)`
 Sets a new value for a variable.
