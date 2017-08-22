@@ -361,8 +361,10 @@ class Pipeline:
     def _exec_one_action(self, batch, action, args, kwargs):
         if self._needs_exec(action):
             for _ in range(action['repeat'] or 1):
+                batch.pipeline = self
                 action_method, _ = self._get_action_method(batch, action['name'])
                 batch = action_method(*args, **kwargs)
+                batch.pipeline = self
         return batch
 
     def _exec_nested_pipeline(self, batch, action):
