@@ -61,7 +61,7 @@ class ModelDirectory:
 
         method_specs = [model_method.method_spec for model_method in all_model_methods
                         if hasattr(model_method, 'method_spec')]
-        model_specs = [ModelDirectory.get_model(method_spec) for method_spec in method_specs]
+        model_specs = [ModelDirectory.get_model(method_spec, pipeline) for method_spec in method_specs]
 
         if len(model_specs) == 0:
             return None
@@ -86,7 +86,7 @@ class ModelDirectory:
         else:
             raise RuntimeError("Method %s is not decorated with @model" % model_name)
 
-        model_spec = ModelDirectory.get_model(method_spec)
+        model_spec = ModelDirectory.get_model(method_spec, from_pipeline)
         method_spec = {**method_spec, **dict(pipeline=to_pipeline)}
         ModelDirectory.add_model(method_spec, model_spec)
 
@@ -110,14 +110,15 @@ class ModelDirectory:
         ModelDirectory.models[mode][pipeline].pop(model_method, None)
 
     @staticmethod
-    def get_model(method_spec):
+    def get_model(method_spec, pipeline=None):
         """ Return a model specification for a given model method
         Return:
             a model specification or a list of model specifications
         Raises:
             ValueError if a model has not been found
         """
-        mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        mode, model_method, _pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        pipeline = pipeline or _pipeline if mode == 'dynamic' else None
         if pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]:
             return ModelDirectory.models[mode][pipeline][model_method]
         else:
@@ -170,27 +171,24 @@ def model(mode='static', engine='tf'):
     def _model_decorator(method):
 
         _dynamic_model_lock = threading.Lock()
-        _method_spec = dict()
 
         def _get_method_spec(batch=None):
             pipeline = batch.pipeline if batch is not None else None
-            if len(_method_spec) == 0:
-                _method_spec.update(dict(mode=mode, engine=engine, method=method,
-                                         name=get_method_fullname(method), pipeline=pipeline))
-            return _method_spec
+            return dict(mode=mode, engine=engine, method=method,
+                        name=get_method_fullname(method), pipeline=pipeline)
 
-        def _add_model(model_spec):
-            ModelDirectory.add_model(_method_spec, model_spec)
+        def _add_model(method_spec, model_spec):
+            ModelDirectory.add_model(method_spec, model_spec)
 
         @functools.wraps(method)
         def _model_wrapper(self, *args, **kwargs):
             if mode == 'static':
-                model_spec = ModelDirectory.get_model(_method_spec)
+                model_spec = ModelDirectory.get_model(_get_method_spec())
             elif mode == 'dynamic':
-                _get_method_spec(self)
-                if not ModelDirectory.model_exists(_method_spec):
+                method_spec = _get_method_spec(self)
+                if not ModelDirectory.model_exists(method_spec):
                     with _dynamic_model_lock:
-                        if not ModelDirectory.model_exists(_method_spec):
+                        if not ModelDirectory.model_exists(method_spec):
 
                             config = None
                             if self.pipeline is not None:
@@ -200,8 +198,8 @@ def model(mode='static', engine='tf'):
                                     model_names = [model_key for model_key in full_config
                                                    if ModelDirectory.equal_names(model_key, full_model_name)]
                                     if len(model_names) > 1:
-                                        raise ValueError("Ambigous config contains several keys" +
-                                                         " with similar names", model_names)
+                                        raise ValueError("Ambigous config contains several keys " +
+                                                         "with similar names", model_names)
                                     if len(model_names) == 1:
                                         config = full_config[model_names[0]]
 
@@ -210,19 +208,19 @@ def model(mode='static', engine='tf'):
                             else:
                                 model_spec = method(self, *args, **kwargs, config=config)
 
-                            _add_model(model_spec)
-                model_spec = ModelDirectory.get_model(_method_spec)
+                            _add_model(method_spec, model_spec)
+                model_spec = ModelDirectory.get_model(method_spec, self.pipeline)
             else:
                 raise ValueError("Unknown mode", mode)
             return model_spec
 
+        method_spec = _get_method_spec()
         if mode == 'static':
-            _get_method_spec()
             model_spec = method()
-            _add_model(model_spec)
+            _add_model(method_spec, model_spec)
         _model_wrapper.model_method = method
-        _model_wrapper.method_spec = _method_spec
-        method.method_spec = _method_spec
+        _model_wrapper.method_spec = method_spec
+        method.method_spec = method_spec
         return _model_wrapper
     return _model_decorator
 

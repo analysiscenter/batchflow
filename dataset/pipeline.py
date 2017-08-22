@@ -360,7 +360,6 @@ class Pipeline:
         if self._needs_exec(action):
             for _ in range(action['repeat'] or 1):
                 action_method, _ = self._get_action_method(batch, action['name'])
-                batch.pipeline = self
                 batch = action_method(*args, **kwargs)
         return batch
 
@@ -417,7 +416,10 @@ class Pipeline:
     def _exec(self, batch, new_loop=False):
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
-        return self._exec_all_actions(batch)
+        batch.pipeline = self
+        batch_res = self._exec_all_actions(batch)
+        batch_res.pipeline = self
+        return batch_res
 
     def import_model(self, model_name, pipeline):
         """ Import a model from another pipeline
