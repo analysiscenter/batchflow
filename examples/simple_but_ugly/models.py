@@ -84,8 +84,8 @@ class MyArrayBatch(ArrayBatch):
 
     @action
     def test_dynamic(self):
-        model_spec = self.get_model_by_name("dynamic_model")
         print("========== test dynamic =============")
+        model_spec = self.get_model_by_name("dynamic_model")
         input_data, model_output = model_spec
         session = self.pipeline.get_variable("session")
         res = session.run(model_output, feed_dict={input_data: self.data})
@@ -146,11 +146,14 @@ print(res.get_model_by_name("static_model"))
 
 res2 = (ds_data.pipeline()
                .init_variable("session", sess)
-               .import_model("dynamic_model", res)
+               #.import_model("dynamic_model", res)
                .load(data)
                .test_dynamic()
 )
 
+print("--------------------------------------------")
+print("============== start test ==================")
+print(res2)
 for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
