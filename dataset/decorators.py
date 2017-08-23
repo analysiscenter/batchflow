@@ -79,7 +79,7 @@ class ModelDirectory:
             return model_specs
 
     @staticmethod
-    def init_model(model_name, pipeline, batch=None):
+    def init_model(model_name, pipeline, config=None):
         """ Initialize a static model in a pipeline """
         model_methods = ModelDirectory.find_model_method_by_name(model_name, None, ['static'])
         if model_methods is None:
@@ -87,7 +87,7 @@ class ModelDirectory:
         if len(model_methods) > 1:
             raise ValueError("There are several models with the name '%s' in the pipeline %s" % (model_name, pipeline))
         dummy_batch = _DummyBatch(pipeline)
-        _ = model_methods[0](dummy_batch)
+        _ = model_methods[0](dummy_batch, config)
 
     @staticmethod
     def import_model(model_name, from_pipeline, to_pipeline):
@@ -130,8 +130,8 @@ class ModelDirectory:
                 mode_models = ModelDirectory.models[mode][pipeline]
                 model_dicts.append(mode_models)
         for mode_models in model_dicts:
-            for model in mode_models:
-                method_spec = {**model.method_spec, **dict(pipeline=pipeline)}
+            for one_model in mode_models:
+                method_spec = {**one_model.method_spec, **dict(pipeline=pipeline)}
                 ModelDirectory.del_model(method_spec)
 
     @staticmethod
@@ -210,7 +210,7 @@ def model(mode='global', engine='tf'):
             ModelDirectory.add_model(method_spec, model_spec)
 
         @functools.wraps(method)
-        def _model_wrapper(self, *args, **kwargs):
+        def _model_wrapper(self, config=None):
             if mode == 'global':
                 model_spec = ModelDirectory.get_model(_get_method_spec())
             elif mode in ['static', 'dynamic']:
@@ -221,7 +221,6 @@ def model(mode='global', engine='tf'):
                     with _pipeline_model_lock:
                         if not ModelDirectory.model_exists(method_spec):
 
-                            config = None
                             if _pipeline is not None:
                                 full_config = _pipeline.config
                                 full_model_name = get_method_fullname(method)
@@ -232,12 +231,11 @@ def model(mode='global', engine='tf'):
                                         raise ValueError("Ambigous config contains several keys " +
                                                          "with similar names", model_names)
                                     if len(model_names) == 1:
-                                        config = full_config[model_names[0]]
+                                        config = {**full_config[model_names[0]], **config}
 
-                            if mode == 'static':
-                                model_spec = method(_pipeline, config=config)
-                            else:
-                                model_spec = method(self, config=config)
+                            args = (_pipeline,) if mode == 'static' else (self,)
+                            args = args if config is None else args + (config,)
+                            model_spec = method(*args)
 
                             _add_model(method_spec, model_spec)
                 model_spec = ModelDirectory.get_model(method_spec, _pipeline)

@@ -34,7 +34,7 @@ class MyArrayBatch(ArrayBatch):
         return self
 
     @model(mode='static')
-    def static_model(pipeline, config):
+    def static_model(pipeline):
         print("Building a static model")
         with pipeline.get_variable("session").graph.as_default():
             with tf.variable_scope("static"):

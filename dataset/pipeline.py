@@ -445,7 +445,7 @@ class Pipeline:
             model_name: string - a name of the model to import
             config - configurations parameters
         """
-        ModelDirectory.init_model(model_name, pipeline=self, batch=None)
+        ModelDirectory.init_model(model_name, pipeline=self, config=config)
         return self
         #self._action_list.append({'name': INIT_MODEL_ID, 'model_name': model_name, 'config': config})
         #return self.append_action()
