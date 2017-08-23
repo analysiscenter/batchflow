@@ -56,9 +56,8 @@ class Pipeline:
             self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
 
             if pipeline in ModelDirectory.models['static']:
-                static_models = [method.method_spec['name'] for method in ModelDirectory.models['static'][pipeline]]
-                for model in static_models:
-                    ModelDirectory.import_model(model, pipeline, self)
+                for each_model in ModelDirectory.models['static'][pipeline]:
+                    ModelDirectory.import_model(each_model, pipeline, self)
 
         self._variables_lock = threading.Lock()
         self._tf_session = None
