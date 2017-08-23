@@ -12,7 +12,7 @@ from dataset import *
 
 
 # Example of custome Batch class which defines some actions
-class MyArrayBatch(ArrayBatch):
+class MyBatch(Batch):
     def __init__(self, index, *args, **kwargs):
         super().__init__(index)
 
@@ -69,7 +69,7 @@ class MyArrayBatch(ArrayBatch):
     @action(use_lock='__train_dynamic')
     def train_dynamic(self):
         print("inside train")
-        model_spec = self.get_model_by_name("dynamic_model")
+        model_spec = self.get_model_by_name(MyBatch.dynamic_model)
         #print("        action for a dynamic model", model_spec)
         session = self.pipeline.get_variable("session")
         with self.pipeline.get_variable("print lock"):
@@ -104,7 +104,7 @@ def pd_data():
     ix = np.arange(K)
     data = np.arange(K * 3).reshape(K, -1).astype("float32")
     dsindex = DatasetIndex(ix)
-    ds = Dataset(index=dsindex, batch_class=MyArrayBatch)
+    ds = Dataset(index=dsindex, batch_class=MyBatch)
     return ds, data.copy()
 
 
@@ -122,7 +122,7 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 template_pp = (Pipeline()
                 .init_variable("session", init=tf.Session)
                 .init_variable("loss history", init=list, init_on_each_run=True)
-                .init_model('static_model')
+                .init_model(MyBatch.static_model)
 )
 
 # Create another template
@@ -132,7 +132,7 @@ pp2 = (template_pp
         .load(data)
         #.train_global()
         .train_static()
-        #.train_dynamic()
+        .train_dynamic()
 )
 
 # Create another template
