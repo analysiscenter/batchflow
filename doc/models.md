@@ -8,35 +8,52 @@ A model definition method
 - returns a model descriptor.
 
 There are two modes of model definitions:
+- global
 - static
 - dynamic
 
-A static model is compiled at a class compilation time, so even before any other code is run.
+A global model is compiled at a class compilation time, so even before any other code is run.
 As a result, it has no access to any variable or code outside itself even to `self` argument.
 
+A static model exists within a pipeline and is compiled when `init_model(...)` is added to the pipeline (so before the pipeline is run).
+As a result, it has an access to the pipeline and its config.
+
 A dynamic model exists within a pipeline and is compiled each time the pipeline is run, when some action requests a model descriptor.
-As a result it has access to everything else (including a batch `self` argument) thus allowing to build models adapting to shapes and data sizes.
+Consequently, it has access to everything else (including a batch `self` argument) thus allowing to build models adapting to shapes and data sizes.
 
 ```python
 class MyBatch(Batch):
     ...
-    @model(mode='static')
+    @model(mode='global')
     def basic_model():
-        input_data = tf.placeholder('float', [None, 28])
+        input_data = tf.placeholder('float', [None, 28, 28, 1])
+        output_data = tf.placeholder('float', [10])
         model_output = ...
-        cost = tf.reduce_mean(tf.square(data - model_output))
+        cost = tf.reduce_mean(tf.square(output_data - model_output))
         optimizer = tf.train.AdamOptimizer().minimize(cost)
         return [input_data, optimizer]
 
+    @model(mode='static')
+    def static_model(pipeline, config=None):
+        with pipeline.get_variable("session").graph.as_default():
+            with tf.variable_scope("static"):
+                input_data = tf.placeholder('float', [None, 28, 28, 1])
+                output_data = tf.placeholder('float', [10])
+                model_output = ...
+                cost = tf.reduce_mean(tf.square(output_data - model_output))
+                optimizer = tf.train.AdamOptimizer().minimize(cost)
+        return [input_data, optimizer]
+
     @model(mode='dynamic')
-    def advanced_model(self):
+    def advanced_model(self, config=None):
         with tf.Graph().as_default():
-          input_data = tf.placeholder('float', (None,) + self.images.shape])
-          model_output = ...
-          cost = tf.reduce_mean(tf.square(data - model_output))
-          optimizer = tf.train.AdamOptimizer().minimize(cost)
-          session = tf.Session()
-          session.run(tf.global_variable_initializer())
+            input_data = tf.placeholder('float', (None,) + self.images.shape])
+            output_data = tf.placeholder('float', [10])
+            model_output = ...
+            cost = tf.reduce_mean(tf.square(output_data - model_output))
+            optimizer = tf.train.AdamOptimizer().minimize(cost)
+            session = tf.Session()
+            session.run(tf.global_variable_initializer())
         return dict(session=session, input_data=input_data, train_step=optimizer)
 ```
 It is for you to decide what the model descriptor is. It might be a list, dict or any other data sctructure, containing:
@@ -114,9 +131,27 @@ my_pipeline = my_dataset.p
                  .train_model("resnet50")
 ```
 
+## Static model initialization
+Static models exist within pipelines, but before the pipeline is run. As a consequence, you should explicitly declare which static models you need in the pipeline.
+```python
+template_pipeline = Pipeline().
+                       .init_model("my_static_model")
+                       .prepocess()
+                       .normalize()
+```
+This is a template pipeline and it will never run. It is used as a building block for more complex pipelines.
+
+```python
+my_mnist_pipeline = (template_pipeline << mnist_dataset).run(BATCH_SIZE, n_epochs=10)
+my_cifar_pipeline = (template_pipeline << cifar_dataset).run(BATCH_SIZE, n_epochs=10)
+```
+`my_static_model` will be defined only once in the `init_model(...)`.
+But it will be used many times in the each children pipeline with different datasets.
+That is why static models do not have access to data shapes (since they may differ in differen datasets).
+
 
 ## Model import
-Dynamic models exist within pipelines. This is not a problem if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you train a model in one pipeline and later use it in an inference pipeline.
+Dynamic and static models exist within pipelines. This is not a problem if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you train a model in one pipeline and later use it in an inference pipeline.
 
 This can be easily achieved with a model import.
 
