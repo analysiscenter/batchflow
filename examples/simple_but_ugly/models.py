@@ -119,7 +119,7 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 
 
 # Create a template pipeline
-template_pp = (Pipeline()
+template_pp = (Pipeline(config=config)
                 .init_variable("session", init=tf.Session)
                 .init_variable("loss history", init=list, init_on_each_run=True)
                 .init_model(MyBatch.static_model)
