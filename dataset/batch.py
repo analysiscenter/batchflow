@@ -327,10 +327,6 @@ class Batch(BaseBatch):
         """ Return a model specification given its name """
         return ModelDirectory.get_model_by_name(model_name, batch=self)
 
-    def get_all_model_names(self):
-        """ Return all model names in the batch class """
-        return ModelDirectory.get_all_model_names(self)
-
     def get_errors(self, all_res):
         """ Return a list of errors from a parallel action """
         all_errors = [error for error in all_res if isinstance(error, Exception)]
