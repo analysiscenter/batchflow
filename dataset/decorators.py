@@ -44,7 +44,8 @@ class ModelDirectory:
     @staticmethod
     def equal_names(model_name, model_ref):
         """ Check if model_name equals a full model name stored in model_ref """
-        return model_ref[-len(model_name):] == model_name
+        name = model_name if not callable(model_name) else get_method_fullname(model_name)
+        return model_ref[-len(name):] == name
 
     @staticmethod
     def find_model_method_by_name(model_name, pipeline=None, modes=None):
@@ -155,6 +156,7 @@ class ModelDirectory:
         """ Return a model specification given its name
         Args:
             model_name: str - a name of the model
+                        callable - a method or a function with a model definition
             batch - an instance of the batch class where to look for a model or None
             pipeline - a pipeline where to look for a model or None
         Return:
@@ -172,10 +174,13 @@ class ModelDirectory:
                 else:
                     raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
         else:
-            if not hasattr(batch, model_name):
-                raise ValueError("Model '%s' not found in the batch class %s"
-                                 % (model_name, batch.__class__.__name__))
-            method = getattr(batch, model_name)
+            if callable(model_name):
+                method = functools.partial(model_name, batch)
+            else:
+                if not hasattr(batch, model_name):
+                    raise ValueError("Model '%s' not found in the batch class %s"
+                                     % (model_name, batch.__class__.__name__))
+                method = getattr(batch, model_name)
             model_spec = method()
         return model_spec
 
