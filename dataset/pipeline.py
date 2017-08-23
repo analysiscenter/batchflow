@@ -23,11 +23,13 @@ JOIN_ID = '#_join'
 MERGE_ID = '#_merge'
 REBATCH_ID = '#_rebatch'
 IMPORT_MODEL_ID = '#_import_model'
+INIT_MODEL_ID = '#_init_model'
 
 
 def mult_option(a, b):
     """ Multiply even if any arg is None """
     return a * b if a is not None and b is not None else a if a is not None else b
+
 
 class Pipeline:
     """ Pipeline """
@@ -53,6 +55,11 @@ class Pipeline:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
             self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
 
+            if pipeline in ModelDirectory.models['static']:
+                static_models = [method.method_spec['name'] for method in ModelDirectory.models['static'][pipeline]]
+                for model in static_models:
+                    ModelDirectory.import_model(model, pipeline, self)
+
         self._variables_lock = threading.Lock()
         self._tf_session = None
 
@@ -67,6 +74,10 @@ class Pipeline:
 
         self.reset_iter()
 
+    def __del__(self):
+        """ Free pipeline resources """
+        if ModelDirectory is not None:
+            ModelDirectory.delete_all_models(self)
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -398,6 +409,9 @@ class Pipeline:
                 batch = self._exec_nested_pipeline(batch, _action)
             elif _action['name'] == IMPORT_MODEL_ID:
                 ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
+            elif _action['name'] == INIT_MODEL_ID:
+                # ModelDirectory.init_model(_action['model_name'], pipeline=self, batch=batch)
+                pass
             else:
                 if join_batches is None:
                     _action_args = _action['args']
@@ -424,6 +438,17 @@ class Pipeline:
         batch_res = self._exec_all_actions(batch)
         batch_res.pipeline = self
         return batch_res
+
+    def init_model(self, model_name, config=None):
+        """ Initialize a static model
+        Args:
+            model_name: string - a name of the model to import
+            config - configurations parameters
+        """
+        ModelDirectory.init_model(model_name, pipeline=self, batch=None)
+        return self
+        #self._action_list.append({'name': INIT_MODEL_ID, 'model_name': model_name, 'config': config})
+        #return self.append_action()
 
     def import_model(self, model_name, pipeline):
         """ Import a model from another pipeline
@@ -618,8 +643,6 @@ class Pipeline:
 
     def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """ Generate batches """
-        self.reset_iter()
-
         target = kwargs.pop('target', 'threads')
         self._tf_session = kwargs.pop('tf_session', None)
 

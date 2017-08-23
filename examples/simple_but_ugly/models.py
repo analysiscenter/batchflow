@@ -16,17 +16,17 @@ class MyArrayBatch(ArrayBatch):
     def __init__(self, index, *args, **kwargs):
         super().__init__(index)
 
-    @model(mode='static')
-    def static_model():
-        print("Building a static model")
-        with tf.variable_scope("static"):
+    @model(mode='global')
+    def global_model():
+        print("Building a global model")
+        with tf.variable_scope("global"):
             input_data = tf.placeholder('float', [None, 3])
             model_output = tf.square(tf.reduce_sum(input_data))
         return [input_data, model_output]
 
-    @action(model='static_model')
-    def train_static(self, model_spec):
-        #print("        action for a static model", model_spec)
+    @action(model='global_model')
+    def train_global(self, model_spec):
+        print("        action for a global model", model_spec)
         input_data, model_output = model_spec
         session = self.pipeline.get_variable("session")
         res = session.run(model_output, feed_dict={input_data: self.data})
@@ -34,16 +34,18 @@ class MyArrayBatch(ArrayBatch):
         return self
 
     @model(mode='static')
-    def static_model2():
-        print("Building a static model 2")
-        with tf.variable_scope("static2"):
-            input_data = tf.placeholder('float', [None, 3])
-            model_output = tf.square(tf.reduce_sum(input_data))
+    def static_model(pipeline, config):
+        print("Building a static model")
+        with pipeline.get_variable("session").graph.as_default():
+            with tf.variable_scope("static"):
+                input_data = tf.placeholder('float', [None, 3])
+                model_output = tf.square(tf.reduce_sum(input_data))
+        print("Static model is ready")
         return [input_data, model_output]
 
-    @action(model='static_model2')
-    def train_static2(self, model_spec):
-        #print("        action for a static model 2", model_spec)
+    @action(model='static_model')
+    def train_static(self, model_spec):
+        print("        action for a static model", model_spec)
         input_data, model_output = model_spec
         session = self.pipeline.get_variable("session")
         res = session.run(model_output, feed_dict={input_data: self.data})
@@ -111,23 +113,31 @@ ds_data, data = pd_data()
 
 # Create tf session
 sess = tf.Session()
+sess.run(tf.global_variables_initializer())
 
 config = dict(dynamic_model=dict(arg1=0, arg2=0))
 
-# Create pipeline
-res = (ds_data.pipeline(config)
-        .init_variable("session", sess)
-        .init_variable("loss history", init=list, init_on_each_run=True)
-        .init_variable("print lock", init=threading.Lock)
-        .load(data)
-        #.train_static()
-        #.train_static2()
-        .train_dynamic()
+
+# Create a template pipeline
+template_pp = (Pipeline()
+                .init_variable("session", init=tf.Session)
+                .init_variable("loss history", init=list, init_on_each_run=True)
+                .init_model('static_model')
 )
 
+# Create another template
+pp2 = (template_pp
+        .init_variable("session", sess)
+        .init_variable("print lock", init=threading.Lock)
+        .load(data)
+        #.train_global()
+        .train_static()
+        #.train_dynamic()
+)
 
+# Create another template
+res = pp2 << ds_data
 
-sess.run(tf.global_variables_initializer())
 
 
 print("Start iterating...")
@@ -142,13 +152,13 @@ print("Stop iterating:", time() - t)
 
 print(res.get_variable("loss history"))
 
-print(res.get_model_by_name("static_model"))
+print(res.get_model_by_name("global_model"))
 
 res2 = (ds_data.pipeline()
                .init_variable("session", sess)
                #.import_model("dynamic_model", res)
                .load(data)
-               .test_dynamic()
+               #.test_dynamic()
 )
 
 print("--------------------------------------------")
@@ -159,7 +169,7 @@ for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
 
-print(res2.get_model_by_name("dynamic_model"))
+#print(res2.get_model_by_name("dynamic_model"))
 
-print(res2.get_model_by_name("static_model"))
+print(res2.get_model_by_name("global_model"))
 
