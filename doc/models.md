@@ -147,7 +147,7 @@ my_cifar_pipeline = (template_pipeline << cifar_dataset).run(BATCH_SIZE, n_epoch
 ```
 `my_static_model` will be defined only once in the `init_model(...)`.
 But it will be used many times in the each children pipeline with different datasets.
-That is why static models do not have access to data shapes (since they may differ in differen datasets).
+That is why static models do not have access to data shapes (since they may differ in different datasets).
 
 
 ## Model import

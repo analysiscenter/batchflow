@@ -7,7 +7,7 @@
 1. [Running pipelines](#running-pipelines)
 1. [Pipeline variables](#pipeline-variables)
 1. [Join and merge](#join-and-merge)
-1. [Model import](#model-import)
+1. [Models](#models)
 1. [Public API](#public-api)
 
 
@@ -370,8 +370,28 @@ images_pipeline = (images_dataset.p
 Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works properly for your specific data and write your own `merge` if needed.
 
 
-## Shared models
-Dynamic models exist within pipelines. This is not a problem if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you might train a model in one pipeline and later use it in an inference pipeline.
+## Models
+
+### Model import
+Static models exist within pipelines, but before the pipeline is run. As a consequence, you should explicitly declare which static models you need in the pipeline.
+```python
+template_pipeline = Pipeline().
+                       .init_model("my_static_model")
+                       .prepocess()
+                       .normalize()
+```
+This is a template pipeline and it will never run. It is used as a building block for more complex pipelines.
+
+```python
+my_mnist_pipeline = (template_pipeline << mnist_dataset).run(BATCH_SIZE, n_epochs=10)
+my_cifar_pipeline = (template_pipeline << cifar_dataset).run(BATCH_SIZE, n_epochs=10)
+```
+`my_static_model` will be defined only once in the `init_model(...)`.
+But it will be used many times in the each children pipeline with different datasets.
+That is why static models do not have access to data shapes (since they may differ in different datasets).
+
+### Shared models
+Dynamic and static models exist within pipelines. This is not a problem if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you might train a model in one pipeline and later use it in an inference pipeline.
 
 This can be easily achieved with a model import.
 
@@ -452,6 +472,12 @@ Merges batches from several sources (datasets or pipelines).
 
 ### `rebatch(batch_size)`
 Splits and merges batches coming from the previous actions to form a batch of a given size.
+
+### `init_model(model_name, config=None)`
+Initialize a static model by calling [a model method](model.md)
+
+### `import_model(model_name, from_pipeline)`
+Import a static or dynamic model from another pipeline.
 
 ### `init_variable(name, default=None, init=None, init_on_each_run=False)`
 Creates a variable with the default value or init function.
