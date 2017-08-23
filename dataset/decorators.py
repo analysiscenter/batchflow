@@ -236,7 +236,9 @@ def model(mode='global', engine='tf'):
                                         raise ValueError("Ambigous config contains several keys " +
                                                          "with similar names", model_names)
                                     if len(model_names) == 1:
-                                        config = {**full_config[model_names[0]], **config}
+                                        config_p = full_config[model_names[0]] or dict()
+                                        config_a = config or dict()
+                                        config = {**config_p, **config_a}
 
                             args = (_pipeline,) if mode == 'static' else (self,)
                             args = args if config is None else args + (config,)
