@@ -45,10 +45,14 @@ class MyBatch(Batch):
 
     @action(model='static_model')
     def train_static(self, model_spec):
-        print("        action for a static model", model_spec)
+        t1 = time()
+        print("\n ================= train static ====================")
         input_data, model_output = model_spec
         session = self.pipeline.get_variable("session")
+        t = time()
         res = session.run(model_output, feed_dict={input_data: self.data})
+        te = time()
+        print(te - t, te - t1)
         #print("        ", int(res))
         return self
 
@@ -90,7 +94,9 @@ class MyBatch(Batch):
         model_spec = self.get_model_by_name("dynamic_model")
         input_data, model_output = model_spec
         session = self.pipeline.get_variable("session")
+        t = time()
         res = session.run(model_output, feed_dict={input_data: self.data})
+        print(time() - t)
         print(int(res), self.data.sum() ** 2)
         return self
 
@@ -122,7 +128,7 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 template_pp = (Pipeline(config=config)
                 .init_variable("session", init=tf.Session)
                 .init_variable("loss history", init=list, init_on_each_run=True)
-                .init_model(MyBatch.static_model)
+                .init_model("static_model")
 )
 
 # Create another template
@@ -133,17 +139,23 @@ pp2 = (template_pp
         #.train_global()
         .train_static()
         .train_dynamic()
+        .run(K, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 
 # Create another template
-res = pp2 << ds_data
+t = time()
+#res = (pp2 << ds_data).run()
+print(time() - t)
 
-
+t = time()
+res = (pp2 << ds_data).run()
+print(time() - t)
 
 print("Start iterating...")
+res = pp2 << ds_data
 t = time()
 t1 = t
-for batch in res.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
+for batch in res.gen_batch(K, n_epochs=1, drop_last=True, prefetch=Q*0):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
@@ -153,6 +165,8 @@ print("Stop iterating:", time() - t)
 print(res.get_variable("loss history"))
 
 print(res.get_model_by_name("global_model"))
+
+print(res.get_model_by_name("dynamic_model"))
 
 res2 = (ds_data.pipeline()
                .init_variable("session", sess)
@@ -171,5 +185,5 @@ for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
 
 #print(res2.get_model_by_name("dynamic_model"))
 
-print(res2.get_model_by_name("global_model"))
+print(res2.get_model_by_name("dynamic_model"))
 

@@ -66,7 +66,7 @@ class ModelDirectory:
     @staticmethod
     def find_model_by_name(model_name, pipeline=None, only_first=False, modes=None):
         """ Search a model by its name """
-        all_model_methods = ModelDirectory.find_model_method_by_name(model_name, modes=modes) or []
+        all_model_methods = ModelDirectory.find_model_method_by_name(model_name, pipeline=pipeline, modes=modes) or []
 
         method_specs = [model_method.method_spec for model_method in all_model_methods
                         if hasattr(model_method, 'method_spec')]
