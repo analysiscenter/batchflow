@@ -404,7 +404,7 @@ class Pipeline:
                 batch = self._exec_nested_pipeline(batch, _action)
             elif _action['name'] == DEFINE_MODEL_ID:
                 ModelDirectory.define_model(_action['mode'], _action['model_class'], _action['model_name'],
-                                            pipeline=self, batch=batch)
+                                            pipeline=self)
             elif _action['name'] == IMPORT_MODEL_ID:
                 ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
             elif _action['name'] == INIT_MODEL_ID:
