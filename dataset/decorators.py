@@ -15,10 +15,6 @@ def _workers_count():
         cpu_count = os.cpu_count()
     return cpu_count * 4
 
-def get_method_fullname(method):
-    """ Return a method name in the format module_name.class_name.func_name """
-    return method.__module__ + '.' + method.__qualname__
-
 
 class _DummyBatch:
     """ A fake batch for static models """
@@ -33,18 +29,39 @@ class ModelDirectory:
     """ Directory of model definition methods in Batch classes """
     models = dict(zip(_MODEL_MODES, (dict() for _ in range(len(_MODEL_MODES)))))
 
+    external_models = dict()
+
+    def print():
+        for mode in ModelDirectory.models:
+            print(mode)
+            for pipeline in ModelDirectory.models[mode]:
+                print("  ", pipeline)
+                for model in ModelDirectory.models[mode][pipeline]:
+                    print("    ", model)
+
+    @staticmethod
+    def get_method_fullname(method):
+        """ Return a method name in the format module_name.class_name.func_name """
+        if callable(method):
+            return method.__module__ + '.' + method.__name__
+        else:
+            return method
+
     @staticmethod
     def add_model(method_spec, model_spec):
         """ Add a model specification into the model directory """
         mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
-        if pipeline not in ModelDirectory.models[mode]:
-            ModelDirectory.models[mode][pipeline] = dict()
-        ModelDirectory.models[mode][pipeline].update({model_method: model_spec})
+        if mode == 'global' or pipeline is None:
+            if pipeline not in ModelDirectory.models[mode]:
+                ModelDirectory.models[mode][pipeline] = dict()
+            ModelDirectory.models[mode][pipeline].update({model_method: model_spec})
+        else:
+            pipeline.models.update({model_method: model_spec})
 
     @staticmethod
     def equal_names(model_name, model_ref):
         """ Check if model_name equals a full model name stored in model_ref """
-        name = model_name if not callable(model_name) else get_method_fullname(model_name)
+        name = ModelDirectory.get_method_fullname(model_name)
         return model_ref[-len(name):] == name
 
     @staticmethod
@@ -53,10 +70,11 @@ class ModelDirectory:
         model_dicts = []
         modes = modes or _MODEL_MODES
         for mode in modes:
-            pipe = None if mode == 'global' else pipeline
-            if pipe in ModelDirectory.models[mode]:
-                mode_models = ModelDirectory.models[mode][pipe]
+            if None in ModelDirectory.models[mode]:
+                mode_models = ModelDirectory.models[mode][None]
                 model_dicts.append(mode_models)
+        if pipeline is not None:
+            model_dicts.append(pipeline.models)
         models_with_same_name = []
         for mode_models in model_dicts:
             models_with_same_name += [model_method for model_method in mode_models
@@ -80,6 +98,110 @@ class ModelDirectory:
             return model_specs
 
     @staticmethod
+    def model_exists(method_spec, pipeline=None):
+        """ Check if a model specification exists in the model directory """
+        mode, model_method, _pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        pipeline = pipeline or _pipeline
+        pipeline = None if mode == 'global' else pipeline
+        return pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline] or \
+               model_method in pipeline.models
+
+    @staticmethod
+    def get_model(method_spec, pipeline=None):
+        """ Return a model specification for a given model method
+        Return:
+            a model specification or a list of model specifications
+        Raises:
+            ValueError if a model has not been found
+        """
+        mode, model_method, _pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        pipeline = pipeline if pipeline is not None else _pipeline
+        pipeline = None if mode == 'global' else pipeline
+        if pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]:
+            return ModelDirectory.models[mode][pipeline][model_method]
+        elif model_method in pipeline.models:
+            return pipeline.models[model_method]
+        else:
+            raise ValueError("Model '%s' not found in the pipeline %s" % (method_spec['name'], pipeline))
+
+    @staticmethod
+    def get_model_by_name(model_name, batch=None, pipeline=None):
+        """ Return a model specification given its name
+        Args:
+            model_name: str - a name of the model
+                        callable - a method or a function with a model definition
+            batch - an instance of the batch class where to look for a model or None
+            pipeline - a pipeline where to look for a model or None
+        Return:
+            a model specification or a list of model specifications
+        Raises:
+            ValueError if a model has not been found
+        """
+        pipeline = pipeline or batch.pipeline
+        model_spec = ModelDirectory.find_model_by_name(model_name, pipeline)
+        if model_spec is None:
+            if batch is None:
+                # a global or static model
+                # this can return a list of model specs or None if not found
+                if pipeline is None:
+                    raise ValueError("Model '%s' not found" % model_name)
+                else:
+                    raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
+            else:
+                if callable(model_name):
+                    method = functools.partial(model_name, batch)
+                else:
+                    # if a model is defined in a model method within a batch class
+                    if hasattr(batch, model_name):
+                        method = getattr(batch, model_name)
+                    else:
+                        raise ValueError("Model '%s' not found in the batch class %s"
+                                         % (model_name, batch.__class__.__name__))
+                model_spec = method()
+        return model_spec
+
+    @staticmethod
+    def del_model(method_spec):
+        """ Remove a model specification from the model directory """
+        mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
+        ModelDirectory.models[mode][pipeline].pop(model_method, None)
+
+    @staticmethod
+    def delete_all_models(pipeline):
+        """ Remove all models created in a pipeline """
+        model_dicts = []
+        for mode in _MODEL_MODES[1:]:
+            if pipeline in ModelDirectory.models[mode]:
+                mode_models = ModelDirectory.models[mode][pipeline]
+                model_dicts.append(mode_models)
+        for mode_models in model_dicts:
+            for one_model in mode_models:
+                method_spec = {**one_model.method_spec, **dict(pipeline=pipeline)}
+                ModelDirectory.del_model(method_spec)
+
+    @staticmethod
+    def define_model(mode, model_class, model_name=None, pipeline=None, batch=None):
+        """ Define a model from a model class
+        Args:
+            mode: str - 'static' or 'dynamic'
+            pipeline - a pipeline for a model
+            model_class: class - a model class
+            model_name: string - a short name for the model
+        """
+        model_name = model_name or model_class.__name__
+
+        def _model_definition_maker():
+            def _model_definition_method(_, config=None):
+                return model_class(mode, config=config)
+            _model_definition_method.__name__ = model_name
+            return _model_definition_method
+
+        model_method = model(mode=mode)(_model_definition_maker())
+        if mode in ['static', 'dynamic']:
+            pipeline.models.update({model_method: dict()})
+        #print("    --- define model", model_method, pipeline, pipeline.models)
+
+    @staticmethod
     def init_model(model_name, pipeline, config=None):
         """ Initialize a static model in a pipeline """
         model_methods = ModelDirectory.find_model_method_by_name(model_name, None, ['static'])
@@ -87,6 +209,7 @@ class ModelDirectory:
             raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
         if len(model_methods) > 1:
             raise ValueError("There are several models with the name '%s' in the pipeline %s" % (model_name, pipeline))
+        # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
         dummy_batch = _DummyBatch(pipeline)
         _ = model_methods[0](dummy_batch, config)
 
@@ -110,81 +233,8 @@ class ModelDirectory:
         method_spec = {**method_spec, **dict(pipeline=to_pipeline)}
         ModelDirectory.add_model(method_spec, model_spec)
 
-    @staticmethod
-    def model_exists(method_spec):
-        """ Check if a model specification exists in the model directory """
-        mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
-        return pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]
 
-    @staticmethod
-    def del_model(method_spec):
-        """ Remove a model specification from the model directory """
-        mode, model_method, pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
-        ModelDirectory.models[mode][pipeline].pop(model_method, None)
-
-    @staticmethod
-    def delete_all_models(pipeline):
-        """ Remove all models created in a pipeline """
-        model_dicts = []
-        for mode in _MODEL_MODES[1:]:
-            if pipeline in ModelDirectory.models[mode]:
-                mode_models = ModelDirectory.models[mode][pipeline]
-                model_dicts.append(mode_models)
-        for mode_models in model_dicts:
-            for one_model in mode_models:
-                method_spec = {**one_model.method_spec, **dict(pipeline=pipeline)}
-                ModelDirectory.del_model(method_spec)
-
-    @staticmethod
-    def get_model(method_spec, pipeline=None):
-        """ Return a model specification for a given model method
-        Return:
-            a model specification or a list of model specifications
-        Raises:
-            ValueError if a model has not been found
-        """
-        mode, model_method, _pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
-        pipeline = pipeline if pipeline is not None else _pipeline
-        pipeline = None if mode == 'global' else pipeline
-        if pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline]:
-            return ModelDirectory.models[mode][pipeline][model_method]
-        else:
-            raise ValueError("Model '%s' not found in the pipeline %s" % (method_spec['name'], pipeline))
-
-    @staticmethod
-    def get_model_by_name(model_name, batch=None, pipeline=None):
-        """ Return a model specification given its name
-        Args:
-            model_name: str - a name of the model
-                        callable - a method or a function with a model definition
-            batch - an instance of the batch class where to look for a model or None
-            pipeline - a pipeline where to look for a model or None
-        Return:
-            a model specification or a list of model specifications
-        Raises:
-            ValueError if a model has not been found
-        """
-        if batch is None:
-            # this can return a list of model specs or None if not found
-            model_spec = ModelDirectory.find_model_by_name(model_name, pipeline)
-
-            if model_spec is None:
-                if pipeline is None:
-                    raise ValueError("Model '%s' not found" % model_name)
-                else:
-                    raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
-        else:
-            if callable(model_name):
-                method = functools.partial(model_name, batch)
-            else:
-                if not hasattr(batch, model_name):
-                    raise ValueError("Model '%s' not found in the batch class %s"
-                                     % (model_name, batch.__class__.__name__))
-                method = getattr(batch, model_name)
-            model_spec = method()
-        return model_spec
-
-def model(mode='global', engine='tf'):
+def model(mode='global'):
     """ Decorator for model methods
 
     Usage:
@@ -207,9 +257,9 @@ def model(mode='global', engine='tf'):
 
         _pipeline_model_lock = threading.Lock()
 
-        def _get_method_spec(pipeline=None):
-            return dict(mode=mode, engine=engine, method=_model_wrapper,
-                        name=get_method_fullname(method), pipeline=pipeline)
+        def _get_method_spec():
+           return dict(mode=mode, method=_model_wrapper, pipeline=None,
+                       name=ModelDirectory.get_method_fullname(method))
 
         def _add_model(method_spec, model_spec):
             ModelDirectory.add_model(method_spec, model_spec)
@@ -217,18 +267,18 @@ def model(mode='global', engine='tf'):
         @functools.wraps(method)
         def _model_wrapper(self, config=None):
             if mode == 'global':
-                model_spec = ModelDirectory.get_model(_get_method_spec())
+                pipeline = None
             elif mode in ['static', 'dynamic']:
-                _pipeline = self.pipeline
-                method_spec = _get_method_spec(_pipeline)
+                pipeline = self.pipeline
+                method_spec = _get_method_spec()
+                method_spec['pipeline'] = pipeline
 
                 if not ModelDirectory.model_exists(method_spec):
                     with _pipeline_model_lock:
                         if not ModelDirectory.model_exists(method_spec):
-
-                            if _pipeline is not None:
-                                full_config = _pipeline.config
-                                full_model_name = get_method_fullname(method)
+                            if pipeline is not None:
+                                full_config = pipeline.config
+                                full_model_name = ModelDirectory.get_method_fullname(method)
                                 if full_config is not None:
                                     model_names = [model_key for model_key in full_config
                                                    if ModelDirectory.equal_names(model_key, full_model_name)]
@@ -240,15 +290,17 @@ def model(mode='global', engine='tf'):
                                         config_a = config or dict()
                                         config = {**config_p, **config_a}
 
-                            args = (_pipeline,) if mode == 'static' else (self,)
+                            args = (pipeline,) if mode == 'static' else (self,)
                             args = args if config is None else args + (config,)
                             model_spec = method(*args)
 
                             _add_model(method_spec, model_spec)
-                model_spec = ModelDirectory.get_model(method_spec, _pipeline)
             else:
                 raise ValueError("Unknown mode", mode)
+
+            model_spec = ModelDirectory.get_model(method_spec, pipeline)
             return model_spec
+
 
         method_spec = _get_method_spec()
         if mode == 'global':
@@ -281,8 +333,8 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
             _res = action_method(action_self, *args, **kwargs)
         else:
             if hasattr(action_self, _model_name):
+                _model_method = getattr(action_self, _model_name)
                 try:
-                    _model_method = getattr(action_self, _model_name)
                     _ = _model_method.model_method
                 except AttributeError:
                     raise ValueError("The method '%s' is not marked with @model" % _model_name)

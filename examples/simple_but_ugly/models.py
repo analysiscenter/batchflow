@@ -10,6 +10,16 @@ sys.path.append("../..")
 from dataset import *
 
 
+class MyModel:
+    """An example of a model class """
+    def __init__(self, mode, config=None):
+        self.config = config
+        print("\n\n___________________ MyModel initialized")
+
+    def __call__(self, *args, **kwargs):
+        print("MyModel call", args, kwargs)
+
+
 
 # Example of custome Batch class which defines some actions
 class MyBatch(Batch):
@@ -100,6 +110,14 @@ class MyBatch(Batch):
         print(int(res), self.data.sum() ** 2)
         return self
 
+    @action
+    def train_model(self, model_name):
+        model = self.get_model_by_name(model_name)
+        print("\n========== train external model =============")
+        print("Train", model_name)
+        return self
+
+
 # number of items in the dataset
 K = 100
 Q = 10
@@ -135,11 +153,18 @@ template_pp = (Pipeline(config=config)
 pp2 = (template_pp
         .init_variable("session", sess)
         .init_variable("print lock", init=threading.Lock)
+        .define_model("dynamic", MyModel, "my_model")
+        .define_model("dynamic", MyModel, "my_model2")
+        #.init_model("MyModel")
         .load(data)
         #.train_global()
         .train_static()
-        .train_dynamic()
-        .run(K, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
+        #.train_dynamic()
+        .train_model("dynamic_model")
+        #.train_model("MyModel")
+        .train_model("my_model")
+        .train_model("my_model2")
+        .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 
 # Create another template
@@ -147,10 +172,16 @@ t = time()
 #res = (pp2 << ds_data).run()
 print(time() - t)
 
+print("-------------------------------------------")
+print("============== start run ==================")
 t = time()
 res = (pp2 << ds_data).run()
 print(time() - t)
+#ModelDirectory.print()
 
+
+print("-------------------------------------------------")
+print("============== start gen_batch ==================")
 print("Start iterating...")
 res = pp2 << ds_data
 t = time()
@@ -161,6 +192,8 @@ for batch in res.gen_batch(K, n_epochs=1, drop_last=True, prefetch=Q*0):
     t1 = time()
 
 print("Stop iterating:", time() - t)
+
+#ModelDirectory.print()
 
 print(res.get_variable("loss history"))
 
@@ -184,6 +217,3 @@ for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
     t1 = time()
 
 #print(res2.get_model_by_name("dynamic_model"))
-
-print(res2.get_model_by_name("dynamic_model"))
-
