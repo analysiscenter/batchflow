@@ -15,7 +15,7 @@ except ImportError:
 from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
-from .decorators import ModelDirectory, model
+from .decorators import ModelDirectory
 
 
 PIPELINE_ID = '#_pipeline'

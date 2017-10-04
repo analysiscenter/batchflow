@@ -29,15 +29,15 @@ class ModelDirectory:
     """ Directory of model definition methods in Batch classes """
     models = dict(zip(_MODEL_MODES, (dict() for _ in range(len(_MODEL_MODES)))))
 
-    external_models = dict()
-
+    @staticmethod
     def print():
+        """ Print a model directory """
         for mode in ModelDirectory.models:
             print(mode)
             for pipeline in ModelDirectory.models[mode]:
                 print("  ", pipeline)
-                for model in ModelDirectory.models[mode][pipeline]:
-                    print("    ", model)
+                for amodel in ModelDirectory.models[mode][pipeline]:
+                    print("    ", amodel)
 
     @staticmethod
     def get_method_fullname(method):
@@ -180,7 +180,7 @@ class ModelDirectory:
                 ModelDirectory.del_model(method_spec)
 
     @staticmethod
-    def define_model(mode, model_class, model_name=None, pipeline=None, batch=None):
+    def define_model(mode, model_class, model_name=None, pipeline=None):
         """ Define a model from a model class
         Args:
             mode: str - 'static' or 'dynamic'
@@ -199,7 +199,6 @@ class ModelDirectory:
         model_method = model(mode=mode)(_model_definition_maker())
         if mode in ['static', 'dynamic']:
             pipeline.models.update({model_method: dict()})
-        #print("    --- define model", model_method, pipeline, pipeline.models)
 
     @staticmethod
     def init_model(model_name, pipeline, config=None):
@@ -258,8 +257,8 @@ def model(mode='global'):
         _pipeline_model_lock = threading.Lock()
 
         def _get_method_spec():
-           return dict(mode=mode, method=_model_wrapper, pipeline=None,
-                       name=ModelDirectory.get_method_fullname(method))
+            return dict(mode=mode, method=_model_wrapper, pipeline=None,
+                        name=ModelDirectory.get_method_fullname(method))
 
         def _add_model(method_spec, model_spec):
             ModelDirectory.add_model(method_spec, model_spec)
