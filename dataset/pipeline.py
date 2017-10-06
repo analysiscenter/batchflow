@@ -22,7 +22,6 @@ PIPELINE_ID = '#_pipeline'
 JOIN_ID = '#_join'
 MERGE_ID = '#_merge'
 REBATCH_ID = '#_rebatch'
-DEFINE_MODEL_ID = '#_define_model'
 IMPORT_MODEL_ID = '#_import_model'
 INIT_MODEL_ID = '#_init_model'
 
@@ -402,14 +401,12 @@ class Pipeline:
                 pass
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
-            elif _action['name'] == DEFINE_MODEL_ID:
-                ModelDirectory.define_model(_action['mode'], _action['model_class'], _action['model_name'],
-                                            pipeline=self)
             elif _action['name'] == IMPORT_MODEL_ID:
                 ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
             elif _action['name'] == INIT_MODEL_ID:
-                # ModelDirectory.init_model(_action['model_name'], pipeline=self, batch=batch)
-                pass
+                ModelDirectory.init_model(mode=_action['mode'], model_class=_action['model_class'],
+                                          model_name=_action['model_name'], config=_action['config'],
+                                          pipeline=self, batch=batch)
             else:
                 if join_batches is None:
                     _action_args = _action['args']
@@ -437,29 +434,22 @@ class Pipeline:
         batch_res.pipeline = self
         return batch_res
 
-    def define_model(self, mode, model_class, model_name=None):
-        """ Define a model
+    def init_model(self, mode, model_class=None, model_name=None, config=None):
+        """ Initialize a static or dynamic model
         Args:
             mode: str - 'static' or 'dynamic'
             model_class: class - a model class
-            model_name: string - a short name for the model
-        """
-        if mode == 'static':
-            ModelDirectory.define_model(mode, model_class, model_name, pipeline=self)
-            return self
-        elif mode == 'dynamic':
-            self._action_list.append({'name': DEFINE_MODEL_ID, 'mode': mode, 'model_class': model_class,
-                                      'model_name': model_name, 'pipeline': self})
-            return self.append_action()
-
-    def init_model(self, model_name, config=None):
-        """ Initialize a static model (run a model definition method)
-        Args:
-            model_name: string - a name of the model to import
+            model_name: string - a name for the model
             config - configurations parameters
         """
-        ModelDirectory.print()
-        ModelDirectory.init_model(model_name, pipeline=self, config=config)
+        if mode == 'static':
+            ModelDirectory.init_model(mode, model_class, model_name, pipeline=self, config=config)
+            return self
+        elif mode == 'dynamic':
+            self._action_list.append({'name': INIT_MODEL_ID, 'mode': mode, 'model_class': model_class,
+                                      'model_name': model_name, 'pipeline': self, 'config': config})
+            return self.append_action()
+
         return self
 
     def import_model(self, model_name, pipeline):

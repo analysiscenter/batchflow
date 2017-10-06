@@ -8,16 +8,13 @@ import tensorflow as tf
 
 sys.path.append("../..")
 from dataset import *
+from dataset.models import BaseModel
 
 
-class MyModel:
+class MyModel(BaseModel):
     """An example of a model class """
-    def __init__(self, mode, config=None):
-        self.config = config
-        print("\n\n___________________ MyModel initialized")
-
-    def __call__(self, *args, **kwargs):
-        print("MyModel call", args, kwargs)
+    def build(self, *args, **kwargs):
+        print("___________________ MyModel initialized")
 
 
 
@@ -112,8 +109,8 @@ class MyBatch(Batch):
 
     @action
     def train_model(self, model_name):
-        model = self.get_model_by_name(model_name)
         print("\n========== train external model =============")
+        model = self.get_model_by_name(model_name)
         print("Train", model_name)
         return self
 
@@ -153,8 +150,8 @@ template_pp = (Pipeline(config=config)
 pp2 = (template_pp
         .init_variable("session", sess)
         .init_variable("print lock", init=threading.Lock)
-        .define_model("dynamic", MyModel, "my_model")
-        .define_model("dynamic", MyModel, "my_model2")
+        .init_model("dynamic", MyModel, "my_model")
+        .init_model("dynamic", MyModel, "my_model2")
         #.init_model("MyModel")
         .load(data)
         #.train_global()

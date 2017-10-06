@@ -104,7 +104,7 @@ class ModelDirectory:
         pipeline = pipeline or _pipeline
         pipeline = None if mode == 'global' else pipeline
         return pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline] or \
-               model_method in pipeline.models
+               model_method in pipeline.models and len(pipeline.models[model_method]) > 0
 
     @staticmethod
     def get_model(method_spec, pipeline=None):
@@ -139,7 +139,7 @@ class ModelDirectory:
         """
         pipeline = pipeline or batch.pipeline
         model_spec = ModelDirectory.find_model_by_name(model_name, pipeline)
-        if model_spec is None:
+        if model_spec is None or len(model_spec) == 0:
             if batch is None:
                 # a global or static model
                 # this can return a list of model specs or None if not found
@@ -154,6 +154,10 @@ class ModelDirectory:
                     # if a model is defined in a model method within a batch class
                     if hasattr(batch, model_name):
                         method = getattr(batch, model_name)
+                    elif len(model_spec) == 0:
+                        model_method = ModelDirectory.find_model_method_by_name(model_name, pipeline)[0]
+                        # a model method is supposed to be in a Batch class, so batch serves as self
+                        method = functools.partial(model_method, batch)
                     else:
                         raise ValueError("Model '%s' not found in the batch class %s"
                                          % (model_name, batch.__class__.__name__))
@@ -180,37 +184,37 @@ class ModelDirectory:
                 ModelDirectory.del_model(method_spec)
 
     @staticmethod
-    def define_model(mode, model_class, model_name=None, pipeline=None):
-        """ Define a model from a model class
+    def init_model(mode, model_class=None, model_name=None, pipeline=None, batch=None, config=None):
+        """ Initialize a static or dynamic model in a pipeline
         Args:
             mode: str - 'static' or 'dynamic'
-            pipeline - a pipeline for a model
             model_class: class - a model class
             model_name: string - a short name for the model
+            pipeline - a pipeline for a model
+            config - a model config
         """
-        model_name = model_name or model_class.__name__
+        if model_class is not None:
+            model_name = model_name or model_class.__name__
+            model_config = config or dict()
 
-        def _model_definition_maker():
-            def _model_definition_method(_, config=None):
-                return model_class(mode, config=config)
-            _model_definition_method.__name__ = model_name
-            return _model_definition_method
-
-        model_method = model(mode=mode)(_model_definition_maker())
-        if mode in ['static', 'dynamic']:
+            def _model_definition_maker():
+                def _model_definition_method(_, config=None):
+                    config = config or dict()
+                    return model_class(mode, config={**model_config, **config})
+                _model_definition_method.__name__ = model_name
+                return _model_definition_method
+            model_method = model(mode=mode)(_model_definition_maker())
             pipeline.models.update({model_method: dict()})
 
-    @staticmethod
-    def init_model(model_name, pipeline, config=None):
-        """ Initialize a static model in a pipeline """
-        model_methods = ModelDirectory.find_model_method_by_name(model_name, None, ['static'])
-        if model_methods is None:
-            raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
-        if len(model_methods) > 1:
-            raise ValueError("There are several models with the name '%s' in the pipeline %s" % (model_name, pipeline))
-        # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
-        dummy_batch = _DummyBatch(pipeline)
-        _ = model_methods[0](dummy_batch, config)
+        if mode == 'static':
+            model_methods = ModelDirectory.find_model_method_by_name(model_name, None, ['static'])
+            if model_methods is None:
+                raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
+            if len(model_methods) > 1:
+                raise ValueError("There are several models with the name '%s' in the pipeline %s" % (model_name, pipeline))
+            # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
+            dummy_batch = _DummyBatch(pipeline)
+            _ = model_methods[0](dummy_batch, config)
 
     @staticmethod
     def import_model(model_name, from_pipeline, to_pipeline):
