@@ -8,20 +8,20 @@ class BaseModel:
 
     def build(self, *args, **kwargs):
         """ Define the model """
-        return None
+        _ = self, args, **kwargs
 
     def load(self, *args, **kwargs):
         """ Load the model """
-        return None
+        _ = self, args, **kwargs
 
     def save(self, *args, **kwargs):
         """ Save the model """
-        return None
+        _ = self, args, **kwargs
 
     def train(self, *args, **kwargs):
         """ Train the model """
-        return None
+        _ = self, args, **kwargs
 
     def predict(self, *args, **kwargs):
         """ Make a prediction using the model  """
-        return None
+        _ = self, args, **kwargs
