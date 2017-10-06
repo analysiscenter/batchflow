@@ -184,7 +184,7 @@ class ModelDirectory:
                 ModelDirectory.del_model(method_spec)
 
     @staticmethod
-    def init_model(mode, model_class=None, model_name=None, pipeline=None, batch=None, config=None):
+    def init_model(mode, model_class=None, model_name=None, pipeline=None, config=None):
         """ Initialize a static or dynamic model in a pipeline
         Args:
             mode: str - 'static' or 'dynamic'
@@ -211,7 +211,8 @@ class ModelDirectory:
             if model_methods is None:
                 raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
             if len(model_methods) > 1:
-                raise ValueError("There are several models with the name '%s' in the pipeline %s" % (model_name, pipeline))
+                raise ValueError("There are several models with the name '%s' in the pipeline %s" \
+                                 % (model_name, pipeline))
             # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
             dummy_batch = _DummyBatch(pipeline)
             _ = model_methods[0](dummy_batch, config)
