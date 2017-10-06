@@ -104,7 +104,7 @@ class ModelDirectory:
         pipeline = pipeline or _pipeline
         pipeline = None if mode == 'global' else pipeline
         return pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline] or \
-               model_method in pipeline.models and len(pipeline.models[model_method]) > 0
+               model_method in pipeline.models and pipeline.models[model_method] is not None
 
     @staticmethod
     def get_model(method_spec, pipeline=None):
@@ -139,7 +139,7 @@ class ModelDirectory:
         """
         pipeline = pipeline or batch.pipeline
         model_spec = ModelDirectory.find_model_by_name(model_name, pipeline)
-        if model_spec is None or len(model_spec) == 0:
+        if model_spec is None:
             if batch is None:
                 # a global or static model
                 # this can return a list of model specs or None if not found
@@ -154,13 +154,15 @@ class ModelDirectory:
                     # if a model is defined in a model method within a batch class
                     if hasattr(batch, model_name):
                         method = getattr(batch, model_name)
-                    elif len(model_spec) == 0:
-                        model_method = ModelDirectory.find_model_method_by_name(model_name, pipeline)[0]
-                        # a model method is supposed to be in a Batch class, so batch serves as self
-                        method = functools.partial(model_method, batch)
                     else:
-                        raise ValueError("Model '%s' not found in the batch class %s"
-                                         % (model_name, batch.__class__.__name__))
+                        model_method = ModelDirectory.find_model_method_by_name(model_name, pipeline)[0]
+                        if model_method is None:
+                            raise ValueError("Model '%s' not found neither in the batch class %s," +
+                                             " nor in the pipeline %s"
+                                             % (model_name, batch.__class__.__name__, pipeline))
+                        else:
+                            # a model method is supposed to be in a Batch class, so batch serves as self
+                            method = functools.partial(model_method, batch)
                 model_spec = method()
         return model_spec
 
@@ -204,7 +206,7 @@ class ModelDirectory:
                 _model_definition_method.__name__ = model_name
                 return _model_definition_method
             model_method = model(mode=mode)(_model_definition_maker())
-            pipeline.models.update({model_method: dict()})
+            pipeline.models.update({model_method: None})
 
         if mode == 'static':
             model_methods = ModelDirectory.find_model_method_by_name(model_name, None, ['static'])

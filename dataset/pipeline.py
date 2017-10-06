@@ -406,7 +406,7 @@ class Pipeline:
             elif _action['name'] == INIT_MODEL_ID:
                 ModelDirectory.init_model(mode=_action['mode'], model_class=_action['model_class'],
                                           model_name=_action['model_name'], config=_action['config'],
-                                          pipeline=self, batch=batch)
+                                          pipeline=self)
             else:
                 if join_batches is None:
                     _action_args = _action['args']
