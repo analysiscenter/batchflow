@@ -24,6 +24,7 @@ MERGE_ID = '#_merge'
 REBATCH_ID = '#_rebatch'
 IMPORT_MODEL_ID = '#_import_model'
 INIT_MODEL_ID = '#_init_model'
+TRAIN_MODEL_ID = '#_train_model'
 
 
 
@@ -378,6 +379,11 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
         return batch
 
+    def _exec_train_model(self, batch, action):
+        model = self.get_model_by_name(_action['model_name'])
+        model.train(action['fn'](batch), *_action['args'], **_action['kwargs'])
+
+
     def _exec_all_actions(self, batch, action_list=None):
         join_batches = None
         action_list = action_list or self._action_list
@@ -407,6 +413,8 @@ class Pipeline:
                 ModelDirectory.init_model(mode=_action['mode'], model_class=_action['model_class'],
                                           model_name=_action['model_name'], config=_action['config'],
                                           pipeline=self)
+            elif _action['name'] == TRAIN_MODEL_ID:
+                self._exec_train_model(batch, _action)
             else:
                 if join_batches is None:
                     _action_args = _action['args']
@@ -455,10 +463,23 @@ class Pipeline:
     def import_model(self, model_name, pipeline):
         """ Import a model from another pipeline
         Args:
-            model_name: string - a name of the model to import
-            pipeline - a pipeline that holds a model
+            model_name: str - a name of the model to import
+            pipeline: Pipeline - a pipeline that holds a model
         """
         self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': model_name, 'pipeline': pipeline})
+        return self.append_action()
+
+    def train_model(self, model_name, fn, *args, **kwargs):
+        """ Train a model
+
+        model.train(fn(batch), *args, **kwargs)
+
+        Args:
+            model_name: str - a name of the model
+            fn - a function to make train data from a batch
+        """
+        self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': model_name, 'fn': fn,
+                                  'args', args, 'kwargs': kwargs})
         return self.append_action()
 
     def join(self, *pipelines):
