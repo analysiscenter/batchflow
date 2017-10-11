@@ -380,8 +380,8 @@ class Pipeline:
         return batch
 
     def _exec_train_model(self, batch, action):
-        model = self.get_model_by_name(_action['model_name'])
-        model.train(action['fn'](batch), *_action['args'], **_action['kwargs'])
+        model = self.get_model_by_name(action['model_name'])
+        model.train(action['fn'](batch), *action['args'], **action['kwargs'])
 
 
     def _exec_all_actions(self, batch, action_list=None):

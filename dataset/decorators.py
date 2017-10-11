@@ -158,7 +158,7 @@ class ModelDirectory:
                         model_method = ModelDirectory.find_model_method_by_name(model_name, pipeline)[0]
                         if model_method is None:
                             raise ValueError("Model '%s' not found neither in the batch class %s,"
-                                              % (model_name, batch.__class__.__name__) +
+                                             % (model_name, batch.__class__.__name__) +
                                              " nor in the pipeline %s" % pipeline)
                         else:
                             # a model method is supposed to be in a Batch class, so batch serves as self
