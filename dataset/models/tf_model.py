@@ -48,6 +48,7 @@ class TFModel(BaseModel):
         self.global_step = None
         self.loss = None
         self.train_step = None
+        self._attrs = []
 
         super().__init__(*args, **kwargs)
 
@@ -99,7 +100,7 @@ class TFModel(BaseModel):
 
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
-                self.store_to_attr('train_step', self.optimizer.minimize(self.loss, global_step=self.global_step))
+                self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
 
             self.session = tf.Session()
             self.session.run(tf.global_variables_initializer())
@@ -307,6 +308,7 @@ class TFModel(BaseModel):
                 setattr(self, attr, graph_item)
 
     def store_to_attr(self, attr, graph_item):
+        """ Make a graph item (variable or operation) accessible as a model attribute """
         with self.graph.as_default():
             setattr(self, attr, graph_item)
             self._attrs.append(attr)
