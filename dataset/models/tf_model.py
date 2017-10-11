@@ -87,19 +87,19 @@ class TFModel(BaseModel):
            (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
         """
         with self.graph.as_default():
-            self.is_training = tf.placeholder(tf.bool, name='is_training')
-            self.global_step = tf.Variable(0, trainable=False, name='global_step')
+            self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
+            self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
             self._build(*args, **kwargs)
 
             self._make_loss()
-            self.loss = tf.losses.get_total_loss()
+            self.store_to_attr('loss', tf.losses.get_total_loss())
 
             optimizer = self._make_optimizer()
 
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
-                self.train_step = optimizer.minimize(self.loss, global_step=self.global_step)
+                self.store_to_attr('train_step', self.optimizer.minimize(self.loss, global_step=self.global_step))
 
             self.session = tf.Session()
             self.session.run(tf.global_variables_initializer())
@@ -256,22 +256,22 @@ class TFModel(BaseModel):
     def save(self, path, *args, **kwargs):
         """ Save tensorflow model.
 
-        Args:
-        - path: str - path to a directory where the model will be stored
+        Parameters
+        ----------
+        path: str - a full path to a directory where the model will be stored
 
-        Returns:
-        - self: a TFModel instance
-
-        Example:
+        Examples
+        --------
         >>> tf_model = TFResNet34('resnet34')
-        >>> ... training the model
-        >>> tf_model.save('/path/to/models/')
-        The model will be stored in /path/to/models/resnet34
+        >>> ... train the model
+        >>> tf_model.save('/path/to/models/resnet34')
+        The model will be saved to /path/to/models/resnet34
         """
         with self.graph.as_default():
             saver = tf.train.Saver()
-            full_path = os.path.join(path, self.name)
-            saver.save(self.session, full_path, *args, global_step=self.global_step, **kwargs)
+            saver.save(self.session, path, *args, global_step=self.global_step, **kwargs)
+            with open(os.path.join(path, 'attrs.json'), 'w') as f:
+                json.dump(self._attrs, f)
 
     def load(self, path, graph, checkpoint=None, *args, **kwargs):
         """ Load a tensorflow model from files
@@ -299,3 +299,15 @@ class TFModel(BaseModel):
 
             saver.restore(self.session, checkpoint_path)
             self.graph = self.session.graph
+
+        with open(os.path.join(dir_path, 'attrs.json'), 'r') as json_file:
+            self._attrs = json.load(json_file)
+        with self.graph.as_default():
+            for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
+                setattr(self, attr, graph_item)
+
+    def store_to_attr(self, attr, graph_item):
+        with self.graph.as_default():
+            setattr(self, attr, graph_item)
+            self._attrs.append(attr)
+            tf.get_collection_ref('attrs').append(graph_item)
