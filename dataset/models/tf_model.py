@@ -1,9 +1,9 @@
+# pylint: disable=undefined-variable
 """ Contains base class for tensorflow models """
 
 import os
 import re
-import functools
-import json
+#import json
 import numpy as np
 
 from .base import BaseModel
@@ -236,7 +236,7 @@ class TFModel(BaseModel):
         """
         return tensor.get_shape().as_list()
 
-    def train(self, fetches=None, feed_dict=None):
+    def train(self, fetches=None, feed_dict=None):   # pylint: disable=arguments-differ
         """ Train the model with the data provided """
         with self:
             _feed_dict = {self.is_training: True}
@@ -245,7 +245,7 @@ class TFModel(BaseModel):
             _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
         return output
 
-    def predict(self, fetches, feed_dict=None):
+    def predict(self, fetches, feed_dict=None):      # pylint: disable=arguments-differ
         """ Get predictions on the data provided """
         with self:
             _feed_dict = {self.is_training: False}

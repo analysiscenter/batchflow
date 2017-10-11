@@ -479,7 +479,7 @@ class Pipeline:
             fn - a function to make train data from a batch
         """
         self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': model_name, 'fn': fn,
-                                  'args', args, 'kwargs': kwargs})
+                                  'args': args, 'kwargs': kwargs})
         return self.append_action()
 
     def join(self, *pipelines):
