@@ -3,8 +3,10 @@
 class BaseModel:
     """ Base model """
     def __init__(self, *args, **kwargs):
-        self.config = kwargs.get('config', None)
-        self.build(*args, **kwargs)
+        self.config = kwargs.get('config', {})
+        self.name = kwargs.get('name', None) or self.__class__.__name__
+        if not kwargs.get('load', False):
+            self.build(*args, **kwargs)
 
     def build(self, *args, **kwargs):
         """ Define the model """
