@@ -53,30 +53,15 @@ class TFModel(BaseModel):
 
 
     def __enter__(self):
-        """ Enter the model graph context
-        Returns
-        -------
-            self: TFModel.
-        """
+        """ Enter the model graph context """
         self._graph_context = self.graph.as_default()
         self._graph_context.__enter__()
         return self
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
-        """ Exit the model graph context
+        """ Exit the model graph context """
+        return self._graph_context.__exit__(exception_type, exception_value, exception_traceback)
 
-        This magic method enables using TFModel instances with 'with' statements.
-        Inside __exit__ just default tensorflow graph is restored.
-
-        Args:
-        - exception_type: type of exception that was raised inside context.
-        - exception_value: exception instance.
-        - exception_traceback: traceback of exception that was raised inside context.
-        """
-        return self._graph_context.__exit__(exception_type,  # pylint: disable=no-member
-                                            exception_value,
-
-                                            exception_traceback)
     def get_from_config(self, variable, default=None):
         """ Return a variable from config or a default value """
         return self.config.get(variable, default)
@@ -96,7 +81,7 @@ class TFModel(BaseModel):
 
     def build(self, *args, **kwargs):
         """ Build the model
-        1. Define a mdel architecture by calling self._build(*args, **kwargs)
+        1. Define a model architecture by calling self._build(*args, **kwargs)
         2. Create an optimizer and define a train step
         3. Set UPDATE_OPS control dependency on train step
            (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
@@ -257,7 +242,7 @@ class TFModel(BaseModel):
             _feed_dict = {self.is_training: True}
             _feed_dict = {**feed_dict, **_feed_dict}
             _fetches = fetches or tuple()
-            _, output = self.session.run([self.train_step, _fetches], _feed_dict)
+            _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
         return output
 
     def predict(self, fetches, feed_dict=None):
