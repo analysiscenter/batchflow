@@ -340,7 +340,8 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
         if _model_name is None:
             _res = action_method(action_self, *args, **kwargs)
         else:
-            _model_spec = ModelDirectory.get_model_by_name(_model_name, pipeline=action_self.pipeline, batch=action_self)
+            _model_spec = ModelDirectory.get_model_by_name(_model_name, pipeline=action_self.pipeline,
+                                                           batch=action_self)
             _res = action_method(action_self, _model_spec, *args, **kwargs)
 
         if _use_lock is not None:
