@@ -30,14 +30,16 @@ class ModelDirectory:
     models = dict(zip(_MODEL_MODES, (dict() for _ in range(len(_MODEL_MODES)))))
 
     @staticmethod
-    def print():
+    def print(pipeline=None):
         """ Print a model directory """
         for mode in ModelDirectory.models:
             print(mode)
-            for pipeline in ModelDirectory.models[mode]:
-                print("  ", pipeline)
-                for amodel in ModelDirectory.models[mode][pipeline]:
+            for pipe in ModelDirectory.models[mode]:
+                print("  ", pipe)
+                for amodel in ModelDirectory.models[mode][pipe]:
                     print("    ", amodel)
+        for amodel in pipeline.models:
+            print(amodel)
 
     @staticmethod
     def get_method_fullname(method):
@@ -141,8 +143,7 @@ class ModelDirectory:
         model_spec = ModelDirectory.find_model_by_name(model_name, pipeline)
         if model_spec is None:
             if batch is None:
-                # a global or static model
-                # this can return a list of model specs or None if not found
+                # when called outside of a batch or a pipeline
                 if pipeline is None:
                     raise ValueError("Model '%s' not found" % model_name)
                 else:
@@ -205,11 +206,12 @@ class ModelDirectory:
                     return model_class(mode, config={**model_config, **config})
                 _model_definition_method.__name__ = model_name
                 return _model_definition_method
-            model_method = model(mode=mode)(_model_definition_maker())
+
+            model_method = model(mode=mode, pipeline=pipeline)(_model_definition_maker())
             pipeline.models.update({model_method: None})
 
         if mode == 'static':
-            model_methods = ModelDirectory.find_model_method_by_name(model_name, None, ['static'])
+            model_methods = ModelDirectory.find_model_method_by_name(model_name, pipeline, ['static'])
             if model_methods is None:
                 raise ValueError("Model '%s' not found in the pipeline %s" % (model_name, pipeline))
             if len(model_methods) > 1:
@@ -240,7 +242,7 @@ class ModelDirectory:
         ModelDirectory.add_model(method_spec, model_spec)
 
 
-def model(mode='global'):
+def model(mode='global', pipeline=None):
     """ Decorator for model methods
 
     Usage:
@@ -263,8 +265,8 @@ def model(mode='global'):
 
         _pipeline_model_lock = threading.Lock()
 
-        def _get_method_spec():
-            return dict(mode=mode, method=_model_wrapper, pipeline=None,
+        def _get_method_spec(pipeline=None):
+            return dict(mode=mode, method=_model_wrapper, pipeline=pipeline,
                         name=ModelDirectory.get_method_fullname(method))
 
         def _add_model(method_spec, model_spec):
@@ -308,7 +310,7 @@ def model(mode='global'):
             return model_spec
 
 
-        method_spec = _get_method_spec()
+        method_spec = _get_method_spec(pipeline)
         if mode == 'global':
             model_spec = method()
             _add_model(method_spec, model_spec)

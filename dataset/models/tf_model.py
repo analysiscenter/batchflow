@@ -3,8 +3,9 @@
 
 import os
 import re
-#import json
+import json
 import numpy as np
+import tensorflow as tf
 
 from .base import BaseModel
 
@@ -40,10 +41,9 @@ class TFModel(BaseModel):
         import tensorflow as tf
         globals()['tf'] = tf
 
-        self.graph = tf.Graph()
+        self.session = kwargs.get('session', None)
+        self.graph = tf.Graph() if self.session is None else self.session.graph
         self._graph_context = None
-
-        self.session = None
         self.is_training = None
         self.global_step = None
         self.loss = None
@@ -111,7 +111,7 @@ class TFModel(BaseModel):
         if par is None:
             return None, None
 
-        if isinstance(par, [tuple, list]):
+        if isinstance(par, (tuple, list)):
             if len(par) == 0:
                 par_name = None
             elif len(par) == 1:
@@ -130,28 +130,26 @@ class TFModel(BaseModel):
 
     def _make_loss(self):
         """ Return a loss function from config """
-        loss = self.get_from_config("loss")
-        _loss = LOSSES.get(re.sub('[-_ ]', '', loss), None)
-        if _loss is not None:
-            return _loss
-        if isinstance(loss, str) and hasattr(tf.losses, loss):
-            return getattr(tf.losses, loss)
-        elif callable(loss):
-            return loss
-        elif loss is None:
-            raise ValueError("Loss is not defined in the model %s" % self.name)
-        else:
-            raise ValueError("Unknown loss", loss)
-
         if len(tf.losses.get_losses()) == 0:
-            loss_fn = self._get_loss()
+            loss = self.get_from_config("loss")
+            if isinstance(loss, str) and hasattr(tf.losses, loss):
+                loss = getattr(tf.losses, loss)
+            elif isinstance(loss, str):
+                loss = LOSSES.get(re.sub('[-_ ]', '', loss), None)
+            elif callable(loss):
+                pass
+            elif loss is None:
+                raise ValueError("Loss is not defined in the model %s" % self)
+            else:
+                raise ValueError("Unknown loss", loss)
+
             try:
                 predictions = self.graph.get_tensor_by_name("predictions:0")
                 targets = self.graph.get_tensor_by_name("targets:0")
             except IndexError:
                 pass
             else:
-                tf.losses.add_loss(loss_fn(targets, predictions))
+                tf.losses.add_loss(loss(targets, predictions))
 
     def _make_decay(self):
         decay_name, decay_args = self._unpack_fn_from_config('decay')
@@ -240,8 +238,12 @@ class TFModel(BaseModel):
     def train(self, fetches=None, feed_dict=None):   # pylint: disable=arguments-differ
         """ Train the model with the data provided """
         with self:
-            _feed_dict = {self.is_training: True}
-            _feed_dict = {**feed_dict, **_feed_dict}
+            feed_dict = feed_dict or {}
+            _feed_dict = {}
+            for placeholder_name, value in feed_dict.items():
+                placeholder = self.graph.get_tensor_by_name(placeholder_name + ':0')
+                _feed_dict.update({placeholder: value})
+            _feed_dict.update({self.is_training: True})
             _fetches = fetches or tuple()
             _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
         return output
@@ -249,6 +251,7 @@ class TFModel(BaseModel):
     def predict(self, fetches, feed_dict=None):      # pylint: disable=arguments-differ
         """ Get predictions on the data provided """
         with self:
+            feed_dict = feed_dict or {}
             _feed_dict = {self.is_training: False}
             _feed_dict = {**feed_dict, **_feed_dict}
             output = self.session.run(fetches, _feed_dict)

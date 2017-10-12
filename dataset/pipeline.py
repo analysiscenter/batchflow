@@ -334,11 +334,6 @@ class Pipeline:
         """ Delete all variables """
         self._variables = dict()
 
-    def get_model_by_name(self, model_name):
-        """ Get a model specification by its name """
-        models = ModelDirectory.get_model_by_name(model_name, pipeline=self)
-        return models
-
     @staticmethod
     def _get_action_method(batch, name):
         if hasattr(batch, name):
@@ -379,9 +374,17 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
         return batch
 
+    def _exec_init_model(self, batch, action):
+        model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
+        if model is None:
+            ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
+                                      model_name=action['model_name'], config=action['config'],
+                                      pipeline=self)
+
     def _exec_train_model(self, batch, action):
-        model = self.get_model_by_name(action['model_name'])
-        model.train(action['fn'](batch), *action['args'], **action['kwargs'])
+        model = self.get_model_by_name(action['model_name'], batch=batch)
+        train_batch_args = action['fn'](batch)
+        model.train(**train_batch_args, **action['kwargs'])
 
 
     def _exec_all_actions(self, batch, action_list=None):
@@ -410,9 +413,7 @@ class Pipeline:
             elif _action['name'] == IMPORT_MODEL_ID:
                 ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
             elif _action['name'] == INIT_MODEL_ID:
-                ModelDirectory.init_model(mode=_action['mode'], model_class=_action['model_class'],
-                                          model_name=_action['model_name'], config=_action['config'],
-                                          pipeline=self)
+                self._exec_init_model(batch, _action)
             elif _action['name'] == TRAIN_MODEL_ID:
                 self._exec_train_model(batch, _action)
             else:
@@ -441,6 +442,11 @@ class Pipeline:
         batch_res = self._exec_all_actions(batch)
         batch_res.pipeline = self
         return batch_res
+
+    def get_model_by_name(self, model_name, batch=None):
+        """ Get a model specification by its name """
+        models = ModelDirectory.get_model_by_name(model_name, pipeline=self, batch=batch)
+        return models
 
     def init_model(self, mode, model_class=None, model_name=None, config=None):
         """ Initialize a static or dynamic model
