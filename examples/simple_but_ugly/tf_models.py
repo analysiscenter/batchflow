@@ -31,6 +31,13 @@ class MyModel(TFModel):
         print("___________________ MyModel initialized")
 
 
+class MyBatch(Batch):
+    @action(model='static_model')
+    def train_in_batch(self, model_spec):
+        print("train model", model_spec)
+        return self
+
+
 def trans(batch):
     return dict(feed_dict=dict(x=batch.data[:, :-1], y=batch.data[:, -1].astype('int')))
 
@@ -44,7 +51,7 @@ def pd_data():
     ix = np.arange(K)
     data = np.arange(K * 3).reshape(K, -1).astype("float32")
     dsindex = DatasetIndex(ix)
-    ds = Dataset(index=dsindex, batch_class=Batch)
+    ds = Dataset(index=dsindex, batch_class=MyBatch)
     return ds, data.copy()
 
 
@@ -63,7 +70,8 @@ pp = (Pipeline(config=config)
         .init_model("static", MyModel, model_name="static_model")
         .init_model("dynamic", MyModel, model_name="dynamic_model")
         .load(data)
-        .train_model("static_model", fn=trans)
+        #.train_model("static_model", fn=trans)
+        .train_in_batch()
         .train_model("dynamic_model", fn=trans)
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )

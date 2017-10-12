@@ -340,17 +340,7 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
         if _model_name is None:
             _res = action_method(action_self, *args, **kwargs)
         else:
-            if hasattr(action_self, _model_name):
-                _model_method = getattr(action_self, _model_name)
-                try:
-                    _ = _model_method.model_method
-                except AttributeError:
-                    raise ValueError("The method '%s' is not marked with @model" % _model_name)
-            else:
-                raise ValueError("There is no such method '%s'" % _model_name)
-
-            _model_spec = _model_method()
-
+            _model_spec = ModelDirectory.get_model_by_name(_model_name, pipeline=action_self.pipeline, batch=action_self)
             _res = action_method(action_self, _model_spec, *args, **kwargs)
 
         if _use_lock is not None:
