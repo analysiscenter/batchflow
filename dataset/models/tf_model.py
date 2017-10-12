@@ -259,22 +259,22 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        path: str - a full path to a directory where the model will be stored
+        path: str - a path to a directory where all model files will be stored
 
         Examples
         --------
-        >>> tf_model = TFResNet34('resnet34')
+        >>> tf_model = TFResNet34()
         >>> ... train the model
         >>> tf_model.save('/path/to/models/resnet34')
         The model will be saved to /path/to/models/resnet34
         """
         with self.graph.as_default():
             saver = tf.train.Saver()
-            saver.save(self.session, path, *args, global_step=self.global_step, **kwargs)
+            saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
             with open(os.path.join(path, 'attrs.json'), 'w') as f:
                 json.dump(self._attrs, f)
 
-    def load(self, path, graph, checkpoint=None, *args, **kwargs):
+    def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
         """ Load a tensorflow model from files
 
         Parameters
@@ -286,12 +286,13 @@ class TFModel(BaseModel):
         Examples
         --------
         >>> tf_model = TFResNet34(load=True)
-        >>> tf_model.load('/path/to/models/resnet34', 'resnet34-1982.meta')
+        >>> tf_model.load('/path/to/models/resnet34')
         """
         self.session = tf.Session()
 
         with self.session.as_default():
-            saver = tf.train.import_meta_graph(os.path.join(path, graph))
+            graph_path = os.path.join(path, graph or 'model.meta')
+            saver = tf.train.import_meta_graph(graph_path)
 
             if checkpoint is None:
                 checkpoint_path = tf.train.latest_checkpoint(path)
@@ -301,7 +302,7 @@ class TFModel(BaseModel):
             saver.restore(self.session, checkpoint_path)
             self.graph = self.session.graph
 
-        with open(os.path.join(dir_path, 'attrs.json'), 'r') as json_file:
+        with open(os.path.join(path, 'attrs.json'), 'r') as json_file:
             self._attrs = json.load(json_file)
         with self.graph.as_default():
             for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
