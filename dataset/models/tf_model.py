@@ -37,10 +37,6 @@ class TFModel(BaseModel):
     """ Base class for all tensorflow models """
 
     def __init__(self, *args, **kwargs):
-        """ Initialize a tensorflow model """
-        import tensorflow as tf
-        globals()['tf'] = tf
-
         self.session = kwargs.get('session', None)
         self.graph = tf.Graph() if self.session is None else self.session.graph
         self._graph_context = None
