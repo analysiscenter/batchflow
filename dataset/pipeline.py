@@ -374,7 +374,7 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
         return batch
 
-    def _exec_init_model(self, batch, action):
+    def _exec_init_model(self, _, action):
         model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
         if model is None:
             ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
