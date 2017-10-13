@@ -558,6 +558,12 @@ class Pipeline:
         self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data})
         return self.append_action(*args, **kwargs)
 
+    def save_model(self, name, path):
+        """ Save a model """
+        model = ModelDirectory.get_model_by_name(name, pipeline=self)
+        model.save(path)
+
+
     def join(self, *pipelines):
         """ Join pipelines
         Args:

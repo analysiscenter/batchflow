@@ -5,8 +5,14 @@ class BaseModel:
     def __init__(self, *args, **kwargs):
         self.config = kwargs.get('config', {})
         self.name = kwargs.get('name', None) or self.__class__.__name__
-        if not kwargs.get('load', False):
+        if self.get_from_config('build', True):
             self.build(*args, **kwargs)
+        if self.get_from_config('load', False):
+            self.load(**self.config)
+
+    def get_from_config(self, variable, default=None):
+        """ Return a variable from config or a default value """
+        return self.config.get(variable, default)
 
     def build(self, *args, **kwargs):
         """ Define the model """

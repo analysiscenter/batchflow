@@ -29,9 +29,14 @@ class MyModel(TFModel):
 
         # Define a cost function
         #tf.losses.add_loss(tf.losses.softmax_cross_entropy(y_oe, y_))
-        #tf.losses.softmax_cross_entropy(y_oe, y_)
+        loss = tf.losses.softmax_cross_entropy(y_oe, y_)
+        self.train_step = tf.train.AdamOptimizer().minimize(loss)
 
         print("___________________ MyModel initialized")
+
+    def load(self, *args, **kwargs):
+        super().load(*args, **kwargs)
+        print("!=============== model loaded")
 
 
 class MyBatch(Batch):
@@ -82,6 +87,7 @@ pp = (Pipeline(config=config)
                     dict(num_classes='num_classes',
                          images_shape=lambda batch: batch.images.shape,
                          loss='ce'))
+        .init_model("static", TFModel, "dynamic_model2", config=dict(build=False, load=True, path='./models/dynamic'))
         .load((data, labels))
         #.train_model("static_model", fn=trans)
         .train_in_batch()
@@ -99,3 +105,5 @@ print("============== start run ==================")
 t = time()
 res = (pp << ds_data).run()
 print(time() - t)
+
+res.save_model("dynamic_model", './models/dynamic')

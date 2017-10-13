@@ -26,7 +26,7 @@ LOSSES = {
 DECAYS = {
     'exp': tf.train.exponential_decay,
     'invtime': tf.train.inverse_time_decay,
-    'natural_exp': tf.train.natural_exp_decay,
+    'naturalexp': tf.train.natural_exp_decay,
     'const': tf.train.piecewise_constant,
     'poly': tf.train.polynomial_decay
 }
@@ -59,11 +59,6 @@ class TFModel(BaseModel):
         """ Exit the model graph context """
         return self._graph_context.__exit__(exception_type, exception_value, exception_traceback)
 
-    def get_from_config(self, variable, default=None):
-        """ Return a variable from config or a default value """
-        return self.config.get(variable, default)
-
-
     def _build(self, *args, **kwargs):
         """ Define a model architecture
 
@@ -94,9 +89,12 @@ class TFModel(BaseModel):
 
             optimizer = self._make_optimizer()
 
-            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            with tf.control_dependencies(update_ops):
-                self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
+            if self.train_step is None:
+                update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                with tf.control_dependencies(update_ops):
+                    self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
+            else:
+                self.store_to_attr('train_step', self.train_step)
 
             self.session = tf.Session()
             self.session.run(tf.global_variables_initializer())
@@ -131,7 +129,7 @@ class TFModel(BaseModel):
             if isinstance(loss, str) and hasattr(tf.losses, loss):
                 loss = getattr(tf.losses, loss)
             elif isinstance(loss, str):
-                loss = LOSSES.get(re.sub('[-_ ]', '', loss), None)
+                loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
             elif callable(loss):
                 pass
             elif loss is None:
@@ -157,7 +155,7 @@ class TFModel(BaseModel):
         elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
             decay_name = getattr(tf.train, decay_name)
         elif decay_name in DECAYS:
-            decay_name = DECAYS[decay_name]
+            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
         else:
             raise ValueError("Unknown learning rate decay method", decay_name)
 
@@ -268,6 +266,8 @@ class TFModel(BaseModel):
         The model will be saved to /path/to/models/resnet34
         """
         with self.graph.as_default():
+            if not os.path.exists(path):
+                os.makedirs(path)
             saver = tf.train.Saver()
             saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
             with open(os.path.join(path, 'attrs.json'), 'w') as f:
@@ -287,10 +287,11 @@ class TFModel(BaseModel):
         >>> tf_model = TFResNet34(load=True)
         >>> tf_model.load('/path/to/models/resnet34')
         """
+        _ = args, kwargs
         self.session = tf.Session()
 
         with self.session.as_default():
-            graph_path = os.path.join(path, graph or 'model.meta')
+            graph_path = os.path.join(path, graph or 'model-0.meta')
             saver = tf.train.import_meta_graph(graph_path)
 
             if checkpoint is None:
