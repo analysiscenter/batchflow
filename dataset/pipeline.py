@@ -378,12 +378,15 @@ class Pipeline:
         model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
         if model is None:
             ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
-                                      model_name=action['model_name'], config=action['config'],
-                                      pipeline=self)
+                                      name=action['model_name'], transform=action['transform'],
+                                      config=action['config'], pipeline=self)
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
-        train_batch_args = action['fn'](batch)
+        if action['transform'] is None:
+            train_batch_args = dict(batch=batch)
+        else:
+            train_batch_args = action['transform'](batch)
         model.train(**train_batch_args, **action['kwargs'])
 
 
@@ -443,48 +446,49 @@ class Pipeline:
         batch_res.pipeline = self
         return batch_res
 
-    def get_model_by_name(self, model_name, batch=None):
+    def get_model_by_name(self, name, batch=None):
         """ Get a model specification by its name """
-        models = ModelDirectory.get_model_by_name(model_name, pipeline=self, batch=batch)
+        models = ModelDirectory.get_model_by_name(name, pipeline=self, batch=batch)
         return models
 
-    def init_model(self, mode, model_class=None, model_name=None, config=None):
+    def init_model(self, mode, model_class=None, name=None, transform=None, config=None):
         """ Initialize a static or dynamic model
         Args:
             mode: str - 'static' or 'dynamic'
             model_class: class - a model class
-            model_name: string - a name for the model
+            name: string - a name for the model
+            transform: callable - a function or method to make additional model args
             config - configurations parameters
         """
         if mode == 'static':
-            ModelDirectory.init_model(mode, model_class, model_name, pipeline=self, config=config)
+            ModelDirectory.init_model(mode, model_class, name, transform=transform, pipeline=self, config=config)
             return self
         elif mode == 'dynamic':
             self._action_list.append({'name': INIT_MODEL_ID, 'mode': mode, 'model_class': model_class,
-                                      'model_name': model_name, 'pipeline': self, 'config': config})
+                                      'model_name': name, 'transform': transform, 'pipeline': self, 'config': config})
             return self.append_action()
 
         return self
 
-    def import_model(self, model_name, pipeline):
+    def import_model(self, name, pipeline):
         """ Import a model from another pipeline
         Args:
-            model_name: str - a name of the model to import
+            name: str - a name of the model to import
             pipeline: Pipeline - a pipeline that holds a model
         """
-        self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': model_name, 'pipeline': pipeline})
+        self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': name, 'pipeline': pipeline})
         return self.append_action()
 
-    def train_model(self, model_name, fn, *args, **kwargs):
+    def train_model(self, name, transform=None, *args, **kwargs):
         """ Train a model
 
         model.train(fn(batch), *args, **kwargs)
 
         Args:
-            model_name: str - a name of the model
-            fn - a function to make train data from a batch
+            name: str - a model name
+            transform - a function or method to make train data from a batch
         """
-        self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': model_name, 'fn': fn,
+        self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'transform': transform,
                                   'args': args, 'kwargs': kwargs})
         return self.append_action()
 

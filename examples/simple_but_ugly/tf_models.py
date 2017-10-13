@@ -67,12 +67,12 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 
 # Create a template pipeline
 pp = (Pipeline(config=config)
-        .init_model("static", MyModel, model_name="static_model")
-        .init_model("dynamic", MyModel, model_name="dynamic_model")
+        .init_model("static", MyModel, name="static_model")
+        .init_model("dynamic", MyModel, name="dynamic_model")
         .load(data)
         #.train_model("static_model", fn=trans)
         .train_in_batch()
-        .train_model("dynamic_model", fn=trans)
+        .train_model("dynamic_model", transform=trans)
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 

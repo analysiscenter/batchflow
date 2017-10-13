@@ -54,6 +54,7 @@ class MyBatch(Batch):
     def train_static(self, model_spec):
         t1 = time()
         print("\n ================= train static ====================")
+        print("model_spec", model_spec)
         input_data, model_output = model_spec
         session = self.pipeline.get_variable("session")
         t = time()
@@ -108,7 +109,7 @@ class MyBatch(Batch):
         return self
 
     @action
-    def train_model(self, model_name):
+    def train_in_batch(self, model_name):
         print("\n========== train external model =============")
         model = self.get_model_by_name(model_name)
         print("Train", model_name)
@@ -157,7 +158,7 @@ pp2 = (template_pp
         #.train_global()
         .train_static()
         #.train_dynamic()
-        .train_model("dynamic_model")
+        .train_in_batch("dynamic_model")
         #.train_model("MyModel")
         .train_model("my_model")
         .train_model("my_model2")
