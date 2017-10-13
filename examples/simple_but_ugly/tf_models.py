@@ -14,22 +14,22 @@ from dataset.models import TFModel
 class MyModel(TFModel):
     """An example of a tf model class """
     def _build(self, *args, **kwargs):
-        images_shape = kwargs.get('images_shape')
-        num_features =  images_shape[-1] if images_shape is not None else 3
-        num_classes = kwargs.get('num_classes', 3)
+        images_shape = self.get_from_config('images_shape', (0, 3))
+        num_features =  images_shape[-1]
+        num_classes = self.get_from_config('num_classes', 3)
 
         x = tf.placeholder("float", [None, num_features], name='x')
         y = tf.placeholder("int32",[None], name='y')
-        y_oe = tf.one_hot(y, num_classes)
+        y_oe = tf.one_hot(y, num_classes, name='targets')
 
         w = tf.Variable(tf.zeros([num_features, num_classes]))
         b = tf.Variable(tf.zeros([num_classes]))
 
-        y_ = tf.nn.softmax(tf.matmul(x, w) + b)
+        y_ = tf.nn.softmax(tf.matmul(x, w) + b, name='predictions')
 
         # Define a cost function
         #tf.losses.add_loss(tf.losses.softmax_cross_entropy(y_oe, y_))
-        tf.losses.softmax_cross_entropy(y_oe, y_)
+        #tf.losses.softmax_cross_entropy(y_oe, y_)
 
         print("___________________ MyModel initialized")
 
@@ -77,8 +77,11 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 # Create a template pipeline
 pp = (Pipeline(config=config)
         .init_variable('num_classes', 3)
-        .init_model("static", MyModel, name="static_model")
-        .init_model("dynamic", MyModel, "dynamic_model", dict(num_classes='num_classes', images_shape=lambda batch: batch.images.shape))
+        .init_model("static", MyModel, name="static_model", config=dict(loss='ce'))
+        .init_model("dynamic", MyModel, "dynamic_model",
+                    dict(num_classes='num_classes',
+                         images_shape=lambda batch: batch.images.shape,
+                         loss='ce'))
         .load((data, labels))
         #.train_model("static_model", fn=trans)
         .train_in_batch()

@@ -216,7 +216,7 @@ class ModelDirectory:
                         kwargs = local_config(pipe_or_batch)
 
                     config = config or dict()
-                    return model_class(mode, config=config, **kwargs)
+                    return model_class(mode, config={**config, **kwargs})
                 _model_definition_method.__name__ = name
                 return _model_definition_method
 
