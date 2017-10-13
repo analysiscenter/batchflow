@@ -186,13 +186,13 @@ class ModelDirectory:
                 ModelDirectory.del_model(method_spec)
 
     @staticmethod
-    def init_model(mode, model_class=None, name=None, transform=None, pipeline=None, config=None):
+    def init_model(mode, model_class=None, name=None, data=None, pipeline=None, config=None):
         """ Initialize a static or dynamic model in a pipeline
         Args:
             mode: str - 'static' or 'dynamic'
             model_class: class - a model class
             name: string - a short name for the model
-            transform: callable - a function or method to make addition model arguments
+            data: callable - a function or method to make addition model arguments
             pipeline - a pipeline to link a model to
             config - a model config
         """
@@ -202,10 +202,10 @@ class ModelDirectory:
 
             def _model_definition_maker():
                 def _model_definition_method(pipe_or_batch, config=None):
-                    if transform is None:
+                    if data is None:
                         kwargs = {}
                     else:
-                        kwargs = transform(pipe_or_batch)
+                        kwargs = data(pipe_or_batch)
                     config = config or dict()
                     return model_class(mode, config={**model_config, **config}, **kwargs)
                 _model_definition_method.__name__ = name

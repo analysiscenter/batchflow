@@ -14,7 +14,7 @@ from dataset.models import TFModel
 class MyModel(TFModel):
     """An example of a tf model class """
     def _build(self, *args, **kwargs):
-        num_features = 2
+        num_features = 3
         num_classes = 3
         x = tf.placeholder("float", [None, num_features], name='x')
         y = tf.placeholder("int32",[None], name='y')
@@ -32,9 +32,11 @@ class MyModel(TFModel):
 
 
 class MyBatch(Batch):
+    components = 'images', 'labels'
+
     @action(model='static_model')
     def train_in_batch(self, model_spec):
-        print("train model", model_spec)
+        print("train in batch model", model_spec)
         return self
 
 
@@ -47,16 +49,17 @@ Q = 10
 
 
 # Fill-in dataset with sample data
-def pd_data():
+def gen_data():
     ix = np.arange(K)
     data = np.arange(K * 3).reshape(K, -1).astype("float32")
+    labels = np.random.choice(3, size=K).astype("int32")
     dsindex = DatasetIndex(ix)
     ds = Dataset(index=dsindex, batch_class=MyBatch)
-    return ds, data.copy()
+    return ds, data, labels
 
 
 # Create datasets
-ds_data, data = pd_data()
+ds_data, data, labels = gen_data()
 
 # Create tf session
 sess = tf.Session()
@@ -69,10 +72,10 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 pp = (Pipeline(config=config)
         .init_model("static", MyModel, name="static_model")
         .init_model("dynamic", MyModel, name="dynamic_model")
-        .load(data)
+        .load((data, labels))
         #.train_model("static_model", fn=trans)
         .train_in_batch()
-        .train_model("dynamic_model", transform=trans)
+        .train_model("dynamic_model", feed_dict={'x': 'images', 'y': 'labels'})
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 

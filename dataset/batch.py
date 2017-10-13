@@ -31,6 +31,7 @@ from .components import MetaComponentsTuple
 class Batch(BaseBatch):
     """ The core Batch class """
     _item_class = None
+    components = None
 
     def __init__(self, index, preloaded=None, *args, **kwargs):
         if  self.components is not None and not isinstance(self.components, tuple):
@@ -154,11 +155,6 @@ class Batch(BaseBatch):
             self.load(self._preloaded)
         res = self._data if self.components is None else self._data_named
         return res if res is not None else self._empty_data
-
-    @property
-    def components(self):
-        """ Return data components names """
-        return None
 
     def make_item_class(self):
         """ Create a class to handle data components """

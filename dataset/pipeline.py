@@ -378,16 +378,43 @@ class Pipeline:
         model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
         if model is None:
             ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
-                                      name=action['model_name'], transform=action['transform'],
+                                      name=action['model_name'], data=action['data'],
                                       config=action['config'], pipeline=self)
 
     def _exec_train_model(self, batch, action):
+        def _map_data(item):
+            if callable(item):
+                data_item = item(batch, model)
+            elif hasattr(batch, item):
+                data_item = getattr(batch, item)
+            else:
+                data_item = item
+            return data_item
+
         model = self.get_model_by_name(action['model_name'], batch=batch)
-        if action['transform'] is None:
-            train_batch_args = dict(batch=batch)
-        else:
-            train_batch_args = action['transform'](batch)
-        model.train(**train_batch_args, **action['kwargs'])
+        make_data = action['make_data']
+        train_args = tuple()
+        train_kwargs = dict()
+
+        if callable(make_data):
+            _data = make_data(batch, model)
+            if isinstance(_data, dict):
+                train_kwargs = _data
+            else:
+                train_args = _data
+
+        for arg, data in action['kwargs'].items():
+            if isinstance(data, dict):
+                data_dict = {}
+                for key, item in data.items():
+                    data_item = _map_data(item)
+                    data_dict.update({key: data_item})
+                data_item = data_dict
+            else:
+                data_item = _map_data(data)
+            train_kwargs.update({arg: data_item})
+
+        model.train(*train_args, **train_kwargs)
 
 
     def _exec_all_actions(self, batch, action_list=None):
@@ -451,21 +478,21 @@ class Pipeline:
         models = ModelDirectory.get_model_by_name(name, pipeline=self, batch=batch)
         return models
 
-    def init_model(self, mode, model_class=None, name=None, transform=None, config=None):
+    def init_model(self, mode, model_class=None, name=None, data=None, config=None):
         """ Initialize a static or dynamic model
         Args:
             mode: str - 'static' or 'dynamic'
             model_class: class - a model class
             name: string - a name for the model
-            transform: callable - a function or method to make additional model args
+            data: tuple, dict or callable - a mapping from batch data to model data
             config - configurations parameters
         """
         if mode == 'static':
-            ModelDirectory.init_model(mode, model_class, name, transform=transform, pipeline=self, config=config)
+            ModelDirectory.init_model(mode, model_class, name, data=data, pipeline=self, config=config)
             return self
         elif mode == 'dynamic':
             self._action_list.append({'name': INIT_MODEL_ID, 'mode': mode, 'model_class': model_class,
-                                      'model_name': name, 'transform': transform, 'pipeline': self, 'config': config})
+                                      'model_name': name, 'data': data, 'pipeline': self, 'config': config})
             return self.append_action()
 
         return self
@@ -479,18 +506,40 @@ class Pipeline:
         self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': name, 'pipeline': pipeline})
         return self.append_action()
 
-    def train_model(self, name, transform=None, *args, **kwargs):
+    def train_model(self, name, make_data=None, *args, **kwargs):
         """ Train a model
 
-        model.train(fn(batch), *args, **kwargs)
-
-        Args:
+        Parameters
+        ----------
             name: str - a model name
-            transform - a function or method to make train data from a batch
+            make_data: callable
+                       a function or method to make train data from a batch
+                       `train_data = make_data(batch, model)`
+                       `model.train(*train_data)`
+            all other named parameters are treated as data mappings which values could be:
+                - a callable taking a batch and a model as parameters
+                - a batch component name
+                - a batch class attribute
+                - a dict of data mappings
+            while all other values are passed directly to `model.train`
+
+        Examples
+        --------
+        >>> pipeline.train_model('resnet', x='images', y_true='masks')
+        Would call a `resnet` model `train` method with `x` and `y_true` arguments:
+        resnet.train(x=batch.images, y_true=batch.masks)
+
+        >>> pipeline.train_model('resnet', feed_dict={'x': 'images'})
+        Would call a `resnet` model `train` method with a `feed_dict` argument:
+        resnet.train(feed_dict={'x': batch.images})
+
+        >>> pipeline.train_model('resnet', MyBatch.make_resnet_data)
+        Equivalent to:
+        train_data = batch.make_resnet_data(resnet_model)
+        resnet_model.train(*train_data)
         """
-        self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'transform': transform,
-                                  'args': args, 'kwargs': kwargs})
-        return self.append_action()
+        self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data})
+        return self.append_action(*args, **kwargs)
 
     def join(self, *pipelines):
         """ Join pipelines
