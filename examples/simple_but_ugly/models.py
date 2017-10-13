@@ -115,6 +115,10 @@ class MyBatch(Batch):
         print("Train", model_name)
         return self
 
+    def make_data_for_dynamic(self):
+        return {'shape': self.data.shape}
+
+
 
 # number of items in the dataset
 K = 100
@@ -151,7 +155,7 @@ template_pp = (Pipeline(config=config)
 pp2 = (template_pp
         .init_variable("session", sess)
         .init_variable("print lock", init=threading.Lock)
-        .init_model("dynamic", MyModel, "my_model")
+        .init_model("dynamic", MyModel, "my_model", config=MyBatch.make_data_for_dynamic)
         .init_model("dynamic", MyModel, "my_model2")
         #.init_model("MyModel")
         .load(data)
@@ -193,11 +197,11 @@ print("Stop iterating:", time() - t)
 
 #ModelDirectory.print()
 
-print(res.get_variable("loss history"))
+print("loss:", res.get_variable("loss history"))
 
-print(res.get_model_by_name("global_model"))
+print("global:", res.get_model_by_name("global_model"))
 
-print(res.get_model_by_name("dynamic_model"))
+print("dynamic:", res.get_model_by_name("dynamic_model"))
 
 res2 = (ds_data.pipeline()
                .init_variable("session", sess)

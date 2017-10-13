@@ -186,28 +186,37 @@ class ModelDirectory:
                 ModelDirectory.del_model(method_spec)
 
     @staticmethod
-    def init_model(mode, model_class=None, name=None, data=None, pipeline=None, config=None):
+    def init_model(mode, model_class=None, name=None, pipeline=None, config=None):
         """ Initialize a static or dynamic model in a pipeline
         Args:
             mode: str - 'static' or 'dynamic'
             model_class: class - a model class
             name: string - a short name for the model
-            data: callable - a function or method to make addition model arguments
             pipeline - a pipeline to link a model to
-            config - a model config
+            config: dict or callable - a mapping or a function/method for additional model arguments
         """
         if model_class is not None:
             name = name or model_class.__name__
-            model_config = config or dict()
+            local_config = config or dict()
 
             def _model_definition_maker():
                 def _model_definition_method(pipe_or_batch, config=None):
-                    if data is None:
-                        kwargs = {}
-                    else:
-                        kwargs = data(pipe_or_batch)
+                    kwargs = {}
+                    if isinstance(local_config, dict):
+                        for arg, val in local_config.items():
+                            if isinstance(val, str):
+                                val_in_pp = pipeline.get_variable(val) if pipeline.has_variable(val) else None
+                                val_in_ba = getattr(pipe_or_batch, val) if hasattr(pipe_or_batch, val) else None
+                                val = val_in_pp or val_in_ba or val
+                            elif callable(val):
+                                val = val(pipe_or_batch)
+                            kwargs.update({arg: val})
+
+                    elif callable(local_config):
+                        kwargs = local_config(pipe_or_batch)
+
                     config = config or dict()
-                    return model_class(mode, config={**model_config, **config}, **kwargs)
+                    return model_class(mode, config=config, **kwargs)
                 _model_definition_method.__name__ = name
                 return _model_definition_method
 

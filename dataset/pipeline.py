@@ -378,8 +378,7 @@ class Pipeline:
         model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
         if model is None:
             ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
-                                      name=action['model_name'], data=action['data'],
-                                      config=action['config'], pipeline=self)
+                                      name=action['model_name'], config=action['config'], pipeline=self)
 
     def _exec_train_model(self, batch, action):
         def _map_data(item):
@@ -478,21 +477,39 @@ class Pipeline:
         models = ModelDirectory.get_model_by_name(name, pipeline=self, batch=batch)
         return models
 
-    def init_model(self, mode, model_class=None, name=None, data=None, config=None):
+    def init_model(self, mode, model_class=None, name=None, config=None):
         """ Initialize a static or dynamic model
-        Args:
+        Parameters
+        ----------
             mode: str - 'static' or 'dynamic'
             model_class: class - a model class
             name: string - a name for the model
-            data: tuple, dict or callable - a mapping from batch data to model data
-            config - configurations parameters
+            config: dict or callable - a mapping for additional configurations parameters
+                a callable takes a batch(for a dynamic model) or a pipeline (for a static model) as a parameter
+                a dict consists of pairs (arg_name, value) where arg_name is an argument name for model.build
+                    and value could be:
+                    - a callable which takes a batch (for dynamic) or a pipeline (for static models)
+                    - a pipeline variable name
+                    - a batch component name
+                    any other value will be passed unchanged.
+
+        Examples
+        --------
+        >>> pipeline.init_model('static', MyModel)
+
+        >>> pipeline
+              .init_variable('images_shape', [256, 256])
+              .init_model('static', MyModel, config={'input_shape': 'images_shape'})
+
+        >>> pipeline.init_model('dynamic', MyModel, config={'input_shape': lambda batch: batch.images.shape[1:]})
+
         """
         if mode == 'static':
-            ModelDirectory.init_model(mode, model_class, name, data=data, pipeline=self, config=config)
+            ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
             return self
         elif mode == 'dynamic':
             self._action_list.append({'name': INIT_MODEL_ID, 'mode': mode, 'model_class': model_class,
-                                      'model_name': name, 'data': data, 'pipeline': self, 'config': config})
+                                      'model_name': name, 'pipeline': self, 'config': config})
             return self.append_action()
 
         return self

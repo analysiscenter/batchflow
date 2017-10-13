@@ -14,19 +14,22 @@ from dataset.models import TFModel
 class MyModel(TFModel):
     """An example of a tf model class """
     def _build(self, *args, **kwargs):
-        num_features = 3
-        num_classes = 3
+        images_shape = kwargs.get('images_shape')
+        num_features =  images_shape[-1] if images_shape is not None else 3
+        num_classes = kwargs.get('num_classes', 3)
+
         x = tf.placeholder("float", [None, num_features], name='x')
         y = tf.placeholder("int32",[None], name='y')
         y_oe = tf.one_hot(y, num_classes)
 
-        w = tf.Variable(tf.zeros([num_features,num_classes]))
+        w = tf.Variable(tf.zeros([num_features, num_classes]))
         b = tf.Variable(tf.zeros([num_classes]))
 
         y_ = tf.nn.softmax(tf.matmul(x, w) + b)
 
         # Define a cost function
-        tf.losses.add_loss(tf.losses.softmax_cross_entropy(y_oe, y_))
+        #tf.losses.add_loss(tf.losses.softmax_cross_entropy(y_oe, y_))
+        tf.losses.softmax_cross_entropy(y_oe, y_)
 
         print("___________________ MyModel initialized")
 
@@ -38,6 +41,9 @@ class MyBatch(Batch):
     def train_in_batch(self, model_spec):
         print("train in batch model", model_spec)
         return self
+
+    def make_data_for_dynamic(self):
+        return {'images_shape': self.images.shape, 'num_classes': 3}
 
 
 def trans(batch):
@@ -70,8 +76,9 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 
 # Create a template pipeline
 pp = (Pipeline(config=config)
+        .init_variable('num_classes', 3)
         .init_model("static", MyModel, name="static_model")
-        .init_model("dynamic", MyModel, name="dynamic_model")
+        .init_model("dynamic", MyModel, "dynamic_model", dict(num_classes='num_classes', images_shape=lambda batch: batch.images.shape))
         .load((data, labels))
         #.train_model("static_model", fn=trans)
         .train_in_batch()
