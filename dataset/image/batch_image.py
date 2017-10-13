@@ -86,9 +86,7 @@ def preserve_shape_numba(image_shape, shape, crop=CROP_CENTER):
 
 class BasicImagesBatch(Batch):
     """ Batch class for 2D images """
-    @property
-    def components(self):
-        return "images", "labels"
+    components = "images", "labels"
 
     def assemble(self, all_res, *args, **kwargs):
         """ Assemble the batch after a parallel action """
