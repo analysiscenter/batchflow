@@ -8,7 +8,7 @@ import tensorflow as tf
 
 sys.path.append("../..")
 from dataset import *
-from dataset.models import TFModel
+from dataset.models.tf import TFModel
 
 
 class MyModel(TFModel):

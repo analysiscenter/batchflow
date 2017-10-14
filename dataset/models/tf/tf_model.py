@@ -7,7 +7,7 @@ import json
 import numpy as np
 import tensorflow as tf
 
-from .base import BaseModel
+from ..base import BaseModel
 
 
 LOSSES = {
