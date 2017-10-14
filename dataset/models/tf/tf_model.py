@@ -32,6 +32,11 @@ DECAYS = {
 }
 
 
+def print_graph(graph):
+    ops = graph.get_operations()
+    for op in ops:
+        print(op.name)
+
 
 class TFModel(BaseModel):
     """ Base class for all tensorflow models
@@ -147,16 +152,21 @@ class TFModel(BaseModel):
 
     def build(self, *args, **kwargs):
         """ Build the model
-        1. Define a model architecture by calling self._build(*args, **kwargs)
-        2. Create an optimizer and define a train step
-        3. Set UPDATE_OPS control dependency on train step
+
+        1. Define is_training and global_step tensors
+        2. Define a model architecture by calling self._build(*args, **kwargs)
+        3. Create a loss function
+        4. Create an optimizer and define a train step
+        5. Set UPDATE_OPS control dependency on train step
            (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
+        6. Create a tensorflow session
         """
         with self.graph.as_default():
             self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
             self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
             self._build(*args, **kwargs)
+            print_graph(self.graph)
 
             self._make_loss()
             self.store_to_attr('loss', tf.losses.get_total_loss())

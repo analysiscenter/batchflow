@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-import urllib
+import urllib.request
 import gzip
 import numpy as np
 

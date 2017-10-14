@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-import urllib
+import urllib.request
 import pickle
 import tarfile
 import numpy as np
