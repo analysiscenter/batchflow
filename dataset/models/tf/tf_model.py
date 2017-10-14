@@ -32,12 +32,6 @@ DECAYS = {
 }
 
 
-def print_graph(graph):
-    ops = graph.get_operations()
-    for op in ops:
-        print(op.name)
-
-
 class TFModel(BaseModel):
     """ Base class for all tensorflow models
 
@@ -166,7 +160,6 @@ class TFModel(BaseModel):
             self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
             self._build(*args, **kwargs)
-            print_graph(self.graph)
 
             self._make_loss()
             self.store_to_attr('loss', tf.losses.get_total_loss())
