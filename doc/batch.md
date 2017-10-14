@@ -31,9 +31,8 @@ Thus `gen_batch` and `next_batch` will create batches that contain preloaded dat
 ### Data components
 Not infrequently, the batch stores a more complex data structures, e.g. features and labels or images, masks, bounding boxes and labels. To work with these you might employ data components. Just define a property as follows:
 ```python
-    @property
-    def components(self):
-        return 'images', 'masks', 'labels'
+    class MyBatch(Batch):
+        components = 'images', 'masks', 'labels'
 ```
 And this allows you to address components to read and write data:
 ```python
@@ -44,7 +43,7 @@ batch[4].masks = new_masks
 ```
 
 ## Action methods
-`Action` methods form a public API of the batch class which is available in the [pipeline](pipeline.md). If you operate directly with the batch class instances, you don't need `action` methods. However, pipelines provide the most convenient interface to process the whole dataset and to separate data processing steps and model training / validation cycles.
+`Action` methods form a public API of the batch class which is available in [pipelines](pipeline.md). If you operate directly with the batch class instances, you don't need `action` methods. However, pipelines provide the most convenient interface to process the whole dataset and to separate data processing steps and model training / validation cycles.
 
 In order to convert a batch class method to an action you add `@action` decorator:
 ```python
@@ -61,25 +60,28 @@ Take into account that an `action` method should return an instance of some `Bat
 If an `action` changes the instance's data directly, it may simply return `self`.
 
 
-## Model definitions and model-based actions
-Models and model training methods can also be a part of a batch class.
-
+## Models and model-based actions
+To get access to a model just call `self.get_model_by_name(...)` within actions or ordinary batch class methods.
 ```python
-class MyArrayBatch(ArrayBatch):
+class MyBatch(Batch):
     ...
-    @model()
-    def basic_model():
-        input_data = tf.placeholder('float', [None, 28])
-        model_output = ...
-        return [input_data, model_output]
+    @action
+    def train_my_model(model_name):
+        my_model = self.get_model_by_name(model_name)
+        my_model.train(...)
 
-    @action(model='basic_model')
-    def train_model(self, model_spec):
-        input_data, optimizer = model_spec
-        # update gradients
+```
+
+Actions might be linked to certain models:
+```python
+class MyBatch(Batch):
+    ...
+    @action(model='my_resnet34')
+    def train_resnet(self, resnet34):
+        resnet34.train(...)
         return self
 ```
-For details see [Working with models](models.md).
+For more details see [Working with models](models.md).
 
 
 ## Running methods in parallel
@@ -109,7 +111,7 @@ class MyBatch(Batch):
         super().__init__()
         # process your data
 ```
-It is not so important if you are extremely carefull when calling batch generators and parallelizing actions, so you are absolutly sure that a batch cannot get unexpected arguments.
+It is not so important if you are extremely careful when calling batch generators and parallelizing actions, so you are absolutly sure that a batch cannot get unexpected arguments.
 But usually it is just easier to add `*args` and `*kwargs` and have a guarantee that your program will not break or hang up (as it most likely will do if you do batch prefetching with multiprocessing).
 
 ### Don't load data in the constructor

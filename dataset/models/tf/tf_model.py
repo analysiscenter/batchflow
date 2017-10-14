@@ -15,7 +15,7 @@ LOSSES = {
     'ce': tf.losses.softmax_cross_entropy,
     'crossentropy': tf.losses.softmax_cross_entropy,
     'absolutedifference': tf.losses.absolute_difference,
-    'L1': tf.losses.absolute_difference,
+    'l1': tf.losses.absolute_difference,
     'cosine': tf.losses.cosine_distance,
     'cos': tf.losses.cosine_distance,
     'hinge': tf.losses.hinge_loss,
@@ -34,7 +34,66 @@ DECAYS = {
 
 
 class TFModel(BaseModel):
-    """ Base class for all tensorflow models """
+    """ Base class for all tensorflow models
+
+    Attributes
+    ----------
+    name: str - a model name
+    config: dict - configuration parameters
+
+    session: tf.Session
+    graph: tf.Graph
+    is_training: tf.Tensor
+    global_step: tf.Tensor
+    loss: tf.Tensor
+    train_step: tf.Operation
+
+
+    Configuration
+    -------------
+    loss - a loss function, might be one of:
+        - short name ('mse', 'ce', 'l1', 'cos', 'hinge', 'huber', 'logloss')
+        - a function name from tf.losses (e.g. 'absolute_difference' or 'sparse_softmax_cross_entropy')
+        - a callable
+
+        Examples:
+        `{'loss': 'mse'}`
+        `{'loss': 'sigmoid_cross_entropy'}`
+        `{'loss': tf.losses.huber_loss}`
+        `{'loss': external_loss_fn}`
+
+    decay - a learning rate decay algorithm might be defined in one of three formats:
+        - name
+        - tuple (name, args)
+        - dict {'name': name, 'args': args}
+
+        where name might be one of
+        - short name ('exp', 'invtime', 'naturalexp', 'const', 'poly')
+        - a function name from tf.train (e.g. 'exponential_decay')
+        - a callable
+
+        Examples:
+           `{'decay': 'exp'}`
+           `{'decay': ('polynomial_decay', {'decay_steps':10000})}`
+           `{'decay': {'name': tf.train.inverse_time_decay, args: {'decay_rate': .5}}`
+
+    optimizer - an optimizer might be defined in one of three formats
+            - name
+            - tuple (name, args)
+            - dict with keys 'name' and 'args'
+
+            where name might be one of
+            - short name (e.g. 'Adam', 'Adagrad')
+            - a function name from tf.train (e.g. 'FtlrOptimizer')
+            - a callable
+
+        Examples:
+            `{'optimizer': 'Adam'}` or
+            `{'optimizer': ('Ftlr', {'learning_rate_power': 0})}`
+            `{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}`
+            `{'optimizer': some_optimizer_fn}`
+
+    """
 
     def __init__(self, *args, **kwargs):
         self.session = kwargs.get('session', None)
@@ -65,6 +124,21 @@ class TFModel(BaseModel):
         This method must be implemented in ancestor classes:
         inside it a tensorflow model must be defined (placeholders, layers, loss, etc)
 
+        How to write your own _build method
+        -----------------------------------
+        1. Give names to all placeholders (you will need them later in `train` and `predict`)
+        2. For dropout, batch norm, etc you might use a predefined `self.is_training` tensor.
+        3. For learning rate decay and training control you might use a predefined `self.global_step` tensor.
+        4. In many cases there is no need to write a loss function as it might be defined through config, e.g.
+        5. However, for that to work you have to define operations with names `targets` and `predictions`.
+           Their output tensors will be sent to a loss function.
+        6. If you need to define your own loss function, use losses from `tf.losses` or call `tf.losses.add_loss(...)`
+        7. In most cases there is no need to define an optimizer as well,
+           since it might be defined through config, e.g.:
+        8. If you need to write your own optimizer, assing `self.train_step` to the train step operation.
+           Don't forget about UPDATE_OPS control dependency
+           (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
+
         Notes
         -----
         This method is executed within a self.graph context
@@ -87,9 +161,9 @@ class TFModel(BaseModel):
             self._make_loss()
             self.store_to_attr('loss', tf.losses.get_total_loss())
 
-            optimizer = self._make_optimizer()
-
             if self.train_step is None:
+                optimizer = self._make_optimizer()
+
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
                     self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
@@ -126,14 +200,14 @@ class TFModel(BaseModel):
         """ Return a loss function from config """
         if len(tf.losses.get_losses()) == 0:
             loss = self.get_from_config("loss")
-            if isinstance(loss, str) and hasattr(tf.losses, loss):
+            if loss is None:
+                raise ValueError("Loss is not defined in the model %s" % self)
+            elif isinstance(loss, str) and hasattr(tf.losses, loss):
                 loss = getattr(tf.losses, loss)
             elif isinstance(loss, str):
                 loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
             elif callable(loss):
                 pass
-            elif loss is None:
-                raise ValueError("Loss is not defined in the model %s" % self)
             else:
                 raise ValueError("Unknown loss", loss)
 
@@ -162,7 +236,7 @@ class TFModel(BaseModel):
         return decay_name, decay_args
 
     def _make_optimizer(self):
-        optimizer_name, optimizer_args = self._unpack_fn_from_config('optimizer', (tf.train.AdamOptimizer, {}))
+        optimizer_name, optimizer_args = self._unpack_fn_from_config('optimizer', ('Adam', {}))
 
         if callable(optimizer_name):
             pass
@@ -189,7 +263,7 @@ class TFModel(BaseModel):
 
     @staticmethod
     def num_channels(tensor):
-        """ Return the number of channels (last dimension) in the tensor
+        """ Return the number of channels (the last dimension) in the tensor
 
         Parameters
         ----------
@@ -230,7 +304,21 @@ class TFModel(BaseModel):
         return tensor.get_shape().as_list()
 
     def train(self, fetches=None, feed_dict=None):   # pylint: disable=arguments-differ
-        """ Train the model with the data provided """
+        """ Train the model with the data provided
+
+        Parameters
+        ----------
+        fetches : an arbitrarily nested structure of `tf.Operation`s and `tf.Tensor`s
+        feed_dict: a dict with input data, where key is a placeholder name and value is a numpy value
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same structure
+
+        See also
+        --------
+        Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
+        """
         with self:
             feed_dict = feed_dict or {}
             _feed_dict = {}
@@ -243,7 +331,26 @@ class TFModel(BaseModel):
         return output
 
     def predict(self, fetches, feed_dict=None):      # pylint: disable=arguments-differ
-        """ Get predictions on the data provided """
+        """ Get predictions on the data provided
+
+        Parameters
+        ----------
+        fetches : an arbitrarily nested structure of `tf.Operation`s and `tf.Tensor`s
+        feed_dict: a dict with input data, where key is a placeholder name and value is a numpy value
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same structure
+
+        Notes
+        -----
+        The only difference between `predict` and `train` is that `train` also executes a `train_step` operation
+        which involves calculating and applying gradients and thus chainging model weights.
+
+        See also
+        --------
+        Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
+        """
         with self:
             feed_dict = feed_dict or {}
             _feed_dict = {self.is_training: False}
@@ -260,8 +367,8 @@ class TFModel(BaseModel):
 
         Examples
         --------
-        >>> tf_model = TFResNet34()
-        >>> ... train the model
+        >>> tf_model = ResNet34()
+        Now train the model
         >>> tf_model.save('/path/to/models/resnet34')
         The model will be saved to /path/to/models/resnet34
         """
@@ -284,7 +391,7 @@ class TFModel(BaseModel):
 
         Examples
         --------
-        >>> tf_model = TFResNet34(load=True)
+        >>> tf_model = ResNet34(load=True)
         >>> tf_model.load('/path/to/models/resnet34')
         """
         _ = args, kwargs
