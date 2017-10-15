@@ -236,27 +236,39 @@ class Pipeline:
         var = self._variables.get(name)
         return var.get('value', default)
 
-    def init_variable(self, name, default=None, init=None, init_on_each_run=False):
+    def init_variable(self, name, default=None, init=None, init_on_each_run=None):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
-        Args:
+
+        Parameters
+        ----------
             name: string - a name of the variable
             default - an initial value for the variable
             init: callable - a function which returns the default value
-            init_on_each_run: bool - whether to initialize the variable before each run / gen_batch
-        Return:
+            init_on_each_run: callable - same as `init` but is used to initialize the variable before each run / gen_batch
+
+        Returns
+        -------
             self - in order to use it in the pipeline chains
 
-        Examples:
+        Examples
+        --------
             pp = dataset.p.
-                    .init_variable("loss_history", init=list, init_on_each_run=True)
-                    .init_variable("accuracy", default=0)
+                    .init_variable("iterations", default=0)
+                    .init_variable("accuracy", init_on_each_run=0)
+                    .init_variable("loss_history", init_on_each_run=list)
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
         if name not in self._variables:
             with self._variables_lock:
                 if name not in self._variables:
+                    if not isinstance(init_on_each_run, bool):
+                        if callable(init_on_each_run):
+                            init = init_on_each_run
+                        else:
+                            default = init_on_each_run
+                        init_on_each_run = True
                     self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run)
                     self.set_variable(name, default if init is None else init())
         return self
@@ -271,7 +283,7 @@ class Pipeline:
 
         Examples:
             pp = dataset.p.
-                    .init_variables({"loss_history": dict(init=list, init_on_each_run=True),
+                    .init_variables({"loss_history": dict(init_on_each_run=list),
                                      "accuracy", dict(default=0)})
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
@@ -433,17 +445,22 @@ class Pipeline:
 
         if isinstance(predictions, (tuple, list)):
             for i, pred in enumerate(predictions):
-                if not isinstance(action['store_at'], (tuple, list)):
-                    loc, name = 'p', action['store_at']
-                elif isinstance(action['store_at'][i], (tuple, list)):
-                    loc, name = action['store_at'][i]
-                else:
-                    loc, name = 'p', action['store_at'][i]
+                if len(store_at) <= i + 1:
+                    if isinstance(store_at[i], (tuple, list)):
+                        loc, name = store_at[i]
+                    else:
+                        if hasattr(batch, store_at[i]):
+                            loc = 'b'
+                        elif batch.pipeline.has_variable(store_at[i]):
+                            loc = 'p'
+                        else:
+                            loc = None
+                        name = store_at[i]
 
-                if loc in ['p', 'pipeline']:
-                    batch.pipeline.get_variable(name).append(pred)
-                elif loc in ['b', 'batch']:
-                    setattr(batch, name, pred)
+                    if loc in ['p', 'pipeline']:
+                        batch.pipeline.get_variable(name).append(pred)
+                    elif loc in ['b', 'batch']:
+                        setattr(batch, name, pred)
 
 
     def _exec_all_actions(self, batch, action_list=None):
@@ -522,7 +539,7 @@ class Pipeline:
                     and value could be:
                     - a callable which takes a batch (for dynamic) or a pipeline (for static models)
                     - a pipeline variable name
-                    - a batch component name
+                    - a batch component name (for dynamic mode only)
                     any other value will be passed unchanged.
 
         Examples
@@ -606,11 +623,14 @@ class Pipeline:
                        Should return tuple or dict.
 
             store_at: str or tuple of str or tuple of (str, str) - where to store predictions
-                    str - a name of a pipeline variable to store all predicted data in the same place
-                    tuple of str - pipeline variable names for each predicted item
+                    str - a name of a batch attribute or a pipeline variable to store predicted data
+                    tuple of str - names of batch attributes or pipeline variables for each predicted item
                     tuple of tuples(str, str) - locations and names for each predicted item
                             location could be 'pipeline' or 'batch' for a pipeline variable or a batch component
                             a name is a variable or component name
+                    Name is treated as a batch attribute if this attribute is already exists in the batch.
+                    Otherwise, predictions are stored in a pipeline variable with that name.
+                    If it does not exist either, predictions are not stored anywhere.
 
             all other named parameters are treated as data mappings which values could be:
                 - a callable taking a batch and a model as parameters
@@ -622,17 +642,17 @@ class Pipeline:
         Examples
         --------
         pipeline
-           .init_variable('predicted_labels', init=list, init_on_each_run=True)
-           .predict_model('resnet', x='images', y_true='labels', store_at='predicted_labels')
+            .predict_model('resnet', x='images', y_true='labels', store_at='predicted_labels')
         Would call a `resnet` model `predict` method with `x` and `y_true` arguments:
         `predictions = resnet.predict(x=batch.images, y_true=batch.labels)`
-        Predictions will be stored in a pipeline variable `predicted_labels`.
+        Predictions will be stored `batch.predicted_labels`.
 
-        >>> pipeline.train_model('tf_unet', fetches='predicted_masks', feed_dict={'x': 'images'}, store_at=('b', 'inferred_masks'))
+        >>> pipeline.
+            .init_variable('inferred_masks', init=list, init_on_each_run=True)
+            .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': 'images'}, store_at='inferred_masks')
         Would call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
         predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})
-        Predictions for each bacth will be stored at batch component 'inferred_masks'.
-        Make sure that batch component names do not interfere with data mappings.
+        Predictions for each batch will be stored in a pipeline variable 'inferred_masks'.
 
         >>> pipeline.train_model('deepnet', MyBatch.make_deepnet_data)
         Equivalent to:

@@ -46,7 +46,7 @@ if __name__ == "__main__":
     print("Start testing...")
     test_pp = (mnist.test.p
                 .import_model('conv', train_pp)
-                .init_variable('predictions', init=list)
+                .init_variable('predictions', init_on_each_run=list)
                 .predict_model('conv', fetches='predicted_labels', feed_dict={'images': 'images', 'labels': 'labels'}, store_at='predictions')
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False))
     print("End testing")

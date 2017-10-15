@@ -203,9 +203,9 @@ to draw a graph later). This is why you might need pipeline variables.
 ```python
 my_pipeline = my_dataset.p
                  .init_variable("my_variable", 100)
-                 .init_variable("some_counter", 0, init_on_each_run=True)
+                 .init_variable("some_counter", init_on_each_run=0)
                  .init_variable("var with init function", init=my_init_function)
-                 .init_variable("loss_history", init=list, init_on_each_run=True)
+                 .init_variable("loss_history", init_on_each_run=list)
                  .first_action()
                  .second_action()
                  ...

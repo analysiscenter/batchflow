@@ -205,9 +205,13 @@ class ModelDirectory:
                     if isinstance(local_config, dict):
                         for arg, val in local_config.items():
                             if isinstance(val, str):
+                                val_in_ba = None
+                                if mode == 'dynamic' and hasattr(pipe_or_batch, val):
+                                    val_in_ba = getattr(pipe_or_batch, val)
                                 val_in_pp = pipeline.get_variable(val) if pipeline.has_variable(val) else None
-                                val_in_ba = getattr(pipe_or_batch, val) if hasattr(pipe_or_batch, val) else None
-                                val = val_in_pp or val_in_ba or val
+                                val = val_in_ba if val_in_ba is not None \
+                                      else val_in_pp if val_in_pp is not None \
+                                      else val
                             elif callable(val):
                                 val = val(pipe_or_batch)
                             kwargs.update({arg: val})
