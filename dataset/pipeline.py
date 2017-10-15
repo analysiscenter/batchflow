@@ -439,23 +439,23 @@ class Pipeline:
 
         if not isinstance(predictions, (tuple, list, dict, OrderedDict)):
             predictions = (predictions, )
-            store_at = (action['store_at'], )
+            save_to = (action['save_to'], )
         else:
-            store_at = action['store_at']
+            save_to = action['save_to']
 
         if isinstance(predictions, (tuple, list)):
             for i, pred in enumerate(predictions):
-                if len(store_at) <= i + 1:
-                    if isinstance(store_at[i], (tuple, list)):
-                        loc, name = store_at[i]
+                if len(save_to) <= i + 1:
+                    if isinstance(save_to[i], (tuple, list)):
+                        loc, name = save_to[i]
                     else:
-                        if hasattr(batch, store_at[i]):
+                        if hasattr(batch, save_to[i]):
                             loc = 'b'
-                        elif batch.pipeline.has_variable(store_at[i]):
+                        elif batch.pipeline.has_variable(save_to[i]):
                             loc = 'p'
                         else:
                             loc = None
-                        name = store_at[i]
+                        name = save_to[i]
 
                     if loc in ['p', 'pipeline']:
                         batch.pipeline.get_variable(name).append(pred)
@@ -609,7 +609,7 @@ class Pipeline:
         self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data})
         return self.append_action(*args, **kwargs)
 
-    def predict_model(self, name, make_data=None, store_at=None, *args, **kwargs):
+    def predict_model(self, name, make_data=None, save_to=None, *args, **kwargs):
         """ Predict using a model
 
         Parameters
@@ -620,7 +620,7 @@ class Pipeline:
                        `input_data = make_data(batch, model)`
                        `model.train(*input_data)`
 
-            store_at: str or tuple of str or tuple of (str, str) - where to store predictions
+            save_to: str or tuple of str or tuple of (str, str) - where to save predictions
                     str - a name of a batch attribute or a pipeline variable to store predicted data
                     tuple of str - names of batch attributes or pipeline variables for each predicted item
                     tuple of tuples(str, str) - locations and names for each predicted item
@@ -640,14 +640,14 @@ class Pipeline:
         Examples
         --------
         pipeline
-            .predict_model('resnet', x='images', y_true='labels', store_at='predicted_labels')
+            .predict_model('resnet', x='images', y_true='labels', save_to='predicted_labels')
         Would call a `resnet` model `predict` method with `x` and `y_true` arguments:
         `predictions = resnet.predict(x=batch.images, y_true=batch.labels)`
         Predictions will be stored `batch.predicted_labels`.
 
         >>> pipeline.
             .init_variable('inferred_masks', init_on_each_run=list)
-            .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': 'images'}, store_at='inferred_masks')
+            .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': 'images'}, save_to='inferred_masks')
         Would call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
         predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})
         Predictions for each batch will be stored in a pipeline variable 'inferred_masks'.
@@ -658,7 +658,7 @@ class Pipeline:
         deepnet_model.train(*predict_data)
         """
         self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
-                                  'store_at': store_at})
+                                  'save_to': save_to})
         return self.append_action(*args, **kwargs)
 
     def save_model(self, name, path):
