@@ -265,7 +265,7 @@ class MyBatch(Batch):
     ...
 
 my_pipeline = my_dataset.p
-                .init_variable("my lock", init=threading.Lock, init_on_each_run=True)
+                .init_variable("my lock", init=threading.Lock)
                 .some_action()
                 ...
 
@@ -479,10 +479,10 @@ Initialize a static model by calling [a model method](model.md)
 ### `import_model(model_name, from_pipeline)`
 Import a static or dynamic model from another pipeline.
 
-### `init_variable(name, default=None, init=None, init_on_each_run=False)`
+### `init_variable(name, default=None, init=None, init_on_each_run=None)`
 Creates a variable with the default value or init function.
 
-### `get_variable(name, default=None, init=None, init_on_each_run=False)`
+### `get_variable(name, default=None, init=None, init_on_each_run=None)`
 Returns a value of the variable with a given name (creates a variable if it does not exist)
 
 ### `set_variable(name, value)`

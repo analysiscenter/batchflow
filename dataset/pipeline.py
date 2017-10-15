@@ -220,14 +220,14 @@ class Pipeline:
         """
         return name in self._variables
 
-    def get_variable(self, name, default=None, init=None, init_on_each_run=False):
+    def get_variable(self, name, default=None, init=None, init_on_each_run=None):
         """ Return a variable value
         If the variable does not exists, it will be created and initialized (see `init_variable` below)
         Args:
             name: string - a name of the variable
             default - a value for the variable if it does not exists
             init: callable - a function which returns the default value
-            init_on_each_run: bool - whether to initialize the variable before each run / gen_batch
+            init_on_each_run: callable - same as `init` but initializes the variable before each run
         Return:
             a value of the variable
         """
@@ -245,7 +245,7 @@ class Pipeline:
             name: string - a name of the variable
             default - an initial value for the variable
             init: callable - a function which returns the default value
-            init_on_each_run: callable - same as `init` but is used to initialize the variable before each run
+            init_on_each_run: callable - same as `init` but initializes the variable before each run
 
         Returns
         -------
@@ -648,7 +648,7 @@ class Pipeline:
         Predictions will be stored `batch.predicted_labels`.
 
         >>> pipeline.
-            .init_variable('inferred_masks', init=list, init_on_each_run=True)
+            .init_variable('inferred_masks', init_on_each_run=list)
             .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': 'images'}, store_at='inferred_masks')
         Would call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
         predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})
