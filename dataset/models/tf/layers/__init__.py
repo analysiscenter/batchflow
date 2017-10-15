@@ -34,8 +34,8 @@ def mip(x, depth, name='mip'):
         splits = tf.split(x, split_sizes, axis=-1)
         mips = []
         for split in splits:
-            mip = tf.reduce_max(split, axis=-1)
-            mips.append(mip)
+            amip = tf.reduce_max(split, axis=-1)
+            mips.append(amip)
         mips = tf.stack(mips, axis=-1)
 
     return mips
