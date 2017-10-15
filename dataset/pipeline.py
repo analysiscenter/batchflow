@@ -272,7 +272,8 @@ class Pipeline:
                             default = init_on_each_run
                         init_on_each_run = True
                     lock = threading.Lock() if lock else None
-                    self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run, lock=lock)
+                    self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run,
+                                                 lock=lock)
                     self.set_variable(name, default if init is None else init())
         return self
 
@@ -359,7 +360,7 @@ class Pipeline:
         self._action_list.append({'name': INC_VARIABLE_ID, 'var_name': name})
         return self.append_action()
 
-    def _exec_inc_variable(self, batch, action):
+    def _exec_inc_variable(self, _, action):
         if self.has_variable(action['var_name']):
             if self._variables[action['var_name']]['lock'] is not None:
                 with self._variables[action['var_name']]['lock']:
@@ -374,7 +375,7 @@ class Pipeline:
         self._action_list.append({'name': PRINT_VARIABLE_ID, 'var_name': name})
         return self.append_action()
 
-    def _exec_print_variable(self, batch, action):
+    def _exec_print_variable(self, _, action):
         print(self.get_variable(action['var_name']))
 
     def append_variable(self, name, from_name):
@@ -382,7 +383,7 @@ class Pipeline:
         self._action_list.append({'name': APPEND_VARIABLE_ID, 'var_name': name, 'from_name': from_name})
         return self.append_action()
 
-    def _exec_append_variable(self, batch, action):
+    def _exec_append_variable(self, _, action):
         name = action['var_name']
         from_name = action['from_name']
 
@@ -661,7 +662,8 @@ class Pipeline:
         train_data = batch.make_resnet_data(resnet_model)
         resnet_model.train(*train_data)
         """
-        self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data, 'save_to': save_to})
+        self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data,
+                                  'save_to': save_to})
         return self.append_action(*args, **kwargs)
 
     def predict_model(self, name, make_data=None, save_to=None, *args, **kwargs):

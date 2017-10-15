@@ -332,7 +332,7 @@ class TFModel(BaseModel):
         elif isinstance(fetches, (tuple, list)):
             _fetches = []
             for fetch in fetches:
-                _fetches.append(self._tensor_name(fetches))
+                _fetches.append(self._tensor_name(fetch))
         elif isinstance(fetches, dict):
             _fetches = dict()
             for key, fetch in fetches.items():
