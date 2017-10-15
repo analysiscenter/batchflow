@@ -131,8 +131,7 @@ class Pipeline:
             raise TypeError("Both operands should be Pipelines")
         if other.num_actions > 0:
             return self.concat(self, other)
-        else:
-            return self
+        return self
 
     def __matmul__(self, other):
         if self.num_actions == 0:
@@ -163,8 +162,7 @@ class Pipeline:
         cls = BaseBatch if cls is None else cls
         if hasattr(cls, name) and callable(getattr(cls, name)):
             return True
-        else:
-            return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
+        return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
 
     def __getattr__(self, name):
         """ Check if an unknown attr is an action from some batch class """
@@ -574,8 +572,7 @@ class Pipeline:
     def _needs_exec(self, action):
         if action['proba'] is None:
             return True
-        else:
-            return np.random.binomial(1, action['proba']) == 1
+        return np.random.binomial(1, action['proba']) == 1
 
     def _exec(self, batch, new_loop=False):
         if new_loop:
@@ -772,8 +769,7 @@ class Pipeline:
     def _get_dtypes(tensors=None, action=None):
         if tensors:
             return [tensor.dtype for tensor in tensors]
-        else:
-            return [placeholder.dtype for placeholder in action['tf_placeholders']]
+        return [placeholder.dtype for placeholder in action['tf_placeholders']]
 
     def _create_tf_queue(self, tensors, action):
         if action['tf_session'] is None:
@@ -795,8 +791,7 @@ class Pipeline:
     def _get_tensor(batch, action):
         if action['get_tensor'] is None:
             return batch.data
-        else:
-            return action['get_tensor'](batch)
+        return action['get_tensor'](batch)
 
     def _put_batch_into_tf_queue(self, batch, action):
         tensors = self._get_tensor(batch, action)

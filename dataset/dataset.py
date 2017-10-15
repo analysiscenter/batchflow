@@ -21,17 +21,15 @@ class Dataset(Baseset):
         """
         if (batch_class is None or (batch_class == dataset.batch_class)) and cls._is_same_index(index, dataset.index):
             return dataset
-        else:
-            bcl = batch_class if batch_class is not None else dataset.batch_class
-            return cls(index, batch_class=bcl, preloaded=dataset.preloaded)
+        bcl = batch_class if batch_class is not None else dataset.batch_class
+        return cls(index, batch_class=bcl, preloaded=dataset.preloaded)
 
     @staticmethod
     def build_index(index):
         """ Create index """
         if isinstance(index, DatasetIndex):
             return index
-        else:
-            return DatasetIndex(index)
+        return DatasetIndex(index)
 
     @staticmethod
     def _is_same_index(index1, index2):

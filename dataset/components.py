@@ -12,10 +12,9 @@ class ComponentDescriptor:
             return self._default
         elif instance.pos is None:
             return instance.data[self._component]
-        else:
-            pos = instance.pos[self._component]
-            data = instance.data[self._component]
-            return data[pos] if data is not None else self._default
+        pos = instance.pos[self._component]
+        data = instance.data[self._component]
+        return data[pos] if data is not None else self._default
 
     def __set__(self, instance, value):
         if instance.pos is None:

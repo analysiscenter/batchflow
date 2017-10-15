@@ -141,8 +141,7 @@ class Batch(BaseBatch):
         """ Return an array-like with the indices """
         if isinstance(self.index, DatasetIndex):
             return self.index.indices
-        else:
-            return self.index
+        return self.index
 
     def __len__(self):
         return len(self.index)
@@ -316,8 +315,7 @@ class Batch(BaseBatch):
         """ Return dtype for batch data """
         if isinstance(self.data, tuple):
             return tuple(self.infer_dtype(item) for item in self.data)
-        else:
-            return self.infer_dtype(self.data)
+        return self.infer_dtype(self.data)
 
     def get_model_by_name(self, model_name):
         """ Return a model specification given its name """

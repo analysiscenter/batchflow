@@ -214,9 +214,8 @@ class BasicImagesBatch(Batch):
             _angle = np.random.uniform(*angle)
             preserve_shape = kwargs.pop('preserve_shape', True)
             return self._rotate_one(ix, component, _angle, preserve_shape=preserve_shape, **kwargs)
-        else:
-            image = self.get(ix, component)
-            return image
+        image = self.get(ix, component)
+        return image
 
     @action
     def flip(self, axis=None):

@@ -30,14 +30,12 @@ class Baseset:
         """ Return an array-like with the indices """
         if isinstance(self.index, Baseset):
             return self.index.indices
-        else:
-            return self.index
+        return self.index
 
     def __len__(self):
         if self.indices is None:
             return 0
-        else:
-            return len(self.indices)
+        return len(self.indices)
 
     @property
     def is_splitted(self):

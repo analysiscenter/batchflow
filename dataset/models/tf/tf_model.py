@@ -313,8 +313,7 @@ class TFModel(BaseModel):
             return getattr(self, name)
         elif ':' in name:
             return name
-        else:
-            return name + ':0'
+        return name + ':0'
 
     def _fill_feed_dict(self, feed_dict=None):
         feed_dict = feed_dict or {}

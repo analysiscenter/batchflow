@@ -46,8 +46,7 @@ class ModelDirectory:
         """ Return a method name in the format module_name.class_name.func_name """
         if callable(method):
             return method.__module__ + '.' + method.__name__
-        else:
-            return method
+        return method
 
     @staticmethod
     def add_model(method_spec, model_spec):
@@ -96,8 +95,7 @@ class ModelDirectory:
             return None
         elif len(model_specs) == 1 or only_first:
             return model_specs[0]
-        else:
-            return model_specs
+        return model_specs
 
     @staticmethod
     def model_exists(method_spec, pipeline=None):
@@ -387,9 +385,8 @@ def action(*args, **kwargs):
     if len(args) == 1 and callable(args[0]):
         # action without arguments
         return _make_action_wrapper(action_method=args[0])
-    else:
-        # action with arguments
-        return _make_action_wrapper_with_args(*args, **kwargs)
+    # action with arguments
+    return _make_action_wrapper_with_args(*args, **kwargs)
 
 
 def any_action_failed(results):
@@ -427,8 +424,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
         def _call_init_fn(init_fn, args, kwargs):
             if callable(init_fn):
                 return init_fn(*args, **kwargs)
-            else:
-                return init_fn
+            return init_fn
 
         def _call_post_fn(self, post_fn, futures, args, kwargs):
             all_results = []

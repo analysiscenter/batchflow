@@ -53,8 +53,7 @@ class DatasetIndex(Baseset):
         """ Create a dictionary with positions in the index """
         if self.indices is None:
             return dict()
-        else:
-            return dict(zip(self.indices, np.arange(len(self))))
+        return dict(zip(self.indices, np.arange(len(self))))
 
     def get_pos(self, index):
         """ Return position of an item in the index """
@@ -66,8 +65,7 @@ class DatasetIndex(Baseset):
             return self._pos[index]
         elif isinstance(index, Iterable):
             return np.asarray([self._pos[ix] for ix in index])
-        else:
-            return self._pos[index]
+        return self._pos[index]
 
     def subset_by_pos(self, pos):
         """ Return subset of index by given positions in the index """
@@ -255,8 +253,7 @@ class FilesIndex(DatasetIndex):
         """ Build index from a path string or an index given """
         if path is None:
             return self.build_from_index(index, *args, **kwargs)
-        else:
-            return self.build_from_path(path, *args, **kwargs)
+        return self.build_from_path(path, *args, **kwargs)
 
     def build_from_index(self, index, paths, dirs):
         """ Build index from another index for indices given """
