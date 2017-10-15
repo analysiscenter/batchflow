@@ -7,6 +7,7 @@ from .conv import conv1d_block, conv2d_block, conv3d_block
 
 def flatten(x, name=None):
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) """
+    x = tf.convert_to_tensor(x)
     dims = tf.reduce_prod(tf.shape(x)[1:])
     x = tf.reshape(x, [-1, dims], name=name)
     return x
@@ -14,7 +15,27 @@ def flatten(x, name=None):
 
 def iflatten(x, name=None):
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) using inferred shape and numpy """
+    x = tf.convert_to_tensor(x)
     shape = x.get_shape().as_list()
     dim = np.prod(shape[1:])
     x = tf.reshape(x, [-1, dim], name=name)
     return x
+
+
+def mip(x, depth, name='mip'):
+    """ Shrink last dimension by making max pooling every depth channels """
+    with tf.name_scope(name):
+        x = tf.convert_to_tensor(x)
+        num_layers = x.get_shape().as_list()[-1]
+        split_sizes = [depth] * (num_layers // depth)
+        if num_layers % depth:
+            split_sizes += [num_layers % depth]
+
+        splits = tf.split(x, split_sizes, axis=-1)
+        mips = []
+        for split in splits:
+            mip = tf.reduce_max(split, axis=-1)
+            mips.append(mip)
+        mips = tf.stack(mips, axis=-1)
+
+    return mips
