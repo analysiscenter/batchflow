@@ -308,14 +308,38 @@ class TFModel(BaseModel):
         """
         return tensor.get_shape().as_list()
 
+    def _tensor_name(self, name):
+        if hasattr(self, name):
+            return getattr(self, name)
+        elif ':' in name:
+            return name
+        else:
+            return name + ':0'
+
     def _fill_feed_dict(self, feed_dict=None):
         feed_dict = feed_dict or {}
         _feed_dict = {}
         for placeholder_name, value in feed_dict.items():
-            placeholder = self.graph.get_tensor_by_name(placeholder_name + ':0')
+            placeholder = self.graph.get_tensor_by_name(self._tensor_name(placeholder_name))
             _feed_dict.update({placeholder: value})
         _feed_dict.update({self.is_training: True})
         return _feed_dict
+
+    def _fill_fetches(self, fetches=None, default=None):
+        fetches = fetches or default
+        if isinstance(fetches, str):
+            _fetches = self._tensor_name(fetches)
+        elif isinstance(fetches, (tuple, list)):
+            _fetches = []
+            for fetch in fetches:
+                _fetches.append(self._tensor_name(fetches))
+        elif isinstance(fetches, dict):
+            _fetches = dict()
+            for key, fetch in fetches.items():
+                _fetches.update({key: self._tensor_name(fetches)})
+        else:
+            _fetches = fetches
+        return _fetches
 
     def train(self, fetches=None, feed_dict=None):   # pylint: disable=arguments-differ
         """ Train the model with the data provided
@@ -335,7 +359,7 @@ class TFModel(BaseModel):
         """
         with self:
             _feed_dict = self._fill_feed_dict(feed_dict)
-            _fetches = fetches or tuple()
+            _fetches = self._fill_fetches(fetches, default=None)
             _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
         return output
 
@@ -362,17 +386,7 @@ class TFModel(BaseModel):
         """
         with self:
             _feed_dict = self._fill_feed_dict(feed_dict)
-            if fetches is None:
-                _fetches = 'predictions:0'
-            elif isinstance(fetches, str):
-                _fetches = fetches + ':0'
-            elif isinstance(fetches, (tuple, list)):
-                _fetches = []
-                for fetch in fetches:
-                    _fetches.append(fetch + ':0')
-            else:
-                _fetches = fetches
-
+            _fetches = self._fill_fetches(fetches, default='predictions')
             output = self.session.run(_fetches, _feed_dict)
         return output
 

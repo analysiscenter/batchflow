@@ -18,7 +18,7 @@ class MyModel(TFModel):
         input_labels = tf.placeholder("uint8", [None], name='labels')
         images = tf.to_float(input_images)
 
-        features = conv2d_block(images, 32, (3, 3), name='layer1')
+        features = conv2d_block(images, 32, (3, 3), layout='canp', name='layer1')
         features = iflatten(features)
 
         layer1 = tf.layers.dense(features, units=512, activation=tf.nn.relu)
@@ -37,8 +37,12 @@ if __name__ == "__main__":
     print()
     print("Start training...")
     train_pp = (mnist.train.p
+                .init_variable('loss_history', init_on_each_run=list)
+                .init_variable('loss', init_on_each_run=0)
                 .init_model('static', MyModel, 'conv', config={'loss': 'ce'})
-                .train_model('conv', feed_dict={'images': 'images', 'labels': 'labels'})
+                .train_model('conv', fetches='loss', feed_dict={'images': 'images', 'labels': 'labels'}, save_to='loss')
+                .append_variable('loss_history', 'loss')
+                .print_variable('loss')
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True))
     print("End training")
 
@@ -46,13 +50,15 @@ if __name__ == "__main__":
     print("Start testing...")
     test_pp = (mnist.test.p
                 .import_model('conv', train_pp)
-                .init_variable('predictions', init_on_each_run=list)
+                .init_variable('all_predictions', init_on_each_run=list)
+                .init_variable('predictions')
                 .predict_model('conv', fetches='predicted_labels', feed_dict={'images': 'images', 'labels': 'labels'}, save_to='predictions')
+                .append_variable('all_predictions', 'predictions')
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False))
     print("End testing")
 
     print("Predictions")
-    for pred in test_pp.get_variable("predictions"):
+    for pred in test_pp.get_variable("all_predictions"):
         print(pred.shape)
 
     conv = train_pp.get_model_by_name("conv")
