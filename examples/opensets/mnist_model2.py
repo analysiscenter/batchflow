@@ -38,11 +38,11 @@ if __name__ == "__main__":
     print("Start training...")
     train_pp = (mnist.train.p
                 .init_variable('loss_history', init_on_each_run=list)
-                .init_variable('loss', init_on_each_run=0)
+                .init_variable('current_loss', init_on_each_run=0)
                 .init_model('static', MyModel, 'conv', config={'loss': 'ce'})
-                .train_model('conv', fetches='loss', feed_dict={'images': 'images', 'labels': 'labels'}, save_to='loss')
-                .append_variable('loss_history', 'loss')
-                .print_variable('loss')
+                .train_model('conv', fetches='loss', feed_dict={'images': 'images', 'labels': 'labels'}, save_to='current_loss')
+                .append_variable('loss_history', 'current_loss')
+                .print_variable('current_loss')
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True))
     print("End training")
 

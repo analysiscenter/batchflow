@@ -451,6 +451,8 @@ class Pipeline:
                 data_item = item(batch, model)
             elif isinstance(item, str) and hasattr(batch, item):
                 data_item = getattr(batch, item)
+            elif self.has_variable(item):
+                data_item = self.get_variable(item)
             else:
                 data_item = item
             return data_item
@@ -473,6 +475,12 @@ class Pipeline:
                     data_item = _map_data(item)
                     data_dict.update({key: data_item})
                 data_item = data_dict
+            elif isinstance(data, (tuple, list)):
+                data_list = []
+                for item in data:
+                    data_item = _map_data(item)
+                    data_list.append(data_item)
+                data_item = data_list
             else:
                 data_item = _map_data(data)
             kwargs.update({arg: data_item})
