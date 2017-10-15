@@ -26,20 +26,33 @@ class MyModel(TFModel):
         model_output = tf.identity(model_output, name='predictions')
 
         encoded_labels = tf.one_hot(input_labels, depth=10, name='targets')
+        predicted_labels = tf.argmax(model_output, axis=1, name='predicted_labels')
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 64
+    BATCH_SIZE = 256 * 4
 
     mnist = MNIST()
 
     print()
     print("Start training...")
-    res = (mnist.train.p
-            .init_model('static', MyModel, 'conv', config={'loss': 'dice'})
-            .train_model('conv', feed_dict={'images': 'images', 'labels': 'labels'})
-            .run(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True))
+    train_pp = (mnist.train.p
+                .init_model('static', MyModel, 'conv', config={'loss': 'ce'})
+                .train_model('conv', feed_dict={'images': 'images', 'labels': 'labels'})
+                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True))
     print("End training")
 
-    conv = res.get_model_by_name("conv")
-    print(conv.graph.get_operations())
+    print()
+    print("Start testing...")
+    test_pp = (mnist.test.p
+                .import_model('conv', train_pp)
+                .init_variable('predictions', init=list)
+                .predict_model('conv', fetches='predicted_labels', feed_dict={'images': 'images', 'labels': 'labels'}, store_at='predictions')
+                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False))
+    print("End testing")
+
+    print("Predictions")
+    for pred in test_pp.get_variable("predictions"):
+        print(pred.shape)
+
+    conv = train_pp.get_model_by_name("conv")

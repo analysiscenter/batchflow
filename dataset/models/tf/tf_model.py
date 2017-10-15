@@ -308,6 +308,15 @@ class TFModel(BaseModel):
         """
         return tensor.get_shape().as_list()
 
+    def _fill_feed_dict(self, feed_dict=None):
+        feed_dict = feed_dict or {}
+        _feed_dict = {}
+        for placeholder_name, value in feed_dict.items():
+            placeholder = self.graph.get_tensor_by_name(placeholder_name + ':0')
+            _feed_dict.update({placeholder: value})
+        _feed_dict.update({self.is_training: True})
+        return _feed_dict
+
     def train(self, fetches=None, feed_dict=None):   # pylint: disable=arguments-differ
         """ Train the model with the data provided
 
@@ -325,17 +334,12 @@ class TFModel(BaseModel):
         Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
         """
         with self:
-            feed_dict = feed_dict or {}
-            _feed_dict = {}
-            for placeholder_name, value in feed_dict.items():
-                placeholder = self.graph.get_tensor_by_name(placeholder_name + ':0')
-                _feed_dict.update({placeholder: value})
-            _feed_dict.update({self.is_training: True})
+            _feed_dict = self._fill_feed_dict(feed_dict)
             _fetches = fetches or tuple()
             _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
         return output
 
-    def predict(self, fetches, feed_dict=None):      # pylint: disable=arguments-differ
+    def predict(self, fetches=None, feed_dict=None):      # pylint: disable=arguments-differ
         """ Get predictions on the data provided
 
         Parameters
@@ -357,10 +361,19 @@ class TFModel(BaseModel):
         Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
         """
         with self:
-            feed_dict = feed_dict or {}
-            _feed_dict = {self.is_training: False}
-            _feed_dict = {**feed_dict, **_feed_dict}
-            output = self.session.run(fetches, _feed_dict)
+            _feed_dict = self._fill_feed_dict(feed_dict)
+            if fetches is None:
+                _fetches = 'predictions:0'
+            elif isinstance(fetches, str):
+                _fetches = fetches + ':0'
+            elif isinstance(fetches, (tuple, list)):
+                _fetches = []
+                for fetch in fetches:
+                    _fetches.append(fetch + ':0')
+            else:
+                _fetches = fetches
+
+            output = self.session.run(_fetches, _feed_dict)
         return output
 
     def save(self, path, *args, **kwargs):

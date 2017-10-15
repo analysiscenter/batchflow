@@ -2,7 +2,7 @@
 import traceback
 import concurrent.futures as cf
 import threading
-#import multiprocessing as mpc
+from collections import OrderedDict
 import asyncio
 import logging
 import queue as q
@@ -25,6 +25,7 @@ REBATCH_ID = '#_rebatch'
 IMPORT_MODEL_ID = '#_import_model'
 INIT_MODEL_ID = '#_init_model'
 TRAIN_MODEL_ID = '#_train_model'
+PREDICT_MODEL_ID = '#_predict_model'
 
 
 
@@ -380,27 +381,26 @@ class Pipeline:
             ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
                                       name=action['model_name'], config=action['config'], pipeline=self)
 
-    def _exec_train_model(self, batch, action):
+    def _make_model_args(self, batch, action, model):
         def _map_data(item):
             if callable(item):
                 data_item = item(batch, model)
-            elif hasattr(batch, item):
+            elif isinstance(item, str) and hasattr(batch, item):
                 data_item = getattr(batch, item)
             else:
                 data_item = item
             return data_item
 
-        model = self.get_model_by_name(action['model_name'], batch=batch)
         make_data = action['make_data']
-        train_args = tuple()
-        train_kwargs = dict()
+        args = tuple()
+        kwargs = dict()
 
         if callable(make_data):
             _data = make_data(batch, model)
             if isinstance(_data, dict):
-                train_kwargs = _data
+                kwargs = _data
             else:
-                train_args = _data
+                args = _data
 
         for arg, data in action['kwargs'].items():
             if isinstance(data, dict):
@@ -411,9 +411,39 @@ class Pipeline:
                 data_item = data_dict
             else:
                 data_item = _map_data(data)
-            train_kwargs.update({arg: data_item})
+            kwargs.update({arg: data_item})
 
-        model.train(*train_args, **train_kwargs)
+        return args, kwargs
+
+    def _exec_train_model(self, batch, action):
+        model = self.get_model_by_name(action['model_name'], batch=batch)
+        args, kwargs = self._make_model_args(batch, action, model)
+        model.train(*args, **kwargs)
+
+    def _exec_predict_model(self, batch, action):
+        model = self.get_model_by_name(action['model_name'], batch=batch)
+        args, kwargs = self._make_model_args(batch, action, model)
+        predictions = model.predict(*args, **kwargs)
+
+        if not isinstance(predictions, (tuple, list, dict, OrderedDict)):
+            predictions = (predictions, )
+            store_at = (action['store_at'], )
+        else:
+            store_at = action['store_at']
+
+        if isinstance(predictions, (tuple, list)):
+            for i, pred in enumerate(predictions):
+                if not isinstance(action['store_at'], (tuple, list)):
+                    loc, name = 'p', action['store_at']
+                elif isinstance(action['store_at'][i], (tuple, list)):
+                    loc, name = action['store_at'][i]
+                else:
+                    loc, name = 'p', action['store_at'][i]
+
+                if loc in ['p', 'pipeline']:
+                    batch.pipeline.get_variable(name).append(pred)
+                elif loc in ['b', 'batch']:
+                    setattr(batch, name, pred)
 
 
     def _exec_all_actions(self, batch, action_list=None):
@@ -445,6 +475,8 @@ class Pipeline:
                 self._exec_init_model(batch, _action)
             elif _action['name'] == TRAIN_MODEL_ID:
                 self._exec_train_model(batch, _action)
+            elif _action['name'] == PREDICT_MODEL_ID:
+                self._exec_predict_model(batch, _action)
             else:
                 if join_batches is None:
                     _action_args = _action['args']
@@ -529,10 +561,12 @@ class Pipeline:
         Parameters
         ----------
             name: str - a model name
+
             make_data: callable
                        a function or method to make train data from a batch
                        `train_data = make_data(batch, model)`
                        `model.train(*train_data)`
+
             all other named parameters are treated as data mappings which values could be:
                 - a callable taking a batch and a model as parameters
                 - a batch component name
@@ -556,6 +590,57 @@ class Pipeline:
         resnet_model.train(*train_data)
         """
         self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data})
+        return self.append_action(*args, **kwargs)
+
+    def predict_model(self, name, make_data=None, store_at=None, *args, **kwargs):
+        """ Predict using a model
+
+        Parameters
+        ----------
+            name: str - a model name
+
+            make_data: callable
+                       a function or method to make input data from a batch
+                       `input_data = make_data(batch, model)`
+                       `model.train(*input_data)`
+                       Should return tuple or dict.
+
+            store_at: str or tuple of str or tuple of (str, str) - where to store predictions
+                    str - a name of a pipeline variable to store all predicted data in the same place
+                    tuple of str - pipeline variable names for each predicted item
+                    tuple of tuples(str, str) - locations and names for each predicted item
+                            location could be 'pipeline' or 'batch' for a pipeline variable or a batch component
+                            a name is a variable or component name
+
+            all other named parameters are treated as data mappings which values could be:
+                - a callable taking a batch and a model as parameters
+                - a batch component name
+                - a batch class attribute
+                - a dict of data mappings
+            while all other values are passed directly to `model.predict`
+
+        Examples
+        --------
+        pipeline
+           .init_variable('predicted_labels', init=list, init_on_each_run=True)
+           .predict_model('resnet', x='images', y_true='labels', store_at='predicted_labels')
+        Would call a `resnet` model `predict` method with `x` and `y_true` arguments:
+        `predictions = resnet.predict(x=batch.images, y_true=batch.labels)`
+        Predictions will be stored in a pipeline variable `predicted_labels`.
+
+        >>> pipeline.train_model('tf_unet', fetches='predicted_masks', feed_dict={'x': 'images'}, store_at=('b', 'inferred_masks'))
+        Would call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
+        predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})
+        Predictions for each bacth will be stored at batch component 'inferred_masks'.
+        Make sure that batch component names do not interfere with data mappings.
+
+        >>> pipeline.train_model('deepnet', MyBatch.make_deepnet_data)
+        Equivalent to:
+        predict_data = batch.make_deepnet_data(deepnet_model)
+        deepnet_model.train(*predict_data)
+        """
+        self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
+                                  'store_at': store_at})
         return self.append_action(*args, **kwargs)
 
     def save_model(self, name, path):
