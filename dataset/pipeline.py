@@ -245,7 +245,7 @@ class Pipeline:
             name: string - a name of the variable
             default - an initial value for the variable
             init: callable - a function which returns the default value
-            init_on_each_run: callable - same as `init` but is used to initialize the variable before each run / gen_batch
+            init_on_each_run: callable - same as `init` but is used to initialize the variable before each run
 
         Returns
         -------
