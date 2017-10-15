@@ -579,10 +579,10 @@ class Pipeline:
         ----------
             name: str - a model name
 
-            make_data: callable
-                       a function or method to make train data from a batch
+            make_data: callable - a function or method to make train data from a batch. Should return tuple or dict.
                        `train_data = make_data(batch, model)`
                        `model.train(*train_data)`
+
 
             all other named parameters are treated as data mappings which values could be:
                 - a callable taking a batch and a model as parameters
@@ -616,11 +616,9 @@ class Pipeline:
         ----------
             name: str - a model name
 
-            make_data: callable
-                       a function or method to make input data from a batch
+            make_data: callable - a function or method to make train data from a batch. Should return tuple or dict.
                        `input_data = make_data(batch, model)`
                        `model.train(*input_data)`
-                       Should return tuple or dict.
 
             store_at: str or tuple of str or tuple of (str, str) - where to store predictions
                     str - a name of a batch attribute or a pipeline variable to store predicted data
