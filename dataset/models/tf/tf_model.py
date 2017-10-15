@@ -8,6 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..base import BaseModel
+from .losses import dice
 
 
 LOSSES = {
@@ -20,7 +21,8 @@ LOSSES = {
     'cos': tf.losses.cosine_distance,
     'hinge': tf.losses.hinge_loss,
     'huber': tf.losses.huber_loss,
-    'logloss': tf.losses.log_loss
+    'logloss': tf.losses.log_loss,
+    'dice': dice
 }
 
 DECAYS = {
@@ -51,7 +53,7 @@ class TFModel(BaseModel):
     Configuration
     -------------
     loss - a loss function, might be one of:
-        - short name ('mse', 'ce', 'l1', 'cos', 'hinge', 'huber', 'logloss')
+        - short name ('mse', 'ce', 'l1', 'cos', 'hinge', 'huber', 'logloss', 'dice')
         - a function name from tf.losses (e.g. 'absolute_difference' or 'sparse_softmax_cross_entropy')
         - a callable
 
