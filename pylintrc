@@ -5,6 +5,7 @@ max-line-length=120
 max-attributes=20
 max-locals=20
 max-args=16
+max-module-lines=1500
 
 [TYPECHECK]
 ignored-modules=numpy,cv2
