@@ -618,7 +618,7 @@ class Pipeline:
             name: string - a name for the model
             config: dict or callable - a mapping for additional configurations parameters
                 a callable takes a batch(for a dynamic model) or a pipeline (for a static model) as a parameter
-                a dict consists of pairs (arg_name, value) where arg_name is an argument name for model.build
+                a dict consists of pairs (key, value) where key is a config option name
                     and value could be:
                     - a callable which takes a batch (for dynamic) or a pipeline (for static models)
                     - a pipeline variable name
