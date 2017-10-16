@@ -22,6 +22,21 @@ def iflatten(x, name=None):
     return x
 
 
+def maxout(x, depth, axis=-1, name='max'):
+    """ Shrink last dimension by making max pooling every depth channels """
+    with tf.name_scope(name):
+        x = tf.convert_to_tensor(x)
+
+        shape = x.get_shape().as_list()
+        shape[axis] = -1
+        shape += [depth]
+        for i in range(len(shape)):
+            if shape[i] is None:
+                shape[i] = tf.shape(x)[i]
+
+        out = tf.reduce_max(tf.reshape(x, shape), axis=-1, keep_dims=False)
+        return out
+
 def mip(x, depth, name='mip'):
     """ Shrink last dimension by making max pooling every depth channels """
     with tf.name_scope(name):
