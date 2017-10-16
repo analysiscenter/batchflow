@@ -621,8 +621,8 @@ class Pipeline:
                 a dict consists of pairs (key, value) where key is a config option name
                     and value could be:
                     - a callable which takes a batch (for dynamic) or a pipeline (for static models)
-                    - a pipeline variable name
                     - a batch component name (for dynamic mode only)
+                    - a pipeline variable name
                     any other value will be passed unchanged.
 
         Examples
@@ -669,8 +669,8 @@ class Pipeline:
 
             all other named parameters are treated as data mappings which values could be:
                 - a callable taking a batch and a model as parameters
-                - a batch component name
-                - a batch class attribute
+                - a batch component name or a batch class attribute name
+                - a pipeline variable name
                 - a dict of data mappings
             while all other values are passed directly to `model.train`
 
@@ -719,8 +719,8 @@ class Pipeline:
 
             all other named parameters are treated as data mappings which values could be:
                 - a callable taking a batch and a model as parameters
-                - a batch component name
-                - a batch class attribute
+                - a batch component name or a batch class attribute name
+                - a pipeline variable name
                 - a dict of data mappings
             while all other values are passed directly to `model.predict`
 
