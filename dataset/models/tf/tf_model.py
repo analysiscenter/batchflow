@@ -66,7 +66,7 @@ class TFModel(BaseModel):
     decay - a learning rate decay algorithm might be defined in one of three formats:
         - name
         - tuple (name, args)
-        - dict {'name': name, 'args': args}
+        - dict {'name': name, **other_args}
 
         where name might be one of
         - short name ('exp', 'invtime', 'naturalexp', 'const', 'poly')
@@ -76,7 +76,7 @@ class TFModel(BaseModel):
         Examples:
            `{'decay': 'exp'}`
            `{'decay': ('polynomial_decay', {'decay_steps':10000})}`
-           `{'decay': {'name': tf.train.inverse_time_decay, args: {'decay_rate': .5}}`
+           `{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}`
 
     optimizer - an optimizer might be defined in one of three formats
             - name
@@ -91,6 +91,7 @@ class TFModel(BaseModel):
         Examples:
             `{'optimizer': 'Adam'}` or
             `{'optimizer': ('Ftlr', {'learning_rate_power': 0})}`
+            `{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}`
             `{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}`
             `{'optimizer': some_optimizer_fn}`
 
@@ -192,10 +193,9 @@ class TFModel(BaseModel):
             elif len(par) == 2:
                 par_name, par_args = par
             else:
-                par_name = par[0]
-                par_args = par[1:]
+                par_name, par_args = par[0], par[1:]
         elif isinstance(par, dict):
-            par_name, par_args = par.get('name', None), par.get('args', {})
+            par_name, par_args = par.pop('name', None), par
         else:
             par_name, par_args = par, {}
 
@@ -241,7 +241,7 @@ class TFModel(BaseModel):
         return decay_name, decay_args
 
     def _make_optimizer(self):
-        optimizer_name, optimizer_args = self._unpack_fn_from_config('optimizer', ('Adam', {}))
+        optimizer_name, optimizer_args = self._unpack_fn_from_config('optimizer', 'Adam')
 
         if callable(optimizer_name):
             pass
