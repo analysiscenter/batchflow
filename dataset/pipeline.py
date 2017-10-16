@@ -27,7 +27,6 @@ INIT_MODEL_ID = '#_init_model'
 TRAIN_MODEL_ID = '#_train_model'
 PREDICT_MODEL_ID = '#_predict_model'
 PRINT_VARIABLE_ID = '#_print_variable'
-APPEND_VARIABLE_ID = '#_append_variable'
 INC_VARIABLE_ID = '#_inc_variable'
 SAVE_TO_VARIABLE_ID = '#_save_to_variable'
 
