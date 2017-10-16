@@ -45,15 +45,20 @@ class Baseset:
     def calc_cv_split(self, shares=0.8):
         """ Calculate split into train, test and validation subsets
 
-        Return: a tuple which contains number of items in train, test and validation subsets
+        Returns
+        -------
+        a tuple which contains number of items in train, test and validation subsets
 
-        Usage:
-           # split into train / test in 80/20 ratio
-           bs.calc_cv_split()
-           # split into train / test / validation in 60/30/10 ratio
-           bs.calc_cv_split([0.6, 0.3])
-           # split into train / test / validation in 50/30/20 ratio
-           bs.calc_cv_split([0.5, 0.3, 0.2])
+        Examples
+        --------
+        Split into train / test in 80/20 ratio
+        >>> bs.calc_cv_split()
+
+        Split into train / test / validation in 60/30/10 ratio
+        >>> bs.calc_cv_split([0.6, 0.3])
+
+        Split into train / test / validation in 50/30/20 ratio
+        >>> bs.calc_cv_split([0.5, 0.3, 0.2])
         """
         _shares = np.array(shares).ravel() # pylint: disable=no-member
 
@@ -88,13 +93,16 @@ class Baseset:
         """ Split the dataset into train, test and validation sub-datasets
         Subsets are available as .train, .test and .validation respectively
 
-        Usage:
-           # split into train / test in 80/20 ratio
-           ds.cv_split()
-           # split into train / test / validation in 60/30/10 ratio
-           ds.cv_split([0.6, 0.3])
-           # split into train / test / validation in 50/30/20 ratio
-           ds.cv_split([0.5, 0.3, 0.2])
+        Examples
+        --------
+        Split into train / test in 80/20 ratio
+        >>> ds.cv_split()
+
+        Split into train / test / validation in 60/30/10 ratio
+        >>> ds.cv_split([0.6, 0.3])
+
+        Split into train / test / validation in 50/30/20 ratio
+        >>> ds.cv_split([0.5, 0.3, 0.2])
         """
         self.index.cv_split(shares, shuffle)
 

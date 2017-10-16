@@ -39,29 +39,29 @@ class TFModel(BaseModel):
 
     Attributes
     ----------
-    name: str - a model name
-    config: dict - configuration parameters
+    name : str - a model name
+    config : dict - configuration parameters
 
-    session: tf.Session
-    graph: tf.Graph
-    is_training: tf.Tensor
-    global_step: tf.Tensor
-    loss: tf.Tensor
-    train_step: tf.Operation
+    session : tf.Session
+    graph : tf.Graph
+    is_training : tf.Tensor
+    global_step : tf.Tensor
+    loss : tf.Tensor
+    train_step : tf.Operation
 
 
     Configuration
     -------------
     loss - a loss function, might be one of:
-        - short name ('mse', 'ce', 'l1', 'cos', 'hinge', 'huber', 'logloss', 'dice')
-        - a function name from tf.losses (e.g. 'absolute_difference' or 'sparse_softmax_cross_entropy')
-        - a callable
+        * short name ('mse', 'ce', 'l1', 'cos', 'hinge', 'huber', 'logloss', 'dice')
+        * a function name from tf.losses (e.g. 'absolute_difference' or 'sparse_softmax_cross_entropy')
+        * a callable
 
         Examples:
-        `{'loss': 'mse'}`
-        `{'loss': 'sigmoid_cross_entropy'}`
-        `{'loss': tf.losses.huber_loss}`
-        `{'loss': external_loss_fn}`
+        ``{'loss': 'mse'}``
+        ``{'loss': 'sigmoid_cross_entropy'}``
+        ``{'loss': tf.losses.huber_loss}``
+        ``{'loss': external_loss_fn}``
 
     decay - a learning rate decay algorithm might be defined in one of three formats:
         - name
@@ -74,9 +74,9 @@ class TFModel(BaseModel):
         - a callable
 
         Examples:
-           `{'decay': 'exp'}`
-           `{'decay': ('polynomial_decay', {'decay_steps':10000})}`
-           `{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}`
+           ``{'decay': 'exp'}``
+           ``{'decay': ('polynomial_decay', {'decay_steps':10000})}``
+           ``{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}``
 
     optimizer - an optimizer might be defined in one of three formats
             - name
@@ -89,11 +89,11 @@ class TFModel(BaseModel):
             - a callable
 
         Examples:
-            `{'optimizer': 'Adam'}` or
-            `{'optimizer': ('Ftlr', {'learning_rate_power': 0})}`
-            `{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}`
-            `{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}`
-            `{'optimizer': some_optimizer_fn}`
+            ``{'optimizer': 'Adam'}``
+            ``{'optimizer': ('Ftlr', {'learning_rate_power': 0})}``
+            ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
+            ``{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}``
+            ``{'optimizer': some_optimizer_fn}``
 
     """
 
@@ -272,11 +272,11 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        tensor: tf.Variable or tf.Tensor
+        tensor : tf.Variable or tf.Tensor
 
         Returns
         -------
-        number of channels: int
+        number of channels : int
         """
         return tensor.get_shape().as_list()[-1]
 
@@ -286,11 +286,11 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        tensor: tf.Variable or tf.Tensor
+        tensor : tf.Variable or tf.Tensor
 
         Returns
         -------
-        batch size: int
+        batch size : int
         """
         return tensor.get_shape().as_list()[0]
 
@@ -300,11 +300,11 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        tensor: tf.Variable or tf.Tensor
+        tensor : tf.Variable or tf.Tensor
 
         Returns
         -------
-        shape: tuple of ints
+        shape : tuple of ints
         """
         return tensor.get_shape().as_list()
 
@@ -346,7 +346,7 @@ class TFModel(BaseModel):
         Parameters
         ----------
         fetches : an arbitrarily nested structure of `tf.Operation`s and `tf.Tensor`s
-        feed_dict: a dict with input data, where key is a placeholder name and value is a numpy value
+        feed_dict : a dict with input data, where key is a placeholder name and value is a numpy value
 
         Returns
         -------
@@ -371,7 +371,7 @@ class TFModel(BaseModel):
         Parameters
         ----------
         fetches : an arbitrarily nested structure of `tf.Operation`s and `tf.Tensor`s
-        feed_dict: a dict with input data, where key is a placeholder name and value is a numpy value
+        feed_dict : a dict with input data, where key is a placeholder name and value is a numpy value
 
         Returns
         -------
@@ -397,13 +397,15 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        path: str - a path to a directory where all model files will be stored
+        path : str - a path to a directory where all model files will be stored
 
         Examples
         --------
         >>> tf_model = ResNet34()
+
         Now train the model
         >>> tf_model.save('/path/to/models/resnet34')
+
         The model will be saved to /path/to/models/resnet34
         """
         with self.graph.as_default():
@@ -419,13 +421,14 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        - path: str - a directory where a model is stored
-        - graph: str - a filename for a metagraph file
-        - checkpoint: str - a checkpoint file name or None to load the latest checkpoint
+        path : str - a directory where a model is stored
+        graph : str - a filename for a metagraph file
+        checkpoint : str - a checkpoint file name or None to load the latest checkpoint
 
         Examples
         --------
         >>> tf_model = ResNet34(load=True)
+        
         >>> tf_model.load('/path/to/models/resnet34')
         """
         _ = args, kwargs

@@ -109,10 +109,14 @@ class ModelDirectory:
     @staticmethod
     def get_model(method_spec, pipeline=None):
         """ Return a model specification for a given model method
-        Return:
-            a model specification or a list of model specifications
-        Raises:
-            ValueError if a model has not been found
+
+        Returns
+        -------
+        a model specification or a list of model specifications
+
+        Raises
+        ------
+        `ValueError` if a model has not been found
         """
         mode, model_method, _pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
         pipeline = pipeline if pipeline is not None else _pipeline
@@ -126,15 +130,21 @@ class ModelDirectory:
     @staticmethod
     def get_model_by_name(model_name, batch=None, pipeline=None):
         """ Return a model specification given its name
-        Args:
-            model_name: str - a name of the model
-                        callable - a method or a function with a model definition
-            batch - an instance of the batch class where to look for a model or None
-            pipeline - a pipeline where to look for a model or None
-        Return:
-            a model specification or a list of model specifications
-        Raises:
-            ValueError if a model has not been found
+
+        Parameters
+        ----------
+        model_name: str - a name of the model
+                    callable - a method or a function with a model definition
+        batch - an instance of the batch class where to look for a model or None
+        pipeline - a pipeline where to look for a model or None
+
+        Returns
+        -------
+        a model specification or a list of model specifications
+
+        Raises
+        ------
+        `ValueError` if a model has not been found
         """
         pipeline = pipeline or batch.pipeline
         model_spec = ModelDirectory.find_model_by_name(model_name, pipeline, only_first=True)
@@ -186,12 +196,14 @@ class ModelDirectory:
     @staticmethod
     def init_model(mode, model_class=None, name=None, pipeline=None, config=None, batch=None):
         """ Initialize a static or dynamic model in a pipeline
-        Args:
-            mode: str - 'static' or 'dynamic'
-            model_class: class - a model class
-            name: string - a short name for the model
-            pipeline - a pipeline to link a model to
-            config: dict or callable - a mapping or a function/method for additional model arguments
+
+        Parameters
+        ----------
+        mode : str - 'static' or 'dynamic'
+        model_class : class - a model class
+        name : str - a short name for the model
+        pipeline - a pipeline to link a model to
+        config : dict or callable - a mapping or a function/method for additional model arguments
         """
         if model_class is not None:
             name = name or model_class.__name__
@@ -265,21 +277,22 @@ class ModelDirectory:
 def model(mode='global', pipeline=None):
     """ Decorator for model methods
 
-    Usage:
-        @model()
-        def global_model():
-            ...
-            return my_model
+    Examples
+    --------
+    @model()
+    def global_model():
+        ...
+        return my_model
 
-        @model(mode='static')
-        def static_model(config=None):
-            ...
-            return my_model
+    @model(mode='static')
+    def static_model(config=None):
+        ...
+        return my_model
 
-        @model(mode='dynamic')
-        def some_model(self, config=None):
-            ...
-            return my_model
+    @model(mode='dynamic')
+    def some_model(self, config=None):
+        ...
+        return my_model
     """
     def _model_decorator(method):
 
@@ -376,14 +389,20 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
 def action(*args, **kwargs):
     """ Decorator for action methods in Batch classes
 
-    Usage:
-        @action
-        def some_action(self, arg1, arg2):
-            ...
+    Examples ::
+    --------
 
-        @action(model='some_model')
-        def train_model(self, model, another_arg):
-            ...
+    @action
+    def some_action(self, arg1, arg2):
+        ...
+
+    @action(model='some_model')
+    def train_model(self, model, another_arg):
+        ...
+
+    @action(use_lock='lock_name')
+    def critical_section(self, some_arg, another_arg):
+        ...
     """
     if len(args) == 1 and callable(args[0]):
         # action without arguments

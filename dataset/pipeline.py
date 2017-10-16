@@ -1,4 +1,4 @@
-""" Pipeline classes """
+""" Contains pipeline class """
 import traceback
 import concurrent.futures as cf
 import threading
@@ -224,13 +224,17 @@ class Pipeline:
     def get_variable(self, name, default=None, init=None, init_on_each_run=None):
         """ Return a variable value
         If the variable does not exists, it will be created and initialized (see `init_variable` below)
-        Args:
-            name: string - a name of the variable
-            default - a value for the variable if it does not exists
-            init: callable - a function which returns the default value
-            init_on_each_run: callable - same as `init` but initializes the variable before each run
-        Return:
-            a value of the variable
+
+        Parameters
+        ----------
+        name : string - a name of the variable
+        default - a value for the variable if it does not exists
+        init : callable - a function which returns the default value
+        init_on_each_run : callable - same as `init` but initializes the variable before each run
+
+        Returns
+        -------
+        a value of the variable
         """
         if name not in self._variables:
             self.init_variable(name, default, init, init_on_each_run)
@@ -243,19 +247,19 @@ class Pipeline:
 
         Parameters
         ----------
-            name: string - a name of the variable
-            default - an initial value for the variable
-            init: callable - a function which returns the default value
-            init_on_each_run: callable - same as `init` but initializes the variable before each run
-            lock: bool - whether to lock a variable before each update (default: True)
+        name : string - a name of the variable
+        default - an initial value for the variable
+        init : callable - a function which returns the default value
+        init_on_each_run : callable - same as `init` but initializes the variable before each run
+        lock : bool - whether to lock a variable before each update (default: True)
 
         Returns
         -------
-            self - in order to use it in the pipeline chains
+        self - in order to use it in the pipeline chains
 
         Examples
         --------
-            pp = dataset.p.
+        >>> pp = dataset.p.
                     .init_variable("iterations", default=0)
                     .init_variable("accuracy", init_on_each_run=0)
                     .init_variable("loss_history", init_on_each_run=list)
@@ -279,14 +283,19 @@ class Pipeline:
 
     def init_variables(self, variables):
         """ Create several variables
-        Args:
-            vars: dict - key: string - a variable name,
-                         value: dict -  a variable value and params (see `init_variable`)
-        Return:
-            self - in order to use it in the pipeline chains
 
-        Examples:
-            pp = dataset.p.
+        Parameters
+        ----------
+        variables : dict
+                    key : str - a variable name,
+                    value : dict -  a variable value and params (see `init_variable`)
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Examples
+        --------
+        >>> pp = dataset.p
                     .init_variables({"loss_history": dict(init_on_each_run=list),
                                      "accuracy", dict(default=0)})
                     .load('/some/path', fmt='blosc')
@@ -305,11 +314,15 @@ class Pipeline:
         """ Set a variable value
         If the variable does not exists, it will be created, however, the warning will be displayed that
         the variable was not initialized.
-        Args:
-            name: string - a name of the variable
-            value - a value for the variable
-        Return:
-            self - in order to use it in the pipeline chains
+
+        Parameters
+        ----------
+        name : str - a name of the variable
+        value - a value for the variable
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
         """
         if not self.has_variable(name):
             logging.warning("Pipeline variable '%s' was not initialized", name)
@@ -324,11 +337,15 @@ class Pipeline:
     def delete_variable(self, name):
         """ Delete a variable
         If the variable does not exists, the warning will be issued.
-        Args:
-            name: string - a name of the variable
-                  iterable - several variable names
-        Return:
-            self - in order to use it in the pipeline chains
+
+        Parameters
+        ----------
+        name : str - a name of the variable
+             : iterable - several variable names
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
         """
         if name not in self._variables:
             logging.warning("Pipeline variable '%s' does not exist", name)
@@ -636,12 +653,13 @@ class Pipeline:
 
     def init_model(self, mode, model_class=None, name=None, config=None):
         """ Initialize a static or dynamic model
+
         Parameters
         ----------
-            mode: str - 'static' or 'dynamic'
-            model_class: class - a model class
-            name: string - a name for the model
-            config: dict or callable - a mapping for additional configurations parameters
+            mode : str - 'static' or 'dynamic'
+            model_class : class - a model class
+            name : str - a name for the model
+            config : dict or callable - a mapping for additional configurations parameters
                 a callable takes a batch(for a dynamic model) or a pipeline (for a static model) as a parameter
                 a dict consists of pairs (key, value) where key is a config option name
                     and value could be:
@@ -673,9 +691,11 @@ class Pipeline:
 
     def import_model(self, name, pipeline):
         """ Import a model from another pipeline
-        Args:
-            name: str - a name of the model to import
-            pipeline: Pipeline - a pipeline that holds a model
+
+        Parameters
+        ----------
+        name : str - a name of the model to import
+        pipeline : Pipeline - a pipeline that holds a model
         """
         self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': name, 'pipeline': pipeline})
         return self.append_action()
@@ -685,34 +705,32 @@ class Pipeline:
 
         Parameters
         ----------
-            name: str - a model name
+        name : str - a model name
 
-            make_data: callable - a function or method to make train data from a batch. Should return tuple or dict.
-                       `train_data = make_data(batch, model)`
-                       `model.train(*train_data)`
+        make_data : callable - a function or method to make train data from a batch. Should return tuple or dict.
 
-
-            all other named parameters are treated as data mappings which values could be:
-                - a callable taking a batch and a model as parameters
-                - a batch component name or a batch class attribute name
-                - a pipeline variable name
-                - a dict of data mappings
-            while all other values are passed directly to `model.train`
+        all other named parameters are treated as data mappings which values could be:
+        - a callable taking a batch and a model as parameters
+        - a batch component name or a batch class attribute name
+        - a pipeline variable name
+        - a dict of data mappings
+        while all other values are passed directly to ``model.train``
 
         Examples
         --------
         >>> pipeline.train_model('resnet', x='images', y_true='masks')
         Would call a `resnet` model `train` method with `x` and `y_true` arguments:
-        resnet.train(x=batch.images, y_true=batch.masks)
+        ``resnet.train(x=batch.images, y_true=batch.masks)``
 
         >>> pipeline.train_model('resnet', feed_dict={'x': 'images'})
         Would call a `resnet` model `train` method with a `feed_dict` argument:
-        resnet.train(feed_dict={'x': batch.images})
+        ``resnet.train(feed_dict={'x': batch.images})``
 
         >>> pipeline.train_model('resnet', MyBatch.make_resnet_data)
-        Equivalent to:
-        train_data = batch.make_resnet_data(resnet_model)
-        resnet_model.train(*train_data)
+        Equivalent to::
+
+            train_data = batch.make_resnet_data(resnet_model)
+            resnet_model.train(**train_data)
         """
         self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data,
                                   'save_to': save_to, 'append_to': append_to})
@@ -723,51 +741,50 @@ class Pipeline:
 
         Parameters
         ----------
-            name: str - a model name
+        name : str - a model name
 
-            make_data: callable - a function or method to make train data from a batch. Should return tuple or dict.
-                       `input_data = make_data(batch, model)`
-                       `model.train(*input_data)`
+        make_data : callable - a function or method to make train data from a batch. Should return tuple or dict.
 
-            save_to: str or tuple of str or tuple of (str, str) - where to save predictions to.
-                    str - a name of a batch attribute or a pipeline variable to store predicted data
-                    tuple of str - names of batch attributes or pipeline variables for each predicted item
-                    tuple of tuples(str, str) - locations and names for each predicted item
-                            location: str - could be 'pipeline' or 'batch' for a pipeline variable or a batch component
-                            name: str - a pipeline variable or a batch component name
-                    Name is treated as a batch attribute if this attribute is already exists in the batch.
-                    Otherwise, predictions are stored in a pipeline variable with that name.
-                    If it does not exist either, predictions are not stored anywhere.
+        save_to : str or tuple of str or tuple of (str, str) - where to save predictions to.
+                - str - a name of a batch attribute or a pipeline variable to store predicted data
+                - tuple of str - names of batch attributes or pipeline variables for each predicted item
+                - tuple of tuples(str, str) - locations and names for each predicted item
+                        * location: str - could be 'pipeline' or 'batch' for a pipeline variable or a batch component
+                        * name: str - a pipeline variable or a batch component name
+                Name is treated as a batch attribute if this attribute is already exists in the batch.
+                Otherwise, predictions are stored in a pipeline variable with that name.
+                If it does not exist either, predictions are not stored anywhere.
 
-            append_to - str or tuple of str - a pipeline variable where to append predictions to.
-                If both `save_to` and `append_to` are present, only `append_to` is used.
+        append_to : str or tuple of str - a pipeline variable where to append predictions to.
+            If both `save_to` and `append_to` are present, only `append_to` is used.
 
-            all other named parameters are treated as data mappings which values could be:
-                - a callable taking a batch and a model as parameters
-                - a batch component name or a batch class attribute name
-                - a pipeline variable name
-                - a dict of data mappings
-            while all other values are passed directly to `model.predict`
+        all other named parameters are treated as data mappings which values could be:
+            - a callable taking a batch and a model as parameters
+            - a batch component name or a batch class attribute name
+            - a pipeline variable name
+            - a dict of data mappings
+        while all other values are passed directly to `model.predict`
 
         Examples
         --------
-        pipeline
-            .predict_model('resnet', x='images', y_true='labels', save_to='predicted_labels')
+        >>> pipeline
+                .predict_model('resnet', x='images', y_true='labels', save_to='predicted_labels')
         Would call a `resnet` model `predict` method with `x` and `y_true` arguments:
-        `predictions = resnet.predict(x=batch.images, y_true=batch.labels)`
+        ``predictions = resnet.predict(x=batch.images, y_true=batch.labels)``
         Predictions will be stored `batch.predicted_labels`.
 
-        >>> pipeline.
+        >>> pipeline
             .init_variable('inferred_masks', init_on_each_run=list)
             .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': 'images'}, save_to='inferred_masks')
         Would call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
-        predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})
-        Predictions for each batch will be stored in a pipeline variable 'inferred_masks'.
+        ``predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})``
+        Predictions for each batch will be stored in a pipeline variable `inferred_masks`.
 
         >>> pipeline.train_model('deepnet', MyBatch.make_deepnet_data)
-        Equivalent to:
-        predict_data = batch.make_deepnet_data(deepnet_model)
-        deepnet_model.train(*predict_data)
+        Equivalent to::
+
+            predict_data = batch.make_deepnet_data(deepnet_model)
+            deepnet_model.train(**predict_data)
         """
         self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
                                   'save_to': save_to, 'append_to': append_to})
@@ -780,10 +797,7 @@ class Pipeline:
 
 
     def join(self, *pipelines):
-        """ Join pipelines
-        Args:
-            one or several pipelines
-        """
+        """ Join one or several pipelines """
         self._action_list.append({'name': JOIN_ID, 'pipelines': pipelines, 'mode': 'i'})
         return self.append_action()
 
