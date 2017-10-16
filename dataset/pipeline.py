@@ -389,19 +389,14 @@ class Pipeline:
 
         var = self.get_variable(name)
         if value is None:
-            if isinstance(from_name, str) and hasattr(batch, from_name):
-                from_var = getattr(batch, from_name)
-            elif isinstance(from_name, str) and self.has_variable(from_name):
+            if isinstance(from_name, str) and self.has_variable(from_name):
                 from_var = self.get_variable(from_name)
             else:
                 raise ValueError("Unknown name %s", from_name)
         else:
             from_var = value
 
-        if hasattr(var, 'append'):
-            var.append(from_var)
-        elif isinstance(var, (dict, OrderedDict)):
-            var.update({from_name: from_var})
+        var.append(from_var)
 
         if context is not None:
             context.__exit__(None, None, None)
