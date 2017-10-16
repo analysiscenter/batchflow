@@ -66,15 +66,3 @@ some_pipeline.next_batch(BATCH_SIZE, prefetch=3)
 ```
 The parameter `prefetch` defines how many additional batches will be processed in the background.
 See [prefetch.md](prefetch.md)
-
-
-## Tensorflow queues
-A pipeline might send data directly into [TensorFlow](https://www.tensorflow.org) queues:
-```python
-my_pipeline = my_dataset.p
-                .load('/some/path')
-                .preprocessing_action()
-                .another_action()
-                .put_into_tf_queue(queue=input_queue)
-```
-For details see [Working with Tensorflow queues](tf_queue.md).
