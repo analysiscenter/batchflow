@@ -428,7 +428,7 @@ class TFModel(BaseModel):
         Examples
         --------
         >>> tf_model = ResNet34(load=True)
-        
+
         >>> tf_model.load('/path/to/models/resnet34')
         """
         _ = args, kwargs

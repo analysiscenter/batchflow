@@ -616,8 +616,6 @@ class Pipeline:
                 self._exec_predict_model(batch, _action)
             elif _action['name'] == PRINT_VARIABLE_ID:
                 self._exec_print_variable(batch, _action)
-            elif _action['name'] == APPEND_VARIABLE_ID:
-                self._exec_append_variable(batch, _action)
             elif _action['name'] == SAVE_TO_VARIABLE_ID:
                 self._exec_save_to_variable(batch, _action)
             else:

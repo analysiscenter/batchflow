@@ -30,7 +30,7 @@ def maxout(x, depth, axis=-1, name='max'):
         shape = x.get_shape().as_list()
         shape[axis] = -1
         shape += [depth]
-        for i in range(len(shape)):
+        for i, _ in enumerate(shape):
             if shape[i] is None:
                 shape[i] = tf.shape(x)[i]
 
