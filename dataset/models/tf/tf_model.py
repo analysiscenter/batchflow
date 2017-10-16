@@ -335,7 +335,7 @@ class TFModel(BaseModel):
         elif isinstance(fetches, dict):
             _fetches = dict()
             for key, fetch in fetches.items():
-                _fetches.update({key: self._tensor_name(fetches)})
+                _fetches.update({key: self._tensor_name(fetch)})
         else:
             _fetches = fetches
         return _fetches
@@ -358,7 +358,10 @@ class TFModel(BaseModel):
         """
         with self:
             _feed_dict = self._fill_feed_dict(feed_dict)
-            _fetches = self._fill_fetches(fetches, default=None)
+            if fetches is None:
+                _fetches = tuple()
+            else:
+                _fetches = self._fill_fetches(fetches, default=None)
             _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
         return output
 

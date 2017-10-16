@@ -236,7 +236,7 @@ class Pipeline:
         var = self._variables.get(name)
         return var.get('value', default)
 
-    def init_variable(self, name, default=None, init=None, init_on_each_run=None, lock=False):
+    def init_variable(self, name, default=None, init=None, init_on_each_run=None, lock=True):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
 
@@ -246,6 +246,7 @@ class Pipeline:
             default - an initial value for the variable
             init: callable - a function which returns the default value
             init_on_each_run: callable - same as `init` but initializes the variable before each run
+            lock: bool - whether to lock a variable before each update (default: True)
 
         Returns
         -------
@@ -376,26 +377,34 @@ class Pipeline:
     def _exec_print_variable(self, _, action):
         print(self.get_variable(action['var_name']))
 
-    def append_variable(self, name, from_name):
-        """ Append a value of a from_name variable to name variable during pipeline execution """
-        self._action_list.append({'name': APPEND_VARIABLE_ID, 'var_name': name, 'from_name': from_name})
-        return self.append_action()
-
-    def _exec_append_variable(self, _, action):
-        name = action['var_name']
-        from_name = action['from_name']
-
+    def append_variable(self, name, value=None, from_name=None):
+        """ Append a value to a pipeline variable """
         if not self.has_variable(name):
             raise ValueError("Variable %s does not exist", name)
-        if not self.has_variable(from_name):
-            raise ValueError("Variable %s does not exist", from_name)
+
+        context = None
+        if self._variables[name]['lock'] is not None:
+            context = self._variables[name]['lock']
+            context.__enter__()
 
         var = self.get_variable(name)
-        from_var = self.get_variable(from_name)
+        if value is None:
+            if isinstance(from_name, str) and hasattr(batch, from_name):
+                from_var = getattr(batch, from_name)
+            elif isinstance(from_name, str) and self.has_variable(from_name):
+                from_var = self.get_variable(from_name)
+            else:
+                raise ValueError("Unknown name %s", from_name)
+        else:
+            from_var = value
+
         if hasattr(var, 'append'):
             var.append(from_var)
         elif isinstance(var, (dict, OrderedDict)):
             var.update({from_name: from_var})
+
+        if context is not None:
+            context.__exit__(None, None, None)
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -509,17 +518,35 @@ class Pipeline:
                     elif loc in ['b', 'batch']:
                         setattr(batch, name, pred)
 
+    def _append_model_output(self, batch, output, append_to):
+        if not isinstance(output, (tuple, list, dict, OrderedDict)):
+            output = (output, )
+            append_to = (append_to, )
+
+        if isinstance(output, (tuple, list)):
+            for i, pred in enumerate(output):
+                if len(append_to) <= i + 1:
+                    if batch.pipeline.has_variable(append_to[i]):
+                        # batch.pipeline.get_variable(append_to[i]).append(pred)
+                        batch.pipeline.append_variable(append_to[i], value=pred)
+
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         output = model.train(*args, **kwargs)
-        self._save_model_output(batch, output, action['save_to'])
+        if action['append_to'] is None:
+            self._save_model_output(batch, output, action['save_to'])
+        else:
+            self._append_model_output(batch, output, action['append_to'])
 
     def _exec_predict_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         predictions = model.predict(*args, **kwargs)
-        self._save_model_output(batch, predictions, action['save_to'])
+        if action['append_to'] is None:
+            self._save_model_output(batch, predictions, action['save_to'])
+        else:
+            self._append_model_output(batch, predictions, action['append_to'])
 
     def _exec_all_actions(self, batch, action_list=None):
         join_batches = None
@@ -633,7 +660,7 @@ class Pipeline:
         self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': name, 'pipeline': pipeline})
         return self.append_action()
 
-    def train_model(self, name, make_data=None, save_to=None, *args, **kwargs):
+    def train_model(self, name, make_data=None, save_to=None, append_to=None, *args, **kwargs):
         """ Train a model
 
         Parameters
@@ -668,10 +695,10 @@ class Pipeline:
         resnet_model.train(*train_data)
         """
         self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data,
-                                  'save_to': save_to})
+                                  'save_to': save_to, 'append_to': append_to})
         return self.append_action(*args, **kwargs)
 
-    def predict_model(self, name, make_data=None, save_to=None, *args, **kwargs):
+    def predict_model(self, name, make_data=None, save_to=None, append_to=None, *args, **kwargs):
         """ Predict using a model
 
         Parameters
@@ -682,15 +709,18 @@ class Pipeline:
                        `input_data = make_data(batch, model)`
                        `model.train(*input_data)`
 
-            save_to: str or tuple of str or tuple of (str, str) - where to save predictions
+            save_to: str or tuple of str or tuple of (str, str) - where to save predictions to.
                     str - a name of a batch attribute or a pipeline variable to store predicted data
                     tuple of str - names of batch attributes or pipeline variables for each predicted item
                     tuple of tuples(str, str) - locations and names for each predicted item
-                            location could be 'pipeline' or 'batch' for a pipeline variable or a batch component
-                            a name is a variable or component name
+                            location: str - could be 'pipeline' or 'batch' for a pipeline variable or a batch component
+                            name: str - a pipeline variable or a batch component name
                     Name is treated as a batch attribute if this attribute is already exists in the batch.
                     Otherwise, predictions are stored in a pipeline variable with that name.
                     If it does not exist either, predictions are not stored anywhere.
+
+            append_to - str or tuple of str - a pipeline variable where to append predictions to.
+                If both `save_to` and `append_to` are present, only `append_to` is used.
 
             all other named parameters are treated as data mappings which values could be:
                 - a callable taking a batch and a model as parameters
@@ -720,7 +750,7 @@ class Pipeline:
         deepnet_model.train(*predict_data)
         """
         self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
-                                  'save_to': save_to})
+                                  'save_to': save_to, 'append_to': append_to})
         return self.append_action(*args, **kwargs)
 
     def save_model(self, name, path):
