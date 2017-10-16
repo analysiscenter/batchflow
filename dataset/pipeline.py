@@ -29,6 +29,7 @@ PREDICT_MODEL_ID = '#_predict_model'
 PRINT_VARIABLE_ID = '#_print_variable'
 APPEND_VARIABLE_ID = '#_append_variable'
 INC_VARIABLE_ID = '#_inc_variable'
+SAVE_TO_VARIABLE_ID = '#_save_to_variable'
 
 
 def mult_option(a, b):
@@ -63,6 +64,7 @@ class Pipeline:
             self.models = pipeline.models.copy()
 
         self._variables_lock = threading.Lock()
+        self._models_lock = threading.Lock()
         self._tf_session = None
 
         self._stop_flag = False
@@ -312,12 +314,7 @@ class Pipeline:
         """
         if not self.has_variable(name):
             logging.warning("Pipeline variable '%s' was not initialized", name)
-        if self._variables[name]['lock'] is not None:
-            with self._variables[name]['lock']:
-                self._variables[name].update({'value': value})
-        else:
-            self._variables[name].update({'value': value})
-        return self
+        self._variables[name].update({'value': value})
 
     def assign_variable(self, name, value):
         """ Assign a value to a variable
@@ -354,6 +351,23 @@ class Pipeline:
         """ Delete all variables """
         self._variables = dict()
 
+    def append_variable(self, name, value=None, from_name=None):
+        """ Append a value to a pipeline variable """
+        if not self.has_variable(name):
+            raise ValueError("Variable %s does not exist", name)
+
+        var = self.get_variable(name)
+        if value is None:
+            if isinstance(from_name, str) and self.has_variable(from_name):
+                from_var = self.get_variable(from_name)
+            else:
+                raise ValueError("Unknown name %s", from_name)
+        else:
+            from_var = value
+
+        var.append(from_var)
+
+
     def inc_variable(self, name):
         """ Increment a value of a given variable during pipeline execution """
         self._action_list.append({'name': INC_VARIABLE_ID, 'var_name': name})
@@ -377,29 +391,31 @@ class Pipeline:
     def _exec_print_variable(self, _, action):
         print(self.get_variable(action['var_name']))
 
-    def append_variable(self, name, value=None, from_name=None):
-        """ Append a value to a pipeline variable """
-        if not self.has_variable(name):
-            raise ValueError("Variable %s does not exist", name)
+    def save_to_variable(self, name, value, mode='w'):
+        """ Save a value to a given variable during pipeline execution """
+        self._action_list.append({'name': SAVE_TO_VARIABLE_ID, 'var_name': name, 'value': value, 'mode': mode})
+        return self.append_action()
 
-        context = None
-        if self._variables[name]['lock'] is not None:
-            context = self._variables[name]['lock']
-            context.__enter__()
-
-        var = self.get_variable(name)
-        if value is None:
-            if isinstance(from_name, str) and self.has_variable(from_name):
-                from_var = self.get_variable(from_name)
+    def _exec_save_to_variable(self, batch, action):
+        def _save(name, value, mode):
+            if mode in ['a', 'append']:
+                self.get_variable(name).append(value)
             else:
-                raise ValueError("Unknown name %s", from_name)
+                self.set_variable(name, value)
+
+        value = action['value']
+        name = action['var_name']
+
+        if isinstance(value, str) and self.has_variable(value):
+            if self._variables[value]['lock'] is not None:
+                with self._variables[value]['lock']:
+                    value = self.get_variable(value)
+                    _save(name, value, action['mode'])
         else:
-            from_var = value
+            if isinstance(value, str) and hasattr(batch, value):
+                value = getattr(batch, value)
+            _save(name, value, action['mode'])
 
-        var.append(from_var)
-
-        if context is not None:
-            context.__exit__(None, None, None)
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -441,11 +457,13 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
         return batch
 
-    def _exec_init_model(self, _, action):
-        model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
-        if model is None:
-            ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
-                                      name=action['model_name'], config=action['config'], pipeline=self)
+    def _exec_init_model(self, batch, action):
+        with self._models_lock:
+            model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
+            if model is None:
+                ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
+                                          name=action['model_name'], config=action['config'],
+                                          pipeline=self, batch=batch)
 
     def _make_model_args(self, batch, action, model):
         def _map_data(item):
@@ -547,7 +565,9 @@ class Pipeline:
         join_batches = None
         action_list = action_list or self._action_list
         for _action in action_list:
-            if _action['name'] in [JOIN_ID, MERGE_ID]:
+            if _action.get('#dont_run', False):
+                pass
+            elif _action['name'] in [JOIN_ID, MERGE_ID]:
                 join_batches = []
                 for pipe in _action['pipelines']:   # pylint: disable=not-an-iterable
                     if _action['mode'] == 'i':
@@ -567,9 +587,13 @@ class Pipeline:
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
             elif _action['name'] == IMPORT_MODEL_ID:
-                ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
+                with self._models_lock:
+                    if ModelDirectory.find_model_by_name(_action['model_name'], pipeline=self) is None:
+                        ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
+                    _action['#dont_run'] = True
             elif _action['name'] == INIT_MODEL_ID:
                 self._exec_init_model(batch, _action)
+                _action['#dont_run'] = True
             elif _action['name'] == TRAIN_MODEL_ID:
                 self._exec_train_model(batch, _action)
             elif _action['name'] == PREDICT_MODEL_ID:
@@ -578,6 +602,8 @@ class Pipeline:
                 self._exec_print_variable(batch, _action)
             elif _action['name'] == APPEND_VARIABLE_ID:
                 self._exec_append_variable(batch, _action)
+            elif _action['name'] == SAVE_TO_VARIABLE_ID:
+                self._exec_save_to_variable(batch, _action)
             else:
                 if join_batches is None:
                     _action_args = _action['args']

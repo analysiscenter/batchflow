@@ -184,7 +184,7 @@ class ModelDirectory:
                 ModelDirectory.del_model(method_spec)
 
     @staticmethod
-    def init_model(mode, model_class=None, name=None, pipeline=None, config=None):
+    def init_model(mode, model_class=None, name=None, pipeline=None, config=None, batch=None):
         """ Initialize a static or dynamic model in a pipeline
         Args:
             mode: str - 'static' or 'dynamic'
@@ -237,6 +237,9 @@ class ModelDirectory:
             # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
             dummy_batch = _DummyBatch(pipeline)
             _ = model_methods[0](dummy_batch, config)
+        elif mode == 'dynamic' and model_class is not None and batch is not None:
+            model_method(batch, config)
+
 
     @staticmethod
     def import_model(name, from_pipeline, to_pipeline):

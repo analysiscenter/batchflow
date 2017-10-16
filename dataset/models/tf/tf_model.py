@@ -356,7 +356,7 @@ class TFModel(BaseModel):
         --------
         Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
         """
-        with self:
+        with self.graph.as_default():
             _feed_dict = self._fill_feed_dict(feed_dict)
             if fetches is None:
                 _fetches = tuple()
@@ -386,7 +386,7 @@ class TFModel(BaseModel):
         --------
         Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
         """
-        with self:
+        with self.graph.as_default():
             _feed_dict = self._fill_feed_dict(feed_dict)
             _fetches = self._fill_fetches(fetches, default='predictions')
             output = self.session.run(_fetches, _feed_dict)

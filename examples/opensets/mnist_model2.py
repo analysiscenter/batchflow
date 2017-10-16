@@ -33,7 +33,7 @@ class MyModel(TFModel):
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 256 * 4
+    BATCH_SIZE = 256
 
     mnist = MNIST()
 
@@ -42,15 +42,19 @@ if __name__ == "__main__":
     t = time()
     train_pp = (mnist.train.p
                 .init_variable('loss_history', init_on_each_run=list)
+                .init_variable('current_loss', init_on_each_run=0)
                 .init_model('dynamic', MyModel, 'conv',
                             config={'loss': 'ce',
-                                    'optimizer': 'Adam',
+                                    'optimizer': {'name':'Adam', 'use_locking': True},
                                     'images_shape': lambda batch: batch.images.shape[1:]})
                 .train_model('conv', fetches='loss', feed_dict={'input_images': 'images',
                                                                 'input_labels': 'labels'},
-                             append_to='loss_history')
-                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True))
+                             save_to='current_loss')
+                .print_variable('current_loss')
+                .save_to_variable('loss_history', 'current_loss', mode='a')
+                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=6))
     print("End training", time() - t)
+
 
     print()
     print("Start testing...")
@@ -61,7 +65,7 @@ if __name__ == "__main__":
                 .predict_model('conv', fetches='predicted_labels', feed_dict={'input_images': 'images',
                                                                               'input_labels': 'labels'},
                                append_to='all_predictions')
-                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False))
+                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False, prefetch=4))
     print("End testing", time() - t)
 
     print("Predictions")
