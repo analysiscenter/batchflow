@@ -788,10 +788,11 @@ class Pipeline:
                                   'save_to': save_to, 'append_to': append_to})
         return self.append_action(*args, **kwargs)
 
-    def save_model(self, name, path):
+    def save_model(self, name, *args, **kwargs):
         """ Save a model """
         model = ModelDirectory.get_model_by_name(name, pipeline=self)
-        model.save(path)
+        model.save(*args, **kwargs)
+        return self
 
 
     def join(self, *pipelines):
