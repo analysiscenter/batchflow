@@ -77,9 +77,10 @@ full_workflow = my_dataset.p
                           .init_variable('current_accuracy', 0)
                           .init_variable('loss_history', init_on_each_run=list)
                           ...
-                          .train_model('my_model', output='accuracy', x='images', y='labels', save_to='current_accuracy')
-                          .train_model('another_model', fecthes='loss', feed_dict={'x': ''images',
-                                                                                   'y': ''labels'},
+                          .train_model('my_model', output='accuracy', x='images', y='labels',
+                                       save_to='current_accuracy')
+                          .train_model('another_model', fecthes='loss',
+                                       feed_dict={'x': ''images', 'y': ''labels'},
                                        append_to='loss_history')
 ```
 
@@ -131,7 +132,7 @@ Note, that `save_model` is imperative, i.e. it saves a model right now, but not 
 Thus, it cannot be a part of a pipeline's chain of actions (otherwise, this would save the model after processing each batch,
 which might be highly undesired).
 
-It is expected to be called separately after a training pipeline has finished.
+`save_model` is expected to be called separately after a training pipeline has finished.
 
 
 ## Models and template pipelines
