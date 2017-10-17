@@ -222,8 +222,6 @@ class ModelDirectory:
                                 val = val_in_ba if val_in_ba is not None \
                                       else val_in_pp if val_in_pp is not None \
                                       else val
-                            elif callable(val):
-                                val = val(pipe_or_batch)
                             kwargs.update({arg: val})
 
                     elif callable(local_config):
