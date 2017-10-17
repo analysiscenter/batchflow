@@ -542,6 +542,11 @@ class Batch(BaseBatch):
             raise ValueError("Unknown format " + fmt)
         return self
 
+    @action
+    def save(self, *args, **kwargs):
+        """ Save batch data to a file (an alias for dump method)"""
+        return self.dump(*args, **kwargs)
+
 
 class ArrayBatch(Batch):
     """ Base Batch class for array-like datasets
