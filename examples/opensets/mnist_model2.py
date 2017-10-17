@@ -44,7 +44,9 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_model('dynamic', MyModel, 'conv',
-                            config={'loss': 'ce',
+                            config={'session': {'config': tf.ConfigProto(allow_soft_placement=True,
+                                                                         log_device_placement=True)},
+                                    'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'images_shape': lambda batch: batch.images.shape[1:]})
                 .train_model('conv', fetches='loss', feed_dict={'input_images': 'images',
