@@ -8,6 +8,7 @@ Pipelines can include model definitions, training, evauluation and prediction ac
 1. [Adding a model to a pipeline](#adding-a-model-to-a-pipeline)
 1. [Training a model](#training-a-model)
 1. [Predicting with a model](#predicting-with-a-model)
+1. [Saving a model](#saving-a-model)
 1. [Models and template pipelines](#models-and-template-pipelines)
 1. [Importing models](#importing-models)
 1. [Parallel training](#parallel-training)
@@ -61,11 +62,12 @@ full_workflow = my_dataset.p
                           .train_model('my_model', x='images', y='labels')
 ```
 `train_model`'s arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.
+
 Universally used arguments are:
 - `make_data` - a function or method which takes a current batch and a model instance and return a dict of arguments for `model.train(...)`.
-- `save_to` - a batch component name or a pipeline variable name where an output of `model.train` (if there is any) will be stored in.
+- `save_to` - a batch component name or a pipeline variable name where an output of `model.train` (if there is any) will be stored in.  
 If both (a batch component and a pipeline variable with the same name) exist, then a batch componenty will be used. So be careful with naming.
-- `append_to` - a pipeline variable name where a model output will be appended to.
+- `append_to` - a pipeline variable name where a model output will be appended to.  
 If both (`save_to` and `append_to`) are present, then only `append_to` will be used.
 
 ```python
@@ -106,7 +108,7 @@ full_workflow = my_dataset.p
 
 
 ## Predicting with a model
-`predict_model` is very similar to `train_model` described above:
+`predict_model` is very similar to [`train_model`](#training-a-model) described above:
 ```python
 full_workflow = my_dataset.p
                           .init_model('static', MyModel, 'my_model', config)
@@ -117,8 +119,23 @@ full_workflow = my_dataset.p
 Read a model specfication to find out what it needs for predicting and what its output is.
 
 
+## Saving a model
+You can write a model to a persistent storage at any time by calling `save_model(...)`
+```python
+some_pipeline.save_model('my_model', path='/some/path')
+```
+As usual, the first argument is a model name, while all other arguments are model specific, so read a model documentation
+to find out what parameters are required to save a model.
+
+Note, that `save_model` is imperative, i.e. it saves a model right now, but not when a pipeline is executed.
+Thus, it cannot be a part of a pipeline's chain of actions (otherwise, this would save the model after processing each batch,
+which might be highly undesired).
+
+It is expected to be called separately after a training pipeline has finished.
+
+
 ## Models and template pipelines
-A template pipeline is not linked to any dataset and thus it will never run. It is used as a building block for more complex pipelines.
+A template pipeline is not linked to any dataset and thus it will never run. It might be used as a building block for more complex pipelines.
 
 ```python
 template_pipeline = Pipeline().
@@ -137,7 +154,8 @@ cifar_pipeline = (template_pipeline << cifar_dataset).run(BATCH_SIZE, n_epochs=1
 ```
 Take into account, that a static model is created only once in the template_pipeline.
 But it will be used in each children pipeline with different datasets (which might be a good or bad thing).
-Whilest, a separate instance of a dynamic model will be created in each children pipeline.
+
+Whilst, a separate instance of a dynamic model will be created in each children pipeline.
 
 
 ## Importing models
@@ -151,20 +169,18 @@ train_pipeline = (images_dataset.p
                        .load(...)
                        .random_rotate(angle=(-30, 30))
                        .train_model("Resnet50")
-                       .run(BATCH_SIZE, shuffle=True, n_epochs=10)
+                       .run(BATCH_SIZE, shuffle=True, n_epochs=10))
 
 inference_pipeline_template = (Pipeline()
                                   .resize(shape=(256, 256))
                                   .normalize()
                                   .import_model("Resnet50", train_pipeline)
-                                  .predict_model("Resnet50")
-)
-
+                                  .predict_model("Resnet50"))
 ...
 
 infer = (inference_pipeline_template << some_dataset).run(INFER_BATCH_SIZE, shuffle=False)
 ```
-When `inference_pipeline_template` is run, the model `resnet50` from `train_pipeline` will be imported.
+When `inference_pipeline_template` is run, the model `Resnet50` from `train_pipeline` will be imported.
 
 
 ## Parallel training
