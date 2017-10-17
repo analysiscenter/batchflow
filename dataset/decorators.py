@@ -364,8 +364,10 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
     @functools.wraps(action_method)
     def _action_wrapper(action_self, *args, **kwargs):
         """ Call the action method """
-        if _use_lock is not None:
+        if _use_lock is not None and _use_lock:
             if action_self.pipeline is not None:
+                if isinstance(_use_lock, bool):
+                    _use_lock = '#_lock_' + action_method.__name__
                 if not action_self.pipeline.has_variable(_use_lock):
                     action_self.pipeline.init_variable(_use_lock, threading.Lock())
                 action_self.pipeline.get_variable(_use_lock).acquire()
@@ -400,8 +402,12 @@ def action(*args, **kwargs):
     def train_model(self, model, another_arg):
         ...
 
-    @action(use_lock='lock_name')
+    @action(use_lock=True)
     def critical_section(self, some_arg, another_arg):
+        ...
+
+    @action(use_lock='lock_name')
+    def another_critical_section(self, some_arg, another_arg):
         ...
     """
     if len(args) == 1 and callable(args[0]):
