@@ -364,7 +364,7 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
     @functools.wraps(action_method)
     def _action_wrapper(action_self, *args, **kwargs):
         """ Call the action method """
-        if _use_lock:
+        if _use_lock:   # pylint: disable=used-before-assignment
             if action_self.pipeline is not None:
                 if isinstance(_use_lock, bool):
                     _use_lock = '#_lock_' + action_method.__name__
