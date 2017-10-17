@@ -6,12 +6,14 @@ Pipelines can include model definitions, training, evauluation and prediction ac
 1. [Model class](#model-class)
 1. [Model types](#model-types)
 1. [Adding a model to a pipeline](#adding-a-model-to-a-pipeline)
+1. [Configuring a model](#configuring-a-model)
 1. [Training a model](#training-a-model)
 1. [Predicting with a model](#predicting-with-a-model)
 1. [Saving a model](#saving-a-model)
 1. [Models and template pipelines](#models-and-template-pipelines)
 1. [Importing models](#importing-models)
 1. [Parallel training](#parallel-training)
+1. [Writing your own model](#writing-your-own-model)
 
 
 ## Model class
@@ -51,6 +53,20 @@ In `init_model` you state a mode (`static` or `dynamic`), a model class, an opti
 A static model is initialized immediately in the `init_model`, while a dynamic model will be initialized when the pipeline is run and the very first batch flows into the pipeline.
 
 If a model was already created in another pipeline, it might be [imported](#importing-models).
+
+
+## Configuring a model
+Most often than not models have many options and hyperparameters which define the model structure (e.g. number and types of layers for a neural network or a number and depth of trees for forests) or training procedure (e.g. an optimization algorithm or regularization constants).
+
+Global options:
+- `build` : bool - whether to call `model.build(...)` to create a model. Default is `True`.
+- `load` : bool - whether to load a model from a persistent storage.  
+If `load=True`, then `model.load()` will be called. Default is `False`.
+Loading usually requires some additional config parameters like paths, file names or file formats.
+
+For some models only one of `build` or `load` can be `True`. While other models might need a building phase even if a model is loaded from a disk.
+Read a model specfication to know how to configure it.
+
 
 
 ## Training a model
@@ -198,3 +214,6 @@ class MyBatch:
         return self
 ```
 However, as far as `tensorflow` is concerned, its optimizers have a parameter [`use_locking`](https://www.tensorflow.org/api_docs/python/tf/train/Optimizer#__init__) which allows for concurrent updates when set to `True`.
+
+
+## Writing your own model
