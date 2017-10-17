@@ -1,5 +1,15 @@
 # Working with large datasets
 
+## Content
+1. [Index](#index)
+1. [Dataset](#dataset)
+1. [Batch](#batch)
+1. [Pipeline](#pipeline)
+1. [Within-batch parallelism](#within-batch-parallelism)
+1. [Inter-batch parallelism](#inter-batch-parallelism)
+1. [Model](#models)
+
+
 ## Index
 Index holds a sequence of data item ids. As a dataset is split into batches you should have a mechanism to uniquely address each data item.
 In simple cases it can be just a `numpy.arange`:
@@ -66,3 +76,11 @@ some_pipeline.next_batch(BATCH_SIZE, prefetch=3)
 ```
 The parameter `prefetch` defines how many additional batches will be processed in the background.
 See [prefetch.md](prefetch.md)
+
+
+## Models
+Mostly, pipelines are needed to train machine learning models or predict using these models.
+
+See [Working with models](models.md) to understand what a model is and how to use it within pipelines.
+
+If you work with [TensorFlow]((https://www.tensorflow.org/), you might be interested to know how to build [TensorFlow models](#tf_models.md)
