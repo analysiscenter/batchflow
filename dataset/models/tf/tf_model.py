@@ -222,8 +222,8 @@ class TFModel(BaseModel):
             try:
                 predictions = self.graph.get_tensor_by_name("predictions:0")
                 targets = self.graph.get_tensor_by_name("targets:0")
-            except IndexError:
-                pass
+            except KeyError:
+                raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % self.name)
             else:
                 tf.losses.add_loss(loss(targets, predictions))
 
@@ -312,11 +312,13 @@ class TFModel(BaseModel):
         return tensor.get_shape().as_list()
 
     def _tensor_name(self, name):
-        if hasattr(self, name):
-            return getattr(self, name)
-        elif ':' in name:
-            return name
-        return name + ':0'
+        if isinstance(name, str):
+            if hasattr(self, name):
+                return getattr(self, name)
+            elif ':' in name:
+                return name
+            return name + ':0'
+        return name
 
     def _fill_feed_dict(self, feed_dict=None):
         feed_dict = feed_dict or {}
