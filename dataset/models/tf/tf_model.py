@@ -52,10 +52,12 @@ class TFModel(BaseModel):
 
     Configuration
     -------------
+    session : dict - parameters for session creation (https://www.tensorflow.org/api_docs/python/tf/Session#__init__)
+
     loss - a loss function, might be one of:
-        * short name ('mse', 'ce', 'l1', 'cos', 'hinge', 'huber', 'logloss', 'dice')
-        * a function name from tf.losses (e.g. 'absolute_difference' or 'sparse_softmax_cross_entropy')
-        * a callable
+        - short name ('mse', 'ce', 'l1', 'cos', 'hinge', 'huber', 'logloss', 'dice')
+        - a function name from tf.losses (e.g. 'absolute_difference' or 'sparse_softmax_cross_entropy')
+        - a callable
 
         Examples:
         ``{'loss': 'mse'}``
@@ -176,7 +178,8 @@ class TFModel(BaseModel):
             else:
                 self.store_to_attr('train_step', self.train_step)
 
-            self.session = tf.Session()
+            session_config = self.get_from_config('session', {})
+            self.session = tf.Session(**session_config)
             self.session.run(tf.global_variables_initializer())
 
     def _unpack_fn_from_config(self, param, default=None):
