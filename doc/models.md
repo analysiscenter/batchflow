@@ -61,12 +61,12 @@ Most often than not models have many options and hyperparameters which define th
 Global options:
 - `build` : bool - whether to call `model.build(...)` to create a model. Default is `True`.
 - `load` : bool - whether to load a model from a persistent storage.  
-If `load=True`, then `model.load()` will be called. Default is `False`.
+If `load=True`, then `model.load()` will be called. Default is `False`.  
 Loading usually requires some additional config parameters like paths, file names or file formats.
 
 For some models only one of `build` or `load` can be `True`. While other models might need a building phase even if a model is loaded from a disk.
-Read a model specfication to know how to configure it.
 
+Read a model specfication to know how to configure it.
 
 
 ## Training a model
@@ -79,10 +79,10 @@ full_workflow = my_dataset.p
 ```
 `train_model`'s arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.
 
-Universally used arguments are:
+Model independent arguments are:
 - `make_data` - a function or method which takes a current batch and a model instance and return a dict of arguments for `model.train(...)`.
-- `save_to` - a batch component name or a pipeline variable name where an output of `model.train` (if there is any) will be stored in.  
-If both (a batch component and a pipeline variable with the same name) exist, then a batch componenty will be used. So be careful with naming.
+- `save_to` - a batch component name or a pipeline variable name to store an output of `model.train` (if there is any).  
+If both (a batch component and a pipeline variable with the same name) exist, then a batch component will be used. So be careful with naming.
 - `append_to` - a pipeline variable name where a model output will be appended to.  
 If both (`save_to` and `append_to`) are present, then only `append_to` will be used.
 
@@ -148,7 +148,8 @@ Note, that `save_model` is imperative, i.e. it saves a model right now, but not 
 Thus, it cannot be a part of a pipeline's chain of actions (otherwise, this would save the model after processing each batch,
 which might be highly undesired).
 
-`save_model` is expected to be called separately after a training pipeline has finished.
+`save_model` is expected to be called in an action method or after a training pipeline has finished
+(e.g. after [`pipeline.run`](pipeline.md#running-pipelines)).
 
 
 ## Models and template pipelines
