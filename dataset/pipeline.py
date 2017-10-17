@@ -28,6 +28,7 @@ TRAIN_MODEL_ID = '#_train_model'
 PREDICT_MODEL_ID = '#_predict_model'
 PRINT_VARIABLE_ID = '#_print_variable'
 INC_VARIABLE_ID = '#_inc_variable'
+UPDATE_VARIABLE_ID = '#_update_variable'
 SAVE_TO_VARIABLE_ID = '#_save_to_variable'
 
 
@@ -399,6 +400,21 @@ class Pipeline:
         else:
             raise ValueError("No such variable %s", action['var_name'])
 
+    def update_variable(self, name, fn):
+        """ Update a value of a given variable during pipeline execution """
+        self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name, 'fn': fn})
+        return self.append_action()
+
+    def _exec_update_variable(self, batch, action):
+        if self.has_variable(action['var_name']):
+            if self._variables[action['var_name']]['lock'] is not None:
+                with self._variables[action['var_name']]['lock']:
+                    self.set_variable(action['var_name'], action['fn'](batch))
+            else:
+                self.set_variable(action['var_name'], action['fn'](batch))
+        else:
+            raise ValueError("No such variable %s", action['var_name'])
+
     def print_variable(self, name):
         """ Print a value of a given variable during pipeline execution """
         self._action_list.append({'name': PRINT_VARIABLE_ID, 'var_name': name})
@@ -616,6 +632,8 @@ class Pipeline:
                 self._exec_predict_model(batch, _action)
             elif _action['name'] == PRINT_VARIABLE_ID:
                 self._exec_print_variable(batch, _action)
+            elif _action['name'] == UPDATE_VARIABLE_ID:
+                self._exec_update_variable(batch, _action)
             elif _action['name'] == SAVE_TO_VARIABLE_ID:
                 self._exec_save_to_variable(batch, _action)
             else:
@@ -661,7 +679,6 @@ class Pipeline:
                 a callable takes a batch(for a dynamic model) or a pipeline (for a static model) as a parameter
                 a dict consists of pairs (key, value) where key is a config option name
                     and value could be:
-                    - a callable which takes a batch (for dynamic) or a pipeline (for static models)
                     - a batch component name (for dynamic mode only)
                     - a pipeline variable name
                     any other value will be passed unchanged.

@@ -43,18 +43,20 @@ if __name__ == "__main__":
     train_pp = (mnist.train.p
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
+                .init_variable('pred_label', init_on_each_run=list)
+                .init_variable('images_shape', (0, 0))
+                .update_variable('images_shape', lambda batch: batch.images.shape[1:])
                 .init_model('dynamic', MyModel, 'conv',
-                            config={'session': {'config': tf.ConfigProto(allow_soft_placement=True,
-                                                                         log_device_placement=True)},
+                            config={'session': {'config': tf.ConfigProto(allow_soft_placement=True)},
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
-                                    'images_shape': lambda batch: batch.images.shape[1:]})
-                .train_model('conv', fetches='loss', feed_dict={'input_images': 'images',
+                                    'images_shape': 'images_shape'})
+                .train_model('conv', fetches=['loss', 'predicted_labels'], feed_dict={'input_images': 'images',
                                                                 'input_labels': 'labels'},
-                             save_to='current_loss')
+                             save_to=['current_loss', 'pred_label'])
                 .print_variable('current_loss')
                 .save_to_variable('loss_history', 'current_loss', mode='a')
-                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=6))
+                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0))
     print("End training", time() - t)
 
 

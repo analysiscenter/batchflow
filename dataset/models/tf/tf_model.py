@@ -115,8 +115,7 @@ class TFModel(BaseModel):
     def __enter__(self):
         """ Enter the model graph context """
         self._graph_context = self.graph.as_default()
-        self._graph_context.__enter__()
-        return self
+        return self._graph_context.__enter__()
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
         """ Exit the model graph context """
@@ -271,7 +270,7 @@ class TFModel(BaseModel):
 
     @staticmethod
     def num_channels(tensor):
-        """ Return the number of channels (the last dimension) in the tensor
+        """ Return the number of channels (the length of the last dimension) in the tensor
 
         Parameters
         ----------
