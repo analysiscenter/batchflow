@@ -530,7 +530,7 @@ class Pipeline:
 
         if isinstance(output, (tuple, list)):
             for i, pred in enumerate(output):
-                if len(save_to) <= i + 1:
+                if len(save_to) >= i + 1:
                     if isinstance(save_to[i], (tuple, list)):
                         loc, name = save_to[i]
                     else:
@@ -554,7 +554,7 @@ class Pipeline:
 
         if isinstance(output, (tuple, list)):
             for i, pred in enumerate(output):
-                if len(append_to) <= i + 1:
+                if len(append_to) >= i + 1:
                     if batch.pipeline.has_variable(append_to[i]):
                         # batch.pipeline.get_variable(append_to[i]).append(pred)
                         batch.pipeline.append_variable(append_to[i], value=pred)
