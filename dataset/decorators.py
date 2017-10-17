@@ -364,13 +364,15 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
     @functools.wraps(action_method)
     def _action_wrapper(action_self, *args, **kwargs):
         """ Call the action method """
-        if _use_lock:   # pylint: disable=used-before-assignment
+        if _use_lock is not None:   # pylint: disable=used-before-assignment
             if action_self.pipeline is not None:
                 if isinstance(_use_lock, bool):
-                    _use_lock = '#_lock_' + action_method.__name__
-                if not action_self.pipeline.has_variable(_use_lock):
-                    action_self.pipeline.init_variable(_use_lock, threading.Lock())
-                action_self.pipeline.get_variable(_use_lock).acquire()
+                    _lock_name = '#_lock_' + action_method.__name__
+                else:
+                    _lock_name = _use_lock
+                if not action_self.pipeline.has_variable(_lock_name):
+                    action_self.pipeline.init_variable(_lock_name, threading.Lock())
+                action_self.pipeline.get_variable(_lock_name).acquire()
 
         if _model_name is None:
             _res = action_method(action_self, *args, **kwargs)
@@ -381,7 +383,7 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
 
         if _use_lock is not None:
             if action_self.pipeline is not None:
-                action_self.pipeline.get_variable(_use_lock).release()
+                action_self.pipeline.get_variable(_lock_name).release()
 
         return _res
 
