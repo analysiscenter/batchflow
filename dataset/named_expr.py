@@ -47,7 +47,7 @@ class C(_NamedExpression):
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
         args = []
-        if isinstance(batch, _DummyBatch):
+        if isinstance(batch, _DummyBatch) or batch is None:
             args += [batch.pipeline or pipeline]
         else:
             args += [batch]

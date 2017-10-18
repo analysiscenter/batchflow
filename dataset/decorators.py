@@ -211,7 +211,7 @@ class ModelDirectory:
                             if mode == 'dynamic':
                                 val = val.get(batch=batch)
                             else:
-                                val = val.get(pipeline=batch.pipeline)
+                                val = val.get(pipeline=batch.pipeline)  # pylint: disable=undefined-loop-variable
                         return val
 
                     config = config or dict()

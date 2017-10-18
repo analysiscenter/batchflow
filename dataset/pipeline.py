@@ -16,7 +16,7 @@ from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
 from .decorators import ModelDirectory
-from .named_expr import _NamedExpression, B, C, V
+from .named_expr import _NamedExpression
 
 
 PIPELINE_ID = '#_pipeline'
@@ -705,7 +705,8 @@ class Pipeline:
         append_to : a named expression or a sequence of named expressions of type B or V
             A location where the model output will be appended to
 
-        All other named parameters are treated as data mappings of any type which keys and values could be named expressions
+        All other named parameters are treated as data mappings of any type
+        which keys and values could be named expressions:
             - B('name') - a batch class attribute or component name
             - V('name') - a pipeline variable name
             - C(name) - a callable which takes (batch, model)
@@ -750,7 +751,8 @@ class Pipeline:
         append_to : a named expression or a sequence of named expressions of type B or V
             A location where the model output will be appended to
 
-        All other named parameters are treated as data mappings of any type which keys and values could be named expressions
+        All other named parameters are treated as data mappings of any type
+        which keys and values could be named expressions:
             - B('name') - a batch class attribute or component name
             - V('name') - a pipeline variable name
             - C(name) - a callable which takes (batch, model)
