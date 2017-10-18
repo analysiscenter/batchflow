@@ -212,7 +212,7 @@ my_pipeline = my_dataset.p
 ```
 To initialize a variable just add to a pipeline `init_variable(...)` with a variable name and a default value.
 Variables might be initialized once in a lifetime (e.g. some global state or a configuration parameter) or before each run
-(like counters and local history stores).
+(like counters or history stores).
 
 Sometimes it is more convenient to initialize variables indirectly through a function. For instance, `loss_history` cannot be initialized with `[]`
 as it would make a global variable which won't be cleared on every run. What you actually need is a call to `list()` on each run.
@@ -231,9 +231,12 @@ class MyBatch(Batch):
         var_value = self.pipeline.get_variable("variable_name")
         ...
 ```
-If a variable does not exist, it will be created and initialized. For a flexible initialization `default`, `init` and `init_on_each_run` might be passed to `get_variable()`.
+If a variable does not exist, it might be created and initialized, if `create` parameter is set to `True`.
+For a flexible initialization `default`, `init` and `init_on_each_run` might also be passed to `get_variable()`.
 
-To change a variable value call `set_variable`:
+If `create` is `False` (which is by default), then `get_variable` will raise a `KeyError` if a variable does not exist.
+
+To change a variable value just call `set_variable` within an action:
 ```python
 class MyBatch(Batch):
     ...
@@ -243,6 +246,18 @@ class MyBatch(Batch):
         self.pipeline.set_variable("variable_name", new_value)
         ...
 ```
+
+Or add `update_variable` to the pipeline:
+```python
+my_pipeline
+    ...
+    .update_variable("current_batch_labels", fn=MyBatch.get_labels)
+    .update_variable("all_labels", var='current_batch_labels', mode='append')
+```
+If `fn` is specified, it would be called with the current batch as a parameter.
+
+Mode 'append' allows to gather values from all the batches. Append mode works with both `var` and `fn` parameters.
+
 
 ### Deleting a variable
 Just call `pipeline.delete_variable("variable_name")` or `pipeline.del_variable("variable_name")`.

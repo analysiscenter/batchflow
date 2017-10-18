@@ -29,7 +29,6 @@ PREDICT_MODEL_ID = '#_predict_model'
 PRINT_VARIABLE_ID = '#_print_variable'
 INC_VARIABLE_ID = '#_inc_variable'
 UPDATE_VARIABLE_ID = '#_update_variable'
-SAVE_TO_VARIABLE_ID = '#_save_to_variable'
 
 
 def mult_option(a, b):
@@ -222,13 +221,15 @@ class Pipeline:
         """
         return name in self._variables
 
-    def get_variable(self, name, default=None, init=None, init_on_each_run=None):
+    def get_variable(self, name, default=None, init=None, init_on_each_run=None, create=False):
         """ Return a variable value
         If the variable does not exists, it will be created and initialized (see `init_variable` below)
 
         Parameters
         ----------
         name : string - a name of the variable
+        create : bool - whether to create a variable if it does not exist. Default is `False`.
+            If `init` or `init_on_each_run` is specified, then the variable will created regardless of `create`.
         default - a value for the variable if it does not exists
         init : callable - a function which returns the default value
         init_on_each_run : callable - same as `init` but initializes the variable before each run
@@ -236,9 +237,17 @@ class Pipeline:
         Returns
         -------
         a value of the variable
+
+        Raises
+        ------
+        `KeyError` if a variable does not exist
         """
-        if name not in self._variables:
-            self.init_variable(name, default, init, init_on_each_run)
+        create = callable(init) or callable(init_on_each_run) or create
+        if not self.has_variable(name):
+            if create:
+                self.init_variable(name, default, init, init_on_each_run)
+            else:
+                raise KeyError("No such variable '%s' exists" % name)
         var = self._variables.get(name)
         return var.get('value', default)
 
@@ -370,15 +379,10 @@ class Pipeline:
 
     def append_variable(self, name, value=None, from_name=None):
         """ Append a value to a pipeline variable """
-        if not self.has_variable(name):
-            raise ValueError("Variable %s does not exist", name)
-
         var = self.get_variable(name)
-        if value is None:
-            if isinstance(from_name, str) and self.has_variable(from_name):
-                from_var = self.get_variable(from_name)
-            else:
-                raise ValueError("Unknown name %s", from_name)
+
+        if value is None and from_var is not None:
+            from_var = self.get_variable(from_name)
         else:
             from_var = value
 
@@ -398,22 +402,33 @@ class Pipeline:
             else:
                 self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
         else:
-            raise ValueError("No such variable %s", action['var_name'])
+            raise KeyError("No such variable %s exists", action['var_name'])
 
-    def update_variable(self, name, fn):
+    def update_variable(self, name, value=None, fn=None, var=None, mode='w'):
         """ Update a value of a given variable during pipeline execution """
-        self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name, 'fn': fn})
+        self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name,
+                                  'value': value, 'fn': fn, 'from_var': var, 'mode': mode})
         return self.append_action()
 
     def _exec_update_variable(self, batch, action):
         if self.has_variable(action['var_name']):
             if self._variables[action['var_name']]['lock'] is not None:
-                with self._variables[action['var_name']]['lock']:
-                    self.set_variable(action['var_name'], action['fn'](batch))
+                self._variables[action['var_name']]['lock'].acquire()
+
+            if action['fn'] is not None:
+                value = action['fn'](batch)
+            elif action['from_var'] is not None:
+                value = self.get_variable(action['from_var'])
+
+            if action['mode'] in ['a', 'append']:
+                self.get_variable(action['var_name']).append(value)
             else:
-                self.set_variable(action['var_name'], action['fn'](batch))
+                self.set_variable(action['var_name'], value)
+
+            if self._variables[action['var_name']]['lock'] is not None:
+                self._variables[action['var_name']]['lock'].release()
         else:
-            raise ValueError("No such variable %s", action['var_name'])
+            raise KeyError("No such variable %s exist" % action['var_name'])
 
     def print_variable(self, name):
         """ Print a value of a given variable during pipeline execution """
@@ -423,31 +438,9 @@ class Pipeline:
     def _exec_print_variable(self, _, action):
         print(self.get_variable(action['var_name']))
 
-    def save_to_variable(self, name, value, mode='w'):
+    def save_to_variable(self, name, *args, **kwargs):
         """ Save a value to a given variable during pipeline execution """
-        self._action_list.append({'name': SAVE_TO_VARIABLE_ID, 'var_name': name, 'value': value, 'mode': mode})
-        return self.append_action()
-
-    def _exec_save_to_variable(self, batch, action):
-        def _save(name, value, mode):
-            if mode in ['a', 'append']:
-                self.get_variable(name).append(value)
-            else:
-                self.set_variable(name, value)
-
-        value = action['value']
-        name = action['var_name']
-
-        if isinstance(value, str) and self.has_variable(value):
-            if self._variables[value]['lock'] is not None:
-                with self._variables[value]['lock']:
-                    value = self.get_variable(value)
-                    _save(name, value, action['mode'])
-        else:
-            if isinstance(value, str) and hasattr(batch, value):
-                value = getattr(batch, value)
-            _save(name, value, action['mode'])
-
+        return self.update_variable(name, *args, **kwargs)
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -572,7 +565,6 @@ class Pipeline:
             for i, pred in enumerate(output):
                 if len(append_to) >= i + 1:
                     if batch.pipeline.has_variable(append_to[i]):
-                        # batch.pipeline.get_variable(append_to[i]).append(pred)
                         batch.pipeline.append_variable(append_to[i], value=pred)
 
     def _exec_train_model(self, batch, action):
@@ -634,8 +626,6 @@ class Pipeline:
                 self._exec_print_variable(batch, _action)
             elif _action['name'] == UPDATE_VARIABLE_ID:
                 self._exec_update_variable(batch, _action)
-            elif _action['name'] == SAVE_TO_VARIABLE_ID:
-                self._exec_save_to_variable(batch, _action)
             else:
                 if join_batches is None:
                     _action_args = _action['args']
