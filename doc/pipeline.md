@@ -386,47 +386,7 @@ Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works pr
 
 
 ## Models
-
-### Model import
-Static models exist within pipelines, but before the pipeline is run. As a consequence, you should explicitly declare which static models you need in the pipeline.
-```python
-template_pipeline = Pipeline().
-                       .init_model("my_static_model")
-                       .prepocess()
-                       .normalize()
-```
-This is a template pipeline and it will never run. It is used as a building block for more complex pipelines.
-
-```python
-my_mnist_pipeline = (template_pipeline << mnist_dataset).run(BATCH_SIZE, n_epochs=10)
-my_cifar_pipeline = (template_pipeline << cifar_dataset).run(BATCH_SIZE, n_epochs=10)
-```
-`my_static_model` will be defined only once in the `init_model(...)`.
-But it will be used many times in the each children pipeline with different datasets.
-That is why static models do not have access to data shapes (since they may differ in different datasets).
-
-### Shared models
-Dynamic and static models exist within pipelines. This is not a problem if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you might train a model in one pipeline and later use it in an inference pipeline.
-
-This can be easily achieved with a model import.
-
-```python
-train_pipeline = (images_dataset.p
-                       .load(...)
-                       .random_rotate(angle=(-30, 30))
-                       .train_classifier(model_name="resnet50")
-                       .run(BATCH_SIZE, shuffle=True, n_epochs=10)
-
-inference_pipeline_template = (Pipeline()
-                                  .resize(shape=(256, 256))
-                                  .normalize()
-                                  .import_model("resnet50", train_pipeline)
-                                  .get_prediction(model_name="resnet50")
-)
-```
-When `inference_pipeline_template` is run, the model descriptor `resnet50` from `train_pipeline` will be imported.
-
-For this to work `images_dataset`'s batch class should contain an action `train_classifier` and [a model method](model.md) named "resnet50".
+See [Working with models](#models.md)
 
 
 ## Public API
