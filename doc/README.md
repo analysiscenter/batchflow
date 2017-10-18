@@ -7,7 +7,7 @@
 1. [Pipeline](#pipeline)
 1. [Within-batch parallelism](#within-batch-parallelism)
 1. [Inter-batch parallelism](#inter-batch-parallelism)
-1. [Model](#models)
+1. [Models](#models)
 
 
 ## Index
@@ -83,4 +83,4 @@ Mostly, pipelines are needed to train machine learning models or predict using t
 
 See [Working with models](models.md) to understand what a model is and how to use it within pipelines.
 
-If you work with [TensorFlow]((https://www.tensorflow.org/), you might be interested to know how to build [TensorFlow models](#tf_models.md)
+If you work with [TensorFlow]((https://www.tensorflow.org/), you might be interested to know how to build [TensorFlow models](tf_models.md)
