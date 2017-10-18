@@ -386,7 +386,7 @@ Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works pr
 
 
 ## Models
-See [Working with models](#models.md)
+See [Working with models](models.md)
 
 
 ## Public API
