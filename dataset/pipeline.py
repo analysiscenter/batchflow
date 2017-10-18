@@ -377,17 +377,11 @@ class Pipeline:
         """ Delete all variables """
         self._variables = dict()
 
-    def append_variable(self, name, value=None, from_name=None):
+    def append_variable(self, name, value=None, var=None):
         """ Append a value to a pipeline variable """
-        var = self.get_variable(name)
-
-        if value is None and from_var is not None:
-            from_var = self.get_variable(from_name)
-        else:
-            from_var = value
-
-        var.append(from_var)
-
+        if value is None and var is not None:
+            value = self.get_variable(var)
+        self.get_variable(name).append(value)
 
     def inc_variable(self, name):
         """ Increment a value of a given variable during pipeline execution """
