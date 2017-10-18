@@ -488,40 +488,39 @@ Merges batches from several sources (datasets or pipelines).
 ### `rebatch(batch_size)`
 Splits and merges batches coming from the previous actions to form a batch of a given size.
 
-### `init_model(model_name, config=None)`
-Initialize a static model by calling [a model method](model.md)
+### `init_model(mode, model_class=None, model_name=None, config=None)`
+Initialize [a model](models.md)
 
 ### `import_model(model_name, from_pipeline)`
 Import a static or dynamic model from another pipeline.
 
-### `init_variable(name, default=None, init=None, init_on_each_run=None)`
-Creates a variable with the default value or init function.
+### `train_model(model_name, save_to=None, append_to=None, *args, **kwargs)`
+Train a model during pipeline execution.
 
-### `get_variable(name, default=None, init=None, init_on_each_run=None)`
-Returns a value of the variable with a given name (creates a variable if it does not exist)
+### `predict_model(model_name, save_to=None, append_to=None, *args, **kwargs)`
+Predict using a model during pipeline execution.
+
+### `init_variable(name, default=None, init=None, init_on_each_run=None)`
+Create a variable with the default value or init function.
+
+### `get_variable(name, default=None, init=None, init_on_each_run=None, create=False)`
+Return a value of the variable with a given name (might create a variable if it does not exist)
 
 ### `set_variable(name, value)`
-Sets a new value for a variable.
+Immediately set a new value for a variable.
 
 Same as `assign_variable()`
 
 ### `assign_variable(name, value)`
-Sets a new value for a variable.
+Immediately set a new value for a variable.
 
 Same as `set_variable()`
+
+### `update_variable(name, value=None, fn=None, var=None)`
+Update a variable value during pipeline execution.
 
 ### `del_variable(name)`
 Deletes a variable with a given name.
 
 ### `delete_variable(name)`
 Deletes a variable with a given name.
-
-### `put_into_tf_queue(session, queue, get_tensor)`
-Puts the batches into a tensorflow queue.
-
-Arguments:
-    session: a tensorflow session in which a graph with the queue is executed
-    queue:   the queue where the tensors will be put
-    get_tensor: a callable which receives a batch as an argument and returns a tensor to put into the queue
-
-For a detailed exlpanation see [Working with tensorflow queues](tf_queue.md).
