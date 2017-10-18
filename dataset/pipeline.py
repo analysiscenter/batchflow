@@ -36,6 +36,15 @@ def mult_option(a, b):
     return a * b if a is not None and b is not None else a if a is not None else b
 
 
+def hashable(x):
+    """ Check if x is hashable """
+    try:
+        hash(x)
+    except TypeError:
+        return False
+    return True
+
+
 class Pipeline:
     """ Pipeline """
     def __init__(self, dataset=None, config=None, pipeline=None, proba=None, repeat=None):
@@ -219,7 +228,7 @@ class Pipeline:
         Return:
             True if the variable exists
         """
-        return name in self._variables
+        return hashable(name) and name in self._variables
 
     def get_variable(self, name, default=None, init=None, init_on_each_run=None, create=False):
         """ Return a variable value
@@ -276,9 +285,9 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        if name not in self._variables:
+        if not self.has_variable(name):
             with self._variables_lock:
-                if name not in self._variables:
+                if not self.has_variable(name):
                     if not isinstance(init_on_each_run, bool):
                         if callable(init_on_each_run):
                             init = init_on_each_run
@@ -351,20 +360,15 @@ class Pipeline:
         Parameters
         ----------
         name : str - a name of the variable
-             : iterable - several variable names
 
         Returns
         -------
         self - in order to use it in the pipeline chains
         """
-        if name not in self._variables:
+        if not self.has_variable(name):
             logging.warning("Pipeline variable '%s' does not exist", name)
         else:
-            if isinstance(name, str):
-                self._variables.pop(name)
-            else:
-                for var in name:
-                    self._variables.pop(var)
+            self._variables.pop(name)
         return self
 
     def del_variable(self, name):
@@ -486,9 +490,7 @@ class Pipeline:
 
     def _make_model_args(self, batch, action, model):
         def _map_data(item):
-            if callable(item):
-                data_item = item(batch, model)
-            elif isinstance(item, str) and hasattr(batch, item):
+            if isinstance(item, str) and hasattr(batch, item):
                 data_item = getattr(batch, item)
             elif self.has_variable(item):
                 data_item = self.get_variable(item)
