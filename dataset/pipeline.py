@@ -16,6 +16,7 @@ from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
 from .decorators import ModelDirectory
+from .named_expr import _NamedExpression, B, C, V
 
 
 PIPELINE_ID = '#_pipeline'
@@ -43,6 +44,7 @@ def hashable(x):
     except TypeError:
         return False
     return True
+
 
 
 class Pipeline:
@@ -292,7 +294,7 @@ class Pipeline:
                         if callable(init_on_each_run):
                             init = init_on_each_run
                         else:
-                            default = init_on_each_run
+                            default = default or init_on_each_run
                         init_on_each_run = True
                     lock = threading.Lock() if lock else None
                     self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run,
@@ -402,10 +404,10 @@ class Pipeline:
         else:
             raise KeyError("No such variable %s exists", action['var_name'])
 
-    def update_variable(self, name, value=None, fn=None, var=None, mode='w'):
+    def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable during pipeline execution """
         self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name,
-                                  'value': value, 'fn': fn, 'from_var': var, 'mode': mode})
+                                  'value': value, 'mode': mode})
         return self.append_action()
 
     def _exec_update_variable(self, batch, action):
@@ -413,10 +415,10 @@ class Pipeline:
             if self._variables[action['var_name']]['lock'] is not None:
                 self._variables[action['var_name']]['lock'].acquire()
 
-            if action['fn'] is not None:
-                value = action['fn'](batch)
-            elif action['from_var'] is not None:
-                value = self.get_variable(action['from_var'])
+            if isinstance(action['value'], _NamedExpression):
+                value = action['value'].get(batch=batch)
+            else:
+                value = action['value']
 
             if action['mode'] in ['a', 'append']:
                 self.get_variable(action['var_name']).append(value)
@@ -490,31 +492,28 @@ class Pipeline:
 
     def _make_model_args(self, batch, action, model):
         def _map_data(item):
-            if isinstance(item, str) and hasattr(batch, item):
-                data_item = getattr(batch, item)
-            elif self.has_variable(item):
-                data_item = self.get_variable(item)
-            else:
-                data_item = item
-            return data_item
+            if isinstance(item, _NamedExpression):
+                return item.get(batch=batch, model=model)
+            return item
 
         make_data = action['make_data']
         args = tuple()
         kwargs = dict()
 
         if callable(make_data):
-            _data = make_data(batch, model)
+            _data = make_data(batch=batch, model=model)
             if isinstance(_data, dict):
                 kwargs = _data
             else:
                 args = _data
 
-        for arg, data in action['kwargs'].items():
+        kwargs = {**action['kwargs'], **kwargs}
+
+        for arg, data in kwargs.items():
             if isinstance(data, dict):
-                data_dict = {}
+                data_dict = type(data)()
                 for key, item in data.items():
-                    data_item = _map_data(item)
-                    data_dict.update({key: data_item})
+                    data_dict.update({_map_data(key): _map_data(item)})
                 data_item = data_dict
             elif isinstance(data, (tuple, list)):
                 data_list = []
@@ -528,58 +527,44 @@ class Pipeline:
 
         return args, kwargs
 
-    def _save_model_output(self, batch, output, save_to):
+    def _save_model_output(self, batch, model, output, save_to, mode='w'):
         if not isinstance(output, (tuple, list, dict, OrderedDict)):
-            output = (output, )
-            save_to = (save_to, )
+            output = [output]
+            save_to = [save_to]
+        if isinstance(save_to, tuple):
+            save_to = list(save_to)
 
         if isinstance(output, (tuple, list)):
-            for i, pred in enumerate(output):
-                if len(save_to) >= i + 1:
-                    if isinstance(save_to[i], (tuple, list)):
-                        loc, name = save_to[i]
-                    else:
-                        if hasattr(batch, save_to[i]):
-                            loc = 'b'
-                        elif batch.pipeline.has_variable(save_to[i]):
-                            loc = 'p'
+            for i, item in enumerate(output):
+                if i < len(save_to):
+                    if isinstance(save_to[i], _NamedExpression):
+                        if mode == 'a':
+                            save_to[i].append(item, batch=batch, model=model)
                         else:
-                            loc = None
-                        name = save_to[i]
-
-                    if loc in ['p', 'pipeline']:
-                        batch.pipeline.set_variable(name, pred)
-                    elif loc in ['b', 'batch']:
-                        setattr(batch, name, pred)
-
-    def _append_model_output(self, batch, output, append_to):
-        if not isinstance(output, (tuple, list, dict, OrderedDict)):
-            output = (output, )
-            append_to = (append_to, )
-
-        if isinstance(output, (tuple, list)):
-            for i, pred in enumerate(output):
-                if len(append_to) >= i + 1:
-                    if batch.pipeline.has_variable(append_to[i]):
-                        batch.pipeline.append_variable(append_to[i], value=pred)
+                            save_to[i].set(item, batch=batch, model=model)
+                    else:
+                        if mode == 'a':
+                            save_to[i].append(item)
+                        else:
+                            save_to[i] = item
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         output = model.train(*args, **kwargs)
         if action['append_to'] is None:
-            self._save_model_output(batch, output, action['save_to'])
+            self._save_model_output(batch, model, output, action['save_to'])
         else:
-            self._append_model_output(batch, output, action['append_to'])
+            self._save_model_output(batch, model, output, action['append_to'], 'a')
 
     def _exec_predict_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         predictions = model.predict(*args, **kwargs)
         if action['append_to'] is None:
-            self._save_model_output(batch, predictions, action['save_to'])
+            self._save_model_output(batch, model, predictions, action['save_to'])
         else:
-            self._append_model_output(batch, predictions, action['append_to'])
+            self._save_model_output(batch, model, predictions, action['append_to'], 'a')
 
     def _exec_all_actions(self, batch, action_list=None):
         join_batches = None
@@ -658,16 +643,15 @@ class Pipeline:
 
         Parameters
         ----------
-            mode : str - 'static' or 'dynamic'
-            model_class : class - a model class
-            name : str - a name for the model
-            config : dict or callable - a mapping for additional configurations parameters
-                a callable takes a batch(for a dynamic model) or a pipeline (for a static model) as a parameter
-                a dict consists of pairs (key, value) where key is a config option name
-                    and value could be:
-                    - a batch component name (for dynamic mode only)
-                    - a pipeline variable name
-                    any other value will be passed unchanged.
+        mode : str - 'static' or 'dynamic'
+        model_class : class - a model class
+        name : str - a name for the model. Default - a model class name.
+        config : dict - model configurations parameters, where each key and value could be named expressions
+            - B('name') - a batch class attribute or component name
+            - V('name') - a pipeline variable name
+            - C(name) - a callable which takes batch for dynamic models and pipeline for static models
+            These expressions will be substituted by their actual values.
+            All other value will be used "as is".
 
         Examples
         --------
@@ -675,13 +659,18 @@ class Pipeline:
 
         >>> pipeline
               .init_variable('images_shape', [256, 256])
-              .init_model('static', MyModel, config={'input_shape': 'images_shape'})
+              .init_model('static', MyModel, config={'input_shape': V('images_shape')})
 
-        >>> pipeline.init_model('dynamic', MyModel, config={'input_shape': lambda batch: batch.images.shape[1:]})
+        >>> pipeline
+              .init_variable('shape_name', images_shape')
+              .init_model('dynamic', MyModel, config={V('shape_name)': B('images_shape')})
 
+        >>> pipeline
+              .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
         if mode == 'static':
-            ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
+            with self._models_lock:
+                ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
             return self
         elif mode == 'dynamic':
             self._action_list.append({'name': INIT_MODEL_ID, 'mode': mode, 'model_class': model_class,
@@ -708,26 +697,35 @@ class Pipeline:
         ----------
         name : str - a model name
 
-        make_data : callable - a function or method to make train data from a batch. Should return tuple or dict.
+        make_data : callable - a function or method to make train parameters from a batch. Should return dict.
 
-        all other named parameters are treated as data mappings which values could be:
-        - a callable taking a batch and a model as parameters
-        - a batch component name or a batch class attribute name
-        - a pipeline variable name
-        - a dict of data mappings
-        while all other values are passed directly to ``model.train``
+        save_to : a named expression or a sequence of named expressions of type B or V
+            A location where the model output will be stored
+
+        append_to : a named expression or a sequence of named expressions of type B or V
+            A location where the model output will be appended to
+
+        All other named parameters are treated as data mappings of any type which keys and values could be named expressions
+            - B('name') - a batch class attribute or component name
+            - V('name') - a pipeline variable name
+            - C(name) - a callable which takes (batch, model)
+            These expressions are substituted by their actual values.
+            All other value will be used "as is".
+        These parameters after substitution will be sent to `model.train(...)`.
 
         Examples
         --------
-        >>> pipeline.train_model('resnet', x='images', y_true='masks')
+        >>> pipeline.train_model('resnet', x=B('images'), y_true=B('masks'))
         Would call a `resnet` model `train` method with `x` and `y_true` arguments:
         ``resnet.train(x=batch.images, y_true=batch.masks)``
 
-        >>> pipeline.train_model('resnet', feed_dict={'x': 'images'})
+        >>> pipeline
+               .init_variable('tensor_name', 'x')
+               .train_model('resnet', feed_dict={V('tensor_name'): B('images')})
         Would call a `resnet` model `train` method with a `feed_dict` argument:
         ``resnet.train(feed_dict={'x': batch.images})``
 
-        >>> pipeline.train_model('resnet', MyBatch.make_resnet_data)
+        >>> pipeline.train_model('resnet', C(MyBatch.make_resnet_data))
         Equivalent to::
 
             train_data = batch.make_resnet_data(resnet_model)
@@ -744,39 +742,34 @@ class Pipeline:
         ----------
         name : str - a model name
 
-        make_data : callable - a function or method to make train data from a batch. Should return tuple or dict.
+        make_data : callable - a function or method to make train data from a batch. Should return dict.
 
-        save_to : str or tuple of str or tuple of (str, str) - where to save predictions to.
-                - str - a name of a batch attribute or a pipeline variable to store predicted data
-                - tuple of str - names of batch attributes or pipeline variables for each predicted item
-                - tuple of tuples(str, str) - locations and names for each predicted item
-                        * location: str - could be 'pipeline' or 'batch' for a pipeline variable or a batch component
-                        * name: str - a pipeline variable or a batch component name
-                Name is treated as a batch attribute if this attribute is already exists in the batch.
-                Otherwise, predictions are stored in a pipeline variable with that name.
-                If it does not exist either, predictions are not stored anywhere.
+        save_to : a named expression or a sequence of named expressions of type B or V
+            A location where the model output will be stored
 
-        append_to : str or tuple of str - a pipeline variable where to append predictions to.
-            If both `save_to` and `append_to` are present, only `append_to` is used.
+        append_to : a named expression or a sequence of named expressions of type B or V
+            A location where the model output will be appended to
 
-        all other named parameters are treated as data mappings which values could be:
-            - a callable taking a batch and a model as parameters
-            - a batch component name or a batch class attribute name
-            - a pipeline variable name
-            - a dict of data mappings
-        while all other values are passed directly to `model.predict`
+        All other named parameters are treated as data mappings of any type which keys and values could be named expressions
+            - B('name') - a batch class attribute or component name
+            - V('name') - a pipeline variable name
+            - C(name) - a callable which takes (batch, model)
+            These expressions are substituted by their actual values.
+            All other value will be used "as is".
+        These parameters after substitution will be sent to `model.predict(...)`.
 
         Examples
         --------
         >>> pipeline
-                .predict_model('resnet', x='images', y_true='labels', save_to='predicted_labels')
+                .predict_model('resnet', x=B('images'), y_true=B('labels'), save_to=B('predicted_labels'))
         Would call a `resnet` model `predict` method with `x` and `y_true` arguments:
         ``predictions = resnet.predict(x=batch.images, y_true=batch.labels)``
         Predictions will be stored `batch.predicted_labels`.
 
         >>> pipeline
             .init_variable('inferred_masks', init_on_each_run=list)
-            .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': 'images'}, save_to='inferred_masks')
+            .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': B('images')},
+                           save_to=V('inferred_masks'))
         Would call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
         ``predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})``
         Predictions for each batch will be stored in a pipeline variable `inferred_masks`.
@@ -784,7 +777,7 @@ class Pipeline:
         >>> pipeline.train_model('deepnet', MyBatch.make_deepnet_data)
         Equivalent to::
 
-            predict_data = batch.make_deepnet_data(deepnet_model)
+            predict_data = batch.make_deepnet_data(model=deepnet_model)
             deepnet_model.train(**predict_data)
         """
         self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,

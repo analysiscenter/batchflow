@@ -62,11 +62,29 @@ Global options:
 - `build` : bool - whether to call `model.build(...)` to create a model. Default is `True`.
 - `load` : bool - whether to load a model from a persistent storage.  
 If `load=True`, `model.load()` will be called. Default is `False`.  
-Loading usually requires some additional config parameters like paths, file names or file formats.
+Loading usually requires some additional config parameters like paths, file names or file formats. Check the documentation for the model you use for more details.
 
 For some models only one of `build` or `load` can be `True`. While other models might need a building phase even if a model is loaded from a disk.
 
 Read a model specfication to know how to configure it.
+
+For flexibilty `config` might include so called `named expressions` which are defined by name but substitued with thei actual value:
+`B('name')` - a batch component
+`V('name')` - a pipeline variable
+`C(name)` - a callable
+
+```python
+pipeline
+    .init_variable('images_shape', [256, 256])
+    .init_model('static', MyModel, config={'input_shape': V('images_shape')})
+
+pipeline
+    .init_variable('shape_name', images_shape')
+    .init_model('dynamic', MyModel, config={V('shape_name)': B('images_shape')})
+
+pipeline
+    .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
+```
 
 
 ## Training a model
@@ -75,29 +93,30 @@ A train action should be stated below an initialization action:
 full_workflow = my_dataset.p
                           .init_model('static', MyModel, 'my_model', config)
                           ...
-                          .train_model('my_model', x='images', y='labels')
+                          .train_model('my_model', x=B('images'), y=B('labels'))
 ```
 `train_model`'s arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.
 
 Model independent arguments are:
 - `make_data` - a function or method which takes a current batch and a model instance and return a dict of arguments for `model.train(...)`.
-- `save_to` - a batch component name or a pipeline variable name to store an output of `model.train` (if there is any).  
+- `save_to` - a location or a sequence of locations where to store an output of `model.train` (if there is any).  
 If both (a batch component and a pipeline variable with the same name) exist, then a batch component will be used. So be careful with naming.
-- `append_to` - a pipeline variable name where a model output will be appended to.  
+- `append_to` - a location or a sequence of locations where a model output will be appended to.  
 If both (`save_to` and `append_to`) are present, only `append_to` will be used.
 
 ```python
 full_workflow = my_dataset.p
                           .init_model('static', MyModel, 'my_model', my_config)
                           .init_model('dynamic', AnotherModel, 'another_model', another_config)
+                          .init_variable('current_loss', 0)
                           .init_variable('current_accuracy', 0)
                           .init_variable('loss_history', init_on_each_run=list)
                           ...
-                          .train_model('my_model', output='accuracy', x='images', y='labels',
-                                       save_to='current_accuracy')
+                          .train_model('my_model', output=['loss', 'accuracy'], x=B('images'), y=B('labels'),
+                                       save_to=[V('current_loss'), V('current_accuracy')])
                           .train_model('another_model', fetches='loss',
-                                       feed_dict={'x': ''images', 'y': ''labels'},
-                                       append_to='loss_history')
+                                       feed_dict={'x': B('images'), 'y': B('labels')},
+                                       append_to=V('loss_history'))
 ```
 
 You can also write an action which works with a model directly.
@@ -131,7 +150,7 @@ full_workflow = my_dataset.p
                           .init_model('static', MyModel, 'my_model', config)
                           .init_variable('predicted_labels', init_on_each_run=list)
                           ...
-                          .predict_model('my_model', x='images', save_to='predicted_labels')
+                          .predict_model('my_model', x=B('images'), save_to=V('predicted_labels'))
 ```
 Read a model specfication to find out what it needs for predicting and what its output is.
 
@@ -161,8 +180,8 @@ template_pipeline = Pipeline().
                        .init_model('dynamic', MyModel2)
                        .prepocess()
                        .normalize()
-                       .train_model('MyModel', some_transform_fn)
-                       .train_model('MyModel2', some_transform_fn2)
+                       .train_model('MyModel', ...)
+                       .train_model('MyModel2', ...)
 ```
 
 Linking a pipeline to a dataset creates a new pipeline that can be run.
@@ -207,11 +226,9 @@ If you [prefetch](prefetch.md) with actions based on non-thread-safe models, you
 class MyBatch:
     ...
     @action(use_lock="some_model_lock")
-    def train_it(self, model_spec):
-        input_images, input_labels = model_spec[0]
-        optimizer, cost, accuracy = model_spec[1]
-        session = self.pipeline.get_variable("session")
-        _, loss = session.run([optimizer, cost], feed_dict={input_images: self.images, input_labels: self.labels})
+    def train_it(self, model_name):
+        model = self.get_model_by_name(model_name)
+        model.train(input_images=self.images, input_labels=self.labels)
         return self
 ```
 However, as far as `tensorflow` is concerned, its optimizers have a parameter [`use_locking`](https://www.tensorflow.org/api_docs/python/tf/train/Optimizer#__init__) which allows for concurrent updates when set to `True`.

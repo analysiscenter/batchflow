@@ -6,6 +6,8 @@ import concurrent.futures as cf
 import asyncio
 import functools
 
+from .named_expr import _NamedExpression, _DummyBatch
+
 
 def _workers_count():
     cpu_count = 0
@@ -14,12 +16,6 @@ def _workers_count():
     except AttributeError:
         cpu_count = os.cpu_count()
     return cpu_count * 4
-
-
-class _DummyBatch:
-    """ A fake batch for static models """
-    def __init__(self, pipeline):
-        self.pipeline = pipeline
 
 
 _MODEL_MODES = ['global', 'static', 'dynamic']
@@ -203,32 +199,35 @@ class ModelDirectory:
         model_class : class - a model class
         name : str - a short name for the model
         pipeline - a pipeline to link a model to
-        config : dict or callable - a mapping or a function/method for additional model arguments
+        config : dict or callable - a mapping or a function/method for additional model parameters
         """
         if model_class is not None:
             name = name or model_class.__name__
-            local_config = config or dict()
 
             def _model_definition_maker():
-                def _model_definition_method(pipe_or_batch, config=None):
-                    kwargs = {}
-                    if isinstance(local_config, dict):
-                        for arg, val in local_config.items():
-                            if isinstance(val, str):
-                                val_in_ba = None
-                                if mode == 'dynamic' and hasattr(pipe_or_batch, val):
-                                    val_in_ba = getattr(pipe_or_batch, val)
-                                val_in_pp = pipeline.get_variable(val) if pipeline.has_variable(val) else None
-                                val = val_in_ba if val_in_ba is not None \
-                                      else val_in_pp if val_in_pp is not None \
-                                      else val
-                            kwargs.update({arg: val})
-
-                    elif callable(local_config):
-                        kwargs = local_config(pipe_or_batch)
+                def _model_definition_method(batch, config=None):
+                    def _get_named_expr(val):
+                        if isinstance(val, _NamedExpression):
+                            if mode == 'dynamic':
+                                val = val.get(batch=batch)
+                            else:
+                                val = val.get(pipeline=batch.pipeline)
+                        return val
 
                     config = config or dict()
-                    return model_class(mode, name=name, config={**config, **kwargs})
+                    kwargs = {}
+                    if isinstance(config, _NamedExpression):
+                        config = _get_named_expr(config)
+                    if isinstance(config, dict):
+                        for arg, val in config.items():
+                            arg = _get_named_expr(arg)
+                            val = _get_named_expr(val)
+                            kwargs.update({arg: val})
+                    else:
+                        raise TypeError("config should be a dict")
+
+                    return model_class(mode, name=name, config={**kwargs})
+
                 _model_definition_method.__name__ = name
                 return _model_definition_method
 
@@ -324,7 +323,7 @@ def model(mode='global', pipeline=None):
                                     if len(model_names) > 1:
                                         raise ValueError("Ambigous config contains several keys " +
                                                          "with similar names", model_names)
-                                    if len(model_names) == 1:
+                                    elif len(model_names) == 1:
                                         config_p = full_config[model_names[0]] or dict()
                                         config_a = config or dict()
                                         config = {**config_p, **config_a}

@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append("../..")
-from dataset import action, model
+from dataset import action, model, B, C, V
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
@@ -44,21 +44,21 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_variable('images_shape', (0, 0))
-                .update_variable('images_shape', fn=lambda batch: batch.images.shape[1:])
+                .init_variable('input_tensor_name', 'input_images')
                 .init_model('dynamic', MyModel, 'conv',
                             config={'session': {'config': tf.ConfigProto(allow_soft_placement=True)},
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
-                                    'images_shape': 'images_shape'})
-                .train_model('conv', fetches=['loss', 'predicted_labels'], feed_dict={'input_images': 'images',
-                                                                'input_labels': 'labels'},
-                             save_to=['current_loss', 'pred_label'])
+                                    'images_shape': C(lambda batch: batch.images.shape[1:])})
+                .train_model('conv', fetches=['loss', 'predicted_labels'],
+                                     feed_dict={V('input_tensor_name'): B('images'),
+                                                'input_labels': B('labels')},
+                             save_to=[V('current_loss'), V('pred_label')])
                 .print_variable('current_loss')
-                .save_to_variable('loss_history', var='current_loss', mode='a'))
+                .update_variable('loss_history', V('current_loss'), mode='a'))
 
-    #train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
-    train_pp.next_batch(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+    #train_pp.next_batch(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
     print("End training", time() - t)
 
 
@@ -68,9 +68,9 @@ if __name__ == "__main__":
     test_pp = (mnist.test.p
                 .import_model('conv', train_pp)
                 .init_variable('all_predictions', init_on_each_run=list)
-                .predict_model('conv', fetches='predicted_labels', feed_dict={'input_images': 'images',
-                                                                              'input_labels': 'labels'},
-                               append_to='all_predictions')
+                .predict_model('conv', fetches='predicted_labels', feed_dict={'input_images': B('images'),
+                                                                              'input_labels': B('labels')},
+                               append_to=V('all_predictions'))
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False, prefetch=4))
     print("End testing", time() - t)
 
