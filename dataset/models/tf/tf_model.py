@@ -197,6 +197,7 @@ class TFModel(BaseModel):
             else:
                 par_name, par_args = par[0], par[1:]
         elif isinstance(par, dict):
+            par = par.copy()
             par_name, par_args = par.pop('name', None), par
         else:
             par_name, par_args = par, {}
