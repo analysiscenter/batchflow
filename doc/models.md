@@ -95,7 +95,7 @@ full_workflow = my_dataset.p
                           ...
                           .train_model('my_model', output='accuracy', x='images', y='labels',
                                        save_to='current_accuracy')
-                          .train_model('another_model', fecthes='loss',
+                          .train_model('another_model', fetches='loss',
                                        feed_dict={'x': ''images', 'y': ''labels'},
                                        append_to='loss_history')
 ```
@@ -110,7 +110,7 @@ class MyBatch(Batch):
 
     @action
     def train_in_batch(self, model_name):
-        model_spec = self.get_model_by_name(model_name)
+        model = self.get_model_by_name(model_name)
         ...
 
 
@@ -202,7 +202,7 @@ When `inference_pipeline_template` is run, the model `Resnet50` from `train_pipe
 
 
 ## Parallel training
-If you [prefetch](prefetch.md) with actions based on non-thread-safe models you might encounter that your model hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock can be added to an action to allow for only one concurrent execution:
+If you [prefetch](prefetch.md) with actions based on non-thread-safe models, you might encounter that your model hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock can be added to an action to allow for only one concurrent execution:
 ```python
 class MyBatch:
     ...
