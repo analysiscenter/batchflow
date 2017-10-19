@@ -56,7 +56,7 @@ class C(_NamedExpression):
         _ = model
         pipeline = batch.pipeline or pipeline
         config = pipeline.config or {}
-        return config[self.name] = value
+        config[self.name] = value
 
 
 class F(_NamedExpression):
