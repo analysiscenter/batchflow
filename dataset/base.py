@@ -60,6 +60,7 @@ class Baseset:
         Split into train / test / validation in 50/30/20 ratio
         >>> bs.calc_cv_split([0.5, 0.3, 0.2])
         """
+        _shares = [shares] if isinstance(shares, (int, float)) else shares
         _shares = np.array(shares).ravel()         # pylint: disable=no-member
         n_items = len(self)
 
