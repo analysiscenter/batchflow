@@ -91,6 +91,9 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
         if layer == 'c':
             tensor = tf.layers.conv2d(tensor, filters=filters, kernel_size=kernel_size, strides=strides,
                                       padding=padding, use_bias=use_bias)
+        elif layer == 't':
+            tensor = tf.layers.conv2d_transpose(tensor, filters=filters, kernel_size=kernel_size, strides=strides,
+                                                padding=padding, use_bias=use_bias)
         elif layer == 'a':
             tensor = activation(tensor)
         elif layer == 'n':
@@ -141,6 +144,9 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
         if layer == 'c':
             tensor = tf.layers.conv3d(tensor, filters=filters, kernel_size=kernel_size, strides=strides,
                                       padding=padding, use_bias=use_bias)
+        elif layer == 't':
+            tensor = tf.layers.conv3d_transpose(tensor, filters=filters, kernel_size=kernel_size, strides=strides,
+                                                padding=padding, use_bias=use_bias)
         elif layer == 'a':
             tensor = activation(tensor)
         elif layer == 'n':
