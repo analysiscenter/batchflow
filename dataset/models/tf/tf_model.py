@@ -328,7 +328,7 @@ class TFModel(BaseModel):
             placeholder = self._map_name(placeholder)
             value = self._map_name(value)
             _feed_dict.update({placeholder: value})
-        if not self.is_training in _feed_dict:
+        if self.is_training not in _feed_dict:
             _feed_dict.update({self.is_training: is_training})
         return _feed_dict
 
