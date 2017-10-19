@@ -67,7 +67,7 @@ class Baseset:
             raise ValueError("Shares must have no more than 3 elements")
         if _shares.sum() > 1:
             raise ValueError("Shares must sum to 1")
-        if n_item < len(shares):
+        if n_items < len(shares):
             raise ValueError("A set of size %d cannot be split into %d subsets" % (n_items, len(_shares)))
 
         _shares[-1] = 1 - _shares[:-1].sum()
@@ -78,7 +78,7 @@ class Baseset:
         _lens = np.pad(_lens, (0, 3 - len(_lens)), 'constant')
 
         train_len, test_len, valid_len = _lens
-        train_share = max(0, n_items - test_share - valid_share)
+        train_len = max(0, n_items - test_len - valid_len)
 
         return train_len, test_len, valid_len
 
