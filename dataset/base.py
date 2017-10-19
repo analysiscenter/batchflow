@@ -45,9 +45,20 @@ class Baseset:
     def calc_cv_split(self, shares=0.8):
         """ Calculate split into train, test and validation subsets
 
+        Parameters
+        ----------
+        shares : float or a sequence of floats
+            A share of train, test and validation subset respectively.
+
         Returns
         -------
         a tuple which contains number of items in train, test and validation subsets
+
+        Raises
+        ------
+        `ValueError` if shares has more than 3 items or
+                        sum of shares is greater than 1 or
+                        this set does not have enough items to split
 
         Examples
         --------
@@ -61,13 +72,14 @@ class Baseset:
         >>> bs.calc_cv_split([0.5, 0.3, 0.2])
         """
         _shares = [shares] if isinstance(shares, (int, float)) else shares
-        _shares = np.array(shares).ravel()         # pylint: disable=no-member
+        _shares = _shares if len(_shares) > 1 else _shares + [.0]
+        _shares = np.array(_shares).ravel()         # pylint: disable=no-member
         n_items = len(self)
 
         if _shares.shape[0] > 3:
             raise ValueError("Shares must have no more than 3 elements")
         if _shares.sum() > 1:
-            raise ValueError("Shares must sum to 1")
+            raise ValueError("Shares must sum to 1:", shares)
         if n_items < len(_shares):
             raise ValueError("A set of size %d cannot be split into %d subsets" % (n_items, len(_shares)))
 
