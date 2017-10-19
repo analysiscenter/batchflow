@@ -60,7 +60,7 @@ class Pipeline:
             self.models = dict()
         else:
             self.dataset = pipeline.dataset
-            self.config = pipeline.config.copy()
+            self.config = None if pipeline.config is None else pipeline.config.copy()
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
             self._variables = pipeline._variables.copy()  # pylint: disable=protected-access
             if self.num_actions == 1:
