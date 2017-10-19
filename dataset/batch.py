@@ -512,7 +512,7 @@ class Batch(BaseBatch):
 
 
     @action
-    def load(self, src=None, fmt=None, components=None, *args, **kwargs):  #pylint: disable=arguments-differ
+    def load(self, src=None, fmt=None, components=None, *args, **kwargs):
         """ Load data from another array or a file """
         components = [components] if isinstance(components, str) else components
         if fmt is None:
@@ -526,7 +526,7 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def dump(self, dst=None, fmt=None, components=None, *args, **kwargs):    #pylint: disable=arguments-differ
+    def dump(self, dst=None, fmt=None, components=None, *args, **kwargs):
         """ Load data from another array or a file """
         components = [components] if isinstance(components, str) else components
         if fmt is None:
