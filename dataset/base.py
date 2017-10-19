@@ -60,28 +60,27 @@ class Baseset:
         Split into train / test / validation in 50/30/20 ratio
         >>> bs.calc_cv_split([0.5, 0.3, 0.2])
         """
-        _shares = np.array(shares).ravel() # pylint: disable=no-member
+        _shares = np.array(shares).ravel()         # pylint: disable=no-member
+        n_items = len(self)
 
         if _shares.shape[0] > 3:
             raise ValueError("Shares must have no more than 3 elements")
         if _shares.sum() > 1:
             raise ValueError("Shares must sum to 1")
+        if n_item < len(shares):
+            raise ValueError("A set of size %d cannot be split into %d subsets" % (n_items, len(_shares)))
 
-        if _shares.shape[0] == 3:
-            if not np.allclose(1. - _shares.sum(), 0.):
-                raise ValueError("Shares must sum to 1")
-            train_share, test_share, valid_share = _shares
-        elif _shares.shape[0] == 2:
-            train_share, test_share, valid_share = _shares[0], _shares[1], 1 - _shares.sum()
-        else:
-            train_share, test_share, valid_share = _shares[0], 1 - _shares[0], 0.
+        _shares[-1] = 1 - _shares[:-1].sum()
+        _lens = np.round(_shares * n_items).astype('int')
 
-        n_items = len(self)
-        train_share, test_share, valid_share = \
-            np.round(np.array([train_share, test_share, valid_share]) * n_items).astype('int')
-        train_share = n_items - test_share - valid_share
+        for s, _ in enumerate(_shares):
+            _lens[s] = _lens[s] if _shares[s] > 0 and _lens[s] >= 1 else 1
+        _lens = np.pad(_lens, (0, 3 - len(_lens)), 'constant')
 
-        return train_share, test_share, valid_share
+        train_len, test_len, valid_len = _lens
+        train_share = max(0, n_items - test_share - valid_share)
+
+        return train_len, test_len, valid_len
 
 
     def create_subset(self, index):
@@ -106,7 +105,8 @@ class Baseset:
         """
         self.index.cv_split(shares, shuffle)
 
-        self.train = self.create_subset(self.index.train)
+        if self.index.train is not None:
+            self.train = self.create_subset(self.index.train)
         if self.index.test is not None:
             self.test = self.create_subset(self.index.test)
         if self.index.validation is not None:

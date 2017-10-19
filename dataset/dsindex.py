@@ -88,7 +88,7 @@ class DatasetIndex(Baseset):
            # split into train / test / validation in 50/30/20 ratio
            di.cv_split([0.5, 0.3, 0.2])
         """
-        _, test_share, valid_share = self.calc_cv_split(shares)
+        train_share, test_share, valid_share = self.calc_cv_split(shares)
 
         # TODO: make a view not copy if not shuffled
         if shuffle:
@@ -102,8 +102,9 @@ class DatasetIndex(Baseset):
         if test_share > 0:
             test_pos = order[valid_share : valid_share + test_share]
             self.test = self.create_subset(self.subset_by_pos(test_pos))
-        train_pos = order[valid_share + test_share:]
-        self.train = self.create_subset(self.subset_by_pos(train_pos))
+        if train_share > 0:
+            train_pos = order[valid_share + test_share:]
+            self.train = self.create_subset(self.subset_by_pos(train_pos))
 
 
     def _shuffle(self, shuffle, iter_params=None):
