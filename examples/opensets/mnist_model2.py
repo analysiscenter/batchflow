@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append("../..")
-from dataset import action, model, B, C, V
+from dataset import action, model, B, C, F, V
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
@@ -49,7 +49,7 @@ if __name__ == "__main__":
                             config={'session': {'config': tf.ConfigProto(allow_soft_placement=True)},
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
-                                    'images_shape': C(lambda batch: batch.images.shape[1:])})
+                                    'images_shape': F(lambda batch: batch.images.shape[1:])})
                 .train_model('conv', fetches=['loss', 'predicted_labels'],
                                      feed_dict={V('input_tensor_name'): B('images'),
                                                 'input_labels': B('labels')},

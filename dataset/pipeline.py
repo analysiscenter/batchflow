@@ -649,7 +649,8 @@ class Pipeline:
         config : dict - model configurations parameters, where each key and value could be named expressions
             - B('name') - a batch class attribute or component name
             - V('name') - a pipeline variable name
-            - C(name) - a callable which takes batch for dynamic models and pipeline for static models
+            - C('name') - a pipeline config option
+            - F(name) - a callable which takes a batch for dynamic models or a pipeline for static models
             These expressions will be substituted by their actual values.
             All other value will be used "as is".
 
@@ -709,7 +710,8 @@ class Pipeline:
         which keys and values could be named expressions:
             - B('name') - a batch class attribute or component name
             - V('name') - a pipeline variable name
-            - C(name) - a callable which takes (batch, model)
+            - C('name') - a pipeline config option
+            - F(name) - a callable which takes (batch, model)
             These expressions are substituted by their actual values.
             All other value will be used "as is".
         These parameters after substitution will be sent to `model.train(...)`.
@@ -755,7 +757,8 @@ class Pipeline:
         which keys and values could be named expressions:
             - B('name') - a batch class attribute or component name
             - V('name') - a pipeline variable name
-            - C(name) - a callable which takes (batch, model)
+            - C('name') - a pipeline config option
+            - F(name) - a callable which takes (batch, model)
             These expressions are substituted by their actual values.
             All other value will be used "as is".
         These parameters after substitution will be sent to `model.predict(...)`.

@@ -43,7 +43,24 @@ class B(_NamedExpression):
 
 
 class C(_NamedExpression):
-    """ Callable """
+    """ A pipeline config option """
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a value of a pipeline config """
+        _ = model
+        pipeline = batch.pipeline or pipeline
+        config = pipeline.config or {}
+        return config.get(self.name, None)
+
+    def set(self, value, batch=None, pipeline=None, model=None):
+        """ Assign a value to a pipeline config """
+        _ = model
+        pipeline = batch.pipeline or pipeline
+        config = pipeline.config or {}
+        return config[self.name] = value
+
+
+class F(_NamedExpression):
+    """ A function, method or any other callable """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
         args = []

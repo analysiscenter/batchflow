@@ -71,7 +71,8 @@ Read a model specfication to know how to configure it.
 For flexibilty `config` might include so called `named expressions` which are defined by name but substitued with thei actual value:
 `B('name')` - a batch component
 `V('name')` - a pipeline variable
-`C(name)` - a callable
+`C('name')` - a pipeline config option
+`F(name)` - a function, method or any other callable
 
 ```python
 pipeline
@@ -83,7 +84,7 @@ pipeline
     .init_model('dynamic', MyModel, config={V('shape_name)': B('images_shape')})
 
 pipeline
-    .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
+    .init_model('dynamic', MyModel, config={'input_shape': F(lambda batch: batch.images.shape[1:])})
 ```
 
 

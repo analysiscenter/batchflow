@@ -251,12 +251,17 @@ Or add `update_variable` to the pipeline:
 ```python
 my_pipeline
     ...
-    .update_variable("current_batch_labels", fn=MyBatch.get_labels)
-    .update_variable("all_labels", var='current_batch_labels', mode='append')
+    .update_variable("current_batch_labels", F(MyBatch.get_labels))
+    .update_variable("all_labels", V('current_batch_labels'), mode='append')
 ```
-If `fn` is specified, it would be called with the current batch as a parameter.
+The first argument specifies a variable name, while the second one could be some value or a named expression:
 
-Mode 'append' allows to gather values from all the batches. Append mode works with both `var` and `fn` parameters.
+- B('name') - a batch class attribute or component name
+- V('name') - a pipeline variable name
+- C('name') - a pipeline config option
+- F(name) - a callable which takes a batch (could be a batch class method or a function)
+
+Mode 'append' allows to gather values from all the batches.
 
 
 ### Deleting a variable
