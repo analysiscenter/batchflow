@@ -1056,7 +1056,7 @@ class Pipeline:
 
     def next_batch(self, *args, **kwargs):
         """ Get the next batch and execute all previous lazy actions
-        next_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+        next_batch(batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
         """
         if len(args) == 0 and len(kwargs) == 0:
             if self._lazy_run is None:
@@ -1068,12 +1068,11 @@ class Pipeline:
                 self._batch_generator = self.gen_batch(*args, **kwargs)
             batch_res = next(self._batch_generator)
         else:
-            self._lazy_run = args, kwargs
             _kwargs = kwargs.copy()
             # target is not used here, but people tend to forget removing it when set prefetch to 0
-            _ = _kwargs.pop('target', 'threads')
+            _kwargs.pop('target')
             # prefetch could be 0
-            _ = _kwargs.pop('prefetch', 0)
+            _kwargs.pop('prefetch')
             batch_res = None
             while batch_res is None:
                 batch_index = self.index.next_batch(*args, **_kwargs)
