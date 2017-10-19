@@ -68,11 +68,11 @@ For some models only one of `build` or `load` can be `True`. While other models 
 
 Read a model specfication to know how to configure it.
 
-For flexibilty `config` might include so called `named expressions` which are defined by name but substitued with thei actual value:
-`B('name')` - a batch component
-`V('name')` - a pipeline variable
-`C('name')` - a pipeline config option
-`F(name)` - a function, method or any other callable
+For flexibilty `config` might include so called `named expressions` which are defined by name but substitued with their actual values:
+- `B('name')` - a batch component
+- `V('name')` - a pipeline variable
+- `C('name')` - a pipeline config option
+- `F(name)` - a function, method or any other callable
 
 ```python
 pipeline
@@ -101,8 +101,10 @@ full_workflow = my_dataset.p
 Model independent arguments are:
 - `make_data` - a function or method which takes a current batch and a model instance and return a dict of arguments for `model.train(...)`.
 - `save_to` - a location or a sequence of locations where to store an output of `model.train` (if there is any).  
-If both (a batch component and a pipeline variable with the same name) exist, then a batch component will be used. So be careful with naming.
+  Could be a named expression: `B("name")`, `C("name")` or `V("name")`.  
 - `append_to` - a location or a sequence of locations where a model output will be appended to.  
+  Could be a named expression: `B("name")`, `C("name")` or `V("name")`.
+
 If both (`save_to` and `append_to`) are present, only `append_to` will be used.
 
 ```python
