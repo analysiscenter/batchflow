@@ -60,9 +60,9 @@ class Pipeline:
             self.models = dict()
         else:
             self.dataset = pipeline.dataset
-            self.config = pipeline.config
+            self.config = pipeline.config.copy()
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
-            self._variables = pipeline._variables         # pylint: disable=protected-access
+            self._variables = pipeline._variables.copy()  # pylint: disable=protected-access
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
