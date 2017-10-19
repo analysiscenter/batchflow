@@ -312,7 +312,7 @@ class TFModel(BaseModel):
         """
         return tensor.get_shape().as_list()
 
-    def _tensor_name(self, name):
+    def _map_name(self, name):
         if isinstance(name, str):
             if hasattr(self, name):
                 return getattr(self, name)
@@ -324,8 +324,9 @@ class TFModel(BaseModel):
     def _fill_feed_dict(self, feed_dict=None, is_training=True):
         feed_dict = feed_dict or {}
         _feed_dict = {}
-        for placeholder_name, value in feed_dict.items():
-            placeholder = self.graph.get_tensor_by_name(self._tensor_name(placeholder_name))
+        for placeholder, value in feed_dict.items():
+            placeholder = self._map_name(placeholder)
+            value = self._map_name(value)
             _feed_dict.update({placeholder: value})
         if not self.is_training in _feed_dict:
             _feed_dict.update({self.is_training: is_training})
@@ -334,15 +335,15 @@ class TFModel(BaseModel):
     def _fill_fetches(self, fetches=None, default=None):
         fetches = fetches or default
         if isinstance(fetches, str):
-            _fetches = self._tensor_name(fetches)
+            _fetches = self._map_name(fetches)
         elif isinstance(fetches, (tuple, list)):
             _fetches = []
             for fetch in fetches:
-                _fetches.append(self._tensor_name(fetch))
+                _fetches.append(self._map_name(fetch))
         elif isinstance(fetches, dict):
             _fetches = dict()
             for key, fetch in fetches.items():
-                _fetches.update({key: self._tensor_name(fetch)})
+                _fetches.update({key: self._map_name(fetch)})
         else:
             _fetches = fetches
         return _fetches
