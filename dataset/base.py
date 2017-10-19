@@ -68,7 +68,7 @@ class Baseset:
             raise ValueError("Shares must have no more than 3 elements")
         if _shares.sum() > 1:
             raise ValueError("Shares must sum to 1")
-        if n_items < len(shares):
+        if n_items < len(_shares):
             raise ValueError("A set of size %d cannot be split into %d subsets" % (n_items, len(_shares)))
 
         _shares[-1] = 1 - _shares[:-1].sum()
