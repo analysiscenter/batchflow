@@ -405,7 +405,29 @@ class Pipeline:
             raise KeyError("No such variable %s exists", action['var_name'])
 
     def update_variable(self, name, value=None, mode='w'):
-        """ Update a value of a given variable during pipeline execution """
+        """ Update a value of a given variable during pipeline execution
+
+        Parameters
+        ----------
+        name : str - a variable name
+
+        value - an updating value, could be some value or a named expression:
+        - B('name') - a batch class attribute or component name
+        - V('name') - a pipeline variable name
+        - C('name') - a pipeline config option
+        - F(name) - a callable which takes a batch (could be a batch class method or a function)
+        These expressions will be substituted for their real value.
+
+        mode : str - a method to update a variable value, could be one of:
+        - 'a' or 'append' to append a value to a variable (e.g. if a variable is a list)
+        - 'u' or 'update' to update a value to a variable (e.g. if a variable is a dict)
+        - 'w' or 'write' to rewrite a variable with a new value
+        - a callable which takes a variable value and a new value
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+        """
         self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name,
                                   'value': value, 'mode': mode})
         return self.append_action()
@@ -420,8 +442,12 @@ class Pipeline:
             else:
                 value = action['value']
 
-            if action['mode'] in ['a', 'append']:
+            if callable(action['mode']):
+                action['mode'](self.get_variable(action['var_name']), value)
+            elif action['mode'] in ['a', 'append']:
                 self.get_variable(action['var_name']).append(value)
+            elif action['mode'] in ['u', 'update']:
+                self.get_variable(action['var_name']).update(value)
             else:
                 self.set_variable(action['var_name'], value)
 
@@ -632,6 +658,7 @@ class Pipeline:
         batch_res = self._exec_all_actions(batch)
         batch_res.pipeline = self
         return batch_res
+
 
     def get_model_by_name(self, name, batch=None):
         """ Get a model specification by its name """

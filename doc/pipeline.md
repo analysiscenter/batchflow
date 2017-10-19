@@ -254,14 +254,18 @@ my_pipeline
     .update_variable("current_batch_labels", F(MyBatch.get_labels))
     .update_variable("all_labels", V('current_batch_labels'), mode='append')
 ```
-The first argument specifies a variable name, while the second one could be some value or a named expression:
-
+The first argument specifies a variable name, while the second is an updating value and
+it one could be some value or a named expression:
 - B('name') - a batch class attribute or component name
 - V('name') - a pipeline variable name
 - C('name') - a pipeline config option
 - F(name) - a callable which takes a batch (could be a batch class method or a function)
 
-Mode 'append' allows to gather values from all the batches.
+Mode could be one of:
+- 'a' or 'append' to append a value to a variable (e.g. if a variable is a list)
+- 'u' or 'update' to update a value to a variable (e.g. if a variable is a dict)
+- 'w' or 'write' to rewrite a variable with a new value
+- a callable which takes a variable value and a new value
 
 
 ### Deleting a variable
