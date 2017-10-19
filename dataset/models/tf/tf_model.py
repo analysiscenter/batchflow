@@ -206,19 +206,20 @@ class TFModel(BaseModel):
 
     def _make_loss(self):
         """ Return a loss function from config """
-        if len(tf.losses.get_losses()) == 0:
-            loss = self.get_from_config("loss")
-            if loss is None:
+        loss = self.get_from_config("loss")
+        if loss is None:
+            if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
-            elif isinstance(loss, str) and hasattr(tf.losses, loss):
-                loss = getattr(tf.losses, loss)
-            elif isinstance(loss, str):
-                loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
-            elif callable(loss):
-                pass
-            else:
-                raise ValueError("Unknown loss", loss)
+        elif isinstance(loss, str) and hasattr(tf.losses, loss):
+            loss = getattr(tf.losses, loss)
+        elif isinstance(loss, str):
+            loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
+        elif callable(loss):
+            pass
+        else:
+            raise ValueError("Unknown loss", loss)
 
+        if loss is not None:
             try:
                 predictions = self.graph.get_tensor_by_name("predictions:0")
                 targets = self.graph.get_tensor_by_name("targets:0")
