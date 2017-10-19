@@ -321,13 +321,14 @@ class TFModel(BaseModel):
             return name + ':0'
         return name
 
-    def _fill_feed_dict(self, feed_dict=None):
+    def _fill_feed_dict(self, feed_dict=None, is_training=True):
         feed_dict = feed_dict or {}
         _feed_dict = {}
         for placeholder_name, value in feed_dict.items():
             placeholder = self.graph.get_tensor_by_name(self._tensor_name(placeholder_name))
             _feed_dict.update({placeholder: value})
-        _feed_dict.update({self.is_training: True})
+        if not self.is_training in _feed_dict:
+            _feed_dict.update({self.is_training: is_training})
         return _feed_dict
 
     def _fill_fetches(self, fetches=None, default=None):
@@ -363,7 +364,7 @@ class TFModel(BaseModel):
         Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
         """
         with self.graph.as_default():
-            _feed_dict = self._fill_feed_dict(feed_dict)
+            _feed_dict = self._fill_feed_dict(feed_dict, is_training=True)
             if fetches is None:
                 _fetches = tuple()
             else:
@@ -393,7 +394,7 @@ class TFModel(BaseModel):
         Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
         """
         with self.graph.as_default():
-            _feed_dict = self._fill_feed_dict(feed_dict)
+            _feed_dict = self._fill_feed_dict(feed_dict, is_training=False)
             _fetches = self._fill_fetches(fetches, default='predictions')
             output = self.session.run(_fetches, _feed_dict)
         return output
