@@ -508,90 +508,6 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
         return batch
 
-    def _exec_init_model(self, batch, action):
-        with self._models_lock:
-            model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
-            if model is None:
-                ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
-                                          name=action['model_name'], config=action['config'],
-                                          pipeline=self, batch=batch)
-
-    def _make_model_args(self, batch, action, model):
-        def _map_data(item):
-            if isinstance(item, _NamedExpression):
-                return item.get(batch=batch, model=model)
-            return item
-
-        make_data = action['make_data']
-        args = tuple()
-        kwargs = dict()
-
-        if callable(make_data):
-            _data = make_data(batch=batch, model=model)
-            if isinstance(_data, dict):
-                kwargs = _data
-            else:
-                args = _data
-
-        kwargs = {**action['kwargs'], **kwargs}
-
-        for arg, data in kwargs.items():
-            if isinstance(data, dict):
-                data_dict = type(data)()
-                for key, item in data.items():
-                    data_dict.update({_map_data(key): _map_data(item)})
-                data_item = data_dict
-            elif isinstance(data, (tuple, list)):
-                data_list = []
-                for item in data:
-                    data_item = _map_data(item)
-                    data_list.append(data_item)
-                data_item = data_list
-            else:
-                data_item = _map_data(data)
-            kwargs.update({arg: data_item})
-
-        return args, kwargs
-
-    def _save_model_output(self, batch, model, output, save_to, mode='w'):
-        if not isinstance(output, (tuple, list, dict, OrderedDict)):
-            output = [output]
-            save_to = [save_to]
-        if isinstance(save_to, tuple):
-            save_to = list(save_to)
-
-        if isinstance(output, (tuple, list)):
-            for i, item in enumerate(output):
-                if i < len(save_to):
-                    if isinstance(save_to[i], _NamedExpression):
-                        if mode == 'a':
-                            save_to[i].append(item, batch=batch, model=model)
-                        else:
-                            save_to[i].set(item, batch=batch, model=model)
-                    else:
-                        if mode == 'a':
-                            save_to[i].append(item)
-                        else:
-                            save_to[i] = item
-
-    def _exec_train_model(self, batch, action):
-        model = self.get_model_by_name(action['model_name'], batch=batch)
-        args, kwargs = self._make_model_args(batch, action, model)
-        output = model.train(*args, **kwargs)
-        if action['append_to'] is None:
-            self._save_model_output(batch, model, output, action['save_to'])
-        else:
-            self._save_model_output(batch, model, output, action['append_to'], 'a')
-
-    def _exec_predict_model(self, batch, action):
-        model = self.get_model_by_name(action['model_name'], batch=batch)
-        args, kwargs = self._make_model_args(batch, action, model)
-        predictions = model.predict(*args, **kwargs)
-        if action['append_to'] is None:
-            self._save_model_output(batch, model, predictions, action['save_to'])
-        else:
-            self._save_model_output(batch, model, predictions, action['append_to'], 'a')
-
     def _exec_all_actions(self, batch, action_list=None):
         join_batches = None
         action_list = action_list or self._action_list
@@ -707,6 +623,14 @@ class Pipeline:
 
         return self
 
+    def _exec_init_model(self, batch, action):
+        with self._models_lock:
+            model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
+            if model is None:
+                ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
+                                          name=action['model_name'], config=action['config'],
+                                          pipeline=self, batch=batch)
+
     def import_model(self, name, pipeline):
         """ Import a model from another pipeline
 
@@ -815,6 +739,83 @@ class Pipeline:
         self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
                                   'save_to': save_to, 'append_to': append_to})
         return self.append_action(*args, **kwargs)
+
+    def _make_model_args(self, batch, action, model):
+        def _map_data(item):
+            if isinstance(item, _NamedExpression):
+                return item.get(batch=batch, model=model)
+            return item
+
+        make_data = action['make_data']
+        args = tuple()
+        kwargs = dict()
+
+        if callable(make_data):
+            _data = make_data(batch=batch, model=model)
+            if isinstance(_data, dict):
+                kwargs = _data
+            else:
+                args = _data
+
+        kwargs = {**action['kwargs'], **kwargs}
+
+        for arg, data in kwargs.items():
+            if isinstance(data, dict):
+                data_dict = type(data)()
+                for key, item in data.items():
+                    data_dict.update({_map_data(key): _map_data(item)})
+                data_item = data_dict
+            elif isinstance(data, (tuple, list)):
+                data_list = []
+                for item in data:
+                    data_item = _map_data(item)
+                    data_list.append(data_item)
+                data_item = data_list
+            else:
+                data_item = _map_data(data)
+            kwargs.update({arg: data_item})
+
+        return args, kwargs
+
+    def _save_model_output(self, batch, model, output, save_to, mode='w'):
+        if not isinstance(output, (tuple, list, dict, OrderedDict)):
+            output = [output]
+            save_to = [save_to]
+        if isinstance(save_to, tuple):
+            save_to = list(save_to)
+
+        if isinstance(output, (tuple, list)):
+            for i, item in enumerate(output):
+                if i < len(save_to):
+                    if isinstance(save_to[i], _NamedExpression):
+                        if mode == 'a':
+                            save_to[i].append(item, batch=batch, model=model)
+                        else:
+                            save_to[i].set(item, batch=batch, model=model)
+                    else:
+                        if mode == 'a':
+                            save_to[i].append(item)
+                        else:
+                            save_to[i] = item
+
+    def _exec_train_model(self, batch, action):
+        model = self.get_model_by_name(action['model_name'], batch=batch)
+        args, kwargs = self._make_model_args(batch, action, model)
+        output = model.train(*args, **kwargs)
+        if action['append_to'] is None:
+            self._save_model_output(batch, model, output, action['save_to'])
+        else:
+            self._save_model_output(batch, model, output, action['append_to'], 'a')
+
+    def _exec_predict_model(self, batch, action):
+        model = self.get_model_by_name(action['model_name'], batch=batch)
+        args, kwargs = self._make_model_args(batch, action, model)
+        predictions = model.predict(*args, **kwargs)
+        if action['append_to'] is None:
+            self._save_model_output(batch, model, predictions, action['save_to'])
+        else:
+            self._save_model_output(batch, model, predictions, action['append_to'], 'a')
+
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
