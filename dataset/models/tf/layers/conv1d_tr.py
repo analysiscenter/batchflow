@@ -1,4 +1,6 @@
 """ Contains 1d transposed convolution layer """
+import tensorflow as tf
+
 
 def conv1d_transpose(tensor, filters, kernel_size, strides, padding, use_bias):
     """ Transposed 1D convolution layer
