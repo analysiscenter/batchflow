@@ -2,7 +2,7 @@
 import numpy as np
 import tensorflow as tf
 
-from .conv import conv1d_block, conv2d_block, conv3d_block
+from .conv import conv_block, conv1d_block, conv2d_block, conv3d_block
 
 
 def flatten(x, name=None):
