@@ -10,7 +10,7 @@ from dataset import action, model, B, C, F, V
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
-from dataset.models.tf.layers import conv2d_block, iflatten
+from dataset.models.tf.layers import conv2d_block, flatten
 
 
 class MyModel(TFModel):
