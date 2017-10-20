@@ -65,7 +65,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                                 padding=padding, use_bias=use_bias)
         elif layer == 't':
             tensor = transposed_conv_layer(tensor, filters=filters, kernel_size=kernel_size, strides=strides,
-                                padding=padding, use_bias=use_bias)
+                                           padding=padding, use_bias=use_bias)
         elif layer == 'a':
             tensor = activation(tensor)
         elif layer == 'n':
