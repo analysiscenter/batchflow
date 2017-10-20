@@ -12,19 +12,20 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     input_tensor : tf.Tensor
     filters : int - number of filters in the ouput tensor
     kernel_size  int - kernel size
-    layout : str - a sequence of layers
+    layout : str - a sequence of layers:
         c - convolution
         n - batch normalization
         a - activation
         p - max pooling
+        Default is 'cnap'.
     name : str -  name of the layer that will be used as a scope
-    strides : int
-    padding : str - padding mode, can be 'same' or 'valid';
-    use_bias : bool
-    activation : callable
-    pool_size : int
-    pool_strides : int
-    is_training : bool or tf.Tensor
+    strides : int. Default is 1.
+    padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
+    use_bias : bool. Default is True.
+    activation : callable. Default is `tf.nn.relu`.
+    pool_size : int. Default is 2.
+    pool_strides : int. Default is 2.
+    is_training : bool or tf.Tensor. Default is True.
 
     Returns
     -------
@@ -63,20 +64,21 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     input_tensor : tf.Tensor
     filter s: int - number of filters in the ouput tensor
     kernel_size:  int or tuple(int, int) - kernel size
-    layout : str - a sequence of layers
+    layout : str - a sequence of layers:
         c - convolution
         t - transposed convolution
         n - batch normalization
         a - activation
         p - max pooling
+        Default is 'cnap'.
     name : str -  name of the layer that will be used as a scope
-    strides : tuple(int, int)
-    padding : str - padding mode, can be 'same' or 'valid';
-    use_bias : bool
-    activation : callable
-    pool_size : tuple(int, int)
-    pool_strides : tuple(int, int)
-    is_training : bool or tf.Tensor
+    strides : int. Default is 1.
+    padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
+    use_bias : bool. Default is True.
+    activation : callable. Default is `tf.nn.relu`.
+    pool_size : int. Default is 2.
+    pool_strides : int. Default is 2.
+    is_training : bool or tf.Tensor. Default is True.
 
     Returns
     -------
@@ -117,20 +119,21 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     input_tensor : tf.Tensor
     filters : int - number of filters in the ouput tensor
     kernel_size : int or tuple(int, int, int) - kernel size
-    layout : str - a sequence of layers
+    layout : str - a sequence of layers:
         c - convolution
         t - transposed convolution
         n - batch normalization
         a - activation
         p - max pooling
+        Default is 'cnap'.
     name : str -  name of the layer that will be used as a scope
-    strides : tuple(int, int, int)
-    padding : str - padding mode, can be 'same' or 'valid';
-    use_bias : bool
-    activation : callable
-    pool_size : tuple(int, int, int)
-    pool_strides : tuple(int, int, int)
-    is_training : bool or tf.Tensor
+    strides : int. Default is 1.
+    padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
+    use_bias : bool. Default is True.
+    activation : callable. Default is `tf.nn.relu`.
+    pool_size : int. Default is 2.
+    pool_strides : int. Default is 2.
+    is_training : bool or tf.Tensor. Default is True.
 
     Returns
     -------
@@ -172,20 +175,21 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     input_tensor : tf.Tensor
     filters : int - number of filters in the ouput tensor
     kernel_size : int or tuple of ints - kernel size
-    layout : str - a sequence of layers
+    layout : str - a sequence of layers:
         c - convolution
         t - transposed convolution
         n - batch normalization
         a - activation
         p - max pooling
+        Default is 'cnap'.
     name : str -  name of the layer that will be used as a scope
-    strides : int or tuple of ints
-    padding : str - padding mode, can be 'same' or 'valid';
-    use_bias : bool
-    activation : callable
-    pool_size : int or tuple of ints
-    pool_strides : int or tuple of ints
-    is_training : bool or tf.Tensor
+    strides : int. Default is 1.
+    padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
+    use_bias : bool. Default is True.
+    activation : callable. Default is `tf.nn.relu`.
+    pool_size : int. Default is 2.
+    pool_strides : int. Default is 2.
+    is_training : bool or tf.Tensor. Default is True.
 
     Returns
     -------
