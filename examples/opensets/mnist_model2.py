@@ -22,7 +22,7 @@ class MyModel(TFModel):
         images = tf.to_float(input_images)
 
         features = conv2d_block(images, 32, (3, 3), layout='canp', name='layer1')
-        features = iflatten(features)
+        features = flatten(features)
 
         layer1 = tf.layers.dense(features, units=512, activation=tf.nn.relu)
         model_output = tf.layers.dense(layer1, units=10)

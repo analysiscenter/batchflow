@@ -5,7 +5,7 @@ import tensorflow as tf
 from .conv import conv_block, conv1d_block, conv2d_block, conv3d_block
 
 
-def flatten(x, name=None):
+def flatten2d(x, name=None):
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) """
     x = tf.convert_to_tensor(x)
     dims = tf.reduce_prod(tf.shape(x)[1:])
@@ -13,7 +13,7 @@ def flatten(x, name=None):
     return x
 
 
-def iflatten(x, name=None):
+def flatten(x, name=None):
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) using inferred shape and numpy """
     x = tf.convert_to_tensor(x)
     shape = x.get_shape().as_list()
