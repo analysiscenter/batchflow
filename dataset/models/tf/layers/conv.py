@@ -4,7 +4,7 @@ import tensorflow as tf
 
 def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, is_training=True):
+                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True):
     """ Complex 1d convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -25,6 +25,7 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     activation : callable. Default is `tf.nn.relu`.
     pool_size : int. Default is 2.
     pool_strides : int. Default is 2.
+    dropout_rate : float. Default is 0.
     is_training : bool or tf.Tensor. Default is True.
 
     Returns
@@ -47,6 +48,8 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
             tensor = tf.layers.batch_normalization(tensor, axis=-1, training=is_training)
         elif layer == 'p':
             tensor = tf.layers.max_pooling1d(tensor, pool_size, pool_strides, padding)
+        elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
+            tensor = tf.layers.drop_out(tensor, dropout_rate, training=is_training)
 
     if context is not None:
         context.__exit__(None, None, None)
@@ -56,7 +59,7 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
 
 def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, is_training=True):
+                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True):
     """ Complex 2d convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -78,6 +81,7 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     activation : callable. Default is `tf.nn.relu`.
     pool_size : int. Default is 2.
     pool_strides : int. Default is 2.
+    dropout_rate : float. Default is 0.
     is_training : bool or tf.Tensor. Default is True.
 
     Returns
@@ -103,6 +107,8 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
             tensor = tf.layers.batch_normalization(tensor, axis=-1, training=is_training)
         elif layer == 'p':
             tensor = tf.layers.max_pooling2d(tensor, pool_size, pool_strides, padding)
+        elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
+            tensor = tf.layers.drop_out(tensor, dropout_rate, training=is_training)
 
     if context is not None:
         context.__exit__(None, None, None)
@@ -111,7 +117,7 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
 
 def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, is_training=True):
+                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True):
     """ Complex 3d convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -133,6 +139,7 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     activation : callable. Default is `tf.nn.relu`.
     pool_size : int. Default is 2.
     pool_strides : int. Default is 2.
+    dropout_rate : float. Default is 0.
     is_training : bool or tf.Tensor. Default is True.
 
     Returns
@@ -158,6 +165,8 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
             tensor = tf.layers.batch_normalization(tensor, axis=-1, training=is_training)
         elif layer == 'p':
             tensor = tf.layers.max_pooling3d(tensor, pool_size, pool_strides, padding)
+        elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
+            tensor = tf.layers.drop_out(tensor, dropout_rate, training=is_training)
 
     if context is not None:
         context.__exit__(None, None, None)
@@ -166,7 +175,7 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
 
 def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None,
                strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
-               pool_size=2, pool_strides=2, is_training=True):
+               pool_size=2, pool_strides=2, dropout_rate=0., is_training=True):
     """ Complex convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -189,6 +198,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     activation : callable. Default is `tf.nn.relu`.
     pool_size : int. Default is 2.
     pool_strides : int. Default is 2.
+    dropout_rate : float. Default is 0.
     is_training : bool or tf.Tensor. Default is True.
 
     Returns
@@ -198,15 +208,15 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     if dim == 1:
         output = conv1d_block(input_tensor, filters, kernel_size, layout, name,
                               strides, padding, use_bias, activation,
-                              pool_size, pool_strides, is_training)
+                              pool_size, pool_strides, dropout_rate, is_training)
     elif dim == 2:
         output = conv2d_block(input_tensor, filters, kernel_size, layout, name,
                               strides, padding, use_bias, activation,
-                              pool_size, pool_strides, is_training)
+                              pool_size, pool_strides, dropout_rate, is_training)
     elif dim == 2:
         output = conv3d_block(input_tensor, filters, kernel_size, layout, name,
                               strides, padding, use_bias, activation,
-                              pool_size, pool_strides, is_training)
+                              pool_size, pool_strides, dropout_rate, is_training)
     else:
         raise ValueError("Number of dimensions could be 1, 2 or 3, but given %d" % dim)
 
