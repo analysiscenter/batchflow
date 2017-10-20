@@ -54,8 +54,8 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
 
 
 def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=(1, 1), padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=(2, 2), pool_strides=(2, 2), is_training=True):
+                 strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
+                 pool_size=2, pool_strides=2, is_training=True):
     """ Complex 2d convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -108,8 +108,8 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     return tensor
 
 def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=(1, 1, 1), padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=(2, 2, 2), pool_strides=(2, 2, 2), is_training=True):
+                 strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
+                 pool_size=2, pool_strides=2, is_training=True):
     """ Complex 3d convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -162,8 +162,8 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     return tensor
 
 def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=(1, 1), padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=(2, 2), pool_strides=(2, 2), is_training=True):
+               strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
+               pool_size=2, pool_strides=2, is_training=True):
     """ Complex convolution with batch normalization, activation and pooling layers
 
     Parameters
