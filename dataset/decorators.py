@@ -159,14 +159,14 @@ class ModelDirectory:
                     if hasattr(batch, model_name):
                         method = getattr(batch, model_name)
                     else:
-                        model_method = ModelDirectory.find_model_method_by_name(model_name, pipeline)[0]
+                        model_method = ModelDirectory.find_model_method_by_name(model_name, pipeline)
                         if model_method is None:
                             raise ValueError("Model '%s' not found neither in the batch class %s,"
                                              % (model_name, batch.__class__.__name__) +
                                              " nor in the pipeline %s" % pipeline)
                         else:
                             # a model method is supposed to be in a Batch class, so batch serves as self
-                            method = functools.partial(model_method, batch)
+                            method = functools.partial(model_method[0], batch)
                 model_spec = method()
         return model_spec
 
@@ -203,6 +203,7 @@ class ModelDirectory:
         """
         if model_class is not None:
             name = name or model_class.__name__
+            init_config = config
 
             def _model_definition_maker():
                 def _model_definition_method(batch, config=None):
@@ -214,12 +215,12 @@ class ModelDirectory:
                                 val = val.get(pipeline=batch.pipeline)  # pylint: disable=undefined-loop-variable
                         return val
 
-                    config = config or dict()
-                    kwargs = {}
-                    if isinstance(config, _NamedExpression):
-                        config = _get_named_expr(config)
-                    if isinstance(config, dict):
-                        for arg, val in config.items():
+                    kwargs = config or dict()
+                    _config = init_config or dict()
+                    if isinstance(_config, _NamedExpression):
+                        _config = _get_named_expr(_config)
+                    if isinstance(_config, dict):
+                        for arg, val in _config.items():
                             arg = _get_named_expr(arg)
                             val = _get_named_expr(val)
                             kwargs.update({arg: val})
@@ -246,8 +247,6 @@ class ModelDirectory:
             # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
             dummy_batch = _DummyBatch(pipeline)
             _ = model_methods[0](dummy_batch, config)
-        elif mode == 'dynamic' and model_class is not None and batch is not None:
-            model_method(batch, config)
 
 
     @staticmethod

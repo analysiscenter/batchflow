@@ -155,7 +155,7 @@ template_pp = (Pipeline(config=config)
 pp2 = (template_pp
         .init_variable("session", sess)
         .init_variable("print lock", init=threading.Lock)
-        .init_model("dynamic", MyModel, "my_model", config=MyBatch.make_data_for_dynamic)
+        .init_model("dynamic", MyModel, "my_model", config=F(MyBatch.make_data_for_dynamic))
         .init_model("dynamic", MyModel, "my_model2")
         #.init_model("MyModel")
         .load(data)
@@ -184,8 +184,8 @@ print(time() - t)
 
 print("-------------------------------------------------")
 print("============== start gen_batch ==================")
-print("Start iterating...")
 res = pp2 << ds_data
+print("Start iterating...")
 t = time()
 t1 = t
 for batch in res.gen_batch(K, n_epochs=1, drop_last=True, prefetch=Q*0):

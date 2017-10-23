@@ -612,11 +612,10 @@ class Pipeline:
         >>> pipeline
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        if mode == 'static':
-            with self._models_lock:
-                ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
-            return self
-        elif mode == 'dynamic':
+        with self._models_lock:
+            ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
+
+        if mode == 'dynamic':
             self._action_list.append({'name': INIT_MODEL_ID, 'mode': mode, 'model_class': model_class,
                                       'model_name': name, 'pipeline': self, 'config': config})
             return self.append_action()

@@ -91,7 +91,7 @@ if __name__ == "__main__":
     dataset, data = gen_data(K, (S, S))
 
     res = (dataset.p
-            .load((data, None))
+            .load((data, ))
             .convert_to_pil()
             .resize(shape=(384, 384))
             .random_rotate(angle=(-np.pi/4, np.pi/4), preserve_shape=True)

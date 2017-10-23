@@ -82,16 +82,17 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 # Create a template pipeline
 pp = (Pipeline(config=config)
         .init_variable('num_classes', 3)
+        .init_variable('var_name', 'num_classes')
         .init_model("static", MyModel, name="static_model", config=dict(loss='ce'))
         .init_model("dynamic", MyModel, "dynamic_model",
-                    dict(num_classes='num_classes',
-                         images_shape=lambda batch: batch.images.shape,
+                    dict(num_classes=V(V('var_name')),
+                         images_shape=F(lambda batch: batch.images.shape),
                          loss='ce'))
-        .init_model("static", TFModel, "dynamic_model2", config=dict(build=False, load=True, path='./models/dynamic'))
+        #.init_model("static", TFModel, "dynamic_model2", config=dict(build=False, load=True, path='./models/dynamic'))
         .load((data, labels))
         #.train_model("static_model", fn=trans)
         .train_in_batch()
-        .train_model("dynamic_model", feed_dict={'x': 'images', 'y': 'labels'})
+        .train_model("dynamic_model", feed_dict={'x': B('images'), 'y': B('labels')})
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 

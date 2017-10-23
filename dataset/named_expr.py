@@ -14,8 +14,11 @@ class _NamedExpression:
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression """
-        _ = batch, pipeline, model
-        raise NotImplementedError("get should be defined in child classes")
+        if isinstance(self.name, _NamedExpression):
+            name = self.name.get(batch=batch, pipeline=pipeline, model=model)
+        else:
+            name = self.name
+        return name
 
     def set(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a named expression """
@@ -31,38 +34,39 @@ class B(_NamedExpression):
     """ Batch component name """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a batch component """
-        _ = pipeline, model
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
         if isinstance(batch, _DummyBatch):
-            raise ValueError("Batch expressions are not allowed in static models B(%s)" % self.name)
-        return getattr(batch, self.name)
+            raise ValueError("Batch expressions are not allowed in static models B(%s)" % name)
+        return getattr(batch, name)
 
     def set(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a batch component """
-        _ = pipeline, model
-        setattr(batch, self.name, value)
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        setattr(batch, name, value)
 
 
 class C(_NamedExpression):
     """ A pipeline config option """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline config """
-        _ = model
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline or pipeline
         config = pipeline.config or {}
-        return config.get(self.name, None)
+        return config.get(name, None)
 
     def set(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """
-        _ = model
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline or pipeline
         config = pipeline.config or {}
-        config[self.name] = value
+        config[name] = value
 
 
 class F(_NamedExpression):
     """ A function, method or any other callable """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
         args = []
         if isinstance(batch, _DummyBatch) or batch is None:
             args += [batch.pipeline or pipeline]
@@ -70,7 +74,7 @@ class F(_NamedExpression):
             args += [batch]
         if model is not None:
             args += [model]
-        return self.name(*args)
+        return name(*args)
 
     def set(self, *args, **kwargs):
         """ Assign a value by calling a callable """
@@ -87,12 +91,12 @@ class V(_NamedExpression):
     """ Pipeline variable name """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline variable """
-        _ = model
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline or pipeline
-        return pipeline.get_variable(self.name)
+        return pipeline.get_variable(name)
 
     def set(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline variable """
-        _ = model
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline or pipeline
-        pipeline.set_variable(self.name, value)
+        pipeline.set_variable(name, value)
