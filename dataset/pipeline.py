@@ -622,14 +622,7 @@ class Pipeline:
         return self
 
     def _exec_init_model(self, batch, action):
-        if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self) is None:
-            with self._models_lock:
-                if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self):
-                    ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
-                                              name=action['model_name'], config=action['config'],
-                                              pipeline=self)
-                    _action['#dont_run'] = True
-
+        action['#dont_run'] = True
 
     def import_model(self, name, pipeline):
         """ Import a model from another pipeline
