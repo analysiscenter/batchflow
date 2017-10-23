@@ -12,7 +12,7 @@ except:
 from .base import BaseModel
 
 
-class SklearnModel(BaseModel)
+class SklearnModel(BaseModel):
  """ Base class for scikit-learn models
 
     Attributes
