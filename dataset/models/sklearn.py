@@ -60,7 +60,7 @@ class SklearnModel(BaseModel):
         else:
             raise ValueError("Scikit-learn estimator does not exist. Check your config for 'estimator'.")
 
-    def train(self, X, y, classes=None, sample_weight=None, *args, **kwargs):
+    def train(self, X, y, *args, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -71,15 +71,12 @@ class SklearnModel(BaseModel):
         y : numpy array, shape (n_samples,)
             Subset of the target values
 
-        classes : array, shape (n_classes,)
-            Classes across all calls to partial_fit.
-
-        sample_weight : array-like, shape (n_samples,), optional
-            Weights applied to individual samples
-
-        For more details look at the documentation for the estimator used.
+        For more details and other parameters look at the documentation for the estimator used.
         """
-        self.estimator.partial_fit(X, y, classes, sample_weight)
+        if hasattr(self.estimator, 'partial_fit'):
+            self.estimator.partial_fit(X, y, classes, sample_weight, *args, **kwargs)
+        else:
+            self.estimator.fit(X, y, classes, sample_weight, *args, **kwargs)
 
     def predict(self, X, *args, **kwargs):
         """ Predict with the data provided
@@ -89,7 +86,7 @@ class SklearnModel(BaseModel):
         X : array-like, shape (n_samples, n_features)
             Subset of the training data
 
-        For more details look at the documentation for the estimator used.
+        For more details and other parameters look at the documentation for the estimator used.
 
         Returns
         -------
