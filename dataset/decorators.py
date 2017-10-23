@@ -190,7 +190,7 @@ class ModelDirectory:
                 ModelDirectory.del_model(method_spec)
 
     @staticmethod
-    def init_model(mode, model_class=None, name=None, pipeline=None, config=None, batch=None):
+    def init_model(mode, model_class=None, name=None, pipeline=None, config=None):
         """ Initialize a static or dynamic model in a pipeline
 
         Parameters
@@ -199,7 +199,13 @@ class ModelDirectory:
         model_class : class - a model class
         name : str - a short name for the model
         pipeline - a pipeline to link a model to
-        config : dict or callable - a mapping or a function/method for additional model parameters
+        config : dict - model configurations parameters, where each key and value could be named expressions
+            - B('name') - a batch class attribute or component name
+            - V('name') - a pipeline variable name
+            - C('name') - a pipeline config option
+            - F(name) - a callable which takes a batch for dynamic models or a pipeline for static models
+            These expressions will be substituted by their actual values.
+            All other value will be used "as is".
         """
         if model_class is not None:
             name = name or model_class.__name__

@@ -540,7 +540,6 @@ class Pipeline:
                     _action['#dont_run'] = True
             elif _action['name'] == INIT_MODEL_ID:
                 self._exec_init_model(batch, _action)
-                _action['#dont_run'] = True
             elif _action['name'] == TRAIN_MODEL_ID:
                 self._exec_train_model(batch, _action)
             elif _action['name'] == PREDICT_MODEL_ID:
@@ -623,12 +622,14 @@ class Pipeline:
         return self
 
     def _exec_init_model(self, batch, action):
-        with self._models_lock:
-            model = ModelDirectory.find_model_by_name(action['model_name'], pipeline=self)
-            if model is None:
-                ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
-                                          name=action['model_name'], config=action['config'],
-                                          pipeline=self, batch=batch)
+        if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self) is None:
+            with self._models_lock:
+                if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self):
+                    ModelDirectory.init_model(mode=action['mode'], model_class=action['model_class'],
+                                              name=action['model_name'], config=action['config'],
+                                              pipeline=self)
+                    _action['#dont_run'] = True
+
 
     def import_model(self, name, pipeline):
         """ Import a model from another pipeline
