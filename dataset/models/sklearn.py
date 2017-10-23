@@ -3,11 +3,11 @@
 
 try:
     from sklearn.external import joblib as pickle
-except:
+except ImportError:
     pass
 try:
     import dill as pickle
-except:
+except ImportError:
     pass
 from .base import BaseModel
 
