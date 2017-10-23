@@ -74,9 +74,9 @@ class SklearnModel(BaseModel):
         For more details and other parameters look at the documentation for the estimator used.
         """
         if hasattr(self.estimator, 'partial_fit'):
-            self.estimator.partial_fit(X, y, classes, sample_weight, *args, **kwargs)
+            self.estimator.partial_fit(X, y, *args, **kwargs)
         else:
-            self.estimator.fit(X, y, classes, sample_weight, *args, **kwargs)
+            self.estimator.fit(X, y, *args, **kwargs)
 
     def predict(self, X, *args, **kwargs):
         """ Predict with the data provided
@@ -93,4 +93,4 @@ class SklearnModel(BaseModel):
         array, shape (n_samples,)
             Predicted value per sample.
         """
-        return self.estimator.predict(X)
+        return self.estimator.predict(X, *args, **kwargs)
