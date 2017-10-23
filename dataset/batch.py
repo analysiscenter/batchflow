@@ -1,6 +1,7 @@
 """ Contains basic Batch classes """
 
 import os
+import threading
 
 try:
     import dill
@@ -38,6 +39,7 @@ class Batch(BaseBatch):
             raise TypeError("components should be a tuple of strings with components names")
         super().__init__(index, *args, **kwargs)
         self._preloaded = preloaded
+        self._preloaded_lock = threading.Lock()
 
     @classmethod
     def from_data(cls, index, data):
@@ -151,7 +153,9 @@ class Batch(BaseBatch):
         """ Return batch data """
         if self._data is None and self._preloaded is not None:
             # load data the first time it's requested
-            self.load(self._preloaded)
+            with self._preloaded_lock:
+                if self._data is None and self._preloaded is not None:
+                    self.load(self._preloaded)
         res = self._data if self.components is None else self._data_named
         return res if res is not None else self._empty_data
 
@@ -218,7 +222,8 @@ class Batch(BaseBatch):
 
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
-            return getattr(self.data, name)
+            attr = getattr(self.data, name)
+            return attr
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
@@ -242,7 +247,9 @@ class Batch(BaseBatch):
             _src = data
         else:
             _src = data if isinstance(data, tuple) else tuple([data])
+
         _src = self.get_items(items, _src)
+
         if components is None:
             self._data = _src
         else:
@@ -267,8 +274,8 @@ class Batch(BaseBatch):
         elif isinstance(_data, dict):
             res = dict(zip(_data.keys(), (_data[comp][self.get_pos(data, comp, index)] for comp in _data)))
         else:
-            ix = self.get_pos(data, None, index)
-            res = _data[ix]
+            pos = self.get_pos(data, None, index)
+            res = _data[pos]
         return res
 
     def get(self, item=None, component=None):
