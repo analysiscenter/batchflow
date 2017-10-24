@@ -1,4 +1,5 @@
 """ Contains pipeline class """
+from copy import deepcopy
 import traceback
 import concurrent.futures as cf
 import threading
@@ -533,10 +534,7 @@ class Pipeline:
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
             elif _action['name'] == IMPORT_MODEL_ID:
-                with self._models_lock:
-                    if ModelDirectory.find_model_by_name(_action['model_name'], pipeline=self) is None:
-                        ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
-                    _action['#dont_run'] = True
+                self._exec_import_model(batch, _action)
             elif _action['name'] == TRAIN_MODEL_ID:
                 self._exec_train_model(batch, _action)
             elif _action['name'] == PREDICT_MODEL_ID:
@@ -622,6 +620,12 @@ class Pipeline:
         """
         self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': name, 'pipeline': pipeline})
         return self.append_action()
+
+    def _exec_import_model(self, batch, action):
+        if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self) is None:
+            with self._models_lock:
+                if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self) is None:
+                    ModelDirectory.import_model(action['model_name'], action['pipeline'], self)
 
     def train_model(self, name, make_data=None, save_to=None, append_to=None, *args, **kwargs):
         """ Train a model

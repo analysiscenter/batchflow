@@ -203,19 +203,24 @@ print("global:", res.get_model_by_name("global_model"))
 
 print("dynamic:", res.get_model_by_name("dynamic_model"))
 
-res2 = (ds_data.pipeline()
-               .init_variable("session", sess)
-               .import_model("dynamic_model", res)
-               .load(data)
-               #.test_dynamic()
+pp3 = (Pipeline()
+           .init_variable("session", sess)
+           .import_model("my_model2", res)
+           .load(data)
+           .train_model("my_model2")
+           #.test_dynamic()
 )
 
 print("--------------------------------------------")
 print("============== start test ==================")
-print(res2)
+res2 = pp3 << ds_data
 for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
+
+res3 = pp3 << ds_data
+print("predict")
+res3.run(3, n_epochs=1)
 
 #print(res2.get_model_by_name("dynamic_model"))

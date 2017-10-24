@@ -258,14 +258,14 @@ class ModelDirectory:
     @staticmethod
     def import_model(name, from_pipeline, to_pipeline):
         """ Import a model from another pipeline """
-        models = ModelDirectory.find_model_method_by_name(name, from_pipeline)
-        if models is None:
+        model_methods = ModelDirectory.find_model_method_by_name(name, from_pipeline)
+        if model_methods is None:
             raise RuntimeError("Model '%s' does not exist in the pipeline %s" % (name, from_pipeline))
-        if len(models) > 1:
+        if len(model_methods) > 1:
             raise RuntimeError("There are a few models with the name '%s' in the pipeline %s"
                                % (name, from_pipeline))
 
-        model_method = models[0]
+        model_method = model_methods[0]
         if hasattr(model_method, 'method_spec'):
             method_spec = model_method.method_spec
         else:
