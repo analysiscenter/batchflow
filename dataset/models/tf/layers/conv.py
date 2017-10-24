@@ -48,7 +48,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     output tensor: tf.Tensor
     """
 
-    if dim > 3:
+    if not isinstance(dim, int) or dim < 1 or dim > 3:
         raise ValueError("Number of dimensions could be 1, 2 or 3, but given %d" % dim)
 
     context = None
