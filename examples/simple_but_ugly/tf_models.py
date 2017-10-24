@@ -9,28 +9,29 @@ import tensorflow as tf
 sys.path.append("../..")
 from dataset import *
 from dataset.models.tf import TFModel
+from dataset.models.tf.layers import conv2d_block, flatten
 
 
 class MyModel(TFModel):
     """An example of a tf model class """
     def _build(self, *args, **kwargs):
-        images_shape = self.get_from_config('images_shape', (0, 3))
-        num_features =  images_shape[-1]
+        images_shape = self.get_from_config('images_shape', (12, 12, 1))
         num_classes = self.get_from_config('num_classes', 3)
 
-        x = tf.placeholder("float", [None, num_features], name='x')
+        x = tf.placeholder("float", [None] + list(images_shape), name='x')
         y = tf.placeholder("int32",[None], name='y')
         y_oe = tf.one_hot(y, num_classes, name='targets')
 
-        w = tf.Variable(tf.zeros([num_features, num_classes]))
-        b = tf.Variable(tf.zeros([num_classes]))
-
-        y_ = tf.nn.softmax(tf.matmul(x, w) + b, name='predictions')
+        c = conv2d_block(x, 32, 3, conv=dict(kernel_initializer=tf.contrib.layers.xavier_initializer()), max_pooling=dict(strides=4))
+        f = flatten(c)
+        f = tf.layers.dense(f, num_classes)
+        y_ = tf.identity(f, name='predictions')
 
         # Define a cost function
         #tf.losses.add_loss(tf.losses.softmax_cross_entropy(y_oe, y_))
         loss = tf.losses.softmax_cross_entropy(y_oe, y_)
         self.train_step = tf.train.AdamOptimizer().minimize(loss)
+        print(c.shape)
 
         print("___________________ MyModel initialized")
 
@@ -62,7 +63,7 @@ Q = 10
 # Fill-in dataset with sample data
 def gen_data():
     ix = np.arange(K)
-    data = np.arange(K * 3).reshape(K, -1).astype("float32")
+    data = np.random.choice(255, size=(K, 12, 12, 1)).astype("float32")
     labels = np.random.choice(3, size=K).astype("int32")
     dsindex = DatasetIndex(ix)
     ds = Dataset(index=dsindex, batch_class=MyBatch)
@@ -86,7 +87,7 @@ pp = (Pipeline(config=config)
         .init_model("static", MyModel, name="static_model", config=dict(loss='ce'))
         .init_model("dynamic", MyModel, "dynamic_model",
                     dict(num_classes=V(V('var_name')),
-                         images_shape=F(lambda batch: batch.images.shape),
+                         images_shape=F(lambda batch: batch.images.shape[1:]),
                          loss='ce'))
         #.init_model("static", TFModel, "dynamic_model2", config=dict(build=False, load=True, path='./models/dynamic'))
         .load((data, labels))

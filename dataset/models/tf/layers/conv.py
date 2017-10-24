@@ -18,8 +18,8 @@ def _get_layer_fn(fn, dim):
 
 
 def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None,
-               strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
-               pool_size=2, pool_strides=2, dropout_rate=0., is_training=True):
+               strides=1, padding='same', activation=tf.nn.relu,
+               pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex multi-dimensional convolution layer with batch normalization, activation, pooling and dropout
 
     Parameters
@@ -37,7 +37,6 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     name : str -  name of the layer that will be used as a scope
     strides : int. Default is 1.
     padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
-    use_bias : bool. Default is True.
     activation : callable. Default is `tf.nn.relu`.
     pool_size : int. Default is 2.
     pool_strides : int. Default is 2.
@@ -64,19 +63,26 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     tensor = input_tensor
     for layer in layout:
         if layer == 'c':
-            tensor = conv_layer(tensor, filters=filters, kernel_size=kernel_size, strides=strides,
-                                padding=padding, use_bias=use_bias)
+            args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding)
+            args = {**args, **kwargs.get('conv', {})}
+            tensor = conv_layer(tensor, **args)
         elif layer == 't':
-            tensor = transposed_conv_layer(tensor, filters=filters, kernel_size=kernel_size, strides=strides,
-                                           padding=padding, use_bias=use_bias)
+            args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding)
+            args = {**args, **kwargs.get('transposed_conv', {})}
+            tensor = transposed_conv_layer(tensor, **args)
         elif layer == 'a':
             tensor = activation(tensor)
         elif layer == 'n':
-            tensor = batch_norm(tensor, axis=-1, training=is_training)
+            args = kwargs.get('batch_norm', {})
+            tensor = batch_norm(tensor, axis=-1, training=is_training, **args)
         elif layer == 'p':
-            tensor = max_pooling(tensor, pool_size, pool_strides, padding)
+            args = dict(pool_size=pool_size, strides=pool_strides, padding=padding)
+            args = {**args, **kwargs.get('max_pooling', {})}
+            tensor = max_pooling(tensor, **args)
         elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
-            tensor = dropout(tensor, dropout_rate, training=is_training)
+            args = dict(dropout_rate=dropout_rate)
+            args = {**args, **kwargs.get('dropout', {})}
+            tensor = dropout(tensor, **args, training=is_training)
 
     if context is not None:
         context.__exit__(None, None, None)
@@ -85,8 +91,8 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
 
 
 def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True):
+                 strides=1, padding='same', activation=tf.nn.relu,
+                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -104,7 +110,6 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     name : str -  name of the layer that will be used as a scope
     strides : int. Default is 1.
     padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
-    use_bias : bool. Default is True.
     activation : callable. Default is `tf.nn.relu`.
     pool_size : int. Default is 2.
     pool_strides : int. Default is 2.
@@ -116,13 +121,13 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     output tensor: tf.Tensor
     """
     return conv_block(1, input_tensor, filters, kernel_size, layout, name,
-                      strides, padding, use_bias, activation,
-                      pool_size, pool_strides, dropout_rate, is_training)
+                      strides, padding, activation,
+                      pool_size, pool_strides, dropout_rate, is_training, **kwargs)
 
 
 def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True):
+                 strides=1, padding='same', activation=tf.nn.relu,
+                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -140,7 +145,6 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     name : str -  name of the layer that will be used as a scope
     strides : int. Default is 1.
     padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
-    use_bias : bool. Default is True.
     activation : callable. Default is `tf.nn.relu`.
     pool_size : int. Default is 2.
     pool_strides : int. Default is 2.
@@ -152,13 +156,13 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     output tensor: tf.Tensor
     """
     return conv_block(2, input_tensor, filters, kernel_size, layout, name,
-                      strides, padding, use_bias, activation,
-                      pool_size, pool_strides, dropout_rate, is_training)
+                      strides, padding, activation,
+                      pool_size, pool_strides, dropout_rate, is_training, **kwargs)
 
 
 def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', use_bias=True, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True):
+                 strides=1, padding='same', activation=tf.nn.relu,
+                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation and pooling layers
 
     Parameters
@@ -176,7 +180,6 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     name : str -  name of the layer that will be used as a scope
     strides : int. Default is 1.
     padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
-    use_bias : bool. Default is True.
     activation : callable. Default is `tf.nn.relu`.
     pool_size : int. Default is 2.
     pool_strides : int. Default is 2.
@@ -188,5 +191,5 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     output tensor: tf.Tensor
     """
     return conv_block(3, input_tensor, filters, kernel_size, layout, name,
-                      strides, padding, use_bias, activation,
-                      pool_size, pool_strides, dropout_rate, is_training)
+                      strides, padding, activation,
+                      pool_size, pool_strides, dropout_rate, is_training, **kwargs)
