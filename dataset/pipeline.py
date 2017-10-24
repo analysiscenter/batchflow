@@ -24,7 +24,6 @@ JOIN_ID = '#_join'
 MERGE_ID = '#_merge'
 REBATCH_ID = '#_rebatch'
 IMPORT_MODEL_ID = '#_import_model'
-INIT_MODEL_ID = '#_init_model'
 TRAIN_MODEL_ID = '#_train_model'
 PREDICT_MODEL_ID = '#_predict_model'
 PRINT_VARIABLE_ID = '#_print_variable'
@@ -538,8 +537,6 @@ class Pipeline:
                     if ModelDirectory.find_model_by_name(_action['model_name'], pipeline=self) is None:
                         ModelDirectory.import_model(_action['model_name'], _action['pipeline'], self)
                     _action['#dont_run'] = True
-            elif _action['name'] == INIT_MODEL_ID:
-                self._exec_init_model(batch, _action)
             elif _action['name'] == TRAIN_MODEL_ID:
                 self._exec_train_model(batch, _action)
             elif _action['name'] == PREDICT_MODEL_ID:
@@ -613,16 +610,7 @@ class Pipeline:
         """
         with self._models_lock:
             ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
-
-        if mode == 'dynamic':
-            self._action_list.append({'name': INIT_MODEL_ID, 'mode': mode, 'model_class': model_class,
-                                      'model_name': name, 'pipeline': self, 'config': config})
-            return self.append_action()
-
         return self
-
-    def _exec_init_model(self, batch, action):
-        action['#dont_run'] = True
 
     def import_model(self, name, pipeline):
         """ Import a model from another pipeline
