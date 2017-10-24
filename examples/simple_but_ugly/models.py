@@ -205,7 +205,7 @@ print("dynamic:", res.get_model_by_name("dynamic_model"))
 
 res2 = (ds_data.pipeline()
                .init_variable("session", sess)
-               #.import_model("dynamic_model", res)
+               .import_model("dynamic_model", res)
                .load(data)
                #.test_dynamic()
 )

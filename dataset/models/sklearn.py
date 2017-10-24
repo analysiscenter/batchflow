@@ -45,8 +45,7 @@ class SklearnModel(BaseModel):
         ----------
         path : str - a full path to a file from which a model will be loaded
         """
-        if self.estimator is not None:
-            self.estimator = pickle.load(path)
+        self.estimator = pickle.load(path)
 
     def save(self, path, *args, **kwargs):
         """ Save the model.
