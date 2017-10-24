@@ -43,6 +43,12 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     dropout_rate : float. Default is 0.
     is_training : bool or tf.Tensor. Default is True.
 
+    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
+    transposed_conv : dict - parameters for transposed conv layers, like initializers, regularalizers, etc
+    batch_norm : dict - parameters for batch normalization layers, like momentum, intiializers, etc
+    max_pooling : dict - parameters for max_pooling layers, like initializers, regularalizers, etc
+    dropout : dict - parameters for dropout layers, like noise_shape, etc
+
     Returns
     -------
     output tensor: tf.Tensor
@@ -116,6 +122,12 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     dropout_rate : float. Default is 0.
     is_training : bool or tf.Tensor. Default is True.
 
+    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
+    transposed_conv : dict - parameters for transposed conv layers, like initializers, regularalizers, etc
+    batch_norm : dict - parameters for batch normalization layers, like momentum, intiializers, etc
+    max_pooling : dict - parameters for max_pooling layers, like initializers, regularalizers, etc
+    dropout : dict - parameters for dropout layers, like noise_shape, etc
+
     Returns
     -------
     output tensor: tf.Tensor
@@ -151,6 +163,12 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     dropout_rate : float. Default is 0.
     is_training : bool or tf.Tensor. Default is True.
 
+    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
+    transposed_conv : dict - parameters for transposed conv layers, like initializers, regularalizers, etc
+    batch_norm : dict - parameters for batch normalization layers, like momentum, intiializers, etc
+    max_pooling : dict - parameters for max_pooling layers, like initializers, regularalizers, etc
+    dropout : dict - parameters for dropout layers, like noise_shape, etc
+
     Returns
     -------
     output tensor: tf.Tensor
@@ -185,6 +203,12 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     pool_strides : int. Default is 2.
     dropout_rate : float. Default is 0.
     is_training : bool or tf.Tensor. Default is True.
+
+    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
+    transposed_conv : dict - parameters for transposed conv layers, like initializers, regularalizers, etc
+    batch_norm : dict - parameters for batch normalization layers, like momentum, intiializers, etc
+    max_pooling : dict - parameters for max_pooling layers, like initializers, regularalizers, etc
+    dropout : dict - parameters for dropout layers, like noise_shape, etc
 
     Returns
     -------
