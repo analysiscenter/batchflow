@@ -216,10 +216,10 @@ class ModelDirectory:
                     def _get_named_expr(val):
                         if isinstance(val, _NamedExpression):
                             if mode == 'dynamic':
-                                val = val.get(batch=batch)
+                                out = val.get(batch=batch)
                             else:
-                                val = val.get(pipeline=batch.pipeline)  # pylint: disable=undefined-loop-variable
-                        return val
+                                out = val.get(pipeline=batch.pipeline)
+                        return out
 
                     kwargs = config or dict()
                     _config = init_config or dict()
