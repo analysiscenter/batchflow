@@ -97,7 +97,7 @@ class ModelDirectory:
     def model_exists(method_spec, pipeline=None):
         """ Check if a model specification exists in the model directory """
         mode, model_method, _pipeline = method_spec['mode'], method_spec['method'], method_spec['pipeline']
-        pipeline = pipeline or _pipeline
+        pipeline = pipeline if pipeline is not None else _pipeline
         pipeline = None if mode == 'global' else pipeline
         return pipeline in ModelDirectory.models[mode] and model_method in ModelDirectory.models[mode][pipeline] or \
                model_method in pipeline.models and pipeline.models[model_method] is not None
@@ -142,7 +142,7 @@ class ModelDirectory:
         ------
         `ValueError` if a model has not been found
         """
-        pipeline = pipeline or batch.pipeline
+        pipeline = pipeline if pipeline is not None else batch.pipeline
         model_spec = ModelDirectory.find_model_by_name(model_name, pipeline, only_first=True)
         if model_spec is None:
             if batch is None:
