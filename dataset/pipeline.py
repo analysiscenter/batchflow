@@ -611,22 +611,25 @@ class Pipeline:
             ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
         return self
 
-    def import_model(self, name, pipeline):
+    def import_model(self, name, source):
         """ Import a model from another pipeline
 
         Parameters
         ----------
         name : str - a name of the model to import
-        pipeline : Pipeline - a pipeline that holds a model
+        source : pipeline or model - a pipeline that holds a model or a model itself
         """
-        self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': name, 'pipeline': pipeline})
+        self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': name, 'source': source})
         return self.append_action()
 
     def _exec_import_model(self, _, action):
         if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self) is None:
             with self._models_lock:
                 if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self) is None:
-                    ModelDirectory.import_model(action['model_name'], action['pipeline'], self)
+                    if isinstance(action['source'], Pipeline):
+                        ModelDirectory.import_model_from(action['model_name'], action['source'], self)
+                    else:
+                        ModelDirectory.import_model(action['model_name'], action['source'], self)
 
     def train_model(self, name, make_data=None, save_to=None, append_to=None, extend_to=None, *args, **kwargs):
         """ Train a model

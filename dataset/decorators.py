@@ -196,7 +196,7 @@ class ModelDirectory:
         Parameters
         ----------
         mode : str - 'static' or 'dynamic'
-        model_class : class - a model class
+        model_class : class - a model class to instantiate a model
         name : str - a short name for the model
         pipeline - a pipeline to link a model to
         config : dict - model configurations parameters, where each key and value could be named expressions
@@ -257,7 +257,21 @@ class ModelDirectory:
 
 
     @staticmethod
-    def import_model(name, from_pipeline, to_pipeline):
+    def import_model(name, model_spec, pipeline):
+        """ Import a model into a pipeline """
+        def _model_definition_maker():
+            def _model_definition_method(*args, **kwargs):
+                _ = args, kwargs
+                return model_spec
+            _model_definition_method.__name__ = name
+            return _model_definition_method
+
+        model_method = model(mode='dynamic', pipeline=pipeline)(_model_definition_maker())
+        dummy_batch = _DummyBatch(pipeline)
+        model_method(dummy_batch)
+
+    @staticmethod
+    def import_model_from(name, from_pipeline, to_pipeline):
         """ Import a model from another pipeline """
         model_methods = ModelDirectory.find_model_method_by_name(name, from_pipeline)
         if model_methods is None:
@@ -273,7 +287,7 @@ class ModelDirectory:
             raise RuntimeError("Method %s is not decorated with @model" % name)
 
         model_spec = ModelDirectory.get_model(method_spec, from_pipeline)
-        method_spec = {**method_spec, **dict(pipeline=to_pipeline)}
+        method_spec = {**method_spec, **dict(mode='dynamic', pipeline=to_pipeline)}
         ModelDirectory.add_model(method_spec, model_spec)
 
 
@@ -337,7 +351,6 @@ def model(mode='global', pipeline=None):
                             args = (pipeline,) if mode == 'static' else (self,)
                             args = args if config is None else args + (config,)
                             model_spec = method(*args)
-
                             _add_model(method_spec, model_spec)
             else:
                 raise ValueError("Unknown mode", mode)
