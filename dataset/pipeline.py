@@ -288,6 +288,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
+        _ = args, kwargs
         if not self.has_variable(name):
             with self._variables_lock:
                 if not self.has_variable(name):
