@@ -754,7 +754,7 @@ class Pipeline:
         args = tuple()
         kwargs = dict()
 
-        if isinstance(data, _NamedExpression):
+        if isinstance(make_data, _NamedExpression):
             kwargs = _map_data(make_data)
         elif callable(make_data):
             kwargs = make_data(batch=batch, model=model)
@@ -783,8 +783,11 @@ class Pipeline:
 
     def _save_model_output(self, batch, model, output, save_to, mode='w'):
         if not isinstance(save_to, (tuple, list)):
-            save_to = [save_to]
-        output = [output]
+            _save_to = [save_to]
+        if not isinstance(output, (tuple, list)):
+            _output = [output]
+        if len(save_to) != len(output) and len(save_to) == 1:
+            output = [output]
 
         for i, var in enumerate(save_to):
             if len(output) <= i:
