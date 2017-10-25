@@ -582,7 +582,7 @@ class Pipeline:
     def _exec_args(self, batch, action):
         _action = {}
         for arg, value in action.items():
-            value = _get_value(value, batch=batch)
+            value = self._get_value(value, batch=batch)
             _action.update({arg: value})
         return _action
 
