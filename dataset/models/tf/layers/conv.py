@@ -5,16 +5,26 @@ from .conv1d_tr import conv1d_transpose
 
 
 ND_LAYERS = {
+    'activation': None,
     'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
-    'batch-norm': tf.layers.batch_normalization,
-    'transposed-conv': [conv1d_transpose, tf.layers.conv2d_transpose, tf.layers.conv3d_transpose],
-    'max-pooling': [tf.layers.max_pooling1d, tf.layers.max_pooling2d, tf.layers.max_pooling3d],
+    'batch_norm': tf.layers.batch_normalization,
+    'transposed_conv': [conv1d_transpose, tf.layers.conv2d_transpose, tf.layers.conv3d_transpose],
+    'max_pooling': [tf.layers.max_pooling1d, tf.layers.max_pooling2d, tf.layers.max_pooling3d],
     'dropout': tf.layers.dropout
+}
+
+C_LAYERS = {
+    'a': 'activation',
+    'c': 'conv',
+    'n': 'batch_norm',
+    't': 'transposed_conv',
+    'p': 'max_pooling',
+    'd': 'dropout'
 }
 
 def _get_layer_fn(fn, dim):
     f = ND_LAYERS[fn]
-    return f if callable(f) else f[dim-1]
+    return f if callable(f) or f is None else f[dim-1]
 
 
 def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None,
@@ -63,35 +73,28 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         context = tf.variable_scope(name)
         context.__enter__()
 
-    conv_layer, transposed_conv_layer = _get_layer_fn('conv', dim), _get_layer_fn('transposed-conv', dim)
-    batch_norm, max_pooling = _get_layer_fn('batch-norm', dim), _get_layer_fn('max-pooling', dim)
-    dropout = _get_layer_fn('dropout', dim)
-
     tensor = input_tensor
     for layer in layout:
-        if layer == 'c':
-            args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
-                        dilation_rate=dilation_rate)
-            args = {**args, **kwargs.get('conv', {})}
-            tensor = conv_layer(tensor, **args)
-        elif layer == 't':
-            args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding)
-            args = {**args, **kwargs.get('transposed_conv', {})}
-            tensor = transposed_conv_layer(tensor, **args)
-        elif layer == 'a':
+        layer_name = C_LAYERS[layer]
+        layer_fn = _get_layer_fn(layer_name, dim)
+
+        if layer == 'a':
             tensor = activation(tensor)
-        elif layer == 'n':
-            args = dict(fused=True)
-            args = {**args, **kwargs.get('batch_norm', {})}
-            tensor = batch_norm(tensor, axis=-1, training=is_training, **args)
-        elif layer == 'p':
-            args = dict(pool_size=pool_size, strides=pool_strides, padding=padding)
-            args = {**args, **kwargs.get('max_pooling', {})}
-            tensor = max_pooling(tensor, **args)
-        elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
-            args = dict(dropout_rate=dropout_rate)
-            args = {**args, **kwargs.get('dropout', {})}
-            tensor = dropout(tensor, **args, training=is_training)
+        else:
+            if layer == 'c':
+                args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
+                            dilation_rate=dilation_rate)
+            elif layer == 't':
+                args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding)
+            elif layer == 'n':
+                args = dict(fused=True, axis=-1, training=is_training)
+            elif layer == 'p':
+                args = dict(pool_size=pool_size, strides=pool_strides, padding=padding)
+            elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
+                args = dict(dropout_rate=dropout_rate, training=is_training)
+
+            args = {**args, **kwargs.get(layer_name, {})}
+            tensor = layer_fn(tensor, **args)
 
     if context is not None:
         context.__exit__(None, None, None)
