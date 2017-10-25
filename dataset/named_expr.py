@@ -15,10 +15,8 @@ class _NamedExpression:
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression """
         if isinstance(self.name, _NamedExpression):
-            name = self.name.get(batch=batch, pipeline=pipeline, model=model)
-        else:
-            name = self.name
-        return name
+            return self.name.get(batch=batch, pipeline=pipeline, model=model)
+        return self.name
 
     def set(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a named expression """

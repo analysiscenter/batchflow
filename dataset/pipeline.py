@@ -29,6 +29,7 @@ PREDICT_MODEL_ID = '#_predict_model'
 PRINT_VARIABLE_ID = '#_print_variable'
 INC_VARIABLE_ID = '#_inc_variable'
 UPDATE_VARIABLE_ID = '#_update_variable'
+CALL_ID = '#_call'
 
 
 def mult_option(a, b):
@@ -438,10 +439,7 @@ class Pipeline:
             if self._variables[action['var_name']]['lock'] is not None:
                 self._variables[action['var_name']]['lock'].acquire()
 
-            if isinstance(action['value'], _NamedExpression):
-                value = action['value'].get(batch=batch)
-            else:
-                value = action['value']
+            value = self._get_value(action['value'], batch)
 
             if callable(action['mode']):
                 action['mode'](self.get_variable(action['var_name']), value)
@@ -512,7 +510,10 @@ class Pipeline:
     def _exec_all_actions(self, batch, action_list=None):
         join_batches = None
         action_list = action_list or self._action_list
-        for _action in action_list:
+        for action in action_list:
+            #_action = self._exec_args(batch, action)
+            _action = action
+
             if _action.get('#dont_run', False):
                 pass
             elif _action['name'] in [JOIN_ID, MERGE_ID]:
@@ -544,6 +545,8 @@ class Pipeline:
                 self._exec_print_variable(batch, _action)
             elif _action['name'] == UPDATE_VARIABLE_ID:
                 self._exec_update_variable(batch, _action)
+            elif _action['name'] == CALL_ID:
+                self._exec_call(batch, _action)
             else:
                 if join_batches is None:
                     _action_args = _action['args']
@@ -570,6 +573,35 @@ class Pipeline:
         batch_res.pipeline = self
         return batch_res
 
+    def _get_value(self, expr, batch=None, model=None):
+        if isinstance(expr, _NamedExpression):
+            expr = expr.get(batch=batch, pipeline=self, model=model)
+        return expr
+
+    def _exec_args(self, batch, action):
+        _action = {}
+        for arg, value in action.items():
+            value = _get_value(value, batch=batch)
+            _action.update({arg: value})
+        return _action
+
+    def call(self, fn, save_to):
+        """ Call any function during pipeline execution
+
+        Parameters
+        ----------
+        fn : a function, method or callable to call.
+            Could be a named expression.
+        save_to : a named expression or a sequence of named expressions
+            A location where function output will be saved to.
+        """
+        self._action_list.append({'name': CALL_ID, 'fn': fn, 'save_to': save_to})
+        return self.append_action()
+
+    def _exec_call(self, batch, action):
+        fn = self._get_value(action['fn'], batch)
+        output = fn(batch)
+        self._save_output(batch, None, output, action['save_to'])
 
     def get_model_by_name(self, name, batch=None):
         """ Get a model specification by its name """
@@ -654,6 +686,8 @@ class Pipeline:
             A location where the model output will be extended to.
             (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
 
+        Only one of `save_to`, `append_to`, `extend_to` should be present.
+
         All other named parameters are treated as data mappings of any type
         which keys and values could be named expressions:
             - B('name') - a batch class attribute or component name
@@ -708,6 +742,8 @@ class Pipeline:
             A location where the model output will be extended to.
             (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
 
+        Only one of `save_to`, `append_to`, `extend_to` should be present.
+
         All other named parameters are treated as data mappings of any type
         which keys and values could be named expressions:
             - B('name') - a batch class attribute or component name
@@ -745,21 +781,18 @@ class Pipeline:
         return self.append_action(*args, **kwargs)
 
     def _make_model_args(self, batch, action, model):
-        def _map_data(item):
-            if isinstance(item, _NamedExpression):
-                return item.get(batch=batch, model=model)
-            return item
+        map_data = lambda item: self._get_value(item, batch=batch, model=model)
 
-        make_data = action['make_data']
+        make_data = action['make_data'] or {}
         args = tuple()
         kwargs = dict()
 
-        if isinstance(make_data, _NamedExpression):
-            kwargs = _map_data(make_data)
-        elif callable(make_data):
+        if callable(make_data):
             kwargs = make_data(batch=batch, model=model)
-            if not isinstance(kwargs, dict):
-                raise TypeError("make_data should return a dict with kwargs", make_data)
+        else:
+            kwargs = map_data(make_data)
+        if not isinstance(kwargs, dict):
+            raise TypeError("make_data should return a dict with kwargs", make_data)
 
         kwargs = {**action['kwargs'], **kwargs}
 
@@ -767,21 +800,21 @@ class Pipeline:
             if isinstance(data, dict):
                 data_dict = type(data)()
                 for key, item in data.items():
-                    data_dict.update({_map_data(key): _map_data(item)})
+                    data_dict.update({map_data(key): map_data(item)})
                 data_item = data_dict
             elif isinstance(data, (tuple, list)):
                 data_list = []
                 for item in data:
-                    data_item = _map_data(item)
+                    data_item = map_data(item)
                     data_list.append(data_item)
                 data_item = data_list
             else:
-                data_item = _map_data(data)
+                data_item = map_data(data)
             kwargs.update({arg: data_item})
 
         return args, kwargs
 
-    def _save_model_output(self, batch, model, output, save_to, mode='w'):
+    def _save_output(self, batch, model, output, save_to, mode='w'):
         if not isinstance(save_to, (tuple, list)):
             save_to = [save_to]
         if not isinstance(output, (tuple, list)):
@@ -814,22 +847,22 @@ class Pipeline:
         args, kwargs = self._make_model_args(batch, action, model)
         output = model.train(*args, **kwargs)
         if action['extend_to'] is not None:
-            self._save_model_output(batch, model, output, action['extend_to'], 'e')
+            self._save_output(batch, model, output, action['extend_to'], 'e')
         elif action['append_to'] is not None:
-            self._save_model_output(batch, model, output, action['append_to'], 'a')
+            self._save_output(batch, model, output, action['append_to'], 'a')
         else:
-            self._save_model_output(batch, model, output, action['save_to'])
+            self._save_output(batch, model, output, action['save_to'])
 
     def _exec_predict_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         predictions = model.predict(*args, **kwargs)
         if action['extend_to'] is not None:
-            self._save_model_output(batch, model, predictions, action['extend_to'], 'e')
+            self._save_output(batch, model, predictions, action['extend_to'], 'e')
         elif action['append_to'] is not None:
-            self._save_model_output(batch, model, predictions, action['append_to'], 'a')
+            self._save_output(batch, model, predictions, action['append_to'], 'a')
         else:
-            self._save_model_output(batch, model, predictions, action['save_to'])
+            self._save_output(batch, model, predictions, action['save_to'])
 
 
     def save_model(self, name, *args, **kwargs):

@@ -51,6 +51,10 @@ class MyBatch(Batch):
     def make_data_for_dynamic(self):
         return {'images_shape': self.images.shape, 'num_classes': 3}
 
+    def some_method(self):
+        print("some_method is called for batch", self.indices)
+        return self.indices
+
 
 def trans(batch):
     return dict(feed_dict=dict(x=batch.data[:, :-1], y=batch.data[:, -1].astype('int')))
@@ -82,6 +86,7 @@ model = MyModel()
 pp = (Pipeline(config=config)
         .init_variable('num_classes', 3)
         .init_variable('var_name', 'num_classes')
+        .init_variable('output', init_on_each_run=list)
         .init_variable('loss_history', init_on_each_run=list)
         .init_variable('loss_history2', init_on_each_run=list)
         .init_variable('loss_history3', init_on_each_run=list)
@@ -99,6 +104,7 @@ pp = (Pipeline(config=config)
                     extend_to=[V('loss_history')])
         .train_model("imported_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
                     append_to=V('loss_history2')) #, V('loss_history3')])
+        .call(MyBatch.some_method, save_to=V('output'))
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 
@@ -119,4 +125,4 @@ print(res.get_variable("loss_history"))
 
 print(res.get_variable("loss_history2"))
 
-print(res.get_variable("loss_history3"))
+print(res.get_variable("output"))
