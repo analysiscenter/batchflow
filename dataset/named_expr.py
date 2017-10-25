@@ -55,14 +55,14 @@ class C(_NamedExpression):
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline config """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline or pipeline
+        pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
         return config.get(name, None)
 
     def set(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline or pipeline
+        pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
         config[name] = value
 
@@ -74,7 +74,8 @@ class F(_NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         args = []
         if isinstance(batch, _DummyBatch) or batch is None:
-            args += [batch.pipeline or pipeline]
+            _pipeline = batch.pipeline if batch is not None else pipeline
+            args += [_pipeline]
         else:
             args += [batch]
         if model is not None:
@@ -86,22 +87,17 @@ class F(_NamedExpression):
         _ = args, kwargs
         raise NotImplementedError("Setting a value with a callable is not supported")
 
-    def append(self, *args, **kwargs):
-        """ Append a value by calling a callable """
-        _ = args, kwargs
-        raise NotImplementedError("Appending with a callable is not supported")
-
 
 class V(_NamedExpression):
     """ Pipeline variable name """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline variable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline or pipeline
+        pipeline = batch.pipeline if batch is not None else pipeline
         return pipeline.get_variable(name)
 
     def set(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline variable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline or pipeline
+        pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.set_variable(name, value)
