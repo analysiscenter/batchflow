@@ -50,11 +50,14 @@ def hashable(x):
 class Pipeline:
     """ Pipeline """
     def __init__(self, dataset=None, config=None, pipeline=None, proba=None, repeat=None):
+        self._variables = {}
+        self._variables_lock = threading.Lock()
+        self._models_lock = threading.Lock()
+
         if pipeline is None:
             self.dataset = dataset
             self.config = config
             self._action_list = []
-            self._variables = None
             self.delete_all_variables()
             self._lazy_run = None
             self.models = dict()
@@ -62,7 +65,7 @@ class Pipeline:
             self.dataset = pipeline.dataset
             self.config = None if pipeline.config is None else deepcopy(pipeline.config)
             self._action_list = deepcopy(pipeline._action_list)  # pylint: disable=protected-access
-            self._variables = deepcopy(pipeline._variables)  # pylint: disable=protected-access
+            self.init_variables(pipeline._variables)  # pylint: disable=protected-access
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
@@ -73,8 +76,6 @@ class Pipeline:
             self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
             self.models = pipeline.models.copy()
 
-        self._variables_lock = threading.Lock()
-        self._models_lock = threading.Lock()
         self._tf_session = None
 
         self._stop_flag = False
@@ -262,7 +263,7 @@ class Pipeline:
         var = self._variables.get(name)
         return var.get('value', default)
 
-    def init_variable(self, name, default=None, init=None, init_on_each_run=None, lock=True):
+    def init_variable(self, name, default=None, init=None, init_on_each_run=None, lock=True, *args, **kwargs):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
 
