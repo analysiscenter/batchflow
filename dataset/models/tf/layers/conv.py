@@ -79,7 +79,8 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         elif layer == 'a':
             tensor = activation(tensor)
         elif layer == 'n':
-            args = kwargs.get('batch_norm', {})
+            args = dict(fused=True)
+            args = {**args, **kwargs.get('batch_norm', {})}
             tensor = batch_norm(tensor, axis=-1, training=is_training, **args)
         elif layer == 'p':
             args = dict(pool_size=pool_size, strides=pool_strides, padding=padding)
