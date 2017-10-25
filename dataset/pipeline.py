@@ -638,7 +638,9 @@ class Pipeline:
         ----------
         name : str - a model name
 
-        make_data : callable - a function or method to make train parameters from a batch. Should return dict.
+        make_data : a callable or a named expression
+            a function or method to transform batch data to train parameters.
+            Should return dict - kwargs for `model.train(...)`.
 
         save_to : a named expression or a sequence of named expressions of type B or V
             A location where the model output will be stored.
@@ -691,7 +693,9 @@ class Pipeline:
         ----------
         name : str - a model name
 
-        make_data : callable - a function or method to make train data from a batch. Should return dict.
+        make_data : a callable or a named expression
+            a function or method to transform batch data to prediction parameters.
+            Should return dict - kwargs for `model.predict(...)`.
 
         save_to : a named expression or a sequence of named expressions of type B or V
             A location where the model output will be stored
@@ -750,12 +754,12 @@ class Pipeline:
         args = tuple()
         kwargs = dict()
 
-        if callable(make_data):
-            _data = make_data(batch=batch, model=model)
-            if isinstance(_data, dict):
-                kwargs = _data
-            else:
-                args = _data
+        if isinstance(data, _NamedExpression):
+            kwargs = _map_data(make_data)
+        elif callable(make_data):
+            kwargs = make_data(batch=batch, model=model)
+            if not isinstance(kwargs, dict):
+                raise TypeError("make_data should return a dict with kwargs", make_data)
 
         kwargs = {**action['kwargs'], **kwargs}
 
