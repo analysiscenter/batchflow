@@ -214,6 +214,7 @@ class ModelDirectory:
             def _model_definition_maker():
                 def _model_definition_method(batch, config=None):
                     def _get_named_expr(val):
+                        out = val
                         if isinstance(val, _NamedExpression):
                             if mode == 'dynamic':
                                 out = val.get(batch=batch)
