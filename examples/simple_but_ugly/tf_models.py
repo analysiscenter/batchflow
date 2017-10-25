@@ -84,6 +84,7 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 pp = (Pipeline(config=config)
         .init_variable('num_classes', 3)
         .init_variable('var_name', 'num_classes')
+        .init_variable('loss_history', init_on_each_run=list)
         .init_model("static", MyModel, name="static_model", config=dict(loss='ce'))
         .init_model("dynamic", MyModel, "dynamic_model",
                     dict(num_classes=V(V('var_name')),
@@ -93,7 +94,8 @@ pp = (Pipeline(config=config)
         .load((data, labels))
         #.train_model("static_model", fn=trans)
         .train_in_batch()
-        .train_model("dynamic_model", feed_dict={'x': B('images'), 'y': B('labels')})
+        .train_model("dynamic_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
+                    extend_to=V('loss_history'))
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 
@@ -109,3 +111,5 @@ res = (pp << ds_data).run()
 print(time() - t)
 
 res.save_model("dynamic_model", './models/dynamic')
+
+print(res.get_variable("loss_history"))

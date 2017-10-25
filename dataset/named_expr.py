@@ -26,9 +26,14 @@ class _NamedExpression:
         raise NotImplementedError("set should be defined in child classes")
 
     def append(self, value, *args, **kwargs):
-        """ Append a value to a named expression """
+        """ Append a value to a named expression
+        (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists) """
         self.get(*args, **kwargs).append(value)
 
+    def extend(self, value, *args, **kwargs):
+        """ Extend a value to a named expression
+        (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists) """
+        self.get(*args, **kwargs).extend(value)
 
 class B(_NamedExpression):
     """ Batch component name """

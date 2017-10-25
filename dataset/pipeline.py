@@ -64,7 +64,7 @@ class Pipeline:
         else:
             self.dataset = pipeline.dataset
             self.config = None if pipeline.config is None else deepcopy(pipeline.config)
-            self._action_list = deepcopy(pipeline._action_list)  # pylint: disable=protected-access
+            self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
             self.init_variables(pipeline._variables)  # pylint: disable=protected-access
             if self.num_actions == 1:
                 if proba is not None:
@@ -629,7 +629,7 @@ class Pipeline:
                 if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self) is None:
                     ModelDirectory.import_model(action['model_name'], action['pipeline'], self)
 
-    def train_model(self, name, make_data=None, save_to=None, append_to=None, *args, **kwargs):
+    def train_model(self, name, make_data=None, save_to=None, append_to=None,  extend_to=None, *args, **kwargs):
         """ Train a model
 
         Parameters
@@ -639,10 +639,16 @@ class Pipeline:
         make_data : callable - a function or method to make train parameters from a batch. Should return dict.
 
         save_to : a named expression or a sequence of named expressions of type B or V
-            A location where the model output will be stored
+            A location where the model output will be stored.
+            This will rewrite the previous value in the location given.
 
         append_to : a named expression or a sequence of named expressions of type B or V
-            A location where the model output will be appended to
+            A location where the model output will be appended to.
+            (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
+
+        extend_to : a named expression or a sequence of named expressions of type B or V
+            A location where the model output will be extended to.
+            (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
 
         All other named parameters are treated as data mappings of any type
         which keys and values could be named expressions:
@@ -673,10 +679,10 @@ class Pipeline:
             resnet_model.train(**train_data)
         """
         self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data,
-                                  'save_to': save_to, 'append_to': append_to})
+                                  'save_to': save_to, 'append_to': append_to, 'extend_to': extend_to})
         return self.append_action(*args, **kwargs)
 
-    def predict_model(self, name, make_data=None, save_to=None, append_to=None, *args, **kwargs):
+    def predict_model(self, name, make_data=None, save_to=None, append_to=None, extend_to=None, *args, **kwargs):
         """ Predict using a model
 
         Parameters
@@ -690,6 +696,11 @@ class Pipeline:
 
         append_to : a named expression or a sequence of named expressions of type B or V
             A location where the model output will be appended to
+            (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
+
+        extend_to : a named expression or a sequence of named expressions of type B or V
+            A location where the model output will be extended to.
+            (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
 
         All other named parameters are treated as data mappings of any type
         which keys and values could be named expressions:
@@ -724,7 +735,7 @@ class Pipeline:
             deepnet_model.train(**predict_data)
         """
         self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
-                                  'save_to': save_to, 'append_to': append_to})
+                                  'save_to': save_to, 'append_to': append_to, 'extend_to': extend_to})
         return self.append_action(*args, **kwargs)
 
     def _make_model_args(self, batch, action, model):
@@ -765,43 +776,51 @@ class Pipeline:
         return args, kwargs
 
     def _save_model_output(self, batch, model, output, save_to, mode='w'):
-        if not isinstance(output, (tuple, list, dict, OrderedDict)):
-            output = [output]
+        if not isinstance(save_to, (tuple, list)):
             save_to = [save_to]
-        if isinstance(save_to, tuple):
-            save_to = list(save_to)
+        output = [output]
 
-        if isinstance(output, (tuple, list)):
-            for i, item in enumerate(output):
-                if i < len(save_to):
-                    if isinstance(save_to[i], _NamedExpression):
-                        if mode == 'a':
-                            save_to[i].append(item, batch=batch, model=model)
-                        else:
-                            save_to[i].set(item, batch=batch, model=model)
-                    else:
-                        if mode == 'a':
-                            save_to[i].append(item)
-                        else:
-                            save_to[i] = item
+        for i, var in enumerate(save_to):
+            if len(output) <= i:
+                raise ValueError("'%s' output has fewer items than expected." \
+                                 % model.name )
+            item = output[i]
+            if isinstance(var, _NamedExpression):
+                if mode == 'a':
+                    var.append(item, batch=batch, model=model)
+                elif mode == 'e':
+                    var.extend(item, batch=batch, model=model)
+                else:
+                    var.set(item, batch=batch, model=model)
+            else:
+                if mode == 'a':
+                    var.append(item)
+                elif mode == 'e':
+                    var.extend(item)
+                else:
+                    save_to[i] = item
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         output = model.train(*args, **kwargs)
-        if action['append_to'] is None:
-            self._save_model_output(batch, model, output, action['save_to'])
-        else:
+        if action['extend_to'] is not None:
+            self._save_model_output(batch, model, output, action['extend_to'], 'e')
+        elif action['append_to'] is not None:
             self._save_model_output(batch, model, output, action['append_to'], 'a')
+        else:
+            self._save_model_output(batch, model, output, action['save_to'])
 
     def _exec_predict_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         predictions = model.predict(*args, **kwargs)
-        if action['append_to'] is None:
-            self._save_model_output(batch, model, predictions, action['save_to'])
-        else:
+        if action['extend_to'] is not None:
+            self._save_model_output(batch, model, predictions, action['extend_to'], 'e')
+        elif action['append_to'] is not None:
             self._save_model_output(batch, model, predictions, action['append_to'], 'a')
+        else:
+            self._save_model_output(batch, model, predictions, action['save_to'])
 
 
     def save_model(self, name, *args, **kwargs):
