@@ -629,7 +629,7 @@ class Pipeline:
                 if ModelDirectory.find_model_by_name(action['model_name'], pipeline=self) is None:
                     ModelDirectory.import_model(action['model_name'], action['pipeline'], self)
 
-    def train_model(self, name, make_data=None, save_to=None, append_to=None,  extend_to=None, *args, **kwargs):
+    def train_model(self, name, make_data=None, save_to=None, append_to=None, extend_to=None, *args, **kwargs):
         """ Train a model
 
         Parameters
@@ -783,7 +783,7 @@ class Pipeline:
         for i, var in enumerate(save_to):
             if len(output) <= i:
                 raise ValueError("'%s' output has fewer items than expected." \
-                                 % model.name )
+                                 % model.name)
             item = output[i]
             if isinstance(var, _NamedExpression):
                 if mode == 'a':
