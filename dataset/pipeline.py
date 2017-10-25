@@ -411,7 +411,7 @@ class Pipeline:
 
         Parameters
         ----------
-        name : str - a variable name
+        name : str or a named expression - a variable name
 
         value - an updating value, could be some value or a named expression:
         - B('name') - a batch class attribute or component name
@@ -435,25 +435,26 @@ class Pipeline:
         return self.append_action()
 
     def _exec_update_variable(self, batch, action):
-        if self.has_variable(action['var_name']):
-            if self._variables[action['var_name']]['lock'] is not None:
-                self._variables[action['var_name']]['lock'].acquire()
+        var_name = self._get_value(action['var_name'], batch)
+        if self.has_variable(var_name):
+            if self._variables[var_name]['lock'] is not None:
+                self._variables[var_name]['lock'].acquire()
 
             value = self._get_value(action['value'], batch)
 
             if callable(action['mode']):
-                action['mode'](self.get_variable(action['var_name']), value)
+                action['mode'](self.get_variable(var_name), value)
             elif action['mode'] in ['a', 'append']:
-                self.get_variable(action['var_name']).append(value)
+                self.get_variable(var_name).append(value)
             elif action['mode'] in ['u', 'update']:
-                self.get_variable(action['var_name']).update(value)
+                self.get_variable(var_name).update(value)
             else:
-                self.set_variable(action['var_name'], value)
+                self.set_variable(var_name, value)
 
-            if self._variables[action['var_name']]['lock'] is not None:
-                self._variables[action['var_name']]['lock'].release()
+            if self._variables[var_name]['lock'] is not None:
+                self._variables[var_name]['lock'].release()
         else:
-            raise KeyError("No such variable %s exist" % action['var_name'])
+            raise KeyError("No such variable %s exist" % var_name)
 
     def print_variable(self, name):
         """ Print a value of a given variable during pipeline execution """
@@ -585,18 +586,19 @@ class Pipeline:
             _action.update({arg: value})
         return _action
 
-    def call(self, fn, save_to):
+    def call(self, fn, save_to, *args, **kwargs):
         """ Call any function during pipeline execution
 
         Parameters
         ----------
         fn : a function, method or callable to call.
             Could be a named expression.
+
         save_to : a named expression or a sequence of named expressions
             A location where function output will be saved to.
         """
         self._action_list.append({'name': CALL_ID, 'fn': fn, 'save_to': save_to})
-        return self.append_action()
+        return self.append_action(*args, **kwargs)
 
     def _exec_call(self, batch, action):
         fn = self._get_value(action['fn'], batch)
