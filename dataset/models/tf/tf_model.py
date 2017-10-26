@@ -186,7 +186,7 @@ class TFModel(BaseModel):
             self.session = tf.Session(**session_config)
             self.session.run(tf.global_variables_initializer())
 
-    def _make_inputs(self, names=None):
+    def _make_inputs(self):
         """ Make model input data using config
 
         In the config's inputs section it looks for names and creates placeholders required, as well as
@@ -255,9 +255,11 @@ class TFModel(BaseModel):
 
             name = input_config.get('name')
             if name is not None:
-                tensor =tf.identity(tensor, name=name)
+                tensor = tf.identity(tensor, name=name)
 
             output[input_name] = tensor
+
+        output = None if len(output) < 1 else output
         return output
 
     def _make_transform(self, tensor, config):
