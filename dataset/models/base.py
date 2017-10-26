@@ -1,7 +1,18 @@
 """ Contains a base model class"""
 
 class BaseModel:
-    """ Base model """
+    """ Base model
+
+    Attributes
+    ----------
+    name : str - a model name
+    config : dict - configuration parameters
+
+    Configuration
+    -------------
+    build : bool - whether to build a model by calling `self.build()`. Default is True.
+    load : bool - whether to load a model by calling `self.load()`. Default is False.
+    """
     def __init__(self, *args, **kwargs):
         self.config = kwargs.get('config', {})
         self.name = kwargs.get('name', None) or self.__class__.__name__
