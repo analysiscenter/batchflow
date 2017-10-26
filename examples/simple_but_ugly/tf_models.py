@@ -93,7 +93,7 @@ pp = (Pipeline(config=config)
         .init_model("static", MyModel, name="static_model",
                     config=dict(loss='ce',
                         inputs={'x': dict(shape=(12, 12, 1)),
-                                'y': dict(name='targets', dtype='int32', shape=3, transform='ohe')}))
+                                'y': ('int32', 3, None, 'ohe', 'targets')}))
         .init_model("dynamic", MyModel, "dynamic_model",
                     dict(num_classes=V(V('var_name')),
                          images_shape=F(lambda batch: batch.images.shape[1:]),

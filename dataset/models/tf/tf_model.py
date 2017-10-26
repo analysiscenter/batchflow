@@ -200,9 +200,9 @@ class TFModel(BaseModel):
         -------------
         inputs : dict
             key : str - a placeholder name
-            values : dict - each placeholder's config
+            values : dict or tuple - each input's config
 
-        Placeholder config:
+        Input config:
         dtype : str or tf.DType (by default 'float32') - data type
 
         shape : int, tuple, list or None (default)
@@ -219,6 +219,10 @@ class TFModel(BaseModel):
         name : str
             a name for the transformed and reshaped tensor.
 
+        If an input config is a tuple, it should contain all items exactly in the order shown above:
+        dtype, shape, data_format, transform, name.
+        If an item is None, the default value will be used instead.
+
         Returns
         -------
         None or dict - where key is a placeholder name and a value is a corresponding tensor after configuration
@@ -231,7 +235,7 @@ class TFModel(BaseModel):
         -------
         out : list of tf.Tensors
         """
-
+        names = ('dtype', 'shape', 'data_format', 'transform', 'name')
         config = self.get_from_config('inputs') or {}
         config = copy1(config)
         output = dict()
@@ -239,6 +243,11 @@ class TFModel(BaseModel):
         defaults = dict(dtype='float32', data_format='channels_last')
 
         for input_name, input_config in config.items():
+            if isinstance(input_config, (tuple, list)):
+                input_config = input_config + type(input_config)([None for _ in names])
+                input_config = input_config[:len(names)]
+                input_config = dict(zip(names, input_config))
+                input_config = dict((k, v) for k,v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
             shape = input_config.get('shape')
