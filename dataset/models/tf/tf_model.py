@@ -9,6 +9,7 @@ import tensorflow as tf
 
 from ..base import BaseModel
 from .losses import dice
+from ...utils import copy1
 
 
 LOSSES = {
@@ -39,15 +40,16 @@ class TFModel(BaseModel):
 
     Attributes
     ----------
-    name : str - a model name
-    config : dict - configuration parameters
-
     session : tf.Session
     graph : tf.Graph
     is_training : tf.Tensor
     global_step : tf.Tensor
     loss : tf.Tensor
     train_step : tf.Operation
+
+    from BaseModel:
+    name : str - a model name
+    config : dict - configuration parameters
 
 
     Configuration
@@ -129,7 +131,8 @@ class TFModel(BaseModel):
 
         How to write your own _build method
         -----------------------------------
-        1. Give names to all placeholders (you will need them later in `train` and `predict`)
+        1. Call `self._make_input()` or give proper names to all placeholders
+           (you will need them later in `train` and `predict`)
         2. For dropout, batch norm, etc you might use a predefined `self.is_training` tensor.
         3. For learning rate decay and training control you might use a predefined `self.global_step` tensor.
         4. In many cases there is no need to write a loss function as it might be defined through config, e.g.
@@ -138,7 +141,7 @@ class TFModel(BaseModel):
         6. If you need to define your own loss function, use losses from `tf.losses` or call `tf.losses.add_loss(...)`
         7. In most cases there is no need to define an optimizer as well,
            since it might be defined through config, e.g.:
-        8. If you need to write your own optimizer, assing `self.train_step` to the train step operation.
+        8. If you need to use your own optimizer, assing `self.train_step` to the train step operation.
            Don't forget about UPDATE_OPS control dependency
            (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
 
@@ -163,7 +166,8 @@ class TFModel(BaseModel):
             self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
             self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
-            self._build(*args, **kwargs)
+            inputs = self._make_inputs()
+            self._build(inputs)
 
             self._make_loss()
             self.store_to_attr('loss', tf.losses.get_total_loss())
@@ -180,6 +184,110 @@ class TFModel(BaseModel):
             session_config = self.get_from_config('session', {})
             self.session = tf.Session(**session_config)
             self.session.run(tf.global_variables_initializer())
+
+    def _make_inputs(self, names=None):
+        """ Make model input data using config
+
+        In the config's inputs section it looks for names and creates placeholders required, as well as
+        some typical transormations (like one-hot-encoding and reshaping).
+
+        Parameters
+        ----------
+        names : a sequence of str - placeholder names
+
+        Configuration
+        -------------
+        inputs : dict
+            key : str - a placeholder name
+            values : dict - each placeholder's config
+
+        Placeholder config:
+        dtype : str or tf.DType (by default 'float32') - data type
+
+        shape : int, tuple, list or None (default)
+            a desired tensor shape which includes the number of channels/classes and doesn't include a batch size.
+
+        data_format : str {'channels_first', 'channels_last'}
+            The ordering of the dimensions in the inputs. Default is 'channels_last'.
+
+        transform : str or callable
+            if transform is 'ohe', one-hot encoding will be applied.
+            The new axis is created at the last dimension if data_format is 'channels_last' or
+            at the first dimension after a batch size otherwise.
+
+        name : str
+            a name for the transformed and reshaped tensor.
+
+        Returns
+        -------
+        None or dict - where key is a placeholder name and a value is a corresponding tensor after configuration
+
+        Raises
+        ------
+        KeyError if there is any name missing in the config's input section
+
+        Returns
+        -------
+        out : list of tf.Tensors
+        """
+
+        config = self.get_from_config('inputs') or {}
+        config = copy1(config)
+        output = dict()
+
+        defaults = dict(dtype='float32', data_format='channels_last')
+
+        for input_name, input_config in config.items():
+            input_config = {**defaults, **input_config}
+
+            shape = input_config.get('shape')
+            if isinstance(shape, int):
+                input_config['shape'] = (shape,)
+
+            dtype = input_config.get('dtype')
+            tensor = tf.placeholder(dtype, name=input_name)
+            tensor = self._make_transform(tensor, input_config)
+
+            shape = input_config.get('shape')
+            if shape is not None:
+                tensor = tf.reshape(tensor, [-1] + list(shape))
+
+            name = input_config.get('name')
+            if name is not None:
+                tensor =tf.identity(tensor, name=name)
+
+            output[input_name] = tensor
+        return output
+
+    def _make_transform(self, tensor, config):
+        if config is not None:
+            transform_name = config.get('transform')
+            transform_dict = {'ohe': self._make_ohe}
+            if isinstance(transform_name, str):
+                tensor = transform_dict[transform_name](tensor, config)
+            elif callable(transform_name):
+                tensor = transform_name(tensor)
+            elif transform_name is not None:
+                raise ValueError("Unknown transform {}".format(transform_name))
+        return tensor
+
+    def _make_ohe(self, tensor, config):
+        shape = config.get('shape')
+        data_format = config.get('data_format')
+
+        if data_format == 'channels_last':
+            n_classes = shape[-1]
+            axis = -1
+        elif data_format == 'channels_first':
+            n_classes = shape[0]
+            axis = 1
+        else:
+            raise ValueError("data_format must be 'channels_last' or 'channels_first'",
+                             "but '{}' was given".format(data_format))
+
+        tensor = tf.one_hot(tensor, depth=n_classes, axis=axis)
+        return tensor
+
 
     def _unpack_fn_from_config(self, param, default=None):
         par = self.get_from_config(param, default)
@@ -271,7 +379,7 @@ class TFModel(BaseModel):
         return np.sum(arr)
 
     @staticmethod
-    def num_channels(tensor):
+    def num_channels(tensor, data_format="channels_last"):
         """ Return the number of channels (the length of the last dimension) in the tensor
 
         Parameters
@@ -282,7 +390,8 @@ class TFModel(BaseModel):
         -------
         number of channels : int
         """
-        return tensor.get_shape().as_list()[-1]
+        channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 1
+        return tensor.get_shape().as_list()[channels_dim]
 
     @staticmethod
     def batch_size(tensor):

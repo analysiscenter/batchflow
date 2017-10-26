@@ -25,6 +25,19 @@ class BaseModel:
         """ Return a variable from config or a default value """
         return self.config.get(variable, default)
 
+    def _make_inputs(self, names=None):
+        """ Make model input data using config
+
+        Parameters
+        ----------
+        names : a sequence of str - names for input variables
+
+        Returns
+        -------
+        None or dict - where key is a variable name and a value is a corresponding variable after configuration
+        """
+        return None
+
     def build(self, *args, **kwargs):
         """ Define the model """
         _ = self, args, kwargs

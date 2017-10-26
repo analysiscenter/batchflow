@@ -21,7 +21,7 @@ class MyModel(TFModel):
         input_labels = tf.placeholder("uint8", [None], name='input_labels')
         images = tf.to_float(input_images)
 
-        features = conv2d_block(images, 32, (3, 3), layout='canp', name='layer1')
+        features = conv2d_block(images, 32, 3, layout='canp', name='layer1')
         features = flatten(features)
 
         layer1 = tf.layers.dense(features, units=512, activation=tf.nn.relu)

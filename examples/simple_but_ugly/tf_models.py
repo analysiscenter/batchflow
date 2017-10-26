@@ -14,24 +14,23 @@ from dataset.models.tf.layers import conv2d_block, flatten
 
 class MyModel(TFModel):
     """An example of a tf model class """
-    def _build(self, *args, **kwargs):
-        images_shape = self.get_from_config('images_shape', (12, 12, 1))
-        num_classes = self.get_from_config('num_classes', 3)
+    def _build(self, inputs, *args, **kwargs):
+        #images_shape = self.get_from_config('images_shape', (12, 12, 1))
+        #num_classes = self.get_from_config('num_classes', 3)
 
-        x = tf.placeholder("float", [None] + list(images_shape), name='x')
-        y = tf.placeholder("int32",[None], name='y')
-        y_oe = tf.one_hot(y, num_classes, name='targets')
-
-        c = conv2d_block(x, 32, 3, conv=dict(kernel_initializer=tf.contrib.layers.xavier_initializer()), max_pooling=dict(strides=4))
-        f = flatten(c)
-        f = tf.layers.dense(f, num_classes)
+        #x = tf.placeholder("float", [None] + list(images_shape), name='x')
+        #y = tf.placeholder("int32",[None], name='y')
+        #y_oe = tf.one_hot(y, num_classes, name='targets')
+        print(inputs)
+        c = conv2d_block(inputs['x'], 3, 3, conv=dict(kernel_initializer=tf.contrib.layers.xavier_initializer()), max_pooling=dict(strides=4))
+        f = tf.reduce_mean(c, [1,2])
         y_ = tf.identity(f, name='predictions')
 
         # Define a cost function
         #tf.losses.add_loss(tf.losses.softmax_cross_entropy(y_oe, y_))
-        loss = tf.losses.softmax_cross_entropy(y_oe, y_)
-        self.train_step = tf.train.AdamOptimizer().minimize(loss)
-        print(c.shape)
+        #loss = tf.losses.softmax_cross_entropy(y_oe, y_)
+        #self.train_step = tf.train.AdamOptimizer().minimize(loss)
+        #print(c.shape)
 
         print("___________________ MyModel initialized")
 
@@ -80,7 +79,7 @@ ds_data, data, labels = gen_data()
 config = dict(dynamic_model=dict(arg1=0, arg2=0))
 
 # create a model
-model = MyModel()
+#model = MyModel()
 
 # Create a template pipeline
 pp = (Pipeline(config=config)
@@ -91,20 +90,25 @@ pp = (Pipeline(config=config)
         .init_variable('loss_history', init_on_each_run=list)
         .init_variable('loss_history2', init_on_each_run=list)
         .init_variable('loss_history3', init_on_each_run=list)
-        .init_model("static", MyModel, name="static_model", config=dict(loss='ce'))
+        .init_model("static", MyModel, name="static_model",
+                    config=dict(loss='ce',
+                        inputs={'x': dict(shape=(12, 12, 1)),
+                                'y': dict(name='targets', dtype='int32', shape=3, transform='ohe')}))
         .init_model("dynamic", MyModel, "dynamic_model",
                     dict(num_classes=V(V('var_name')),
                          images_shape=F(lambda batch: batch.images.shape[1:]),
-                         loss='ce'))
-        .import_model('imported_model', model)
+                         loss='ce',
+                         inputs={'x': dict(shape=(12, 12, 1)),
+                                 'y': dict(name='targets', dtype='int32', shape=3, transform='ohe')}))
+#        .import_model('imported_model', model)
         #.init_model("static", TFModel, "dynamic_model2", config=dict(build=False, load=True, path='./models/dynamic'))
         .load((data, labels))
         #.train_model("static_model", fn=trans)
         .train_in_batch()
         .train_model("dynamic_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
                     extend_to=[V('loss_history')])
-        .train_model("imported_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
-                    append_to=V('loss_history2')) #, V('loss_history3')])
+        #.train_model("imported_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
+        #            append_to=V('loss_history2')) #, V('loss_history3')])
         .call(MyBatch.some_method, save_to=V('output'))
         .update_variable(V('var_name2'), V('output'))
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
