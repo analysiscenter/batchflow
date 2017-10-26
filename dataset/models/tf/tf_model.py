@@ -2,6 +2,7 @@
 """ Contains base class for tensorflow models """
 
 import os
+import glob
 import re
 import json
 import numpy as np
@@ -552,7 +553,20 @@ class TFModel(BaseModel):
         self.session = tf.Session()
 
         with self.session.as_default():
-            graph_path = os.path.join(path, graph or 'model-0.meta')
+            if graph is None:
+                graph_files = glob.glob(os.path.join(path, '*.meta'))
+                graph_files = [os.path.splitext(os.path.basename(graph))[0] for graph in graph_files]
+                all_steps = []
+                for graph in graph_files:
+                    try:
+                        step = int(graph.split('-')[-1])
+                    except ValueError:
+                        pass
+                    else:
+                        all_steps.append(step)
+                graph = '-'.join(['model', str(max(all_steps))]) + '.meta'
+
+            graph_path = os.path.join(path, graph)
             saver = tf.train.import_meta_graph(graph_path)
 
             if checkpoint is None:

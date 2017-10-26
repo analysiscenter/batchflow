@@ -21,7 +21,7 @@ class MyModel(TFModel):
         #x = tf.placeholder("float", [None] + list(images_shape), name='x')
         #y = tf.placeholder("int32",[None], name='y')
         #y_oe = tf.one_hot(y, num_classes, name='targets')
-        print(inputs)
+
         c = conv2d_block(inputs['x'], 3, 3, conv=dict(kernel_initializer=tf.contrib.layers.xavier_initializer()), max_pooling=dict(strides=4))
         f = tf.reduce_mean(c, [1,2])
         y_ = tf.identity(f, name='predictions')
@@ -126,6 +126,9 @@ res = (pp << ds_data).run()
 print(time() - t)
 
 res.save_model("dynamic_model", './models/dynamic')
+
+m = res.get_model_by_name('dynamic_model')
+m.load('./models/dynamic')
 
 print(res.get_variable("loss_history"))
 
