@@ -4,11 +4,11 @@ import copy
 def copy1(data):
     """ Copy data exactly 1 level deep """
     if isinstance(data, tuple):
-        out = tuple(copy1_list(data))
+        out = tuple(_copy1_list(data))
     elif isinstance(data, list):
-        out = copy1_list(data)
+        out = _copy1_list(data)
     elif isinstance(data, dict):
-        out = copy1_dict(data)
+        out = _copy1_dict(data)
     else:
         out = copy.copy(data)
     return out
