@@ -247,7 +247,7 @@ class TFModel(BaseModel):
                 input_config = input_config + type(input_config)([None for _ in names])
                 input_config = input_config[:len(names)]
                 input_config = dict(zip(names, input_config))
-                input_config = dict((k, v) for k,v in input_config.items() if v is not None)
+                input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
             shape = input_config.get('shape')
