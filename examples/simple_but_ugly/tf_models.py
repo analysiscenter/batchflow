@@ -105,11 +105,11 @@ pp = (Pipeline(config=config)
         #.train_model("static_model", fn=trans)
         .train_in_batch()
         .train_model("dynamic_model", fetches="loss", feed_dict={'x': B('images'), 'y': B('labels')},
-                     save_to=V('loss_history'))
+                     save_to=V('loss_history'), mode='a')
         #.train_model("imported_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
         #            append_to=V('loss_history2')) #, V('loss_history3')])
-        .call(MyBatch.some_method, save_to=V('output'))
-        .update_variable(V('var_name2'), V('output'))
+        .call(MyBatch.some_method, save_to=V('output'), mode='e')
+        .update_variable(V('var_name2'), [V(V('var_name'))], mode='a')
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 
@@ -133,5 +133,5 @@ print(res.get_variable("loss_history"))
 
 print(res.get_variable("loss_history2"))
 
-print(res.get_variable("output"))
+print('output:', res.get_variable("output"))
 print(res.get_variable("loss_history3"))
