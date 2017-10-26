@@ -16,7 +16,7 @@ from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
 from .decorators import ModelDirectory
-from .named_expr import _NamedExpression
+from .named_expr import _NamedExpression, eval_expr
 
 
 PIPELINE_ID = '#_pipeline'
@@ -578,9 +578,7 @@ class Pipeline:
         return batch_res
 
     def _get_value(self, expr, batch=None, model=None):
-        if isinstance(expr, _NamedExpression):
-            expr = expr.get(batch=batch, pipeline=self, model=model)
-        return expr
+        return eval_expr(expr, batch, model)
 
     def _exec_args(self, batch, action):
         _action = {}
@@ -801,21 +799,7 @@ class Pipeline:
 
         kwargs = {**action['kwargs'], **kwargs}
 
-        for arg, data in kwargs.items():
-            if isinstance(data, dict):
-                data_dict = type(data)()
-                for key, item in data.items():
-                    data_dict.update({map_data(key): map_data(item)})
-                data_item = data_dict
-            elif isinstance(data, (tuple, list)):
-                data_list = []
-                for item in data:
-                    data_item = map_data(item)
-                    data_list.append(data_item)
-                data_item = data_list
-            else:
-                data_item = map_data(data)
-            kwargs.update({arg: data_item})
+        kwargs = self._get_value(kwargs, batch=batch, model=model)
 
         return args, kwargs
 

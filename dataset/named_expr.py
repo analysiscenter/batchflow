@@ -99,3 +99,22 @@ class V(_NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.set_variable(name, value)
+
+
+def eval_expr(expr, batch, model=None):
+    """ Evaluate a named expression recursively """
+    if isinstance(expr, _NamedExpression):
+        expr = expr.get(batch=batch, model=model)
+    elif isinstance(expr, (list, tuple)):
+        _expr = []
+        for val in expr:
+            _expr.append(eval_expr(val, batch=batch, model=model))
+        expr = type(expr)(_expr)
+    elif isinstance(expr, dict):
+        _expr = type(expr)()
+        for key, val in expr.items():
+            key = eval_expr(key, batch=batch, model=model)
+            val = eval_expr(val, batch=batch, model=model)
+            _expr.update({key: val})
+        expr = _expr
+    return expr

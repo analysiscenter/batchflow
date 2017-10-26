@@ -6,7 +6,7 @@ import concurrent.futures as cf
 import asyncio
 import functools
 
-from .named_expr import _NamedExpression, _DummyBatch
+from .named_expr import _NamedExpression, _DummyBatch, eval_expr
 
 
 def _workers_count():
@@ -212,27 +212,20 @@ class ModelDirectory:
             init_config = config
 
             def _model_definition_maker():
-                def _model_definition_method(batch, config=None):
-                    def _get_named_expr(val):
-                        out = val
-                        if isinstance(val, _NamedExpression):
-                            if mode == 'dynamic':
-                                out = val.get(batch=batch)
-                            else:
-                                out = val.get(pipeline=batch.pipeline)
+                def _model_definition_method(batch_or_pipe, config=None):
+                    def _calc_expr(val):
+                        if mode == 'dynamic':
+                            args = dict(batch=batch_or_pipe)
+                        else:
+                            dummy_batch = _DummyBatch(batch_or_pipe)
+                            args = dict(batch=dummy_batch)
+                        out = eval_expr(val, **args)
                         return out
 
-                    kwargs = config or dict()
-                    _config = init_config or dict()
-                    if isinstance(_config, _NamedExpression):
-                        _config = _get_named_expr(_config)
-                    if isinstance(_config, dict):
-                        for arg, val in _config.items():
-                            arg = _get_named_expr(arg)
-                            val = _get_named_expr(val)
-                            kwargs.update({arg: val})
-                    else:
-                        raise TypeError("config should be a dict")
+                    global_config = config or dict()
+                    local_config = init_config or dict()
+                    kwargs = {**global_config, **local_config}
+                    kwargs = _calc_expr(kwargs)
 
                     return model_class(mode, name=name, config={**kwargs})
 
@@ -253,7 +246,7 @@ class ModelDirectory:
                                  % (name, pipeline))
             # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
             dummy_batch = _DummyBatch(pipeline)
-            _ = model_methods[0](dummy_batch, config)
+            _ = model_methods[0](dummy_batch)
 
 
     @staticmethod
@@ -323,11 +316,11 @@ def model(mode='global', pipeline=None):
             ModelDirectory.add_model(method_spec, model_spec)
 
         @functools.wraps(method)
-        def _model_wrapper(self, config=None):
+        def _model_wrapper(batch, config=None):
             if mode == 'global':
                 pipeline = None
             elif mode in ['static', 'dynamic']:
-                pipeline = self.pipeline
+                pipeline = batch.pipeline
                 method_spec = _get_method_spec()
                 method_spec['pipeline'] = pipeline
 
@@ -348,7 +341,7 @@ def model(mode='global', pipeline=None):
                                         config_a = config or dict()
                                         config = {**config_p, **config_a}
 
-                            args = (pipeline,) if mode == 'static' else (self,)
+                            args = (pipeline,) if mode == 'static' else (batch,)
                             args = args if config is None else args + (config,)
                             model_spec = method(*args)
                             _add_model(method_spec, model_spec)

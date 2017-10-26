@@ -1,6 +1,7 @@
 """ Contains helper functions """
 import copy
 
+
 def copy1(data):
     """ Copy data exactly 1 level deep """
     if isinstance(data, tuple):

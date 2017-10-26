@@ -76,7 +76,7 @@ def gen_data():
 # Create datasets
 ds_data, data, labels = gen_data()
 
-config = dict(dynamic_model=dict(arg1=0, arg2=0))
+config = dict(dynamic_model=dict(arg1=0, arg2=0), static_model=dict(arg1=1))
 
 # create a model
 #model = MyModel()
@@ -90,23 +90,22 @@ pp = (Pipeline(config=config)
         .init_variable('loss_history', init_on_each_run=list)
         .init_variable('loss_history2', init_on_each_run=list)
         .init_variable('loss_history3', init_on_each_run=list)
-        .init_model("static", MyModel, name="static_model",
-                    config=dict(loss='ce',
-                        inputs={'x': dict(shape=(12, 12, 1)),
-                                'y': ('int32', 3, None, 'ohe', 'targets')}))
-        .init_model("dynamic", MyModel, "dynamic_model",
-                    dict(num_classes=V(V('var_name')),
-                         images_shape=F(lambda batch: batch.images.shape[1:]),
-                         loss='ce',
+        .init_model("static", MyModel, "static_model",
+                    dict(loss='ce',
                          inputs={'x': dict(shape=(12, 12, 1)),
-                                 'y': dict(name='targets', dtype='int32', shape=3, transform='ohe')}))
+                                 'y': ('int32', 3, None, 'ohe', 'targets')}))
+        .init_model("dynamic", MyModel, "dynamic_model",
+                    dict(loss='ce',
+                         inputs={'x': dict(shape=F(lambda b: b.images.shape[1:])),
+                                 'y': dict(name='targets', dtype=F(lambda b: b.labels.dtype),
+                                           shape=V(V('var_name')), transform='ohe')}))
 #        .import_model('imported_model', model)
         #.init_model("static", TFModel, "dynamic_model2", config=dict(build=False, load=True, path='./models/dynamic'))
         .load((data, labels))
         #.train_model("static_model", fn=trans)
         .train_in_batch()
-        .train_model("dynamic_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
-                    extend_to=[V('loss_history')])
+        .train_model("dynamic_model", fetches="loss", feed_dict={'x': B('images'), 'y': B('labels')},
+                     save_to=V('loss_history'))
         #.train_model("imported_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
         #            append_to=V('loss_history2')) #, V('loss_history3')])
         .call(MyBatch.some_method, save_to=V('output'))
