@@ -422,6 +422,7 @@ class Pipeline:
 
         mode : str - a method to update a variable value, could be one of:
         - 'a' or 'append' to append a value to a variable (e.g. if a variable is a list)
+        - 'e' or 'extend' to extend a value to a variable (e.g. if a variable is a list)
         - 'u' or 'update' to update a value to a variable (e.g. if a variable is a dict)
         - 'w' or 'write' to rewrite a variable with a new value
         - a callable which takes a variable value and a new value
@@ -444,6 +445,8 @@ class Pipeline:
 
             if callable(action['mode']):
                 action['mode'](self.get_variable(var_name), value)
+            elif action['mode'] in ['e', 'extend']:
+                self.get_variable(var_name).extend(value)
             elif action['mode'] in ['a', 'append']:
                 self.get_variable(var_name).append(value)
             elif action['mode'] in ['u', 'update']:
