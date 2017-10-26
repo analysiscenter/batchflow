@@ -6,7 +6,7 @@ import concurrent.futures as cf
 import asyncio
 import functools
 
-from .named_expr import _NamedExpression, _DummyBatch, eval_expr
+from .named_expr import _DummyBatch, eval_expr
 
 
 def _workers_count():
