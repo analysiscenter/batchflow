@@ -102,10 +102,13 @@ Model independent arguments are:
 - `make_data` - a function or method which takes a current batch and a model instance and return a dict of arguments for `model.train(...)`.
 - `save_to` - a location or a sequence of locations where to store an output of `model.train` (if there is any).  
   Could be a named expression: `B("name")`, `C("name")` or `V("name")`.  
-- `append_to` - a location or a sequence of locations where a model output will be appended to.  
-  Could be a named expression: `B("name")`, `C("name")` or `V("name")`.
+- `mode` - could be one of:
+- 'w' or 'write' to rewrite a location with a new value
+- 'a' or 'append' to append a value to a location (e.g. if a location is a list)
+- 'e' or 'extend' to extend a location with a new value (e.g. if a location is a list and a value is a list too)
+- 'u' or 'update' to update a location with a new value (e.g. if a location is a dict)
+  For sets and dicts 'u' and 'a' do the same.
 
-If both (`save_to` and `append_to`) are present, only `append_to` will be used.
 
 ```python
 full_workflow = my_dataset.p
@@ -119,7 +122,7 @@ full_workflow = my_dataset.p
                                        save_to=[V('current_loss'), V('current_accuracy')])
                           .train_model('another_model', fetches='loss',
                                        feed_dict={'x': B('images'), 'y': B('labels')},
-                                       append_to=V('loss_history'))
+                                       save_to=V('loss_history'), mode='append')
 ```
 
 You can also write an action which works with a model directly.
