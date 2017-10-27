@@ -16,6 +16,9 @@ class MyModel(BaseModel):
     def build(self, *args, **kwargs):
         print("___________________ MyModel initialized")
 
+    def train(self, *args, **kwargs):
+        return 1, 2, 3
+
 
 
 # Example of custome Batch class which defines some actions
@@ -165,7 +168,7 @@ pp2 = (template_pp
         .train_in_batch("dynamic_model")
         #.train_model("MyModel")
         .train_model("my_model")
-        .train_model("my_model2")
+        .train_model("my_model2", save_to=V('output'))
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 

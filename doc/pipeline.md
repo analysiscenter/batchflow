@@ -254,18 +254,19 @@ my_pipeline
     .update_variable("current_batch_labels", F(MyBatch.get_labels))
     .update_variable("all_labels", V('current_batch_labels'), mode='append')
 ```
-The first argument specifies a variable name, while the second is an updating value and
-it one could be some value or a named expression:
+The first parameter specifies a variable name, and it can be a string or a named expression, returning a string.
+The second parameter is an updating value and it can be a value of any type or a named expression:
 - B('name') - a batch class attribute or component name
 - V('name') - a pipeline variable name
 - C('name') - a pipeline config option
 - F(name) - a callable which takes a batch (could be a batch class method or a function)
 
 Mode could be one of:
+- 'w' or 'write' to rewrite a variable with a new value. This is a default mode.
 - 'a' or 'append' to append a value to a variable (e.g. if a variable is a list)
-- 'u' or 'update' to update a value to a variable (e.g. if a variable is a dict)
-- 'w' or 'write' to rewrite a variable with a new value
-- a callable which takes a variable value and a new value
+- 'e' or 'extend' to extend a variable with a new value (e.g. if a variable is a list and a value is a list too)
+- 'u' or 'update' to update a variable with a new value (e.g. if a variable is a dict).
+For sets and dicts 'u' and 'a' do the same.
 
 
 ### Deleting a variable
@@ -463,10 +464,10 @@ Initialize [a model](models.md)
 ### `import_model(model_name, from_pipeline)`
 Import a static or dynamic model from another pipeline.
 
-### `train_model(model_name, save_to=None, append_to=None, *args, **kwargs)`
+### `train_model(model_name, save_to=None, mode='w', *args, **kwargs)`
 Train a model during pipeline execution.
 
-### `predict_model(model_name, save_to=None, append_to=None, *args, **kwargs)`
+### `predict_model(model_name, save_to=None, mode='w', *args, **kwargs)`
 Predict using a model during pipeline execution.
 
 ### `init_variable(name, default=None, init=None, init_on_each_run=None)`
@@ -485,7 +486,7 @@ Immediately set a new value for a variable.
 
 Same as `set_variable()`
 
-### `update_variable(name, value=None, fn=None, var=None)`
+### `update_variable(name, value=None, mode='w')`
 Update a variable value during pipeline execution.
 
 ### `del_variable(name)`

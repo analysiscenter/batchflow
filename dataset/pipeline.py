@@ -16,7 +16,7 @@ from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
 from .decorators import ModelDirectory
-from .named_expr import NamedExpression, eval_expr
+from .named_expr import NamedExpression, V, eval_expr
 
 
 PIPELINE_ID = '#_pipeline'
@@ -421,11 +421,11 @@ class Pipeline:
         These expressions will be substituted for their real value.
 
         mode : str - a method to update a variable value, could be one of:
-        - 'a' or 'append' to append a value to a variable (e.g. if a variable is a list)
-        - 'e' or 'extend' to extend a value to a variable (e.g. if a variable is a list)
-        - 'u' or 'update' to update a value to a variable (e.g. if a variable is a dict)
-        - 'w' or 'write' to rewrite a variable with a new value
-        - a callable which takes a variable value and a new value
+        - 'w' or 'write' to rewrite a variable with a new value. This is a default mode.
+        - 'a' or 'append' to append a value to a variable (e.g. if a variable is a list).
+        - 'e' or 'extend' to extend a variable with a new value (e.g. if a variable is a list).
+        - 'u' or 'update' to update a variable with a new value (e.g. if a variable is a dict).
+        For sets and dicts 'a' and 'u' do exactly the same.
 
         Returns
         -------
@@ -443,16 +443,7 @@ class Pipeline:
 
             value = self._get_value(action['value'], batch)
 
-            if callable(action['mode']):
-                action['mode'](self.get_variable(var_name), value)
-            elif action['mode'] in ['e', 'extend']:
-                self.get_variable(var_name).extend(value)
-            elif action['mode'] in ['a', 'append']:
-                self.get_variable(var_name).append(value)
-            elif action['mode'] in ['u', 'update']:
-                self.get_variable(var_name).update(value)
-            else:
-                self.set_variable(var_name, value)
+            V(var_name).set(value, batch=batch, mode=action['mode'])
 
             if self._variables[var_name]['lock'] is not None:
                 self._variables[var_name]['lock'].release()
@@ -687,7 +678,7 @@ class Pipeline:
             This will rewrite the previous value in the location given.
 
         mode : str {'w', 'a', 'e', 'u'} - a method of storing output
-            'w' - overwrite `save_to` location with a new value. This is a default option.
+            'w' - overwrite `save_to` location with a new value. This is a default mode.
             'a' - append a new value to `save_to` location
                   (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
             'e' - extend `save_to` location with a new value
@@ -743,7 +734,7 @@ class Pipeline:
             A location where the model output will be stored
 
         mode : str {'w', 'a', 'e', 'u'} - a method of storing output
-            'w' - overwrite `save_to` location with a new value. This is a default option.
+            'w' - overwrite `save_to` location with a new value. This is a default mode.
             'a' - append a new value to `save_to` location
                   (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
             'e' - extend `save_to` location with a new value
@@ -811,7 +802,9 @@ class Pipeline:
     def _save_output(self, batch, model, output, save_to, mode='w'):
         if not isinstance(save_to, (tuple, list)):
             save_to = [save_to]
-        if not isinstance(output, (tuple, list)) or len(save_to) == 1:
+            if isinstance(output, (tuple, list)):
+                output = [output]
+        if not isinstance(output, (tuple, list)):
             output = [output]
 
         if len(save_to) != len(output):
