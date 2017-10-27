@@ -16,7 +16,7 @@ from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
 from .decorators import ModelDirectory
-from .named_expr import _NamedExpression, eval_expr
+from .named_expr import NamedExpression, eval_expr
 
 
 PIPELINE_ID = '#_pipeline'
@@ -811,30 +811,19 @@ class Pipeline:
     def _save_output(self, batch, model, output, save_to, mode='w'):
         if not isinstance(save_to, (tuple, list)):
             save_to = [save_to]
-        if not isinstance(output, (tuple, list)):
+        if not isinstance(output, (tuple, list)) or len(save_to) == 1:
             output = [output]
-        if len(save_to) == len(output):
-            pass
-        elif len(save_to) == 1:
-            output = [output]
-        else:
-            raise ValueError("The number of model outputs does not equal the number of 'save_to' locations.")
 
+        if len(save_to) != len(output):
+            raise ValueError("The number of model outputs does not equal the number of 'save_to' locations.")
 
         for i, var in enumerate(save_to):
             if len(output) <= i:
                 raise ValueError("'%s' output has fewer items than expected." \
                                  % model.name)
             item = output[i]
-            if isinstance(var, _NamedExpression):
-                if mode in ['a', 'append']:
-                    var.append(item, batch=batch, model=model)
-                elif mode in ['e', 'extend']:
-                    var.extend(item, batch=batch, model=model)
-                elif mode in ['u', 'update']:
-                    var.update(item, batch=batch, model=model)
-                else:
-                    var.set(item, batch=batch, model=model)
+            if isinstance(var, NamedExpression):
+                var.set(item, batch=batch, model=model, mode=mode)
             else:
                 if mode in ['a', 'append']:
                     var.append(item)
@@ -863,7 +852,6 @@ class Pipeline:
         model = ModelDirectory.get_model_by_name(name, pipeline=self)
         model.save(*args, **kwargs)
         return self
-
 
     def join(self, *pipelines):
         """ Join one or several pipelines """
