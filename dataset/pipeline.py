@@ -822,20 +822,20 @@ class Pipeline:
                                  % model.name)
             item = output[i]
             if isinstance(var, _NamedExpression):
-                if mode == 'a':
+                if mode in ['a', 'append']:
                     var.append(item, batch=batch, model=model)
-                elif mode == 'e':
+                elif mode in ['e', 'extend']:
                     var.extend(item, batch=batch, model=model)
-                elif mode == 'u':
+                elif mode in ['u', 'update']:
                     var.update(item, batch=batch, model=model)
                 else:
                     var.set(item, batch=batch, model=model)
             else:
-                if mode == 'a':
+                if mode in ['a', 'append']:
                     var.append(item)
-                elif mode == 'e':
+                elif mode in ['e', 'extend']:
                     var.extend(item)
-                elif mode == 'u':
+                elif mode in ['u', 'update']:
                     var.update(item)
                 else:
                     save_to[i] = item
