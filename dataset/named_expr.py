@@ -7,7 +7,7 @@ class _DummyBatch:
         self.pipeline = pipeline
 
 
-class _NamedExpression:
+class NamedExpression:
     """ Base class for a named expression """
     def __init__(self, name):
         self.name = name
@@ -18,10 +18,16 @@ class _NamedExpression:
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
         return self.name
 
-    def set(self, value, batch=None, pipeline=None, model=None):
+    def set(self, value, batch=None, pipeline=None, model=None, mode='w'):
         """ Assign a value to a named expression """
-        _ = value, batch, pipeline, model
-        raise NotImplementedError("set should be defined in child classes")
+        if mode in ['a', 'append']:
+            var.append(value, batch=batch, pipeline=pipeline, model=model)
+        elif mode in ['e', 'extend']:
+            var.extend(value, batch=batch, pipeline=pipeline, model=model)
+        elif mode in ['u', 'update']:
+            var.update(value, batch=batch, pipeline=pipeline, model=model)
+        else:
+            raise NotImplementedError("set should be defined in child classes")
 
     def append(self, value, *args, **kwargs):
         """ Append a value to a named expression
@@ -52,7 +58,7 @@ class _NamedExpression:
         self.get(*args, **kwargs).update(value)
 
 
-class B(_NamedExpression):
+class B(NamedExpression):
     """ Batch component name """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a batch component """
@@ -67,7 +73,7 @@ class B(_NamedExpression):
         setattr(batch, name, value)
 
 
-class C(_NamedExpression):
+class C(NamedExpression):
     """ A pipeline config option """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline config """
@@ -84,7 +90,7 @@ class C(_NamedExpression):
         config[name] = value
 
 
-class F(_NamedExpression):
+class F(NamedExpression):
     """ A function, method or any other callable """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
@@ -105,7 +111,7 @@ class F(_NamedExpression):
         raise NotImplementedError("Setting a value with a callable is not supported")
 
 
-class V(_NamedExpression):
+class V(NamedExpression):
     """ Pipeline variable name """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline variable """
@@ -122,7 +128,7 @@ class V(_NamedExpression):
 
 def eval_expr(expr, batch, model=None):
     """ Evaluate a named expression recursively """
-    if isinstance(expr, _NamedExpression):
+    if isinstance(expr, NamedExpression):
         expr = expr.get(batch=batch, model=model)
     elif isinstance(expr, (list, tuple)):
         _expr = []
