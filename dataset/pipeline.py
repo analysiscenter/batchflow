@@ -802,7 +802,9 @@ class Pipeline:
     def _save_output(self, batch, model, output, save_to, mode='w'):
         if not isinstance(save_to, (tuple, list)):
             save_to = [save_to]
-        if not isinstance(output, (tuple, list)) or len(save_to) == 1 and len(output) > 1:
+            if isinstance(output, (tuple, list)):
+                output = [output]
+        if not isinstance(output, (tuple, list)):
             output = [output]
 
         if len(save_to) != len(output):
