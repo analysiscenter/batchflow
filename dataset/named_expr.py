@@ -14,20 +14,24 @@ class NamedExpression:
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression """
-        if isinstance(self.name, _NamedExpression):
+        if isinstance(self.name, NamedExpression):
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
         return self.name
 
     def set(self, value, batch=None, pipeline=None, model=None, mode='w'):
-        """ Assign a value to a named expression """
+        """ Set a value to a named expression """
         if mode in ['a', 'append']:
-            var.append(value, batch=batch, pipeline=pipeline, model=model)
+            self.append(value, batch=batch, pipeline=pipeline, model=model)
         elif mode in ['e', 'extend']:
-            var.extend(value, batch=batch, pipeline=pipeline, model=model)
+            self.extend(value, batch=batch, pipeline=pipeline, model=model)
         elif mode in ['u', 'update']:
-            var.update(value, batch=batch, pipeline=pipeline, model=model)
+            self.update(value, batch=batch, pipeline=pipeline, model=model)
         else:
-            raise NotImplementedError("set should be defined in child classes")
+            self.assign(value, batch=batch, pipeline=pipeline, model=model)
+
+    def assign(self, value, batch=None, pipeline=None, model=None):
+        """ Assign a value to a named expression """
+        raise NotImplementedError("assign should be implemented in child classes")
 
     def append(self, value, *args, **kwargs):
         """ Append a value to a named expression
@@ -67,7 +71,7 @@ class B(NamedExpression):
             raise ValueError("Batch expressions are not allowed in static models B(%s)" % name)
         return getattr(batch, name)
 
-    def set(self, value, batch=None, pipeline=None, model=None):
+    def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a batch component """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         setattr(batch, name, value)
@@ -82,7 +86,7 @@ class C(NamedExpression):
         config = pipeline.config or {}
         return config.get(name, None)
 
-    def set(self, value, batch=None, pipeline=None, model=None):
+    def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
@@ -105,10 +109,10 @@ class F(NamedExpression):
             args += [model]
         return name(*args)
 
-    def set(self, *args, **kwargs):
+    def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
         _ = args, kwargs
-        raise NotImplementedError("Setting a value with a callable is not supported")
+        raise NotImplementedError("Assigning a value with a callable is not supported")
 
 
 class V(NamedExpression):
@@ -119,7 +123,7 @@ class V(NamedExpression):
         pipeline = batch.pipeline if batch is not None else pipeline
         return pipeline.get_variable(name)
 
-    def set(self, value, batch=None, pipeline=None, model=None):
+    def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline variable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
