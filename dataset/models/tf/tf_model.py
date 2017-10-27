@@ -250,13 +250,13 @@ class TFModel(BaseModel):
                 input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
-            dtype = input_config.get('dtype')
-            tensor = tf.placeholder(dtype, name=input_name)
-            tensor = self._make_transform(tensor, input_config)
-
             shape = input_config.get('shape')
             if isinstance(shape, int):
                 input_config['shape'] = (shape,)
+
+            dtype = input_config.get('dtype')
+            tensor = tf.placeholder(dtype, name=input_name)
+            tensor = self._make_transform(tensor, input_config)
 
             if isinstance(shape, (list, tuple)):
                 tensor = tf.reshape(tensor, [-1] + list(shape))
@@ -405,6 +405,8 @@ class TFModel(BaseModel):
         ValueError shape in tensor configuration isn't int, tuple or list
         """
         shape = self.get_from_config('inputs')[tensor_name].get('shape')
+        if isinstance(shape, int):
+            shape = (shape,)
         if isinstance(shape, (list, tuple)):
             data_format = self.get_from_config('inputs')[tensor_name].get('data_format', 'channels_last')
             channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
@@ -429,6 +431,8 @@ class TFModel(BaseModel):
         ValueError shape in tensor configuration isn't int, tuple or list
         """
         shape = self.get_from_config('inputs')[tensor_name].get('shape')
+        if isinstance(shape, int):
+            shape = (shape,)
         if isinstance(shape, (list, tuple)):
             return len(shape) - 1
         else:
