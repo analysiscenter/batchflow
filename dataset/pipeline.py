@@ -413,7 +413,7 @@ class Pipeline:
         ----------
         name : str or a named expression - a variable name
 
-        value - an updating value, could be some value or a named expression:
+        value - an updating value, could be a value of any type or a named expression:
         - B('name') - a batch class attribute or component name
         - V('name') - a pipeline variable name
         - C('name') - a pipeline config option
@@ -813,8 +813,13 @@ class Pipeline:
             save_to = [save_to]
         if not isinstance(output, (tuple, list)):
             output = [output]
-        if len(save_to) != len(output) and len(save_to) == 1:
+        if len(save_to) == len(output):
+            pass
+        elif len(save_to) == 1:
             output = [output]
+        else:
+            raise ValueError("The number of model outputs does not equal the number of 'save_to'`' locations.")
+
 
         for i, var in enumerate(save_to):
             if len(output) <= i:
