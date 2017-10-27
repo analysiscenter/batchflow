@@ -818,7 +818,7 @@ class Pipeline:
         elif len(save_to) == 1:
             output = [output]
         else:
-            raise ValueError("The number of model outputs does not equal the number of 'save_to'`' locations.")
+            raise ValueError("The number of model outputs does not equal the number of 'save_to' locations.")
 
 
         for i, var in enumerate(save_to):
