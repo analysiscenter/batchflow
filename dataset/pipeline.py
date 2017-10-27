@@ -844,7 +844,6 @@ class Pipeline:
         """ Save a model """
         model = ModelDirectory.get_model_by_name(name, pipeline=self)
         model.save(*args, **kwargs)
-        return self
 
     def join(self, *pipelines):
         """ Join one or several pipelines """
