@@ -8,7 +8,7 @@ class _DummyBatch:
 
 
 class _NamedExpression:
-    """ Base class for named expression """
+    """ Base class for a named expression """
     def __init__(self, name):
         self.name = name
 
@@ -24,17 +24,29 @@ class _NamedExpression:
         raise NotImplementedError("set should be defined in child classes")
 
     def append(self, value, *args, **kwargs):
-        """ Append a value to the named expression
-        (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists) """
-        self.get(*args, **kwargs).append(value)
+        """ Append a value to a named expression
+
+        if a named expression is a dict or set, `update` is called, or `append` otherwise.
+
+        See also
+        --------
+        list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists
+        dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
+        set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update
+        """
+        var = self.get(*args, **kwargs)
+        if isinstance(var, (set, dict)):
+            var.update(value)
+        else:
+            var.append(value)
 
     def extend(self, value, *args, **kwargs):
-        """ Extend the named expression with a new value
+        """ Extend a named expression with a new value
         (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists) """
         self.get(*args, **kwargs).extend(value)
 
     def update(self, value, *args, **kwargs):
-        """ Update the named expression with a new value
+        """ Update a named expression with a new value
         (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
         or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update) """
         self.get(*args, **kwargs).update(value)
