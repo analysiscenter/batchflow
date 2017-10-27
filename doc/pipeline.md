@@ -264,7 +264,7 @@ The second parameter is an updating value and it can be a value of any type or a
 Mode could be one of:
 - 'a' or 'append' to append a value to a variable (e.g. if a variable is a list)
 - 'e' or 'extend' to extend a variable with a new value (e.g. if a variable is a list and a value is a list too)
-- 'u' or 'update' to update a variable with a new value (e.g. if a variable is a dict)
+- 'u' or 'update' to update a variable with a new value (e.g. if a variable is a dict).  
   For sets and dicts 'u' and 'a' do the same.
 - 'w' or 'write' to rewrite a variable with a new value
 - a callable which takes the current variable value and a new value and performs an update operation.

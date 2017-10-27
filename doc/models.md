@@ -103,10 +103,10 @@ Model independent arguments are:
 - `save_to` - a location or a sequence of locations where to store an output of `model.train` (if there is any).  
   Could be a named expression: `B("name")`, `C("name")` or `V("name")`.  
 - `mode` - could be one of:
-- 'w' or 'write' to rewrite a location with a new value
-- 'a' or 'append' to append a value to a location (e.g. if a location is a list)
-- 'e' or 'extend' to extend a location with a new value (e.g. if a location is a list and a value is a list too)
-- 'u' or 'update' to update a location with a new value (e.g. if a location is a dict)
+  - 'w' or 'write' to rewrite a location with a new value
+  - 'a' or 'append' to append a value to a location (e.g. if a location is a list)
+  - 'e' or 'extend' to extend a location with a new value (e.g. if a location is a list and a value is a list too)
+  - 'u' or 'update' to update a location with a new value (e.g. if a location is a dict).  
   For sets and dicts 'u' and 'a' do the same.
 
 
