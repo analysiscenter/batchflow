@@ -12,7 +12,7 @@ def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='c
 
     Parameters
     ----------
-    dim: int {1, 2, 3}
+    dim: int {1, 2, 3} - number of dimensions
     inputs: tf.Tensor
     pool_size: int
     strides: int
@@ -44,7 +44,7 @@ def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_forma
 
     Parameters
     ----------
-    dim: int {1, 2, 3}
+    dim: int {1, 2, 3} - number of dimensions
     inputs: tf.Tensor
     pool_size: int
     strides: int
@@ -64,3 +64,28 @@ def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_forma
         return tf.layers.average_pooling3d(inputs, pool_size, strides, padding, data_format, name)
     else:
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
+
+
+def global_average_pooling(dim, inputs, data_format='channels_last', name=None):
+    """ Multi-dimensional global average-pooling layer.
+
+    Parameters
+    ----------
+    dim: int {1, 2, 3} - number of dimensions
+    inputs: tf.Tensor
+    data_format: str {'channels_last', 'channels_first'}
+    name: str
+
+    Returns
+    -------
+    tf.Tensor
+    """
+    axis = 1 if data_format == 'channels_last' else 2
+    if dim == 2:
+        axis = [axis, axis+1]
+    elif dim == 3:
+        axis = [axis, axis+1, axis+2]
+    else:
+        raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
+
+    return tf.reduce_mean(inputs, axis=axis, name=name)
