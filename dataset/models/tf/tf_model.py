@@ -258,8 +258,7 @@ class TFModel(BaseModel):
             tensor = tf.placeholder(dtype, name=input_name)
             tensor = self._make_transform(tensor, input_config)
 
-            shape = input_config.get('shape')
-            if shape is not None:
+            if isinstance(shape, (list, tuple)):
                 tensor = tf.reshape(tensor, [-1] + list(shape))
 
             name = input_config.get('name')
@@ -390,20 +389,67 @@ class TFModel(BaseModel):
             arr = np.asarray([np.prod(self.get_shape(v)) for v in tf.trainable_variables()])
         return np.sum(arr)
 
-    @staticmethod
-    def num_channels(tensor, data_format="channels_last"):
+    def num_channels(self, tensor_name):
         """ Return the number of channels (the length of the last dimension) in the tensor
 
         Parameters
         ----------
-        tensor : tf.Variable or tf.Tensor
+        tensor_name : str
 
         Returns
         -------
         number of channels : int
+
+        Raises
+        ------
+        ValueError shape in tensor configuration isn't int, tuple or list
         """
-        channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 1
-        return tensor.get_shape().as_list()[channels_dim]
+        shape = self.get_from_config('inputs')[tensor_name].get('shape')
+        if isinstance(shape, int):
+            shape = (shape,)
+        if isinstance(shape, (list, tuple)):
+            data_format = self.get_from_config('inputs')[tensor_name].get('data_format', 'channels_last')
+            channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
+            return shape[channels_dim]
+        else:
+            raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
+
+
+    def spatial_dim(self, tensor_name):
+        """ Return the tensor spatial  dimensionality (without channels dimension)
+
+        Parameters
+        ----------
+        tensor_name : str
+
+        Returns
+        -------
+        spatial dimension : int
+
+        Raises
+        ------
+        ValueError shape in tensor configuration isn't int, tuple or list
+        """
+        shape = self.get_from_config('inputs')[tensor_name].get('shape')
+        if isinstance(shape, int):
+            shape = (shape,)
+        if isinstance(shape, (list, tuple)):
+            return len(shape) - 1
+        else:
+            raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
+
+    def data_format(self, tensor_name):
+        """ Return the tensor data format (channels_last or channels_first)
+
+        Parameters
+        ----------
+        tensor_name : str
+
+        Returns
+        -------
+        data_format : str
+        """
+        return self.get_from_config('inputs')[tensor_name].get('data_format', 'channels_last')
 
     @staticmethod
     def batch_size(tensor):
