@@ -1,9 +1,14 @@
 """ Contains pooling layers """
 import tensorflow as tf
 
+
 def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='channels_last', name=None):
     """ Multi-dimensional max-pooling layer.
-    See all doc here: https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling1d
+
+    For more detailes see tensorflow documentation:
+    https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling1d
+    https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling2d
+    https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling3d
 
     Parameters
     ----------
@@ -26,11 +31,16 @@ def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='c
     elif dim == 3:
         return tf.layers.max_pooling3d(inputs, pool_size, strides, padding, data_format, name)
     else:
-        raise ValueError("Number of dimensions could be 1, 2 or 3, but given %d" % dim)
+        raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
+
 
 def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='channels_last', name=None):
     """ Multi-dimensional average-pooling layer.
-    See all doc here: https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling1d
+
+    For more detailes see tensorflow documentation:
+    https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling1d
+    https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling2d
+    https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling3d
 
     Parameters
     ----------
@@ -53,5 +63,4 @@ def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_forma
     elif dim == 3:
         return tf.layers.average_pooling3d(inputs, pool_size, strides, padding, data_format, name)
     else:
-        raise ValueError("Number of dimensions could be 1, 2 or 3, but given %d" % dim)
-
+        raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)

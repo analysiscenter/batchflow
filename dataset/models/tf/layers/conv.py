@@ -2,6 +2,7 @@
 import tensorflow as tf
 
 from .conv1d_tr import conv1d_transpose
+from .pooling import max_pooling
 
 
 ND_LAYERS = {
@@ -9,7 +10,7 @@ ND_LAYERS = {
     'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
     'batch_norm': tf.layers.batch_normalization,
     'transposed_conv': [conv1d_transpose, tf.layers.conv2d_transpose, tf.layers.conv3d_transpose],
-    'max_pooling': [tf.layers.max_pooling1d, tf.layers.max_pooling2d, tf.layers.max_pooling3d],
+    'max_pooling': max_pooling,
     'dropout': tf.layers.dropout
 }
 
@@ -67,7 +68,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     """
 
     if not isinstance(dim, int) or dim < 1 or dim > 3:
-        raise ValueError("Number of dimensions could be 1, 2 or 3, but given %d" % dim)
+        raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
     context = None
     if name is not None:
@@ -91,7 +92,8 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
             elif layer == 'n':
                 args = dict(fused=True, axis=-1, training=is_training)
             elif layer == 'p':
-                args = dict(pool_size=pool_size, strides=pool_strides, padding=padding)
+                args = dict(dim=dim, pool_size=pool_size, strides=pool_strides, padding=padding,
+                            data_format=data_format)
             elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
                 args = dict(dropout_rate=dropout_rate, training=is_training)
 
