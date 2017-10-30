@@ -200,7 +200,7 @@ class TFModel(BaseModel):
         Configuration
         -------------
         inputs : dict
-            key : str - a placeholder name 
+            key : str - a placeholder name before reshaping and transformation
             values : dict or tuple - each input's config
 
         Input config:
