@@ -156,12 +156,13 @@ class TFModel(BaseModel):
         """ Build the model
 
         1. Define is_training and global_step tensors
-        2. Define a model architecture by calling self._build(*args, **kwargs)
-        3. Create a loss function
-        4. Create an optimizer and define a train step
-        5. Set UPDATE_OPS control dependency on train step
+        2. Create input placeholders (see _make_inputs doc-string)
+        3. Define a model architecture by calling self._build(*args, **kwargs)
+        4. Create a loss function
+        5. Create an optimizer and define a train step
+        6. Set UPDATE_OPS control dependency on train step
            (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
-        6. Create a tensorflow session
+        7. Create a tensorflow session
         """
         with self.graph.as_default():
             self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
@@ -199,7 +200,7 @@ class TFModel(BaseModel):
         Configuration
         -------------
         inputs : dict
-            key : str - a placeholder name
+            key : str - a placeholder name 
             values : dict or tuple - each input's config
 
         Input config:
@@ -256,6 +257,7 @@ class TFModel(BaseModel):
 
             dtype = input_config.get('dtype')
             tensor = tf.placeholder(dtype, name=input_name)
+            output[input_name] = tensor
             tensor = self._make_transform(tensor, input_config)
 
             if isinstance(shape, (list, tuple)):
@@ -265,7 +267,7 @@ class TFModel(BaseModel):
             if name is not None:
                 tensor = tf.identity(tensor, name=name)
 
-            output[input_name] = tensor
+            output[name] = tensor
 
         output = None if len(output) < 1 else output
         return output
