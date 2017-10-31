@@ -73,6 +73,11 @@ And this allows you to address components to read and write data:
    label_k = batch[k].labels
    batch[4].masks = new_masks
 
+Numerous methods take ``components`` parameters which allows to specify which components will be affected by the method.
+For instance, you can load components from different sources, or save components to disk, or apply some transformations
+(like resizing, zooming or rotating).
+
+
 Action methods
 --------------
 
@@ -144,14 +149,14 @@ Writing your own Batch
 ----------------------
 
 Constructor should include `*args` and `*kwargs`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
    class MyBatch(Batch):
        ...
        def __init__(self, index, your_param1, your_param2, *args, **kwargs):
-           super().__init__()
+           super().__init__(index)
            # process your data
 
 It is not so important if you are extremely careful when calling batch generators and parallelizing actions, so you are absolutly sure that a batch cannot get unexpected arguments.
@@ -181,20 +186,33 @@ Instead DO that:
    class MyBatch(Batch):
        ...
        def __init__(self, index, your_param1, your_param2, *args, **kwargs):
-           super().__init__()
+           super().__init__(index)
            ...
 
        @action
-       def load(self, source, format):
+       def load(self, src, fmt=None):
            # load data from source
            ...
-           self._data = read(file)
+           self.put_into_data(read(file))
            return self
 
-(optional) Store your data in `_data` property
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Store your data in `_data` property
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 It is just a convenient convention which makes your life more consistent.
+
+Use components
+^^^^^^^^^^^^^^
+
+Quite often a batch contains several semantic data parts, like images and labels, or transactions and ther scores.
+For a more flexible data processing and covenient actions create data components. It takes just one line of code:
+
+.. code-block:: python
+
+    class MyBatch(Batch):
+        components = 'images', 'masks', 'labels'
+
+See above `for more details about components <#components>`_.
 
 Make `actions` whenever possible
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -213,12 +231,12 @@ So make it an `action`:
 
 `Actions` should return an instance of some batch class.
 
-Parallel everyting you can
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Parallelize everyting you can
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you want a really fast data processing you can't do without `numba` or `cython`.
 And don't forget about input/output operations.
-For more details see `parallel <parallel>`_.
+For more details see :doc:`how to make a parallel actions <parallel>`.
 
 Define `load` and `dump` action-methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -232,11 +250,11 @@ Define `load` and `dump` action-methods
        @action
        def load(self, src, fmt='raw'):
            if fmt == 'raw':
-               self._data = ... # load from a raw file
+               self.put_into_data(...) # load from a raw file
            elif fmt == 'blosc':
-               self._data = ... # load from a blosc file
+               self.put_into_data(...) # load from a blosc file
            else:
-               raise ValueError("Unknown format '%s'" % fmt)
+               super().load(src, fmt)
            return self
 
        @action
@@ -246,7 +264,7 @@ Define `load` and `dump` action-methods
            elif fmt == 'blosc':
                # write self.data to a blosc file
            else:
-               raise ValueError("Unknown format '%s'" % fmt)
+               super().dum(dst, fmt)
            return self
 
 This lets you create explicit pipeline workflows:
@@ -272,15 +290,15 @@ This is extremely important if you read batch data from many files.
        @action
        def load(self, src, fmt='raw'):
            if fmt == 'raw':
-               self.put_into_data(self.indices, self._load_raw(src))
+               self.put_into_data(self._load_raw(src))
            elif fmt == 'blosc':
-               self.put_into_data(self.indices, self._load_blosc(src))
+               self.put_into_data(self._load_blosc(src))
            else:
                raise ValueError("Unknown format '%s'" % fmt)
            return self
 
        @inbatch_parallel(init='_init_io', post='_post_io', target='async')
-       async def _load_raw(self, item):
+       async def _load_raw(self, item, full_path):
            # load one data item from a raw format file
            return loaded_item
 
@@ -291,7 +309,7 @@ This is extremely important if you read batch data from many files.
            if any_action_failed(all_res):
                raise IOError("Could not load data.")
            else:
-               self._data = np.concatenate(all_res)
+               self.put_into_data(np.concatenate(all_res))
            return self
 
 Make all I/O in `async` methods even if there is nothing to parallelize
@@ -318,4 +336,4 @@ You may define your own `post`-method in order to check the result and process t
 API
 ---
 
-See :doc:`Batch API <../../dataset.batch>`.
+See :doc:`Batch API <../api/dataset.batch>`.

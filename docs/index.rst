@@ -12,7 +12,9 @@ Main features:
 * data processing actions
 * flexible model configuration
 * within batch parallelism
-* batch prefetching.
+* batch prefetching
+* ready to use ML models and proven NN architectures
+* convenient layers and helper functions to build custom models.
 
 
 Contents
@@ -23,7 +25,7 @@ Contents
 
    intro/intro
    intro/classes
-   dataset
+   api/dataset
 
 
 Basic usage

@@ -116,4 +116,4 @@ And then create a dataset with a new batch class:
 API
 ---
 
-See :doc:`Dataset API <../../dataset.dataset>`.
+See :doc:`Dataset API <../api/dataset.dataset>`.

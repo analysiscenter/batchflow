@@ -19,7 +19,7 @@ Let's look at an example. Here is a simple pipeline:
 
    some_pipeline = some_dataset.p.action1().action2().action3()
 
-At first, we run it without `prefetch`\ :
+At first, we run it without `prefetch`:
 
 .. code-block:: python
 

@@ -121,4 +121,4 @@ This method is called automatically from the :class:`~dataset.DatasetIndex` cons
 API
 ---
 
-See :doc:`Index API <../../dataset.index>`.
+See :doc:`Index API <../api/dataset.index>`.
