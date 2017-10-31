@@ -37,7 +37,7 @@ DECAYS = {
 
 
 class TFModel(BaseModel):
-    """ Base class for all tensorflow models
+    r""" Base class for all tensorflow models
 
     Attributes
     ----------
@@ -66,7 +66,8 @@ class TFModel(BaseModel):
 
     loss - a loss function, might be one of:
         - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
-        - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_ (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
+        - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
+          (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
         - callable
 
         Examples:
@@ -84,7 +85,8 @@ class TFModel(BaseModel):
         where name might be one of:
 
         - short name ('exp', 'invtime', 'naturalexp', 'const', 'poly')
-        - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ (e.g. 'exponential_decay')
+        - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
+          (e.g. 'exponential_decay')
         - a callable
 
         Examples:
@@ -101,7 +103,8 @@ class TFModel(BaseModel):
             where name might be one of:
 
             - short name (e.g. 'Adam', 'Adagrad')
-            - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ (e.g. 'FtlrOptimizer')
+            - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
+              (e.g. 'FtlrOptimizer')
             - a callable
 
         Examples:
@@ -111,7 +114,6 @@ class TFModel(BaseModel):
         - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
         - ``{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}``
         - ``{'optimizer': some_optimizer_fn}``
-
     """
 
     def __init__(self, *args, **kwargs):

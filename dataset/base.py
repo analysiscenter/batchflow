@@ -117,9 +117,11 @@ class Baseset:
         shuffle : bool, :class:`numpy.random.RandomState`, int or callable
             whether to randomize items order before splitting into subsets. Default is `False`. Can be
 
-            * `bool` : `False` - to make subsets in the order of indices in the index, or `True` - to make random subsets.
+            * `bool` : `False` - to make subsets in the order of indices in the index,
+                       `True` - to make random subsets.
             * a :class:`numpy.random.RandomState` object which has an inplace shuffle method.
-            * `int` - a random seed number which will be used internally to create a :class:`numpy.random.RandomState` object.
+            * `int` - a random seed number which will be used internally to create
+                      a :class:`numpy.random.RandomState` object.
             * callable - a function which gets an order and returns a shuffled order.
 
         Examples
