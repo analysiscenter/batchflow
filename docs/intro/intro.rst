@@ -111,5 +111,3 @@ Models
 Mostly, pipelines are needed to train machine learning models or predict using these models.
 
 See :doc:`Working with models <models>` to understand what a model is and how to use it within pipelines.
-
-If you work with TensorFlow, you might be interested to know :doc:`how to build TensorFlow models <tf_models>`.
