@@ -62,7 +62,7 @@ class TFModel(BaseModel):
 
     **Configuration**
 
-    session : dict - parameters for `session creation <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
+    session : dict - `session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
 
     loss - a loss function, might be one of:
         - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
