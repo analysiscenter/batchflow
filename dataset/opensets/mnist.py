@@ -11,7 +11,20 @@ from .. import DatasetIndex, parallel, any_action_failed
 
 
 class MNIST(ImagesOpenset):
-    """ MNIST dataset """
+    """ MNIST dataset
+
+    Examples
+    --------
+    .. code-block:: python
+
+        # download MNIST data, split into train/test and create dataset instances
+        mnist = MNIST()
+
+        # iterate over the dataset
+        for batch in mnist.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
+            # do something with a batch
+    """
+
     TRAIN_IMAGES_URL = "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
     TRAIN_LABELS_URL = "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz"
     TEST_IMAGES_URL = "http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz"

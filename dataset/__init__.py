@@ -1,4 +1,4 @@
-""" Dataset module implements Dataset, DatasetIndex, Preprocess and Batch classes"""
+""" Dataset enables a fast processing of large dataset using flexible pipelines """
 import sys
 
 from .base import Baseset
