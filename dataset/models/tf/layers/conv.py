@@ -98,7 +98,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                 args = dict(dropout_rate=dropout_rate, training=is_training)
 
             args = {**args, **kwargs.get(layer_name, {})}
-            tensor = layer_fn(tensor, **args)
+            tensor = layer_fn(inputs=tensor, **args)
 
     if context is not None:
         context.__exit__(None, None, None)
