@@ -6,18 +6,22 @@ def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='c
     """ Multi-dimensional max-pooling layer.
 
     For more detailes see tensorflow documentation:
-    https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling1d
-    https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling2d
-    https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling3d
+
+    - `<https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling1d>`_
+    - `<https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling2d>`_
+    - `<https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling3d>`_
 
     Parameters
     ----------
-    dim: int {1, 2, 3} - number of dimensions
+    dim: int {1, 2, 3}
+        number of dimensions
     inputs: tf.Tensor
     pool_size: int
     strides: int
-    padding: str {'same', 'valid'}
-    data_format: str {'channels_last', 'channels_first'}
+    padding: str
+        'same' or 'valid'
+    data_format: str
+        'channels_last' or 'channels_first'
     name: str
 
     Returns
@@ -38,18 +42,22 @@ def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_forma
     """ Multi-dimensional average-pooling layer.
 
     For more detailes see tensorflow documentation:
-    https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling1d
-    https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling2d
-    https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling3d
+
+    - `<https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling1d>`_
+    - `<https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling2d>`_
+    - `<https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling3d>`_
 
     Parameters
     ----------
-    dim: int {1, 2, 3} - number of dimensions
+    dim: int {1, 2, 3}
+        number of dimensions
     inputs: tf.Tensor
     pool_size: int
     strides: int
-    padding: str {'same', 'valid'}
-    data_format: str {'channels_last', 'channels_first'}
+    padding: str
+        'same' or 'valid'
+    data_format: str
+        'channels_last' or 'channels_first'
     name: str
 
     Returns
@@ -71,9 +79,11 @@ def global_average_pooling(dim, inputs, data_format='channels_last', name=None):
 
     Parameters
     ----------
-    dim: int {1, 2, 3} - number of dimensions
+    dim: int {1, 2, 3}
+        number of dimensions
     inputs: tf.Tensor
-    data_format: str {'channels_last', 'channels_first'}
+    data_format: str
+        'channels_last' or 'channels_first'
     name: str
 
     Returns
@@ -89,3 +99,30 @@ def global_average_pooling(dim, inputs, data_format='channels_last', name=None):
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
     return tf.reduce_mean(inputs, axis=axis, name=name)
+
+
+def global_max_pooling(dim, inputs, data_format='channels_last', name=None):
+    """ Multi-dimensional global max-pooling layer.
+
+    Parameters
+    ----------
+    dim: int {1, 2, 3}
+        number of dimensions
+    inputs: tf.Tensor
+    data_format: str
+        'channels_last' or 'channels_first'
+    name: str
+
+    Returns
+    -------
+    tf.Tensor
+    """
+    axis = 1 if data_format == 'channels_last' else 2
+    if dim == 2:
+        axis = [axis, axis+1]
+    elif dim == 3:
+        axis = [axis, axis+1, axis+2]
+    else:
+        raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
+
+    return tf.reduce_max(inputs, axis=axis, name=name)
