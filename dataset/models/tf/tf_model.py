@@ -37,69 +37,83 @@ DECAYS = {
 
 
 class TFModel(BaseModel):
-    """ Base class for all tensorflow models
+    r""" Base class for all tensorflow models
 
     Attributes
     ----------
     session : tf.Session
+
     graph : tf.Graph
+
     is_training : tf.Tensor
+
     global_step : tf.Tensor
+
     loss : tf.Tensor
+
     train_step : tf.Operation
 
     from BaseModel:
+
     name : str - a model name
+
     config : dict - configuration parameters
 
 
-    Configuration
-    -------------
-    session : dict - parameters for session creation (https://www.tensorflow.org/api_docs/python/tf/Session#__init__)
+    **Configuration**
+
+    session : dict - `session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
 
     loss - a loss function, might be one of:
-        - short name ('mse', 'ce', 'l1', 'cos', 'hinge', 'huber', 'logloss', 'dice')
-        - a function name from tf.losses (e.g. 'absolute_difference' or 'sparse_softmax_cross_entropy')
-        - a callable
+        - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+        - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
+          (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
+        - callable
 
         Examples:
-        ``{'loss': 'mse'}``
-        ``{'loss': 'sigmoid_cross_entropy'}``
-        ``{'loss': tf.losses.huber_loss}``
-        ``{'loss': external_loss_fn}``
+
+        - ``{'loss': 'mse'}``
+        - ``{'loss': 'sigmoid_cross_entropy'}``
+        - ``{'loss': tf.losses.huber_loss}``
+        - ``{'loss': external_loss_fn}``
 
     decay - a learning rate decay algorithm might be defined in one of three formats:
         - name
         - tuple (name, args)
-        - dict {'name': name, **other_args}
+        - dict {'name': name, \**args}
 
-        where name might be one of
+        where name might be one of:
+
         - short name ('exp', 'invtime', 'naturalexp', 'const', 'poly')
-        - a function name from tf.train (e.g. 'exponential_decay')
+        - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
+          (e.g. 'exponential_decay')
         - a callable
 
         Examples:
-           ``{'decay': 'exp'}``
-           ``{'decay': ('polynomial_decay', {'decay_steps':10000})}``
-           ``{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}``
 
-    optimizer - an optimizer might be defined in one of three formats
+        - ``{'decay': 'exp'}``
+        - ``{'decay': ('polynomial_decay', {'decay_steps':10000})}``
+        - ``{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}``
+
+    optimizer - an optimizer might be defined in one of three formats:
             - name
             - tuple (name, args)
-            - dict with keys 'name' and 'args'
+            - dict {'name': name, \**args}
 
-            where name might be one of
+            where name might be one of:
+
             - short name (e.g. 'Adam', 'Adagrad')
-            - a function name from tf.train (e.g. 'FtlrOptimizer')
+            - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
+              (e.g. 'FtlrOptimizer')
             - a callable
 
         Examples:
-            ``{'optimizer': 'Adam'}``
-            ``{'optimizer': ('Ftlr', {'learning_rate_power': 0})}``
-            ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
-            ``{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}``
-            ``{'optimizer': some_optimizer_fn}``
 
+        - ``{'optimizer': 'Adam'}``
+        - ``{'optimizer': ('Ftlr', {'learning_rate_power': 0})}``
+        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
+        - ``{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}``
+        - ``{'optimizer': some_optimizer_fn}``
     """
 
     def __init__(self, *args, **kwargs):
@@ -155,12 +169,12 @@ class TFModel(BaseModel):
     def build(self, *args, **kwargs):
         """ Build the model
 
-        1. Define is_training and global_step tensors
-        2. Define a model architecture by calling self._build(*args, **kwargs)
+        1. Define `is_training` and `global_step` tensors
+        2. Define a model architecture by calling ``self._build(*args, **kwargs)``
         3. Create a loss function
         4. Create an optimizer and define a train step
-        5. Set UPDATE_OPS control dependency on train step
-           (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
+        5. `Set UPDATE_OPS control dependency on train step
+           <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_
         6. Create a tensorflow session
         """
         with self.graph.as_default():
@@ -520,8 +534,10 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        fetches : an arbitrarily nested structure of `tf.Operation`s and `tf.Tensor`s
-        feed_dict : a dict with input data, where key is a placeholder name and value is a numpy value
+        fetches : tuple, list
+            `tf.Operation`s and `tf.Tensor`s to calculate
+        feed_dict : dict
+            input data, where key is a placeholder name and value is a numpy value
 
         Returns
         -------
@@ -529,7 +545,7 @@ class TFModel(BaseModel):
 
         See also
         --------
-        Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
+        `Tensorflow Session run <https://www.tensorflow.org/api_docs/python/tf/Session#run>`_
         """
         with self.graph.as_default():
             _feed_dict = self._fill_feed_dict(feed_dict, is_training=True)
@@ -545,8 +561,10 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        fetches : an arbitrarily nested structure of `tf.Operation`s and `tf.Tensor`s
-        feed_dict : a dict with input data, where key is a placeholder name and value is a numpy value
+        fetches : tuple, list
+            `tf.Operation`s and `tf.Tensor`s to calculate
+        feed_dict : dict
+            input data, where key is a placeholder name and value is a numpy value
 
         Returns
         -------
@@ -559,7 +577,7 @@ class TFModel(BaseModel):
 
         See also
         --------
-        Tensorflow Session run (https://www.tensorflow.org/api_docs/python/tf/Session#run)
+        `Tensorflow Session run <https://www.tensorflow.org/api_docs/python/tf/Session#run>`_
         """
         with self.graph.as_default():
             _feed_dict = self._fill_feed_dict(feed_dict, is_training=False)
@@ -572,13 +590,15 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        path : str - a path to a directory where all model files will be stored
+        path : str
+            a path to a directory where all model files will be stored
 
         Examples
         --------
         >>> tf_model = ResNet34()
 
-        Now train the model
+        Now save the model
+
         >>> tf_model.save('/path/to/models/resnet34')
 
         The model will be saved to /path/to/models/resnet34
@@ -596,9 +616,12 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        path : str - a directory where a model is stored
-        graph : str - a filename for a metagraph file
-        checkpoint : str - a checkpoint file name or None to load the latest checkpoint
+        path : str
+            a directory where a model is stored
+        graph : str
+            a filename for a metagraph file
+        checkpoint : str
+            a checkpoint file name or None to load the latest checkpoint
 
         Examples
         --------

@@ -8,9 +8,17 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, *args, **kwargs):
     Parameters
     ----------
     input_tensor : tf.Tensor
-    filters : int - number of filters in the ouput tensor
-    kernel_size : int - kernel size
+        input tensor
+    filters : int
+        number of filters in the ouput tensor
+    kernel_size : int
+        kernel size
     strides : int
+        convolution stride. Default is 1.
+
+    Returns
+    -------
+    tf.Tensor
     """
     up_tensor = tf.expand_dims(inputs, 1)
     conv_output = tf.layers.conv2d_transpose(up_tensor, filters=filters, kernel_size=(1, kernel_size),
