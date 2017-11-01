@@ -274,9 +274,9 @@ class TFModel(BaseModel):
 
             output_after[input_name] = tensor
 
-        output_before, output_after = [None if len(output) < 1 else output 
+        output_before, output_after = [None if len(output) < 1 else output
                                        for output in [output_before, output_after]]
-        
+
         return output_before, output_after
 
     def _make_transform(self, tensor, config):
