@@ -277,7 +277,7 @@ class TFModel(BaseModel):
 
             for pl_name in [name, input_name]:
                 if pl_name in operation_names:
-                    raise ValueError('tf operation with name {} is already exists'.format(pl_name))
+                    raise ValueError('tf operation with name {} already exists'.format(pl_name))
 
             if name == input_name:
                 raise ValueError('Placeholder "{}": name must not be the same as key'.format(name))
