@@ -284,4 +284,5 @@ Models zoo
 
 Writing your own model
 ----------------------
-To be done...
+
+- `How to write TensorFlow models <tf_model#how-to-write-a-custom-model>`_

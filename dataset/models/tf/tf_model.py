@@ -64,6 +64,8 @@ class TFModel(BaseModel):
 
     session : dict - `session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
 
+    inputs : dict - model inputs (see :meth:`._make_inputs`)
+
     loss - a loss function, might be one of:
         - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
         - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
@@ -138,33 +140,55 @@ class TFModel(BaseModel):
         """ Exit the model graph context """
         return self._graph_context.__exit__(exception_type, exception_value, exception_traceback)
 
-    def _build(self, *args, **kwargs):
+    def _build(self):
         """ Define a model architecture
 
-        This method must be implemented in ancestor classes:
-        inside it a tensorflow model must be defined (placeholders, layers, loss, etc)
+        #. Input data and its parameters should be defined in configuration under ``inputs`` key.
 
-        How to write your own _build method
-        -----------------------------------
-        1. Call `self._make_input()` or give proper names to all placeholders
-           (you will need them later in `train` and `predict`)
-        2. For dropout, batch norm, etc you might use a predefined `self.is_training` tensor.
-        3. For learning rate decay and training control you might use a predefined `self.global_step` tensor.
-        4. In many cases there is no need to write a loss function as it might be defined through config, e.g.
-        5. However, for that to work you have to define operations with names `targets` and `predictions`.
-           Their output tensors will be sent to a loss function.
-        6. If you need to define your own loss function, use losses from `tf.losses` or call `tf.losses.add_loss(...)`
-        7. In most cases there is no need to define an optimizer as well,
-           since it might be defined through config, e.g.:
-        8. If you need to use your own optimizer, assing `self.train_step` to the train step operation.
-           Don't forget about UPDATE_OPS control dependency
-           (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
+        #. Define names for all placeholders and call :meth:`._make_inputs`::
+
+            def _build():
+                names = ['images', 'labels']
+                placeholders, inputs = self._make_inputs(names)
+
+           If config does not contain any name from ``names``, :exc:`ValueError` is raised.
+
+        #. ``placeholders`` and ``inputs`` are dicts with the same keys as ``inputs``.
+           They contain all placeholders and tensors after reshaping/transformations, correspondingly.
+           Use ``inputs`` to build a model. And names will also be needed later in
+           ``train`` and ``predict`` methods.
+
+        #. You might want to use a convenient multidimensional :func:`~.layers.conv_block`,
+           as well as :func:`~.layers.global_average_pooling`,
+           :func:`~.layers.mip`, or other predefined layers.
+           Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
+
+        #. For dropout, batch norm, etc you might use a predefined ``self.is_training`` tensor.
+
+        #. For decay and training control you might use a predefined ``self.global_step`` tensor.
+
+        #. In many cases there is no need to write a loss function, learning decay and optimizer
+           as they might be defined through config.
+
+        #. For a cofigured loss to work one of the inputs should have a name ``targets`` and
+           one of the tensors in your model should have a name ``predictions``.
+           They will be used in a loss function.
+
+        #. If you have defined your own loss function, call `tf.losses.add_loss(...)
+           <https://www.tensorflow.org/api_docs/python/tf/losses/add_loss>`_.
+
+        #. If you need to use your own optimizer, assign ``self.train_step`` to the train step operation.
+           Don't forget about `UPDATE_OPS control dependency
+           <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_.
 
         Notes
         -----
         This method is executed within a self.graph context
         """
         _ = args, kwargs
+        input_names = []
+        placeholders, inputs = self._make_inputs(input_names)
+
 
     def build(self, *args, **kwargs):
         """ Build the model
@@ -182,8 +206,7 @@ class TFModel(BaseModel):
             self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
             self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
-            input_dict_before, input_dict_after = self._make_inputs()
-            self._build(input_dict_before, input_dict_after)
+            self._build()
 
             self._make_loss()
             self.store_to_attr('loss', tf.losses.get_total_loss())
@@ -201,24 +224,24 @@ class TFModel(BaseModel):
             self.session = tf.Session(**session_config)
             self.session.run(tf.global_variables_initializer())
 
-    def _make_inputs(self):
+    def _make_inputs(self, names=None):
         """ Make model input data using config
 
         In the config's inputs section it looks for names and creates placeholders required, as well as
         some typical transormations (like one-hot-encoding and reshaping).
 
-        Parameters
-        ----------
-        names : a sequence of str - placeholder names
+        **Configuration**
 
-        Configuration
-        -------------
         inputs : dict
-            key : str - a placeholder name before reshaping and transformation
-            values : dict or tuple - each input's config
+            - key : str
+                a placeholder name
+            - values : dict or tuple
+                each input's config
 
         Input config:
-        dtype : str or tf.DType (by default 'float32') - data type
+
+        dtype : str or tf.DType (by default 'float32')
+            data type
 
         shape : int, tuple, list or None (default)
             a desired tensor shape which includes the number of channels/classes and doesn't include a batch size.
@@ -238,9 +261,10 @@ class TFModel(BaseModel):
         dtype, shape, data_format, transform, name.
         If an item is None, the default value will be used instead.
 
-        Returns
-        -------
-        None or dict - where key is a placeholder name and a value is a corresponding tensor after configuration
+        Parameters
+        ----------
+        names : list
+            placeholder names that are expected in the config inputs section
 
         Raises
         ------
@@ -248,39 +272,44 @@ class TFModel(BaseModel):
 
         Returns
         -------
-        output_before : dict
-            key : str - a placeholder name before reshaping and transformation
-            value : tf.Tensor - placeholder before reshaping and transformations
-        output_after : dict
-            key : str - a placeholder name before reshaping and transformation
-            value : tf.Tensor - placeholder after reshaping and transformations
+        placeholders : dict
+            key : str
+                a placeholder name
+            value : tf.Tensor
+                placeholder tensor
+        tensors : dict
+            key : str
+                a placeholder name
+            value : tf.Tensor
+                placeholder tensor after reshaping and transformations
         """
-        names = ('dtype', 'shape', 'data_format', 'transform', 'name')
         config = self.get_from_config('inputs') or {}
         config = copy1(config)
-        output_before = dict()
-        output_after = dict()
 
+        names = names or []
+        missing_names = set(names) - set(config.keys())
+        if len(missing_names) > 0:
+            raise ValueError("Inputs should contain {} names".format(missing_names))
+
+        placeholder_names = set(config.keys())
+        tensor_names = set(x.get('name') for x in config.values() if x.get('name'))
+        wrong_names = placeholder_names & tensor_names
+        if len(wrong_names) > 0:
+            raise ValueError('Inputs contain duplicate names:', wrong_names)
+
+        param_names = ('dtype', 'shape', 'data_format', 'transform', 'name')
         defaults = dict(dtype='float32', data_format='channels_last')
+
+        placeholders = dict()
+        tensors = dict()
 
         for input_name, input_config in config.items():
             if isinstance(input_config, (tuple, list)):
-                input_config = input_config + type(input_config)([None for _ in names])
-                input_config = input_config[:len(names)]
-                input_config = dict(zip(names, input_config))
+                input_config = input_config + type(input_config)([None for _ in param_names])
+                input_config = input_config[:len(param_names)]
+                input_config = dict(zip(param_names, input_config))
                 input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
-
-            operation_names = [op.name for op in tf.get_default_graph().get_operations()]
-
-            name = input_config.get('name')
-
-            for pl_name in [name, input_name]:
-                if pl_name in operation_names:
-                    raise ValueError('tf operation with name {} already exists'.format(pl_name))
-
-            if name == input_name:
-                raise ValueError('Placeholder "{}": name must not be the same as key'.format(name))
 
             shape = input_config.get('shape')
             if isinstance(shape, int):
@@ -288,21 +317,19 @@ class TFModel(BaseModel):
 
             dtype = input_config.get('dtype')
             tensor = tf.placeholder(dtype, name=input_name)
-            output_before[input_name] = tensor
-            tensor = self._make_transform(tensor, input_config)
+            placeholders[input_name] = tensor
 
+            tensor = self._make_transform(tensor, input_config)
             if isinstance(shape, (list, tuple)):
                 tensor = tf.reshape(tensor, [-1] + list(shape))
 
+            name = input_config.get('name')
             if name is not None:
                 tensor = tf.identity(tensor, name=name)
 
-            output_after[input_name] = tensor
+            tensors[input_name] = tensor
 
-        output_before, output_after = [None if len(output) < 1 else output
-                                       for output in [output_before, output_after]]
-
-        return output_before, output_after
+        return placeholders, tensors
 
     def _make_transform(self, tensor, config):
         if config is not None:
@@ -448,6 +475,9 @@ class TFModel(BaseModel):
         else:
             raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
 
+    def num_classes(self, tensor_name):
+        """ Return the  number of classes """
+        return self.num_channels(tensor_name)
 
     def spatial_dim(self, tensor_name):
         """ Return the tensor spatial  dimensionality (without channels dimension)

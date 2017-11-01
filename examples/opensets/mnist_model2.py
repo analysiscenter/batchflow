@@ -10,26 +10,22 @@ from dataset import action, model, B, C, F, V
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
-from dataset.models.tf.layers import conv2d_block, flatten
+from dataset.models.tf.layers import conv2d_block, global_average_pooling
 
 
 class MyModel(TFModel):
-    def _build(self, *args, **kwargs):
-        images_shape = [None] + list(self.get_from_config('images_shape'))
+    def _build(self):
+        names = ['images', 'labels']
+        placeholders, inputs = self._make_inputs(names)
 
-        input_images = tf.placeholder("uint8", images_shape, name='input_images')
-        input_labels = tf.placeholder("uint8", [None], name='input_labels')
-        images = tf.to_float(input_images)
+        num_classes = self.num_classes('labels')
+        x = conv2d_block(inputs['images'], 32, 3, layout='cnap', name='layer1')
+        x = conv2d_block(x, 64, 3, layout='cnap', name='layer2')
+        #x = conv2d_block(x, 128, 3, layout='cnap', name='layer3')
+        x = conv2d_block(x, num_classes, 3, layout='cnap', name='layer4')
+        x = global_average_pooling(2, x, name='predictions')
 
-        features = conv2d_block(images, 32, 3, layout='canp', name='layer1')
-        features = flatten(features)
-
-        layer1 = tf.layers.dense(features, units=512, activation=tf.nn.relu)
-        model_output = tf.layers.dense(layer1, units=10)
-        predictions = tf.identity(model_output, name='predictions')
-
-        targets = tf.one_hot(input_labels, depth=10, name='targets')
-        predicted_labels = tf.argmax(model_output, axis=1, name='predicted_labels')
+        predicted_labels = tf.argmax(x, axis=1, name='predicted_labels')
 
 
 if __name__ == "__main__":
@@ -44,15 +40,16 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_variable('input_tensor_name', 'input_images')
+                .init_variable('input_tensor_name', 'images')
                 .init_model('dynamic', MyModel, 'conv',
                             config={'session': {'config': tf.ConfigProto(allow_soft_placement=True)},
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
-                                    'images_shape': F(lambda batch: batch.images.shape[1:])})
+                                    'inputs': dict(images={'shape': (28, 28, 1)},
+                                                   labels={'shape': 10, 'dtype': 'uint8', 'transform': 'ohe', 'name': 'targets'})})
                 .train_model('conv', fetches=['loss', 'predicted_labels'],
                                      feed_dict={V('input_tensor_name'): B('images'),
-                                                'input_labels': B('labels')},
+                                                'labels': B('labels')},
                              save_to=[V('current_loss'), V('pred_label')])
                 .print_variable('current_loss')
                 .update_variable('loss_history', V('current_loss'), mode='a'))
