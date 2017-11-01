@@ -169,21 +169,21 @@ class TFModel(BaseModel):
     def build(self, *args, **kwargs):
         """ Build the model
 
-        1. Define is_training and global_step tensors
-        2. Create input placeholders (see _make_inputs doc-string)
-        3. Define a model architecture by calling self._build(*args, **kwargs)
+        1. Define `is_training` and `global_step` tensors
+        2. Create placeholders (see _make_inputs docstring)
+        3. Define a model architecture by calling ``self._build(*args, **kwargs)``
         4. Create a loss function
         5. Create an optimizer and define a train step
-        6. Set UPDATE_OPS control dependency on train step
-           (see https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization)
+        6. `Set UPDATE_OPS control dependency on train step
+           <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_
         7. Create a tensorflow session
         """
         with self.graph.as_default():
             self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
             self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
-            input_dicts = self._make_inputs()
-            self._build(*input_dicts)
+            input_dict_before, input_dict_after = self._make_inputs()
+            self._build(input_dict_before, input_dict_after)
 
             self._make_loss()
             self.store_to_attr('loss', tf.losses.get_total_loss())
@@ -248,11 +248,12 @@ class TFModel(BaseModel):
 
         Returns
         -------
-        output_before : dict of tf.Tensors
-            dict of placeholders before reshaping and transformations with placeholders names as keys
-        output_after : dict of tf.Tensors
-            dict of placeholders after reshaping and transformations where keys are names of corresponding
-            placeholders before reshaping and transformations
+        output_before : dict
+            key : str - a placeholder name before reshaping and transformation
+            value : tf.Tensor - placeholder before reshaping and transformations
+        output_after : dict
+            key : str - a placeholder name before reshaping and transformation
+            value : tf.Tensor - placeholder after reshaping and transformations
         """
         names = ('dtype', 'shape', 'data_format', 'transform', 'name')
         config = self.get_from_config('inputs') or {}
@@ -270,6 +271,17 @@ class TFModel(BaseModel):
                 input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
+            operation_names = [op.name for op in tf.get_default_graph().get_operations()]
+
+            name = input_config.get('name')
+
+            for pl_name in [name, input_name]:
+                if pl_name in operation_names:
+                    raise ValueError('tf operation with name {} is already exists'.format(pl_name))
+
+            if name == input_name:
+                raise ValueError('Placeholder "{}": name after transformation must not be the same as before'.format(name))
+
             shape = input_config.get('shape')
             if isinstance(shape, int):
                 input_config['shape'] = (shape,)
@@ -281,11 +293,6 @@ class TFModel(BaseModel):
 
             if isinstance(shape, (list, tuple)):
                 tensor = tf.reshape(tensor, [-1] + list(shape))
-
-            name = input_config.get('name')
-
-            if name == input_name:
-                raise ValueError('Placeholder "{}": name must not be the same as key'.format(name))
 
             if name is not None:
                 tensor = tf.identity(tensor, name=name)
