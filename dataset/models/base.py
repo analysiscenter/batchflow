@@ -43,6 +43,7 @@ class BaseModel:
         -------
         None or dict - where key is a variable name and a value is a corresponding variable after configuration
         """
+        _ = names
         return None
 
     def build(self, *args, **kwargs):
