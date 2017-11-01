@@ -280,7 +280,7 @@ class TFModel(BaseModel):
                     raise ValueError('tf operation with name {} is already exists'.format(pl_name))
 
             if name == input_name:
-                raise ValueError('Placeholder "{}": name after transformation must not be the same as before'.format(name))
+                raise ValueError('Placeholder "{}": name must not be the same as key'.format(name))
 
             shape = input_config.get('shape')
             if isinstance(shape, int):
