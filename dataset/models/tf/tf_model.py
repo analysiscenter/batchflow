@@ -267,7 +267,7 @@ class TFModel(BaseModel):
             name = input_config.get('name')
 
             if name == input_name:
-                raise ValueError('Placeholder {}: name must not be the same as key'.format(name))
+                raise ValueError('Placeholder "{}": name must not be the same as key'.format(name))
 
             if name is not None:
                 tensor = tf.identity(tensor, name=name)
