@@ -1,3 +1,6 @@
+ # pylint: disable=super-init-not-called
+""" Contains base class for all keras models. """
+
 import functools
 import numpy as np
 from keras.models import Model
