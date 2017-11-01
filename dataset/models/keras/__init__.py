@@ -1,1 +1,1 @@
-from .base import KerasModel
+from .keras_model import KerasModel
