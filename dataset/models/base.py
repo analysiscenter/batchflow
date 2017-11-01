@@ -32,7 +32,7 @@ class BaseModel:
         """ Return a variable from config or a default value """
         return self.config.get(variable, default)
 
-    def _make_inputs(self):
+    def _make_inputs(self, names=None):
         """ Make model input data using config
 
         Parameters

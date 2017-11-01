@@ -185,9 +185,9 @@ class TFModel(BaseModel):
         -----
         This method is executed within a self.graph context
         """
-        _ = args, kwargs
         input_names = []
         placeholders, inputs = self._make_inputs(input_names)
+        _ = args, kwargs, placeholders, inputs
 
 
     def build(self, *args, **kwargs):
