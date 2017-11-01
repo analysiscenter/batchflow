@@ -251,7 +251,7 @@ class TFModel(BaseModel):
         output_before : dict of tf.Tensors
             dict of placeholders before reshaping and transformations with placeholders names as keys
         output_after : dict of tf.Tensors
-            dict of placeholders after reshaping and transformations where keys are names of corresponding 
+            dict of placeholders after reshaping and transformations where keys are names of corresponding
             placeholders before reshaping and transformations
         """
         names = ('dtype', 'shape', 'data_format', 'transform', 'name')
