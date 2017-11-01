@@ -1,4 +1,5 @@
  # pylint: disable=super-init-not-called
+ # pylint: disable=unused-argument
 """ Contains base class for all keras models. """
 
 import functools
