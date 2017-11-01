@@ -168,8 +168,8 @@ class TFModel(BaseModel):
             self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
             self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
-            inputs = self._make_inputs()
-            self._build(inputs)
+            input_dicts = self._make_inputs()
+            self._build(*input_dicts)
 
             self._make_loss()
             self.store_to_attr('loss', tf.losses.get_total_loss())
@@ -239,7 +239,8 @@ class TFModel(BaseModel):
         names = ('dtype', 'shape', 'data_format', 'transform', 'name')
         config = self.get_from_config('inputs') or {}
         config = copy1(config)
-        output = dict()
+        output_before = dict()
+        output_after = dict()
 
         defaults = dict(dtype='float32', data_format='channels_last')
 
@@ -257,20 +258,26 @@ class TFModel(BaseModel):
 
             dtype = input_config.get('dtype')
             tensor = tf.placeholder(dtype, name=input_name)
-            output[input_name] = tensor
+            output_before[input_name] = tensor
             tensor = self._make_transform(tensor, input_config)
 
             if isinstance(shape, (list, tuple)):
                 tensor = tf.reshape(tensor, [-1] + list(shape))
 
             name = input_config.get('name')
+
+            if name == input_name:
+                raise ValueError('Placeholder {}: name must not be the same as key'.format(name))
+
             if name is not None:
                 tensor = tf.identity(tensor, name=name)
 
-            output[name] = tensor
+            output_after[input_name] = tensor
 
-        output = None if len(output) < 1 else output
-        return output
+        output_before, output_after = [None if len(output) < 1 else output 
+                                      for output in [output_before, output_after]]
+        
+        return output_before, output_after
 
     def _make_transform(self, tensor, config):
         if config is not None:
