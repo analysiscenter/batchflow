@@ -1,6 +1,7 @@
 """ Contains basic Batch classes """
 
 import os
+import threading
 
 try:
     import dill
@@ -31,12 +32,14 @@ from .components import MetaComponentsTuple
 class Batch(BaseBatch):
     """ The core Batch class """
     _item_class = None
+    components = None
 
     def __init__(self, index, preloaded=None, *args, **kwargs):
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
         super().__init__(index, *args, **kwargs)
         self._preloaded = preloaded
+        self._preloaded_lock = threading.Lock()
 
     @classmethod
     def from_data(cls, index, data):
@@ -55,12 +58,18 @@ class Batch(BaseBatch):
     @classmethod
     def merge(cls, batches, batch_size=None):
         """ Merge several batches to form a new batch of a given size
-        Args:
-            batches - a tuple of batches to merge
-            batch_size - if None, just merge all batches into one batch (the rest will be None),
-                         if an integer, then make one batch of batch_size and a batch with the rest of data
-        Return:
-            a tuple of two batches
+
+        Parameters
+        ----------
+        batches : tuple of batches
+
+        batch_size : int or None
+            if `None`, just merge all batches into one batch (the rest will be `None`),
+            if `int`, then make one batch of `batch_size` and a batch with the rest of data.
+
+        Returns
+        -------
+        batch, rest : tuple of two batches
         """
         def _make_index(data):
             return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
@@ -120,10 +129,14 @@ class Batch(BaseBatch):
 
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
-        Args:
-            dataset: could be a dataset or a Dataset class
-        Output:
-            an instance of a class specified by `dataset` arg, preloaded with this batch data
+
+        Parameters
+        ----------
+        dataset: could be a dataset or a Dataset class
+
+        Returns
+        -------
+        an instance of a class specified by `dataset` arg, preloaded with this batch data
         """
         if dataset is None:
             dataset_class = Dataset
@@ -140,8 +153,7 @@ class Batch(BaseBatch):
         """ Return an array-like with the indices """
         if isinstance(self.index, DatasetIndex):
             return self.index.indices
-        else:
-            return self.index
+        return self.index
 
     def __len__(self):
         return len(self.index)
@@ -151,14 +163,11 @@ class Batch(BaseBatch):
         """ Return batch data """
         if self._data is None and self._preloaded is not None:
             # load data the first time it's requested
-            self.load(self._preloaded)
+            with self._preloaded_lock:
+                if self._data is None and self._preloaded is not None:
+                    self.load(self._preloaded)
         res = self._data if self.components is None else self._data_named
         return res if res is not None else self._empty_data
-
-    @property
-    def components(self):
-        """ Return data components names """
-        return None
 
     def make_item_class(self):
         """ Create a class to handle data components """
@@ -181,38 +190,52 @@ class Batch(BaseBatch):
     def get_pos(self, data, component, index):
         """ Return a position in data for a given index
 
-        Parameters:
-            data: if None, get_pos should return a position in self.data
-            components: could be one of [None, int or string]
-                None: data has no components (e.g. just an array or pandas.DataFrame)
-                int: a position of a data component, when components names are not defined
-                str: a name of a data component
-            index: an index
-        Returns:
-            int - a position in a batch data where an item with a given index is stored
-        It is used to read / write data in a given component:
+        Parameters
+        ----------
+        data : None or data
+            if `None`, should return a position in `self.data`
+
+        components : None, int or str
+            - None - data has no components (e.g. just an array or pandas.DataFrame)
+            - int - a position of a data component, when components names are not defined
+                (e.g. data is a tuple)
+            - str - a name of a data component
+
+        index : any - an index id
+
+        Returns
+        -------
+        int - a position in a batch data where an item with a given index is stored
+
+        Notes
+        -----
+        It is used to read / write data from / to a given component::
+
             batch_data = data.component[pos]
             data.component[pos] = new_data
 
-        Examples:
-            if self.data holds a numpy array, then get_pos(None, None, index) should
-            just return self.index.get_pos(index)
-            if self.data.images contains BATCH_SIZE images as a numpy array,
-                then get_pos(None, 'images', index) should return self.index.get_pos(index)
-            if self.data.labels is a dict {index: label}, then get_pos(None, 'labels', index) should return index.
+        if `self.data` holds a numpy array, then get_pos(None, None, index) should
+        just return `self.index.get_pos(index)`
 
-            if data is not None, then you need to know in advance how to get a position for a given index.
-            For instance, data is a large numpy array, a batch is a subset of this array and
-            batch.index holds row numbers from a large arrays.
-            Thus, get_pos(data, None, index) should just return index.
+        if `self.data.images` contains BATCH_SIZE images as a numpy array,
+        then `get_pos(None, 'images', index)` should return `self.index.get_pos(index)`
 
-            A more complicated example of data:
-            - batch represent small crops of large images
-            - self.data.source holds a few large images (e.g just 5 items)
-            - self.data.coords holds coordinates for crops (e.g. it contains 100 items)
-            - self.data.image_no holds an array of image numbers for each crop (so it also contains 100 items)
-            then get_pos(None, 'source', index) should return self.data.image_no[self.index.get_pos(index)].
-            Whilst, get_pos(data, 'source', index) should return data.image_no[index].
+        if `self.data.labels` is a dict {index: label}, then `get_pos(None, 'labels', index)` should return index.
+
+        if `data` is not `None`, then you need to know in advance how to get a position for a given index.
+
+        For instance, `data` is a large numpy array, and a batch is a subset of this array and
+        `batch.index` holds row numbers from a large arrays.
+        Thus, `get_pos(data, None, index)` should just return index.
+
+        A more complicated example of data:
+
+        - batch represent small crops of large images
+        - `self.data.source` holds a few large images (e.g just 5 items)
+        - `self.data.coords` holds coordinates for crops (e.g. 100 items)
+        - `self.data.image_no` holds an array of image numbers for each crop (so it also contains 100 items)
+        then `get_pos(None, 'source', index)` should return `self.data.image_no[self.index.get_pos(index)]`.
+        Whilst, `get_pos(data, 'source', index)` should return `data.image_no[index]`.
         """
         _ = component
         if data is None:
@@ -223,7 +246,8 @@ class Batch(BaseBatch):
 
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
-            return getattr(self.data, name)
+            attr = getattr(self.data, name)
+            return attr
         else:
             raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
@@ -241,13 +265,15 @@ class Batch(BaseBatch):
         else:
             super().__setattr__(name, value)
 
-    def put_into_data(self, items, data, components=None):
-        """ Load data into _data property """
+    def put_into_data(self, data, components=None):
+        """ Load data into :attr:`_data` property """
         if self.components is None:
             _src = data
         else:
             _src = data if isinstance(data, tuple) else tuple([data])
-        _src = self.get_items(items, _src)
+
+        _src = self.get_items(self.indices, _src)
+
         if components is None:
             self._data = _src
         else:
@@ -272,8 +298,8 @@ class Batch(BaseBatch):
         elif isinstance(_data, dict):
             res = dict(zip(_data.keys(), (_data[comp][self.get_pos(data, comp, index)] for comp in _data)))
         else:
-            ix = self.get_pos(data, None, index)
-            res = _data[ix]
+            pos = self.get_pos(data, None, index)
+            res = _data[pos]
         return res
 
     def get(self, item=None, component=None):
@@ -310,19 +336,6 @@ class Batch(BaseBatch):
         _ = self.data, args, kwargs
         return [[]]
 
-    def infer_dtype(self, data=None):
-        """ Detect dtype of batch data """
-        if data is None:
-            data = self.data
-        return np.asarray(data).dtype.name
-
-    def get_dtypes(self):
-        """ Return dtype for batch data """
-        if isinstance(self.data, tuple):
-            return tuple(self.infer_dtype(item) for item in self.data)
-        else:
-            return self.infer_dtype(self.data)
-
     def get_model_by_name(self, model_name):
         """ Return a model specification given its name """
         return ModelDirectory.get_model_by_name(model_name, batch=self)
@@ -343,16 +356,26 @@ class Batch(BaseBatch):
     def apply_transform(self, ix, dst, src, func, *args, **kwargs):
         """ Apply a function to each item in the batch
 
-        Args:
-            dst: the destination to put the result in, can be:
-                 - a string - a component name, e.g. 'images' or 'masks'
-                 - an array-like - a numpy-array, list, etc
-            src: the source to get data from, can be:
-                 - a string - a component name, e.g. 'images' or 'masks'
-                 - an array-like - a numpy-array, a list, etc
-            func: a callable - a function to apply to each item from the source
+        Parameters
+        ----------
+        dst : str or array
+            the destination to put the result in, can be:
 
-        apply_transform does the following:
+            - str - a component name, e.g. 'images' or 'masks'
+            - array-like - a numpy-array, list, etc
+
+        src : str or array
+            the source to get data from, can be:
+
+            - str - a component name, e.g. 'images' or 'masks'
+            - array-like - a numpy-array, list, etc
+
+        func : callable
+            a function to apply to each item from the source
+
+        Notes
+        -----
+        apply_transform does the following (but in parallel):
             for item in batch:
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
@@ -381,15 +404,24 @@ class Batch(BaseBatch):
     def apply_transform_all(self, dst, src, func, *args, **kwargs):
         """ Apply a function the whole batch at once
 
-        Args:
-            dst: the destination to put the result in, can be:
-                 - a string - a component name, e.g. 'images' or 'masks'
-                 - an array-like - a numpy-array, list, etc
-            src: the source to get data from, can be:
-                 - a string - a component name, e.g. 'images' or 'masks'
-                 - an array-like - a numpy-array, a list, etc
-            func: a callable - a function to apply to each item in the source component
+        Parameters
+        ----------
+        dst : str or array
+            the destination to put the result in, can be:
 
+            - str - a component name, e.g. 'images' or 'masks'
+            - array-like - a numpy-array, list, etc
+        src : str or array
+            the source to get data from, can be:
+
+            - str - a component name, e.g. 'images' or 'masks'
+            - array-like - a numpy-array, list, etc
+
+        func : callable
+            a function to apply to each item from the source
+
+        Notes
+        -----
         apply_transform_all does the following:
             self.dst = func(self.src, *args, **kwargs)
         """
@@ -481,6 +513,7 @@ class Batch(BaseBatch):
     @action(use_lock='__dump_table_lock')
     def _dump_table(self, dst, fmt='feather', components=None, *args, **kwargs):
         """ Save batch data to table formats
+
         Args:
           dst: str - a path to dump into
           fmt: str - format: feather, hdf5, csv
@@ -518,11 +551,28 @@ class Batch(BaseBatch):
 
 
     @action
-    def load(self, src=None, fmt=None, components=None, *args, **kwargs):  #pylint: disable=arguments-differ
-        """ Load data from another array or a file """
+    def load(self, src=None, fmt=None, components=None, *args, **kwargs):
+        """ Load data from another array or a file.
+
+        Parameters
+        ----------
+        src :
+            a source (e.g. an array or a file name)
+
+        fmt : str
+            a source format, one of None, 'blosc', 'csv', 'hdf5', 'feather'
+
+        components : None or str or tuple of str
+            components to load
+
+        *args :
+            other parameters are passed to format-specific loaders
+        **kwargs :
+            other parameters are passed to format-specific loaders
+        """
         components = [components] if isinstance(components, str) else components
         if fmt is None:
-            self.put_into_data(self.indices, src, components)
+            self.put_into_data(src, components)
         elif fmt == 'blosc':
             self._load_blosc(src, components=components, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:
@@ -532,8 +582,26 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def dump(self, dst=None, fmt=None, components=None, *args, **kwargs):    #pylint: disable=arguments-differ
-        """ Load data from another array or a file """
+    def dump(self, dst=None, fmt=None, components=None, *args, **kwargs):
+        """ Save data to another array or a file.
+
+        Parameters
+        ----------
+        dst :
+            a destination (e.g. an array or a file name)
+
+        fmt : str
+            a destination format, one of None, 'blosc', 'csv', 'hdf5', 'feather'
+
+        components : None or str or tuple of str
+            components to load
+
+        *args :
+            other parameters are passed to format-specific writers
+
+        *kwargs :
+            other parameters are passed to format-specific writers
+        """
         components = [components] if isinstance(components, str) else components
         if fmt is None:
             if components is not None and len(components) > 1:
@@ -547,6 +615,11 @@ class Batch(BaseBatch):
         else:
             raise ValueError("Unknown format " + fmt)
         return self
+
+    @action
+    def save(self, *args, **kwargs):
+        """ Save batch data to a file (an alias for dump method)"""
+        return self.dump(*args, **kwargs)
 
 
 class ArrayBatch(Batch):

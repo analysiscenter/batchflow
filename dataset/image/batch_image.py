@@ -86,9 +86,7 @@ def preserve_shape_numba(image_shape, shape, crop=CROP_CENTER):
 
 class BasicImagesBatch(Batch):
     """ Batch class for 2D images """
-    @property
-    def components(self):
-        return "images", "labels"
+    components = "images", "labels"
 
     def assemble(self, all_res, *args, **kwargs):
         """ Assemble the batch after a parallel action """
@@ -216,9 +214,8 @@ class BasicImagesBatch(Batch):
             _angle = np.random.uniform(*angle)
             preserve_shape = kwargs.pop('preserve_shape', True)
             return self._rotate_one(ix, component, _angle, preserve_shape=preserve_shape, **kwargs)
-        else:
-            image = self.get(ix, component)
-            return image
+        image = self.get(ix, component)
+        return image
 
     @action
     def flip(self, axis=None):
@@ -268,13 +265,13 @@ class ImagesBatch(BasicImagesBatch):
         return self
 
     @action
-    def convert_to_pil(self):
+    def convert_to_pil(self, component='images'):
         """ Convert batch data to PIL.Image format """
         if self.images is None:
             new_images = None
         else:
             new_images = np.asarray(list(None for _ in self.indices))
-            self.apply_transform(new_images, 'images', PIL.Image.fromarray)
+            self.apply_transform(new_images, component, PIL.Image.fromarray)
         new_data = (new_images, self.labels)
         new_batch = ImagesPILBatch(np.arange(len(self)), preloaded=new_data)
         return new_batch
@@ -431,13 +428,15 @@ class ImagesPILBatch(BasicImagesBatch):
         origin_x, origin_y = origin
         shape = shape if shape is not None else (image.width - origin_x, image.height - origin_y)
         box = origin_x, origin_y, origin_x + shape[0], origin_y + shape[1]
-        return image.crop(box)
+        new_image = image.crop(box)
+        return new_image
 
     @inbatch_parallel('indices', post='assemble')
     def _crop(self, ix, component='images', origin=None, shape=None):
         """ Crop all images """
         image = self.get(ix, component)
-        return self._crop_image(image, origin, shape)
+        new_image = self._crop_image(image, origin, shape)
+        return new_image
 
     @inbatch_parallel('indices', post='assemble')
     def _random_crop(self, ix, component='images', shape=None):
@@ -445,7 +444,8 @@ class ImagesPILBatch(BasicImagesBatch):
         image = self.get(ix, component)
         origin_x = np.random.randint(0, image.width - shape[0])
         origin_y = np.random.randint(0, image.height - shape[1])
-        return self._crop_image(image, (origin_x, origin_y), shape)
+        new_image = self._crop_image(image, (origin_x, origin_y), shape)
+        return new_image
 
     @action
     @inbatch_parallel('indices', post='assemble')

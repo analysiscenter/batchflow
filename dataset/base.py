@@ -22,63 +22,82 @@ class Baseset:
 
     @property
     def index(self):
-        """ Return the index """
+        """:class:`dataset.DatasetIndex` : the dataset's index """
         return self._index
 
     @property
     def indices(self):
-        """ Return an array-like with the indices """
+        """:class:`numpy.ndarray` : an array with the indices """
         if isinstance(self.index, Baseset):
             return self.index.indices
-        else:
-            return self.index
+        return self.index
 
     def __len__(self):
         if self.indices is None:
             return 0
-        else:
-            return len(self.indices)
+        return len(self.indices)
 
     @property
-    def is_splitted(self):
-        """ True if dataset was splitted into train / test / validation sub-datasets """
-        return self.train is not None
+    def is_split(self):
+        """bool : True if dataset has been split into train / test / validation subsets """
+        return self.train is not None or self.test is not None or self.validation is not None
 
     def calc_cv_split(self, shares=0.8):
         """ Calculate split into train, test and validation subsets
 
-        Return: a tuple which contains number of items in train, test and validation subsets
+        Parameters
+        ----------
+        shares : float or a sequence of floats
+            A share of train, test and validation subset respectively.
 
-        Usage:
-           # split into train / test in 80/20 ratio
-           bs.calc_cv_split()
-           # split into train / test / validation in 60/30/10 ratio
-           bs.calc_cv_split([0.6, 0.3])
-           # split into train / test / validation in 50/30/20 ratio
-           bs.calc_cv_split([0.5, 0.3, 0.2])
+        Returns
+        -------
+        a tuple which contains number of items in train, test and validation subsets
+
+        Raises
+        ------
+        ValueError
+            * if shares has more than 3 items
+            * if sum of shares is greater than 1
+            * if this set does not have enough items to split
+
+        Examples
+        --------
+        Split into train / test in 80/20 ratio
+
+        >>> some_set.calc_cv_split()
+
+        Split into train / test / validation in 60/30/10 ratio
+
+        >>> some_set.calc_cv_split([0.6, 0.3])
+
+        Split into train / test / validation in 50/30/20 ratio
+
+        >>> some_set.calc_cv_split([0.5, 0.3, 0.2])
         """
-        _shares = np.array(shares).ravel() # pylint: disable=no-member
+        _shares = [shares] if isinstance(shares, (int, float)) else shares
+        _shares = _shares if len(_shares) > 1 else _shares + [.0]
+        _shares = np.array(_shares).ravel()         # pylint: disable=no-member
+        n_items = len(self)
 
         if _shares.shape[0] > 3:
             raise ValueError("Shares must have no more than 3 elements")
         if _shares.sum() > 1:
-            raise ValueError("Shares must sum to 1")
+            raise ValueError("Shares must sum to 1:", shares)
+        if n_items < len(_shares):
+            raise ValueError("A set of size %d cannot be split into %d subsets" % (n_items, len(_shares)))
 
-        if _shares.shape[0] == 3:
-            if not np.allclose(1. - _shares.sum(), 0.):
-                raise ValueError("Shares must sum to 1")
-            train_share, test_share, valid_share = _shares
-        elif _shares.shape[0] == 2:
-            train_share, test_share, valid_share = _shares[0], _shares[1], 1 - _shares.sum()
-        else:
-            train_share, test_share, valid_share = _shares[0], 1 - _shares[0], 0.
+        _shares[-1] = 1 - _shares[:-1].sum()
+        _lens = np.round(_shares * n_items).astype('int')
 
-        n_items = len(self)
-        train_share, test_share, valid_share = \
-            np.round(np.array([train_share, test_share, valid_share]) * n_items).astype('int')
-        train_share = n_items - test_share - valid_share
+        for s, _ in enumerate(_shares):
+            _lens[s] = _lens[s] if _shares[s] > 0 and _lens[s] >= 1 else 1
+        _lens = np.pad(_lens, (0, 3 - len(_lens)), 'constant')
 
-        return train_share, test_share, valid_share
+        train_len, test_len, valid_len = _lens
+        train_len = max(0, n_items - test_len - valid_len)
+
+        return train_len, test_len, valid_len
 
 
     def create_subset(self, index):
@@ -87,20 +106,42 @@ class Baseset:
 
 
     def cv_split(self, shares=0.8, shuffle=False):
-        """ Split the dataset into train, test and validation sub-datasets
-        Subsets are available as .train, .test and .validation respectively
+        """ Split the dataset into train, test and validation sub-datasets.
+        Subsets are available as `.train`, `.test` and `.validation` respectively.
 
-        Usage:
-           # split into train / test in 80/20 ratio
-           ds.cv_split()
-           # split into train / test / validation in 60/30/10 ratio
-           ds.cv_split([0.6, 0.3])
-           # split into train / test / validation in 50/30/20 ratio
-           ds.cv_split([0.5, 0.3, 0.2])
+        Parameters
+        ----------
+        shares : float, tuple of 2 floats, or tuple of 3 floats
+            train/test/validation shares. Default is 0.8.
+
+        shuffle : bool, :class:`numpy.random.RandomState`, int or callable
+            whether to randomize items order before splitting into subsets. Default is `False`. Can be
+
+            * `bool` : `False` - to make subsets in the order of indices in the index,
+                       `True` - to make random subsets.
+            * a :class:`numpy.random.RandomState` object which has an inplace shuffle method.
+            * `int` - a random seed number which will be used internally to create
+                      a :class:`numpy.random.RandomState` object.
+            * callable - a function which gets an order and returns a shuffled order.
+
+        Examples
+        --------
+        Split into train / test in 80/20 ratio
+
+        >>> dataset.cv_split()
+
+        Split into train / test / validation in 60/30/10 ratio
+
+        >>> dataset.cv_split([0.6, 0.3])
+
+        Split into train / test / validation in 50/30/20 ratio
+
+        >>> dataset.cv_split([0.5, 0.3, 0.2])
         """
         self.index.cv_split(shares, shuffle)
 
-        self.train = self.create_subset(self.index.train)
+        if self.index.train is not None:
+            self.train = self.create_subset(self.index.train)
         if self.index.test is not None:
             self.test = self.create_subset(self.index.test)
         if self.index.validation is not None:

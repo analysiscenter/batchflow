@@ -40,8 +40,7 @@ class JointDataset(Baseset):
         """ Create a common index for all included datasets """
         if align:
             return DatasetIndex(np.arange(len(datasets[0])))
-        else:
-            return datasets[0].index
+        return datasets[0].index
 
 
     def create_subset(self, index):

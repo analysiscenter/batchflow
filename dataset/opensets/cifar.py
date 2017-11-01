@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-import urllib
+import urllib.request
 import pickle
 import tarfile
 import numpy as np
@@ -61,7 +61,19 @@ class BaseCIFAR(ImagesOpenset):
 
 
 class CIFAR10(BaseCIFAR):
-    """ CIFAR10 dataset """
+    """ CIFAR10 dataset
+
+    Examples
+    --------
+    .. code-block:: python
+
+        # download CIFAR data, split into train/test and create dataset instances
+        cifar = CIFAR10()
+
+        # iterate over the dataset
+        for batch in cifar.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
+            # do something with a batch
+    """
     SOURCE_URL = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
     LABELS_KEY = b"labels"
     TRAIN_NAME_ID = "data_batch"
@@ -69,7 +81,19 @@ class CIFAR10(BaseCIFAR):
 
 
 class CIFAR100(BaseCIFAR):
-    """ CIFAR100 dataset """
+    """ CIFAR100 dataset
+
+    Examples
+    --------
+    .. code-block:: python
+
+        # download CIFAR data, split into train/test and create dataset instances
+        cifar = CIFAR100()
+
+        # iterate over the dataset
+        for batch in cifar.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=5):
+            # do something with a batch
+    """
     SOURCE_URL = "https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz"
     LABELS_KEY = b"fine_labels"
     TRAIN_NAME_ID = "train"
