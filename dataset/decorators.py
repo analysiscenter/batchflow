@@ -227,7 +227,7 @@ class ModelDirectory:
                     kwargs = {**global_config, **local_config}
                     kwargs = _calc_expr(kwargs)
 
-                    return model_class(mode, name=name, config={**kwargs})
+                    return model_class(name=name, config={**kwargs})
 
                 _model_definition_method.__name__ = name
                 return _model_definition_method
