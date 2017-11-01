@@ -35,36 +35,58 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
 
     Parameters
     ----------
-    d : int {1, 2, 3} - number of dimensions
+    d : int {1, 2, 3}
+        number of dimensions
     input_tensor : tf.Tensor
-    filters : int - number of filters in the ouput tensor
-    kernel_size  int - kernel size
-    layout : str - a sequence of layers:
-        c - convolution
-        n - batch normalization
-        a - activation
-        p - max pooling
-        Default is 'cnap'.
-    name : str -  name of the layer that will be used as a scope.
-    strides : int. Default is 1.
-    padding : str - padding mode, can be 'same' or 'valid'. Default - 'same',
-    data_format : str - 'channels_last' or 'channels_first'. Default - 'channels_last'.
-    dilation_rate: int. Default is 1.
-    activation : callable. Default is `tf.nn.relu`.
-    pool_size : int. Default is 2.
-    pool_strides : int. Default is 2.
-    dropout_rate : float. Default is 0.
-    is_training : bool or tf.Tensor. Default is True.
+        input tensor
+    filters : int
+        number of filters in the ouput tensor
+    kernel_size : int
+        kernel size
+    layout : str
+        a sequence of layers:
 
-    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
-    transposed_conv : dict - parameters for transposed conv layers, like initializers, regularalizers, etc
-    batch_norm : dict - parameters for batch normalization layers, like momentum, intiializers, etc
-    max_pooling : dict - parameters for max_pooling layers, like initializers, regularalizers, etc
-    dropout : dict - parameters for dropout layers, like noise_shape, etc
+        - c - convolution
+        - t - transposed convolution
+        - n - batch normalization
+        - a - activation
+        - p - max pooling
+        Default is 'cnap'.
+    name : str
+        name of the layer that will be used as a scope.
+    strides : int
+        Default is 1.
+    padding : str
+        padding mode, can be 'same' or 'valid'. Default - 'same',
+    data_format : str
+        'channels_last' or 'channels_first'. Default - 'channels_last'.
+    dilation_rate: int
+        Default is 1.
+    activation : callable
+        Default is `tf.nn.relu`.
+    pool_size : int
+        Default is 2.
+    pool_strides : int
+        Default is 2.
+    dropout_rate : float
+        Default is 0.
+    is_training : bool or tf.Tensor
+        Default is True.
+
+    conv : dict
+        parameters for convolution layers, like initializers, regularalizers, etc
+    transposed_conv : dict
+        parameters for transposed conv layers, like initializers, regularalizers, etc
+    batch_norm : dict
+        parameters for batch normalization layers, like momentum, intiializers, etc
+    max_pooling : dict
+        parameters for max_pooling layers, like initializers, regularalizers, etc
+    dropout : dict
+        parameters for dropout layers, like noise_shape, etc
 
     Returns
     -------
-    output tensor: tf.Tensor
+    output tensor : tf.Tensor
     """
 
     if not isinstance(dim, int) or dim < 1 or dim > 3:
@@ -98,7 +120,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                 args = dict(dropout_rate=dropout_rate, training=is_training)
 
             args = {**args, **kwargs.get(layer_name, {})}
-            tensor = layer_fn(tensor, **args)
+            tensor = layer_fn(inputs=tensor, **args)
 
     if context is not None:
         context.__exit__(None, None, None)
@@ -109,36 +131,56 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
 def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', data_format='channels_last', dilation_rate=1, activation=tf.nn.relu,
                  pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
-    """ Complex 2d convolution with batch normalization, activation and pooling layers
+    """ Complex 1d convolution with batch normalization, activation, pooling and dropout layers
 
     Parameters
     ----------
     input_tensor : tf.Tensor
-    filter s: int - number of filters in the ouput tensor
-    kernel_size:  int or tuple(int, int) - kernel size
-    layout : str - a sequence of layers:
-        c - convolution
-        t - transposed convolution
-        n - batch normalization
-        a - activation
-        p - max pooling
-        Default is 'cnap'.
-    name : str -  name of the layer that will be used as a scope
-    strides : int. Default is 1.
-    padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
-    data_format : str - 'channels_last' or 'channels_first'. Default - 'channels_last'.
-    dilation_rate: int. Default is 1.
-    activation : callable. Default is `tf.nn.relu`.
-    pool_size : int. Default is 2.
-    pool_strides : int. Default is 2.
-    dropout_rate : float. Default is 0.
-    is_training : bool or tf.Tensor. Default is True.
+        input tensor
+    filters : int
+        number of filters in the ouput tensor
+    kernel_size : int
+        kernel size
+    layout : str
+        a sequence of layers:
 
-    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
-    transposed_conv : dict - parameters for transposed conv layers, like initializers, regularalizers, etc
-    batch_norm : dict - parameters for batch normalization layers, like momentum, intiializers, etc
-    max_pooling : dict - parameters for max_pooling layers, like initializers, regularalizers, etc
-    dropout : dict - parameters for dropout layers, like noise_shape, etc
+        - c - convolution
+        - t - transposed convolution
+        - n - batch normalization
+        - a - activation
+        - p - max pooling
+        Default is 'cnap'.
+    name : str
+        name of the layer that will be used as a scope.
+    strides : int
+        Default is 1.
+    padding : str
+        padding mode, can be 'same' or 'valid'. Default - 'same',
+    data_format : str
+        'channels_last' or 'channels_first'. Default - 'channels_last'.
+    dilation_rate: int
+        Default is 1.
+    activation : callable
+        Default is `tf.nn.relu`.
+    pool_size : int
+        Default is 2.
+    pool_strides : int
+        Default is 2.
+    dropout_rate : float
+        Default is 0.
+    is_training : bool or tf.Tensor
+        Default is True.
+
+    conv : dict
+        parameters for convolution layers, like initializers, regularalizers, etc
+    transposed_conv : dict
+        parameters for transposed conv layers, like initializers, regularalizers, etc
+    batch_norm : dict
+        parameters for batch normalization layers, like momentum, intiializers, etc
+    max_pooling : dict
+        parameters for max_pooling layers, like initializers, regularalizers, etc
+    dropout : dict
+        parameters for dropout layers, like noise_shape, etc
 
     Returns
     -------
@@ -152,36 +194,56 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
 def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', data_format='channels_last', dilation_rate=1, activation=tf.nn.relu,
                  pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
-    """ Complex 2d convolution with batch normalization, activation and pooling layers
+    """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
 
     Parameters
     ----------
     input_tensor : tf.Tensor
-    filter s: int - number of filters in the ouput tensor
-    kernel_size:  int or tuple(int, int) - kernel size
-    layout : str - a sequence of layers:
-        c - convolution
-        t - transposed convolution
-        n - batch normalization
-        a - activation
-        p - max pooling
-        Default is 'cnap'.
-    name : str -  name of the layer that will be used as a scope
-    strides : int. Default is 1.
-    padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
-    data_format : str - 'channels_last' or 'channels_first'. Default - 'channels_last'.
-    dilation_rate: int. Default is 1.
-    activation : callable. Default is `tf.nn.relu`.
-    pool_size : int. Default is 2.
-    pool_strides : int. Default is 2.
-    dropout_rate : float. Default is 0.
-    is_training : bool or tf.Tensor. Default is True.
+        input tensor
+    filters : int
+        number of filters in the ouput tensor
+    kernel_size : int
+        kernel size
+    layout : str
+        a sequence of layers:
 
-    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
-    transposed_conv : dict - parameters for transposed conv layers, like initializers, regularalizers, etc
-    batch_norm : dict - parameters for batch normalization layers, like momentum, intiializers, etc
-    max_pooling : dict - parameters for max_pooling layers, like initializers, regularalizers, etc
-    dropout : dict - parameters for dropout layers, like noise_shape, etc
+        - c - convolution
+        - t - transposed convolution
+        - n - batch normalization
+        - a - activation
+        - p - max pooling
+        Default is 'cnap'.
+    name : str
+        name of the layer that will be used as a scope.
+    strides : int
+        Default is 1.
+    padding : str
+        padding mode, can be 'same' or 'valid'. Default - 'same',
+    data_format : str
+        'channels_last' or 'channels_first'. Default - 'channels_last'.
+    dilation_rate: int
+        Default is 1.
+    activation : callable
+        Default is `tf.nn.relu`.
+    pool_size : int
+        Default is 2.
+    pool_strides : int
+        Default is 2.
+    dropout_rate : float
+        Default is 0.
+    is_training : bool or tf.Tensor
+        Default is True.
+
+    conv : dict
+        parameters for convolution layers, like initializers, regularalizers, etc
+    transposed_conv : dict
+        parameters for transposed conv layers, like initializers, regularalizers, etc
+    batch_norm : dict
+        parameters for batch normalization layers, like momentum, intiializers, etc
+    max_pooling : dict
+        parameters for max_pooling layers, like initializers, regularalizers, etc
+    dropout : dict
+        parameters for dropout layers, like noise_shape, etc
 
     Returns
     -------
@@ -195,36 +257,56 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
 def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', data_format='channels_last', dilation_rate=1, activation=tf.nn.relu,
                  pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
-    """ Complex 2d convolution with batch normalization, activation and pooling layers
+    """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
 
     Parameters
     ----------
     input_tensor : tf.Tensor
-    filter s: int - number of filters in the ouput tensor
-    kernel_size:  int or tuple(int, int) - kernel size
-    layout : str - a sequence of layers:
-        c - convolution
-        t - transposed convolution
-        n - batch normalization
-        a - activation
-        p - max pooling
-        Default is 'cnap'.
-    name : str -  name of the layer that will be used as a scope
-    strides : int. Default is 1.
-    padding : str - padding mode, can be 'same' or 'valid'. Default - 'same'
-    data_format : str - 'channels_last' or 'channels_first'. Default - 'channels_last'.
-    dilation_rate: int. Default is 1.
-    activation : callable. Default is `tf.nn.relu`.
-    pool_size : int. Default is 2.
-    pool_strides : int. Default is 2.
-    dropout_rate : float. Default is 0.
-    is_training : bool or tf.Tensor. Default is True.
+        input tensor
+    filters : int
+        number of filters in the ouput tensor
+    kernel_size : int
+        kernel size
+    layout : str
+        a sequence of layers:
 
-    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
-    transposed_conv : dict - parameters for transposed conv layers, like initializers, regularalizers, etc
-    batch_norm : dict - parameters for batch normalization layers, like momentum, intiializers, etc
-    max_pooling : dict - parameters for max_pooling layers, like initializers, regularalizers, etc
-    dropout : dict - parameters for dropout layers, like noise_shape, etc
+        - c - convolution
+        - t - transposed convolution
+        - n - batch normalization
+        - a - activation
+        - p - max pooling
+        Default is 'cnap'.
+    name : str
+        name of the layer that will be used as a scope.
+    strides : int
+        Default is 1.
+    padding : str
+        padding mode, can be 'same' or 'valid'. Default - 'same',
+    data_format : str
+        'channels_last' or 'channels_first'. Default - 'channels_last'.
+    dilation_rate: int
+        Default is 1.
+    activation : callable
+        Default is `tf.nn.relu`.
+    pool_size : int
+        Default is 2.
+    pool_strides : int
+        Default is 2.
+    dropout_rate : float
+        Default is 0.
+    is_training : bool or tf.Tensor
+        Default is True.
+
+    conv : dict
+        parameters for convolution layers, like initializers, regularalizers, etc
+    transposed_conv : dict
+        parameters for transposed conv layers, like initializers, regularalizers, etc
+    batch_norm : dict
+        parameters for batch normalization layers, like momentum, intiializers, etc
+    max_pooling : dict
+        parameters for max_pooling layers, like initializers, regularalizers, etc
+    dropout : dict
+        parameters for dropout layers, like noise_shape, etc
 
     Returns
     -------

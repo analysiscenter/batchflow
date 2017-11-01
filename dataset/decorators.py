@@ -400,26 +400,28 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
     return _action_wrapper
 
 def action(*args, **kwargs):
-    """ Decorator for action methods in Batch classes
+    """ Decorator for action methods in :class:`~dataset.Batch` classes
 
     Examples ::
     --------
 
-    @action
-    def some_action(self, arg1, arg2):
-        ...
+    .. code-block:: python
 
-    @action(model='some_model')
-    def train_model(self, model, another_arg):
-        ...
+        @action
+        def some_action(self, arg1, arg2):
+            ...
 
-    @action(use_lock=True)
-    def critical_section(self, some_arg, another_arg):
-        ...
+        @action(model='some_model')
+        def train_model(self, model, another_arg):
+            ...
 
-    @action(use_lock='lock_name')
-    def another_critical_section(self, some_arg, another_arg):
-        ...
+        @action(use_lock=True)
+        def critical_section(self, some_arg, another_arg):
+            ...
+
+        @action(use_lock='lock_name')
+        def another_critical_section(self, some_arg, another_arg):
+            ...
     """
     if len(args) == 1 and callable(args[0]):
         # action without arguments
@@ -429,11 +431,11 @@ def action(*args, **kwargs):
 
 
 def any_action_failed(results):
-    """ Return True if some parallelized invocations threw exceptions """
+    """ Return `True` if some parallelized invocations threw exceptions """
     return any(isinstance(res, Exception) for res in results)
 
 def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
-    """ Make in-batch parallel decorator """
+    """ Decorator for parallel methods in :class:`~dataset.Batch` classes"""
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
 
