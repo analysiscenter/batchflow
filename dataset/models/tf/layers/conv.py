@@ -51,6 +51,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         - n - batch normalization
         - a - activation
         - p - max pooling
+        - d - dropout
         Default is 'cnap'.
     name : str
         name of the layer that will be used as a scope.
@@ -149,6 +150,7 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
         - n - batch normalization
         - a - activation
         - p - max pooling
+        - d - dropout
         Default is 'cnap'.
     name : str
         name of the layer that will be used as a scope.
@@ -212,6 +214,7 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
         - n - batch normalization
         - a - activation
         - p - max pooling
+        - d - dropout
         Default is 'cnap'.
     name : str
         name of the layer that will be used as a scope.
@@ -275,6 +278,7 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
         - n - batch normalization
         - a - activation
         - p - max pooling
+        - d - dropout
         Default is 'cnap'.
     name : str
         name of the layer that will be used as a scope.
