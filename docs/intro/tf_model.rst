@@ -29,7 +29,7 @@ Example
     from dataset.models.tf import TFModel
     from dataset.models.tf.layers input conv_block, global_average_pooling
 
-    class MyMode(TFModel):
+    class MyModel(TFModel):
         def _build(self):
             names = ['images', 'labels']
             placeholders, inputs = self._make_inputs(names)
@@ -45,7 +45,7 @@ Example
             x = conv_block(dim, x, num_classes, 3, layout='cnap', name='conv3', training=self.is_training)
             x = global_average_pooling(dim, x, name='predictions')
 
-Note that you can use this model for 1d, 2d and 3d inputs.
+Note that you can use this model for 1d, 2d and 3d inputs (with a proper config when initializing a model).
 
 Now you can train the model in a pipeline:
 
