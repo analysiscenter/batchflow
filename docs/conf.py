@@ -45,8 +45,6 @@ extensions = [
 #    'numpydoc', # used to parse numpy-style docstrings for autodoc
 ]
 
-napoleon_use_ivar = False
-
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -132,6 +130,7 @@ html_sidebars = {
 }
 """
 
+autoclass_content = 'class'
 add_module_names = False
 
 intersphinx_mapping = {

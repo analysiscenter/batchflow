@@ -3,7 +3,9 @@ Tensorflow models
 
 Configuration
 -------------
-Tensorflow models inherits ``build`` and ``load`` `configuration parameters <models#configuring-a-model>`_.
+
+.. autoclass:: dataset.models.tf.TFModel
+    :noindex:
 
 
 How to configure model inputs

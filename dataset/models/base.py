@@ -1,7 +1,7 @@
 """ Contains a base model class"""
 
 class BaseModel:
-    """ Base model
+    """ Base class for all models
 
     Attributes
     ----------

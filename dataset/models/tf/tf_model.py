@@ -62,7 +62,9 @@ class TFModel(BaseModel):
 
     **Configuration**
 
-    session : dict - `session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
+    ``build`` and ``load`` are inherited from :class:`.BaseModel`.
+
+    session : dict - `Tensorflow session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
 
     inputs : dict - model inputs (see :meth:`._make_inputs`)
 
@@ -104,7 +106,8 @@ class TFModel(BaseModel):
 
             where name might be one of:
 
-            - short name (e.g. 'Adam', 'Adagrad')
+            - short name (e.g. 'Adam', 'Adagrad', any optimiser from
+              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ without a word `Optimiser`)
             - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
               (e.g. 'FtlrOptimizer')
             - a callable
@@ -236,8 +239,8 @@ class TFModel(BaseModel):
     def _make_inputs(self, names=None):
         """ Make model input data using config
 
-        In the config's inputs section it looks for ``names`` and creates placeholders required, as well as
-        some typical transormations (like one-hot-encoding and reshaping).
+        In the config's inputs section it looks for ``names``, creates placeholders required, and
+        makes some typical transformations (like one-hot-encoding and reshaping), if needed.
 
         **Configuration**
 
