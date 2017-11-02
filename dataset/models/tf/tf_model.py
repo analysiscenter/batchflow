@@ -199,7 +199,7 @@ class TFModel(BaseModel):
         """
         input_names = []
         placeholders, inputs = self._make_inputs(input_names)
-        _ = args, kwargs, placeholders, inputs
+        _ = placeholders, inputs
 
 
     def build(self, *args, **kwargs):

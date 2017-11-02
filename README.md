@@ -70,6 +70,6 @@ import dataset as ds
 If your python file is located in a subdirectory, you might need to add a path to `dataset`:
 ```python
 import sys
-sys.path.append("..")
+sys.path.insert(0, "../dataset")
 import dataset as ds
 ```
