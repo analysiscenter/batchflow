@@ -21,7 +21,6 @@ class MyModel(TFModel):
         num_classes = self.num_classes('labels')
         x = conv2d_block(inputs['images'], 32, 3, layout='cnap', name='layer1')
         x = conv2d_block(x, 64, 3, layout='cnap', name='layer2')
-        #x = conv2d_block(x, 128, 3, layout='cnap', name='layer3')
         x = conv2d_block(x, num_classes, 3, layout='cnap', name='layer4')
         x = global_average_pooling(2, x, name='predictions')
 

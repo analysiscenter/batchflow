@@ -143,9 +143,9 @@ class TFModel(BaseModel):
     def _build(self):
         """ Define a model architecture
 
-        #. Input data and its parameters should be defined in configuration under ``inputs`` key.
+        It takes just 2 steps:
 
-        #. Define names for all placeholders and call :meth:`._make_inputs`::
+        #. Define names for all placeholders and make input tensors by calling :meth:`._make_inputs`::
 
             def _build():
                 names = ['images', 'labels']
@@ -153,9 +153,18 @@ class TFModel(BaseModel):
 
            If config does not contain any name from ``names``, :exc:`ValueError` is raised.
 
-        #. ``placeholders`` and ``inputs`` are dicts with the same keys as ``inputs``.
+        #. Add your layers.
+
+        And that's pretty it.
+
+        Things worth mentioning:
+
+        #. Input data and its parameters should be defined in configuration under ``inputs`` key.
+
+        #. :meth:`._make_inputs returns ``placeholders`` and ``inputs`` which are dicts
+           with the same keys as ``inputs``.
            They contain all placeholders and tensors after reshaping/transformations, correspondingly.
-           Use ``inputs`` to build a model. And names will also be needed later in
+           Use ``inputs`` to build a model. While names will also be needed later in
            ``train`` and ``predict`` methods.
 
         #. You might want to use a convenient multidimensional :func:`~.layers.conv_block`,
@@ -170,7 +179,7 @@ class TFModel(BaseModel):
         #. In many cases there is no need to write a loss function, learning decay and optimizer
            as they might be defined through config.
 
-        #. For a cofigured loss to work one of the inputs should have a name ``targets`` and
+        #. For a configured loss one of the inputs should have a name ``targets`` and
            one of the tensors in your model should have a name ``predictions``.
            They will be used in a loss function.
 
@@ -193,14 +202,14 @@ class TFModel(BaseModel):
     def build(self, *args, **kwargs):
         """ Build the model
 
-        1. Define `is_training` and `global_step` tensors
-        2. Create placeholders (see _make_inputs docstring)
-        3. Define a model architecture by calling ``self._build(*args, **kwargs)``
-        4. Create a loss function
-        5. Create an optimizer and define a train step
-        6. `Set UPDATE_OPS control dependency on train step
+        #. Create a graph
+        #. Define ``is_training`` and ``global_step`` tensors
+        #. Define a model architecture by calling :meth:``._build``
+        #. Create a loss function from config
+        #. Create an optimizer and define a train step from config
+        #. `Set UPDATE_OPS control dependency on train step
            <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_
-        7. Create a tensorflow session
+        #. Create a tensorflow session
         """
         with self.graph.as_default():
             self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
@@ -227,7 +236,7 @@ class TFModel(BaseModel):
     def _make_inputs(self, names=None):
         """ Make model input data using config
 
-        In the config's inputs section it looks for names and creates placeholders required, as well as
+        In the config's inputs section it looks for ``names`` and creates placeholders required, as well as
         some typical transormations (like one-hot-encoding and reshaping).
 
         **Configuration**
@@ -268,7 +277,8 @@ class TFModel(BaseModel):
 
         Raises
         ------
-        KeyError if there is any name missing in the config's input section
+        KeyError if there is any name missing in the config's input section.
+        ValueError if there are duplicate names.
 
         Returns
         -------
@@ -289,7 +299,7 @@ class TFModel(BaseModel):
         names = names or []
         missing_names = set(names) - set(config.keys())
         if len(missing_names) > 0:
-            raise ValueError("Inputs should contain {} names".format(missing_names))
+            raise KeyError("Inputs should contain {} names".format(missing_names))
 
         placeholder_names = set(config.keys())
         tensor_names = set(x.get('name') for x in config.values() if x.get('name'))
