@@ -29,7 +29,7 @@ Example
 .. code-block:: python
 
     from dataset.models.tf import TFModel
-    from dataset.models.tf.layers input conv_block, global_average_pooling
+    from dataset.models.tf.layers import conv_block, global_average_pooling
 
     class MyModel(TFModel):
         def _build(self):

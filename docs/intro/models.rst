@@ -286,3 +286,9 @@ Writing your own model
 ----------------------
 
 - `How to write TensorFlow models <tf_model#how-to-write-a-custom-model>`_
+
+
+Layers and losses
+-----------------
+
+- `TensorFlow layers <tf_layers>`_

@@ -11,3 +11,4 @@ Classes and capabilities
    parallel
    prefetch
    models
+   tf_layers
