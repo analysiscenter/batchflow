@@ -2,12 +2,12 @@
 dataset
 =======
 
-.. include:: dataset.index.rst
+.. toctree::
+   :maxdepth: 2
 
-.. include:: dataset.dataset.rst
-
-.. include:: dataset.batch.rst
-
-.. include:: dataset.pipeline.rst
-
-.. include:: dataset.decorators.rst
+   dataset.index.rst
+   dataset.dataset.rst
+   dataset.batch.rst
+   dataset.pipeline.rst
+   dataset.decorators.rst
+   dataset.exceptions.rst

@@ -150,7 +150,7 @@ class Batch(BaseBatch):
 
     @property
     def indices(self):
-        """ Return an array-like with the indices """
+        """: numpy array - an array with the indices """
         if isinstance(self.index, DatasetIndex):
             return self.index.indices
         return self.index
@@ -160,7 +160,7 @@ class Batch(BaseBatch):
 
     @property
     def data(self):
-        """ Return batch data """
+        """: tuple or named components - batch data """
         if self._data is None and self._preloaded is not None:
             # load data the first time it's requested
             with self._preloaded_lock:
@@ -192,8 +192,8 @@ class Batch(BaseBatch):
 
         Parameters
         ----------
-        data : None or data
-            if `None`, should return a position in `self.data`
+        data : some array or tuple of arrays
+            if `None`, should return a position in :attr:`self.data <.Batch.data>`
 
         components : None, int or str
             - None - data has no components (e.g. just an array or pandas.DataFrame)
@@ -201,11 +201,13 @@ class Batch(BaseBatch):
                 (e.g. data is a tuple)
             - str - a name of a data component
 
-        index : any - an index id
+        index : any
+            an index id
 
         Returns
         -------
-        int - a position in a batch data where an item with a given index is stored
+        int
+            a position in a batch data where an item with a given index is stored
 
         Notes
         -----
@@ -234,6 +236,7 @@ class Batch(BaseBatch):
         - `self.data.source` holds a few large images (e.g just 5 items)
         - `self.data.coords` holds coordinates for crops (e.g. 100 items)
         - `self.data.image_no` holds an array of image numbers for each crop (so it also contains 100 items)
+
         then `get_pos(None, 'source', index)` should return `self.data.image_no[self.index.get_pos(index)]`.
         Whilst, `get_pos(data, 'source', index)` should return `data.image_no[index]`.
         """
@@ -326,7 +329,7 @@ class Batch(BaseBatch):
 
     @property
     def items(self):
-        """ Init function for batch items parallelism """
+        """: list - batch items """
         return [[self[ix]] for ix in self.indices]
 
     def run_once(self, *args, **kwargs):
@@ -375,8 +378,9 @@ class Batch(BaseBatch):
 
         Notes
         -----
-        apply_transform does the following (but in parallel):
-            for item in batch:
+        apply_transform does the following (but in parallel)::
+
+            for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
         if not isinstance(dst, str) and not isinstance(src, str):
@@ -422,7 +426,8 @@ class Batch(BaseBatch):
 
         Notes
         -----
-        apply_transform_all does the following:
+        apply_transform_all does the following::
+
             self.dst = func(self.src, *args, **kwargs)
         """
 

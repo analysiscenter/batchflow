@@ -15,9 +15,11 @@ class BaseModel:
 
     **Configuration**:
 
-    * build : bool - whether to build a model by calling `self.build()`. Default is True.
-    * load : dict - parameters for model loading. If present, a model will be loaded
-             by calling `self.load(**config['load'])`.
+    * build : bool
+        whether to build a model by calling `self.build()`. Default is True.
+    * load : dict
+        parameters for model loading. If present, a model will be loaded
+        by calling `self.load(**config['load'])`.
 
     """
     def __init__(self, name=None, config=None, *args, **kwargs):
