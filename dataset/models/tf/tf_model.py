@@ -151,7 +151,7 @@ class TFModel(BaseModel):
                 names = ['images', 'labels']
                 placeholders, inputs = self._make_inputs(names)
 
-           If config does not contain any name from ``names``, :exc:`ValueError` is raised.
+           If config does not contain any name from ``names``, :exc:`KeyError` is raised.
 
         #. Add your layers.
 
@@ -161,10 +161,10 @@ class TFModel(BaseModel):
 
         #. Input data and its parameters should be defined in configuration under ``inputs`` key.
 
-        #. :meth:`._make_inputs returns ``placeholders`` and ``inputs`` which are dicts
-           with the same keys as ``inputs``.
+        #. :meth:`._make_inputs` returns ``placeholders`` and ``inputs`` which are dicts
+           with the same keys as ``config['inputs']``.
            They contain all placeholders and tensors after reshaping/transformations, correspondingly.
-           Use ``inputs`` to build a model. While names will also be needed later in
+           Use ``inputs`` to build a model. While placeholder names will also be needed later in
            ``train`` and ``predict`` methods.
 
         #. You might want to use a convenient multidimensional :func:`~.layers.conv_block`,
@@ -176,7 +176,7 @@ class TFModel(BaseModel):
 
         #. For decay and training control you might use a predefined ``self.global_step`` tensor.
 
-        #. In many cases there is no need to write a loss function, learning decay and optimizer
+        #. In many cases there is no need to write a loss function, learning rate decay and optimizer
            as they might be defined through config.
 
         #. For a configured loss one of the inputs should have a name ``targets`` and
@@ -249,26 +249,32 @@ class TFModel(BaseModel):
 
         Input config:
 
-        dtype : str or tf.DType (by default 'float32')
+        ``dtype`` : str or tf.DType (by default 'float32')
             data type
 
-        shape : int, tuple, list or None (default)
+        ``shape`` : int, tuple, list or None (default)
             a desired tensor shape which includes the number of channels/classes and doesn't include a batch size.
 
-        data_format : str {'channels_first', 'channels_last'}
+        ``data_format`` : str {``'channels_first'``, ``'channels_last'``} or {``'f'``, ``'l'``}
             The ordering of the dimensions in the inputs. Default is 'channels_last'.
 
-        transform : str or callable
-            if transform is 'ohe', one-hot encoding will be applied.
-            The new axis is created at the last dimension if data_format is 'channels_last' or
+        ``transform`` : str or callable
+            if transform is ``'ohe'``, one-hot encoding will be applied.
+            The new axis is created at the last dimension if data_format is ``'channels_last'`` or
             at the first dimension after a batch size otherwise.
 
-        name : str
+        ``name`` : str
             a name for the transformed and reshaped tensor.
 
         If an input config is a tuple, it should contain all items exactly in the order shown above:
         dtype, shape, data_format, transform, name.
         If an item is None, the default value will be used instead.
+
+        **How it works**
+
+        Input data will be cast to ``dtype``, then reshaped to ``shape`` in accordance with ``data_format``
+        and finally transformed with a ``transform`` function. The resulting tensor will have the name ``name``.
+        The original placeholder tensor will have the name ``key``.
 
         Parameters
         ----------
@@ -315,19 +321,24 @@ class TFModel(BaseModel):
 
         for input_name, input_config in config.items():
             if isinstance(input_config, (tuple, list)):
-                input_config = input_config + type(input_config)([None for _ in param_names])
+                input_config = list(input_config) + [None for _ in param_names]
                 input_config = input_config[:len(param_names)]
                 input_config = dict(zip(param_names, input_config))
                 input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
+            dtype = input_config.get('dtype')
+            tensor = tf.placeholder(dtype, name=input_name)
+            placeholders[input_name] = tensor
+
             shape = input_config.get('shape')
             if isinstance(shape, int):
                 input_config['shape'] = (shape,)
 
-            dtype = input_config.get('dtype')
-            tensor = tf.placeholder(dtype, name=input_name)
-            placeholders[input_name] = tensor
+            if input_config.get('data_format') == 'l':
+                input_config['data_format'] = 'channels_last'
+            elif input_config.get('data_format') == 'f':
+                input_config['data_format'] = 'channels_first'
 
             tensor = self._make_transform(tensor, input_config)
             if isinstance(shape, (list, tuple)):

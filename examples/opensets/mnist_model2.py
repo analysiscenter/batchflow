@@ -10,7 +10,7 @@ from dataset import action, model, B, C, F, V
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
-from dataset.models.tf.layers import conv2d_block, global_average_pooling
+from dataset.models.tf.layers import conv2d_block, global_max_pooling
 
 
 class MyModel(TFModel):
@@ -19,10 +19,10 @@ class MyModel(TFModel):
         placeholders, inputs = self._make_inputs(names)
 
         num_classes = self.num_classes('labels')
-        x = conv2d_block(inputs['images'], 32, 3, layout='cnap', name='layer1')
-        x = conv2d_block(x, 64, 3, layout='cnap', name='layer2')
-        x = conv2d_block(x, num_classes, 3, layout='cnap', name='layer4')
-        x = global_average_pooling(2, x, name='predictions')
+        x = conv2d_block(inputs['images'], 32, 3, layout='cnap', name='layer1', training=self.is_training)
+        x = conv2d_block(x, 64, 3, layout='cnap', name='layer2', training=self.is_training)
+        x = conv2d_block(x, num_classes, 3, layout='cnap', name='layer4', training=self.is_training)
+        x = global_max_pooling(2, x, name='predictions')
 
         predicted_labels = tf.argmax(x, axis=1, name='predicted_labels')
 
@@ -64,9 +64,9 @@ if __name__ == "__main__":
     test_pp = (mnist.test.p
                 .import_model('conv', train_pp)
                 .init_variable('all_predictions', init_on_each_run=list)
-                .predict_model('conv', fetches='predicted_labels', feed_dict={'input_images': B('images'),
-                                                                              'input_labels': B('labels')},
-                               append_to=V('all_predictions'))
+                .predict_model('conv', fetches='predicted_labels', feed_dict={'images': B('images'),
+                                                                              'labels': B('labels')},
+                               save_to=V('all_predictions'), mode='a')
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False, prefetch=4))
     print("End testing", time() - t)
 
