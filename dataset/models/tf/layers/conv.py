@@ -117,7 +117,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                 args = dict(dim=dim, pool_size=pool_size, strides=pool_strides, padding=padding,
                             data_format=data_format)
             elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
-                args = dict(dropout_rate=dropout_rate, training=is_training)
+                args = dict(rate=dropout_rate, training=is_training)
 
             args = {**args, **kwargs.get(layer_name, {})}
             tensor = layer_fn(inputs=tensor, **args)
