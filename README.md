@@ -94,3 +94,21 @@ Note the double `dataset` in import - it's not a typo.
 
 What is great about using a submodule that every commit in your project can be linked to its own version of a submodule.
 This is extremely convenient in a fast paced research environment.
+
+
+## Citing Dataset
+Please cite Dataset in your publications if it helps your research.
+
+[![DOI](https://zenodo.org/badge/84835419.svg)](https://zenodo.org/badge/latestdoi/84835419)
+
+```
+Roman Kh et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041204
+```
+
+@misc{roman_kh_2017_1041204,
+  author       = {Roman Kh and et al},
+  title        = {Dataset library for fast ML workflows},
+  year         = 2017,
+  doi          = {10.5281/zenodo.1041204},
+  url          = {https://doi.org/10.5281/zenodo.1041204}
+}
