@@ -54,22 +54,43 @@ For more advanced cases and detailed API see [the documentation](https://analysi
 
 > `Dataset` supports python 3.5 or higher.
 
+### Python package
+With modern [pipenv](https://docs.pipenv.org/)
+```
+pipenv install git+https://github.com/analysiscenter/dataset.git
+```
+
+With old-fashioned [pip](https://pip.pypa.io/en/stable/)
+```
+pip3 install git+https://github.com/analysiscenter/dataset.git#egg=dataset
+```
+
+After that just import `dataset`:
+```python
+import dataset as ds
+```
 
 ### Git submodule
-In many cases it is much more convenient to install `dataset` as a submodule in your project repository than as a system python package.
+In many cases it might be more convenient to install `dataset` as a submodule in your project repository than as a python package.
 ```
 git submodule add https://github.com/analysiscenter/dataset.git
 git submodule init
 git submodule update
 ```
-After that you can import it as a python module:
+
+If your python file is located in another directory, you might need to add a path to `dataset`:
 ```python
+import sys
+sys.path.insert(0, "/path/to/dataset/dataset")
 import dataset as ds
 ```
 
-If your python file is located in a subdirectory, you might need to add a path to `dataset`:
+Local import is also possible:
 ```python
-import sys
-sys.path.insert(0, "../dataset")
-import dataset as ds
+import .dataset.dataset as ds
 ```
+
+Note the double `dataset` in import - it's not a typo.
+
+What is great about using a submodule that every commit in your project can be linked to its own version of a submodule.
+This is extremely convenient in a fast paced research environment.

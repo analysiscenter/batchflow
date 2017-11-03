@@ -30,7 +30,7 @@ Contents
 
 Basic usage
 ===========
-.. code-block:: python
+::
 
     my_workflow = my_dataset.pipeline()
                     .load('/some/path')
@@ -39,9 +39,17 @@ Basic usage
                     .some_additional_action()
                     .save('/to/other/path')
 
-The trick here is that all the processing actions are lazy. They are not executed until their results are needed, e.g. when you request a preprocessed batch:
+The trick here is that all the processing actions are lazy. They are not executed until their results are needed, e.g. when you request a preprocessed batch::
 
-.. code-block:: python
+    my_workflow.run(BATCH_SIZE, shuffle=True, n_epochs=5)
+
+or ::
+
+    for batch in my_workflow.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=5):
+        # only now the actions are fired and data is being changed with the workflow defined earlier
+        # actions are executed one by one and here you get a fully processed batch
+
+or ::
 
     NUM_ITERS = 1000
     for i in range(NUM_ITERS):
@@ -52,31 +60,50 @@ The trick here is that all the processing actions are lazy. They are not execute
 Installation
 ============
 
+
+Python package
+--------------
+
+With modern `pipenv <https://docs.pipenv.org/>`_::
+
+    pipenv install git+https://github.com/analysiscenter/dataset.git#egg=dataset
+
+With old-fashioned `pip <https://pip.pypa.io/en/stable/>`_::
+
+    pip3 install git+https://github.com/analysiscenter/dataset.git
+
+
+After that just import `dataset`::
+
+    import dataset as ds
+
+
+Git submodule
+-------------
+
 .. note:: `Dataset` module is in the beta stage. Your suggestions and improvements are very welcome.
 
 .. note:: `Dataset` supports python 3.5 or higher.
 
 
-Git submodule
--------------
-In many cases it is much more convenient to install `dataset` as a submodule in your project repository than as a system python package.
-
-.. code-block:: shell
+In many cases it is much more convenient to install `dataset` as a submodule in your project repository than as a python package::
 
     git submodule add https://github.com/analysiscenter/dataset.git
     git submodule init
     git submodule update
 
-After that you can import it as a python module:
 
-.. code-block:: python
-
-    import dataset as ds
-
-If your python file is located in a subdirectory, you might need to add a path to `dataset`:
-
-.. code-block:: python
+If your python file is located in another directory, you might need to add a path to `dataset` location::
 
     import sys
-    sys.path.append("..")
+    sys.path.insert(0, "/path/to/dataset")
     import dataset as ds
+
+Local import is also possible::
+
+    import .dataset.dataset as ds
+
+Note the double `dataset` in import - it's not a typo.
+
+What is great about using a submodule that every commit in your project can be linked to its own version of a submodule.
+This is extremely convenient in a fast paced research environment.
