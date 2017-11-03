@@ -23,7 +23,7 @@ long_description = convert_file(path.join(here, 'README.md'), 'rst')
 
 setup(
     name='dataset',
-    packages=find_packages(),
+    packages=find_packages(exclude=['examples']),
     version=version,
     url='https://github.com/analysiscenter/dataset',
     license='Apache License 2.0',

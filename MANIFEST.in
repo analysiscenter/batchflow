@@ -4,6 +4,8 @@ include README.md
 include setup.py
 
 recursive-include dataset *
+recursive-include examples/tutorial *
+recursive-include examples/opensets *
 recursive-include docs *
 recursive-exclude docs/_build *
 
