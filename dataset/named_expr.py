@@ -84,7 +84,11 @@ class C(NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
-        return config.get(name, None)
+
+        recursive_names = name.split('/')
+        for n in recursive_names:
+            config = config.get(n)
+        return config
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """

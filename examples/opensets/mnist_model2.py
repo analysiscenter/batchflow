@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append("../..")
-from dataset import action, model, B, C, F, V
+from dataset import Pipeline, B, C, F, V
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
@@ -25,6 +25,8 @@ class MyModel(TFModel):
         x = global_max_pooling(2, x, name='predictions')
 
         predicted_labels = tf.argmax(x, axis=1, name='predicted_labels')
+        self.config['new'] = 1
+        self.config['arg1'] = 20
 
 
 if __name__ == "__main__":
@@ -32,10 +34,12 @@ if __name__ == "__main__":
 
     mnist = MNIST()
 
+    config = dict(some=1, conv=dict(arg1=10))
     print()
     print("Start training...")
     t = time()
-    train_pp = (mnist.train.p
+    train_tp = (Pipeline(config=config)
+                .print_variable(C('conv/arg1'))
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
@@ -51,12 +55,16 @@ if __name__ == "__main__":
                                                 'labels': B('labels')},
                              save_to=[V('current_loss'), V('pred_label')])
                 .print_variable('current_loss')
+                .print_variable(C('conv/arg1'))
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
-    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
-    #train_pp.next_batch(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+    train_pp = (train_tp << mnist.train)
+    #train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+    train_pp.next_batch(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
     print("End training", time() - t)
 
+    train_pp = (train_tp << mnist.train)
+    train_pp.next_batch(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
 
     print()
     print("Start testing...")
@@ -71,7 +79,7 @@ if __name__ == "__main__":
     print("End testing", time() - t)
 
     print("Predictions")
-    for pred in test_pp.get_variable("all_predictions"):
-        print(pred.shape)
+    #for pred in test_pp.get_variable("all_predictions"):
+    #    print(pred.shape)
 
     conv = train_pp.get_model_by_name("conv")
