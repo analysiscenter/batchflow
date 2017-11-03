@@ -101,9 +101,7 @@ If your python file is located in another directory, you might need to add a pat
 
 Local import is also possible::
 
-    from .dataset import dataset as ds
-
-Note the double `dataset` in imports - it's not a typo.
+    from .dataset import Dataset
 
 What is great about using a submodule that every commit in your project can be linked to its own version of a submodule.
 This is extremely convenient in a fast paced research environment.
