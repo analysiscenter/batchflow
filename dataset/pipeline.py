@@ -56,7 +56,7 @@ class Pipeline:
 
         if pipeline is None:
             self.dataset = dataset
-            self.config = config
+            self.config = deepcopy(config) if config is not None else {}
             self._action_list = []
             self.delete_all_variables()
             self._lazy_run = None
@@ -455,8 +455,12 @@ class Pipeline:
         self._action_list.append({'name': PRINT_VARIABLE_ID, 'var_name': name})
         return self.append_action()
 
-    def _exec_print_variable(self, _, action):
-        print(self.get_variable(action['var_name']))
+    def _exec_print_variable(self, batch, action):
+        if isinstance(action['var_name'], NamedExpression):
+            value = action['var_name'].get(batch)
+        else:
+            value = self.get_variable(action['var_name'])
+        print(value)
 
     def save_to_variable(self, name, *args, **kwargs):
         """ Save a value to a given variable during pipeline execution """
@@ -578,7 +582,7 @@ class Pipeline:
             _action.update({arg: value})
         return _action
 
-    def call(self, fn, save_to, mode='w', *args, **kwargs):
+    def call(self, fn, save_to=None, mode='w', *args, **kwargs):
         """ Call any function during pipeline execution
 
         Parameters
@@ -600,7 +604,8 @@ class Pipeline:
             output = fn(batch)
         else:
             raise TypeError("Callable is expected, but got {}".format(type(fn)))
-        self._save_output(batch, None, output, action['save_to'], action['mode'])
+        if action['save_to'] is not None:
+            self._save_output(batch, None, output, action['save_to'], action['mode'])
 
     def get_model_by_name(self, name, batch=None):
         """ Get a model specification by its name """

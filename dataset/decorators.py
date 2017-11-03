@@ -224,10 +224,11 @@ class ModelDirectory:
 
                     global_config = config or dict()
                     local_config = init_config or dict()
-                    kwargs = {**global_config, **local_config}
-                    kwargs = _calc_expr(kwargs)
 
-                    return model_class(name=name, config={**kwargs})
+                    global_config.update(_calc_expr(global_config))
+                    global_config.update(_calc_expr(local_config))
+                    return model_class(name=name, config=global_config)
+
 
                 _model_definition_method.__name__ = name
                 return _model_definition_method
@@ -337,9 +338,7 @@ def model(mode='global', pipeline=None):
                                         raise ValueError("Ambigous config contains several keys " +
                                                          "with similar names", model_names)
                                     elif len(model_names) == 1:
-                                        config_p = full_config[model_names[0]] or dict()
-                                        config_a = config or dict()
-                                        config = {**config_p, **config_a}
+                                        config = full_config[model_names[0]] or dict()
 
                             args = (pipeline,) if mode == 'static' else (batch,)
                             args = args if config is None else args + (config,)
