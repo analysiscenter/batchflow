@@ -12,7 +12,7 @@ from .decorators import action, inbatch_parallel, parallel, any_action_failed, m
 from .exceptions import SkipBatchException
 
 
-__version__ = '0.1.9-beta'
+__version__ = '0.2.0'
 
 
 if sys.version_info < (3, 5):
