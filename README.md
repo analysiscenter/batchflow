@@ -81,7 +81,7 @@ git submodule update
 If your python file is located in another directory, you might need to add a path to `dataset`:
 ```python
 import sys
-sys.path.insert(0, "/path/to/dataset/dataset")
+sys.path.insert(0, "/path/to/dataset")
 import dataset as ds
 ```
 
@@ -90,7 +90,7 @@ Local import is also possible:
 from .dataset import dataset as ds
 ```
 
-Note the double `dataset` in imports - it's not a typo.
+Note the double `dataset` in import - it's not a typo.
 
 What is great about using a submodule that every commit in your project can be linked to its own version of a submodule.
 This is extremely convenient in a fast paced research environment.
