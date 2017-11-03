@@ -21,7 +21,7 @@ def flatten(x, name=None):
 
 
 def maxout(x, depth, axis=-1, name='max'):
-    """ Shrink last dimension by making max pooling every depth channels """
+    """ Shrink last dimension by making max pooling every ``depth`` channels """
     with tf.name_scope(name):
         x = tf.convert_to_tensor(x)
 
@@ -36,7 +36,7 @@ def maxout(x, depth, axis=-1, name='max'):
         return out
 
 def mip(x, depth, name='mip'):
-    """ Shrink last dimension by making max pooling every depth channels """
+    """ Shrink last dimension by making max pooling every ``depth`` channels """
     with tf.name_scope(name):
         x = tf.convert_to_tensor(x)
         num_layers = x.get_shape().as_list()[-1]

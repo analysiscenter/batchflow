@@ -58,3 +58,35 @@ That's a fully working example. Just try it with a simple pipeline:
                 .print_variable('current_loss')
                 .run(128, shuffle=True, n_epochs=2))
 
+
+1d transposed convolution
+-------------------------
+
+.. autofunction:: dataset.models.tf.layers.conv1d_transpose
+
+
+Pooling
+-------
+
+.. autofunction:: dataset.models.tf.layers.max_pooling
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.average_pooling
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.global_max_pooling
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.global_average_pooling
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.mip
+    :noindex:
+
+Flatten
+-------
+.. autofunction:: dataset.models.tf.layers.flatten
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.flatten2d
+    :noindex:
