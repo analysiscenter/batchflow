@@ -8,6 +8,16 @@ import tensorflow as tf
 
 sys.path.append("../..")
 from dataset import *
+from dataset.models import BaseModel
+
+
+class MyModel(BaseModel):
+    """An example of a model class """
+    def build(self, *args, **kwargs):
+        print("___________________ MyModel initialized")
+
+    def train(self, *args, **kwargs):
+        return 1, 2, 3
 
 
 
@@ -47,6 +57,7 @@ class MyBatch(Batch):
     def train_static(self, model_spec):
         t1 = time()
         print("\n ================= train static ====================")
+        print("model_spec", model_spec)
         input_data, model_output = model_spec
         session = self.pipeline.get_variable("session")
         t = time()
@@ -100,6 +111,18 @@ class MyBatch(Batch):
         print(int(res), self.data.sum() ** 2)
         return self
 
+    @action
+    def train_in_batch(self, model_name):
+        print("\n========== train external model =============")
+        model = self.get_model_by_name(model_name)
+        print("Train", model_name)
+        return self
+
+    def make_data_for_dynamic(self):
+        return {'shape': self.data.shape}
+
+
+
 # number of items in the dataset
 K = 100
 Q = 10
@@ -135,11 +158,18 @@ template_pp = (Pipeline(config=config)
 pp2 = (template_pp
         .init_variable("session", sess)
         .init_variable("print lock", init=threading.Lock)
+        .init_model("dynamic", MyModel, "my_model", config=F(MyBatch.make_data_for_dynamic))
+        .init_model("dynamic", MyModel, "my_model2")
+        #.init_model("MyModel")
         .load(data)
         #.train_global()
         .train_static()
-        .train_dynamic()
-        .run(K, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
+        #.train_dynamic()
+        .train_in_batch("dynamic_model")
+        #.train_model("MyModel")
+        .train_model("my_model")
+        .train_model("my_model2", save_to=V('output'))
+        .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
 )
 
 # Create another template
@@ -147,12 +177,18 @@ t = time()
 #res = (pp2 << ds_data).run()
 print(time() - t)
 
+print("-------------------------------------------")
+print("============== start run ==================")
 t = time()
 res = (pp2 << ds_data).run()
 print(time() - t)
+#ModelDirectory.print()
 
-print("Start iterating...")
+
+print("-------------------------------------------------")
+print("============== start gen_batch ==================")
 res = pp2 << ds_data
+print("Start iterating...")
 t = time()
 t1 = t
 for batch in res.gen_batch(K, n_epochs=1, drop_last=True, prefetch=Q*0):
@@ -162,28 +198,32 @@ for batch in res.gen_batch(K, n_epochs=1, drop_last=True, prefetch=Q*0):
 
 print("Stop iterating:", time() - t)
 
-print(res.get_variable("loss history"))
+#ModelDirectory.print()
 
-print(res.get_model_by_name("global_model"))
+print("loss:", res.get_variable("loss history"))
 
-print(res.get_model_by_name("dynamic_model"))
+print("global:", res.get_model_by_name("global_model"))
 
-res2 = (ds_data.pipeline()
-               .init_variable("session", sess)
-               #.import_model("dynamic_model", res)
-               .load(data)
-               #.test_dynamic()
+print("dynamic:", res.get_model_by_name("dynamic_model"))
+
+pp3 = (Pipeline()
+           .init_variable("session", sess)
+           .import_model("my_model2", res)
+           .load(data)
+           .train_model("my_model2")
+           #.test_dynamic()
 )
 
 print("--------------------------------------------")
 print("============== start test ==================")
-print(res2)
+res2 = pp3 << ds_data
 for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
     with res.get_variable("print lock"):
         print("Batch", batch.indices, "is ready in", time() - t1)
     t1 = time()
 
+res3 = pp3 << ds_data
+print("predict")
+res3.run(3, n_epochs=1)
+
 #print(res2.get_model_by_name("dynamic_model"))
-
-print(res2.get_model_by_name("dynamic_model"))
-

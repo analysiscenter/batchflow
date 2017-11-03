@@ -8,7 +8,8 @@ import scipy.ndimage
 from time import time
 
 sys.path.append("../..")
-from dataset import DatasetIndex, Dataset, ImagesBatch, action, inbatch_parallel, any_action_failed
+from dataset import DatasetIndex, Dataset, action, inbatch_parallel, any_action_failed
+from dataset.image import ImagesBatch
 
 @njit(nogil=True)
 def embarassingly_parallel_one(image):
@@ -90,8 +91,8 @@ if __name__ == "__main__":
     dataset, data = gen_data(K, (S, S))
 
     res = (dataset.p
-            .load((data,))
-            .convert_to_pil('images')
+            .load((data, ))
+            .convert_to_pil()
             .resize(shape=(384, 384))
             .random_rotate(angle=(-np.pi/4, np.pi/4), preserve_shape=True)
             .crop(shape=(256, 256))
