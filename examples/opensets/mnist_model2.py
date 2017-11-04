@@ -20,11 +20,9 @@ class MyModel(TFModel):
 
         num_classes = self.num_classes('labels')
         x = inputs['images']
-        x = conv2d_block(x, [32, 32, 64], 3, strides=[1, 1, 1], dropout_rate=.15,
-                         layout='cacacand', name='layer1', training=self.is_training)
-        x = conv2d_block(x, [64, 64, 128], 3, strides=[1, 1, 1], dropout_rate=.15,
-                         layout='cacacand', name='layer2', training=self.is_training)
-        x = conv2d_block(x, num_classes, 1, layout='cna', name='layer3', training=self.is_training)
+        x = conv2d_block(x, [32, 64, 128], 3, strides=[2, 2, 2], dropout_rate=.15,
+                         layout='cnacnacnad', name='layer1', training=self.is_training)
+        x = conv2d_block(x, num_classes, 3, layout='cna', name='layer3', training=self.is_training)
         x = global_max_pooling(2, x, name='predictions')
 
         predicted_labels = tf.argmax(x, axis=1, name='predicted_labels')

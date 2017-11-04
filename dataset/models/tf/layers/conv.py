@@ -25,9 +25,9 @@ C_LAYERS = {
     'd': 'dropout'
 }
 
-_layers_keys = str(list(C_LAYERS.keys()))
-_groups_keys = _layers_keys.replace('v', 'p')
-C_GROUPS = dict(zip(_layers_keys, _groups_keys))
+_LAYERS_KEYS = str(list(C_LAYERS.keys()))
+_GROUP_KEYS = _LAYERS_KEYS.replace('v', 'p')
+C_GROUPS = dict(zip(_LAYERS_KEYS, _GROUP_KEYS))
 
 def _get_layer_fn(fn, dim):
     f = ND_LAYERS[fn]
