@@ -10,7 +10,7 @@ from dataset import Pipeline, B, C, F, V
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
-from dataset.models.tf.layers import conv2d_block, global_max_pooling
+from dataset.models.tf.layers import conv2d_block
 
 
 class MyModel(TFModel):
@@ -20,10 +20,9 @@ class MyModel(TFModel):
 
         num_classes = self.num_classes('labels')
         x = inputs['images']
-        x = conv2d_block(x, [32, 64, 128], 3, strides=[2, 2, 2], dropout_rate=.15,
-                         layout='cnacnacnad', name='layer1', training=self.is_training)
-        x = conv2d_block(x, num_classes, 3, layout='cna', name='layer3', training=self.is_training)
-        x = global_max_pooling(2, x, name='predictions')
+        x = conv2d_block(x, [32, 64, 128, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
+                         layout='cnacnacnadcnaP', name='network', training=self.is_training)
+        x = tf.identity(x, name='predictions')
 
         predicted_labels = tf.argmax(x, axis=1, name='predicted_labels')
 

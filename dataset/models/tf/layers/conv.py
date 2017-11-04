@@ -2,7 +2,7 @@
 import tensorflow as tf
 
 from .conv1d_tr import conv1d_transpose
-from .pooling import max_pooling, average_pooling
+from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling
 
 
 ND_LAYERS = {
@@ -12,6 +12,8 @@ ND_LAYERS = {
     'transposed_conv': [conv1d_transpose, tf.layers.conv2d_transpose, tf.layers.conv3d_transpose],
     'max_pooling': max_pooling,
     'average_pooling': average_pooling,
+    'global_max_pooling': global_max_pooling,
+    'global_average_pooling': global_average_pooling,
     'dropout': tf.layers.dropout
 }
 
@@ -22,6 +24,8 @@ C_LAYERS = {
     't': 'transposed_conv',
     'p': 'max_pooling',
     'v': 'average_pooling',
+    'P': 'global_max_pooling',
+    'V': 'global_average_pooling',
     'd': 'dropout'
 }
 
@@ -68,6 +72,8 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         - a - activation
         - p - max pooling
         - v - average pooling
+        - P - global max pooling
+        - V - global average pooling
         - d - dropout
 
         Default is 'cnap'.
@@ -176,6 +182,8 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                             data_format=data_format)
             elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
                 args = dict(rate=dropout_rate, training=is_training)
+            elif layer in ['P', 'V']:
+                args = dict(dim=dim, data_format=data_format)
 
             args = {**args, **kwargs.get(layer_name, {})}
             args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
