@@ -7,11 +7,15 @@ The module :mod:`.models.tf.layers` includes a :func:`convolution building block
 which helps build complex networks in a concise way.
 The block consist of predefined layers, among which:
 
-- convolution
-- transposed convolution
+- convolutions (as well as dilated and separable convolutions)
+- transposed convolutions
 - batch normalization
 - activation
 - max pooling
+- global max pooling
+- average pooling
+- global average pooling
+- maximum intensity projection (mip)
 - dropout
 
 The layers types and order are set by ``layout`` parameter. Thus, for instance, you can easily create
@@ -22,19 +26,25 @@ a sequence of 4 layers (3x3 convolution, batch norm, relu and max pooling) in on
     x = conv2d_block(dim, x, 32, 3, layout='cnap', name='conv1', training=self.is_training)
 
 
-Or a more sophisticated example - a full 12-layer VGG-like model in just 4 lines:
+Or a more sophisticated example - a full 14-layer VGG-like model in just 6 lines:
 
 .. code-block:: python
 
     class MyModel(TFModel):
         def _build(self):
             placeholders, inputs = self._make_inputs()
+
             dim = 2
-            x1 = conv_block(dim, inputs['images'], 16, 3, layout='cccnap', name='conv1', training=self.is_training)
-            x2 = conv_block(dim, x1, 32, 3, layout='cccnap', name='conv2', training=self.is_training)
-            x3 = conv_block(dim, x2, 64, 3, layout='cccnap', name='conv3', training=self.is_training)
-            x4 = conv_block(dim, x3, 128, 3, layout='cccnap', name='conv4', training=self.is_training)
-            output = global_average_pooling(dim, x4, name='predictions')
+            num_classes = self.num_classes('labels')
+
+            x = inputs['images']
+            x = conv_block(dim, x, 64, 3, layout='cacap', name='block1')
+            x = conv_block(dim, x, 128, 3, layout='cacap', name='block2')
+            x = conv_block(dim, x, 256, 3, layout='cacacap', name='block3')
+            x = conv_block(dim, x, 512, 3, layout='cacacap', name='block4')
+            x = conv_block(dim, x, 512, 3, layout='cacacap', name='block5')
+            x = conv_block(dim, x, num_classes, 3, layout='caP', name='classification')
+            output = tf.identity(x, name='predictions')
 
 That's a fully working example. Just try it with a simple pipeline:
 
@@ -80,7 +90,15 @@ A complex Nd block:
 
     x = conv_block(dim, x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
 
+Or the earlier defined 14-layers VGG network as a one-liner::
 
+    x = conv_block(dim, x, [64]*2 + [128]*2 + [256]*3 + [512]*6 + [num_classes], 3, layout='cacap cacap cacacap cacacap cacacap caP')
+
+However, in terms of training performance and prediction accuracy the following block with strided separable (grouped) convolutions
+and dropout will perform a way better::
+
+        x = conv_block(dim, x, [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
+                       layout='cna cna cna cnaP', depth_multiplier=[1, 2, 2, 1], training=self.is_training)
 
 1d transposed convolution
 -------------------------

@@ -10,7 +10,7 @@ from dataset import Pipeline, B, C, F, V
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
-from dataset.models.tf.layers import conv2d_block
+from dataset.models.tf.layers import conv_block
 
 
 class MyModel(TFModel):
@@ -19,9 +19,10 @@ class MyModel(TFModel):
         placeholders, inputs = self._make_inputs(names)
 
         num_classes = self.num_classes('labels')
+        dim = 2
         x = inputs['images']
-        x = conv2d_block(x, [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
-                         layout='cnacnacnadcnaP', depth_multiplier=[1, 2, 2, 1],
+        x = conv_block(dim, x, [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
+                         layout='cna cna cna cnaP', depth_multiplier=[1, 2, 2, 1],
                          name='network', training=self.is_training)
         x = tf.identity(x, name='predictions')
 
@@ -29,7 +30,7 @@ class MyModel(TFModel):
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 256
+    BATCH_SIZE = 64
 
     mnist = MNIST()
 

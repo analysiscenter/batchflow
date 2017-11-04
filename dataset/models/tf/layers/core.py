@@ -36,7 +36,7 @@ def maxout(inputs, depth, axis=-1, name='max'):
         return out
 
 def mip(inputs, depth, name='mip'):
-    """ Shrink last dimension by making max pooling every ``depth`` channels """
+    """ Maximum intensity projection by shrinking the last dimension with max pooling every ``depth`` channels """
     with tf.name_scope(name):
         x = tf.convert_to_tensor(inputs)
         num_layers = x.get_shape().as_list()[-1]

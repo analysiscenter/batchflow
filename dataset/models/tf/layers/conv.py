@@ -79,7 +79,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         - P - global max pooling
         - V - global average pooling
         - d - dropout
-        - m - :func:`.layers.mip`
+        - m - maximum intensity projection (:func:`.layers.mip`)
 
         Default is 'cnap'.
     name : str
@@ -164,6 +164,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
             layout_dict[C_GROUPS[layer]] = [-1, 0]
         layout_dict[C_GROUPS[layer]][1] += 1
 
+    layout = layout.replace(' ', '')
     tensor = input_tensor
     for layer in layout:
 
