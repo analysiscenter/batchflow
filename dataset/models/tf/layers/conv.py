@@ -1,6 +1,7 @@
 """ Contains convolution layers """
 import tensorflow as tf
 
+from .core import mip
 from .conv1d_tr import conv1d_transpose
 from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling
 
@@ -14,7 +15,8 @@ ND_LAYERS = {
     'average_pooling': average_pooling,
     'global_max_pooling': global_max_pooling,
     'global_average_pooling': global_average_pooling,
-    'dropout': tf.layers.dropout
+    'dropout': tf.layers.dropout,
+    'mip': mip
 }
 
 C_LAYERS = {
@@ -26,7 +28,8 @@ C_LAYERS = {
     'v': 'average_pooling',
     'P': 'global_max_pooling',
     'V': 'global_average_pooling',
-    'd': 'dropout'
+    'd': 'dropout',
+    'm': 'mip'
 }
 
 _LAYERS_KEYS = str(list(C_LAYERS.keys()))
@@ -75,6 +78,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         - P - global max pooling
         - V - global average pooling
         - d - dropout
+        - m - :func:`.layers.mip`
 
         Default is 'cnap'.
     name : str
@@ -184,6 +188,8 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                 args = dict(rate=dropout_rate, training=is_training)
             elif layer in ['P', 'V']:
                 args = dict(dim=dim, data_format=data_format)
+            elif layer == 'm':
+                args = {}
 
             args = {**args, **kwargs.get(layer_name, {})}
             args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
