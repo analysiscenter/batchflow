@@ -20,8 +20,9 @@ class MyModel(TFModel):
 
         num_classes = self.num_classes('labels')
         x = inputs['images']
-        x = conv2d_block(x, [32, 64, 128, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
-                         layout='cnacnacnadcnaP', name='network', training=self.is_training)
+        x = conv2d_block(x, [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
+                         layout='cnacnacnadcnaP', depth_multiplier=[1, 2, 2, 1],
+                         name='network', training=self.is_training)
         x = tf.identity(x, name='predictions')
 
         predicted_labels = tf.argmax(x, axis=1, name='predicted_labels')

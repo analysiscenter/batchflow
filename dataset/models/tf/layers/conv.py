@@ -9,12 +9,13 @@ from .pooling import max_pooling, average_pooling, global_max_pooling, global_av
 ND_LAYERS = {
     'activation': None,
     'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
-    'batch_norm': tf.layers.batch_normalization,
     'transposed_conv': [conv1d_transpose, tf.layers.conv2d_transpose, tf.layers.conv3d_transpose],
+    'separable_conv': [None, tf.layers.separable_conv2d, None],
     'max_pooling': max_pooling,
     'average_pooling': average_pooling,
     'global_max_pooling': global_max_pooling,
     'global_average_pooling': global_average_pooling,
+    'batch_norm': tf.layers.batch_normalization,
     'dropout': tf.layers.dropout,
     'mip': mip
 }
@@ -22,12 +23,12 @@ ND_LAYERS = {
 C_LAYERS = {
     'a': 'activation',
     'c': 'conv',
-    'n': 'batch_norm',
     't': 'transposed_conv',
     'p': 'max_pooling',
     'v': 'average_pooling',
     'P': 'global_max_pooling',
     'V': 'global_average_pooling',
+    'n': 'batch_norm',
     'd': 'dropout',
     'm': 'mip'
 }
@@ -52,8 +53,8 @@ def _unpack_args(args, layer_no, layers_max):
     return new_args
 
 def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None,
-               strides=1, padding='same', data_format='channels_last', dilation_rate=1, activation=tf.nn.relu,
-               pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
+               strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
+               activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex multi-dimensional convolution layer with batch normalization, activation, pooling and dropout
 
     Parameters
@@ -69,7 +70,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     layout : str
         a sequence of layers:
 
-        - c - convolution
+        - c - convolution (+ dilated, separable)
         - t - transposed convolution
         - n - batch normalization
         - a - activation
@@ -175,7 +176,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         else:
             if layer == 'c':
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
-                            data_format=data_format, dilation_rate=dilation_rate)
+                            data_format=data_format, dilation_rate=dilation_rate, depth_multiplier=depth_multiplier)
             elif layer == 't':
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             data_format=data_format)
@@ -193,6 +194,13 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
 
             args = {**args, **kwargs.get(layer_name, {})}
             args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
+
+            if layer == 'c':
+                if args['depth_multiplier'] > 1:
+                    layer_fn = _get_layer_fn('separable_conv', dim)
+                else:
+                    args.pop('depth_multiplier')
+
             tensor = layer_fn(inputs=tensor, **args)
 
     if context is not None:
@@ -202,36 +210,36 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
 
 
 def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
+                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
+                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 1d convolution with batch normalization, activation, pooling and dropout layers
 
     See :func:`.conv_block` for details.
     """
     return conv_block(1, input_tensor, filters, kernel_size, layout, name,
-                      strides, padding, data_format, dilation_rate, activation,
+                      strides, padding, data_format, dilation_rate, depth_multiplier, activation,
                       pool_size, pool_strides, dropout_rate, is_training, **kwargs)
 
 
 def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
+                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
+                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
 
     See :func:`.conv_block` for details.
     """
     return conv_block(2, input_tensor, filters, kernel_size, layout, name,
-                      strides, padding, data_format, dilation_rate, activation,
+                      strides, padding, data_format, dilation_rate, depth_multiplier, activation,
                       pool_size, pool_strides, dropout_rate, is_training, **kwargs)
 
 
 def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, activation=tf.nn.relu,
-                 pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
+                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
+                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
 
     See :func:`.conv_block` for details.
     """
     return conv_block(3, input_tensor, filters, kernel_size, layout, name,
-                      strides, padding, data_format, dilation_rate, activation,
+                      strides, padding, data_format, dilation_rate, depth_multiplier, activation,
                       pool_size, pool_strides, dropout_rate, is_training, **kwargs)
