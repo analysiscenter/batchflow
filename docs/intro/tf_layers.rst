@@ -58,11 +58,35 @@ That's a fully working example. Just try it with a simple pipeline:
                 .print_variable('current_loss')
                 .run(128, shuffle=True, n_epochs=2))
 
+When ``layout`` includes several layers of the same type, each one can have its own parameters,
+if corresponding arguments are passed as lists/tuples.
+
+A canonical bottleneck block (1x1, 3x3, 1x1 conv with relu in-between)::
+
+    x = conv_block(2, x, [64, 64, 256], [1, 3, 1], layout='cacac')
+
+A complex Nd block:
+
+- 5x5 conv with 32 filters
+- relu
+- 3x3 conv with 32 filters
+- relu
+- 3x3 conv with 64 filters and a spatial stride 2
+- relu
+- batch norm
+- dropout with rate 0.15
+
+::
+
+    x = conv_block(dim, x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
+
+
 
 1d transposed convolution
 -------------------------
 
 .. autofunction:: dataset.models.tf.layers.conv1d_transpose
+    :noindex:
 
 
 Pooling
