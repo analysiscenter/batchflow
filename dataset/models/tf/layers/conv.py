@@ -2,7 +2,7 @@
 import tensorflow as tf
 
 from .conv1d_tr import conv1d_transpose
-from .pooling import max_pooling
+from .pooling import max_pooling, average_pooling
 
 
 ND_LAYERS = {
@@ -11,6 +11,7 @@ ND_LAYERS = {
     'batch_norm': tf.layers.batch_normalization,
     'transposed_conv': [conv1d_transpose, tf.layers.conv2d_transpose, tf.layers.conv3d_transpose],
     'max_pooling': max_pooling,
+    'average_pooling': average_pooling,
     'dropout': tf.layers.dropout
 }
 
@@ -20,8 +21,13 @@ C_LAYERS = {
     'n': 'batch_norm',
     't': 'transposed_conv',
     'p': 'max_pooling',
+    'v': 'average_pooling',
     'd': 'dropout'
 }
+
+_layers_keys = str(list(C_LAYERS.keys()))
+_groups_keys = _layers_keys.replace('v', 'p')
+C_GROUPS = dict(zip(_layers_keys, _groups_keys))
 
 def _get_layer_fn(fn, dim):
     f = ND_LAYERS[fn]
@@ -61,6 +67,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         - n - batch normalization
         - a - activation
         - p - max pooling
+        - v - average pooling
         - d - dropout
 
         Default is 'cnap'.
@@ -130,7 +137,6 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
 
         x = conv_block(dim, x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
 
-
     """
 
     if not isinstance(dim, int) or dim < 1 or dim > 3:
@@ -143,14 +149,14 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
 
     layout_dict = {}
     for layer in layout:
-        if layer not in layout_dict:
-            layout_dict[layer] = [-1, 0]
-        layout_dict[layer][1] += 1
+        if C_GROUPS[layer] not in layout_dict:
+            layout_dict[C_GROUPS[layer]] = [-1, 0]
+        layout_dict[C_GROUPS[layer]][1] += 1
 
     tensor = input_tensor
     for layer in layout:
 
-        layout_dict[layer][0] += 1
+        layout_dict[C_GROUPS[layer]][0] += 1
         layer_name = C_LAYERS[layer]
         layer_fn = _get_layer_fn(layer_name, dim)
 
@@ -165,14 +171,14 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                             data_format=data_format)
             elif layer == 'n':
                 args = dict(fused=True, axis=-1, training=is_training)
-            elif layer == 'p':
+            elif C_GROUPS[layer] == 'p':
                 args = dict(dim=dim, pool_size=pool_size, strides=pool_strides, padding=padding,
                             data_format=data_format)
             elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
                 args = dict(rate=dropout_rate, training=is_training)
 
             args = {**args, **kwargs.get(layer_name, {})}
-            args = _unpack_args(args, *layout_dict[layer])
+            args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
             tensor = layer_fn(inputs=tensor, **args)
 
     if context is not None:
