@@ -100,10 +100,25 @@ and dropout will perform a way better::
         x = conv_block(dim, x, [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
                        layout='cna cna cna cnaP', depth_multiplier=[1, 2, 2, 1], training=self.is_training)
 
-1d transposed convolution
+Transposed convolution
 -------------------------
 
+.. autofunction:: dataset.models.tf.layers.conv_transpose
+    :noindex:
+
 .. autofunction:: dataset.models.tf.layers.conv1d_transpose
+    :noindex:
+
+
+Separable convolution
+---------------------
+.. autofunction:: dataset.models.tf.layers.separable_conv
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.separable_conv1d
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.separable_conv3d
     :noindex:
 
 
@@ -131,4 +146,10 @@ Flatten
     :noindex:
 
 .. autofunction:: dataset.models.tf.layers.flatten2d
+    :noindex:
+
+
+Maximum intensity projection
+----------------------------
+.. autofunction:: dataset.models.tf.layers.mip
     :noindex:

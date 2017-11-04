@@ -147,7 +147,6 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     ::
 
         x = conv_block(dim, x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
-
     """
 
     if not isinstance(dim, int) or dim < 1 or dim > 3:
@@ -217,7 +216,9 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 1d convolution with batch normalization, activation, pooling and dropout layers
 
-    See :func:`.conv_block` for details.
+    See also
+    --------
+    :func:`.conv_block`
     """
     return conv_block(1, input_tensor, filters, kernel_size, layout, name,
                       strides, padding, data_format, dilation_rate, depth_multiplier, activation,
@@ -229,7 +230,9 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
 
-    See :func:`.conv_block` for details.
+    See also
+    --------
+    :func:`.conv_block`
     """
     return conv_block(2, input_tensor, filters, kernel_size, layout, name,
                       strides, padding, data_format, dilation_rate, depth_multiplier, activation,
@@ -241,7 +244,9 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
                  activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
 
-    See :func:`.conv_block` for details.
+    See also
+    --------
+    :func:`.conv_block`
     """
     return conv_block(3, input_tensor, filters, kernel_size, layout, name,
                       strides, padding, data_format, dilation_rate, depth_multiplier, activation,

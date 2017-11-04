@@ -49,7 +49,10 @@ Example
 
 Note that you can use this model for 1d, 2d and 3d inputs (with a proper config when initializing a model).
 
-Now you can train the model in a pipeline:
+Also take a look into `conv_block <tf_layers#convolution-block>`_ documentation to find out how to write this network
+in just one line of code and other sophisticated examples.
+
+Now you can train the model in a simple pipeline:
 
 .. code-block:: python
 
