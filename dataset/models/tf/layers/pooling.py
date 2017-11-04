@@ -5,11 +5,6 @@ import tensorflow as tf
 def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='channels_last', name=None):
     """ Multi-dimensional max-pooling layer.
 
-    For more detailes see tensorflow documentation:
-    `tf.layers.max_pooling1d <https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling1d>`_,
-    `tf.layers.max_pooling2d <https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling2d>`_,
-    `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling3d>`_
-
     Parameters
     ----------
     dim: int {1, 2, 3}
@@ -30,6 +25,12 @@ def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='c
     Returns
     -------
     tf.Tensor
+
+    See also
+    --------
+    `tf.layers.max_pooling1d <https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling1d>`_,
+    `tf.layers.max_pooling2d <https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling2d>`_,
+    `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling3d>`_
     """
     if dim == 1:
         return tf.layers.max_pooling1d(inputs, pool_size, strides, padding, data_format, name)
@@ -44,11 +45,6 @@ def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='c
 def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='channels_last', name=None):
     """ Multi-dimensional average-pooling layer.
 
-    For more detailes see tensorflow documentation:
-    `tf.layers.average_pooling1d <https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling1d>`_,
-    `tf.layers.average_pooling2d <https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling2d>`_,
-    `tf.layers.average_pooling3d <https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling3d>`_
-
     Parameters
     ----------
     dim: int {1, 2, 3}
@@ -69,6 +65,12 @@ def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_forma
     Returns
     -------
     tf.Tensor
+
+    See also
+    --------
+    `tf.layers.average_pooling1d <https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling1d>`_,
+    `tf.layers.average_pooling2d <https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling2d>`_,
+    `tf.layers.average_pooling3d <https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling3d>`_
     """
     if dim == 1:
         return tf.layers.average_pooling1d(inputs, pool_size, strides, padding, data_format, name)
