@@ -81,11 +81,11 @@ def conv_transpose(dim, inputs, filters, kernel_size, strides, *args, **kwargs):
     `tf.layers.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d_transpose>`_
     """
     if dim == 1:
-        ouput = conv1d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
+        output = conv1d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
     elif dim == 2:
-        ouput = tf.layers.conv2d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
+        output = tf.layers.conv2d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
     elif dim == 3:
-        ouput = tf.layers.conv3d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
+        output = tf.layers.conv3d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
     return output
 
 
