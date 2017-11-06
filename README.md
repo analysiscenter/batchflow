@@ -100,15 +100,15 @@ Please cite Dataset in your publications if it helps your research.
 [![DOI](https://zenodo.org/badge/84835419.svg)](https://zenodo.org/badge/latestdoi/84835419)
 
 ```
-Roman Kh et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041204
+Roman Kh et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
 ```
 
 ```
-@misc{roman_kh_2017_1041204,
+@misc{roman_kh_2017_1041203,
   author       = {Roman Kh and et al},
   title        = {Dataset library for fast ML workflows},
   year         = 2017,
-  doi          = {10.5281/zenodo.1041204},
-  url          = {https://doi.org/10.5281/zenodo.1041204}
+  doi          = {10.5281/zenodo.1041203},
+  url          = {https://doi.org/10.5281/zenodo.1041203}
 }
 ```

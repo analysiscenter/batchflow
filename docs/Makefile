@@ -14,6 +14,21 @@ help:
 
 .PHONY: help Makefile
 
+.ONESHELL:
+gh-pages:
+	cd ..
+	git checkout gh-pages
+	git reset HEAD
+	git checkout master dataset docs
+	cd docs
+	make html
+	mv -fv _build/html/* ..
+	cd ..
+	rm -rf dataset docs
+	git add -A
+	git commit -am "Generated new doc"
+
+
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile
