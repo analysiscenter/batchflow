@@ -130,6 +130,7 @@ class TFModel(BaseModel):
         self.loss = None
         self.train_step = None
         self._attrs = []
+        self._recast_output = {}
 
         super().__init__(*args, **kwargs)
 
@@ -258,6 +259,9 @@ class TFModel(BaseModel):
         ``shape`` : int, tuple, list or None (default)
             a desired tensor shape which includes the number of channels/classes and doesn't include a batch size.
 
+        ``classes`` : array-like or None (default)
+            an array of class labels if data labels are strings or anything else except int
+
         ``data_format`` : str {``'channels_first'``, ``'channels_last'``} or {``'f'``, ``'l'``}
             The ordering of the dimensions in the inputs. Default is 'channels_last'.
 
@@ -270,7 +274,7 @@ class TFModel(BaseModel):
             a name for the transformed and reshaped tensor.
 
         If an input config is a tuple, it should contain all items exactly in the order shown above:
-        dtype, shape, data_format, transform, name.
+        dtype, shape, classes, data_format, transform, name.
         If an item is None, the default value will be used instead.
 
         **How it works**
@@ -316,7 +320,7 @@ class TFModel(BaseModel):
         if len(wrong_names) > 0:
             raise ValueError('Inputs contain duplicate names:', wrong_names)
 
-        param_names = ('dtype', 'shape', 'data_format', 'transform', 'name')
+        param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
         defaults = dict(dtype='float32', data_format='channels_last')
 
         placeholders = dict()
@@ -330,7 +334,11 @@ class TFModel(BaseModel):
                 input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
-            dtype = input_config.get('dtype')
+            if self.has_classes(input_name):
+                dtype = np.asarray(self.classes(input_name)).dtype
+                dtype = tf.string if dtype.type is np.str_ else dtype
+            else:
+                dtype = input_config.get('dtype')
             tensor = tf.placeholder(dtype, name=input_name)
             placeholders[input_name] = tensor
 
@@ -343,7 +351,7 @@ class TFModel(BaseModel):
             elif input_config.get('data_format') == 'f':
                 input_config['data_format'] = 'channels_first'
 
-            tensor = self._make_transform(tensor, input_config)
+            tensor = self._make_transform(input_name, tensor, input_config)
             if isinstance(shape, (list, tuple)):
                 tensor = tf.reshape(tensor, [-1] + list(shape))
 
@@ -355,35 +363,50 @@ class TFModel(BaseModel):
 
         return placeholders, tensors
 
-    def _make_transform(self, tensor, config):
+    def _make_transform(self, input_name, tensor, config):
         if config is not None:
             transform_name = config.get('transform')
             transform_dict = {'ohe': self._make_ohe}
             if isinstance(transform_name, str):
-                tensor = transform_dict[transform_name](tensor, config)
+                tensor = transform_dict[transform_name](input_name, tensor, config)
             elif callable(transform_name):
                 tensor = transform_name(tensor)
             elif transform_name is not None:
                 raise ValueError("Unknown transform {}".format(transform_name))
         return tensor
 
-    def _make_ohe(self, tensor, config):
-        shape = config.get('shape')
-        data_format = config.get('data_format')
+    def _make_ohe(self, input_name, tensor, config):
+        if config.get('shape') is None and config.get('classes') is None:
+            raise ValueError("shape and classes cannot be both None for input '{}'".format(input_name))
 
-        if data_format == 'channels_last':
-            n_classes = shape[-1]
-            axis = -1
-        elif data_format == 'channels_first':
-            n_classes = shape[0]
-            axis = 1
-        else:
-            raise ValueError("data_format must be 'channels_last' or 'channels_first'",
-                             "but '{}' was given".format(data_format))
-
+        if self.has_classes(input_name):
+            tf_classes = tf.constant(self.classes(input_name), name=input_name + '__classes')
+            get_indices = lambda c: tf.where(tf.equal(c, tf_classes))[0][0]
+            tensor = tf.map_fn(get_indices, tensor, dtype=tf.int64)
+        n_classes = self.num_classes(input_name)
+        axis = -1 if self.data_format(input_name) else 1
         tensor = tf.one_hot(tensor, depth=n_classes, axis=axis)
         return tensor
 
+    def tf_ohe_to_classes(self, tensor, input_name, name=None):
+        """ Convert one-hot tensor to classes of ``input_name`` """
+        if self.has_classes(input_name):
+            labels = tf.argmax(tensor, axis=-1)
+            labels = self.tf_to_classes(labels, input_name, name)
+        else:
+            labels = tf.argmax(tensor, axis=-1, name=name)
+        return labels
+
+    def tf_to_classes(self, tensor, input_name, name=None):
+        """ Convert tensor with labels to classes of ``input_name`` """
+        classes = self.graph.get_tensor_by_name(input_name + '__classes:0')
+        if name is None:
+            name = tensor.name.rsplit(':')[0] + '__to_classes'
+        output = tf.gather(classes, tensor, name=name)
+        # tensorflow cast all strings to bytes so we need to recast them back
+        if classes.dtype == tf.string:
+            self._recast_output.update({output: 'str'})
+        return output
 
     def _unpack_fn_from_config(self, param, default=None):
         par = self.get_from_config(param, default)
@@ -499,8 +522,19 @@ class TFModel(BaseModel):
         else:
             raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
 
+    def has_classes(self, tensor_name):
+        """ Check if a tensor has classes defined in the config """
+        return self.get_from_config('inputs')[tensor_name].get('classes') is not None
+
+    def classes(self, tensor_name):
+        """ Return the  number of classes """
+        return self.get_from_config('inputs')[tensor_name].get('classes')
+
     def num_classes(self, tensor_name):
         """ Return the  number of classes """
+        classes = self.get_from_config('inputs')[tensor_name].get('classes')
+        if classes is not None:
+            return len(classes)
         return self.num_channels(tensor_name)
 
     def spatial_dim(self, tensor_name):
@@ -569,6 +603,8 @@ class TFModel(BaseModel):
 
     def _map_name(self, name):
         if isinstance(name, str):
+            if name.startswith('classes('):
+                name = name[8:-1]
             if hasattr(self, name):
                 return getattr(self, name)
             elif ':' in name:
@@ -603,6 +639,30 @@ class TFModel(BaseModel):
             _fetches = fetches
         return _fetches
 
+    def _fill_output(self, output, fetches):
+        def _recast_output(out, ix=None):
+            if isinstance(out, np.ndarray):
+                fetch = fetches[ix] if ix is not None else fetches
+                if isinstance(fetch, str):
+                    fetch = self.graph.get_tensor_by_name(fetch)
+                if type(out[0]) == bytes and fetch in self._recast_output:
+                    return out.astype('str')
+            return out
+
+        if isinstance(output, (tuple, list)):
+            _output = []
+            for i, o in enumerate(output):
+                _output.append( _recast_output(o, i))
+            output = type(output)(_output)
+        elif isinstance(output, dict):
+            _output = type(output)()
+            for k, v in output.items():
+                _output.update({k: _recast_output(v, k)})
+        else:
+            output = _recast_output(output)
+
+        return output
+
     def train(self, fetches=None, feed_dict=None):   # pylint: disable=arguments-differ
         """ Train the model with the data provided
 
@@ -628,7 +688,8 @@ class TFModel(BaseModel):
             else:
                 _fetches = self._fill_fetches(fetches, default=None)
             _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
-        return output
+
+        return self._fill_output(output, _fetches)
 
     def predict(self, fetches=None, feed_dict=None):      # pylint: disable=arguments-differ
         """ Get predictions on the data provided
@@ -657,7 +718,7 @@ class TFModel(BaseModel):
             _feed_dict = self._fill_feed_dict(feed_dict, is_training=False)
             _fetches = self._fill_fetches(fetches, default='predictions')
             output = self.session.run(_fetches, _feed_dict)
-        return output
+        return self._fill_output(output, _fetches)
 
     def save(self, path, *args, **kwargs):
         """ Save tensorflow model.

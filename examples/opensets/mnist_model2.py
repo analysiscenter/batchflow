@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append("../..")
-from dataset import Pipeline, B, C, F, V
+from dataset import Pipeline, B, C, F, V, action
 from dataset.image import ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
@@ -26,13 +26,20 @@ class MyModel(TFModel):
                          name='network', training=self.is_training)
         x = tf.identity(x, name='predictions')
 
-        predicted_labels = tf.argmax(x, axis=1, name='predicted_labels')
+        predicted_labels = self.tf_ohe_to_classes(x, 'labels', name='predicted_labels')
+
+class MyBatch(ImagesBatch):
+    components = 'images', 'labels', 'digits'
+    @action
+    def make_digits(self):
+        self.digits = (10 + self.labels).astype('str')
+        return self
 
 
 if __name__ == "__main__":
     BATCH_SIZE = 64
 
-    mnist = MNIST()
+    mnist = MNIST(batch_class=MyBatch)
 
     config = dict(some=1, conv=dict(arg1=10))
     print()
@@ -48,7 +55,10 @@ if __name__ == "__main__":
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'inputs': dict(images={'shape': (28, 28, 1)},
-                                                   labels={'shape': 10, 'dtype': 'uint8', 'transform': 'ohe', 'name': 'targets'})})
+                                                   labels={'shape': 10, 'dtype': 'uint8',
+                                                   #labels={'classes': (10+np.arange(10)).astype('str'),
+                                                           'transform': 'ohe', 'name': 'targets'})})
+                .make_digits()
                 .train_model('conv', fetches=['loss', 'predicted_labels'],
                                      feed_dict={V('input_tensor_name'): B('images'),
                                                 'labels': B('labels')},
@@ -68,6 +78,7 @@ if __name__ == "__main__":
                 .import_model('conv', train_pp)
                 .init_variable('all_targets', init_on_each_run=list)
                 .init_variable('all_predictions', init_on_each_run=list)
+                .make_digits()
                 .predict_model('conv', fetches='predicted_labels', feed_dict={'images': B('images'),
                                                                               'labels': B('labels')},
                                save_to=V('all_predictions'), mode='a')
@@ -80,6 +91,8 @@ if __name__ == "__main__":
     targets = np.concatenate(test_pp.get_variable('all_targets'))
     accuracy = (predictions == targets).sum() / len(predictions) * 100
     print('Accuracy {:6.2f}'.format(accuracy))
+    print(targets)
+    print(predictions)
 
 
     conv = train_pp.get_model_by_name("conv")
