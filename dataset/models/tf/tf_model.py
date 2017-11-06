@@ -130,7 +130,7 @@ class TFModel(BaseModel):
         self.loss = None
         self.train_step = None
         self._attrs = []
-        self._recast_output = {}
+        self._to_classes = {}
 
         super().__init__(*args, **kwargs)
 
@@ -335,8 +335,7 @@ class TFModel(BaseModel):
             input_config = {**defaults, **input_config}
 
             if self.has_classes(input_name):
-                dtype = np.asarray(self.classes(input_name)).dtype
-                dtype = tf.string if dtype.type is np.str_ else dtype
+                dtype = tf.int32
             else:
                 dtype = input_config.get('dtype')
             tensor = tf.placeholder(dtype, name=input_name)
@@ -379,34 +378,17 @@ class TFModel(BaseModel):
         if config.get('shape') is None and config.get('classes') is None:
             raise ValueError("shape and classes cannot be both None for input '{}'".format(input_name))
 
-        if self.has_classes(input_name):
-            tf_classes = tf.constant(self.classes(input_name), name=input_name + '__classes')
-            get_indices = lambda c: tf.where(tf.equal(c, tf_classes))[0][0]
-            tensor = tf.map_fn(get_indices, tensor, dtype=tf.int64)
         n_classes = self.num_classes(input_name)
         axis = -1 if self.data_format(input_name) else 1
         tensor = tf.one_hot(tensor, depth=n_classes, axis=axis)
         return tensor
 
-    def tf_ohe_to_classes(self, tensor, input_name, name=None):
-        """ Convert one-hot tensor to classes of ``input_name`` """
-        if self.has_classes(input_name):
-            labels = tf.argmax(tensor, axis=-1)
-            labels = self.tf_to_classes(labels, input_name, name)
-        else:
-            labels = tf.argmax(tensor, axis=-1, name=name)
-        return labels
-
-    def tf_to_classes(self, tensor, input_name, name=None):
+    def to_classes(self, tensor, input_name, name=None):
         """ Convert tensor with labels to classes of ``input_name`` """
-        classes = self.graph.get_tensor_by_name(input_name + '__classes:0')
-        if name is None:
-            name = tensor.name.rsplit(':')[0] + '__to_classes'
-        output = tf.gather(classes, tensor, name=name)
-        # tensorflow cast all strings to bytes so we need to recast them back
-        if classes.dtype == tf.string:
-            self._recast_output.update({output: 'str'})
-        return output
+        if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
+            tensor = tf.argmax(tensor, axis=-1, name=name)
+        self._to_classes.update({tensor: input_name})
+        return tensor
 
     def _unpack_fn_from_config(self, param, default=None):
         par = self.get_from_config(param, default)
@@ -603,8 +585,6 @@ class TFModel(BaseModel):
 
     def _map_name(self, name):
         if isinstance(name, str):
-            if name.startswith('classes('):
-                name = name[8:-1]
             if hasattr(self, name):
                 return getattr(self, name)
             elif ':' in name:
@@ -616,6 +596,10 @@ class TFModel(BaseModel):
         feed_dict = feed_dict or {}
         _feed_dict = {}
         for placeholder, value in feed_dict.items():
+            if self.has_classes(placeholder):
+                classes = self.classes(placeholder)
+                get_indices = np.vectorize(lambda c: np.where(c == classes)[0])
+                value = get_indices(value)
             placeholder = self._map_name(placeholder)
             value = self._map_name(value)
             _feed_dict.update({placeholder: value})
@@ -645,8 +629,8 @@ class TFModel(BaseModel):
                 fetch = fetches[ix] if ix is not None else fetches
                 if isinstance(fetch, str):
                     fetch = self.graph.get_tensor_by_name(fetch)
-                if type(out[0]) == bytes and fetch in self._recast_output:
-                    return out.astype('str')
+                if fetch in self._to_classes:
+                    return self.classes(self._to_classes[fetch])[out]
             return out
 
         if isinstance(output, (tuple, list)):

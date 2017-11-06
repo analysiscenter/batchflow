@@ -26,7 +26,7 @@ class MyModel(TFModel):
                          name='network', training=self.is_training)
         x = tf.identity(x, name='predictions')
 
-        predicted_labels = self.tf_ohe_to_classes(x, 'labels', name='predicted_labels')
+        predicted_labels = self.to_classes(x, 'labels', name='predicted_labels')
 
 class MyBatch(ImagesBatch):
     components = 'images', 'labels', 'digits'
@@ -55,13 +55,13 @@ if __name__ == "__main__":
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'inputs': dict(images={'shape': (28, 28, 1)},
-                                                   labels={'shape': 10, 'dtype': 'uint8',
-                                                   #labels={'classes': (10+np.arange(10)).astype('str'),
+                                                   #labels={'shape': 10, 'dtype': 'uint8',
+                                                   labels={'classes': (10+np.arange(10)).astype('str'),
                                                            'transform': 'ohe', 'name': 'targets'})})
                 .make_digits()
                 .train_model('conv', fetches=['loss', 'predicted_labels'],
                                      feed_dict={V('input_tensor_name'): B('images'),
-                                                'labels': B('labels')},
+                                                'labels': B('digits')},
                              save_to=[V('current_loss'), V('pred_label')])
                 .print_variable('current_loss')
                 .update_variable('loss_history', V('current_loss'), mode='a'))
@@ -80,9 +80,9 @@ if __name__ == "__main__":
                 .init_variable('all_predictions', init_on_each_run=list)
                 .make_digits()
                 .predict_model('conv', fetches='predicted_labels', feed_dict={'images': B('images'),
-                                                                              'labels': B('labels')},
+                                                                              'labels': B('digits')},
                                save_to=V('all_predictions'), mode='a')
-                .update_variable('all_targets', B('labels'), mode='a')
+                .update_variable('all_targets', B('digits'), mode='a')
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False, prefetch=0))
     print("End testing", time() - t)
 
