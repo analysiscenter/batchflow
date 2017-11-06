@@ -35,20 +35,22 @@ def maxout(inputs, depth, axis=-1, name='max'):
         out = tf.reduce_max(tf.reshape(x, shape), axis=-1, keep_dims=False)
         return out
 
-def mip(inputs, depth, name='mip'):
-    """ Maximum intensity projection by shrinking the last dimension with max pooling every ``depth`` channels """
+def mip(inputs, depth, data_format='channels_last', name='mip'):
+    """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels """
     with tf.name_scope(name):
         x = tf.convert_to_tensor(inputs)
-        num_layers = x.get_shape().as_list()[-1]
+
+        axis = -1 if data_format == 'channels_last' else 1
+        num_layers = x.get_shape().as_list()[axis]
         split_sizes = [depth] * (num_layers // depth)
         if num_layers % depth:
             split_sizes += [num_layers % depth]
 
-        splits = tf.split(x, split_sizes, axis=-1)
+        splits = tf.split(x, split_sizes, axis=axis)
         mips = []
         for split in splits:
-            amip = tf.reduce_max(split, axis=-1)
+            amip = tf.reduce_max(split, axis=axis)
             mips.append(amip)
-        mips = tf.stack(mips, axis=-1)
+        mips = tf.stack(mips, axis=axis)
 
     return mips

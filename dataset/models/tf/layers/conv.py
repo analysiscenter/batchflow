@@ -141,7 +141,7 @@ def separable_conv(dim, inputs, filters, kernel_size, strides=1, padding='same',
             context.__enter__()
 
         inputs_shape = inputs.get_shape().as_list()
-        axis = dim + 1 if data_format == 'channels_last' else 1
+        axis = -1 if data_format == 'channels_last' else 1
         size = [-1] * (dim + 2)
         size[axis] = 1
         channels_in = inputs_shape[axis]
