@@ -404,7 +404,8 @@ class TFModel(BaseModel):
         """ Convert tensor with labels to classes of ``input_name`` """
         if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
             tensor = tf.argmax(tensor, axis=-1, name=name)
-        self._to_classes.update({tensor: input_name})
+        if self.has_classes(input_name):
+            self._to_classes.update({tensor: input_name})
         return tensor
 
     def _make_mip(self, input_name, tensor, config):
