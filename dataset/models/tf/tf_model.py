@@ -533,7 +533,9 @@ class TFModel(BaseModel):
 
     def has_classes(self, tensor_name):
         """ Check if a tensor has classes defined in the config """
-        return self.get_from_config('inputs')[tensor_name].get('classes') is not None
+        inputs = self.get_from_config('inputs')
+        has = inputs is not None and inputs[tensor_name].get('classes') is not None
+        return has
 
     def classes(self, tensor_name):
         """ Return the  number of classes """
