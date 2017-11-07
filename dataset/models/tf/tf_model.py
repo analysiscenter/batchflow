@@ -369,7 +369,7 @@ class TFModel(BaseModel):
             transform_name = config.get('transform')
             if isinstance(transform_name, str):
 
-                _TRANSFORMS = {
+                transforms = {
                     'ohe': self._make_ohe,
                     'mip': self._make_mip
                 }
@@ -384,7 +384,7 @@ class TFModel(BaseModel):
                     # do not make reshape twice
                     config.pop('shape')
 
-                tensor = _TRANSFORMS[transform_name](input_name, tensor, config)
+                tensor = transforms[transform_name](input_name, tensor, config)
             elif callable(transform_name):
                 tensor = transform_name(tensor)
             elif transform_name is not None:
@@ -625,7 +625,7 @@ class TFModel(BaseModel):
         for placeholder, value in feed_dict.items():
             if self.has_classes(placeholder):
                 classes = self.classes(placeholder)
-                get_indices = np.vectorize(lambda c: np.where(c == classes)[0])
+                get_indices = np.vectorize(lambda c, arr=classes: np.where(c == arr)[0])
                 value = get_indices(value)
             placeholder = self._map_name(placeholder)
             value = self._map_name(value)
@@ -663,7 +663,7 @@ class TFModel(BaseModel):
         if isinstance(output, (tuple, list)):
             _output = []
             for i, o in enumerate(output):
-                _output.append( _recast_output(o, i))
+                _output.append(_recast_output(o, i))
             output = type(output)(_output)
         elif isinstance(output, dict):
             _output = type(output)()
