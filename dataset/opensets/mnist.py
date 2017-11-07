@@ -7,7 +7,8 @@ import gzip
 import numpy as np
 
 from . import ImagesOpenset
-from .. import DatasetIndex, parallel, any_action_failed
+from .. import DatasetIndex
+from .. import parallel, any_action_failed
 
 
 class MNIST(ImagesOpenset):

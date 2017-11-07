@@ -8,7 +8,7 @@ import tarfile
 import numpy as np
 
 from .. import DatasetIndex
-from . import ImagesOpenset
+from .base import ImagesOpenset
 
 
 class BaseCIFAR(ImagesOpenset):

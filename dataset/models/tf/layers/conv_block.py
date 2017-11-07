@@ -202,7 +202,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                 else:
                     args.pop('depth_multiplier')
 
-            with tf.variable_scope('layer-%s-%d' % (layer, i)):
+            with tf.variable_scope('layer-%d' % i):
                 tensor = layer_fn(inputs=tensor, **args)
 
     if context is not None:

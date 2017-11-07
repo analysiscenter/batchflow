@@ -2,8 +2,6 @@
 from binascii import hexlify
 import numpy as np
 
-from .dsindex import DatasetIndex
-
 
 class BaseBatch:
     """ Base class for batches
@@ -11,10 +9,7 @@ class BaseBatch:
     """
     def __init__(self, index, *args, **kwargs):
         _ = args, kwargs
-        if isinstance(index, DatasetIndex):
-            self.index = index
-        else:
-            self.index = DatasetIndex(index)
+        self.index = index
         self._data_named = None
         self._data = None
         self.pipeline = None
