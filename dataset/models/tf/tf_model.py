@@ -534,7 +534,8 @@ class TFModel(BaseModel):
     def has_classes(self, tensor_name):
         """ Check if a tensor has classes defined in the config """
         inputs = self.get_from_config('inputs')
-        has = inputs is not None and inputs[tensor_name].get('classes') is not None
+        has = inputs is not None and tensor_name in inputs and \
+              inputs[tensor_name].get('classes') is not None
         return has
 
     def classes(self, tensor_name):
@@ -543,9 +544,8 @@ class TFModel(BaseModel):
 
     def num_classes(self, tensor_name):
         """ Return the  number of classes """
-        classes = self.get_from_config('inputs')[tensor_name].get('classes')
-        if classes is not None:
-            return len(classes)
+        if self.has_classes(tensor_name):
+            return len(self.classes(tensor_name))
         return self.num_channels(tensor_name)
 
     def spatial_dim(self, tensor_name):
