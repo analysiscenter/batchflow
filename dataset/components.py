@@ -8,17 +8,23 @@ class ComponentDescriptor:
         self._default = default
 
     def __get__(self, instance, cls):
-        if instance.data is None:
-            return self._default
-        elif instance.pos is None:
-            return instance.data[self._component]
-        pos = instance.pos[self._component]
-        data = instance.data[self._component]
-        return data[pos] if data is not None else self._default
+        try:
+            if instance.data is None:
+                out = self._default
+            elif instance.pos is None:
+                out = instance.data[self._component]
+            else:
+                pos = instance.pos[self._component]
+                data = instance.data[self._component]
+                out = data[pos] if data is not None else self._default
+        except IndexError:
+            out = self._default
+        return out
 
     def __set__(self, instance, value):
         if instance.pos is None:
-            new_data = list(instance.data) if instance.data is not None else [None for _ in instance.components]
+            new_data = list(instance.data) if instance.data is not None else []
+            new_data = new_data + [None for _ in range(max(len(instance.components) - len(new_data), 0))]
             new_data[self._component] = value
             instance.data = tuple(new_data)
         else:

@@ -4,11 +4,18 @@ Tensorflow layers and losses
 Convolution block
 -----------------
 The module :mod:`.models.tf.layers` includes a :func:`convolution building block <.models.tf.layers.conv_block>`
-which helps build complex networks in a concise way.
+which helps building complex networks in a concise way.
+
+The advantages of using ``conv_block`` are:
+
+- it helps to create more sophisticated networks with fewer lines of code;
+- it allows to build multidimensional models with the same code (namely 1d, 2d, and 3d);
+- it contains new layers missing in TensorFlow (e.g. separable 1d and 3d convolutions, 1d transposed convolutions, mip);
+- it uses a fast CuDNN implementation of batch norm;
+
 The block consist of predefined layers, among which:
 
-- convolutions (as well as dilated and separable convolutions)
-- transposed convolutions
+- convolutions (as well as dilated, separable and trasposed convolutions)
 - batch normalization
 - activation
 - max pooling
@@ -95,7 +102,7 @@ Or the earlier defined 14-layers VGG network as a one-liner::
     x = conv_block(dim, x, [64]*2 + [128]*2 + [256]*3 + [512]*6 + [num_classes], 3, layout='cacap cacap cacacap cacacap cacacap caP')
 
 However, in terms of training performance and prediction accuracy the following block with strided separable (grouped) convolutions
-and dropout will perform a way better::
+and dropout will perform much better::
 
         x = conv_block(dim, x, [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
                        layout='cna cna cna cnaP', depth_multiplier=[1, 2, 2, 1], training=self.is_training)
