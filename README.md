@@ -90,7 +90,7 @@ This is extremely convenient in a fast paced research environment.
 
 Local import is also possible:
 ```python
-from .dataset import Dataset
+from .dataset.dataset import Dataset
 ```
 
 It requires a double dataset in the import line, though.
