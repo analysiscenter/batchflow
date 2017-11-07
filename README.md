@@ -57,12 +57,12 @@ For more advanced cases and detailed API see [the documentation](https://analysi
 ### Python package
 With modern [pipenv](https://docs.pipenv.org/)
 ```
-pipenv install git+https://github.com/analysiscenter/dataset.git
+pipenv install git+https://github.com/analysiscenter/dataset.git#egg=dataset
 ```
 
 With old-fashioned [pip](https://pip.pypa.io/en/stable/)
 ```
-pip3 install git+https://github.com/analysiscenter/dataset.git#egg=dataset
+pip3 install git+https://github.com/analysiscenter/dataset.git
 ```
 
 After that just import `dataset`:
