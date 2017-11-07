@@ -40,7 +40,6 @@ if __name__ == "__main__":
     BATCH_SIZE = 64
 
     mnist = MNIST(batch_class=MyBatch)
-
     config = dict(some=1, conv=dict(arg1=10))
     print()
     print("Start training...")
