@@ -262,7 +262,7 @@ class TFModel(BaseModel):
             a desired tensor shape which includes the number of channels/classes and doesn't include a batch size.
 
         ``classes`` : array-like or None (default)
-            an array of class labels if data labels are strings or anything else except int
+            an array of class labels if data labels are strings or anything else except ``np.arange(n_classes)``
 
         ``data_format`` : str {``'channels_first'``, ``'channels_last'``} or {``'f'``, ``'l'``}
             The ordering of the dimensions in the inputs. Default is 'channels_last'.
