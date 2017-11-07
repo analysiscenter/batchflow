@@ -93,18 +93,20 @@ In many cases it is much more convenient to install `dataset` as a submodule in 
     git submodule update
 
 
-If your python file is located in another directory, you might need to add a path to `dataset` location::
+If your python file is located in another directory, you might need to add a path to `dataset` submodule location::
 
     import sys
     sys.path.insert(0, "/path/to/dataset")
     import dataset as ds
 
+What is great about using a submodule is that every commit in your project can be linked to its own commit of a submodule.
+This is extremely convenient in a fast paced research environment.
+
 Local import is also possible::
 
-    from .dataset import Dataset
+    from .dataset.dataset import Dataset
 
-What is great about using a submodule that every commit in your project can be linked to its own version of a submodule.
-This is extremely convenient in a fast paced research environment.
+It requires a double dataset in the import line, though.
 
 
 Citing Dataset
