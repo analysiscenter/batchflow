@@ -1,6 +1,6 @@
 """ Contains the base class for open datasets """
 
-from .. import Dataset
+from ..dataset import Dataset
 from ..image import ImagesBatch
 
 

@@ -54,8 +54,9 @@ class Dataset(Baseset):
             that should be included in the batch
             otherwise `batch_indices` should contain their positions in the current index
         """
-        batch_ix = self.index.create_batch(batch_indices, pos, *args, **kwargs)
-        return self.batch_class(batch_ix, preloaded=self.preloaded, **kwargs)
+        if not isinstance(batch_indices, DatasetIndex):
+            batch_indices = self.index.create_batch(batch_indices, pos, *args, **kwargs)
+        return self.batch_class(batch_indices, preloaded=self.preloaded, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow """

@@ -5,7 +5,7 @@ import glob
 from collections import Iterable
 import numpy as np
 
-from .base import Baseset
+from . import Baseset
 
 
 class DatasetIndex(Baseset):
