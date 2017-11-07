@@ -64,11 +64,9 @@ Global options:
 * ``build`` : bool - whether to call ``model.build(...)`` to create a model. Default is ``True``.
 * ``load`` : dict - parameters for model loading from some storage. If present, a model will be loaded by calling `self.load(**config['load'])`.
 
-  If ``True``, ``model.load()`` will be called. Default is ``False``.
-
   Loading usually requires some additional config parameters like paths, file names or file formats. Check the documentation for the model you use for more details.
 
-For some models only one of ``build`` or ``load`` can be ``True``. While other models might need a building phase even if a model is loaded from a disk.
+For some models only one of ``build`` or ``load`` should be specified. While other models might need a building phase even if a model is loaded from a disk.
 
 Read a model specfication to know how to configure it.
 
