@@ -54,7 +54,7 @@ if __name__ == "__main__":
                             config={'session': {'config': tf.ConfigProto(allow_soft_placement=True)},
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
-                                    'inputs': dict(images={'shape': (28, 28, 1)},
+                                    'inputs': dict(images={'shape': (28, 28, 1), 'transform': 'mip @ 1'},
                                                    #labels={'shape': 10, 'dtype': 'uint8',
                                                    labels={'classes': (10+np.arange(10)).astype('str'),
                                                            'transform': 'ohe', 'name': 'targets'})})

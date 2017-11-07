@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..base import BaseModel
+from .layers import mip
 from .losses import dice
 from ...utils import copy1
 
@@ -34,6 +35,7 @@ DECAYS = {
     'const': tf.train.piecewise_constant,
     'poly': tf.train.polynomial_decay
 }
+
 
 
 class TFModel(BaseModel):
@@ -341,16 +343,16 @@ class TFModel(BaseModel):
             tensor = tf.placeholder(dtype, name=input_name)
             placeholders[input_name] = tensor
 
-            shape = input_config.get('shape')
-            if isinstance(shape, int):
-                input_config['shape'] = (shape,)
-
             if input_config.get('data_format') == 'l':
                 input_config['data_format'] = 'channels_last'
             elif input_config.get('data_format') == 'f':
                 input_config['data_format'] = 'channels_first'
 
             tensor = self._make_transform(input_name, tensor, input_config)
+
+            shape = input_config.get('shape')
+            if isinstance(shape, int):
+                input_config['shape'] = (shape,)
             if isinstance(shape, (list, tuple)):
                 tensor = tf.reshape(tensor, [-1] + list(shape))
 
@@ -365,9 +367,24 @@ class TFModel(BaseModel):
     def _make_transform(self, input_name, tensor, config):
         if config is not None:
             transform_name = config.get('transform')
-            transform_dict = {'ohe': self._make_ohe}
             if isinstance(transform_name, str):
-                tensor = transform_dict[transform_name](input_name, tensor, config)
+
+                _TRANSFORMS = {
+                    'ohe': self._make_ohe,
+                    'mip': self._make_mip
+                }
+
+                if transform_name.startswith('mip'):
+                    parts = transform_name.split('@')
+                    transform_name = parts[0].strip()
+                    config['depth'] = int(parts[1])
+                    # mip has to know shape, so we need call reshape first
+                    shape = config.get('shape')
+                    tensor = tf.reshape(tensor, [-1] + list(shape))
+                    # do not make reshape twice
+                    config.pop('shape')
+
+                tensor = _TRANSFORMS[transform_name](input_name, tensor, config)
             elif callable(transform_name):
                 tensor = transform_name(tensor)
             elif transform_name is not None:
@@ -388,6 +405,13 @@ class TFModel(BaseModel):
         if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
             tensor = tf.argmax(tensor, axis=-1, name=name)
         self._to_classes.update({tensor: input_name})
+        return tensor
+
+    def _make_mip(self, input_name, tensor, config):
+        depth = config.get('depth')
+        if depth is None:
+            raise ValueError("mip should be specifies as mip @ depth")
+        tensor = mip(tensor, depth=depth, data_format=self.data_format(input_name))
         return tensor
 
     def _unpack_fn_from_config(self, param, default=None):
@@ -475,12 +499,12 @@ class TFModel(BaseModel):
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
-        with self:
+        with self.graph:
             arr = np.asarray([np.prod(self.get_shape(v)) for v in tf.trainable_variables()])
         return np.sum(arr)
 
     def num_channels(self, tensor_name):
-        """ Return the number of channels (the length of the last dimension) in the tensor
+        """ Return the number of channels in the tensor
 
         Parameters
         ----------
@@ -494,7 +518,10 @@ class TFModel(BaseModel):
         ------
         ValueError shape in tensor configuration isn't int, tuple or list
         """
-        shape = self.get_from_config('inputs')[tensor_name].get('shape')
+        if tensor_name in self.get_from_config('inputs'):
+            shape = self.get_from_config('inputs')[tensor_name].get('shape')
+        else:
+            shape = self.graph.get_tensor_by_name(self._map_name(tensor_name)).get_shape().as_list()[1:]
         if isinstance(shape, int):
             shape = (shape,)
         if isinstance(shape, (list, tuple)):
