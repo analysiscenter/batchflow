@@ -262,15 +262,17 @@ class TFModel(BaseModel):
             a desired tensor shape which includes the number of channels/classes and doesn't include a batch size.
 
         ``classes`` : array-like or None (default)
-            an array of class labels if data labels are strings or anything else except ``np.arange(n_classes)``
+            an array of class labels if data labels are strings or anything else except ``np.arange(num_classes)``
 
         ``data_format`` : str {``'channels_first'``, ``'channels_last'``} or {``'f'``, ``'l'``}
             The ordering of the dimensions in the inputs. Default is 'channels_last'.
 
         ``transform`` : str or callable
-            if transform is ``'ohe'``, one-hot encoding will be applied.
-            The new axis is created at the last dimension if data_format is ``'channels_last'`` or
-            at the first dimension after a batch size otherwise.
+            Predefined transforms are
+
+            - ``'ohe'`` - one-hot encoding
+            - ``'mip @ d'`` - maximum intensity projection :func:`~.layers.mip`
+              with depth ``d`` (should be int)
 
         ``name`` : str
             a name for the transformed and reshaped tensor.
