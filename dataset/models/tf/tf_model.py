@@ -133,6 +133,7 @@ class TFModel(BaseModel):
         self.train_step = None
         self._attrs = []
         self._to_classes = {}
+        self._inputs = {}
 
         super().__init__(*args, **kwargs)
 
@@ -364,6 +365,7 @@ class TFModel(BaseModel):
 
             tensors[input_name] = tensor
 
+        self._inputs = {**placeholders, **tensors}
         return placeholders, tensors
 
     def _make_transform(self, input_name, tensor, config):
@@ -506,12 +508,47 @@ class TFModel(BaseModel):
             arr = np.asarray([np.prod(self.get_shape(v)) for v in tf.trainable_variables()])
         return np.sum(arr)
 
-    def num_channels(self, tensor_name):
+    def get_tensor_config(self, tensor, **kwargs):
+        """ Return tensor configuration
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+        """
+        inputs = self.get_from_config('inputs', {})
+        if isinstance(tensor, tf.Tensor):
+            names = [n for n, i in self._inputs.items() if tensor == i]
+            if len(names) > 0:
+                tensor_name = names[0]
+            else:
+                tensor_name = tensor.name
+            tensor_name = names[0] if len(names) > 0 else None
+        elif isinstance(tensor, str):
+            if tensor in inputs:
+                tensor_name = tensor
+            else:
+                tensor_name = self._map_name(tensor)
+        else:
+            raise TypeError("Tensor can be tf.Tensor or string, but given %s" % type(tensor))
+
+        if tensor_name in inputs:
+            config = inputs[tensor_name]
+        else:
+            tensor = self.graph.get_tensor_by_name(tensor_name)
+            shape = tensor.get_shape().as_list()[1:]
+            config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name,
+                          data_format='channels_last')
+            config = {**config, **kwargs}
+
+        return config
+
+
+    def num_channels(self, tensor, **kwargs):
         """ Return the number of channels in the tensor
 
         Parameters
         ----------
-        tensor_name : str
+        tensor : str or tf.Tensor
 
         Returns
         -------
@@ -521,52 +558,51 @@ class TFModel(BaseModel):
         ------
         ValueError shape in tensor configuration isn't int, tuple or list
         """
-        if tensor_name in self.get_from_config('inputs'):
-            shape = self.get_from_config('inputs')[tensor_name].get('shape')
-        else:
-            shape = self.graph.get_tensor_by_name(self._map_name(tensor_name)).get_shape().as_list()[1:]
+        config = self.get_tensor_config(tensor, **kwargs)
+        shape = config['shape']
+
         if isinstance(shape, int):
             shape = (shape,)
         if isinstance(shape, (list, tuple)):
-            data_format = self.get_from_config('inputs')[tensor_name].get('data_format', 'channels_last')
             channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
             return shape[channels_dim]
         else:
             raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
 
-    def has_classes(self, tensor_name):
+    def has_classes(self, tensor):
         """ Check if a tensor has classes defined in the config """
-        inputs = self.get_from_config('inputs')
-        has = inputs is not None and tensor_name in inputs and \
-              inputs[tensor_name].get('classes') is not None
+        config = self.get_tensor_config(tensor)
+        has = config.get('classes') is not None
         return has
 
-    def classes(self, tensor_name):
+    def classes(self, tensor):
         """ Return the  number of classes """
-        return self.get_from_config('inputs')[tensor_name].get('classes')
+        config = self.get_tensor_config(tensor)
+        return config.get('classes')
 
-    def num_classes(self, tensor_name):
+    def num_classes(self, tensor):
         """ Return the  number of classes """
-        if self.has_classes(tensor_name):
-            return len(self.classes(tensor_name))
-        return self.num_channels(tensor_name)
+        if self.has_classes(tensor):
+            return len(self.classes(tensor))
+        return self.num_channels(tensor)
 
-    def spatial_dim(self, tensor_name):
-        """ Return the tensor spatial  dimensionality (without channels dimension)
+    def spatial_dim(self, tensor, **kwargs):
+        """ Return the tensor spatial dimensionality (without channels dimension)
 
         Parameters
         ----------
-        tensor_name : str
+        tensor : str or tf.Tensor
 
         Returns
         -------
-        spatial dimension : int
+        number of spatial dimensions : int
 
         Raises
         ------
         ValueError shape in tensor configuration isn't int, tuple or list
         """
-        shape = self.get_from_config('inputs')[tensor_name].get('shape')
+        config = self.get_tensor_config(tensor, **kwargs)
+        shape = config.get('shape')
         if isinstance(shape, int):
             shape = (shape,)
         if isinstance(shape, (list, tuple)):
@@ -574,18 +610,19 @@ class TFModel(BaseModel):
         else:
             raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
 
-    def data_format(self, tensor_name):
+    def data_format(self, tensor, **kwargs):
         """ Return the tensor data format (channels_last or channels_first)
 
         Parameters
         ----------
-        tensor_name : str
+        tensor : str or tf.Tensor
 
         Returns
         -------
         data_format : str
         """
-        return self.get_from_config('inputs')[tensor_name].get('data_format', 'channels_last')
+        config = self.get_tensor_config(tensor, **kwargs)
+        return config.get('data_format', 'channels_last')
 
     @staticmethod
     def batch_size(tensor):
@@ -593,7 +630,7 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        tensor : tf.Variable or tf.Tensor
+        tensor : tf.Tensor
 
         Returns
         -------
@@ -607,7 +644,7 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        tensor : tf.Variable or tf.Tensor
+        tensor : tf.Tensor
 
         Returns
         -------
