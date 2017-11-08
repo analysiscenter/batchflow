@@ -564,6 +564,7 @@ class TFModel(BaseModel):
         if isinstance(shape, int):
             shape = (shape,)
         if isinstance(shape, (list, tuple)):
+            data_format = config.get('data_format')
             channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
             return shape[channels_dim]
         else:
