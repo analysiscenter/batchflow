@@ -58,8 +58,8 @@ class InceptionV1(TFModel):
         _, transformed_placeholders = self._make_inputs(names)
 
 
-        data_format = 'channels_last'#self.data_format('images')
-        num_classes = 10# self.num_classes('labels')
+        data_format = self.data_format('images')
+        num_classes = self.num_classes('labels')
 
         max_pool = {'pool_size': 3,
                     'strides': 2,
