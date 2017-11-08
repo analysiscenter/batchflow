@@ -1,4 +1,4 @@
-"""Fully convoltional network"""
+"""Contains class for FCN"""
 import tensorflow as tf
 from .layers import conv_block
 from . import TFModel

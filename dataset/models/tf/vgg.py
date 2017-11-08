@@ -1,4 +1,4 @@
-"""VGG"""
+"""Contains class for VGG"""
 import tensorflow as tf
 
 from . import TFModel
@@ -27,15 +27,14 @@ class VGG(TFModel):
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
     b_norm : bool
         if True enable batch normalization layers
-
-    arch : str or list of tuple
-        if str, it is VGG16 (by default), VGG19, VGG7, VGG6
+    arch : str or list of tuples
+        if str, it is 'VGG16' (by default), 'VGG19', 'VGG7', 'VGG6'
         tuple[0] : int
-            depth of the block
+            number of convolution layers with 3x3 kernel
         tuple[1] : int
-            the number of filters in each layer of the block
+            number of convolution layers with 1x1 kernel
         tuple[2] : bool
-            if True the last layer is convolution with 1x1 kernel else with 3x3.
+            number of filters.
     """
 
     def _build(self):
@@ -92,17 +91,12 @@ class VGG(TFModel):
         ----------
         dim : int
             spatial dimension of input without the number of channels
-
         inputs : tf.Tensor
-
         depth_3 : int
             the number of convolution layers with 3x3 kernel
-
         depth_1 : int
             the number of convolution layers with 1x1 kernel
-
         filters : int
-
         b_norm : bool
             if True enable batch normalization
 
@@ -121,18 +115,15 @@ class VGG(TFModel):
 
     @staticmethod
     def body(dim, inputs, b_norm, arch, **kwargs):
-        """VGG convolution part.
+        """VGG body.
 
         Parameters
         ----------
         dim : int
             spatial dimension of input without the number of channels
-
         inputs : tf.Tensor
-
         b_norm : bool
             if True enable batch normalization
-
         arch : str or list of tuples
 
         Return
@@ -161,7 +152,7 @@ class VGG16(VGG):
 
     @staticmethod
     def body(dim, inputs, b_norm, *args, **kwargs):
-        """VGG16 convolution part.
+        """VGG16 body.
         """
         _ = args
         return VGG.body(dim, inputs, b_norm, 'VGG16', **kwargs)
@@ -177,7 +168,7 @@ class VGG19(VGG):
 
     @staticmethod
     def body(dim, inputs, b_norm, *args, **kwargs):
-        """VGG16 convolution part.
+        """VGG19 body.
         """
         _ = args
         return VGG.body(dim, inputs, b_norm, 'VGG19', **kwargs)
@@ -192,7 +183,7 @@ class VGG7(VGG):
 
     @staticmethod
     def body(dim, inputs, b_norm, *args, **kwargs):
-        """VGG16 convolution part.
+        """VGG7 body.
         """
         _ = args
         return VGG.body(dim, inputs, b_norm, 'VGG7', **kwargs)

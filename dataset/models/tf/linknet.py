@@ -66,15 +66,11 @@ class LinkNet(TFModel):
         ----------
         dim : int
             spatial dimension of input without the number of channels
-
         inputs : tf.Tensor
-
         out_filters : int
             number of output filters
-
         name : str
             tf.scope name
-
         b_norm : bool
             if True enable batch normalization
 
@@ -100,15 +96,11 @@ class LinkNet(TFModel):
         ----------
         dim : int
             spatial dimension of input without the number of channels
-
         inputs : tf.Tensor
-
         out_filters : int
             number of output filters
-
         name : str
             tf.scope name
-
         b_norm : bool
             if True enable batch normalization
 

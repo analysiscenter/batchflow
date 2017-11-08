@@ -13,6 +13,8 @@ class UNet(TFModel):
         input config with keys 'images' and 'masks'
     b_norm : bool
         if True enable batch normalization layers
+    n_filters : int
+        number of filters after the first convolution
     """
     def _build(self):
         """Builds a UNet model."""
@@ -63,15 +65,11 @@ class UNet(TFModel):
         ----------
         dim : int
             spatial dimension of input without the number of channels
-
         inputs : tf.Tensor
-
         out_filters : int
             number of output filters
-
         name : str
             tf.scope name
-
         b_norm : bool
             if True enable batch normalization
 
@@ -93,15 +91,11 @@ class UNet(TFModel):
         ----------
         dim : int
             spatial dimension of input without the number of channels
-
         inputs : tf.Tensor
-
         out_filters : int
             number of output filters
-
         name : str
             tf.scope name
-
         b_norm : bool
             if True enable batch normalization
 
