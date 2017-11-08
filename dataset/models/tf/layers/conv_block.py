@@ -34,7 +34,7 @@ C_LAYERS = {
 }
 
 _LAYERS_KEYS = str(list(C_LAYERS.keys()))
-_GROUP_KEYS = _LAYERS_KEYS.replace('v', 'p')
+_GROUP_KEYS = _LAYERS_KEYS.replace('t', 'c').replace('v', 'p')
 C_GROUPS = dict(zip(_LAYERS_KEYS, _GROUP_KEYS))
 
 def _get_layer_fn(fn, dim):
@@ -52,7 +52,7 @@ def _unpack_args(args, layer_no, layers_max):
 
     return new_args
 
-def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None,
+def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
                strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex multi-dimensional convolution layer with batch normalization, activation, pooling and dropout
@@ -61,7 +61,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     ----------
     d : int {1, 2, 3}
         number of dimensions
-    input_tensor : tf.Tensor
+    inputs : tf.Tensor
         input tensor
     filters : int
         number of filters in the ouput tensor
@@ -164,7 +164,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
         layout_dict[C_GROUPS[layer]][1] += 1
 
     layout = layout.replace(' ', '')
-    tensor = input_tensor
+    tensor = inputs
     for i, layer in enumerate(layout):
 
         layout_dict[C_GROUPS[layer]][0] += 1
@@ -181,7 +181,8 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             data_format=data_format)
             elif layer == 'n':
-                args = dict(fused=True, axis=-1, training=is_training)
+                axis = -1 if data_format == 'channels_last' else 1
+                args = dict(fused=True, axis=axis, training=is_training)
             elif C_GROUPS[layer] == 'p':
                 args = dict(dim=dim, pool_size=pool_size, strides=pool_strides, padding=padding,
                             data_format=data_format)
@@ -190,7 +191,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
             elif layer in ['P', 'V']:
                 args = dict(dim=dim, data_format=data_format)
             elif layer == 'm':
-                args = {}
+                args = dict(data_format=data_format)
 
             args = {**args, **kwargs.get(layer_name, {})}
             args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
@@ -211,7 +212,7 @@ def conv_block(dim, input_tensor, filters, kernel_size, layout='cnap', name=None
     return tensor
 
 
-def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
+def conv1d_block(inputs, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                  activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 1d convolution with batch normalization, activation, pooling and dropout layers
@@ -220,12 +221,12 @@ def conv1d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     --------
     :func:`.conv_block`
     """
-    return conv_block(1, input_tensor, filters, kernel_size, layout, name,
+    return conv_block(1, inputs, filters, kernel_size, layout, name,
                       strides, padding, data_format, dilation_rate, depth_multiplier, activation,
                       pool_size, pool_strides, dropout_rate, is_training, **kwargs)
 
 
-def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
+def conv2d_block(inputs, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                  activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
@@ -234,12 +235,12 @@ def conv2d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     --------
     :func:`.conv_block`
     """
-    return conv_block(2, input_tensor, filters, kernel_size, layout, name,
+    return conv_block(2, inputs, filters, kernel_size, layout, name,
                       strides, padding, data_format, dilation_rate, depth_multiplier, activation,
                       pool_size, pool_strides, dropout_rate, is_training, **kwargs)
 
 
-def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
+def conv3d_block(inputs, filters, kernel_size, layout='cnap', name=None,
                  strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                  activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
@@ -248,6 +249,6 @@ def conv3d_block(input_tensor, filters, kernel_size, layout='cnap', name=None,
     --------
     :func:`.conv_block`
     """
-    return conv_block(3, input_tensor, filters, kernel_size, layout, name,
+    return conv_block(3, inputs, filters, kernel_size, layout, name,
                       strides, padding, data_format, dilation_rate, depth_multiplier, activation,
                       pool_size, pool_strides, dropout_rate, is_training, **kwargs)
