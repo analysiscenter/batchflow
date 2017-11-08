@@ -1,5 +1,4 @@
 """Fully convoltional network"""
-import sys
 import tensorflow as tf
 from .layers import conv_block
 from . import TFModel
