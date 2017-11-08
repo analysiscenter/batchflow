@@ -1,26 +1,20 @@
 """ Contains inception_v1 network: https://arxiv.org/abs/1409.4842 """
-import sys
-
 import tensorflow as tf
-sys.path.append('..')
 
-from dataset.models.tf import TFModel
-from dataset.models.tf.layers import conv_block
-from dataset.models.tf.layers.pooling import max_pooling, global_average_pooling
+from .tf_model import TFModel
+from .layers import conv_block
+from .layers.pooling import max_pooling, global_average_pooling
 
 FILTERS = [
-           [[64, 96, 128, 16, 32, 32],
-           [128, 128, 192, 32, 96, 64]],
-
-           [[192, 96, 208, 16, 48, 64],
-           [160, 112, 224, 24, 64, 64],
-           [128, 128, 256, 24, 64, 64],
-           [112, 144, 288, 32, 64, 64],
-           [256, 160, 320, 32, 128, 128]],
-
-           [[256, 160, 320, 32, 128, 128],
-           [384, 192, 384, 48, 128, 128]]
-           ]
+    [[64, 96, 128, 16, 32, 32],
+     [128, 128, 192, 32, 96, 64]],
+    [[192, 96, 208, 16, 48, 64],
+     [160, 112, 224, 24, 64, 64],
+     [128, 128, 256, 24, 64, 64],
+     [112, 144, 288, 32, 64, 64],
+     [256, 160, 320, 32, 128, 128]],
+    [[256, 160, 320, 32, 128, 128],
+     [384, 192, 384, 48, 128, 128]]]
 
 NAMES = ['a', 'b', 'c', 'd', 'e']
 
@@ -31,7 +25,7 @@ class InceptionV1(TFModel):
     -----------------
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
-    
+
     dim: int {1, 2, 3}
         spatial dimension of input without the number of channels
 
@@ -57,11 +51,15 @@ class InceptionV1(TFModel):
         b_norm = self.get_from_config('batch_norm', True)
         dropout_rate = self.get_from_config('dropout_rate', 0)
         head_type = self.get_from_config('head_type', 'dense')
+
+
+        data_format = 'channels_last'
         names = ['images', 'labels']
         _, transformed_placeholders = self._make_inputs(names)
 
-        num_classes = self.num_classes('labels')
-        data_format = self.data_format('images')
+
+        data_format = 'channels_last'#self.data_format('images')
+        num_classes = 10# self.num_classes('labels')
 
         max_pool = {'pool_size': 3,
                     'strides': 2,
@@ -80,7 +78,7 @@ class InceptionV1(TFModel):
         with tf.variable_scope('inception'):
             net = self.body(dim, transformed_placeholders['images'], b_norm, **kwargs)
             net = self.head(dim, net, num_classes, head_type, data_format, self.is_training, dropout_rate)
-        
+
         self.statistic(tf.identity(net, name='predictions'), transformed_placeholders['labels'])
 
     @staticmethod
@@ -102,15 +100,13 @@ class InceptionV1(TFModel):
         """
         layout = 'cnpcncnp' if b_norm else 'cpccp'
         with tf.variable_scope('body'):
-            print(layout)
             net = conv_block(dim=dim, inputs=inputs, filters=[64, 64, 192], kernel_size=[7, 3, 3], strides=[2, 1, 1],\
                              layout=layout, name='conv', **kwargs)
-            for i in range(len(FILTERS)):
-                length = len(FILTERS[i])
-                for name, filt in zip(NAMES[:length], FILTERS[i]):
+            for i, filters in enumerate(FILTERS):
+                length = len(filters)
+                for name, filt in zip(NAMES[:length], filters):
                     net = InceptionV1.block(dim=dim, inputs=net, filters=filt, name=str(i+3)+name,\
                                             b_norm=b_norm, **kwargs)
-                    print(name, filt, net)
                 if i != 2:
                     net = max_pooling(dim=dim, inputs=net, **kwargs['max_pooling'])
         return net
@@ -193,9 +189,9 @@ class InceptionV1(TFModel):
         - number of filters in conv 3x3
 
         - number of filters in conv 1x1 going before conv 5x5,
-        
+
         - number of filters in conv 5x5,
-        
+
         - number of filters in conv 1x1 going after max_pool
 
         data_format: str {'channels_last', 'channels_first'}
@@ -211,7 +207,6 @@ class InceptionV1(TFModel):
         tf.Tensor - output tf.Tensor
         """
         layout = 'cn' if b_norm else 'c'
-        print(layout, is_training)
         with tf.variable_scope("block-" + name):
             block_1 = conv_block(dim=dim, inputs=inputs, filters=filters[0], kernel_size=1,\
                                  layout=layout, name='conv_1', **kwargs)
