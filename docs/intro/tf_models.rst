@@ -42,14 +42,13 @@ Example
             num_classes = self.num_classes('labels')
 
             x = inputs['images']
-            x = conv_block(dim, x, 32, 3, layout='cnap', name='conv1', training=self.is_training)
-            x = conv_block(dim, x, 64, 3, layout='cnap', name='conv2', training=self.is_training)
-            x = conv_block(dim, x, num_classes, 3, layout='cnap', name='conv3', training=self.is_training)
-            x = global_average_pooling(dim, x, name='predictions')
+            x = conv_block(dim, x, [32, 64, num_classes], 3, layout='cna cna cnaP', strides=2,
+                           name='my_network', training=self.is_training)
+            x = tf.identity(x, name='predictions')
 
 Note that you can use this model for 1d, 2d and 3d inputs (with a proper config when initializing a model).
 
-Also take a look into `conv_block <tf_layers#convolution-block>`_ documentation to find out how to write this network
+Also take a look into `conv_block <tf_layers#convolution-block>`_ documentation to find out how to write complex networks
 in just one line of code and other sophisticated examples.
 
 Now you can train the model in a simple pipeline:
