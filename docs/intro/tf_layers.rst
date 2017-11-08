@@ -18,10 +18,8 @@ The block consist of predefined layers, among which:
 - convolutions (as well as dilated, separable and trasposed convolutions)
 - batch normalization
 - activation
-- max pooling
-- global max pooling
-- average pooling
-- global average pooling
+- global and spatial max pooling
+- global and spatial average pooling
 - maximum intensity projection (mip)
 - dropout
 
@@ -82,7 +80,7 @@ A canonical bottleneck block (1x1, 3x3, 1x1 conv with relu in-between)::
 
     x = conv_block(2, x, [64, 64, 256], [1, 3, 1], layout='cacac')
 
-A complex Nd block:
+A complex n-dimensional block:
 
 - 5x5 conv with 32 filters
 - relu
@@ -101,8 +99,7 @@ Or the earlier defined 14-layers VGG network as a one-liner::
 
     x = conv_block(dim, x, [64]*2 + [128]*2 + [256]*3 + [512]*6 + [num_classes], 3, layout='cacap cacap cacacap cacacap cacacap caP')
 
-However, in terms of training performance and prediction accuracy the following block with strided separable (grouped) convolutions
-and dropout will perform much better::
+However, in terms of training performance and prediction accuracy the following block with strided separable (grouped) convolutions and dropout will perform much better::
 
         x = conv_block(dim, x, [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
                        layout='cna cna cna cnaP', depth_multiplier=[1, 2, 2, 1], training=self.is_training)
