@@ -74,7 +74,7 @@ class VGG(TFModel):
              dropout_rate=0):
         """Head for classification
         """
-        with tf.variable_scope('head'): # pylint: disable=not-context-manager
+        with tf.variable_scope('head'):
             if head_type == 'dense':
                 net = global_average_pooling(dim=dim, inputs=input_tensor, data_format=data_format)
                 net = tf.layers.dropout(net, dropout_rate, training=is_training)
@@ -109,7 +109,7 @@ class VGG(TFModel):
         outp : tf.Tensor
         """
         net = inputs
-        with tf.variable_scope(name):  # pylint: disable=not-context-manager
+        with tf.variable_scope(name):
             layout = 'cna' if enable_batch_norm else 'ca'
             layout = layout * (depth_3 + depth_1) + 'p'
             kernels = [3] * depth_3 + [1] * depth_1
@@ -141,7 +141,7 @@ class VGG(TFModel):
         else:
             raise TypeError("arch must be str or list but {} was given.".format(type(arch)))
         net = inputs
-        with tf.variable_scope('body'):  # pylint: disable=not-context-manager
+        with tf.variable_scope('body'):
             for i, block_cfg in enumerate(arch):
                 net = VGG.block(dim, net, *block_cfg, enable_batch_norm, 'block-'+str(i), **kwargs)
         return net

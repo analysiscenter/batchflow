@@ -44,7 +44,8 @@ class LinkNet(TFModel):
             layout = 'cpna' if enable_batch_norm else 'cpa'
             linknet_filters = 2 ** np.arange(n_blocks) * n_filters
 
-            net = conv_block(dim, inputs['images'], n_filters, 7, layout, 'input_conv', strides=2, pool_size=3, **kwargs)
+            net = conv_block(dim, inputs['images'], n_filters, 7, layout, 'input_conv', 
+                             strides=2, pool_size=3, **kwargs)
 
             encoder_output = []
 
@@ -123,5 +124,5 @@ class LinkNet(TFModel):
             n_filters = inputs.get_shape()[-1].value // 4
 
             output = conv_block(dim, inputs, [n_filters, n_filters, out_filters], [1, 3, 1],
-                              layout, 'conv', strides=[1, 2, 1], **kwargs)
+                                layout, 'conv', strides=[1, 2, 1], **kwargs)
             return output

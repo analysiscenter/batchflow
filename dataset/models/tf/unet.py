@@ -57,8 +57,8 @@ class UNet(TFModel):
             net = tf.concat([encoder_outputs[-i-2], net], axis=axis)
             net = self.upsampling_block(dim, net, filters, 'upsampling-'+str(i), enable_batch_norm, **kwargs)
 
-        net = conv_block(dim, net, [n_filters, n_filters, n_classes], [3, 3, 1], layout+'c', 
-            'output-block', **kwargs)
+        net = conv_block(dim, net, [n_filters, n_filters, n_classes], [3, 3, 1], layout+'c',
+                         'output-block', **kwargs)
         logits = tf.identity(net, 'predictions')
         tf.nn.softmax(logits, name='predicted_prob')
 
@@ -85,7 +85,7 @@ class UNet(TFModel):
         layout = 'pcnacna' if enable_batch_norm else 'pcaca'
         with tf.variable_scope(name):
             output = conv_block(dim, inputs, out_filters, 3, layout, name,
-                              pool_size=2, **kwargs)
+                                pool_size=2, **kwargs)
         return output
 
     @staticmethod

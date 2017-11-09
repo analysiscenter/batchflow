@@ -40,7 +40,7 @@ class FCN(TFModel):
 
         net = VGG16.body(dim, inputs['images'], enable_batch_norm, **layers_dicts)
         layout = 'cna' * 3 if enable_batch_norm else 'ca' * 3
-        net = conv_block(dim, net, [100, 100, n_classes], [7, 1, 1], layout, 'conv-out', 
+        net = conv_block(dim, net, [100, 100, n_classes], [7, 1, 1], layout, 'conv-out',
                          padding=['SAME', 'VALID', 'VALID'], **layers_dicts)
         conv7 = net
         pool4 = tf.get_default_graph().get_tensor_by_name("body/block-3/output:0")
