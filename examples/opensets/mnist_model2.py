@@ -17,13 +17,15 @@ class MyModel(TFModel):
         names = ['images', 'labels']
         placeholders, inputs = self._make_inputs(names)
 
+        n1 = self.num_classes(placeholders['labels'])
+        n1 = self.num_classes(inputs['labels'])
         num_classes = self.num_classes('labels')
         dim = 2
         x = inputs['images']
         x = conv_block(dim, x, [16, 32, 64], 3, strides=[1, 2, 2], dropout_rate=.15,
                          layout='cna cna cna', depth_multiplier=[1, 2, 2],
                          name='network', training=self.is_training)
-        x = self.head(dim, x, 'conv', num_classes=num_classes, training=self.is_training)
+        x = self.head(dim, x, 'conv', 'cnaP', kernel_size=7, num_classes=num_classes, training=self.is_training)
         x = tf.identity(x, name='predictions')
 
         predicted_labels = self.to_classes(x, 'labels', name='predicted_labels')
@@ -37,7 +39,7 @@ class MyBatch(ImagesBatch):
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 64
+    BATCH_SIZE = 128
 
     mnist = MNIST(batch_class=MyBatch)
     config = dict(some=1, conv=dict(arg1=10))
@@ -66,7 +68,7 @@ if __name__ == "__main__":
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
     train_pp = (train_tp << mnist.train)
-    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=4)
     print("End training", time() - t)
 
 
