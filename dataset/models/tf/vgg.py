@@ -2,7 +2,6 @@
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block, global_average_pooling
 
 _ARCH = {'VGG16': [(2, 0, 64),
                    (2, 0, 128),
