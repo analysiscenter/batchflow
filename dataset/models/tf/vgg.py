@@ -20,15 +20,17 @@ _ARCH = {'VGG16': [(2, 0, 64),
 
 class VGG(TFModel):
     """VGG as TFModel
+    https://arxiv.org/abs/1409.1556 (K.Simonyan et al, 2014)
 
     **Configuration**
     -----------------
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
-    b_norm : bool
+    batch_norm : bool
         if True enable batch normalization layers
     arch : str or list of tuples
-        if str, it is 'VGG16' (by default), 'VGG19', 'VGG7', 'VGG6'
+        if str, it is 'VGG16' (by default), 'VGG19', 'VGG7'
+        if list, each tuple must have the following components^
         tuple[0] : int
             number of convolution layers with 3x3 kernel
         tuple[1] : int
@@ -38,14 +40,16 @@ class VGG(TFModel):
     """
 
     def _build(self):
-        """Builds a VGG model."""
+        """
+        Builds a VGG model.
+        """
         names = ['images', 'labels']
         _, inputs = self._make_inputs(names)
 
         n_classes = self.num_channels('labels')
         data_format = self.data_format('images')
         dim = self.spatial_dim('images')
-        b_norm = self.get_from_config('batch_norm', True)
+        enable_batch_norm = self.get_from_config('batch_norm', True)
         arch = self.get_from_config('arch', 'VGG16')
 
         conv = {'data_format': data_format,
@@ -54,7 +58,7 @@ class VGG(TFModel):
                       'training': self.is_training}
         kwargs = {'conv': conv, 'batch_norm': batch_norm}
 
-        net = self.body(dim, inputs['images'], b_norm, arch, **kwargs)
+        net = self.body(dim, inputs['images'], enable_batch_norm, arch, **kwargs)
         net = self.head(dim, net, n_classes, data_format=data_format, is_training=self.is_training)
 
         logits = tf.identity(net, name='predictions')
@@ -76,7 +80,7 @@ class VGG(TFModel):
                 net = tf.layers.dropout(net, dropout_rate, training=is_training)
                 net = tf.layers.dense(net, num_classes)
             elif head_type == 'conv':
-                net = conv_block(dim=dim, input_tensor=input_tensor, filters=num_classes, kernel_size=1,\
+                net = conv_block(dim=dim, inputs=input_tensor, filters=num_classes, kernel_size=1,\
                                      layout='c', name='conv_1', data_format=data_format)
                 net = global_average_pooling(dim=dim, inputs=input_tensor, data_format=data_format)
             else:
@@ -84,7 +88,7 @@ class VGG(TFModel):
         return net
 
     @staticmethod
-    def block(dim, inputs, depth_3, depth_1, filters, b_norm, name='block', **kwargs):
+    def block(dim, inputs, depth_3, depth_1, filters, enable_batch_norm, name='block', **kwargs):
         """VGG block.
 
         Parameters
@@ -97,7 +101,7 @@ class VGG(TFModel):
         depth_1 : int
             the number of convolution layers with 1x1 kernel
         filters : int
-        b_norm : bool
+        enable_batch_norm : bool
             if True enable batch normalization
 
         Return
@@ -106,7 +110,7 @@ class VGG(TFModel):
         """
         net = inputs
         with tf.variable_scope(name):  # pylint: disable=not-context-manager
-            layout = 'cna' if b_norm else 'ca'
+            layout = 'cna' if enable_batch_norm else 'ca'
             layout = layout * (depth_3 + depth_1) + 'p'
             kernels = [3] * depth_3 + [1] * depth_1
             net = conv_block(dim, net, filters, kernels, layout, **kwargs)
@@ -114,7 +118,7 @@ class VGG(TFModel):
         return net
 
     @staticmethod
-    def body(dim, inputs, b_norm, arch, **kwargs):
+    def body(dim, inputs, enable_batch_norm, arch, **kwargs):
         """VGG body.
 
         Parameters
@@ -122,7 +126,7 @@ class VGG(TFModel):
         dim : int
             spatial dimension of input without the number of channels
         inputs : tf.Tensor
-        b_norm : bool
+        enable_batch_norm : bool
             if True enable batch normalization
         arch : str or list of tuples
 
@@ -139,51 +143,51 @@ class VGG(TFModel):
         net = inputs
         with tf.variable_scope('body'):  # pylint: disable=not-context-manager
             for i, block_cfg in enumerate(arch):
-                net = VGG.block(dim, net, *block_cfg, b_norm, 'block-'+str(i), **kwargs)
+                net = VGG.block(dim, net, *block_cfg, enable_batch_norm, 'block-'+str(i), **kwargs)
         return net
 
 class VGG16(VGG):
-    '''
+    """
     Builds a VGG16 model.
-    '''
+    """
     def _build(self, *args, **kwargs):
         self.config['arch'] = 'VGG16'
         super()._build(*args, **kwargs)
 
     @staticmethod
-    def body(dim, inputs, b_norm, *args, **kwargs):
+    def body(dim, inputs, enable_batch_norm, *args, **kwargs):
         """VGG16 body.
         """
         _ = args
-        return VGG.body(dim, inputs, b_norm, 'VGG16', **kwargs)
+        return VGG.body(dim, inputs, enable_batch_norm, 'VGG16', **kwargs)
 
 
 class VGG19(VGG):
-    '''
+    """
     Builds a VGG19 model.
-    '''
+    """
     def _build(self, *args, **kwargs):
         self.config['arch'] = 'VGG19'
         super()._build(*args, **kwargs)
 
     @staticmethod
-    def body(dim, inputs, b_norm, *args, **kwargs):
+    def body(dim, inputs, enable_batch_norm, *args, **kwargs):
         """VGG19 body.
         """
         _ = args
-        return VGG.body(dim, inputs, b_norm, 'VGG19', **kwargs)
+        return VGG.body(dim, inputs, enable_batch_norm, 'VGG19', **kwargs)
 
 class VGG7(VGG):
-    '''
+    """
     Builds a VGG7 model.
-    '''
+    """
     def _build(self, *args, **kwargs):
         self.config['arch'] = 'VGG7'
         super()._build(*args, **kwargs)
 
     @staticmethod
-    def body(dim, inputs, b_norm, *args, **kwargs):
+    def body(dim, inputs, enable_batch_norm, *args, **kwargs):
         """VGG7 body.
         """
         _ = args
-        return VGG.body(dim, inputs, b_norm, 'VGG7', **kwargs)
+        return VGG.body(dim, inputs, enable_batch_norm, 'VGG7', **kwargs)
