@@ -23,7 +23,7 @@ class MyModel(TFModel):
         x = conv_block(dim, x, [16, 32, 64], 3, strides=[1, 2, 2], dropout_rate=.15,
                          layout='cna cna cna', depth_multiplier=[1, 2, 2],
                          name='network', training=self.is_training)
-        x = self.head(dim, x, 'conv', kernel_size=3, num_classes=num_classes, training=self.is_training)
+        x = self.head(dim, x, 'conv', num_classes=num_classes, training=self.is_training)
         x = tf.identity(x, name='predictions')
 
         predicted_labels = self.to_classes(x, 'labels', name='predicted_labels')

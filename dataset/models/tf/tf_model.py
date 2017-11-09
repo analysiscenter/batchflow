@@ -910,18 +910,19 @@ class TFModel(BaseModel):
         """
         with tf.variable_scope('head'):
             x = inputs
-            kernel_size = kwargs.pop('kernel_size', 1)
+            kernel_size = kwargs.pop('kernel_size', 3)
             filters = kwargs.pop('filters', [])
             if style == 'dense':
                 layout = layout or 'f'
-                units = kwargs.get('units', 0)
+                units = kwargs.get('units', [])
                 if isinstance(units, int):
                     units = [units]
                 units = units + ([num_classes] if num_classes is not None else [])
-                kwargs['units'] = units
-                print(units)
                 if len(units) < 1:
                     raise ValueError('units or num_classes should be specified for dense-style head.')
+                elif len(units) == 1:
+                    units = units[0]
+                kwargs['units'] = units
                 if len(TFModel.get_shape(x)) > 2:
                     x = flatten(x)
             elif style == 'conv':

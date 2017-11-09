@@ -63,7 +63,8 @@ class VGG(TFModel):
             kwargs['batch_norm'] = batch_norm
 
         net = self.body(dim, inputs['images'], arch, **kwargs)
-        net = self.head(dim, net, n_classes, data_format=data_format, is_training=self.is_training)
+        net = self.head(dim, net, style='dense', layout='fff', num_classes=n_classes,
+                        units=[100, 100], **kwargs)
 
         logits = tf.identity(net, name='predictions')
         pred_proba = tf.nn.softmax(logits, name='predicted_prob')
@@ -72,24 +73,6 @@ class VGG(TFModel):
         equality = tf.equal(pred_labels, true_labels)
         equality = tf.cast(equality, dtype=tf.float32)
         tf.reduce_mean(equality, name='accuracy')
-
-    @staticmethod
-    def head(dim, input_tensor, num_classes, head_type='dense', data_format='channels_last', is_training=True,\
-             dropout_rate=0):
-        """Head for classification
-        """
-        with tf.variable_scope('head'):
-            if head_type == 'dense':
-                net = global_average_pooling(dim=dim, inputs=input_tensor, data_format=data_format)
-                net = tf.layers.dropout(net, dropout_rate, training=is_training)
-                net = tf.layers.dense(net, num_classes)
-            elif head_type == 'conv':
-                net = conv_block(dim=dim, inputs=input_tensor, filters=num_classes, kernel_size=1,\
-                                     layout='c', name='conv_1', data_format=data_format)
-                net = global_average_pooling(dim=dim, inputs=input_tensor, data_format=data_format)
-            else:
-                raise ValueError("Head_type should be dense or conv, but given %d" % head_type)
-        return net
 
     @staticmethod
     def block(dim, inputs, depth_3, depth_1, filters, name='block', **kwargs):
