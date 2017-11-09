@@ -2,6 +2,7 @@
 import tensorflow as tf
 
 from . import TFModel
+from .layers import conv_block
 
 _ARCH = {'VGG16': [(2, 0, 64),
                    (2, 0, 128),
