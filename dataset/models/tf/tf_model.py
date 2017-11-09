@@ -912,7 +912,7 @@ class TFModel(BaseModel):
             x = inputs
             if style == 'dense':
                 layout = layout or 'f'
-                filters = kwargs.get(filters)
+                filters = kwargs.get('filters')
                 units = kwargs.get('units', 0)
                 units = units + 0 if num_classes is None else num_classes
                 if units < 1:
