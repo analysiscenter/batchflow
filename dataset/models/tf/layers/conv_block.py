@@ -8,6 +8,7 @@ from .pooling import max_pooling, average_pooling, global_max_pooling, global_av
 
 ND_LAYERS = {
     'activation': None,
+    'dense': tf.layers.dense,
     'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
     'transposed_conv': [conv1d_transpose, tf.layers.conv2d_transpose, tf.layers.conv3d_transpose],
     'separable_conv':separable_conv,
@@ -22,6 +23,7 @@ ND_LAYERS = {
 
 C_LAYERS = {
     'a': 'activation',
+    'f': 'dense',
     'c': 'conv',
     't': 'transposed_conv',
     'p': 'max_pooling',
@@ -72,6 +74,7 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
 
         - c - convolution (+ dilated, separable)
         - t - transposed convolution
+        - f - dense (fully connected)
         - n - batch normalization
         - a - activation
         - p - max pooling
@@ -103,6 +106,8 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
     is_training : bool or tf.Tensor
         Default is True.
 
+    dense : dict
+        parameters for dense layers, like initializers, regularalizers, etc
     conv : dict
         parameters for convolution layers, like initializers, regularalizers, etc
     transposed_conv : dict
@@ -174,7 +179,12 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
         if layer == 'a':
             tensor = activation(tensor)
         else:
-            if layer == 'c':
+            if layer == 'f':
+                units = kwargs.get('units')
+                if units is None:
+                    raise ValueError('units cannot be None if layout includes dense layers')
+                args = dict(units=units)
+            elif layer == 'c':
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             data_format=data_format, dilation_rate=dilation_rate, depth_multiplier=depth_multiplier)
             elif layer == 't':
