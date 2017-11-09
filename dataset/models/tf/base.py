@@ -9,7 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..base import BaseModel
-from .layers import mip, flatten, conv_block
+from .layers import mip, conv_block
 from .losses import dice
 from ...utils import copy1
 

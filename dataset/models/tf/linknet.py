@@ -48,14 +48,14 @@ class LinkNet(TFModel):
                              strides=2, pool_size=3, **kwargs)
 
             encoder_output = []
-            for i, filters in enumerate(linknet_filters):
-                net = self.downsampling_block(dim, net, filters, 'downsampling-'+str(i), **kwargs)
+            for i, ifilters in enumerate(linknet_filters):
+                net = self.downsampling_block(dim, net, ifilters, 'downsampling-'+str(i), **kwargs)
                 encoder_output.append(net)
 
-            for i, filters in enumerate(linknet_filters[::-1][1:]):
-                net = self.upsampling_block(dim, net, filters, 'upsampling-'+str(i), **kwargs)
+            for i, ifilters in enumerate(linknet_filters[::-1][1:]):
+                net = self.upsampling_block(dim, net, ifilters, 'upsampling-'+str(i), **kwargs)
                 net = tf.add(net, encoder_output[-2-i])
-            net = self.upsampling_block(dim, net, n_filters, 'upsampling-'+str(i+1), **kwargs)
+            net = self.upsampling_block(dim, net, filters, 'upsampling-'+str(i+1), **kwargs)
 
             layout = 'tnacnat' if enable_batch_norm else 'tacat'
             net = conv_block(dim, net, [32, 32, num_classes], [3, 3, 2], layout, 'output-conv',
