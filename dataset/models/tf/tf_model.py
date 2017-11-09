@@ -926,8 +926,10 @@ class TFModel(BaseModel):
                     x = flatten(x)
             elif style == 'conv':
                 layout = layout or 'cP'
-                filters = kwargs.get('filters', [])
-                filters = filters + [num_classes] if num_classes is not None else []
+                filters = kwargs.pop('filters', [])
+                if isinstance(filters, int):
+                    filters = [filters]
+                filters = filters + ([num_classes] if num_classes is not None else [])
                 if len(filters) < 1:
                     raise ValueError('filters or num_classes should be specified for conv-style head.')
                 elif len(filters) == 1:
