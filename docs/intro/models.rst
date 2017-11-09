@@ -262,7 +262,7 @@ If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, 
 
 .. code-block:: python
 
-   class MyBatch:
+   class MyBatch(Batch):
        ...
        @action(use_lock="some_model_lock")
        def train_it(self, model_name):

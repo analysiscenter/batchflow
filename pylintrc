@@ -1,11 +1,14 @@
 [MASTER]
 ignore=examples
 extension-pkg-whitelist=numpy
+
+[DESIGN]
 max-line-length=120
 max-attributes=20
 max-locals=20
 max-args=16
 max-module-lines=1500
+max-statements=60
 
 [TYPECHECK]
 ignored-modules=numpy,cv2
