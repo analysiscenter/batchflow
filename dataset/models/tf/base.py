@@ -609,13 +609,9 @@ class TFModel(BaseModel):
         Returns
         -------
         number of spatial dimensions : int
-
-        Raises
-        ------
-        ValueError shape in tensor configuration isn't int, tuple or list
         """
         config = self.get_tensor_config(tensor, **kwargs)
-        return config.get('shape') - 1
+        return len(config.get('shape')) - 1
 
     def data_format(self, tensor, **kwargs):
         """ Return the tensor data format (channels_last or channels_first)
