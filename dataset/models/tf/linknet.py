@@ -44,7 +44,7 @@ class LinkNet(TFModel):
             layout = 'cpna' if enable_batch_norm else 'cpa'
             linknet_filters = 2 ** np.arange(n_blocks) * n_filters
 
-            net = conv_block(dim, inputs['images'], n_filters, 7, layout, 'input_conv', 
+            net = conv_block(dim, inputs['images'], n_filters, 7, layout, 'input_conv',
                              strides=2, pool_size=3, **kwargs)
 
             encoder_output = []
@@ -61,7 +61,7 @@ class LinkNet(TFModel):
 
             layout = 'tnacnat' if enable_batch_norm else 'tacat'
 
-            net = conv_block(dim, net, [32, 32, n_classes], [3, 3, 2], layout, 'output-conv', 
+            net = conv_block(dim, net, [32, 32, n_classes], [3, 3, 2], layout, 'output-conv',
                              strides=[2, 1, 2], **kwargs)
 
         logits = tf.identity(net, 'predictions')
