@@ -6,8 +6,7 @@ import scipy.ndimage
 from time import time
 
 sys.path.append("../..")
-from dataset import Dataset
-from dataset.image import ImagesBatch, CROP_CENTER
+from dataset import Dataset, ImagesBatch, CROP_CENTER
 
 if __name__ == "__main__":
     # number of items in the dataset

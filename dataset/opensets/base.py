@@ -1,7 +1,7 @@
 """ Contains the base class for open datasets """
 
 from ..dataset import Dataset
-from ..image import ImagesBatch
+from .. import ImagesBatch
 
 
 class Openset(Dataset):

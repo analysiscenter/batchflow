@@ -8,8 +8,7 @@ import scipy.ndimage
 from time import time
 
 sys.path.append("../..")
-from dataset import DatasetIndex, Dataset, action, inbatch_parallel, any_action_failed
-from dataset.image import ImagesBatch
+from dataset import DatasetIndex, Dataset, action, inbatch_parallel, any_action_failed, ImagesBatch
 
 @njit(nogil=True)
 def embarassingly_parallel_one(image):

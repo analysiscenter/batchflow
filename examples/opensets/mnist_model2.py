@@ -6,8 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append("../..")
-from dataset import Pipeline, B, C, F, V, action
-from dataset.image import ImagesBatch
+from dataset import Pipeline, B, C, F, V, action, ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
 from dataset.models.tf.layers import conv_block
