@@ -326,7 +326,7 @@ class TFModel(BaseModel):
             raise ValueError('Inputs contain duplicate names:', wrong_names)
 
         param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
-        defaults = dict(dtype='float32', data_format='channels_last')
+        defaults = dict(data_format='channels_last')
 
         placeholders = dict()
         tensors = dict()
@@ -339,12 +339,16 @@ class TFModel(BaseModel):
                 input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
+            shape = input_config.get('shape')
+            if isinstance(shape, int):
+                input_config['shape'] = (shape,)
+
             self._inputs[input_name] = dict(config=input_config)
 
             if self.has_classes(input_name):
-                dtype = tf.int32
+                dtype = input_config.get('dtype', tf.int32)
             else:
-                dtype = input_config.get('dtype')
+                dtype = input_config.get('dtype', 'float')
             tensor = tf.placeholder(dtype, name=input_name)
             placeholders[input_name] = tensor
 
@@ -353,12 +357,12 @@ class TFModel(BaseModel):
             elif input_config.get('data_format') == 'f':
                 input_config['data_format'] = 'channels_first'
 
+            self._inputs[input_name] = dict(config=input_config)
             tensor = self._make_transform(input_name, tensor, input_config)
 
             shape = input_config.get('shape')
-            if isinstance(shape, int):
-                input_config['shape'] = (shape,)
-            if isinstance(shape, (list, tuple)):
+            if input_config.get('__reshape', True) and isinstance(shape, (list, tuple)):
+                input_config['shape'] = shape
                 tensor = tf.reshape(tensor, [-1] + list(shape))
 
             name = input_config.get('name')
@@ -375,7 +379,6 @@ class TFModel(BaseModel):
         if config is not None:
             transform_name = config.get('transform')
             if isinstance(transform_name, str):
-
                 transforms = {
                     'ohe': self._make_ohe,
                     'mip': self._make_mip
@@ -389,7 +392,7 @@ class TFModel(BaseModel):
                     shape = config.get('shape')
                     tensor = tf.reshape(tensor, [-1] + list(shape))
                     # do not make reshape twice
-                    config.pop('shape')
+                    config.update({'__reshape': False})
 
                 tensor = transforms[transform_name](input_name, tensor, config)
             elif callable(transform_name):
@@ -402,9 +405,9 @@ class TFModel(BaseModel):
         if config.get('shape') is None and config.get('classes') is None:
             raise ValueError("shape and classes cannot be both None for input '{}'".format(input_name))
 
-        n_classes = self.num_classes(input_name)
+        num_classes = self.num_classes(input_name)
         axis = -1 if self.data_format(input_name) else 1
-        tensor = tf.one_hot(tensor, depth=n_classes, axis=axis)
+        tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
         return tensor
 
     def to_classes(self, tensor, input_name, name=None):
@@ -517,6 +520,15 @@ class TFModel(BaseModel):
         Parameters
         ----------
         tensor : str or tf.Tensor
+
+        Returns
+        -------
+        dict
+            tensor config (see :meth:`._make_inputs`)
+
+        Raises
+        ------
+        ValueError shape in tensor configuration isn't int, tuple or list
         """
         if isinstance(tensor, tf.Tensor):
             names = [n for n, i in self._inputs.items() if tensor in [i['placeholder'], i['tensor']]]
@@ -534,11 +546,20 @@ class TFModel(BaseModel):
 
         if input_name in self._inputs:
             config = self._inputs[input_name]['config']
+            shape = config.get('shape')
+            if isinstance(shape, int):
+                shape = (shape,)
+            kwargs['shape'] = shape
+
+            if 'classes' not in config and 'shape' not in config:
+                raise ValueError("one of 'classes' or 'shape' must be present in inputs config")
+            if 'classes' not in config:
+                if not isinstance(shape, (list, tuple)):
+                    raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
         else:
             tensor = self.graph.get_tensor_by_name(input_name)
             shape = tensor.get_shape().as_list()[1:]
-            config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name,
-                          data_format='channels_last')
+            config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name, data_format='channels_last')
             config = {**config, **kwargs}
 
         return config
@@ -554,22 +575,12 @@ class TFModel(BaseModel):
         Returns
         -------
         number of channels : int
-
-        Raises
-        ------
-        ValueError shape in tensor configuration isn't int, tuple or list
         """
         config = self.get_tensor_config(tensor, **kwargs)
-        shape = config['shape']
-        data_format = config.get('data_format', 'channels_last')
-
-        if isinstance(shape, int):
-            shape = (shape,)
-        if isinstance(shape, (list, tuple)):
-            channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
-            return shape[channels_dim]
-        else:
-            raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
+        shape = config.get('shape')
+        data_format = config.get('data_format')
+        channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
+        return shape[channels_dim]
 
     def has_classes(self, tensor):
         """ Check if a tensor has classes defined in the config """
@@ -604,13 +615,7 @@ class TFModel(BaseModel):
         ValueError shape in tensor configuration isn't int, tuple or list
         """
         config = self.get_tensor_config(tensor, **kwargs)
-        shape = config.get('shape')
-        if isinstance(shape, int):
-            shape = (shape,)
-        if isinstance(shape, (list, tuple)):
-            return len(shape) - 1
-        else:
-            raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
+        return config.get('shape') - 1
 
     def data_format(self, tensor, **kwargs):
         """ Return the tensor data format (channels_last or channels_first)
@@ -624,7 +629,7 @@ class TFModel(BaseModel):
         data_format : str
         """
         config = self.get_tensor_config(tensor, **kwargs)
-        return config.get('data_format', 'channels_last')
+        return config.get('data_format')
 
     @staticmethod
     def batch_size(tensor):

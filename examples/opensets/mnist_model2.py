@@ -39,7 +39,7 @@ class MyBatch(ImagesBatch):
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 64
+    BATCH_SIZE = 128
 
     mnist = MNIST(batch_class=MyBatch)
     config = dict(some=1, conv=dict(arg1=10))
@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
     train_pp = (train_tp << mnist.train)
-    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=4)
     print("End training", time() - t)
 
 
