@@ -927,7 +927,7 @@ class TFModel(BaseModel):
                     raise ValueError('filters or num_classes should be specified for conv-style head.')
                 elif len(filters) == 1:
                     filters = filters[0]
-                kernel_size = kwargs.pop('kernel_size', 1)
+                kernel_size = kwargs.pop('kernel_size', 3)
             else:
                 raise ValueError("Head style should be 'dense' or 'conv', but given %d" % style)
             x = conv_block(dim, x, filters, kernel_size=kernel_size, layout=layout, **kwargs)
