@@ -6,8 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append("../..")
-from dataset import Pipeline, B, C, F, V, action
-from dataset.image import ImagesBatch
+from dataset import Pipeline, B, C, F, V, action, ImagesBatch
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel
 from dataset.models.tf.layers import conv_block
@@ -21,9 +20,10 @@ class MyModel(TFModel):
         num_classes = self.num_classes('labels')
         dim = 2
         x = inputs['images']
-        x = conv_block(dim, x, [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
-                         layout='cna cna cna cnaP', depth_multiplier=[1, 2, 2, 1],
+        x = conv_block(dim, x, [16, 32, 64], 3, strides=[1, 2, 2], dropout_rate=.15,
+                         layout='cna cna cna', depth_multiplier=[1, 2, 2],
                          name='network', training=self.is_training)
+        x = self.head(dim, x, 'conv', num_classes=num_classes, training=self.is_training)
         x = tf.identity(x, name='predictions')
 
         predicted_labels = self.to_classes(x, 'labels', name='predicted_labels')

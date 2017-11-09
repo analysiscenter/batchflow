@@ -21,8 +21,8 @@ try:
 except ImportError:
     pass
 
-from ..batch import Batch
-from ..decorators import action, inbatch_parallel, any_action_failed
+from .batch import Batch
+from .decorators import action, inbatch_parallel, any_action_failed
 
 
 
