@@ -55,7 +55,7 @@ if __name__ == "__main__":
                             config={'session': {'config': tf.ConfigProto(allow_soft_placement=True)},
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
-                                    'inputs': dict(images={'shape': (28, 28, 1), 'transform': 'mip @ 1'},
+                                    'inputs': dict(images={'shape': (None, None, 1)}, #'shape': (28, 28, 1), 'transform': 'mip @ 1'},
                                                    #labels={'shape': 10, 'dtype': 'uint8',
                                                    labels={'classes': (10+np.arange(10)).astype('str'),
                                                            'transform': 'ohe', 'name': 'targets'})})
@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
     train_pp = (train_tp << mnist.train)
-    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=4)
+    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
     print("End training", time() - t)
 
 

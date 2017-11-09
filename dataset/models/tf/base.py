@@ -284,18 +284,18 @@ class TFModel(BaseModel):
 
         **How it works**
 
-        Input data will be cast to ``dtype``, then reshaped to ``shape`` in accordance with ``data_format``
-        and finally transformed with a ``transform`` function. The resulting tensor will have the name ``name``.
-        The original placeholder tensor will have the name ``key``.
+        A placholder with ``dtype``, ``shape`` and with a name ``key`` is created first.
+        Then it is transformed with a ``transform`` function in accordance with ``data_format``.
+        The resulting tensor will have the name ``name``.
 
         Parameters
         ----------
         names : list
-            placeholder names that are expected in the config inputs section
+            placeholder names that are expected in the config's 'inputs' section
 
         Raises
         ------
-        KeyError if there is any name missing in the config's input section.
+        KeyError if there is any name missing in the config's 'inputs' section.
         ValueError if there are duplicate names.
 
         Returns
@@ -339,9 +339,17 @@ class TFModel(BaseModel):
                 input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
+            reshape = None
             shape = input_config.get('shape')
             if isinstance(shape, int):
-                input_config['shape'] = (shape,)
+                shape = (shape,)
+            if shape:
+                input_config['shape'] = shape
+                if None not in shape:
+                    reshape = shape
+                    shape = None
+                else:
+                    shape = [None] + list(shape)
 
             self._inputs[input_name] = dict(config=input_config)
 
@@ -349,7 +357,7 @@ class TFModel(BaseModel):
                 dtype = input_config.get('dtype', tf.int32)
             else:
                 dtype = input_config.get('dtype', 'float')
-            tensor = tf.placeholder(dtype, name=input_name)
+            tensor = tf.placeholder(dtype, shape, input_name)
             placeholders[input_name] = tensor
 
             if input_config.get('data_format') == 'l':
@@ -360,10 +368,8 @@ class TFModel(BaseModel):
             self._inputs[input_name] = dict(config=input_config)
             tensor = self._make_transform(input_name, tensor, input_config)
 
-            shape = input_config.get('shape')
-            if input_config.get('__reshape', True) and isinstance(shape, (list, tuple)):
-                input_config['shape'] = shape
-                tensor = tf.reshape(tensor, [-1] + list(shape))
+            if isinstance(reshape, (list, tuple)):
+                tensor = tf.reshape(tensor, [-1] + list(reshape))
 
             name = input_config.get('name')
             if name is not None:
@@ -384,17 +390,13 @@ class TFModel(BaseModel):
                     'mip': self._make_mip
                 }
 
+                kwargs = dict()
                 if transform_name.startswith('mip'):
                     parts = transform_name.split('@')
                     transform_name = parts[0].strip()
-                    config['depth'] = int(parts[1])
-                    # mip has to know shape, so we need call reshape first
-                    shape = config.get('shape')
-                    tensor = tf.reshape(tensor, [-1] + list(shape))
-                    # do not make reshape twice
-                    config.update({'__reshape': False})
+                    kwargs['depth'] = int(parts[1])
 
-                tensor = transforms[transform_name](input_name, tensor, config)
+                tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
             elif callable(transform_name):
                 tensor = transform_name(tensor)
             elif transform_name is not None:
@@ -403,7 +405,8 @@ class TFModel(BaseModel):
 
     def _make_ohe(self, input_name, tensor, config):
         if config.get('shape') is None and config.get('classes') is None:
-            raise ValueError("shape and classes cannot be both None for input '{}'".format(input_name))
+            raise ValueError("shape and classes cannot be both None for input " +
+                             "'{}' with one-hot-encoding transform".format(input_name))
 
         num_classes = self.num_classes(input_name)
         axis = -1 if self.data_format(input_name) else 1
@@ -418,10 +421,12 @@ class TFModel(BaseModel):
             self._to_classes.update({tensor: input_name})
         return tensor
 
-    def _make_mip(self, input_name, tensor, config):
-        depth = config.get('depth')
+    def _make_mip(self, input_name, tensor, config, depth):
+        # mip has to know shape
+        if config.get('shape') is None:
+            raise ValueError('mip transform requires shape specified in the inputs config')
         if depth is None:
-            raise ValueError("mip should be specifies as mip @ depth")
+            raise ValueError("mip should be specified as mip @ depth, e.g. 'mip @ 3'")
         tensor = mip(tensor, depth=depth, data_format=self.data_format(input_name))
         return tensor
 
@@ -549,18 +554,13 @@ class TFModel(BaseModel):
             shape = config.get('shape')
             if isinstance(shape, int):
                 shape = (shape,)
-            kwargs['shape'] = shape
-
-            if 'classes' not in config and 'shape' not in config:
-                raise ValueError("one of 'classes' or 'shape' must be present in inputs config")
-            if 'classes' not in config:
-                if not isinstance(shape, (list, tuple)):
-                    raise ValueError('shape must be int, tuple or list but {} was given'.format(type(shape)))
+            if shape:
+                kwargs['shape'] = shape
         else:
             tensor = self.graph.get_tensor_by_name(input_name)
             shape = tensor.get_shape().as_list()[1:]
             config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name, data_format='channels_last')
-            config = {**config, **kwargs}
+        config = {**config, **kwargs}
 
         return config
 
@@ -580,7 +580,7 @@ class TFModel(BaseModel):
         shape = config.get('shape')
         data_format = config.get('data_format')
         channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
-        return shape[channels_dim]
+        return shape[channels_dim] if shape else None
 
     def has_classes(self, tensor):
         """ Check if a tensor has classes defined in the config """
