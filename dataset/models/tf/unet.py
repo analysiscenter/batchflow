@@ -35,10 +35,9 @@ class UNet(TFModel):
         n_blocks = self.get_from_config('n_blocks', 4)
 
         conv = {'data_format': data_format}
-        batch_norm = {'momentum': 0.1,
-                      'training': self.is_training}
+        batch_norm = {'momentum': 0.1}
 
-        kwargs = {'conv': conv, 'batch_norm': batch_norm}
+        kwargs = {'conv': conv, 'batch_norm': batch_norm, 'training': self.is_training}
 
         unet_filters = 2 ** np.arange(n_blocks) * n_filters * 2
         axis = dim + 1 if data_format == 'channels_last' else 1
@@ -48,14 +47,14 @@ class UNet(TFModel):
         encoder_outputs = [net]
 
         for i, filters in enumerate(unet_filters):
-            net = self.downsampling_block(dim, net, filters, 'downsampling-'+str(i), enable_batch_norm, **kwargs)
+            net = self.downsampling_block(dim, net, filters, 'downsampling-'+str(i), **kwargs)
             encoder_outputs.append(net)
 
         net = conv_block(dim, net, unet_filters[-1]//2, 2, 't', 'middle-block', 2, **kwargs)
 
         for i, filters in enumerate(unet_filters[::-1][1:]):
             net = tf.concat([encoder_outputs[-i-2], net], axis=axis)
-            net = self.upsampling_block(dim, net, filters, 'upsampling-'+str(i), enable_batch_norm, **kwargs)
+            net = self.upsampling_block(dim, net, filters, 'upsampling-'+str(i), **kwargs)
 
         net = conv_block(dim, net, [n_filters, n_filters, n_classes], [3, 3, 1], layout+'c',
                          'output-block', **kwargs)
@@ -63,7 +62,7 @@ class UNet(TFModel):
         tf.nn.softmax(logits, name='predicted_prob')
 
     @staticmethod
-    def downsampling_block(dim, inputs, out_filters, name, enable_batch_norm, **kwargs):
+    def downsampling_block(dim, inputs, out_filters, name, **kwargs):
         """LinkNet encoder block.
 
         Parameters
@@ -75,13 +74,12 @@ class UNet(TFModel):
             number of output filters
         name : str
             tf.scope name
-        enable_batch_norm : bool
-            if True enable batch normalization
 
         Return
         ------
         outp : tf.Tensor
         """
+        enable_batch_norm = 'batch_norm' in kwargs  
         layout = 'pcnacna' if enable_batch_norm else 'pcaca'
         with tf.variable_scope(name):
             output = conv_block(dim, inputs, out_filters, 3, layout, name,
@@ -89,7 +87,7 @@ class UNet(TFModel):
         return output
 
     @staticmethod
-    def upsampling_block(dim, inputs, out_filters, name, enable_batch_norm, **kwargs):
+    def upsampling_block(dim, inputs, out_filters, name, **kwargs):
         """LinkNet encoder block.
 
         Parameters
@@ -101,13 +99,12 @@ class UNet(TFModel):
             number of output filters
         name : str
             tf.scope name
-        enable_batch_norm : bool
-            if True enable batch normalization
 
         Return
         ------
         outp : tf.Tensor
         """
+        enable_batch_norm = 'batch_norm' in kwargs  
         layout = 'cnacna' if enable_batch_norm else 'caca'
         with tf.variable_scope(name):
             net = conv_block(dim, inputs, 2*out_filters, 3, layout, name+'-1', **kwargs)

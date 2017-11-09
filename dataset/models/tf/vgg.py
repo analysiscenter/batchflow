@@ -28,6 +28,8 @@ class VGG(TFModel):
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
     batch_norm : bool
         if True enable batch normalization layers
+    dilation_rate : int 
+        dilation rate for convolutional layers (1 by default)
     arch : str or list of tuples
         if str, it is 'VGG16' (by default), 'VGG19', 'VGG7'
         if list, each tuple must have the following components^
@@ -54,11 +56,11 @@ class VGG(TFModel):
 
         conv = {'data_format': data_format,
                 'dilation_rate': self.get_from_config('dilation_rate', 1)}
-        batch_norm = {'momentum': 0.9,
-                      'training': self.is_training}
-        kwargs = {'conv': conv, 'batch_norm': batch_norm}
+        batch_norm = {'momentum': 0.1}
 
-        net = self.body(dim, inputs['images'], enable_batch_norm, arch, **kwargs)
+        kwargs = {'conv': conv, 'batch_norm': batch_norm, 'training': self.is_training}
+
+        net = self.body(dim, inputs['images'], arch, **kwargs)
         net = self.head(dim, net, n_classes, data_format=data_format, is_training=self.is_training)
 
         logits = tf.identity(net, name='predictions')
@@ -88,7 +90,7 @@ class VGG(TFModel):
         return net
 
     @staticmethod
-    def block(dim, inputs, depth_3, depth_1, filters, enable_batch_norm, name='block', **kwargs):
+    def block(dim, inputs, depth_3, depth_1, filters, name='block', **kwargs):
         """VGG block.
 
         Parameters
@@ -101,13 +103,12 @@ class VGG(TFModel):
         depth_1 : int
             the number of convolution layers with 1x1 kernel
         filters : int
-        enable_batch_norm : bool
-            if True enable batch normalization
 
         Return
         ------
         outp : tf.Tensor
         """
+        enable_batch_norm = 'batch_norm' in kwargs  
         net = inputs
         with tf.variable_scope(name):
             layout = 'cna' if enable_batch_norm else 'ca'
@@ -118,7 +119,7 @@ class VGG(TFModel):
         return net
 
     @staticmethod
-    def body(dim, inputs, enable_batch_norm, arch, **kwargs):
+    def body(dim, inputs, arch, **kwargs):
         """VGG body.
 
         Parameters
@@ -126,8 +127,6 @@ class VGG(TFModel):
         dim : int
             spatial dimension of input without the number of channels
         inputs : tf.Tensor
-        enable_batch_norm : bool
-            if True enable batch normalization
         arch : str or list of tuples
 
         Return
@@ -143,7 +142,7 @@ class VGG(TFModel):
         net = inputs
         with tf.variable_scope('body'):
             for i, block_cfg in enumerate(arch):
-                net = VGG.block(dim, net, *block_cfg, enable_batch_norm, 'block-'+str(i), **kwargs)
+                net = VGG.block(dim, net, *block_cfg, 'block-'+str(i), **kwargs)
         return net
 
 class VGG16(VGG):
@@ -155,11 +154,11 @@ class VGG16(VGG):
         super()._build(*args, **kwargs)
 
     @staticmethod
-    def body(dim, inputs, enable_batch_norm, *args, **kwargs):
+    def body(dim, inputs, *args, **kwargs):
         """VGG16 body.
         """
         _ = args
-        return VGG.body(dim, inputs, enable_batch_norm, 'VGG16', **kwargs)
+        return VGG.body(dim, inputs, 'VGG16', **kwargs)
 
 
 class VGG19(VGG):
@@ -171,11 +170,11 @@ class VGG19(VGG):
         super()._build(*args, **kwargs)
 
     @staticmethod
-    def body(dim, inputs, enable_batch_norm, *args, **kwargs):
+    def body(dim, inputs, *args, **kwargs):
         """VGG19 body.
         """
         _ = args
-        return VGG.body(dim, inputs, enable_batch_norm, 'VGG19', **kwargs)
+        return VGG.body(dim, inputs, 'VGG19', **kwargs)
 
 class VGG7(VGG):
     """
@@ -186,8 +185,8 @@ class VGG7(VGG):
         super()._build(*args, **kwargs)
 
     @staticmethod
-    def body(dim, inputs, enable_batch_norm, *args, **kwargs):
+    def body(dim, inputs, *args, **kwargs):
         """VGG7 body.
         """
         _ = args
-        return VGG.body(dim, inputs, enable_batch_norm, 'VGG7', **kwargs)
+        return VGG.body(dim, inputs, 'VGG7', **kwargs)

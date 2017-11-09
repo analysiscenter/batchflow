@@ -35,10 +35,9 @@ class LinkNet(TFModel):
         n_blocks = self.get_from_config('n_blocks', 4)
 
         conv = {'data_format': data_format}
-        batch_norm = {'momentum': 0.1,
-                      'training': self.is_training}
+        batch_norm = {'momentum': 0.1}
 
-        kwargs = {'conv': conv, 'batch_norm': batch_norm}
+        kwargs = {'conv': conv, 'batch_norm': batch_norm, 'training': self.is_training}
 
         with tf.variable_scope('LinkNet'):
             layout = 'cpna' if enable_batch_norm else 'cpa'
@@ -50,14 +49,14 @@ class LinkNet(TFModel):
             encoder_output = []
 
             for i, filters in enumerate(linknet_filters):
-                net = self.downsampling_block(dim, net, filters, 'downsampling-'+str(i), enable_batch_norm, **kwargs)
+                net = self.downsampling_block(dim, net, filters, 'downsampling-'+str(i), **kwargs)
                 encoder_output.append(net)
 
             for i, filters in enumerate(linknet_filters[::-1][1:]):
-                net = self.upsampling_block(dim, net, filters, 'upsampling-'+str(i), enable_batch_norm, **kwargs)
+                net = self.upsampling_block(dim, net, filters, 'upsampling-'+str(i), **kwargs)
                 net = tf.add(net, encoder_output[-2-i])
 
-            net = self.upsampling_block(dim, net, n_filters, 'upsampling-3', enable_batch_norm, **kwargs)
+            net = self.upsampling_block(dim, net, n_filters, 'upsampling-3', **kwargs)
 
             layout = 'tnacnat' if enable_batch_norm else 'tacat'
 
@@ -69,7 +68,7 @@ class LinkNet(TFModel):
 
 
     @staticmethod
-    def downsampling_block(dim, inputs, out_filters, name, enable_batch_norm, **kwargs):
+    def downsampling_block(dim, inputs, out_filters, name, **kwargs):
         """LinkNet encoder block.
 
         Parameters
@@ -81,13 +80,12 @@ class LinkNet(TFModel):
             number of output filters
         name : str
             tf.scope name
-        enable_batch_norm : bool
-            if True enable batch normalization
 
         Return
         ------
         outp : tf.Tensor
         """
+        enable_batch_norm = 'batch_norm' in kwargs
         with tf.variable_scope(name):
             layout = 'cna' if enable_batch_norm else 'ca'
             net = conv_block(dim, inputs, out_filters, 3, 2*layout, 'conv-1', strides=[2, 1], **kwargs)
@@ -99,7 +97,7 @@ class LinkNet(TFModel):
         return output
 
     @staticmethod
-    def upsampling_block(dim, inputs, out_filters, name, enable_batch_norm, **kwargs):
+    def upsampling_block(dim, inputs, out_filters, name, **kwargs):
         """LinkNet decoder block.
 
         Parameters
@@ -111,14 +109,13 @@ class LinkNet(TFModel):
             number of output filters
         name : str
             tf.scope name
-        batch_norm : bool
-            if True enable batch normalization
 
         Return
         ------
         outp : tf.Tensor
 
         """
+        enable_batch_norm = 'batch_norm' in kwargs
         with tf.variable_scope(name):
             layout = 'cnatnacna' if enable_batch_norm else 'cataca'
             n_filters = inputs.get_shape()[-1].value // 4
