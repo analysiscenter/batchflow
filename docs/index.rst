@@ -102,11 +102,10 @@ If your python file is located in another directory, you might need to add a pat
 What is great about using a submodule is that every commit in your project can be linked to its own commit of a submodule.
 This is extremely convenient in a fast paced research environment.
 
-Local import is also possible::
+Relative import is also possible::
 
-    from .dataset.dataset import Dataset
+    from .dataset import Dataset
 
-It requires a double dataset in the import line, though.
 
 
 Citing Dataset

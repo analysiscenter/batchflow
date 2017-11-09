@@ -88,12 +88,10 @@ import dataset as ds
 What is great about using a submodule that every commit in your project can be linked to its own commit of a submodule.
 This is extremely convenient in a fast paced research environment.
 
-Local import is also possible:
+Relative import is also possible:
 ```python
-from .dataset.dataset import Dataset
+from .dataset import Dataset
 ```
-
-It requires a double dataset in the import line, though.
 
 
 ## Citing Dataset
