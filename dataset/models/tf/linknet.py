@@ -62,7 +62,7 @@ class LinkNet(TFModel):
                              strides=[2, 1, 2], **kwargs)
 
         logits = tf.identity(net, 'predictions')
-        tf.nn.softmax(logits, name='predicted_prob')
+        tf.nn.softmax(logits, name='predicted_proba')
 
 
     @staticmethod

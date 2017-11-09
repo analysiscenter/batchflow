@@ -561,6 +561,7 @@ class TFModel(BaseModel):
         """
         config = self.get_tensor_config(tensor, **kwargs)
         shape = config['shape']
+        data_format = config.get('data_format', 'channels_last')
 
         if isinstance(shape, int):
             shape = (shape,)
