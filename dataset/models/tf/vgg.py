@@ -58,7 +58,9 @@ class VGG(TFModel):
                 'dilation_rate': self.get_from_config('dilation_rate', 1)}
         batch_norm = {'momentum': 0.1}
 
-        kwargs = {'conv': conv, 'batch_norm': batch_norm, 'training': self.is_training}
+        kwargs = {'conv': conv, 'training': self.is_training}
+        if enable_batch_norm:
+            kwargs['batch_norm'] = batch_norm
 
         net = self.body(dim, inputs['images'], arch, **kwargs)
         net = self.head(dim, net, n_classes, data_format=data_format, is_training=self.is_training)

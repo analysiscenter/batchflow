@@ -37,7 +37,9 @@ class UNet(TFModel):
         conv = {'data_format': data_format}
         batch_norm = {'momentum': 0.1}
 
-        kwargs = {'conv': conv, 'batch_norm': batch_norm, 'training': self.is_training}
+        kwargs = {'conv': conv, 'training': self.is_training}
+        if enable_batch_norm:
+            kwargs['batch_norm'] = batch_norm
 
         unet_filters = 2 ** np.arange(n_blocks) * n_filters * 2
         axis = dim + 1 if data_format == 'channels_last' else 1

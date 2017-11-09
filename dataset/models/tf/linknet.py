@@ -37,7 +37,9 @@ class LinkNet(TFModel):
         conv = {'data_format': data_format}
         batch_norm = {'momentum': 0.1}
 
-        kwargs = {'conv': conv, 'batch_norm': batch_norm, 'training': self.is_training}
+        kwargs = {'conv': conv, 'training': self.is_training}
+        if enable_batch_norm:
+            kwargs['batch_norm'] = batch_norm
 
         with tf.variable_scope('LinkNet'):
             layout = 'cpna' if enable_batch_norm else 'cpa'
