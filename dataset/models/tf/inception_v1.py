@@ -52,11 +52,8 @@ class InceptionV1(TFModel):
         dropout_rate = self.get_from_config('dropout_rate', 0)
         head_type = self.get_from_config('head_type', 'dense')
 
-
-        data_format = 'channels_last'
         names = ['images', 'labels']
         _, transformed_placeholders = self._make_inputs(names)
-
 
         data_format = self.data_format('images')
         num_classes = self.num_classes('labels')
@@ -114,7 +111,7 @@ class InceptionV1(TFModel):
     @staticmethod
     def head(dim, inputs, n_outputs, head_type='dense', data_format='channels_last', is_training=True,\
              dropout_rate=0):
-        """Head of network.
+        """ Head of network.
         Consist of two kinds 'dense' and 'conv'.
 
         Parameters
@@ -154,9 +151,9 @@ class InceptionV1(TFModel):
         return net
 
     def statistic(self, net, targets):
-        """Added to graph some useful funstion like accuracy or preidctions
-        Parameters:
-        -----------
+        """ Added to graph some useful funstion like accuracy or preidctions
+        Parameters
+        ----------
         net: tf.Tensor
         Network output
 
@@ -173,8 +170,8 @@ class InceptionV1(TFModel):
     def block(dim, inputs, filters, data_format='channels_last', name=None, b_norm=True, is_training=True, **kwargs):
         """ Function contains building block from inception_v1 achitecture
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         dim: int
         spacial dimension of input without the number of channels
 
@@ -202,8 +199,8 @@ class InceptionV1(TFModel):
         batch_norm: bool
         Use batch norm or not
 
-        Returns:
-        --------
+        Returns
+        -------
         tf.Tensor - output tf.Tensor
         """
         layout = 'cn' if b_norm else 'c'
