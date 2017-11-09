@@ -19,7 +19,7 @@ _ARCH = {'VGG16': [(2, 0, 64),
                   (2, 1, 256)]}
 
 class VGG(TFModel):
-    """VGG as TFModel
+    """ Base VGG neural network
     https://arxiv.org/abs/1409.1556 (K.Simonyan et al, 2014)
 
     **Configuration**
@@ -31,24 +31,19 @@ class VGG(TFModel):
     dilation_rate : int
         dilation rate for convolutional layers (1 by default)
     arch : str or list of tuples
-        if str, it is 'VGG16' (by default), 'VGG19', 'VGG7'
-        if list, each tuple must have the following components^
-        tuple[0] : int
-            number of convolution layers with 3x3 kernel
-        tuple[1] : int
-            number of convolution layers with 1x1 kernel
-        tuple[2] : bool
-            number of filters.
+        if str, 'VGG16' (default), 'VGG19', 'VGG7'
+        A list should contain tuples of 3 ints:
+        - number of convolution layers with 3x3 kernel
+        - number of convolution layers with 1x1 kernel
+        - number of filters in each layer
     """
 
     def _build(self):
-        """
-        Builds a VGG model.
-        """
+        """ Create network layers """
         names = ['images', 'labels']
         _, inputs = self._make_inputs(names)
 
-        n_classes = self.num_channels('labels')
+        num_classes = self.num_channels('labels')
         data_format = self.data_format('images')
         dim = self.spatial_dim('images')
         enable_batch_norm = self.get_from_config('batch_norm', True)
@@ -63,7 +58,7 @@ class VGG(TFModel):
             kwargs['batch_norm'] = batch_norm
 
         net = self.body(dim, inputs['images'], arch, **kwargs)
-        net = self.head(dim, net, style='dense', layout='fff', num_classes=n_classes,
+        net = self.head(dim, net, style='dense', layout='fff', num_classes=num_classes,
                         units=[100, 100], **kwargs)
 
         logits = tf.identity(net, name='predictions')
@@ -76,7 +71,7 @@ class VGG(TFModel):
 
     @staticmethod
     def block(dim, inputs, depth_3, depth_1, filters, name='block', **kwargs):
-        """VGG block.
+        """ Base VGG block
 
         Parameters
         ----------
@@ -105,7 +100,7 @@ class VGG(TFModel):
 
     @staticmethod
     def body(dim, inputs, arch, **kwargs):
-        """VGG body.
+        """ Create base VGG layers
 
         Parameters
         ----------
@@ -114,16 +109,17 @@ class VGG(TFModel):
         inputs : tf.Tensor
         arch : str or list of tuples
 
-        Return
-        ------
-        outp : tf.Tensor
+        Returns
+        -------
+        tf.Tensor
         """
-        if isinstance(arch, list):
+        if isinstance(arch, (list, tuple)):
             pass
         elif isinstance(arch, str):
             arch = _ARCH[arch]
         else:
             raise TypeError("arch must be str or list but {} was given.".format(type(arch)))
+
         net = inputs
         with tf.variable_scope('body'):
             for i, block_cfg in enumerate(arch):
@@ -131,47 +127,38 @@ class VGG(TFModel):
         return net
 
 class VGG16(VGG):
-    """
-    Builds a VGG16 model.
-    """
+    """ VGG16 network """
     def _build(self, *args, **kwargs):
         self.config['arch'] = 'VGG16'
         super()._build(*args, **kwargs)
 
     @staticmethod
     def body(dim, inputs, *args, **kwargs):
-        """VGG16 body.
-        """
+        """ Create VGG16 body """
         _ = args
         return VGG.body(dim, inputs, 'VGG16', **kwargs)
 
 
 class VGG19(VGG):
-    """
-    Builds a VGG19 model.
-    """
+    """ VGG19 network """
     def _build(self, *args, **kwargs):
         self.config['arch'] = 'VGG19'
         super()._build(*args, **kwargs)
 
     @staticmethod
     def body(dim, inputs, *args, **kwargs):
-        """VGG19 body.
-        """
+        """VGG19 body """
         _ = args
         return VGG.body(dim, inputs, 'VGG19', **kwargs)
 
 class VGG7(VGG):
-    """
-    Builds a VGG7 model.
-    """
+    """ VGG7 network """
     def _build(self, *args, **kwargs):
         self.config['arch'] = 'VGG7'
         super()._build(*args, **kwargs)
 
     @staticmethod
     def body(dim, inputs, *args, **kwargs):
-        """VGG7 body.
-        """
+        """ VGG7 body """
         _ = args
         return VGG.body(dim, inputs, 'VGG7', **kwargs)

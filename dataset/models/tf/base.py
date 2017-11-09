@@ -339,6 +339,8 @@ class TFModel(BaseModel):
                 input_config = dict((k, v) for k, v in input_config.items() if v is not None)
             input_config = {**defaults, **input_config}
 
+            self._inputs[input_name] = dict(config=input_config)
+
             if self.has_classes(input_name):
                 dtype = tf.int32
             else:
@@ -365,7 +367,8 @@ class TFModel(BaseModel):
 
             tensors[input_name] = tensor
 
-        self._inputs = {**placeholders, **tensors}
+            self._inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
+
         return placeholders, tensors
 
     def _make_transform(self, input_name, tensor, config):
@@ -515,26 +518,24 @@ class TFModel(BaseModel):
         ----------
         tensor : str or tf.Tensor
         """
-        inputs = self.get_from_config('inputs', {})
         if isinstance(tensor, tf.Tensor):
-            names = [n for n, i in self._inputs.items() if tensor == i]
+            names = [n for n, i in self._inputs.items() if tensor in [i['placeholder'], i['tensor']]]
             if len(names) > 0:
-                tensor_name = names[0]
+                input_name = names[0]
             else:
-                tensor_name = tensor.name
-            tensor_name = names[0] if len(names) > 0 else None
+                input_name = tensor.name
         elif isinstance(tensor, str):
-            if tensor in inputs:
-                tensor_name = tensor
+            if tensor in self._inputs:
+                input_name = tensor
             else:
-                tensor_name = self._map_name(tensor)
+                input_name = self._map_name(tensor)
         else:
             raise TypeError("Tensor can be tf.Tensor or string, but given %s" % type(tensor))
 
-        if tensor_name in inputs:
-            config = inputs[tensor_name]
+        if input_name in self._inputs:
+            config = self._inputs[input_name]['config']
         else:
-            tensor = self.graph.get_tensor_by_name(tensor_name)
+            tensor = self.graph.get_tensor_by_name(input_name)
             shape = tensor.get_shape().as_list()[1:]
             config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name,
                           data_format='channels_last')
@@ -564,7 +565,6 @@ class TFModel(BaseModel):
         if isinstance(shape, int):
             shape = (shape,)
         if isinstance(shape, (list, tuple)):
-            data_format = config.get('data_format', 'channels_last')
             channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
             return shape[channels_dim]
         else:
@@ -912,8 +912,10 @@ class TFModel(BaseModel):
             x = inputs
             kernel_size = kwargs.pop('kernel_size', 3)
             filters = kwargs.pop('filters', [])
+
             if style == 'dense':
                 layout = layout or 'f'
+
                 units = kwargs.get('units', [])
                 if isinstance(units, int):
                     units = [units]
@@ -923,10 +925,10 @@ class TFModel(BaseModel):
                 elif len(units) == 1:
                     units = units[0]
                 kwargs['units'] = units
-                if len(TFModel.get_shape(x)) > 2:
-                    x = flatten(x)
+
             elif style == 'conv':
                 layout = layout or 'cP'
+
                 if isinstance(filters, int):
                     filters = [filters]
                 filters = filters + ([num_classes] if num_classes is not None else [])
@@ -935,6 +937,6 @@ class TFModel(BaseModel):
                 elif len(filters) == 1:
                     filters = filters[0]
             else:
-                raise ValueError("Head style should be 'dense' or 'conv', but given %d" % style)
+                raise ValueError("Head style should be 'dense' or 'conv', but given %s" % style)
             x = conv_block(dim, x, filters, kernel_size=kernel_size, layout=layout, **kwargs)
         return x
