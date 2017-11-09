@@ -1,7 +1,7 @@
 """ Contains convolution layers """
 import tensorflow as tf
 
-from .core import mip
+from .core import mip, flatten
 from .conv import conv1d_transpose, separable_conv
 from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling
 
@@ -180,6 +180,8 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
             tensor = activation(tensor)
         else:
             if layer == 'f':
+                if len(tensor.get_shape().as_list()) > 2:
+                    tensor = flatten(tensor)
                 units = kwargs.get('units')
                 if units is None:
                     raise ValueError('units cannot be None if layout includes dense layers')
