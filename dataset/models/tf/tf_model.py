@@ -564,7 +564,7 @@ class TFModel(BaseModel):
         if isinstance(shape, int):
             shape = (shape,)
         if isinstance(shape, (list, tuple)):
-            data_format = config.get('data_format')
+            data_format = config.get('data_format', 'channels_last')
             channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
             return shape[channels_dim]
         else:
@@ -910,12 +910,17 @@ class TFModel(BaseModel):
         """
         with tf.variable_scope('head'):
             x = inputs
+            kernel_size = kwargs.pop('kernel_size', 1)
             if style == 'dense':
                 layout = layout or 'f'
-                filters = kwargs.get(filters)
+                filters = kwargs.get('filters')
                 units = kwargs.get('units', 0)
-                units = units + 0 if num_classes is None else num_classes
-                if units < 1:
+                if isinstance(units, int):
+                    units = [units]
+                units = units + ([num_classes] if num_classes is not None else [])
+                kwargs['units'] = units
+                print(units)
+                if len(units) < 1:
                     raise ValueError('units or num_classes should be specified for dense-style head.')
                 if len(TFModel.get_shape(x)) > 2:
                     x = flatten(x)
@@ -927,7 +932,6 @@ class TFModel(BaseModel):
                     raise ValueError('filters or num_classes should be specified for conv-style head.')
                 elif len(filters) == 1:
                     filters = filters[0]
-                kernel_size = kwargs.pop('kernel_size', 1)
             else:
                 raise ValueError("Head style should be 'dense' or 'conv', but given %d" % style)
             x = conv_block(dim, x, filters, kernel_size=kernel_size, layout=layout, **kwargs)
