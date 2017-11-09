@@ -1,15 +1,9 @@
 """ ResNetModel class
 """
-import sys
-
 import tensorflow as tf
-
-sys.path.append("..")
-
-from dataset.dataset.models.tf import TFModel
-from dataset.dataset.models.tf.layers import conv_block
-from dataset.dataset.models.tf.layers.pooling import global_average_pooling
-
+import numpy as np
+from .layers import conv_block
+from . import TFModel
 
 class ResNet(TFModel):
     ''' Universal Residual network constructor
@@ -27,7 +21,11 @@ class ResNet(TFModel):
     head_type: str {'dense', 'conv'}
         Default is 'dense'.
         Type of the classification layers in the end of the model.
-    conv : dict - parameters for convolution layers, like initializers, regularalizers, etc
+    block_params : dict of dicts: {'conv': {}, 'batch_norm': {}}
+        'conv' contains parameters for convolution layers, like initializers,
+        regularalizers, etc.
+        'batch_norm' contains parameters for batch normalization layers,
+        like momentum, intiializers, etc
     activation: specifies activation to use. Default is tf.nn.relu.
     dropout_rate: float in [0, 1]. Default is 0.
 
@@ -54,6 +52,14 @@ class ResNet(TFModel):
         If se_block != 0, squeeze and excitation (se) block with
         corresponding squeezing factor will be added.
         Read more about squeeze and excitation technique: https://arxiv.org/abs/1709.01507.
+    input_block_config: dict
+        parameters for the first layers applied to the input of the network before
+        residual blocks.
+        Default is {'layout': 'cnap', 'filters': 64,
+                    'kernel_size': 7, 'strides': 2,
+                    'pool_size': 3, 'pool_strides': 2})
+        i.e. input_block will consist of 64 7x7 convolutions with stride 2
+        and maxpooling of size 3 and pool_stride 2.
     '''
     def _build(self, *args, **kwargs):
         names = ['images', 'labels']
@@ -78,33 +84,31 @@ class ResNet(TFModel):
                                                    'kernel_size': 7,
                                                    'strides': 2, 'pool_size': 3, 'pool_strides': 2})
         filters = self.get_from_config('filters', [64, 128, 256, 512])
+
         length_factor = self.get_from_config('length_factor', [1, 1, 1, 1])
         if isinstance(length_factor, int):
             length_factor = [length_factor] * len(filters)
-        elif len(length_factor) != len(filters):
-            raise ValueError("length_factor should be int or list of the same length as list\
-                            of filters, but given length is %d" % len(length_factor))
 
         strides = self.get_from_config('strides', [2, 2, 2, 2])
         if isinstance(strides, int):
             strides = [strides] * len(filters)
-        elif len(strides) != len(filters):
-            raise ValueError("strides should be int or list of the same length as list\
-                            of filters, but given length is %d" % len(strides))
 
         bottleneck = self.get_from_config('bottleneck', [False, False, False, False])
         if isinstance(bottleneck, bool):
             bottleneck = [bottleneck] * len(filters)
-        elif len(bottleneck) != len(filters):
-            raise ValueError("bottleneck should be bool or list of the same length as list\
-                            of filters, but given length is %d" % len(bottleneck))
 
         bottelneck_factor = self.get_from_config('bottelneck_factor', [4, 4, 4, 4])
         if isinstance(bottelneck_factor, int):
             bottelneck_factor = [bottelneck_factor] * len(filters)
-        elif len(bottelneck_factor) != len(filters):
-            raise ValueError("bottelneck_factor should be int or list of the same length as list\
-                            of filters, but given length is %d" % len(bottelneck_factor))
+
+        all_factors = {'length_factor': length_factor,
+                       'strides': strides, 'bottleneck': bottleneck,
+                       'bottelneck_factor': bottelneck_factor}
+
+        for name, lst in all_factors.items():
+            if len(lst) != len(filters):
+                raise ValueError("%s should be int or list of the same length as list \
+                                 of filters, but given length is %d" % (name, len(lst)))
 
         se_block = self.get_from_config('se_block', [0, 0, 0, 0])
         if isinstance(se_block, int):
@@ -115,24 +119,27 @@ class ResNet(TFModel):
 
         is_training = self.is_training
         kwargs = {'is_training': is_training, 'data_format': data_format,
-                  'dropout_rate': dropout_rate, 'activation': activation, **kwargs}
+                  'dropout_rate': dropout_rate, 'activation': activation, **block_params}
 
         with tf.variable_scope('resnet'):
             net = ResNet.body(dim, inputs['images'], filters, length_factor, strides, layout,
                               se_block, bottleneck, bottelneck_factor, input_block_config, **kwargs)
-            net = ResNet.head(dim, net, n_classes, head_type, data_format, is_training)
+            net = self.head(dim, net, 'conv', 'Pf', n_classes, units=n_classes, **kwargs)
 
         predictions = tf.identity(net, name='predictions')
-        probs = tf.nn.softmax(net, name='predicted_prob')
+        tf.nn.softmax(net, name='predicted_prob')
         labels_hat = tf.cast(tf.argmax(predictions, axis=1), tf.float32, name='labels_hat')
         labels = tf.cast(tf.argmax(inputs['labels'], axis=1), tf.float32, 'true_labels')
-        accuracy = tf.reduce_mean(tf.cast(tf.equal(labels_hat, labels), \
+        tf.reduce_mean(tf.cast(tf.equal(labels_hat, labels), \
                                   tf.float32), name='accuracy')
 
 
     @staticmethod
     def body(dim, inputs, filters, length_factor, strides, layout, se_block, bottleneck,
              bottelneck_factor, input_block_config, **kwargs):
+        ''' Fully convolutional part of the network
+            without classification layers on top
+        '''
         with tf.variable_scope('body'):
             net = ResNet.input_block(dim, inputs, input_block_config=input_block_config)
             for index, block_length in enumerate(length_factor):
@@ -146,22 +153,9 @@ class ResNet(TFModel):
 
 
     @staticmethod
-    def head(dim, inputs, n_outputs, head_type='dense', data_format='channels_last',
-             is_training=True):
-        """ Head of the net for classification
-        """
-        with tf.variable_scope('head'):
-            if head_type == 'dense':
-                net = global_average_pooling(dim=dim, inputs=inputs, data_format=data_format)
-                net = tf.layers.dense(net, n_outputs)
-            else:
-                net = conv_block(dim=dim, input_tensor=inputs, filters=n_outputs, kernel_size=1,\
-                                     layout='c', name='con v_1', data_format=data_format)
-                net = global_average_pooling(dim=dim, inputs=net, data_format=data_format)
-        return net
-
-
     def input_block(dim, inputs, input_block_config, name='block-'+'input'):
+        ''' First block applied to the input of the network
+        '''
         with tf.variable_scope(name):
             if input_block_config == {}:
                 return inputs
