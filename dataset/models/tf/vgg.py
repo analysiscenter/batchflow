@@ -28,7 +28,7 @@ class VGG(TFModel):
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
     batch_norm : bool
         if True enable batch normalization layers
-    dilation_rate : int 
+    dilation_rate : int
         dilation rate for convolutional layers (1 by default)
     arch : str or list of tuples
         if str, it is 'VGG16' (by default), 'VGG19', 'VGG7'
@@ -110,7 +110,7 @@ class VGG(TFModel):
         ------
         outp : tf.Tensor
         """
-        enable_batch_norm = 'batch_norm' in kwargs  
+        enable_batch_norm = 'batch_norm' in kwargs
         net = inputs
         with tf.variable_scope(name):
             layout = 'cna' if enable_batch_norm else 'ca'

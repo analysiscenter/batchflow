@@ -81,7 +81,7 @@ class UNet(TFModel):
         ------
         outp : tf.Tensor
         """
-        enable_batch_norm = 'batch_norm' in kwargs  
+        enable_batch_norm = 'batch_norm' in kwargs
         layout = 'pcnacna' if enable_batch_norm else 'pcaca'
         with tf.variable_scope(name):
             output = conv_block(dim, inputs, out_filters, 3, layout, name,
@@ -106,7 +106,7 @@ class UNet(TFModel):
         ------
         outp : tf.Tensor
         """
-        enable_batch_norm = 'batch_norm' in kwargs  
+        enable_batch_norm = 'batch_norm' in kwargs
         layout = 'cnacna' if enable_batch_norm else 'caca'
         with tf.variable_scope(name):
             net = conv_block(dim, inputs, 2*out_filters, 3, layout, name+'-1', **kwargs)
