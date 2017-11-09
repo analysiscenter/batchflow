@@ -911,9 +911,9 @@ class TFModel(BaseModel):
         with tf.variable_scope('head'):
             x = inputs
             kernel_size = kwargs.pop('kernel_size', 1)
+            filters = kwargs.pop('filters', [])
             if style == 'dense':
                 layout = layout or 'f'
-                filters = kwargs.get('filters')
                 units = kwargs.get('units', 0)
                 if isinstance(units, int):
                     units = [units]
@@ -926,7 +926,6 @@ class TFModel(BaseModel):
                     x = flatten(x)
             elif style == 'conv':
                 layout = layout or 'cP'
-                filters = kwargs.pop('filters', [])
                 if isinstance(filters, int):
                     filters = [filters]
                 filters = filters + ([num_classes] if num_classes is not None else [])
