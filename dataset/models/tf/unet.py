@@ -65,8 +65,8 @@ class UNet(TFModel):
 
         Parameters
         ----------
-        dim : int
-            spatial dimension of input without the number of channels
+        dim : int {1, 2, 3}
+            input spatial dimensionionaly
         inputs : tf.Tensor
             input tensor
         filters : int
@@ -90,8 +90,8 @@ class UNet(TFModel):
 
         Parameters
         ----------
-        dim : int
-            spatial dimension of input without the number of channels
+        dim : int {1, 2, 3}
+            input spatial dimensionionaly
         inputs : tf.Tensor
             input tensor
         filters : int
