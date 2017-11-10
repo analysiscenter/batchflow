@@ -64,7 +64,8 @@ class UNet(TFModel):
         ------
         tf.Tensor
         """
-        encoder_outputs = [inputs]
+        x = inputs
+        encoder_outputs = [x]
         for i, ifilters in enumerate(filters):
             x = cls.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
             encoder_outputs.append(x)
@@ -79,7 +80,7 @@ class UNet(TFModel):
         return x
 
     @classmethod
-    def head(_, dim, inputs, filters, num_classes, **kwargs):
+    def head(cls, dim, inputs, filters, num_classes, **kwargs):
         """ Two 3x3 convolutions and 1x1 convolution
 
         Parameters
