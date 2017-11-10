@@ -79,6 +79,8 @@ class VGG(TFModel):
         inputs : tf.Tensor
             input tensor
         arch : str or list of tuples
+        name : str
+            scope name
 
         Returns
         -------
