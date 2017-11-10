@@ -893,4 +893,6 @@ class TFModel(BaseModel):
         """ Transform input image with a convolution block """
         if kwargs.get('layout'):
             x = conv_block(dim, inputs, **kwargs)
+        else:
+            x = inputs
         return x
