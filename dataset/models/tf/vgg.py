@@ -98,7 +98,7 @@ class VGG(TFModel):
         return x
 
     @classmethod
-    def head(cls, dim, inputs, units, num_classes, head_name='head', **kwargs):
+    def head(cls, dim, inputs, units, num_classes, name='head', **kwargs):
         """ A sequence of dense layers with the last one having ``num_classes`` units
 
         Parameters
@@ -111,7 +111,7 @@ class VGG(TFModel):
             number of units in dense layers
         num_classes : int
             number of classes
-        head_name : str
+        name : str
             scope name
 
         Returns
@@ -128,7 +128,7 @@ class VGG(TFModel):
 
         else:
             layout = 'f' * len(units)
-        with tf.variable_scope(head_name):
+        with tf.variable_scope(name):
             x = conv_block(dim, inputs, layout=layout, units=units, **kwargs)
         return x
 
