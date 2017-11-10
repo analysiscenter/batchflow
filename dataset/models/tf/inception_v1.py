@@ -4,7 +4,6 @@ import tensorflow as tf
 
 from . import TFModel
 from .layers import conv_block
-from .layers.pooling import max_pooling
 
 
 BLOCK_FILTERS = [
