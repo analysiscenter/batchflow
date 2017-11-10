@@ -68,8 +68,8 @@ class LinkNet(TFModel):
 
         Parameters
         ----------
-        dim : int
-            spatial dimension of input without the number of channels
+        dim : int {1, 2, 3}
+            input spatial dimensionionaly
         inputs : tf.Tensor
             input tensor
         filters : int
@@ -82,8 +82,8 @@ class LinkNet(TFModel):
         tf.Tensor
         """
         enable_batch_norm = 'batch_norm' in kwargs
+        layout = 'cna' if enable_batch_norm else 'ca'
         with tf.variable_scope(name):
-            layout = 'cna' if enable_batch_norm else 'ca'
             net = conv_block(dim, inputs, filters, 3, 2*layout, 'conv-1', strides=[2, 1], **kwargs)
             shortcut = conv_block(dim, inputs, filters, 1, layout, 'conv-2', strides=2, **kwargs)
             add = tf.add(net, shortcut, 'add-1')
@@ -98,8 +98,8 @@ class LinkNet(TFModel):
 
         Parameters
         ----------
-        dim : int
-            spatial dimension of input without the number of channels
+        dim : int {1, 2, 3}
+            input spatial dimensionionaly
         inputs : tf.Tensor
             input tensor
         filters : int
@@ -110,13 +110,11 @@ class LinkNet(TFModel):
         Return
         ------
         tf.Tensor
-
         """
         enable_batch_norm = 'batch_norm' in kwargs
+        layout = 'cnatnacna' if enable_batch_norm else 'cataca'
+        num_filters = inputs.get_shape()[-1].value // 4
         with tf.variable_scope(name):
-            layout = 'cnatnacna' if enable_batch_norm else 'cataca'
-            num_filters = inputs.get_shape()[-1].value // 4
-
             output = conv_block(dim, inputs, [num_filters, num_filters, filters], [1, 3, 1],
                                 layout, 'conv', strides=[1, 2, 1], **kwargs)
-            return output
+        return output

@@ -90,12 +90,11 @@ class VGG(TFModel):
         tf.Tensor
         """
         enable_batch_norm = 'batch_norm' in kwargs
-        x = inputs
+        layout = 'cna' if enable_batch_norm else 'ca'
+        layout = layout * (depth_3 + depth_1) + 'p'
+        kernels = [3] * depth_3 + [1] * depth_1
         with tf.variable_scope(name):
-            layout = 'cna' if enable_batch_norm else 'ca'
-            layout = layout * (depth_3 + depth_1) + 'p'
-            kernels = [3] * depth_3 + [1] * depth_1
-            x = conv_block(dim, x, filters, kernels, layout, **kwargs)
+            x = conv_block(dim, inputs, filters, kernels, layout, **kwargs)
             x = tf.identity(x, name='output')
         return x
 
