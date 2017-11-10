@@ -34,19 +34,23 @@ class UNet(TFModel):
         filters = self.get_from_config('filters', 64)
         num_blocks = self.get_from_config('num_blocks', 4)
 
+        input_block_config = self.get_from_config('input_block', {'filters': filters})
+        layers_filters = 2 ** np.arange(num_blocks) * filters * 2
+        body_config = self.get_from_config('body', {'filters': layers_filters})
+        head_config = self.get_from_config('head', {'filters': filters})
+        head_config['num_classes'] = num_classes
+
         kwargs = {'data_format': data_format, 'training': self.is_training}
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
         with tf.variable_scope('UNet'):
-            x = self.input_block(dim, inputs['images'], filters, **kwargs)
+            x = self.input_block(dim, inputs['images'], **{**kwargs, **input_block_config})
+            x = self.body(dim, x, **{**kwargs, **body_config})
+            output = self.head(dim, x, **{**kwargs, **head_config})
 
-            layers_filters = 2 ** np.arange(num_blocks) * filters * 2
-            x = self.body(dim, x, layers_filters, **kwargs)
-            output = self.head(dim, x, filters, num_classes, **kwargs)
-
-            logits = tf.identity(output, 'predictions')
-            tf.nn.softmax(logits, name='predicted_proba')
+        logits = tf.identity(output, 'predictions')
+        tf.nn.softmax(logits, name='predicted_proba')
 
     @classmethod
     def body(cls, dim, inputs, filters, **kwargs):
@@ -63,8 +67,8 @@ class UNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         x = inputs
@@ -99,12 +103,13 @@ class UNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
+        with tf.variable_scope('head'):
+            x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
         return x
 
     @staticmethod
@@ -122,8 +127,8 @@ class UNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
@@ -145,8 +150,8 @@ class UNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         layout = 'pcnacna' if 'batch_norm' in kwargs else 'pcaca'
@@ -169,8 +174,8 @@ class UNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'

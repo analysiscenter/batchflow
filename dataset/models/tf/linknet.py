@@ -35,19 +35,23 @@ class LinkNet(TFModel):
         filters = self.get_from_config('filters', 64)
         num_blocks = self.get_from_config('num_blocks', 4)
 
+        input_block_config = self.get_from_config('input_block', {'filters': filters})
+        layers_filters = 2 ** np.arange(num_blocks) * filters
+        body_config = self.get_from_config('body', {'filters': layers_filters})
+        head_config = self.get_from_config('head', {'filters': 32})
+        head_config['num_classes'] = num_classes
+
         kwargs = {'data_format': data_format, 'training': self.is_training}
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
         with tf.variable_scope('LinkNet'):
-            x = self.input_block(dim, inputs['images'], filters, **kwargs)
+            x = self.input_block(dim, inputs['images'], **{**kwargs, **input_block_config})
+            x = self.body(dim, x, **{**kwargs, **body_config})
+            output = self.head(dim, x, **{**kwargs, **head_config})
 
-            layers_filters = 2 ** np.arange(num_blocks) * filters
-            x = self.body(dim, x, layers_filters, **kwargs)
-            output = self.head(dim, x, 32, num_classes, **kwargs)
-
-            logits = tf.identity(output, 'predictions')
-            tf.nn.softmax(logits, name='predicted_proba')
+        logits = tf.identity(output, 'predictions')
+        tf.nn.softmax(logits, name='predicted_proba')
 
     @classmethod
     def body(cls, dim, inputs, filters, **kwargs):
@@ -64,8 +68,8 @@ class LinkNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         x = inputs
@@ -98,13 +102,14 @@ class LinkNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         layout = 'tna cna t' if batch_norm else 'ta ca t'
-        x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 2], layout, 'output',
-                       strides=[2, 1, 2], **kwargs)
+        with tf.variable_scope('head'):
+            x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 2], layout, 'output',
+                           strides=[2, 1, 2], **kwargs)
         return x
 
     @staticmethod
@@ -122,8 +127,8 @@ class LinkNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         layout = 'cpna' if batch_norm else 'cpa'
@@ -145,8 +150,8 @@ class LinkNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         enable_batch_norm = 'batch_norm' in kwargs
@@ -175,8 +180,8 @@ class LinkNet(TFModel):
         name : str
             scope name
 
-        Return
-        ------
+        Returns
+        -------
         tf.Tensor
         """
         layout = 'cna tna cna' if 'batch_norm' in kwargs else 'ca ta ca'
