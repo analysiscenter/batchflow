@@ -65,7 +65,7 @@ class FCN(TFModel):
         return VGG16.body(dim, inputs, **kwargs)
 
     @classmethod
-    def head(cls, dim, inputs, arch, num_classes, **kwargs):
+    def head(cls, dim, inputs, arch, num_classes, name='head', **kwargs):
         """ FCN head
 
         Parameters
@@ -78,17 +78,19 @@ class FCN(TFModel):
             network architecture. Default is 'FCN32'.
         num_classes : int
             number of classes
+        name : str
+            scope name
 
         Returns
         -------
         tf.Tensor
         """
-        with tf.variable_scope(kwargs.get('name', 'head')):
+        with tf.variable_scope(name):
             layout = 'cna' * 3 if 'batch_norm' in kwargs else 'ca' * 3
             x = conv_block(dim, inputs, [100, 100, num_classes], [7, 1, 1], layout, 'conv-out', **kwargs)
 
-            pool4 = tf.get_default_graph().get_tensor_by_name("body/block-3/output:0")
-            pool3 = tf.get_default_graph().get_tensor_by_name("body/block-2/output:0")
+            pool4 = tf.get_default_graph().get_tensor_by_name("FCN/body/block-3/output:0")
+            pool3 = tf.get_default_graph().get_tensor_by_name("FCN/body/block-2/output:0")
             if arch == 'FCN32':
                 x = conv_block(dim, x, num_classes, 64, 't', 'output', strides=32, **kwargs)
             else:

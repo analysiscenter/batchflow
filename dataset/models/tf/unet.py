@@ -72,7 +72,7 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        with tf.variable_scope(kwargs.get('name', 'body')):
+        with tf.variable_scope(kwargs.pop('name', 'body')):
             x = inputs
             encoder_outputs = [x]
             for i, ifilters in enumerate(filters):
@@ -89,7 +89,7 @@ class UNet(TFModel):
         return x
 
     @classmethod
-    def head(cls, dim, inputs, filters, num_classes, **kwargs):
+    def head(cls, dim, inputs, filters, num_classes, name='head', **kwargs):
         """ Two 3x3 convolutions and 1x1 convolution
 
         Parameters
@@ -110,12 +110,12 @@ class UNet(TFModel):
         tf.Tensor
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        with tf.variable_scope(kwargs.get('name', 'head')):
+        with tf.variable_scope(name):
             x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
         return x
 
     @staticmethod
-    def input_block(dim, inputs, filters, **kwargs):
+    def input_block(dim, inputs, filters, name='input', **kwargs):
         """ 3x3 convolution
 
         Parameters
@@ -134,7 +134,7 @@ class UNet(TFModel):
         tf.Tensor
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        x = conv_block(dim, inputs, filters, 3, layout, name=kwargs.get('name', 'input'), **kwargs)
+        x = conv_block(dim, inputs, filters, 3, layout, name=name, **kwargs)
         return x
 
     @staticmethod

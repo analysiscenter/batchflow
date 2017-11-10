@@ -55,7 +55,7 @@ class LinkNet(TFModel):
         tf.nn.softmax(logits, name='predicted_proba')
 
     @classmethod
-    def body(cls, dim, inputs, filters, **kwargs):
+    def body(cls, dim, inputs, filters, name='body', **kwargs):
         """ LinkNet body
 
         Parameters
@@ -73,7 +73,7 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        with tf.variable_scope(kwargs.get('name', 'body')):
+        with tf.variable_scope(name):
             x = inputs
             encoder_outputs = []
             for i, ifilters in enumerate(filters):
@@ -88,7 +88,7 @@ class LinkNet(TFModel):
         return x
 
     @classmethod
-    def head(cls, dim, inputs, filters, num_classes, **kwargs):
+    def head(cls, dim, inputs, filters, num_classes, name='head', **kwargs):
         """ 3x3 transposed convolution, 3x3 convolution and 2x2 transposed convolution
 
         Parameters
@@ -109,13 +109,13 @@ class LinkNet(TFModel):
         tf.Tensor
         """
         layout = 'tna cna t' if 'batch_norm' in kwargs else 'ta ca t'
-        with tf.variable_scope(kwargs.get('name', 'head')):
+        with tf.variable_scope(name):
             x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 2], layout,
                            strides=[2, 1, 2], **kwargs)
         return x
 
     @staticmethod
-    def input_block(dim, inputs, filters, **kwargs):
+    def input_block(dim, inputs, filters, name='input', **kwargs):
         """ 7x7 convolution with stride=2 and 3x3 max pooling with stride=2
 
         Parameters
@@ -134,7 +134,7 @@ class LinkNet(TFModel):
         tf.Tensor
         """
         layout = 'cpna' if 'batch_norm' in kwargs else 'cpa'
-        x = conv_block(dim, inputs, filters, 7, layout, name=kwargs.get('name', 'input'),
+        x = conv_block(dim, inputs, filters, 7, layout, name=name,
                        strides=2, pool_size=3, **kwargs)
         return x
 
@@ -189,7 +189,6 @@ class LinkNet(TFModel):
         """
         layout = 'cna tna cna' if 'batch_norm' in kwargs else 'ca ta ca'
         num_filters = inputs.get_shape()[-1].value // 4
-        with tf.variable_scope(name):
-            output = conv_block(dim, inputs, [num_filters, num_filters, filters], [1, 3, 1],
-                                layout, 'conv', strides=[1, 2, 1], **kwargs)
+        output = conv_block(dim, inputs, [num_filters, num_filters, filters], [1, 3, 1],
+                            layout, name, strides=[1, 2, 1], **kwargs)
         return output
