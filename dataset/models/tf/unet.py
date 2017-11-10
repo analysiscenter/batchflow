@@ -40,30 +40,47 @@ class UNet(TFModel):
 
         x = self.input_block(dim, inputs['images'], filters, **kwargs)
         layers_filters = 2 ** np.arange(num_blocks) * filters * 2
-        x = self.body(dim, x, layer_filters, **kwargs)
+        x = self.body(dim, x, layers_filters, **kwargs)
         output = self.head(dim, x, filters, num_classes, **kwargs)
 
         tf.nn.softmax(output, name='predicted_proba')
 
-    @staticmethod
-    def body(dim, inputs, filters, **kwargs):
-        """ UNet body """
+    @classmethod
+    def body(cls, dim, inputs, filters, **kwargs):
+        """ UNet body
+
+        Parameters
+        ----------
+        dim : int {1, 2, 3}
+            input spatial dimensionionaly
+        inputs : tf.Tensor
+            input tensor
+        filters : tuple of int
+            number of filters in downsampling blocks
+        name : str
+            scope name
+
+        Return
+        ------
+        tf.Tensor
+        """
         encoder_outputs = [inputs]
         for i, ifilters in enumerate(filters):
-            x = self.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
+            x = cls.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
             encoder_outputs.append(x)
 
         x = conv_block(dim, x, filters[-1]//2, 2, 't', 'middle', strides=2, **kwargs)
 
-        axis = dim + 1 if data_format == 'channels_last' else 1
+        axis = -1 if kwargs['data_format'] == 'channels_last' else 1
         for i, ifilters in enumerate(filters[::-1][1:]):
             x = tf.concat([encoder_outputs[-i-2], x], axis=axis)
-            x = self.upsampling_block(dim, x, ifilters, 'upsampling-'+str(i), **kwargs)
+            x = cls.upsampling_block(dim, x, ifilters, 'upsampling-'+str(i), **kwargs)
 
         return x
 
-    def head(dim, inputs, filters, num_classes, **kwargs):
-        """ UNet segmentation head
+    @classmethod
+    def head(_, dim, inputs, filters, num_classes, **kwargs):
+        """ Two 3x3 convolutions and 1x1 convolution
 
         Parameters
         ----------
@@ -72,16 +89,18 @@ class UNet(TFModel):
         inputs : tf.Tensor
             input tensor
         filters : int
-            number of output filters
+            number of filters in 3x3 convolutions
+        num_classes : int
+            number of classes (and number of filters in the last 1x1 convolution)
         name : str
-            tf.scope name
+            scope name
 
         Return
         ------
         tf.Tensor
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        x = conv_block(dim, net, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
+        x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
         x = tf.identity(x, 'predictions')
         return x
 
