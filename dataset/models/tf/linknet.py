@@ -106,7 +106,7 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        layout = 'tna cna t' if batch_norm else 'ta ca t'
+        layout = 'tna cna t' if 'batch_norm' in kwargs else 'ta ca t'
         with tf.variable_scope('head'):
             x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 2], layout, 'output',
                            strides=[2, 1, 2], **kwargs)
@@ -131,7 +131,7 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        layout = 'cpna' if batch_norm else 'cpa'
+        layout = 'cpna' if 'batch_norm' in kwargs else 'cpa'
         x = conv_block(dim, inputs, filters, 7, layout, 'input', strides=2, pool_size=3, **kwargs)
         return x
 

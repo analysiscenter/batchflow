@@ -42,10 +42,9 @@ class FCN(TFModel):
         with tf.variable_scope('FCN'):
             x = self.input_block(dim, inputs['images'], **{**kwargs, **input_block_config})
             x = self.body(dim, x, **{**kwargs, **body_config})
-            output = self.head(dim, x, **{**kwargs, **head_config})
+            output = self.head(dim, x, arch, **{**kwargs, **head_config})
 
-
-        tf.nn.softmax(tf.identity(x, 'predictions'), name='predicted_proba')
+        tf.nn.softmax(tf.identity(output, 'predictions'), name='predicted_proba')
 
     @classmethod
     def body(cls, dim, inputs, **kwargs):
@@ -65,7 +64,7 @@ class FCN(TFModel):
         return VGG16.body(dim, inputs, **kwargs)
 
     @classmethod
-    def head(cls, dim, inputs, num_classes, **kwargs):
+    def head(cls, dim, inputs, arch, num_classes, **kwargs):
         """ FCN head
 
         Parameters
@@ -74,6 +73,8 @@ class FCN(TFModel):
             input spatial dimensionionaly
         inputs : tf.Tensor
             input tensor
+        arch : str {'FCN32', 'FCN16', 'FCN8'}
+            network architecture. Default is 'FCN32'.
         num_classes : int
             number of classes
 
@@ -83,7 +84,7 @@ class FCN(TFModel):
         """
         with tf.variable_scope('head'):
             layout = 'cna' * 3 if 'batch_norm' in kwargs else 'ca' * 3
-            x = conv_block(dim, x, [100, 100, num_classes], [7, 1, 1], layout, 'conv-out', **kwargs)
+            x = conv_block(dim, inputs, [100, 100, num_classes], [7, 1, 1], layout, 'conv-out', **kwargs)
 
             pool4 = tf.get_default_graph().get_tensor_by_name("body/block-3/output:0")
             pool3 = tf.get_default_graph().get_tensor_by_name("body/block-2/output:0")

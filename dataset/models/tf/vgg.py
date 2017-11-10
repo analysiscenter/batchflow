@@ -57,7 +57,7 @@ class VGG(TFModel):
         head_config = self.get_from_config('head', {'units': [100, 100]})
         head_config['num_classes'] = num_classes
 
-        kwargs = {'training': self.is_training}
+        kwargs = {'data_format': data_format, 'training': self.is_training}
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
