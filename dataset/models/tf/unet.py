@@ -38,12 +38,15 @@ class UNet(TFModel):
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
-        x = self.input_block(dim, inputs['images'], filters, **kwargs)
-        layers_filters = 2 ** np.arange(num_blocks) * filters * 2
-        x = self.body(dim, x, layers_filters, **kwargs)
-        output = self.head(dim, x, filters, num_classes, **kwargs)
+        with tf.variable_scope('UNet'):
+            x = self.input_block(dim, inputs['images'], filters, **kwargs)
 
-        tf.nn.softmax(output, name='predicted_proba')
+            layers_filters = 2 ** np.arange(num_blocks) * filters * 2
+            x = self.body(dim, x, layers_filters, **kwargs)
+            output = self.head(dim, x, filters, num_classes, **kwargs)
+
+            logits = tf.identity(output, 'predictions')
+            tf.nn.softmax(logits, name='predicted_proba')
 
     @classmethod
     def body(cls, dim, inputs, filters, **kwargs):
@@ -102,7 +105,6 @@ class UNet(TFModel):
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
         x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
-        x = tf.identity(x, 'predictions')
         return x
 
     @staticmethod
