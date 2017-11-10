@@ -167,14 +167,14 @@ class InceptionV1(TFModel):
         """
         layout = 'cn' if 'batch_norm' in kwargs else 'c'
         with tf.variable_scope(name):
-            block_1 = conv_block(dim, inputs, filters[0], 1, layout, name='conv_1', **kwargs)
+            branch_1 = conv_block(dim, inputs, filters[0], 1, layout, name='conv_1', **kwargs)
 
-            block_3 = conv_block(dim, inputs, [filters[1], filters[2]], [1, 3], layout*2, name='conv_3', **kwargs)
+            branch_3 = conv_block(dim, inputs, [filters[1], filters[2]], [1, 3], layout*2, name='conv_3', **kwargs)
 
-            block_5 = conv_block(dim, inputs, [filters[3], filters[4]], [1, 5], layout*2, name='conv_5', **kwargs)
+            branch_5 = conv_block(dim, inputs, [filters[3], filters[4]], [1, 5], layout*2, name='conv_5', **kwargs)
 
-            conv_pool = conv_block(dim, inputs, filters[5], 1, 'p'+layout, 'c_pool', **{**kwargs, 'pool_strides': 1})
+            branch_pool = conv_block(dim, inputs, filters[5], 1, 'p'+layout, 'c_pool', **{**kwargs, 'pool_strides': 1})
 
             axis = -1 if kwargs['data_format'] == 'channels_last' else 1
-            concat = tf.concat([block_1, block_3, block_5, conv_pool], axis, name='output')
+            concat = tf.concat([branch_1, branch_3, branch_5, branch_pool], axis, name='output')
         return concat
