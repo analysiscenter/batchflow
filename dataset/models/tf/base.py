@@ -861,84 +861,38 @@ class TFModel(BaseModel):
             self._attrs.append(attr)
             tf.get_collection_ref('attrs').append(graph_item)
 
-    @staticmethod
-    def head(dim, inputs, style='conv', layout=None, num_classes=None, **kwargs):
+    @classmethod
+    def head(cls, *args, **kwargs):
         """ Last network layers which produce output
 
         Parameters
         ----------
-        dim : int {1, 2, 3}
-            number of dimensions
-        inputs : tf.Tensor
-            input tensor
-        style : {'dense', 'conv'}
-            head style: fully connected or fully convolutional
-        layout : str
-            head layout, see :func:`.layers.conv_block`.
-            Default is 'f' for dense and 'cP' for conv.
-        num_classes : int
-            number of classes for classification head. Default is None.
-
-        These should be specified as named arguments only:
-
-        units : int or tuple of ints
-            Number of units in dense layers (except for the last layer which is specified by ``num_classes``).
-        filters : int or tuple of ints
-            Number of filters in conv layers (except for the last layer which is specified by ``num_classes``)
-        kernel_size : int or tuple of ints
-            kernel size for conv layers
-
-        All other parameters of :func:`.layers.conv_block` can also be passed as named arguments.
+        See :func:`.layers.conv_block`.
 
         Returns
         -------
         tf.Tensor
-            output tensor
 
-        Raises
-        ------
-        ValueError if `units` is not specified for dense head or
-        `filters` is not specified for conv head.
 
         Examples
         --------
         ::
 
-            MyModel.head(2, network_embedding, 'conv', 'cacaP', filters=[128, num_classes], kernel_size=[3, 1])
+            MyModel.head(2, network_embedding, layout='cacaP', filters=[128, num_classes], kernel_size=[3, 1])
 
         ::
 
-            MyModel.head(2, network_embedding, 'dense', 'dfadf', units=[1000, num_classes], dropout_rate=.15)
+            MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
-        with tf.variable_scope('head'):
+        with tf.variable_scope(kwargs.get('name', 'head')):
+            x = conv_block(*args, **kwargs)
+        return x
+
+    @staticmethod
+    def input_block(dim, inputs, **kwargs):
+        """ Transform input image with a convolution block """
+        if kwargs.get('layout'):
+            x = conv_block(dim, inputs, **kwargs)
+        else:
             x = inputs
-            kernel_size = kwargs.pop('kernel_size', 3)
-            filters = kwargs.pop('filters', [])
-
-            if style == 'dense':
-                layout = layout or 'f'
-
-                units = kwargs.get('units', [])
-                if isinstance(units, int):
-                    units = [units]
-                units = units + ([num_classes] if num_classes is not None else [])
-                if len(units) < 1:
-                    raise ValueError('units or num_classes should be specified for dense-style head.')
-                elif len(units) == 1:
-                    units = units[0]
-                kwargs['units'] = units
-
-            elif style == 'conv':
-                layout = layout or 'cP'
-
-                if isinstance(filters, int):
-                    filters = [filters]
-                filters = filters + ([num_classes] if num_classes is not None else [])
-                if len(filters) < 1:
-                    raise ValueError('filters or num_classes should be specified for conv-style head.')
-                elif len(filters) == 1:
-                    filters = filters[0]
-            else:
-                raise ValueError("Head style should be 'dense' or 'conv', but given %s" % style)
-            x = conv_block(dim, x, filters, kernel_size=kernel_size, layout=layout, **kwargs)
         return x
