@@ -47,7 +47,7 @@ class UNet(TFModel):
 
         with tf.variable_scope('UNet'):
             x = self.input_block(dim, inputs['images'], name='input', **{**kwargs, **input_block_config})
-            x = self.body(dim, x, **{**kwargs, name='body', **body_config})
+            x = self.body(dim, x, name='body', **{**kwargs, **body_config})
             output = self.head(dim, x, name='head', **{**kwargs, **head_config})
 
         logits = tf.identity(output, 'predictions')
