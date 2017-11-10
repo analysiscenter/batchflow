@@ -30,7 +30,7 @@ class FCN(TFModel):
         batch_norm = self.get_from_config('batch_norm', {'momentum': 0.1})
         arch = self.get_from_config('arch', 'FCN32')
 
-        input_block_config = self.get_from_config('input_block', {})
+        input_block_config = self.get_from_config('input_block', {'layout': ''})
         body_config = self.get_from_config('body', {})
         head_config = self.get_from_config('head', {})
         head_config['num_classes'] = num_classes

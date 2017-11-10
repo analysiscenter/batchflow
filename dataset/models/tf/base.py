@@ -891,5 +891,6 @@ class TFModel(BaseModel):
     @staticmethod
     def input_block(dim, inputs, **kwargs):
         """ Transform input image with a convolution block """
-        x = conv_block(dim, inputs, **kwargs)
+        if kwargs.get('layout'):
+            x = conv_block(dim, inputs, **kwargs)
         return x
