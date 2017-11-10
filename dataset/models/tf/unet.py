@@ -38,30 +38,32 @@ class UNet(TFModel):
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
-        unet_filters = 2 ** np.arange(num_blocks) * filters * 2
-        axis = dim + 1 if data_format == 'channels_last' else 1
+        x = self.input_block(dim, inputs['images'], filters, **kwargs)
+        layers_filters = 2 ** np.arange(num_blocks) * filters * 2
+        x = self.body(dim, x, layer_filters, **kwargs)
+        output = self.head(dim, x, filters, num_classes, **kwargs)
 
-        layout = 'cnacna' if batch_norm else 'caca'
-        net = conv_block(dim, inputs['images'], filters, 3, layout, 'input', **kwargs)
-        encoder_outputs = [net]
-
-        for i, ifilters in enumerate(unet_filters):
-            net = self.downsampling_block(dim, net, ifilters, 'downsampling-'+str(i), **kwargs)
-            encoder_outputs.append(net)
-
-        net = conv_block(dim, net, unet_filters[-1]//2, 2, 't', 'middle', strides=2, **kwargs)
-
-        for i, ifilters in enumerate(unet_filters[::-1][1:]):
-            net = tf.concat([encoder_outputs[-i-2], net], axis=axis)
-            net = self.upsampling_block(dim, net, ifilters, 'upsampling-'+str(i), **kwargs)
-
-        net = conv_block(dim, net, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
-        logits = tf.identity(net, 'predictions')
-        tf.nn.softmax(logits, name='predicted_proba')
+        tf.nn.softmax(output, name='predicted_proba')
 
     @staticmethod
-    def downsampling_block(dim, inputs, filters, name, **kwargs):
-        """LinkNet encoder block
+    def body(dim, inputs, filters, **kwargs):
+        """ UNet body """
+        encoder_outputs = [inputs]
+        for i, ifilters in enumerate(filters):
+            x = self.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
+            encoder_outputs.append(x)
+
+        x = conv_block(dim, x, filters[-1]//2, 2, 't', 'middle', strides=2, **kwargs)
+
+        axis = dim + 1 if data_format == 'channels_last' else 1
+        for i, ifilters in enumerate(filters[::-1][1:]):
+            x = tf.concat([encoder_outputs[-i-2], x], axis=axis)
+            x = self.upsampling_block(dim, x, ifilters, 'upsampling-'+str(i), **kwargs)
+
+        return x
+
+    def head(dim, inputs, filters, num_classes, **kwargs):
+        """ UNet segmentation head
 
         Parameters
         ----------
@@ -76,17 +78,63 @@ class UNet(TFModel):
 
         Return
         ------
-        outp : tf.Tensor
+        tf.Tensor
         """
-        enable_batch_norm = 'batch_norm' in kwargs
-        layout = 'pcnacna' if enable_batch_norm else 'pcaca'
+        layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
+        x = conv_block(dim, net, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
+        x = tf.identity(x, 'predictions')
+        return x
+
+    @staticmethod
+    def input_block(dim, inputs, filters, **kwargs):
+        """ 3x3 convolution
+
+        Parameters
+        ----------
+        dim : int {1, 2, 3}
+            input spatial dimensionionaly
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        name : str
+            scope name
+
+        Return
+        ------
+        tf.Tensor
+        """
+        layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
+        x = conv_block(dim, inputs, filters, 3, layout, 'input', **kwargs)
+        return x
+
+    @staticmethod
+    def downsampling_block(dim, inputs, filters, name, **kwargs):
+        """ 2x2 max pooling with stride 2 and two 3x3 convolutions
+
+        Parameters
+        ----------
+        dim : int {1, 2, 3}
+            input spatial dimensionionaly
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        name : str
+            scope name
+
+        Return
+        ------
+        tf.Tensor
+        """
+        layout = 'pcnacna' if 'batch_norm' in kwargs else 'pcaca'
         with tf.variable_scope(name):
             x = conv_block(dim, inputs, filters, 3, layout, name, pool_size=2, **kwargs)
         return x
 
     @staticmethod
     def upsampling_block(dim, inputs, filters, name, **kwargs):
-        """LinkNet encoder block
+        """ 3x3 convolution and 2x2 transposed convolution
 
         Parameters
         ----------
@@ -97,15 +145,14 @@ class UNet(TFModel):
         filters : int
             number of output filters
         name : str
-            tf.scope name
+            scope name
 
         Return
         ------
-        outp : tf.Tensor
+        tf.Tensor
         """
-        enable_batch_norm = 'batch_norm' in kwargs
-        layout = 'cnacna' if enable_batch_norm else 'caca'
+        layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
         with tf.variable_scope(name):
-            x = conv_block(dim, inputs, 2*filters, 3, layout, name+'-1', **kwargs)
-            x = conv_block(dim, x, filters, 2, 't', name+'-2', 2, **kwargs)
+            x = conv_block(dim, inputs, 2*filters, 3, layout, 'conv', **kwargs)
+            x = conv_block(dim, x, filters, 2, 't', 'transposed', strides=2, **kwargs)
         return x
