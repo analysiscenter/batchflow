@@ -30,19 +30,20 @@ class FCN(TFModel):
         batch_norm = self.get_from_config('batch_norm', {'momentum': 0.1})
         arch = self.get_from_config('arch', 'FCN32')
 
+        conv_block_config = self.get_from_config('conv_block', {})
         input_block_config = self.get_from_config('input_block', {'layout': ''})
         body_config = self.get_from_config('body', {})
         head_config = self.get_from_config('head', {})
         head_config['num_classes'] = num_classes
 
-        kwargs = {'data_format': data_format, 'training': self.is_training}
+        kwargs = {'data_format': data_format, 'training': self.is_training, **conv_block_config}
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
         with tf.variable_scope('FCN'):
-            x = self.input_block(dim, inputs['images'], **{**kwargs, **input_block_config})
-            x = self.body(dim, x, **{**kwargs, **body_config})
-            output = self.head(dim, x, arch, **{**kwargs, **head_config})
+            x = self.input_block(dim, inputs['images'], name='input', **{**kwargs, **input_block_config})
+            x = self.body(dim, x, name='body', **{**kwargs, **body_config})
+            output = self.head(dim, x, arch, name='head', **{**kwargs, **head_config})
 
         tf.nn.softmax(tf.identity(output, 'predictions'), name='predicted_proba')
 
@@ -82,7 +83,7 @@ class FCN(TFModel):
         -------
         tf.Tensor
         """
-        with tf.variable_scope('head'):
+        with tf.variable_scope(kwargs.get('name', 'head')):
             layout = 'cna' * 3 if 'batch_norm' in kwargs else 'ca' * 3
             x = conv_block(dim, inputs, [100, 100, num_classes], [7, 1, 1], layout, 'conv-out', **kwargs)
 

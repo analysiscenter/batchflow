@@ -884,7 +884,7 @@ class TFModel(BaseModel):
 
             MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
-        with tf.variable_scope('head'):
+        with tf.variable_scope(kwargs.get('name', 'head')):
             x = conv_block(*args, **kwargs)
         return x
 

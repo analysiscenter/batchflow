@@ -32,8 +32,6 @@ class VGG(TFModel):
         parameters for batch normalization layers.
         If None, remove batch norm layers whatsoever.
         Default is ``{'momentum': 0.1}``.
-    dilation_rate : int
-        dilation rate for convolutional layers (1 by default)
     arch : str or list of tuples
         if str, 'VGG16' (default), 'VGG19', 'VGG7'
         A list should contain tuples of 3 ints:
@@ -52,25 +50,26 @@ class VGG(TFModel):
         batch_norm = self.get_from_config('batch_norm', {'momentum': 0.1})
         arch = self.get_from_config('arch', 'VGG16')
 
+        conv_block_config = self.get_from_config('conv_block', {})
         input_block_config = self.get_from_config('input_block', {'layout': ''})
         body_config = self.get_from_config('body', {})
         head_config = self.get_from_config('head', {'units': [100, 100]})
         head_config['num_classes'] = num_classes
 
-        kwargs = {'data_format': data_format, 'training': self.is_training}
+        kwargs = {'data_format': data_format, 'training': self.is_training, **conv_block_config}
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
         with tf.variable_scope('VGG'):
-            x = self.input_block(dim, inputs['images'], **{**kwargs, **input_block_config})
-            x = self.body(dim, x, arch, **{**kwargs, **body_config})
-            output = self.head(dim, x, **{**kwargs, **head_config})
+            x = self.input_block(dim, inputs['images'], name='input', **{**kwargs, **input_block_config})
+            x = self.body(dim, x, arch, name='body', **{**kwargs, **body_config})
+            output = self.head(dim, x, name='head', **{**kwargs, **head_config})
 
         logits = tf.identity(output, name='predictions')
         tf.nn.softmax(logits, name='predicted_proba')
 
     @classmethod
-    def body(cls, dim, inputs, arch, **kwargs):
+    def body(cls, dim, inputs, arch, name, **kwargs):
         """ Create base VGG layers
 
         Parameters
@@ -93,7 +92,7 @@ class VGG(TFModel):
             raise TypeError("arch must be str or list, but {} was given.".format(type(arch)))
 
         x = inputs
-        with tf.variable_scope('body'):
+        with tf.variable_scope(name):
             for i, block_cfg in enumerate(arch):
                 x = cls.block(dim, x, *block_cfg, 'block-'+str(i), **kwargs)
         return x
@@ -125,8 +124,8 @@ class VGG(TFModel):
             units = [units]
         units = list(units) + [num_classes]
         layout = kwargs.get('layout') or 'f' * len(units)
-        with tf.variable_scope('head'):
-            x = conv_block(dim, inputs, layout=layout, units=units, name=name, **kwargs)
+        with tf.variable_scope(name):
+            x = conv_block(dim, inputs, layout=layout, units=units, **kwargs)
         return x
 
 

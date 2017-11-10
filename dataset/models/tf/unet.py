@@ -34,20 +34,21 @@ class UNet(TFModel):
         filters = self.get_from_config('filters', 64)
         num_blocks = self.get_from_config('num_blocks', 4)
 
+        conv_block_config = self.get_from_config('conv_block', {})
         input_block_config = self.get_from_config('input_block', {'filters': filters})
         layers_filters = 2 ** np.arange(num_blocks) * filters * 2
         body_config = self.get_from_config('body', {'filters': layers_filters})
         head_config = self.get_from_config('head', {'filters': filters})
         head_config['num_classes'] = num_classes
 
-        kwargs = {'data_format': data_format, 'training': self.is_training}
+        kwargs = {'data_format': data_format, 'training': self.is_training, **conv_block_config}
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
         with tf.variable_scope('UNet'):
-            x = self.input_block(dim, inputs['images'], **{**kwargs, **input_block_config})
-            x = self.body(dim, x, **{**kwargs, **body_config})
-            output = self.head(dim, x, **{**kwargs, **head_config})
+            x = self.input_block(dim, inputs['images'], name='input', **{**kwargs, **input_block_config})
+            x = self.body(dim, x, **{**kwargs, name='body', **body_config})
+            output = self.head(dim, x, name='head', **{**kwargs, **head_config})
 
         logits = tf.identity(output, 'predictions')
         tf.nn.softmax(logits, name='predicted_proba')
@@ -71,18 +72,19 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        x = inputs
-        encoder_outputs = [x]
-        for i, ifilters in enumerate(filters):
-            x = cls.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
-            encoder_outputs.append(x)
+        with tf.variable_scope(kwargs.get('name', 'body')):
+            x = inputs
+            encoder_outputs = [x]
+            for i, ifilters in enumerate(filters):
+                x = cls.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
+                encoder_outputs.append(x)
 
-        x = conv_block(dim, x, filters[-1]//2, 2, 't', 'middle', strides=2, **kwargs)
+            x = conv_block(dim, x, filters[-1]//2, 2, 't', 'middle', strides=2, **kwargs)
 
-        axis = -1 if kwargs['data_format'] == 'channels_last' else 1
-        for i, ifilters in enumerate(filters[::-1][1:]):
-            x = tf.concat([encoder_outputs[-i-2], x], axis=axis)
-            x = cls.upsampling_block(dim, x, ifilters, 'upsampling-'+str(i), **kwargs)
+            axis = -1 if kwargs['data_format'] == 'channels_last' else 1
+            for i, ifilters in enumerate(filters[::-1][1:]):
+                x = tf.concat([encoder_outputs[-i-2], x], axis=axis)
+                x = cls.upsampling_block(dim, x, ifilters, 'upsampling-'+str(i), **kwargs)
 
         return x
 
@@ -108,7 +110,7 @@ class UNet(TFModel):
         tf.Tensor
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        with tf.variable_scope('head'):
+        with tf.variable_scope(kwargs.get('name', 'head')):
             x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
         return x
 
@@ -132,7 +134,7 @@ class UNet(TFModel):
         tf.Tensor
         """
         layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        x = conv_block(dim, inputs, filters, 3, layout, 'input', **kwargs)
+        x = conv_block(dim, inputs, filters, 3, layout, name=kwargs.get('name', 'input'), **kwargs)
         return x
 
     @staticmethod

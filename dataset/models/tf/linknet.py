@@ -35,20 +35,21 @@ class LinkNet(TFModel):
         filters = self.get_from_config('filters', 64)
         num_blocks = self.get_from_config('num_blocks', 4)
 
+        conv_block_config = self.get_from_config('conv_block', {})
         input_block_config = self.get_from_config('input_block', {'filters': filters})
         layers_filters = 2 ** np.arange(num_blocks) * filters
         body_config = self.get_from_config('body', {'filters': layers_filters})
         head_config = self.get_from_config('head', {'filters': 32})
         head_config['num_classes'] = num_classes
 
-        kwargs = {'data_format': data_format, 'training': self.is_training}
+        kwargs = {'data_format': data_format, 'training': self.is_training, **conv_block_config}
         if batch_norm:
             kwargs['batch_norm'] = batch_norm
 
         with tf.variable_scope('LinkNet'):
-            x = self.input_block(dim, inputs['images'], **{**kwargs, **input_block_config})
-            x = self.body(dim, x, **{**kwargs, **body_config})
-            output = self.head(dim, x, **{**kwargs, **head_config})
+            x = self.input_block(dim, inputs['images'], name='input', **{**kwargs, **input_block_config})
+            x = self.body(dim, x, name='body', **{**kwargs, **body_config})
+            output = self.head(dim, x, name='head', **{**kwargs, **head_config})
 
         logits = tf.identity(output, 'predictions')
         tf.nn.softmax(logits, name='predicted_proba')
@@ -72,16 +73,17 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        x = inputs
-        encoder_outputs = []
-        for i, ifilters in enumerate(filters):
-            x = cls.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
-            encoder_outputs.append(x)
+        with tf.variable_scope(kwargs.get('name', 'body')):
+            x = inputs
+            encoder_outputs = []
+            for i, ifilters in enumerate(filters):
+                x = cls.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
+                encoder_outputs.append(x)
 
-        for i, ifilters in enumerate(filters[::-1][1:]):
-            x = cls.upsampling_block(dim, x, ifilters, 'upsampling-'+str(i), **kwargs)
-            x = tf.add(x, encoder_outputs[-2-i])
-        x = cls.upsampling_block(dim, x, filters[0], 'upsampling-'+str(i+1), **kwargs)
+            for i, ifilters in enumerate(filters[::-1][1:]):
+                x = cls.upsampling_block(dim, x, ifilters, 'upsampling-'+str(i), **kwargs)
+                x = tf.add(x, encoder_outputs[-2-i])
+            x = cls.upsampling_block(dim, x, filters[0], 'upsampling-'+str(i+1), **kwargs)
 
         return x
 
@@ -107,8 +109,8 @@ class LinkNet(TFModel):
         tf.Tensor
         """
         layout = 'tna cna t' if 'batch_norm' in kwargs else 'ta ca t'
-        with tf.variable_scope('head'):
-            x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 2], layout, 'output',
+        with tf.variable_scope(kwargs.get('name', 'head')):
+            x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 2], layout,
                            strides=[2, 1, 2], **kwargs)
         return x
 
@@ -132,7 +134,8 @@ class LinkNet(TFModel):
         tf.Tensor
         """
         layout = 'cpna' if 'batch_norm' in kwargs else 'cpa'
-        x = conv_block(dim, inputs, filters, 7, layout, 'input', strides=2, pool_size=3, **kwargs)
+        x = conv_block(dim, inputs, filters, 7, layout, name=kwargs.get('name', 'input'),
+                       strides=2, pool_size=3, **kwargs)
         return x
 
     @staticmethod
