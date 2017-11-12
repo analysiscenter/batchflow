@@ -17,13 +17,15 @@ class MyModel(TFModel):
         names = ['images', 'labels']
         placeholders, inputs = self._make_inputs(names)
 
+        n1 = self.num_classes(placeholders['labels'])
+        n1 = self.num_classes(inputs['labels'])
         num_classes = self.num_classes('labels')
         dim = 2
         x = inputs['images']
         x = conv_block(dim, x, [16, 32, 64], 3, strides=[1, 2, 2], dropout_rate=.15,
                          layout='cna cna cna', depth_multiplier=[1, 2, 2],
                          name='network', training=self.is_training)
-        x = self.head(dim, x, 'conv', num_classes=num_classes, training=self.is_training)
+        x = self.head(dim, x, 'conv', 'cnaP', kernel_size=7, num_classes=num_classes, training=self.is_training)
         x = tf.identity(x, name='predictions')
 
         predicted_labels = self.to_classes(x, 'labels', name='predicted_labels')
@@ -37,7 +39,7 @@ class MyBatch(ImagesBatch):
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 64
+    BATCH_SIZE = 128
 
     mnist = MNIST(batch_class=MyBatch)
     config = dict(some=1, conv=dict(arg1=10))
@@ -53,7 +55,7 @@ if __name__ == "__main__":
                             config={'session': {'config': tf.ConfigProto(allow_soft_placement=True)},
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
-                                    'inputs': dict(images={'shape': (28, 28, 1), 'transform': 'mip @ 1'},
+                                    'inputs': dict(images={'shape': (None, None, 1)}, #'shape': (28, 28, 1), 'transform': 'mip @ 1'},
                                                    #labels={'shape': 10, 'dtype': 'uint8',
                                                    labels={'classes': (10+np.arange(10)).astype('str'),
                                                            'transform': 'ohe', 'name': 'targets'})})
