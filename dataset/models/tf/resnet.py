@@ -503,7 +503,7 @@ class ResNet(TFModel):
 class ResNet152(ResNet):
     """ An original ResNet-101 architecture for ImageNet
     """
-    def _build(self, *args, **kwargs):
+    def _build(self):
         self.config['length_factor'] = [3, 8, 36, 3]
         self.config['bottelneck'] = True
         super()._build()
@@ -512,7 +512,7 @@ class ResNet152(ResNet):
 class ResNet101(ResNet):
     """ An original ResNet-101 architecture for ImageNet
     """
-    def _build(self, *args, **kwargs):
+    def _build(self):
         self.config['length_factor'] = [3, 4, 23, 3]
         self.config['bottelneck'] = True
         super()._build()
@@ -521,7 +521,7 @@ class ResNet101(ResNet):
 class ResNet50(ResNet):
     """ An original ResNet-50 architecture for ImageNet
     """
-    def _build(self, *args, **kwargs):
+    def _build(self):
         self.config['length_factor'] = [3, 4, 6, 3]
         self.config['bottelneck'] = True
         super()._build()
@@ -530,7 +530,7 @@ class ResNet50(ResNet):
 class ResNet34(ResNet):
     """ An original ResNet-34 architecture for ImageNet
     """
-    def _build(self, *args, **kwargs):
+    def _build(self):
         self.config['length_factor'] = [3, 4, 6, 3]
         super()._build()
 
