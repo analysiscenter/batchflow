@@ -538,6 +538,6 @@ class ResNet34(ResNet):
 class ResNet18(ResNet):
     """ An original ResNet-18 architecture for ImageNet
     """
-    def _build(self, *args, **kwargs):
+    def _build(self):
         self.config['length_factor'] = [2, 2, 2, 2]
         super()._build()
