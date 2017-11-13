@@ -942,7 +942,7 @@ class TFModel(BaseModel):
         return conv_block(*args, **kwargs)
 
     @classmethod
-    def head(cls, name='head', **kwargs):
+    def head(cls, name='head', *args, **kwargs):
         """ Last network layers which produce output from the network embedding
 
         Parameters
@@ -1107,7 +1107,7 @@ class TFModel(BaseModel):
         """
         config = self._build_config()
 
-        defaults = {'training': self.is_training, **config['default']}
+        defaults = {'is_training': self.is_training, **config['default']}
         config['input_block'] = {**defaults, **config['input_block']}
         config['body'] = {**defaults, **config['body']}
         config['head'] = {**defaults, **config['head']}
