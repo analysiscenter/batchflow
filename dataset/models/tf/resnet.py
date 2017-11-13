@@ -126,8 +126,8 @@ class ResNet(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            x = cls.block(inputs, filters, bottleneck, name='block-1', strides=strides, **kwargs)
-            x = cls.block(x, filters, bottleneck, name='block-2', strides=1, **kwargs)
+            x = cls.block(inputs, filters, bottleneck=bottleneck, name='block-1', strides=strides, **kwargs)
+            x = cls.block(x, filters, bottleneck=bottleneck, name='block-2', strides=1, **kwargs)
         return x
 
     @classmethod
@@ -142,8 +142,14 @@ class ResNet(TFModel):
             input tensor
         filters : int
             number of output filters
+        resnext : bool
+            whether to use a usuall or aggregated ResNeXt block
+        resnext_factor : int
+            cardinality for ResNeXt block
         bottleneck : bool
-            whether to use a simple or a bottleneck block
+            whether to use a simple or bottleneck block
+        bottleneck_factor : int
+            the filters nultiplier in the bottleneck block
         name : str
             scope name
 
@@ -160,15 +166,18 @@ class ResNet(TFModel):
                 x = cls.sub_block(inputs, filters, bottleneck, bottleneck_factor, name='sub',
                                   strides=strides, **kwargs)
 
-            num_channels = cls.channels_shape(inputs, kwargs.get('data_format'))
-            num_filters = cls.channels_shape(x, kwargs.get('data_format'))
+            data_format = kwargs.get('data_format')
+            num_channels = cls.channels_shape(inputs, data_format)
+            num_filters = cls.channels_shape(x, data_format)
 
             if num_channels != num_filters or strides > 1:
                 shortcut = conv_block(inputs, num_filters, 1, 'c', name='shortcut', strides=strides, **kwargs)
             else:
                 shortcut = inputs
+
             if se_block:
                 x = cls.se_block(x, se_factor, **kwargs)
+
             activation = kwargs.get('activation', tf.nn.relu)
             x = activation(x + shortcut)
 
@@ -299,15 +308,14 @@ class ResNet(TFModel):
             output tensor
         """
         with tf.variable_scope(name):
-            data_format = kwargs['data_format']
+            data_format = kwargs.get('data_format')
             in_filters = cls.channels_shape(inputs, data_format)
             x = conv_block(inputs, layout='Vfafa', units=[in_filters//ratio, in_filters],
                            activation=[tf.nn.relu, tf.nn.sigmoid], name='se', **kwargs)
 
-            if data_format == 'channels_last':
-                shape = [-1, 1, 1, in_filters]
-            else:
-                shape = [-1, in_filters, 1, 1]
+            shape = [-1] + [1] * (len(cls.spatial_shape(inputs, data_format)) + 1)
+            axis = cls.channels_axis(data_format)
+            shape[axis] = in_filters
             scale = tf.reshape(x, shape)
             x = inputs * scale
         return x

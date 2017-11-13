@@ -535,6 +535,20 @@ class TFModel(BaseModel):
         return config
 
 
+    @staticmethod
+    def channels_axis(data_format):
+        """ Return the channels axis for the tensor
+
+        Parameters
+        ----------
+        data_format : str {'channels_last', 'channels_first'}
+
+        Returns
+        -------
+        number of channels : int
+        """
+        return -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
+
     def num_channels(self, tensor, **kwargs):
         """ Return the number of channels in the tensor
 
@@ -548,9 +562,8 @@ class TFModel(BaseModel):
         """
         config = self.get_tensor_config(tensor, **kwargs)
         shape = config.get('shape')
-        data_format = config.get('data_format')
-        channels_dim = -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
-        return shape[channels_dim] if shape else None
+        channels_axis = self.channels_axis(tensor, **kwargs)
+        return shape[channels_axis] if shape else None
 
     def has_classes(self, tensor):
         """ Check if a tensor has classes defined in the config """
@@ -642,7 +655,7 @@ class TFModel(BaseModel):
         shape : tuple of ints
         """
         shape = tensor.get_shape().as_list()
-        axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
+        axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
         return shape[axis]
 
     @staticmethod
@@ -658,7 +671,7 @@ class TFModel(BaseModel):
         shape : tuple of ints
         """
         shape = tensor.get_shape().as_list()
-        axis = -1 if data_format == 'channels_last' else 1
+        axis = TFModel.channels_axis(data_format)
         return shape[axis]
 
     def _map_name(self, name):
@@ -887,7 +900,10 @@ class TFModel(BaseModel):
 
         if np.abs(input_shape - image_size).sum() > 0:
             begin = [0] * inputs.shape.ndims
-            size = ([-1] + image_size + [-1]) if data_format == 'channels_last' else [-1, -1] + image_size
+            if data_format == "channels_last":
+                size = [-1] + image_size + [1]
+            else:
+                size = [-1, -1] + image_size
             x = tf.slice(inputs, begin=begin, size=size)
         else:
             x = inputs
@@ -942,7 +958,7 @@ class TFModel(BaseModel):
         return conv_block(*args, **kwargs)
 
     @classmethod
-    def head(cls, name='head', **kwargs):
+    def head(cls, inputs, name='head', **kwargs):
         """ Last network layers which produce output from the network embedding
 
         Parameters
@@ -963,10 +979,10 @@ class TFModel(BaseModel):
 
             MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
-        x = conv_block(*args, name=name, **kwargs)
+        x = conv_block(inputs, name=name, **kwargs)
         return x
 
-    def output(self, inputs, ops=None, prefix=None):
+    def output(self, inputs, ops=None, prefix=None, **kwargs):
         """ Add output operations to a model graph, like predictions, quality metrics, etc.
 
         Parameters
@@ -1018,7 +1034,9 @@ class TFModel(BaseModel):
                 if oper == 'proba':
                     tf.nn.softmax(x, name='predicted_proba')
                 elif oper == 'labels':
-                    tf.argmax(x, axis=-1, name='predicted_labels')
+                    data_format = kwargs.get('data_format')
+                    channels_axis = self.channels_axis(data_format)
+                    tf.argmax(x, axis=channels_axis, name='predicted_labels')
                 elif oper == 'accuracy':
                     true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
                     current_scope = self.graph.get_name_scope() + '/'
@@ -1107,10 +1125,11 @@ class TFModel(BaseModel):
         """
         config = self._build_config()
 
-        defaults = {'training': self.is_training, **config['default']}
+        defaults = {'is_training': self.is_training, **config['default']}
         config['input_block'] = {**defaults, **config['input_block']}
         config['body'] = {**defaults, **config['body']}
         config['head'] = {**defaults, **config['head']}
+        config['output'] = {**defaults, **config['output']}
 
         x = self.input_block(**config['input_block'])
         x = self.body(inputs=x, **config['body'])
