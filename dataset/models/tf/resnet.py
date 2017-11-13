@@ -38,10 +38,10 @@ class ResNet(TFModel):
         config['input_block']['inputs'] = self.inputs['images']
 
         body_filters = 2 ** np.arange(num_blocks) * filters
-        config['body'] = {**dict(filters=body_filters, bottleneck_factor=4), **config['body']}
+        config['body'] = {**dict(filters=body_filters, bottleneck_factor=4, se_block=False, ratio=16),
+                          **config['body']}
 
         config['head']['num_classes'] = self.num_classes('labels')
-        config['head']['units'] = []
 
         return config
 
@@ -54,15 +54,16 @@ class ResNet(TFModel):
         ----------
         inputs : tf.Tensor
             input tensor
-        arch : str or dict
-            if str, 'ResNet18', 'ResNet34', 'ResNet50', 'ResNet101', 'ResNet152'.
-            A dict should contain following keys: (see :class:`~.ResNet`)
-            - filters
-            - length_factor
-            - strides
-            - bottleneck
-            - bottelneck_factor
-            - se_block
+        filters : list of int
+            number of filters in each block group
+        num_blocks : list of int
+            number of blocks in each group
+        bottleneck : bool
+            whether to use a simple or bottleneck block
+        bottleneck_factor : int
+            filter number multiplier for a bottleneck block
+        name : str
+            scope name
 
         Returns
         -------
@@ -107,7 +108,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def simple_block(cls, inputs, filters, name, strides, **kwargs):
+    def simple_block(cls, inputs, filters, name, strides, se_block=False, ratio=16, **kwargs):
         """ A simple residual block
 
         Parameters
@@ -133,12 +134,14 @@ class ResNet(TFModel):
                 shortcut = conv_block(inputs, filters, 1, 'c', name='shortcut', strides=strides, **kwargs)
             else:
                 shortcut = inputs
+            if se_block:
+                x = cls.se_block(x, ratio, **kwargs)
             x = x + shortcut
         return x
 
 
     @classmethod
-    def bottleneck_block(cls, inputs, filters, bottleneck_factor, name, strides, **kwargs):
+    def bottleneck_block(cls, inputs, filters, bottleneck_factor, name, strides, se_block=False, ratio=16, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
         Parameters
@@ -166,13 +169,15 @@ class ResNet(TFModel):
                 shortcut = conv_block(inputs, out_filters, 1, 'c', name='shortcut', strides=strides, **kwargs)
             else:
                 shortcut = inputs
+            if se_block:
+                x = cls.se_block(x, ratio, **kwargs)
             x = x + shortcut
 
         return x
 
 
     @classmethod
-    def se_block(cls, inputs, **kwargs):
+    def se_block(cls, inputs, ratio, name='se', **kwargs):
         """
         Squeeze and excitation block
 
@@ -181,38 +186,25 @@ class ResNet(TFModel):
 
         inputs : tf.Tensor
             input tensor
-        se_block : int
-            if `se_block != 0`, squeeze and excitation block with
-            corresponding squeezing factor will be added.
-            If list it should have the same length as the filters.
-            Defaults to 0.
-            Read more about squeeze and excitation technique: https://arxiv.org/abs/1709.01507.
-        **kwargs :
-            keyword arguments that will be passed to conv_block
-            (see :func:`~layers.conv_block.conv_block`).
 
         Returns
         -------
         tf. tensor
             output tensor
         """
+        with tf.variable_scope(name):
+            data_format = kwargs['data_format']
+            in_filters = cls.channels_shape(inputs, data_format)
+            x = conv_block(inputs, layout='Vfafa', units=[in_filters//ratio, in_filters],
+                           activation=[tf.nn.relu, tf.nn.sigmoid], name='se', **kwargs)
 
-        data_format = kwargs['data_format']
-        full = global_average_pooling(inputs=inputs, data_format=data_format)
-        if data_format == 'channels_last':
-            original_filters = inputs.get_shape().as_list()[-1]
-            shape = [-1] + [1] * dim + [original_filters]
-        else:
-            original_filters = inputs.get_shape().as_list()[1]
-            shape = [original_filters] + [-1] + [1] * dim
-        full = tf.reshape(full, shape)
-        full = tf.layers.dense(full, int(original_filters/se_block), activation=tf.nn.relu, \
-                               kernel_initializer=tf.contrib.layers.xavier_initializer(), \
-                               name='fc1')
-        full = tf.layers.dense(full, original_filters, activation=tf.nn.sigmoid, \
-                               kernel_initializer=tf.contrib.layers.xavier_initializer(), \
-                               name='fc2')
-        return inputs * full
+            if data_format == 'channels_last':
+                shape = [-1, 1, 1, in_filters]
+            else:
+                shape = [-1, in_filters, 1, 1]
+            scale = tf.reshape(x, shape)
+            x = inputs * scale
+        return x
 
     @classmethod
     def head(cls, inputs, units=None, num_classes=None, name='head', **kwargs):

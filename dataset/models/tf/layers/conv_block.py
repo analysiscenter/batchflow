@@ -185,7 +185,9 @@ def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
         layer_fn = _get_layer_fn(layer_name, dim)
 
         if layer == 'a':
-            tensor = activation(tensor)
+            args = dict(activation=activation)
+            layer_fn = _unpack_args(args, *layout_dict[C_GROUPS[layer]])['activation']
+            tensor = layer_fn(tensor)
         else:
             layer_args = kwargs.get(layer_name, {})
             skip_layer = layer_args is None or layer_args is False or \
