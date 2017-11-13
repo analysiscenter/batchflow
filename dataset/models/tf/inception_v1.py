@@ -71,7 +71,7 @@ class InceptionV1(TFModel):
             scope name
         """
         layout = 'cnp cn cnp' if 'batch_norm' in kwargs else 'cp c cp'
-        x = conv_block(inputs, name=name, **kwargs)
+        x = conv_block(inputs, layout=layout, name=name, **kwargs)
         return x
 
     @classmethod
