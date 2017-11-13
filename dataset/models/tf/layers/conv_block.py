@@ -188,7 +188,7 @@ def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
             tensor = activation(tensor)
         else:
             layer_args = kwargs.get(layer_name, {})
-            skip_layer = layer_args is None or layer_args == False or \
+            skip_layer = layer_args is None or layer_args is False or \
                          isinstance(layer_args, dict) and 'disable' in layer_args and layer_args.pop('disable')
 
             if skip_layer:

@@ -841,6 +841,19 @@ class TFModel(BaseModel):
 
     @classmethod
     def crop(cls, inputs, shape_image=None, shape=None, data_format='channels_last'):
+        """ Crop input tensor to a given shape or a shape of a give image
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        shape_image : tf.Tensor
+            a source image
+        shape : list
+            a required image shape (excluding batch and channels dimensions)
+        data_format : str {'channels_last', 'channels_first'}
+            data format
+        """
         input_shape = np.array(cls.spatial_shape(inputs, data_format))
         image_size = shape if shape else cls.spatial_shape(shape_image, data_format)
 
@@ -884,7 +897,7 @@ class TFModel(BaseModel):
 
             MyModel.body(2, inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
         """
-        return cls.block(*args, name='block', **kwargs)
+        return cls.block(*args, name=name, **kwargs)
 
     @classmethod
     def block(cls, *args, **kwargs):
@@ -973,16 +986,17 @@ class TFModel(BaseModel):
                 ctx = None
 
             x = tf.identity(tensor, name='predictions')
-            for op in ops:
-                if op == 'proba':
-                    tf.nn.softmax(tensor, name='predicted_proba')
-                elif op == 'labels':
-                    tf.argmax(tensor, axis=-1, name='predicted_labels')
-                elif op == 'accuracy':
+            for oper in ops:
+                if oper == 'proba':
+                    tf.nn.softmax(x, name='predicted_proba')
+                elif oper == 'labels':
+                    tf.argmax(x, axis=-1, name='predicted_labels')
+                elif oper == 'accuracy':
                     true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
                     current_scope = self.graph.get_name_scope() + '/'
                     predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
-                    accuracy = tf.reduce_mean(tf.cast(tf.equal(true_labels, predicted_labels), 'float'), name='accuracy')
+                    equals = tf.cast(tf.equal(true_labels, predicted_labels)
+                    accuracy = tf.reduce_mean(equals, 'float'), name='accuracy')
                     attr_prefix = current_prefix + '_' if current_prefix else ''
                     self.store_to_attr(attr_prefix + 'accuracy', accuracy)
 
@@ -1016,12 +1030,8 @@ class TFModel(BaseModel):
 
             return config
         """
-        if names is not None:
-            self.input_names = [names] if isinstance(names, str) else names
-        else:
-            self.input_names = None
         with tf.variable_scope('inputs'):
-            self._make_inputs(self.input_names)
+            self._make_inputs(names)
 
         config = {}
         config['default'] = self.get_from_config('default', {'batch_norm': {'momentum': .1}})

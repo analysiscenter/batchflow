@@ -1,5 +1,4 @@
 """Contains class for FCN"""
-import numpy as np
 import tensorflow as tf
 
 from . import TFModel, VGG16
@@ -55,25 +54,6 @@ class FCN(TFModel):
         ----------
         inputs : tf.Tensor
             input tensor
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        raise NotImplementedError()
-
-    @classmethod
-    def head(cls, inputs, num_classes, name='head', **kwargs):
-        """ FCN head
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        num_classes : int
-            number of classes
-        name : str
-            scope name
 
         Returns
         -------
