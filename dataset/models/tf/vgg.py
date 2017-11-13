@@ -143,7 +143,7 @@ class VGG(TFModel):
         layout = kwargs.pop('layout', 'f' * len(units))
         units = units[0] if len(units) == 1 else units
 
-        x = conv_block(inputs, units=units, layout=layout, **kwargs)
+        x = conv_block(inputs, units=units, layout=layout, name=name, **kwargs)
         return x
 
 

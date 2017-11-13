@@ -995,8 +995,8 @@ class TFModel(BaseModel):
                     true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
                     current_scope = self.graph.get_name_scope() + '/'
                     predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
-                    equals = tf.cast(tf.equal(true_labels, predicted_labels)
-                    accuracy = tf.reduce_mean(equals, 'float'), name='accuracy')
+                    equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
+                    accuracy = tf.reduce_mean(equals, name='accuracy')
                     attr_prefix = current_prefix + '_' if current_prefix else ''
                     self.store_to_attr(attr_prefix + 'accuracy', accuracy)
 
