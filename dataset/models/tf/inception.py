@@ -8,7 +8,7 @@ from .layers import conv_block
 
 _DEFAULT_BODY_ARCH = [
     {'conv': [[64, 96, 128, 16, 32, 32],
-             [128, 128, 192, 32, 96, 64]],
+              [128, 128, 192, 32, 96, 64]],
      'max_pooling': dict(pool_size=3, pool_strides=2)},
 
     {'conv': [[192, 96, 208, 16, 48, 64],
