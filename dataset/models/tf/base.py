@@ -121,6 +121,18 @@ class TFModel(BaseModel):
         - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
         - ``{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}``
         - ``{'optimizer': some_optimizer_fn}``
+
+    default : dict
+        default parameters for all :func:`.layers.conv_block`s
+
+    input_block : dict
+
+    body : dict
+
+    head : dict
+
+    output : dict
+
     """
 
     def __init__(self, *args, **kwargs):
@@ -631,6 +643,22 @@ class TFModel(BaseModel):
         """
         shape = tensor.get_shape().as_list()
         axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
+        return shape[axis]
+
+    @staticmethod
+    def channels_shape(tensor, data_format='channels_last'):
+        """ Return number of channels in the input tensor
+
+        Parameters
+        ----------
+        tensor : tf.Tensor
+
+        Returns
+        -------
+        shape : tuple of ints
+        """
+        shape = tensor.get_shape().as_list()
+        axis = -1 if data_format == 'channels_last' else 1
         return shape[axis]
 
     def _map_name(self, name):
