@@ -4,6 +4,7 @@ import numpy as np
 
 from .layers import conv_block
 from . import TFModel
+from .resnet import ResNet
 
 
 class LinkNet(TFModel):
@@ -113,14 +114,7 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        layout = 'cna'
-        with tf.variable_scope(name):
-            net = conv_block(inputs, filters, 3, 2*layout, 'conv-1', strides=[2, 1], **kwargs)
-            shortcut = conv_block(inputs, filters, 1, layout, 'conv-2', strides=2, **kwargs)
-            add = tf.add(net, shortcut, 'add-1')
-            net = conv_block(add, filters, 3, 2*layout, 'conv-3', **kwargs)
-            output = tf.add(net, add, 'add-2')
-        return output
+        return ResNet.double_block(inputs, filters, bottleneck=False, name=name, strides=2, **kwargs)
 
     @classmethod
     def upsampling_block(cls, inputs, filters, name, **kwargs):

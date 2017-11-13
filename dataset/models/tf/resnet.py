@@ -81,9 +81,32 @@ class ResNet(TFModel):
         return x
 
 
+    @classmethod
+    def double_block(cls, inputs, filters, bottleneck, name, strides=1, **kwargs):
+        """ Two ResNet blocks one after another
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        bottleneck : bool
+            whether to use a simple or a bottleneck block
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        with tf.variable_scope(name):
+            x = cls.block(inputs, filters, bottleneck=False, name='block-1', strides=strides, **kwargs)
+            x = cls.block(x, filters, bottleneck=False, name='block-2', strides=1, **kwargs)
+        return x
 
     @classmethod
-    def block(cls, inputs, bottleneck, name, **kwargs):
+    def block(cls, inputs, filters, bottleneck, name, **kwargs):
         """ A network building block
 
         Parameters
@@ -91,6 +114,8 @@ class ResNet(TFModel):
 
         inputs : tf.Tensor
             input tensor
+        filters : int
+            number of output filters
         bottleneck : bool
             whether to use a simple or a bottleneck block
         name : str
@@ -102,9 +127,9 @@ class ResNet(TFModel):
             output tensor
         """
         if bottleneck:
-            x = cls.bottleneck_block(inputs, name=name, **kwargs)
+            x = cls.bottleneck_block(inputs, filters, name=name, **kwargs)
         else:
-            x = cls.simple_block(inputs, name=name, **kwargs)
+            x = cls.simple_block(inputs, filters, name=name, **kwargs)
         return x
 
     @classmethod
@@ -130,13 +155,14 @@ class ResNet(TFModel):
             x = conv_block(inputs, filters, 3, layout='cnacn', name='conv', strides=[strides, 1], **kwargs)
 
             num_channels = cls.channels_shape(inputs, kwargs.get('data_format'))
-            if num_channels != filters:
+            if num_channels != filters or strides > 1:
                 shortcut = conv_block(inputs, filters, 1, 'c', name='shortcut', strides=strides, **kwargs)
             else:
                 shortcut = inputs
             if se_block:
                 x = cls.se_block(x, ratio, **kwargs)
-            x = x + shortcut
+            activation = kwargs.get('activation', tf.nn.relu)
+            x = activation(x + shortcut)
         return x
 
 

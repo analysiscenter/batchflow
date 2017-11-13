@@ -32,7 +32,7 @@ if __name__ == "__main__":
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'inputs': dict(images={'shape': (28, 28, 1)},
                                                    masks={'shape': (28, 28), 'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
-                                    'filters': 16
+                                    'filters': 64
                                     })
                                     #'output': dict(ops=['labels', 'accuracy'])})
                 .train_model('conv', fetches='loss',
