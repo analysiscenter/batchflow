@@ -14,6 +14,9 @@ class ResNet(TFModel):
     .. Kaiming He et al. "Deep Residual Learning for Image Recognition"
        Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
 
+    .. Sergey Zagoruyko, Nikos Komodakis. "Wide Residual Networks"
+       Arxiv.org, `<https://arxiv.org/abs/1605.07146>`_
+
     ** Configuration **
 
     inputs : dict
@@ -21,6 +24,14 @@ class ResNet(TFModel):
 
     input_block : dict
 
+    filters : int
+        number of filters in the first block (default=64)
+
+    num_blocks : int
+        number of blocks in the networs (default=4)
+
+    width_factor : int
+        widening factor to make WideResNet (default=4)
     """
 
     def _build_config(self, names=None):
@@ -29,6 +40,7 @@ class ResNet(TFModel):
 
         filters = self.get_from_config('filters', 64)
         num_blocks = self.get_from_config('num_blocks', 4)
+        width_factor = self.get_from_config('width_factor', 4)
 
         config['default']['data_format'] = self.data_format('images')
 
@@ -37,7 +49,7 @@ class ResNet(TFModel):
                                  **config['input_block']}
         config['input_block']['inputs'] = self.inputs['images']
 
-        body_filters = 2 ** np.arange(num_blocks) * filters
+        body_filters = 2 ** np.arange(num_blocks) * filters * width_factor
         config['body'] = {**dict(filters=body_filters, bottleneck_factor=4, se_block=False, ratio=16),
                           **config['body']}
 

@@ -25,6 +25,7 @@ if __name__ == "__main__":
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'inputs': dict(images={'shape': (28, 28, 1)},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
+                                    'filters': 16, 'width_factor': 4,
                                     'body': dict(se_block=True, ratio=4)
                                     })
                                     #'output': dict(ops=['labels', 'accuracy'])})
