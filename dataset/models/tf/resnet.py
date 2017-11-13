@@ -132,7 +132,7 @@ class ResNet(TFModel):
 
     @classmethod
     def block(cls, inputs, filters, resnext, resnext_factor, bottleneck, bottleneck_factor, name,
-              strides=1,se_block=False, se_factor=16, **kwargs):
+              strides=1, se_block=False, se_factor=16, **kwargs):
         """ A network building block
 
         Parameters
@@ -154,9 +154,11 @@ class ResNet(TFModel):
         """
         with tf.variable_scope(name):
             if resnext:
-                x = cls.next_sub_block(inputs, filters, bottleneck, resnext_factor, name='conv', strides=strides, **kwargs)
+                x = cls.next_sub_block(inputs, filters, bottleneck, resnext_factor, name='sub',
+                                       strides=strides, **kwargs)
             else:
-                x = cls.sub_block(inputs, filters, bottleneck, bottleneck_factor, name='conv', strides=strides, **kwargs)
+                x = cls.sub_block(inputs, filters, bottleneck, bottleneck_factor, name='sub',
+                                  strides=strides, **kwargs)
 
             num_channels = cls.channels_shape(inputs, kwargs.get('data_format'))
             num_filters = cls.channels_shape(x, kwargs.get('data_format'))
@@ -196,9 +198,9 @@ class ResNet(TFModel):
             output tensor
         """
         if bottleneck:
-            x = cls.bottleneck_block(inputs, filters, bottleneck_factor, name='conv', strides=strides, **kwargs)
+            x = cls.bottleneck_block(inputs, filters, bottleneck_factor, name, strides=strides, **kwargs)
         else:
-            x = cls.simple_block(inputs, filters, name='conv', strides=strides, **kwargs)
+            x = cls.simple_block(inputs, filters, name, strides=strides, **kwargs)
         return x
 
     @classmethod
@@ -220,7 +222,7 @@ class ResNet(TFModel):
         tf. tensor
             output tensor
         """
-        return conv_block(inputs, filters, 3, layout='cnacn', name='conv', strides=[strides, 1], **kwargs)
+        return conv_block(inputs, filters, 3, layout='cnacn', name=name, strides=[strides, 1], **kwargs)
 
 
     @classmethod
@@ -268,16 +270,16 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        num_channels = cls.channels_shape(inputs, kwargs.get('data_format'))
         sub_blocks = []
-        for i in range(resnext_factor):
-            with tf.variable_scope('next_sub_block-%d' % i):
-                if bottleneck:
-                    x = cls.bottleneck_block(inputs, 4, bottleneck_factor=filters//4, name='conv', **kwargs)
-                else:
-                    x = cls.simple_block(inputs, [4, filters], name='conv', **kwargs)
-                sub_blocks.append(x)
-        x = tf.add_n(sub_blocks)
+        with tf.variable_scope(name):
+            for i in range(resnext_factor):
+                with tf.variable_scope('next_sub_block-%d' % i):
+                    if bottleneck:
+                        x = cls.bottleneck_block(inputs, 4, bottleneck_factor=filters//4, name='conv', **kwargs)
+                    else:
+                        x = cls.simple_block(inputs, [4, filters], name='conv', **kwargs)
+                    sub_blocks.append(x)
+            x = tf.add_n(sub_blocks)
         return x
 
     @classmethod
