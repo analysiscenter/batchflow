@@ -101,8 +101,8 @@ class ResNet(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            x = cls.block(inputs, filters, bottleneck=False, name='block-1', strides=strides, **kwargs)
-            x = cls.block(x, filters, bottleneck=False, name='block-2', strides=1, **kwargs)
+            x = cls.block(inputs, filters, bottleneck, name='block-1', strides=strides, **kwargs)
+            x = cls.block(x, filters, bottleneck, name='block-2', strides=1, **kwargs)
         return x
 
     @classmethod
