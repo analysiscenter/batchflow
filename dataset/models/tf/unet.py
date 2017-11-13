@@ -13,54 +13,59 @@ class UNet(TFModel):
 
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
-    batch_norm : None or dict
-        parameters for batch normalization layers.
-        If None, remove batch norm layers whatsoever.
-        Default is ``{'momentum': 0.1}``.
     filters : int
-        number of filters after the first convolution (64 by default)
+        number of filters in the first and the last convolution (64 by default)
     num_blocks : int
         number of downsampling/upsampling blocks (4 by default)
     """
 
-    def _build(self):
-        names = ['images', 'masks']
-        _, inputs = self._make_inputs(names)
+    def _build_config(self, names=None):
+        names = names if names else ['images', 'masks']
+        config = super()._build_config(names)
 
-        num_classes = self.num_classes('masks')
-        data_format = self.data_format('images')
-        dim = self.spatial_dim('images')
-        batch_norm = self.get_from_config('batch_norm', {'momentum': 0.1})
+        config['default']['data_format'] = self.data_format('images')
+
         filters = self.get_from_config('filters', 64)
         num_blocks = self.get_from_config('num_blocks', 4)
 
-        conv_block_config = self.get_from_config('conv_block', {})
-        input_block_config = self.get_from_config('input_block', {'filters': filters})
+        config['input_block']['filters'] = self.get_from_config('input_block/filters', filters)
+        config['input_block']['inputs'] = self.inputs['images']
+
         layers_filters = 2 ** np.arange(num_blocks) * filters * 2
-        body_config = self.get_from_config('body', {'filters': layers_filters})
-        head_config = self.get_from_config('head', {'filters': filters})
-        head_config['num_classes'] = num_classes
+        config['body']['filters'] = self.get_from_config('body/filters', layers_filters)
 
-        kwargs = {'data_format': data_format, 'training': self.is_training, **conv_block_config}
-        if batch_norm:
-            kwargs['batch_norm'] = batch_norm
+        config['head']['filters'] = self.get_from_config('head/filters', filters)
+        config['head']['num_classes'] = self.num_classes('masks')
 
-        with tf.variable_scope('UNet'):
-            x = self.input_block(dim, inputs['images'], name='input', **{**kwargs, **input_block_config})
-            x = self.body(dim, x, name='body', **{**kwargs, **body_config})
-            output = self.head(dim, x, name='head', **{**kwargs, **head_config})
+        return config
 
-        logits = tf.identity(output, 'predictions')
-        tf.nn.softmax(logits, name='predicted_proba')
 
     @classmethod
-    def body(cls, dim, inputs, filters, **kwargs):
-        """ UNet body
+    def input_block(cls, inputs, filters, name='input_block', **kwargs):
+        """ 3x3 convolution
 
         Parameters
         ----------
-        dim : int {1, 2, 3}
-            input spatial dimensionionaly
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        return conv_block(inputs, filters, 3, layout='cnacna', name=name, **kwargs)
+
+
+    @classmethod
+    def body(cls, inputs, filters, name='body', **kwargs):
+        """ Base layers
+
+        Parameters
+        ----------
         inputs : tf.Tensor
             input tensor
         filters : tuple of int
@@ -72,30 +77,70 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        with tf.variable_scope(kwargs.pop('name', 'body')):
+        with tf.variable_scope(name):
             x = inputs
             encoder_outputs = [x]
             for i, ifilters in enumerate(filters):
-                x = cls.downsampling_block(dim, x, ifilters, 'downsampling-'+str(i), **kwargs)
+                x = cls.downsampling_block(x, ifilters, name='downsampling-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
-            x = conv_block(dim, x, filters[-1]//2, 2, 't', 'middle', strides=2, **kwargs)
-
-            axis = -1 if kwargs['data_format'] == 'channels_last' else 1
-            for i, ifilters in enumerate(filters[::-1][1:]):
-                x = tf.concat([encoder_outputs[-i-2], x], axis=axis)
-                x = cls.upsampling_block(dim, x, ifilters, 'upsampling-'+str(i), **kwargs)
+            for i, ifilters in enumerate(filters[::-1]):
+                x = cls.upsampling_block((x, encoder_outputs[-i-2]), ifilters//2, name='upsampling-'+str(i), **kwargs)
 
         return x
 
     @classmethod
-    def head(cls, dim, inputs, filters, num_classes, name='head', **kwargs):
+    def downsampling_block(cls, inputs, filters, name, **kwargs):
+        """ 2x2 max pooling with stride 2 and two 3x3 convolutions
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        x = conv_block(inputs, filters, 3, layout='pcnacna', name=name, pool_size=2, pool_strides=2, **kwargs)
+        return x
+
+    @classmethod
+    def upsampling_block(cls, inputs, filters, name, **kwargs):
+        """ 3x3 convolution and 2x2 transposed convolution
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        with tf.variable_scope(name):
+            x, skip = inputs
+            x = conv_block(x, filters, 2, layout='t', name='upsample', strides=2, **kwargs)
+            x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
+            axis = -1 if kwargs.get('data_format') == 'channels_last' else 1
+            x = tf.concat((skip, x), axis=axis)
+            x = conv_block(x, filters, 3, layout='cnacna', name='conv', **kwargs)
+        return x
+
+    @classmethod
+    def head(cls, inputs, filters, num_classes, name='head', **kwargs):
         """ Two 3x3 convolutions and 1x1 convolution
 
         Parameters
         ----------
-        dim : int {1, 2, 3}
-            input spatial dimensionionaly
         inputs : tf.Tensor
             input tensor
         filters : int
@@ -109,79 +154,4 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        with tf.variable_scope(name):
-            x = conv_block(dim, inputs, [filters, filters, num_classes], [3, 3, 1], layout+'c', 'output', **kwargs)
-        return x
-
-    @staticmethod
-    def input_block(dim, inputs, filters, name='input', **kwargs):
-        """ 3x3 convolution
-
-        Parameters
-        ----------
-        dim : int {1, 2, 3}
-            input spatial dimensionionaly
-        inputs : tf.Tensor
-            input tensor
-        filters : int
-            number of output filters
-        name : str
-            scope name
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        x = conv_block(dim, inputs, filters, 3, layout, name=name, **kwargs)
-        return x
-
-    @staticmethod
-    def downsampling_block(dim, inputs, filters, name, **kwargs):
-        """ 2x2 max pooling with stride 2 and two 3x3 convolutions
-
-        Parameters
-        ----------
-        dim : int {1, 2, 3}
-            input spatial dimensionionaly
-        inputs : tf.Tensor
-            input tensor
-        filters : int
-            number of output filters
-        name : str
-            scope name
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        layout = 'pcnacna' if 'batch_norm' in kwargs else 'pcaca'
-        with tf.variable_scope(name):
-            x = conv_block(dim, inputs, filters, 3, layout, name, pool_size=2, **kwargs)
-        return x
-
-    @staticmethod
-    def upsampling_block(dim, inputs, filters, name, **kwargs):
-        """ 3x3 convolution and 2x2 transposed convolution
-
-        Parameters
-        ----------
-        dim : int {1, 2, 3}
-            input spatial dimensionionaly
-        inputs : tf.Tensor
-            input tensor
-        filters : int
-            number of output filters
-        name : str
-            scope name
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        layout = 'cnacna' if 'batch_norm' in kwargs else 'caca'
-        with tf.variable_scope(name):
-            x = conv_block(dim, inputs, 2*filters, 3, layout, 'conv', **kwargs)
-            x = conv_block(dim, x, filters, 2, 't', 'transposed', strides=2, **kwargs)
-        return x
+        return conv_block(inputs, [filters, filters, num_classes], [3, 3, 1], layout='cnacnac', name=name, **kwargs)

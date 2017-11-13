@@ -30,9 +30,26 @@ class BaseModel:
         if self.get_from_config('load', False):
             self.load(**self.get_from_config('load'))
 
-    def get_from_config(self, variable, default=None):
+    def get_from_config(self, variable, default=None, config=None):
         """ Return a variable from config or a default value """
-        return self.config.get(variable, default)
+        if '/' in variable:
+            var = variable.split('/')
+            prefix = var[:-1]
+            var_name = var[-1]
+        else:
+            prefix = []
+            var_name = variable
+
+        config = config or self.config
+        for p in prefix:
+            if p in config:
+                config = config[p]
+            else:
+                config = None
+                break
+        if config:
+            return config.get(var_name, default)
+        return default
 
     def _make_inputs(self, names=None):
         """ Make model input data using config

@@ -1,60 +1,58 @@
 """Contains class for FCN"""
+import numpy as np
 import tensorflow as tf
 
-from .layers import conv_block
 from . import TFModel, VGG16
+from .layers import conv_block
+
 
 class FCN(TFModel):
     """ Base Fully convolutional network (FCN)
     https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
-
-    **Configuration**
-
-    inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
-    batch_norm : None or dict
-        parameters for batch normalization layers.
-        If None, remove batch norm layers whatsoever.
-        Default is ``{'momentum': 0.1}``.
-    arch : str {'FCN32', 'FCN16', 'FCN8'}
-        network architecture. Default is 'FCN32'.
     """
 
-    def _build(self):
-        names = ['images', 'masks']
-        _, inputs = self._make_inputs(names)
+    def _build_config(self, names=None):
+        names = names if names else ['images', 'masks']
+        config = super()._build_config(names)
 
-        num_classes = self.num_classes('masks')
-        data_format = self.data_format('images')
-        dim = self.spatial_dim('images')
-        batch_norm = self.get_from_config('batch_norm', {'momentum': 0.1})
-        arch = self.get_from_config('arch', 'FCN32')
+        config['default']['data_format'] = self.data_format('images')
+        config['default']['dropout_rate'] = self.get_from_config('default/dropout_rate', .5)
 
-        conv_block_config = self.get_from_config('conv_block', {})
-        input_block_config = self.get_from_config('input_block', {'layout': ''})
-        body_config = self.get_from_config('body', {})
-        head_config = self.get_from_config('head', {})
-        head_config['num_classes'] = num_classes
+        config['input_block']['inputs'] = self.inputs['images']
+        config['input_block']['input_class'] = self.get_from_config('base_network', VGG16)
+        config['head']['num_classes'] = self.num_classes('masks')
+        config['head']['image_size'] = self.inputs['images'].get_shape().as_list()[1:-1]
+        config['body']['num_classes'] = self.num_classes('masks')
+        config['body']['filters'] = self.get_from_config('body/filters', 100)
 
-        kwargs = {'data_format': data_format, 'training': self.is_training, **conv_block_config}
-        if batch_norm:
-            kwargs['batch_norm'] = batch_norm
+        return config
 
-        with tf.variable_scope('FCN'):
-            x = self.input_block(dim, inputs['images'], name='input', **{**kwargs, **input_block_config})
-            x = self.body(dim, x, name='body', **{**kwargs, **body_config})
-            output = self.head(dim, x, arch, name='head', **{**kwargs, **head_config})
-
-        tf.nn.softmax(tf.identity(output, 'predictions'), name='predicted_proba')
 
     @classmethod
-    def body(cls, dim, inputs, **kwargs):
-        """ Make VGG16 body
+    def input_block(cls, inputs, input_class, name='input_block', **kwargs):
+        """ VGG
 
         Parameters
         ----------
-        dim : int {1, 2, 3}
-            input spatial dimensionionaly
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        return input_class.body(inputs, name=name, **kwargs)
+
+    @classmethod
+    def body(cls, inputs, name='body', **kwargs):
+        """ Base layers
+
+        Parameters
+        ----------
         inputs : tf.Tensor
             input tensor
 
@@ -62,20 +60,16 @@ class FCN(TFModel):
         -------
         tf.Tensor
         """
-        return VGG16.body(dim, inputs, **kwargs)
+        raise NotImplementedError()
 
     @classmethod
-    def head(cls, dim, inputs, arch, num_classes, name='head', **kwargs):
+    def head(cls, inputs, num_classes, name='head', **kwargs):
         """ FCN head
 
         Parameters
         ----------
-        dim : int {1, 2, 3}
-            input spatial dimensionionaly
         inputs : tf.Tensor
             input tensor
-        arch : str {'FCN32', 'FCN16', 'FCN8'}
-            network architecture. Default is 'FCN32'.
         num_classes : int
             number of classes
         name : str
@@ -85,49 +79,209 @@ class FCN(TFModel):
         -------
         tf.Tensor
         """
-        with tf.variable_scope(name):
-            layout = 'cna' * 3 if 'batch_norm' in kwargs else 'ca' * 3
-            x = conv_block(dim, inputs, [100, 100, num_classes], [7, 1, 1], layout, 'conv-out', **kwargs)
+        raise NotImplementedError()
 
-            pool4 = tf.get_default_graph().get_tensor_by_name("FCN/body/block-3/output:0")
-            pool3 = tf.get_default_graph().get_tensor_by_name("FCN/body/block-2/output:0")
-            if arch == 'FCN32':
-                x = conv_block(dim, x, num_classes, 64, 't', 'output', strides=32, **kwargs)
-            else:
-                conv7 = conv_block(dim, x, num_classes, 1, 't', 'conv7', strides=2, **kwargs)
-                pool4 = conv_block(dim, pool4, num_classes, 1, 'c', 'pool4', strides=1, **kwargs)
-                fcn16_sum = tf.add(conv7, pool4, name='fcn16_sum')
-                if arch == 'FCN16':
-                    x = conv_block(dim, fcn16_sum, num_classes, 32, 't', 'output', strides=16, **kwargs)
-                elif arch == 'FCN8':
-                    pool3 = conv_block(dim, pool3, num_classes, 1, 'c', 'pool3')
-                    fcn16_sum = conv_block(dim, fcn16_sum, num_classes, 1, 't', 'fcn16_sum-2', strides=2, **kwargs)
-                    fcn8_sum = tf.add(pool3, fcn16_sum, name='fcn8_sum')
-                    x = conv_block(dim, fcn8_sum, num_classes, 16, 't', 'output', strides=8, **kwargs)
-                else:
-                    raise ValueError("Arch should be one of 'FCN32', 'FCN16' or 'FCN8'")
+    @classmethod
+    def head(cls, inputs, filters, factor, image_size, num_classes, name='head', **kwargs):
+        """ Base layers
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of filters
+        image_size : tuple
+            the output image size
+        num_classes : int
+            number of classes
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        x = conv_block(inputs, num_classes, filters, 't', name=name, strides=factor, **kwargs)
+        x = cls.crop(x, shape=image_size, data_format=kwargs.get('data_format'))
         return x
 
 
 class FCN32(FCN):
     """  Fully convolutional network (FCN32)
-    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016) """
-    def _build(self, *args, **kwargs):
-        self.config['arch'] = 'FCN32'
-        super()._build(*args, **kwargs)
+    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
+
+    **Configuration**
+
+    inputs : dict
+        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+    base_network : class
+        base network (VGG16 by default)
+    body : dict
+        filters : int
+            number of filters in convolutions after base network (default=100)
+    head : dict
+        factor : int
+            upsampling factor (default=32)
+        filters : int
+            number of filters in the final upsampling block (default=32)
+    """
+    def _build_config(self, names=None):
+        config = super()._build_config(names)
+        config['head']['filters'] = self.get_from_config('head/filters', 32)
+        config['head']['factor'] = self.get_from_config('head/factor', 32)
+        return config
+
+    @classmethod
+    def body(cls, inputs, filters, name='body', **kwargs):
+        """ Base layers
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of filters
+        num_classes : int
+            number of classes
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        layout = kwargs.pop('layout', 'cnad cnad')
+        return conv_block(inputs, filters, [7, 1], layout=layout, name=name, **kwargs)
 
 
 class FCN16(FCN):
     """  Fully convolutional network (FCN16)
-    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016) """
-    def _build(self, *args, **kwargs):
-        self.config['arch'] = 'FCN16'
-        super()._build(*args, **kwargs)
+    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
+
+    **Configuration**
+
+    inputs : dict
+        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+    base_network : class
+        base network (VGG16 by default)
+    input_block : dict
+        skip_name : str
+            tensor name for the skip connection.
+            Default='block-3/output:0' for VGG16.
+    body : dict
+        filters : int
+            number of filters in convolutions after base network (default=100)
+    head : dict
+        factor : int
+            upsampling factor (default=32)
+        filters : int
+            number of filters in the final upsampling block (default=32)
+    """
+    def _build_config(self, names=None):
+        config = super()._build_config(names)
+        config['head']['factor'] = self.get_from_config('head/factor', 16)
+        config['head']['filters'] = self.get_from_config('head/filters', 16)
+        config['input_block']['skip_name'] = self.graph.get_name_scope() + '/input_block/' + \
+                                             self.get_from_config('/input_block/skip_name', 'block-3/output:0')
+        return config
+
+    @classmethod
+    def input_block(cls, inputs, input_class, skip_name, name='input_block', **kwargs):
+        x = FCN.input_block(inputs, input_class, name, **kwargs)
+        skip = tf.get_default_graph().get_tensor_by_name(skip_name)
+        return x, skip
+
+    @classmethod
+    def body(cls, inputs, filters, num_classes, name='body', **kwargs):
+        """ Base layers
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            two input tensors
+        filters : int
+            number of filters
+        num_classes : int
+            number of classes
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        with tf.variable_scope(name):
+            x, skip = inputs
+            x = FCN32.body(x, filters, name='fcn32', **kwargs)
+            x = conv_block(x, num_classes, 1, 't', 'fcn32_2', strides=2, **kwargs)
+
+            skip = conv_block(skip, num_classes, 1, 'c', 'pool', **kwargs)
+            output = tf.add(x, skip, name='output')
+        return output
 
 
 class FCN8(FCN):
     """  Fully convolutional network (FCN8)
-    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016) """
-    def _build(self, *args, **kwargs):
-        self.config['arch'] = 'FCN8'
-        super()._build(*args, **kwargs)
+    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
+
+    **Configuration**
+
+    inputs : dict
+        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+    base_network : class
+        base network (VGG16 by default)
+    input_block : dict
+        skip1_name : str
+            tensor name for the first skip connection.
+            Default='block-3/output:0' for VGG16.
+        skip2_name : str
+            tensor name for the second skip connection.
+            Default='block-2/output:0' for VGG16.
+    body : dict
+        filters : int
+            number of filters in convolutions after base network (default=100)
+    head : dict
+        factor : int
+            upsampling factor (default=32)
+        filters : int
+            number of filters in the final upsampling block (default=32)
+    """
+    def _build_config(self, names=None):
+        config = super()._build_config(names)
+        config['head']['factor'] = self.get_from_config('head/factor', 8)
+        config['head']['filters'] = self.get_from_config('head/filters', 8)
+        config['input_block']['skip1_name'] = self.graph.get_name_scope() + '/input_block/' + \
+                                             self.get_from_config('/input_block/skip1_name', 'block-3/output:0')
+        config['input_block']['skip2_name'] = self.graph.get_name_scope() + '/input_block/' + \
+                                             self.get_from_config('/input_block/skip2_name', 'block-2/output:0')
+        return config
+
+    @classmethod
+    def input_block(cls, inputs, input_class, skip1_name, skip2_name, name='input_block', **kwargs):
+        x = FCN.input_block(inputs, input_class, name, **kwargs)
+        skip1 = tf.get_default_graph().get_tensor_by_name(skip1_name)
+        skip2 = tf.get_default_graph().get_tensor_by_name(skip2_name)
+        return x, skip1, skip2
+
+    @classmethod
+    def body(cls, inputs, filters, num_classes, name='body', **kwargs):
+        """ Base layers
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of filters
+        num_classes : int
+            number of classes
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        with tf.variable_scope(name):
+            x, skip1, skip2 = inputs
+
+            x = FCN16.body((x, skip1), filters, num_classes, name='fcn16', **kwargs)
+            x = conv_block(x, num_classes, 1, 't', name='fcn16_2', strides=2, **kwargs)
+
+            skip2 = conv_block(skip2, num_classes, 1, 'c', name='pool2')
+
+            output = tf.add(x, skip2, name='output')
+        return output

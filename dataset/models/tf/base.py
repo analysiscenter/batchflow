@@ -134,6 +134,7 @@ class TFModel(BaseModel):
         self._attrs = []
         self._to_classes = {}
         self._inputs = {}
+        self.inputs = None
 
         super().__init__(*args, **kwargs)
 
@@ -146,65 +147,6 @@ class TFModel(BaseModel):
     def __exit__(self, exception_type, exception_value, exception_traceback):
         """ Exit the model graph context """
         return self._graph_context.__exit__(exception_type, exception_value, exception_traceback)
-
-    def _build(self):
-        """ Define a model architecture
-
-        It takes just 2 steps:
-
-        #. Define names for all placeholders and make input tensors by calling :meth:`._make_inputs`::
-
-            def _build():
-                names = ['images', 'labels']
-                placeholders, inputs = self._make_inputs(names)
-
-           If config does not contain any name from ``names``, :exc:`KeyError` is raised.
-
-        #. Add your layers.
-
-        And that's pretty it.
-
-        Things worth mentioning:
-
-        #. Input data and its parameters should be defined in configuration under ``inputs`` key.
-
-        #. :meth:`._make_inputs` returns ``placeholders`` and ``inputs`` which are dicts
-           with the same keys as ``config['inputs']``.
-           They contain all placeholders and tensors after reshaping/transformations, correspondingly.
-           Use ``inputs`` to build a model. While placeholder names will also be needed later in
-           ``train`` and ``predict`` methods.
-
-        #. You might want to use a convenient multidimensional :func:`~.layers.conv_block`,
-           as well as :func:`~.layers.global_average_pooling`,
-           :func:`~.layers.mip`, or other predefined layers.
-           Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
-
-        #. For dropout, batch norm, etc you might use a predefined ``self.is_training`` tensor.
-
-        #. For decay and training control you might use a predefined ``self.global_step`` tensor.
-
-        #. In many cases there is no need to write a loss function, learning rate decay and optimizer
-           as they might be defined through config.
-
-        #. For a configured loss one of the inputs should have a name ``targets`` and
-           one of the tensors in your model should have a name ``predictions``.
-           They will be used in a loss function.
-
-        #. If you have defined your own loss function, call `tf.losses.add_loss(...)
-           <https://www.tensorflow.org/api_docs/python/tf/losses/add_loss>`_.
-
-        #. If you need to use your own optimizer, assign ``self.train_step`` to the train step operation.
-           Don't forget about `UPDATE_OPS control dependency
-           <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_.
-
-        Notes
-        -----
-        This method is executed within a self.graph context
-        """
-        input_names = []
-        placeholders, inputs = self._make_inputs(input_names)
-        _ = placeholders, inputs
-
 
     def build(self, *args, **kwargs):
         """ Build the model
@@ -219,22 +161,24 @@ class TFModel(BaseModel):
         #. Create a tensorflow session
         """
         with self.graph.as_default():
-            self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
-            self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
+            with tf.variable_scope(self.__class__.__name__):
+                with tf.variable_scope('globals'):
+                    self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
+                    self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
-            self._build()
+                self._build()
 
-            self._make_loss()
-            self.store_to_attr('loss', tf.losses.get_total_loss())
+                self._make_loss()
+                self.store_to_attr('loss', tf.losses.get_total_loss())
 
-            if self.train_step is None:
-                optimizer = self._make_optimizer()
+                if self.train_step is None:
+                    optimizer = self._make_optimizer()
 
-                update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-                with tf.control_dependencies(update_ops):
-                    self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
-            else:
-                self.store_to_attr('train_step', self.train_step)
+                    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                    with tf.control_dependencies(update_ops):
+                        self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
+                else:
+                    self.store_to_attr('train_step', self.train_step)
 
             session_config = self.get_from_config('session', {})
             self.session = tf.Session(**session_config)
@@ -345,20 +289,18 @@ class TFModel(BaseModel):
                 shape = (shape,)
             if shape:
                 input_config['shape'] = shape
-                if None not in shape:
-                    reshape = shape
-                    shape = None
-                else:
-                    shape = [None] + list(shape)
+                shape = [None] + list(shape)
 
             self._inputs[input_name] = dict(config=input_config)
 
             if self.has_classes(input_name):
-                dtype = input_config.get('dtype', tf.int32)
+                dtype = input_config.get('dtype', tf.int64)
+                shape = shape or (None,)
             else:
                 dtype = input_config.get('dtype', 'float')
             tensor = tf.placeholder(dtype, shape, input_name)
             placeholders[input_name] = tensor
+            self.store_to_attr(input_name, tensor)
 
             if input_config.get('data_format') == 'l':
                 input_config['data_format'] = 'channels_last'
@@ -374,10 +316,13 @@ class TFModel(BaseModel):
             name = input_config.get('name')
             if name is not None:
                 tensor = tf.identity(tensor, name=name)
+                self.store_to_attr(name, tensor)
 
             tensors[input_name] = tensor
 
             self._inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
+
+        self.inputs = tensors
 
         return placeholders, tensors
 
@@ -399,7 +344,7 @@ class TFModel(BaseModel):
                 tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
             elif callable(transform_name):
                 tensor = transform_name(tensor)
-            elif transform_name is not None:
+            elif transform_name:
                 raise ValueError("Unknown transform {}".format(transform_name))
         return tensor
 
@@ -456,6 +401,17 @@ class TFModel(BaseModel):
     def _make_loss(self):
         """ Return a loss function from config """
         loss = self.get_from_config("loss")
+
+        if isinstance(loss, dict):
+            target_scope = loss.get('targets_scope', 'inputs')
+            target_scope = '/' + target_scope + '/' if target_scope else ''
+            prediction_scope = loss.get('predictions_scope', '')
+            prediction_scope = '/' + prediction_scope + '/' if prediction_scope else ''
+            loss = loss.get('loss')
+        else:
+            target_scope = 'inputs/'
+            prediction_scope = ''
+
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
@@ -470,8 +426,10 @@ class TFModel(BaseModel):
 
         if loss is not None:
             try:
-                predictions = self.graph.get_tensor_by_name("predictions:0")
-                targets = self.graph.get_tensor_by_name("targets:0")
+                scope = self.graph.get_name_scope()
+                scope = scope + '/' if scope else ''
+                predictions = self.graph.get_tensor_by_name(scope + prediction_scope + "predictions:0")
+                targets = self.graph.get_tensor_by_name(scope + target_scope + "targets:0")
             except KeyError:
                 raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % self.name)
             else:
@@ -591,12 +549,16 @@ class TFModel(BaseModel):
     def classes(self, tensor):
         """ Return the  number of classes """
         config = self.get_tensor_config(tensor)
-        return config.get('classes')
+        classes = config.get('classes')
+        if isinstance(classes, int):
+            return np.arange(classes)
+        return classes
 
     def num_classes(self, tensor):
         """ Return the  number of classes """
         if self.has_classes(tensor):
-            return len(self.classes(tensor))
+            classes = self.classes(tensor)
+            return classes if isinstance(classes, int) else len(classes)
         return self.num_channels(tensor)
 
     def spatial_dim(self, tensor, **kwargs):
@@ -654,6 +616,22 @@ class TFModel(BaseModel):
         shape : tuple of ints
         """
         return tensor.get_shape().as_list()
+
+    @staticmethod
+    def spatial_shape(tensor, data_format='channels_last'):
+        """ Return spatial shape of the input tensor
+
+        Parameters
+        ----------
+        tensor : tf.Tensor
+
+        Returns
+        -------
+        shape : tuple of ints
+        """
+        shape = tensor.get_shape().as_list()
+        axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
+        return shape[axis]
 
     def _map_name(self, name):
         if isinstance(name, str):
@@ -862,8 +840,35 @@ class TFModel(BaseModel):
             tf.get_collection_ref('attrs').append(graph_item)
 
     @classmethod
-    def head(cls, *args, **kwargs):
-        """ Last network layers which produce output
+    def crop(cls, inputs, shape_image=None, shape=None, data_format='channels_last'):
+        input_shape = np.array(cls.spatial_shape(inputs, data_format))
+        image_size = shape if shape else cls.spatial_shape(shape_image, data_format)
+
+        if np.abs(input_shape - image_size).sum() > 0:
+            begin = [0] * inputs.shape.ndims
+            size = ([-1] + image_size + [-1]) if data_format == 'channels_last' else [-1, -1] + image_size
+            x = tf.slice(inputs, begin=begin, size=size)
+        else:
+            x = inputs
+        return x
+
+    @classmethod
+    def input_block(cls, inputs, name='input_block', **kwargs):
+        """ Transform inputs with a convolution block
+
+        Parameters
+        ----------
+        See :func:`.layers.conv_block`.
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        return conv_block(inputs, name=name, **kwargs)
+
+    @classmethod
+    def body(cls, *args, name='body', **kwargs):
+        """ Base layers which produce a network embedding
 
         Parameters
         ----------
@@ -873,26 +878,203 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
 
-
         Examples
         --------
         ::
 
+            MyModel.body(2, inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
+        """
+        return cls.block(*args, name='block', **kwargs)
+
+    @classmethod
+    def block(cls, *args, **kwargs):
+        """ A body building block which transforms inputs with a convolution block
+
+        Parameters
+        ----------
+        See :func:`.layers.conv_block`.
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        return conv_block(*args, **kwargs)
+
+    @classmethod
+    def head(cls, name='head', **kwargs):
+        """ Last network layers which produce output from the network embedding
+
+        Parameters
+        ----------
+        See :func:`.layers.conv_block`.
+
+        Returns
+        -------
+        tf.Tensor
+
+        Examples
+        --------
+        A fully convolutional head with 3x3 and 1x1 convolutions and global max pooling:
+
             MyModel.head(2, network_embedding, layout='cacaP', filters=[128, num_classes], kernel_size=[3, 1])
 
-        ::
+        A fully connected head with dropouts, a dense layer with 1000 units and final dense layer with class logits::
 
             MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
-        with tf.variable_scope(kwargs.get('name', 'head')):
-            x = conv_block(*args, **kwargs)
+        x = conv_block(*args, name=name, **kwargs)
         return x
 
-    @staticmethod
-    def input_block(dim, inputs, **kwargs):
-        """ Transform input image with a convolution block """
-        if kwargs.get('layout'):
-            x = conv_block(dim, inputs, **kwargs)
+    def output(self, inputs, ops=None, prefix=None):
+        """ Add output operations to a model graph, like predictions, quality metrics, etc.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor or a sequence of tf.Tensors
+            input tensors
+
+        ops : a sequence of str
+            operation names::
+            - 'proba' - add ``softmax(inputs)``
+            - 'labels' - add ``argmax(inputs)``
+            - 'accuracy' - add ``mean(predicted_labels == true_labels)``
+
+        prefix : a sequence of str
+            a prefix for each input if there are multiple inputs
+
+        Raises
+        ------
+        ValueError if the number of outputs does not equal to the number of prefixes
+        TypeError if inputs is not a Tensor or a sequence of Tensors
+        """
+        if ops is None:
+            ops = []
+        elif not isinstance(ops, (list, tuple)):
+            ops = [ops]
+
+        if not isinstance(inputs, (tuple, list)):
+            inputs = [inputs]
+            prefix = [prefix]
+
+        if len(inputs) != len(prefix):
+            raise ValueError('Each output in multiple output models should have its own prefix')
+
+        for i, tensor in enumerate(inputs):
+            if not isinstance(tensor, tf.Tensor):
+                raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
+
+            scope = self.graph.get_name_scope()
+            scope = scope + '/' if scope else ''
+            current_prefix = prefix[i] or ''
+            if current_prefix:
+                ctx = tf.variable_scope(current_prefix)
+                ctx.__enter__()
+            else:
+                ctx = None
+
+            x = tf.identity(tensor, name='predictions')
+            for op in ops:
+                if op == 'proba':
+                    tf.nn.softmax(tensor, name='predicted_proba')
+                elif op == 'labels':
+                    tf.argmax(tensor, axis=-1, name='predicted_labels')
+                elif op == 'accuracy':
+                    true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
+                    current_scope = self.graph.get_name_scope() + '/'
+                    predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+                    accuracy = tf.reduce_mean(tf.cast(tf.equal(true_labels, predicted_labels), 'float'), name='accuracy')
+                    attr_prefix = current_prefix + '_' if current_prefix else ''
+                    self.store_to_attr(attr_prefix + 'accuracy', accuracy)
+
+            if ctx:
+                ctx.__exit__(None, None, None)
+
+
+    def _build_config(self, names=None):
+        """ Define a model architecture configuration
+
+        It takes just 2 steps:
+
+        #. Define names for all placeholders and make input tensors by calling ``super()._build_config(names)``::
+
+            def _build_config(se;f, names=None):
+                names = names or ['images', 'labels']
+                config = super()._build_config(names)
+
+           If the model config does not contain any name from ``names``, :exc:`KeyError` is raised.
+
+           See :meth:`._make_inputs` for details.
+
+        #. Define parameters for :meth:`.input_block`, :meth:`.body`, :meth:`.head`::
+
+            config['input_block']['inputs'] = self.inputs['images']
+            config['input_block']['filters'] = self.get_from_config('filters', 32)
+            config['body']['filters'] = filters * 2
+            config['head']['num_classes'] = self.num_classes('labels')
+
+        #. Don't forget to return ``config``.::
+
+            return config
+        """
+        if names is not None:
+            self.input_names = [names] if isinstance(names, str) else names
         else:
-            x = inputs
-        return x
+            self.input_names = None
+        with tf.variable_scope('inputs'):
+            self._make_inputs(self.input_names)
+
+        config = {}
+        config['default'] = self.get_from_config('default', {'batch_norm': {'momentum': .1}})
+        config['input_block'] = self.get_from_config('input_block', {})
+        config['body'] = self.get_from_config('body', {})
+        config['head'] = self.get_from_config('head', {})
+        config['output'] = self.get_from_config('output', {})
+        return config
+
+
+    def _build(self):
+        """ Define a model architecture
+
+        Things worth mentioning:
+
+        #. Input data and its parameters should be defined in configuration under ``inputs`` key.
+           See :meth:`._make_inputs` for details.
+
+        #. You might want to use a convenient multidimensional :func:`~.layers.conv_block`,
+           as well as :func:`~.layers.global_average_pooling`,
+           :func:`~.layers.mip`, or other predefined layers.
+           Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
+
+        #. For dropout, batch norm, etc you might use a predefined ``self.is_training`` tensor.
+
+        #. For decay and training control you might use a predefined ``self.global_step`` tensor.
+
+        #. In many cases there is no need to write a loss function, learning rate decay and optimizer
+           as they might be defined through config.
+
+        #. For a configured loss one of the inputs should have a name ``targets`` and
+           one of the tensors in your model should have a name ``predictions``.
+           They will be used in a loss function.
+
+        #. If you have defined your own loss function, call `tf.losses.add_loss(...)
+           <https://www.tensorflow.org/api_docs/python/tf/losses/add_loss>`_.
+
+        #. If you need to use your own optimizer, assign ``self.train_step`` to the train step operation.
+           Don't forget about `UPDATE_OPS control dependency
+           <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_.
+
+        Notes
+        -----
+        This method is executed within a self.graph context
+        """
+        config = self._build_config()
+
+        defaults = {'training': self.is_training, **config['default']}
+        config['input_block'] = {**defaults, **config['input_block']}
+        config['body'] = {**defaults, **config['body']}
+        config['head'] = {**defaults, **config['head']}
+
+        x = self.input_block(**config['input_block'])
+        x = self.body(inputs=x, **config['body'])
+        output = self.head(inputs=x, **config['head'])
+        self.output(output, **config['output'])
