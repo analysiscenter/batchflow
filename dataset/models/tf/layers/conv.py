@@ -48,10 +48,11 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, *args, **kwargs):
     `tf.layers.conv2d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv2d_transpose>`_,
     `tf.layers.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d_transpose>`_
     """
-    up_tensor = tf.expand_dims(inputs, 1)
+    axis = -1 if data_format == 'channels_last' else 1
+    up_tensor = tf.expand_dims(inputs, axis=axis)
     conv_output = tf.layers.conv2d_transpose(up_tensor, filters=filters, kernel_size=(1, kernel_size),
                                              strides=(1, strides), *args, **kwargs)
-    output = tf.squeeze(conv_output, [1])
+    output = tf.squeeze(conv_output, [axis])
     return output
 
 def conv_transpose(dim, inputs, filters, kernel_size, strides, *args, **kwargs):

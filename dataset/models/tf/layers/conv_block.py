@@ -3,7 +3,7 @@ import tensorflow as tf
 
 from .core import mip, flatten
 from .conv import conv1d_transpose, separable_conv
-from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling
+from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling, fractional_max_pooling
 
 
 ND_LAYERS = {
@@ -14,6 +14,7 @@ ND_LAYERS = {
     'separable_conv':separable_conv,
     'max_pooling': max_pooling,
     'average_pooling': average_pooling,
+    'fractional_max_pooling': fractional_max_pooling,
     'global_max_pooling': global_max_pooling,
     'global_average_pooling': global_average_pooling,
     'batch_norm': tf.layers.batch_normalization,
@@ -29,6 +30,7 @@ C_LAYERS = {
     's': 'separable_conv',
     'p': 'max_pooling',
     'v': 'average_pooling',
+    'r': 'fractional_max_pooling',
     'P': 'global_max_pooling',
     'V': 'global_average_pooling',
     'n': 'batch_norm',
@@ -37,7 +39,11 @@ C_LAYERS = {
 }
 
 _LAYERS_KEYS = str(list(C_LAYERS.keys()))
-_GROUP_KEYS = _LAYERS_KEYS.replace('t', 'c').replace('s', 'c').replace('v', 'p')
+_GROUP_KEYS = (_LAYERS_KEYS
+        .replace('t', 'c')
+        .replace('s', 'c')
+        .replace('v', 'p')
+)
 C_GROUPS = dict(zip(_LAYERS_KEYS, _GROUP_KEYS))
 
 def _get_layer_fn(fn, dim):
@@ -79,6 +85,7 @@ def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
         - a - activation
         - p - max pooling
         - v - average pooling
+        - r - fractional max pooling
         - P - global max pooling
         - V - global average pooling
         - d - dropout
@@ -225,6 +232,11 @@ def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
             elif layer == 'n':
                 axis = -1 if data_format == 'channels_last' else 1
                 args = dict(fused=True, axis=axis, training=is_training)
+
+            elif layer == 'r':
+                args = dict(pooling_ratio=kwargs.get('pooling_ratio', 1.4142),
+                            pseudo_random=kwargs.get('pseudo_random', False),
+                            overlapping=kwargs.get('overlapping', False), padding=padding, data_format=data_format)
 
             elif C_GROUPS[layer] == 'p':
                 args = dict(dim=dim, pool_size=pool_size, strides=pool_strides, padding=padding,
