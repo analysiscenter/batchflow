@@ -162,6 +162,7 @@ def fractional_max_pooling(inputs, pooling_ratio, pseudo_random=False, overlappi
     tf.Tensor
     """
     dim = inputs.shape.ndims
+    _ = padding
 
     if dim == 1:
         with tf.variable_scope(kwargs.get('name') or 'fractional_max_pooling'):

@@ -41,9 +41,9 @@ C_LAYERS = {
 _LAYERS_KEYS = str(list(C_LAYERS.keys()))
 _GROUP_KEYS = (
     _LAYERS_KEYS
-       .replace('t', 'c')
-       .replace('s', 'c')
-       .replace('v', 'p')
+    .replace('t', 'c')
+    .replace('s', 'c')
+    .replace('v', 'p')
 )
 C_GROUPS = dict(zip(_LAYERS_KEYS, _GROUP_KEYS))
 

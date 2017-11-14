@@ -25,7 +25,8 @@ def conv(dim, *args, **kwargs):
     layer_fn = _CONV_LAYERS[dim]
     return layer_fn(*args, **kwargs)
 
-def conv1d_transpose(inputs, filters, kernel_size, strides=1, *args, **kwargs):
+def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
+                     *args, **kwargs):
     """ Transposed 1D convolution layer
 
     Parameters
