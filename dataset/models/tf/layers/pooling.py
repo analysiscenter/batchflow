@@ -1,8 +1,9 @@
 """ Contains pooling layers """
+import numpy as np
 import tensorflow as tf
 
 
-def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='channels_last', name=None):
+def max_pooling(inputs, pool_size, strides, padding='valid', data_format='channels_last', name=None):
     """ Multi-dimensional max-pooling layer.
 
     Parameters
@@ -32,6 +33,7 @@ def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='c
     `tf.layers.max_pooling2d <https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling2d>`_,
     `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/tf/layers/max_pooling3d>`_
     """
+    dim = inputs.shape.ndims - 2
     if dim == 1:
         return tf.layers.max_pooling1d(inputs, pool_size, strides, padding, data_format, name)
     elif dim == 2:
@@ -42,7 +44,7 @@ def max_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='c
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
 
-def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_format='channels_last', name=None):
+def average_pooling(inputs, pool_size, strides, padding='valid', data_format='channels_last', name=None):
     """ Multi-dimensional average-pooling layer.
 
     Parameters
@@ -72,6 +74,7 @@ def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_forma
     `tf.layers.average_pooling2d <https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling2d>`_,
     `tf.layers.average_pooling3d <https://www.tensorflow.org/api_docs/python/tf/layers/average_pooling3d>`_
     """
+    dim = inputs.shape.ndims - 2
     if dim == 1:
         return tf.layers.average_pooling1d(inputs, pool_size, strides, padding, data_format, name)
     elif dim == 2:
@@ -82,7 +85,7 @@ def average_pooling(dim, inputs, pool_size, strides, padding='valid', data_forma
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
 
-def global_average_pooling(dim, inputs, data_format='channels_last', name=None):
+def global_average_pooling(inputs, data_format='channels_last', name=None):
     """ Multi-dimensional global average-pooling layer.
 
     Parameters
@@ -100,6 +103,7 @@ def global_average_pooling(dim, inputs, data_format='channels_last', name=None):
     -------
     tf.Tensor
     """
+    dim = inputs.shape.ndims - 2
     axis = 1 if data_format == 'channels_last' else 2
     if dim == 2:
         axis = [axis, axis+1]
@@ -111,7 +115,7 @@ def global_average_pooling(dim, inputs, data_format='channels_last', name=None):
     return tf.reduce_mean(inputs, axis=axis, name=name)
 
 
-def global_max_pooling(dim, inputs, data_format='channels_last', name=None):
+def global_max_pooling(inputs, data_format='channels_last', name=None):
     """ Multi-dimensional global max-pooling layer.
 
     Parameters
@@ -129,8 +133,11 @@ def global_max_pooling(dim, inputs, data_format='channels_last', name=None):
     -------
     tf.Tensor
     """
+    dim = inputs.shape.ndims - 2
     axis = 1 if data_format == 'channels_last' else 2
-    if dim == 2:
+    if dim == 1:
+        pass
+    elif dim == 2:
         axis = [axis, axis+1]
     elif dim == 3:
         axis = [axis, axis+1, axis+2]
@@ -141,8 +148,8 @@ def global_max_pooling(dim, inputs, data_format='channels_last', name=None):
 
 
 def fractional_max_pooling(inputs, pooling_ratio, pseudo_random=False, overlapping=False,
-                           padding='valid', **kwargs):
-    """ Multi-dimensional global max-pooling layer.
+                           data_format='channels_last', **kwargs):
+    """ Fractional max-pooling layer.
 
     Parameters
     ----------
@@ -161,17 +168,22 @@ def fractional_max_pooling(inputs, pooling_ratio, pseudo_random=False, overlappi
     -------
     tf.Tensor
     """
-    dim = inputs.shape.ndims
-    _ = padding
+    dim = inputs.shape.ndims - 2
+
+    _pooling_ratio = np.ones(inputs.shape.ndims)
+    axis = 1 if data_format == 'channels_last' else 2
+    _pooling_ratio[axis:axis+dim] = pooling_ratio
+    _pooling_ratio = list(_pooling_ratio)
 
     if dim == 1:
         with tf.variable_scope(kwargs.get('name') or 'fractional_max_pooling'):
-            axis = 2
+            axis = 2 if data_format == 'channels_last' else -1
             x = tf.expand_dims(inputs, axis=axis)
-            x = tf.nn.fractional_max_pool(x, pooling_ratio, pseudo_random, overlapping, **kwargs)
+            _pooling_ratio[axis] = 1
+            x, _, _ = tf.nn.fractional_max_pool(x, _pooling_ratio, pseudo_random, overlapping, **kwargs)
             x = tf.squeeze(x, [axis])
     elif dim == 2:
-        x = tf.nn.fractional_max_pool(inputs, pooling_ratio, pseudo_random, overlapping, **kwargs)
+        x, _, _ = tf.nn.fractional_max_pool(inputs, _pooling_ratio, pseudo_random, overlapping, **kwargs)
     else:
         raise ValueError("Number of dimensions in the inputs tensor should be 1 or 2, but given %d" % dim)
 

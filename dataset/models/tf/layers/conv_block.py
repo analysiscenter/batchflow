@@ -163,7 +163,7 @@ def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
 
     ::
 
-        x = conv_block(dim, x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
+        x = conv_block(x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
     """
     layout = layout or ''
     layout = layout.replace(' ', '')
@@ -237,17 +237,21 @@ def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
             elif layer == 'r':
                 args = dict(pooling_ratio=kwargs.get('pooling_ratio', 1.4142),
                             pseudo_random=kwargs.get('pseudo_random', False),
-                            overlapping=kwargs.get('overlapping', False), padding=padding, data_format=data_format)
-
-            elif C_GROUPS[layer] == 'p':
-                args = dict(dim=dim, pool_size=pool_size, strides=pool_strides, padding=padding,
+                            overlapping=kwargs.get('overlapping', False),
                             data_format=data_format)
 
-            elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
-                args = dict(rate=dropout_rate, training=is_training)
+            elif C_GROUPS[layer] == 'p':
+                args = dict(pool_size=pool_size, strides=pool_strides, padding=padding,
+                            data_format=data_format)
+
+            elif layer == 'd':
+                if dropout_rate:
+                    args = dict(rate=dropout_rate, training=is_training)
+                else:
+                    skip_layer = True
 
             elif layer in ['P', 'V']:
-                args = dict(dim=dim, data_format=data_format)
+                args = dict(data_format=data_format)
 
             elif layer == 'm':
                 args = dict(data_format=data_format)

@@ -131,7 +131,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def block(cls, inputs, filters, resnext, resnext_factor, bottleneck, bottleneck_factor, name,
+    def block(cls, inputs, filters, resnext=0, resnext_factor=1, bottleneck=0, bottleneck_factor=4, name=None,
               strides=1, se_block=False, se_factor=16, **kwargs):
         """ A network building block
 

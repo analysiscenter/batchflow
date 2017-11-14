@@ -26,7 +26,7 @@ def conv(dim, *args, **kwargs):
     return layer_fn(*args, **kwargs)
 
 def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
-                     *args, **kwargs):
+                     **kwargs):
     """ Transposed 1D convolution layer
 
     Parameters
@@ -52,11 +52,11 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', d
     axis = -1 if data_format == 'channels_last' else 1
     up_tensor = tf.expand_dims(inputs, axis=axis)
     conv_output = tf.layers.conv2d_transpose(up_tensor, filters=filters, kernel_size=(1, kernel_size),
-                                             strides=(1, strides), *args, **kwargs)
+                                             strides=(1, strides), padding=padding, **kwargs)
     output = tf.squeeze(conv_output, [axis])
     return output
 
-def conv_transpose(dim, inputs, filters, kernel_size, strides, *args, **kwargs):
+def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     """ Transposed Nd convolution layer
 
     Parameters
@@ -82,6 +82,7 @@ def conv_transpose(dim, inputs, filters, kernel_size, strides, *args, **kwargs):
     `tf.layers.conv2d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv2d_transpose>`_,
     `tf.layers.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d_transpose>`_
     """
+    dim = inputs.shape.ndims - 2
     if dim == 1:
         output = conv1d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
     elif dim == 2:
@@ -91,7 +92,7 @@ def conv_transpose(dim, inputs, filters, kernel_size, strides, *args, **kwargs):
     return output
 
 
-def separable_conv(dim, inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
+def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
                    dilation_rate=1, depth_multiplier=1, activation=None, name=None, *args, **kwargs):
     """ Make Nd depthwise convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
@@ -128,6 +129,7 @@ def separable_conv(dim, inputs, filters, kernel_size, strides=1, padding='same',
     tf.Tensor
 
     """
+    dim = inputs.shape.ndims - 2
     conv_layer = _CONV_LAYERS[dim]
 
     if dim == 2:
@@ -153,7 +155,6 @@ def separable_conv(dim, inputs, filters, kernel_size, strides=1, padding='same',
             start = [0] * (dim + 2)
             start[axis] = channel
 
-            print('--', channel, start, size, inputs_shape)
             input_slice = tf.slice(inputs, start, size)
             slice_conv = conv_layer(input_slice, depth_multiplier, kernel_size, strides, padding, data_format,
                                     dilation_rate, activation, name='slice-%d' % channel, *args, **kwargs)
@@ -183,7 +184,7 @@ def separable_conv1d(inputs, filters, kernel_size, strides=1, padding='same', da
     --------
     :func:`.separable_conv`
     """
-    return separable_conv(1, inputs, filters, kernel_size, strides, padding, data_format,
+    return separable_conv(inputs, filters, kernel_size, strides, padding, data_format,
                           dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
 
 def separable_conv2d(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
@@ -201,7 +202,7 @@ def separable_conv2d(inputs, filters, kernel_size, strides=1, padding='same', da
     `tf.layers.separable_conv2d <https://www.tensorflow.org/api_docs/python/tf/layers/separable_conv2d>`_
     is implemented using CUDA and, as a result, much faster.
     """
-    return separable_conv(2, inputs, filters, kernel_size, strides, padding, data_format,
+    return separable_conv(inputs, filters, kernel_size, strides, padding, data_format,
                           dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
 
 def separable_conv3d(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
@@ -213,5 +214,5 @@ def separable_conv3d(inputs, filters, kernel_size, strides=1, padding='same', da
     --------
     :func:`.separable_conv`
     """
-    return separable_conv(3, inputs, filters, kernel_size, strides, padding, data_format,
+    return separable_conv(inputs, filters, kernel_size, strides, padding, data_format,
                           dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
