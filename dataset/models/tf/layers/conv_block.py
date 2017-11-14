@@ -1,4 +1,5 @@
 """ Contains convolution layers """
+# pylint:disable=too-many-statements
 import tensorflow as tf
 
 from .core import mip, flatten
