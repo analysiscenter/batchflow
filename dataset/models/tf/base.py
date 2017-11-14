@@ -901,7 +901,7 @@ class TFModel(BaseModel):
         if np.abs(input_shape - image_size).sum() > 0:
             begin = [0] * inputs.shape.ndims
             if data_format == "channels_last":
-                size = [-1] + image_size + [1]
+                size = [-1] + image_size + [-1]
             else:
                 size = [-1, -1] + image_size
             x = tf.slice(inputs, begin=begin, size=size)
@@ -1028,22 +1028,24 @@ class TFModel(BaseModel):
                 ctx.__enter__()
             else:
                 ctx = None
+            attr_prefix = current_prefix + '_' if current_prefix else ''
 
             x = tf.identity(tensor, name='predictions')
             for oper in ops:
                 if oper == 'proba':
-                    tf.nn.softmax(x, name='predicted_proba')
+                    proba = tf.nn.softmax(x, name='predicted_proba')
+                    self.store_to_attr(attr_prefix + 'predicted_proba', proba)
                 elif oper == 'labels':
                     data_format = kwargs.get('data_format')
                     channels_axis = self.channels_axis(data_format)
-                    tf.argmax(x, axis=channels_axis, name='predicted_labels')
+                    predicted_labels = tf.argmax(x, axis=channels_axis, name='predicted_labels')
+                    self.store_to_attr(attr_prefix + 'predicted_labels', predicted_labels)
                 elif oper == 'accuracy':
                     true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
                     current_scope = self.graph.get_name_scope() + '/'
                     predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
                     equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
                     accuracy = tf.reduce_mean(equals, name='accuracy')
-                    attr_prefix = current_prefix + '_' if current_prefix else ''
                     self.store_to_attr(attr_prefix + 'accuracy', accuracy)
 
             if ctx:
