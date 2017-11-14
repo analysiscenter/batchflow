@@ -25,7 +25,7 @@ class MyModel(TFModel):
         return config
 
     def body(self, inputs, **kwargs):
-        x = conv_block(inputs, [16, 32, 64], 3, layout='cnap cnap cnar', depth_multiplier=[1, 2, 2], **kwargs)
+        x = conv_block(inputs, 16, 3, layout='cnav cnav cnav', pseudo_random=True, overlapping=True, **kwargs)
         return x
 
 class MyBatch(ImagesBatch):
@@ -62,28 +62,58 @@ if __name__ == "__main__":
                                      feed_dict={V('input_tensor_name'): B('images'),
                                                 'labels': B('digits')},
                              save_to=V('current_loss'))
-                .print_variable('current_loss')
+                #.print_variable('current_loss')
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
-    train_pp = (train_tp << mnist.train)
-    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+    #train_pp = (train_tp << mnist.train)
+    train_pp = (train_tp << mnist.train).run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
     print("End training", time() - t)
 
 
     print()
     print("Start testing...")
     t = time()
-    test_pp = (mnist.test.p
-                .import_model('conv', train_pp)
-                .init_variable('accuracy', init_on_each_run=list)
-                .make_digits()
-                .predict_model('conv', fetches='accuracy', feed_dict={'images': B('images'),
-                                                                      'labels': B('digits')},
-                               save_to=V('accuracy'), mode='a')
-                .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False, prefetch=0))
+    test_tp = (Pipeline()
+        .import_model('conv', train_pp)
+        .init_variable('accuracy', init_on_each_run=list)
+        .make_digits()
+        .predict_model('conv', fetches='accuracy', feed_dict={'images': B('images'),
+                                                              'labels': B('digits')},
+                       save_to=V('accuracy'), mode='a')
+    )
+    test_pp = (test_tp << mnist.test).run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
     print("End testing", time() - t)
 
     accuracy = test_pp.get_variable('accuracy')
     print('Accuracy {:6.2f}'.format(np.array(accuracy).mean()))
 
-    conv = train_pp.get_model_by_name("conv")
+    for i in range(3):
+        train_pp = None
+        test_tp = None
+        test_pp = None
+        print("Start training...")
+        t = time()
+        train_pp = (train_tp << mnist.train)
+        print('.... run', train_pp)
+        train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+        print("End training", time() - t)
+
+        test_tp = None
+        test_tp = (Pipeline()
+            .import_model('conv', train_pp)
+            .init_variable('accuracy', init_on_each_run=list)
+            .make_digits()
+            .predict_model('conv', fetches='accuracy', feed_dict={'images': B('images'),
+                                                                  'labels': B('digits')},
+                           save_to=V('accuracy'), mode='a')
+        )
+
+        print("Start testing...")
+        t = time()
+        test_pp = (test_tp << mnist.test)
+        print('.... run', test_pp)
+        test_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+        print("End testing", time() - t)
+
+        accuracy = test_pp.get_variable('accuracy')
+        print('                            Accuracy {:6.2f}'.format(np.array(accuracy).mean()))

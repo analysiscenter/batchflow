@@ -167,6 +167,12 @@ def fractional_max_pooling(inputs, pooling_ratio, pseudo_random=False, overlappi
     Returns
     -------
     tf.Tensor
+
+    Notes
+    -----
+    Be aware that it is not thread safe.
+    ``tf.nn.fractional_max_pool>`` will likely cause segmentation fault in a multi-threading environment
+    (e.g. in a pipeline with prefetch)
     """
     dim = inputs.shape.ndims - 2
 
