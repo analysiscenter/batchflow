@@ -1027,7 +1027,8 @@ class Pipeline:
                 yield batch
 
 
-    def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, on_iter=None,
+                  *args, **kwargs):
         """ Generate batches """
         target = kwargs.pop('target', 'threads')
         self._tf_session = kwargs.pop('tf_session', None)
@@ -1063,6 +1064,8 @@ class Pipeline:
                     yield batch_res
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
+                    if callable(on_iter):
+                        on_iter(batch_res)
                 else:
                     self._stop_flag = True
         else:
@@ -1073,6 +1076,8 @@ class Pipeline:
                     pass
                 else:
                     yield batch_res
+                    if callable(on_iter):
+                        on_iter(batch_res)
 
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all previous lazy actions """
