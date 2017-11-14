@@ -141,7 +141,7 @@ def global_max_pooling(dim, inputs, data_format='channels_last', name=None):
 
 
 def fractional_max_pooling(inputs, pooling_ratio, pseudo_random=False, overlapping=False,
-                           padding='valid', data_format='channels_last', **kwargs):
+                           padding='valid', **kwargs):
     """ Multi-dimensional global max-pooling layer.
 
     Parameters
@@ -165,9 +165,9 @@ def fractional_max_pooling(inputs, pooling_ratio, pseudo_random=False, overlappi
 
     if dim == 1:
         with tf.variable_scope(kwargs.get('name') or 'fractional_max_pooling'):
-            axis = -1 if data_format == 'channels_last' else 1
+            axis = 2
             x = tf.expand_dims(inputs, axis=axis)
-            x = tf.nn.fractional_max_pool(x, (pooling_ratio, 1), pseudo_random, overlapping, **kwargs)
+            x = tf.nn.fractional_max_pool(x, pooling_ratio, pseudo_random, overlapping, **kwargs)
             x = tf.squeeze(x, [axis])
     elif dim == 2:
         x = tf.nn.fractional_max_pool(inputs, pooling_ratio, pseudo_random, overlapping, **kwargs)
