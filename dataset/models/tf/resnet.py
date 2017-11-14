@@ -107,7 +107,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def double_block(cls, inputs, filters, bottleneck, name, strides=1, **kwargs):
+    def double_block(cls, inputs, filters, name, strides=1, **kwargs):
         """ Two ResNet blocks one after another
 
         Parameters
@@ -126,12 +126,12 @@ class ResNet(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            x = cls.block(inputs, filters, bottleneck=bottleneck, name='block-1', strides=strides, **kwargs)
-            x = cls.block(x, filters, bottleneck=bottleneck, name='block-2', strides=1, **kwargs)
+            x = cls.block(inputs, filters, name='block-1', strides=strides, **kwargs)
+            x = cls.block(x, filters, name='block-2', strides=1, **kwargs)
         return x
 
     @classmethod
-    def block(cls, inputs, filters, resnext=0, resnext_factor=1, bottleneck=0, bottleneck_factor=4, name=None,
+    def block(cls, inputs, filters, resnext=0, resnext_factor=16, bottleneck=0, bottleneck_factor=4, name=None,
               strides=1, se_block=False, se_factor=16, **kwargs):
         """ A network building block
 

@@ -114,7 +114,7 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        return ResNet.double_block(inputs, filters, bottleneck=False, name=name, strides=2, **kwargs)
+        return ResNet.double_block(inputs, filters, name=name, strides=2, **kwargs)
 
     @classmethod
     def upsampling_block(cls, inputs, filters, name, **kwargs):
