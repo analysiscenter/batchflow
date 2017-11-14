@@ -267,6 +267,8 @@ class TFModel(BaseModel):
             value : tf.Tensor
                 placeholder tensor after reshaping and transformations
         """
+        # pylint:disable=too-many-statements
+
         config = self.get_from_config('inputs') or {}
         config = copy1(config)
 
