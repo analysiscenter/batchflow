@@ -155,8 +155,7 @@ class ResNet(TFModel):
 
         Returns
         -------
-        tf. tensor
-            output tensor
+        tf.Tensor
         """
         with tf.variable_scope(name):
             if resnext:
@@ -203,8 +202,7 @@ class ResNet(TFModel):
 
         Returns
         -------
-        tf. tensor
-            output tensor
+        tf.Tensor
         """
         if bottleneck:
             x = cls.bottleneck_block(inputs, filters, bottleneck_factor, name, strides=strides, **kwargs)
@@ -228,8 +226,7 @@ class ResNet(TFModel):
 
         Returns
         -------
-        tf. tensor
-            output tensor
+        tf.Tensor
         """
         return conv_block(inputs, filters, 3, layout='cnacn', name=name, strides=[strides, 1], **kwargs)
 
@@ -304,8 +301,7 @@ class ResNet(TFModel):
 
         Returns
         -------
-        tf. tensor
-            output tensor
+        tf.Tensor
         """
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
