@@ -923,10 +923,11 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
+        kwargs = cls.make_params('input_block', **kwargs)
         return conv_block(inputs, name=name, **kwargs)
 
     @classmethod
-    def body(cls, *args, name='body', **kwargs):
+    def body(cls, inputs, name='body', **kwargs):
         """ Base layers which produce a network embedding
 
         Parameters
@@ -943,7 +944,8 @@ class TFModel(BaseModel):
 
             MyModel.body(2, inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
         """
-        return cls.block(*args, name=name, **kwargs)
+        kwargs = cls.make_params('body', **kwargs)
+        return cls.block(inputs, name=name, **kwargs)
 
     @classmethod
     def block(cls, *args, **kwargs):
@@ -981,6 +983,7 @@ class TFModel(BaseModel):
 
             MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
+        kwargs = cls.make_params('head', **kwargs)
         x = conv_block(inputs, name=name, **kwargs)
         return x
 
@@ -1006,6 +1009,8 @@ class TFModel(BaseModel):
         ValueError if the number of outputs does not equal to the number of prefixes
         TypeError if inputs is not a Tensor or a sequence of Tensors
         """
+        kwargs = self.make_params('output', **kwargs)
+
         if ops is None:
             ops = []
         elif not isinstance(ops, (list, tuple)):
@@ -1054,6 +1059,25 @@ class TFModel(BaseModel):
                 ctx.__exit__(None, None, None)
 
 
+    @classmethod
+    def _default_config(cls, name=None):
+        """ Define a model defaults """
+        config = {}
+        config['default'] = {'batch_norm': {'momentum': .1}}
+        config['input_block'] = {}
+        config['body'] = {}
+        config['head'] = {}
+        config['output'] = {}
+
+        if name is not None:
+            return config[name]
+        return config
+
+    @classmethod
+    def make_params(cls, name, **kwargs):
+        config = cls._default_config(name)
+        return {**config, **kwargs}
+
     def _build_config(self, names=None):
         """ Define a model architecture configuration
 
@@ -1083,12 +1107,12 @@ class TFModel(BaseModel):
         with tf.variable_scope('inputs'):
             self._make_inputs(names)
 
-        config = {}
-        config['default'] = self.get_from_config('default', {'batch_norm': {'momentum': .1}})
-        config['input_block'] = self.get_from_config('input_block', {})
-        config['body'] = self.get_from_config('body', {})
-        config['head'] = self.get_from_config('head', {})
-        config['output'] = self.get_from_config('output', {})
+        config = self._default_config()
+        config['default'] = {**config['default'], **self.get_from_config('default', {})}
+        config['input_block'] = {**config['input_block'], **self.get_from_config('input_block', {})}
+        config['body'] = {**config['body'], **self.get_from_config('body', {})}
+        config['head'] = {**config['head'], **self.get_from_config('head', {})}
+        config['output'] = {**config['output'], **self.get_from_config('output', {})}
         return config
 
 

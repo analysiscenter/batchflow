@@ -59,8 +59,8 @@ class ResNet(TFModel):
 
         config['default']['data_format'] = self.data_format('images')
 
-        config['input_block'] = {**dict(filters=64, kernel_size=7, layout='cnap',
-                                        strides=2, pool_size=3, pool_strides=2),
+        config['input_block'] = {**dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2),
                                  **config['input_block']}
         config['input_block']['inputs'] = self.inputs['images']
 
@@ -155,8 +155,7 @@ class ResNet(TFModel):
 
         Returns
         -------
-        tf. tensor
-            output tensor
+        tf.Tensor
         """
         with tf.variable_scope(name):
             if resnext:
@@ -203,8 +202,7 @@ class ResNet(TFModel):
 
         Returns
         -------
-        tf. tensor
-            output tensor
+        tf.Tensor
         """
         if bottleneck:
             x = cls.bottleneck_block(inputs, filters, bottleneck_factor, name, strides=strides, **kwargs)
@@ -228,8 +226,7 @@ class ResNet(TFModel):
 
         Returns
         -------
-        tf. tensor
-            output tensor
+        tf.Tensor
         """
         return conv_block(inputs, filters, 3, layout='cnacn', name=name, strides=[strides, 1], **kwargs)
 
@@ -245,8 +242,8 @@ class ResNet(TFModel):
             input tensor
         filters : int
             number of filters in the first two convolutions
-        out_filters : int
-            number of filters in the last convolution
+        bottleneck_factor : int
+            scale factor for the number of filters
 
         Returns
         -------
@@ -298,14 +295,14 @@ class ResNet(TFModel):
 
         Parameters
         ----------
-
         inputs : tf.Tensor
             input tensor
+        ration : int
+            squeeze ratio for the number of filters
 
         Returns
         -------
-        tf. tensor
-            output tensor
+        tf.Tensor
         """
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')

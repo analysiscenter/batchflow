@@ -7,7 +7,11 @@ from . import TFModel
 
 class UNet(TFModel):
     """ UNet
-    https://arxiv.org/abs/1505.04597 (O.Ronneberger et al, 2015)
+
+    References
+    ----------
+    .. Ronneberger O. et al ""
+       Arxiv.org `<https://arxiv.org/abs/1505.04597>`_
 
     **Configuration**
 

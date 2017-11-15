@@ -714,7 +714,7 @@ class Pipeline:
         Would call a `resnet` model `train` method with a `feed_dict` argument:
         ``resnet.train(feed_dict={'x': batch.images})``
 
-        >>> pipeline.train_model('resnet', C(MyBatch.make_resnet_data))
+        >>> pipeline.train_model('resnet', MyBatch.make_resnet_data)
         Equivalent to::
 
             train_data = batch.make_resnet_data(resnet_model)
@@ -768,17 +768,17 @@ class Pipeline:
 
         >>> pipeline
             .init_variable('inferred_masks', init_on_each_run=list)
-            .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': B('images')},
+            .predict_model('tf_unet', fetches='predictions', feed_dict={'x': B('images')},
                            save_to=V('inferred_masks'))
         Would call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
-        ``predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})``
+        ``predictions = tf_unet.train(fetches='predictions', feed_dict={'x': batch.images})``
         Predictions for each batch will be stored in a pipeline variable `inferred_masks`.
 
-        >>> pipeline.train_model('deepnet', MyBatch.make_deepnet_data)
+        >>> pipeline.predict_model('deepnet', MyBatch.make_deepnet_data)
         Equivalent to::
 
             predict_data = batch.make_deepnet_data(model=deepnet_model)
-            deepnet_model.train(**predict_data)
+            deepnet_model.predict(**predict_data)
         """
         self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
                                   'save_to': save_to, 'mode': mode})
