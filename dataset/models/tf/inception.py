@@ -37,8 +37,8 @@ class Inception_v1(TFModel):
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
     """
     @classmethod
-    def _default_config(cls):
-        config = TFModel._default_config()
+    def default_config(cls):
+        config = TFModel.default_config()
         config['input_block'].update(dict(layout='cnp cn cn p', filters=[64, 64, 192],
                                           kernel_size=[7, 3, 3], strides=[2, 1, 1],
                                           pool_size=3, pool_strides=2))
@@ -73,13 +73,15 @@ class Inception_v1(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
+        filters = kwargs.pop('filters')
+        layout = kwargs.pop('layout')
 
         with tf.variable_scope(name):
             x = inputs
             block_no = 0
             for i, layer in enumerate(kwargs['arch']):
                 if layer == 'b':
-                    x = cls.block(x, filters[block_no], layout=kwargs['layout'], name='block-%d' % i, **kwargs)
+                    x = cls.block(x, filters[block_no], layout=layout, name='block-%d' % i, **kwargs)
                     block_no += 1
                 elif layer == 'p':
                     x = conv_block(x, layout='p', name='max-pooling-%d' % i, **kwargs)

@@ -30,8 +30,8 @@ class UNet(TFModel):
             number of semantic classes
     """
     @classmethod
-    def _default_config(cls):
-        config = TFModel._default_config()
+    def default_config(cls):
+        config = TFModel.default_config()
 
         filters = 64   # number of filters in the first block
 

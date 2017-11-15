@@ -1048,7 +1048,7 @@ class TFModel(BaseModel):
 
 
     @classmethod
-    def _default_config(cls):
+    def default_config(cls):
         """ Define a model defaults """
         config = {}
         config['common'] = {'batch_norm': {'momentum': .1}}
@@ -1061,7 +1061,7 @@ class TFModel(BaseModel):
     @classmethod
     def fill_params(cls, _name, **kwargs):
         """ Fill block params from default config and kwargs """
-        config = cls._default_config()
+        config = cls.default_config()
         config = {**config['common'], **config[_name], **kwargs}
         return config
 
@@ -1094,7 +1094,7 @@ class TFModel(BaseModel):
         with tf.variable_scope('inputs'):
             self._make_inputs(names)
 
-        config = self._default_config()
+        config = self.default_config()
         config['common'] = {**config['common'], **self.get_from_config('common', {})}
         config['input_block'] = {**config['input_block'], **self.get_from_config('input_block', {})}
         config['body'] = {**config['body'], **self.get_from_config('body', {})}

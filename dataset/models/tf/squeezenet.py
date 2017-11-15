@@ -27,8 +27,8 @@ class SqueezeNet(TFModel):
             - b : bypass
     """
     @classmethod
-    def _default_config(cls):
-        config = TFModel._default_config()
+    def default_config(cls):
+        config = TFModel.default_config()
 
         config['input_block'].update(dict(layout='cnap', filters=96, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))

@@ -14,8 +14,8 @@ class FCN(TFModel):
        Arxiv.org `<https://arxiv.org/abs/1605.06211>`_
     """
     @classmethod
-    def _default_config(cls):
-        config = TFModel._default_config()
+    def default_config(cls):
+        config = TFModel.default_config()
 
         config['common']['dropout_rate'] = .5
         config['input_block']['input_class'] = VGG16
@@ -97,7 +97,8 @@ class FCN(TFModel):
         factor = kwargs.pop('factor')
         image_size = kwargs.pop('image_size')
 
-        x = conv_block(inputs, filters=num_classes, kernel_size=filters, layout='t', name=name, **{**kwargs, 'strides': factor})
+        x = conv_block(inputs, filters=num_classes, kernel_size=filters, layout='t', name=name,
+                       **{**kwargs, 'strides': factor})
         x = cls.crop(x, shape=image_size, data_format=kwargs.get('data_format'))
         return x
 
@@ -122,8 +123,8 @@ class FCN32(FCN):
             number of filters in the final upsampling block (default=32)
     """
     @classmethod
-    def _default_config(cls):
-        config = FCN._default_config()
+    def default_config(cls):
+        config = FCN.default_config()
         config['head']['filters'] = 32
         config['head']['factor'] = 32
         return config
@@ -176,8 +177,8 @@ class FCN16(FCN):
             number of filters in the final upsampling block (default=32)
     """
     @classmethod
-    def _default_config(cls):
-        config = FCN._default_config()
+    def default_config(cls):
+        config = FCN.default_config()
         config['head']['filters'] = 16
         config['head']['factor'] = 16
         config['input_block']['skip_name'] = '/input_block/body/block-3/output:0'
@@ -249,8 +250,8 @@ class FCN8(FCN):
             number of filters in the final upsampling block (default=32)
     """
     @classmethod
-    def _default_config(cls):
-        config = FCN._default_config()
+    def default_config(cls):
+        config = FCN.default_config()
         config['head']['filters'] = 8
         config['head']['factor'] = 8
         config['input_block']['skip1_name'] = '/input_block/body/block-3/output:0'

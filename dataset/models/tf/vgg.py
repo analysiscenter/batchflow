@@ -49,8 +49,8 @@ class VGG(TFModel):
         - whether to downscale the image at the end of the block with max_pooling (2x2, stride=2)
     """
     @classmethod
-    def _default_config(cls):
-        config = TFModel._default_config()
+    def default_config(cls):
+        config = TFModel.default_config()
         config['block'] = dict(layout='cna')
         config['head']['units'] = [4096, 4096]
         return config
@@ -128,8 +128,8 @@ class VGG(TFModel):
 class VGG16(VGG):
     """ VGG16 network """
     @classmethod
-    def _default_config(cls):
-        config = VGG._default_config()
+    def default_config(cls):
+        config = VGG.default_config()
         config['body']['arch'] = _VGG16_ARCH
         return config
 
@@ -137,8 +137,8 @@ class VGG16(VGG):
 class VGG19(VGG):
     """ VGG19 network """
     @classmethod
-    def _default_config(cls):
-        config = VGG._default_config()
+    def default_config(cls):
+        config = VGG.default_config()
         config['body']['arch'] = _VGG19_ARCH
         return config
 
@@ -146,7 +146,7 @@ class VGG19(VGG):
 class VGG7(VGG):
     """ VGG7 network """
     @classmethod
-    def _default_config(cls):
-        config = VGG._default_config()
+    def default_config(cls):
+        config = VGG.default_config()
         config['body']['arch'] = _VGG7_ARCH
         return config

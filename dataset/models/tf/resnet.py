@@ -53,8 +53,8 @@ class ResNet(TFModel):
             the number of aggregations in ResNeXt block (default=32)
     """
     @classmethod
-    def _default_config(cls):
-        config = TFModel._default_config()
+    def default_config(cls):
+        config = TFModel.default_config()
         config['input_block'].update(dict(layout='cnap', filters=64, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
 
@@ -70,13 +70,8 @@ class ResNet(TFModel):
         names = names if names else ['images', 'labels']
         config = super()._build_config(names)
 
-        filters = self.get_from_config('filters', 64)
-
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
-
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['filters'])) * filters * config['block']['width_factor']
-
         config['head']['units'] = self.num_classes('labels')
 
         return config
@@ -352,8 +347,8 @@ class ResNet18(ResNet):
        Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
     """
     @classmethod
-    def _default_config(cls):
-        config = ResNet._default_config()
+    def default_config(cls):
+        config = ResNet.default_config()
 
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [2, 2, 2, 2]
@@ -372,8 +367,8 @@ class ResNet34(ResNet):
        Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
     """
     @classmethod
-    def _default_config(cls):
-        config = ResNet._default_config()
+    def default_config(cls):
+        config = ResNet.default_config()
 
         config['body']['num_blocks'] = [3, 4, 6, 3]
         filters = 64   # number of filters in the first block
@@ -392,8 +387,8 @@ class ResNet50(ResNet):
        Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
     """
     @classmethod
-    def _default_config(cls):
-        config = ResNet34._default_config()
+    def default_config(cls):
+        config = ResNet34.default_config()
         config['block']['bottleneck'] = True
         return config
 
@@ -407,8 +402,8 @@ class ResNet101(ResNet):
        Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
     """
     @classmethod
-    def _default_config(cls):
-        config = ResNet._default_config()
+    def default_config(cls):
+        config = ResNet.default_config()
 
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [3, 4, 23, 3]
@@ -427,8 +422,8 @@ class ResNet152(ResNet):
        Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
     """
     @classmethod
-    def _default_config(cls):
-        config = ResNet._default_config()
+    def default_config(cls):
+        config = ResNet.default_config()
 
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [3, 8, 63, 3]
