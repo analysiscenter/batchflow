@@ -44,7 +44,6 @@ class SqueezeNet(TFModel):
         num_blocks = len(config['body']['layout'])
         layers_filters = self.get_from_config('filters', 16) * 2 ** np.arange(num_blocks//2)
         layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
-        print(layers_filters)
         config['body']['filters'] = self.get_from_config('body/filters', layers_filters)
 
         config['head'] = {**dict(layout='dcnaV', filters=self.num_classes('labels'),

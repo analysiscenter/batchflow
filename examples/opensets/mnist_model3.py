@@ -20,7 +20,7 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_model('dynamic', ResNet18, 'conv',
+                .init_model('dynamic', SqueezeNet, 'conv',
                             config={'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'inputs': dict(images={'shape': (28, 28, 1)},
