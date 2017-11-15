@@ -39,6 +39,7 @@ class SqueezeNet(TFModel):
         config['input_block']['inputs'] = self.inputs['images']
 
         config['body']['layout'] = self.get_from_config('layout', 'fffmffffmf')
+        #config['body']['layout'] = self.get_from_config('layout', 'ffbfmbffbffmbf')
 
         num_blocks = len(config['body']['layout'])
         layers_filters = self.get_from_config('filters', 16) * 2 ** np.arange(num_blocks//2)
@@ -60,8 +61,6 @@ class SqueezeNet(TFModel):
             input tensor
         layout : str
             a sequence of block types
-            - f : fire
-            - m : max-pooling
         name : str
             scope name
 
@@ -75,19 +74,18 @@ class SqueezeNet(TFModel):
             for i, block in enumerate(layout):
                 if block == 'b':
                     bypass = x
-                else:
-                    if block == 'f':
-                        x = cls.fire_block(x, filters=filters[i], name='fire-block-%d' % i, **kwargs)
-                    elif block == 'm':
-                        x = conv_block(x, layout='p', name='max-pool-%d' % i, **kwargs)
-                    if bypass:
-                        bypass_channels = cls.channels_shape(bypass, data_format)
-                        x_channels = cls.channels_shape(x, data_format)
+                if block == 'f':
+                    x = cls.fire_block(x, filters=filters[i], name='fire-block-%d' % i, **kwargs)
+                elif block == 'm':
+                    x = conv_block(x, layout='p', name='max-pool-%d' % i, **kwargs)
+                if bypass is not None:
+                    bypass_channels = cls.channels_shape(bypass, kwargs.get('data_format'))
+                    x_channels = cls.channels_shape(x, kwargs.get('data_format'))
 
-                        if x_channels != bypass_filters:
-                            bypass = conv_block(bypass, num_filters, 1, 'c', name='bypass', **kwargs)
-                        x = x + bypass
-                        bypass = None
+                    if x_channels != bypass_channels:
+                        bypass = conv_block(bypass, x_channels, 1, 'c', name='bypass-%d' % i, **kwargs)
+                    x = x + bypass
+                    bypass = None
         return x
 
     @classmethod
