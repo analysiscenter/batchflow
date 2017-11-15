@@ -20,12 +20,11 @@ class SqueezeNet(TFModel):
 
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
-    layout : list of tuples
-        A list should contain tuples of 4 ints:
-        - number of convolution layers with 3x3 kernel
-        - number of convolution layers with 1x1 kernel
-        - number of filters in each layer
-        - whether to downscale the image at the end of the block with max_pooling (2x2, stride=2)
+    layout : str
+        A sequence of blocks:
+        - f : fire block
+        - m : max-pooling
+        - b : bypass
     """
 
     def _build_config(self, names=None):
@@ -71,12 +70,24 @@ class SqueezeNet(TFModel):
         tf.Tensor
         """
         x = inputs
+        bypass = None
         with tf.variable_scope(name):
             for i, block in enumerate(layout):
-                if block == 'f':
-                    x = cls.fire_block(x, filters=filters[i], name='fire-block-%d' % i, **kwargs)
-                elif block == 'm':
-                    x = conv_block(x, layout='p', name='max-pool-%d' % i, **kwargs)
+                if block == 'b':
+                    bypass = x
+                else:
+                    if block == 'f':
+                        x = cls.fire_block(x, filters=filters[i], name='fire-block-%d' % i, **kwargs)
+                    elif block == 'm':
+                        x = conv_block(x, layout='p', name='max-pool-%d' % i, **kwargs)
+                    if bypass:
+                        bypass_channels = cls.channels_shape(bypass, data_format)
+                        x_channels = cls.channels_shape(x, data_format)
+
+                        if x_channels != bypass_filters:
+                            bypass = conv_block(bypass, num_filters, 1, 'c', name='bypass', **kwargs)
+                        x = x + bypass
+                        bypass = None
         return x
 
     @classmethod
