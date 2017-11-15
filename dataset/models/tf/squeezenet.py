@@ -98,9 +98,9 @@ class SqueezeNet(TFModel):
         with tf.variable_scope(name):
             x = conv_block(inputs, filters, 1, layout=layout, name='squeeze-1x1', **kwargs)
 
-            x1 = conv_block(x, filters*4, 1, layout=layout, name='expand-1x1', **kwargs)
-            x3 = conv_block(x, filters*4, 3, layout=layout, name='expand-3x3', **kwargs)
+            exp1 = conv_block(x, filters*4, 1, layout=layout, name='expand-1x1', **kwargs)
+            exp3 = conv_block(x, filters*4, 3, layout=layout, name='expand-3x3', **kwargs)
 
             axis = cls.channels_axis(kwargs.get('data_format'))
-            x = tf.concat([x1, x3], axis=axis)
+            x = tf.concat([exp1, exp3], axis=axis)
         return x
