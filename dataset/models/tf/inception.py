@@ -1,26 +1,26 @@
 """ Contains inception_v1 network: https://arxiv.org/abs/1409.4842 """
 import tensorflow as tf
 
-
 from . import TFModel
 from .layers import conv_block
 
 
-_DEFAULT_BODY_ARCH = [
-    {'conv': [[64, 96, 128, 16, 32, 32],
-              [128, 128, 192, 32, 96, 64]],
-     'max_pooling': dict(pool_size=3, pool_strides=2)},
-
-    {'conv': [[192, 96, 208, 16, 48, 64],
-              [160, 112, 224, 24, 64, 64],
-              [128, 128, 256, 24, 64, 64],
-              [112, 144, 288, 32, 64, 64],
-              [256, 160, 320, 32, 128, 128]],
-     'max_pooling': dict(pool_size=3, pool_strides=2)},
-
-    {'conv': [[256, 160, 320, 32, 128, 128],
-              [384, 192, 384, 48, 128, 128]]}
-]
+_DEFAULT_V1_ARCH = {
+    'arch' : 'bbmbbbbbmbb',
+    'layout': 'cn',
+    'filters': [
+        [64, 96, 128, 16, 32, 32],
+        [128, 128, 192, 32, 96, 64],
+        [192, 96, 208, 16, 48, 64],
+        [160, 112, 224, 24, 64, 64],
+        [128, 128, 256, 24, 64, 64],
+        [112, 144, 288, 32, 64, 64],
+        [256, 160, 320, 32, 128, 128],
+        [256, 160, 320, 32, 128, 128],
+        [384, 192, 384, 48, 128, 128]
+    ],
+    'pool_size': 3, 'pool_strides': 2
+}
 
 
 class Inception_v1(TFModel):
@@ -36,25 +36,29 @@ class Inception_v1(TFModel):
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
     """
+    @classmethod
+    def _default_config(cls):
+        config = TFModel._default_config()
+        config['input_block'].update(dict(layout='cnp cn cn p', filters=[64, 64, 192],
+                                          kernel_size=[7, 3, 3], strides=[2, 1, 1],
+                                          pool_size=3, pool_strides=2))
+        config['block'] = dict(layout='cna')
+        config['body']['arch'] = _DEFAULT_V1_ARCH
+        config['head'].update(dict(layout='Vdf', dropout_rate=.4))
+
+        return config
+
     def _build_config(self, names=None):
         names = names if names else ['images', 'labels']
         config = super()._build_config(names)
 
-        config['default']['data_format'] = self.data_format('images')
-
-        config['input_block'] = {**dict(layout='cnp cn cn p', filters=[64, 64, 192],
-                                        kernel_size=[7, 3, 3], strides=[2, 1, 1], pool_size=3),
-                                 **config['input_block']}
+        config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
-
-        config['body']['arch'] = self.get_from_config('body/arch', _DEFAULT_BODY_ARCH)
-
-        config['head'] = {**dict(layout='Vdf', units=self.num_classes('labels'), dropout_rate=.4),
-                          **config['head']}
+        config['head']['units'] = self.num_classes('labels')
         return config
 
     @classmethod
-    def body(cls, inputs, arch, **kwargs):
+    def body(cls, inputs, name='body', **kwargs):
         """ Base layers
 
         Parameters
@@ -68,19 +72,22 @@ class Inception_v1(TFModel):
         -------
         tf.Tensor
         """
-        with tf.variable_scope(kwargs.get('name', 'body')):
+        kwargs = cls.fill_params('body', **kwargs)
+
+        with tf.variable_scope(name):
             x = inputs
-            for i, group_cfg in enumerate(arch):
-                with tf.variable_scope('block-%d' % i):
-                    for j, filters in enumerate(group_cfg['conv']):
-                        x = cls.block(x, filters, name='module-%d' % j, **kwargs)
-                    if 'max_pooling' in group_cfg:
-                        x = conv_block(x, layout='p', name='max-pooling', **kwargs)
+            block_no = 0
+            for i, layer in enumerate(kwargs['arch']):
+                if layer == 'b':
+                    x = cls.block(x, filters[block_no], layout=kwargs['layout'], name='block-%d' % i, **kwargs)
+                    block_no += 1
+                elif layer == 'p':
+                    x = conv_block(x, layout='p', name='max-pooling-%d' % i, **kwargs)
         return x
 
     @classmethod
     def block(cls, inputs, filters, layout='cn', name=None, **kwargs):
-        """ Function contains building block from inception_v1 achitecture
+        """ Inception building block
 
         Parameters
         ----------
@@ -93,6 +100,8 @@ class Inception_v1(TFModel):
             - number of filters in 1x1 conv going before conv 5x5,
             - number of filters in 5x5 conv,
             - number of filters in 1x1 conv going before max-pooling
+        layout : str
+            a sequence of layers in the block. Default is 'cn'.
         name : str
             scope name
 
@@ -100,6 +109,8 @@ class Inception_v1(TFModel):
         -------
         tf.Tensor
         """
+        kwargs = cls.fill_params('block', **kwargs)
+
         with tf.variable_scope(name):
             branch_1 = conv_block(inputs, filters[0], 1, layout, name='conv_1', **kwargs)
 

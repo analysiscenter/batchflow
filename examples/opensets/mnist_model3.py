@@ -26,7 +26,7 @@ if __name__ == "__main__":
                                     'inputs': dict(images={'shape': (28, 28, 1)},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     #'filters': 16, 'width_factor': 1,
-                                    #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=0),
+                                    'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['labels', 'accuracy'])})
                 .train_model('conv', fetches='loss',
                                      feed_dict={'images': B('images'),

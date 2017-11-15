@@ -17,55 +17,47 @@ class UNet(TFModel):
 
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
-    filters : int
-        number of filters in the first and the last convolution (64 by default)
-    num_blocks : int
-        number of downsampling/upsampling blocks (4 by default)
+
+    body : dict
+        num_blocks : int
+            number of downsampling/upsampling blocks (4 by default)
+
+        filters : list of int
+            number of filters in each block
+
+    head : dict
+        num_classes : int
+            number of semantic classes
     """
+    @classmethod
+    def _default_config(cls):
+        config = TFModel._default_config()
+
+        filters = 64   # number of filters in the first block
+
+        config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
+        config['body']['num_blocks'] = 4
+        config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
+        config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
+        return config
 
     def _build_config(self, names=None):
         names = names if names else ['images', 'masks']
         config = super()._build_config(names)
 
-        config['default']['data_format'] = self.data_format('images')
+        config['common']['data_format'] = self.data_format('images')
 
-        filters = self.get_from_config('filters', 64)
-        num_blocks = self.get_from_config('num_blocks', 4)
-
-        config['input_block']['filters'] = self.get_from_config('input_block/filters', filters)
         config['input_block']['inputs'] = self.inputs['images']
 
-        layers_filters = 2 ** np.arange(num_blocks) * filters * 2
+        layers_filters = 2 ** np.arange(config['body']['num_blocks']) * config['input_block']['filters'] * 2
         config['body']['filters'] = self.get_from_config('body/filters', layers_filters)
 
-        config['head']['filters'] = self.get_from_config('head/filters', filters)
         config['head']['num_classes'] = self.num_classes('masks')
 
         return config
 
-
     @classmethod
-    def input_block(cls, inputs, filters, name='input_block', **kwargs):
-        """ 3x3 convolution
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        filters : int
-            number of output filters
-        name : str
-            scope name
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        return conv_block(inputs, filters, 3, layout='cnacna', name=name, **kwargs)
-
-
-    @classmethod
-    def body(cls, inputs, filters, name='body', **kwargs):
+    def body(cls, inputs, name='body', **kwargs):
         """ Base layers
 
         Parameters
@@ -81,6 +73,9 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
+        kwargs = cls.fill_params('body', **kwargs)
+        filters = kwargs.pop('filters')
+
         with tf.variable_scope(name):
             x = inputs
             encoder_outputs = [x]
@@ -140,15 +135,13 @@ class UNet(TFModel):
         return x
 
     @classmethod
-    def head(cls, inputs, filters, num_classes, name='head', **kwargs):
-        """ Two 3x3 convolutions and 1x1 convolution
+    def head(cls, inputs, num_classes, name='head', **kwargs):
+        """ Conv block followed by 1x1 convolution
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
-            number of filters in 3x3 convolutions
         num_classes : int
             number of classes (and number of filters in the last 1x1 convolution)
         name : str
@@ -158,4 +151,8 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        return conv_block(inputs, [filters, filters, num_classes], [3, 3, 1], layout='cnacnac', name=name, **kwargs)
+        kwargs = cls.fill_params('head', **kwargs)
+        with tf.variable_scope(name):
+            x = conv_block(inputs, name='conv', **kwargs)
+            x = conv_block(inputs, name='last', **{**kwargs, **dict(filters=num_classes, kernel_size=1, layout='c')})
+        return x
