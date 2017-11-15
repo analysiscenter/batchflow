@@ -25,7 +25,7 @@ class MyModel(TFModel):
         return config
 
     def body(self, inputs, **kwargs):
-        x = conv_block(inputs, 16, 3, layout='cnav cnav cnav', pseudo_random=True, overlapping=True, **kwargs)
+        x = conv_block(inputs, 16, 3, layout='snav snav snav', depth_multiplier=2, **kwargs)
         return x
 
 class MyBatch(ImagesBatch):
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     accuracy = test_pp.get_variable('accuracy')
     print('Accuracy {:6.2f}'.format(np.array(accuracy).mean()))
 
-    for i in range(3):
+    for i in range(0):
         train_pp = None
         test_tp = None
         test_pp = None

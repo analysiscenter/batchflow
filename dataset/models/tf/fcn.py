@@ -7,7 +7,11 @@ from .layers import conv_block
 
 class FCN(TFModel):
     """ Base Fully convolutional network (FCN)
-    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
+
+    References
+    ----------
+    .. Shelhamer E. et al "Fully Convolutional Networks for Semantic Segmentation"
+       Arxiv.org `<https://arxiv.org/abs/1605.06211>`_
     """
 
     def _build_config(self, names=None):

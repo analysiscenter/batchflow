@@ -59,8 +59,8 @@ class ResNet(TFModel):
 
         config['default']['data_format'] = self.data_format('images')
 
-        config['input_block'] = {**dict(filters=64, kernel_size=7, layout='cnap',
-                                        strides=2, pool_size=3, pool_strides=2),
+        config['input_block'] = {**dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2),
                                  **config['input_block']}
         config['input_block']['inputs'] = self.inputs['images']
 
