@@ -242,8 +242,8 @@ class ResNet(TFModel):
             input tensor
         filters : int
             number of filters in the first two convolutions
-        out_filters : int
-            number of filters in the last convolution
+        bottleneck_factor : int
+            scale factor for the number of filters
 
         Returns
         -------
@@ -295,9 +295,10 @@ class ResNet(TFModel):
 
         Parameters
         ----------
-
         inputs : tf.Tensor
             input tensor
+        ration : int
+            squeeze ratio for the number of filters
 
         Returns
         -------
