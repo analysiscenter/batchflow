@@ -7,7 +7,11 @@ from .layers import conv_block
 
 class FCN(TFModel):
     """ Base Fully convolutional network (FCN)
-    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
+
+    References
+    ----------
+    .. Shelhamer E. et al "Fully Convolutional Networks for Semantic Segmentation"
+       Arxiv.org `<https://arxiv.org/abs/1605.06211>`_
     """
 
     def _build_config(self, names=None):
@@ -44,7 +48,10 @@ class FCN(TFModel):
         -------
         tf.Tensor
         """
-        return input_class.body(inputs, name=name, **kwargs)
+        with tf.variable_scope(name):
+            x = input_class.input_block(inputs, name='input_block', **kwargs)
+            x = input_class.body(x, name='body', **kwargs)
+        return x
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
@@ -156,8 +163,8 @@ class FCN16(FCN):
     """
     def _build_config(self, names=None):
         config = super()._build_config(names)
-        config['head']['factor'] = self.get_from_config('head/factor', 16)
         config['head']['filters'] = self.get_from_config('head/filters', 16)
+        config['head']['factor'] = self.get_from_config('head/factor', 16)
         config['input_block']['skip_name'] = self.graph.get_name_scope() + '/input_block/' + \
                                              self.get_from_config('/input_block/skip_name', 'block-3/output:0')
         return config
@@ -223,8 +230,8 @@ class FCN8(FCN):
     """
     def _build_config(self, names=None):
         config = super()._build_config(names)
-        config['head']['factor'] = self.get_from_config('head/factor', 8)
         config['head']['filters'] = self.get_from_config('head/filters', 8)
+        config['head']['factor'] = self.get_from_config('head/factor', 8)
         config['input_block']['skip1_name'] = self.graph.get_name_scope() + '/input_block/' + \
                                              self.get_from_config('/input_block/skip1_name', 'block-3/output:0')
         config['input_block']['skip2_name'] = self.graph.get_name_scope() + '/input_block/' + \

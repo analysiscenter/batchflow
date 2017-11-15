@@ -1,5 +1,6 @@
 """ Contains convolution layers """
 # pylint:disable=too-many-statements
+import logging
 import tensorflow as tf
 
 from .core import mip, flatten
@@ -169,6 +170,7 @@ def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
     layout = layout or ''
     layout = layout.replace(' ', '')
     if len(layout) == 0:
+        logging.warning('conv_block: layout is empty, so there is nothing to do, just returning inputs.')
         return inputs
 
     dim = inputs.shape.ndims - 2

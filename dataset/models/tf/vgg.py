@@ -30,7 +30,11 @@ _VGG7_ARCH = [
 
 class VGG(TFModel):
     """ Base VGG neural network
-    https://arxiv.org/abs/1409.1556 (K.Simonyan et al, 2014)
+
+    References
+    ----------
+    .. Simonyan K., Zisserman A.. "Very Deep Convolutional Networks for Large-Scale Image Recognition"
+       Arxiv.org, `<https://arxiv.org/abs/1409.1556>`_
 
     **Configuration**
 
@@ -83,8 +87,8 @@ class VGG(TFModel):
                 x = cls.block(x, *block_cfg, name='block-%d' % i, **kwargs)
         return x
 
-    @staticmethod
-    def block(inputs, depth_3, depth_1, filters, downscale, name='block', **kwargs):
+    @classmethod
+    def block(cls, inputs, depth_3, depth_1, filters, downscale, name='block', **kwargs):
         """ A sequence of 3x3 and 1x1 convolutions followed by pooling
 
         Parameters

@@ -9,7 +9,11 @@ from .resnet import ResNet
 
 class LinkNet(TFModel):
     """ LinkNet
-    https://arxiv.org/abs/1707.03718 (A.Chaurasia et al, 2017)
+
+    References
+    ----------
+    .. Chaurasia A., Culurciello E. "LinkNet: Exploiting Encoder Representations for Efficient Semantic Segmentation"
+       Arxiv.org `<https://arxiv.org/abs/1707.03718>`_
 
     **Configuration**
 
@@ -33,7 +37,9 @@ class LinkNet(TFModel):
         num_blocks = self.get_from_config('num_blocks', 4)
         out_filters = self.get_from_config('out_filters', 32)
 
-        config['input_block']['filters'] = self.get_from_config('input_block/filters', in_filters)
+        config['input_block'] = {**dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2),
+                                 **config['input_block']}
         config['input_block']['inputs'] = self.inputs['images']
 
         layers_filters = 2 ** np.arange(num_blocks) * in_filters
@@ -43,26 +49,6 @@ class LinkNet(TFModel):
         config['head']['num_classes'] = self.num_classes('masks')
 
         return config
-
-
-    @classmethod
-    def input_block(cls, inputs, filters, name='input_block', **kwargs):
-        """ 7x7 convolution with stride=2 and 3x3 max pooling with stride=2
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        filters : int
-            number of output filters
-        name : str
-            scope name
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        return conv_block(inputs, filters, 7, layout='cpna', name=name, strides=2, pool_size=3, **kwargs)
 
     @classmethod
     def body(cls, inputs, filters, name='body', **kwargs):
