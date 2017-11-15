@@ -96,8 +96,8 @@ class MobileNet(TFModel):
 
         with tf.variable_scope(name):
             x = inputs
-            for index in range(len(strides)):
-                x = cls.block(x, strides[index], double_filters[index], 'block-'+str(index), **kwargs)
+            for index, stride in enumerate(strides):
+                x = cls.block(x, stride, double_filters[index], 'block-'+str(index), **kwargs)
             return x
 
 
