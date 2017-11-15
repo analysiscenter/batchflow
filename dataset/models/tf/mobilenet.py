@@ -54,6 +54,11 @@ class MobileNet(TFModel):
 
         input_block = self.get_from_config('input_block', {'layout': 'cna', 'filters': 32,
                                                            'kernel_size' : 3, 'strides': 2})
+
+        config['input_block']['width_factor'] = self.get_from_config('width_factor', 1.0)
+        config['input_block']['resolution_factor'] = self.get_from_config('resolution_factor', 1.0)
+
+
         config['input_block'] = {**input_block,
                                  **config['input_block']}
 
@@ -62,9 +67,6 @@ class MobileNet(TFModel):
         config['body']['strides'] = self.get_from_config('strides', _DEFAULT_BODY['strides'])
         config['body']['double_filters'] = self.get_from_config('double_filters',
                                                                 _DEFAULT_BODY['double_filters'])
-
-        config['body']['width_factor'] = self.get_from_config('width_factor', 1.0)
-        config['body']['resolution_factor'] = self.get_from_config('resolution_factor', 1.0)
 
         config['head'] = {**dict(layout='Vf', units=self.num_classes('labels')),
                           **config['head']}
@@ -84,10 +86,6 @@ class MobileNet(TFModel):
             strides in separable convolutions
         double_filters : list of bool
             if True number of filters in 1x1 covolution will be doubled
-        width_factor : float
-            multiplier for number of channels
-        resolution_factor : float
-            multiplier for spatial resolution
         name : str
             scope name
 
@@ -130,3 +128,36 @@ class MobileNet(TFModel):
 
         x = conv_block(inputs, filters, [3, 1], 'sna cna', name, [strides, 1], **kwargs)
         return x
+
+
+    @classmethod
+    def input_block(cls, inputs, filters=32, width_factor=1, resolution_factor=1, name='input_block', **kwargs):
+        """ Transform inputs with a convolution block
+
+        Parameters
+        ----------
+        filters : int
+            number of filters in convolutional layer
+        width_factor : float
+            multiplier for number of channels
+        resolution_factor : float
+            multiplier for spatial resolution
+
+        kwargs : dict
+            See :func:`.layers.conv_block`.
+
+        Returns
+        -------
+        tf.Tensor
+
+        """
+
+        filters = filters*width_factor
+
+        data_format = kwargs.get('data_format')
+
+        initial_shape = cls.spatial_shape(inputs, data_format)
+        new_shape = [int(size*resolution_factor) for size in initial_shape]
+
+        x = tf.image.resize_images(inputs, new_shape)
+        return conv_block(x, filters, name=name, **kwargs)
