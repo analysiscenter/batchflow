@@ -1,9 +1,11 @@
 """ Contains convolution layers """
+# pylint:disable=too-many-statements
+import logging
 import tensorflow as tf
 
 from .core import mip, flatten
 from .conv import conv1d_transpose, separable_conv
-from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling
+from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling, fractional_max_pooling
 
 
 ND_LAYERS = {
@@ -14,6 +16,7 @@ ND_LAYERS = {
     'separable_conv':separable_conv,
     'max_pooling': max_pooling,
     'average_pooling': average_pooling,
+    'fractional_max_pooling': fractional_max_pooling,
     'global_max_pooling': global_max_pooling,
     'global_average_pooling': global_average_pooling,
     'batch_norm': tf.layers.batch_normalization,
@@ -26,8 +29,10 @@ C_LAYERS = {
     'f': 'dense',
     'c': 'conv',
     't': 'transposed_conv',
+    's': 'separable_conv',
     'p': 'max_pooling',
     'v': 'average_pooling',
+    'r': 'fractional_max_pooling',
     'P': 'global_max_pooling',
     'V': 'global_average_pooling',
     'n': 'batch_norm',
@@ -36,7 +41,12 @@ C_LAYERS = {
 }
 
 _LAYERS_KEYS = str(list(C_LAYERS.keys()))
-_GROUP_KEYS = _LAYERS_KEYS.replace('t', 'c').replace('v', 'p')
+_GROUP_KEYS = (
+    _LAYERS_KEYS
+    .replace('t', 'c')
+    .replace('s', 'c')
+    .replace('v', 'p')
+)
 C_GROUPS = dict(zip(_LAYERS_KEYS, _GROUP_KEYS))
 
 def _get_layer_fn(fn, dim):
@@ -54,15 +64,13 @@ def _unpack_args(args, layer_no, layers_max):
 
     return new_args
 
-def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
+def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
                strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex multi-dimensional convolution layer with batch normalization, activation, pooling and dropout
 
     Parameters
     ----------
-    d : int {1, 2, 3}
-        number of dimensions
     inputs : tf.Tensor
         input tensor
     filters : int
@@ -72,19 +80,21 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
     layout : str
         a sequence of layers:
 
-        - c - convolution (+ dilated, separable)
+        - c - convolution
         - t - transposed convolution
+        - s - separable convolution
         - f - dense (fully connected)
         - n - batch normalization
         - a - activation
         - p - max pooling
         - v - average pooling
+        - r - fractional max pooling
         - P - global max pooling
         - V - global average pooling
         - d - dropout
         - m - maximum intensity projection (:func:`.layers.mip`)
 
-        Default is 'cnap'.
+        Default is ''.
     name : str
         name of the layer that will be used as a scope.
     strides : int
@@ -112,12 +122,16 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
         parameters for convolution layers, like initializers, regularalizers, etc
     transposed_conv : dict
         parameters for transposed conv layers, like initializers, regularalizers, etc
-    batch_norm : dict
+    batch_norm : dict or None
         parameters for batch normalization layers, like momentum, intiializers, etc
+        If None or inculdes parameters 'off' or 'disable' set to True or 1,
+        the layer will be excluded whatsoever.
     max_pooling : dict
         parameters for max_pooling layers, like initializers, regularalizers, etc
-    dropout : dict
+    dropout : dict or None
         parameters for dropout layers, like noise_shape, etc
+        If None or inculdes parameters 'off' or 'disable' set to True or 1,
+        the layer will be excluded whatsoever.
 
     Returns
     -------
@@ -151,11 +165,17 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
 
     ::
 
-        x = conv_block(dim, x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
+        x = conv_block(x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
     """
+    layout = layout or ''
+    layout = layout.replace(' ', '')
+    if len(layout) == 0:
+        logging.warning('conv_block: layout is empty, so there is nothing to do, just returning inputs.')
+        return inputs
 
+    dim = inputs.shape.ndims - 2
     if not isinstance(dim, int) or dim < 1 or dim > 3:
-        raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
+        raise ValueError("Number of dimensions of the inputs tensor should be 1, 2 or 3, but given %d" % dim)
 
     context = None
     if name is not None:
@@ -168,7 +188,6 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
             layout_dict[C_GROUPS[layer]] = [-1, 0]
         layout_dict[C_GROUPS[layer]][1] += 1
 
-    layout = layout.replace(' ', '')
     tensor = inputs
     for i, layer in enumerate(layout):
 
@@ -177,90 +196,77 @@ def conv_block(dim, inputs, filters, kernel_size, layout='cna', name=None,
         layer_fn = _get_layer_fn(layer_name, dim)
 
         if layer == 'a':
-            tensor = activation(tensor)
+            args = dict(activation=activation)
+            layer_fn = _unpack_args(args, *layout_dict[C_GROUPS[layer]])['activation']
+            if layer_fn is not None:
+                tensor = layer_fn(tensor)
         else:
-            if layer == 'f':
-                if len(tensor.get_shape().as_list()) > 2:
+            layer_args = kwargs.get(layer_name, {})
+            skip_layer = layer_args is None or layer_args is False or \
+                         isinstance(layer_args, dict) and 'disable' in layer_args and layer_args.pop('disable')
+
+            if skip_layer:
+                pass
+            elif layer == 'f':
+                if tensor.shape.ndims > 2:
                     tensor = flatten(tensor)
                 units = kwargs.get('units')
                 if units is None:
                     raise ValueError('units cannot be None if layout includes dense layers')
                 args = dict(units=units)
+
             elif layer == 'c':
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
+                            data_format=data_format, dilation_rate=dilation_rate)
+                if filters is None or filters == 0:
+                    raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
+
+            elif layer == 's':
+                args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             data_format=data_format, dilation_rate=dilation_rate, depth_multiplier=depth_multiplier)
+                if filters is None or filters == 0:
+                    raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
+
             elif layer == 't':
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             data_format=data_format)
+                if filters is None or filters == 0:
+                    raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
+
             elif layer == 'n':
                 axis = -1 if data_format == 'channels_last' else 1
                 args = dict(fused=True, axis=axis, training=is_training)
-            elif C_GROUPS[layer] == 'p':
-                args = dict(dim=dim, pool_size=pool_size, strides=pool_strides, padding=padding,
+
+            elif layer == 'r':
+                args = dict(pooling_ratio=kwargs.get('pooling_ratio', 1.4142),
+                            pseudo_random=kwargs.get('pseudo_random', False),
+                            overlapping=kwargs.get('overlapping', False),
                             data_format=data_format)
-            elif layer == 'd' and (not isinstance(dropout_rate, float) or dropout_rate > 0):
-                args = dict(rate=dropout_rate, training=is_training)
+
+            elif C_GROUPS[layer] == 'p':
+                args = dict(pool_size=pool_size, strides=pool_strides, padding=padding,
+                            data_format=data_format)
+
+            elif layer == 'd':
+                if dropout_rate:
+                    args = dict(rate=dropout_rate, training=is_training)
+                else:
+                    skip_layer = True
+
             elif layer in ['P', 'V']:
-                args = dict(dim=dim, data_format=data_format)
+                args = dict(data_format=data_format)
+
             elif layer == 'm':
                 args = dict(data_format=data_format)
 
-            args = {**args, **kwargs.get(layer_name, {})}
-            args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
+            if not skip_layer:
+                args = {**args, **layer_args}
+                args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
 
-            if layer == 'c':
-                if args['depth_multiplier'] > 1:
-                    layer_fn = _get_layer_fn('separable_conv', dim)
-                    args['dim'] = dim
-                else:
-                    args.pop('depth_multiplier')
-
-            with tf.variable_scope('layer-%d' % i):
-                tensor = layer_fn(inputs=tensor, **args)
+                with tf.variable_scope('layer-%d' % i):
+                    tensor = layer_fn(inputs=tensor, **args)
 
     if context is not None:
         context.__exit__(None, None, None)
 
     return tensor
-
-
-def conv1d_block(inputs, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
-                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
-    """ Complex 1d convolution with batch normalization, activation, pooling and dropout layers
-
-    See also
-    --------
-    :func:`.conv_block`
-    """
-    return conv_block(1, inputs, filters, kernel_size, layout, name,
-                      strides, padding, data_format, dilation_rate, depth_multiplier, activation,
-                      pool_size, pool_strides, dropout_rate, is_training, **kwargs)
-
-
-def conv2d_block(inputs, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
-                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
-    """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
-
-    See also
-    --------
-    :func:`.conv_block`
-    """
-    return conv_block(2, inputs, filters, kernel_size, layout, name,
-                      strides, padding, data_format, dilation_rate, depth_multiplier, activation,
-                      pool_size, pool_strides, dropout_rate, is_training, **kwargs)
-
-
-def conv3d_block(inputs, filters, kernel_size, layout='cnap', name=None,
-                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
-                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
-    """ Complex 2d convolution with batch normalization, activation, pooling and dropout layers
-
-    See also
-    --------
-    :func:`.conv_block`
-    """
-    return conv_block(3, inputs, filters, kernel_size, layout, name,
-                      strides, padding, data_format, dilation_rate, depth_multiplier, activation,
-                      pool_size, pool_strides, dropout_rate, is_training, **kwargs)
