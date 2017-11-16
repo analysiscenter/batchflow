@@ -263,6 +263,7 @@ class Batch(BaseBatch):
                 self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
             elif name in self.components:    # pylint: disable=unsupported-membership-test
                 setattr(self._data_named, name, value)
+                super().__setattr__('_data', self._data_named.data)
             else:
                 super().__setattr__(name, value)
         else:
