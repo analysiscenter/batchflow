@@ -31,7 +31,7 @@ class FCN(TFModel):
         config['input_block']['inputs'] = self.inputs['images']
         config['body']['num_classes'] = self.num_classes('masks')
         config['head']['num_classes'] = self.num_classes('masks')
-        config['head']['image_size'] = self.inputs['images'].get_shape().as_list()[1:-1]
+        config['head']['images'] = self.inputs['images']
 
         return config
 
@@ -76,7 +76,6 @@ class FCN(TFModel):
     @classmethod
     def head(cls, inputs, num_classes, name='head', **kwargs):
         """ Base layers
-
         Parameters
         ----------
         inputs : tf.Tensor
@@ -87,7 +86,6 @@ class FCN(TFModel):
             the output image size
         num_classes : int
             number of classes
-
         Returns
         -------
         tf.Tensor
@@ -95,11 +93,11 @@ class FCN(TFModel):
         kwargs = cls.fill_params('head', **kwargs)
         filters = kwargs.pop('filters')
         factor = kwargs.pop('factor')
-        image_size = kwargs.pop('image_size')
+        images = kwargs.pop('images')
 
         x = conv_block(inputs, filters=num_classes, kernel_size=filters, layout='t', name=name,
                        **{**kwargs, 'strides': factor})
-        x = cls.crop(x, shape=image_size, data_format=kwargs.get('data_format'))
+        x = cls.crop(x, images, kwargs.get('data_format'))
         return x
 
 
@@ -219,6 +217,7 @@ class FCN16(FCN):
             x = conv_block(x, num_classes, 1, 't', 'fcn32_2', strides=2, **kwargs)
 
             skip = conv_block(skip, num_classes, 1, 'c', 'pool', **kwargs)
+            x = cls.crop(x, skip, kwargs.get('data_format'))
             output = tf.add(x, skip, name='output')
         return output
 
@@ -296,5 +295,6 @@ class FCN8(FCN):
 
             skip2 = conv_block(skip2, num_classes, 1, 'c', name='pool2')
 
+            x = cls.crop(x, skip2, kwargs.get('data_format'))
             output = tf.add(x, skip2, name='output')
         return output
