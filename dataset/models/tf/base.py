@@ -883,8 +883,10 @@ class TFModel(BaseModel):
             tf.get_collection_ref('attrs').append(graph_item)
 
     @classmethod
-    def crop(cls, inputs, shape_image=None, shape=None, data_format='channels_last'):
-        """ Crop input tensor to a given shape or a shape of a give image
+    def crop(cls, inputs, shape_image, data_format='channels_last'):
+        """ Crop input tensor to a shape of a given image. If shape_image has not fully defined shape 
+        (shape_image.get_shape() has at leats one None) the returned tf.Tensor will be of unknown shape except
+        the number of channels.
 
         Parameters
         ----------
@@ -892,24 +894,55 @@ class TFModel(BaseModel):
             input tensor
         shape_image : tf.Tensor
             a source image
-        shape : list
-            a required image shape (excluding batch and channels dimensions)
         data_format : str {'channels_last', 'channels_first'}
             data format
         """
-        input_shape = np.array(cls.spatial_shape(inputs, data_format))
-        image_size = shape if shape else cls.spatial_shape(shape_image, data_format)
+        if data_format == 'channels_last':
+            static_shape = shape_image.get_shape().as_list()[1:-1]
+            dynamic_shape = tf.shape(shape_image)[1:-1]
+        else:
+            static_shape = shape_image.get_shape().as_list()[2:]
+            dynamic_shape = tf.shape(shape_image)[2:]      
+        if None in inputs.get_shape().as_list()[1:] + static_shape:
+            return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
+        else:
+            return cls._static_crop(inputs, static_shape, dynamic_shape, data_format)
 
-        if np.abs(input_shape - image_size).sum() > 0:
+    @classmethod
+    def _static_crop(cls, inputs, static_shape, dynamic_shape, data_format='channels_last'):
+        input_shape = np.array(cls.spatial_shape(inputs, data_format))
+
+        if np.abs(input_shape - static_shape).sum() > 0:
             begin = [0] * inputs.shape.ndims
             if data_format == "channels_last":
-                size = [-1] + image_size + [-1]
+                size = [-1] + static_shape + [-1]
             else:
-                size = [-1, -1] + image_size
+                size = [-1, -1] + static_shape
             x = tf.slice(inputs, begin=begin, size=size)
         else:
             x = inputs
         return x
+
+    @classmethod
+    def _dynamic_crop(cls, inputs, static_shape, dynamic_shape, data_format='channels_last'):
+        if data_format == 'channels_last':
+            input_shape = tf.shape(inputs)[1:-1]
+            n_channels = inputs.get_shape().as_list()[-1]
+            slice_size = [(-1,), dynamic_shape, (n_channels,)]
+            output_shape = [None] * (len(static_shape) + 1) + [n_channels]
+        else:
+            input_shape = tf.shape(inputs)[2:]
+            image_size = shape if shape else tf.shape(shape_image)[2:]
+            n_channels = inputs.get_shape().as_list()[1]
+            slice_size = [(-1, n_channels), dynamic_shape]
+            output_shape = [None, n_channels] + [None] * len(static_shape)
+
+        begin = [0] * len(inputs.get_shape().as_list())
+        size = tf.concat(slice_size, axis=0)
+        cond = tf.reduce_sum(tf.abs(input_shape - dynamic_shape)) > 0
+        x = tf.cond(cond, lambda: tf.slice(inputs, begin=begin, size=size), lambda: inputs)
+        x.set_shape(output_shape)
+        return x     
 
     @classmethod
     def input_block(cls, inputs, name='input_block', **kwargs):

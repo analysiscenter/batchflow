@@ -20,7 +20,7 @@ class FCN(TFModel):
         config['input_block']['inputs'] = self.inputs['images']
         config['input_block']['input_class'] = self.get_from_config('base_network', VGG16)
         config['head']['num_classes'] = self.num_classes('masks')
-        config['head']['image_size'] = self.inputs['images'].get_shape().as_list()[1:-1]
+        config['head']['images'] = self.inputs['images']#.get_shape().as_list()[1:-1]
         config['body']['num_classes'] = self.num_classes('masks')
         config['body']['filters'] = self.get_from_config('body/filters', 100)
 
@@ -62,7 +62,7 @@ class FCN(TFModel):
         raise NotImplementedError()
 
     @classmethod
-    def head(cls, inputs, filters, factor, image_size, num_classes, name='head', **kwargs):
+    def head(cls, inputs, filters, factor, images, num_classes, name='head', **kwargs):
         """ Base layers
 
         Parameters
@@ -81,7 +81,7 @@ class FCN(TFModel):
         tf.Tensor
         """
         x = conv_block(inputs, num_classes, filters, 't', name=name, strides=factor, **kwargs)
-        x = cls.crop(x, shape=image_size, data_format=kwargs.get('data_format'))
+        x = cls.crop(x, images, kwargs.get('data_format'))
         return x
 
 
@@ -127,7 +127,7 @@ class FCN32(FCN):
         -------
         tf.Tensor
         """
-        layout = kwargs.pop('layout', 'cnad cnad')
+        layout = kwargs.pop('layout', 'cna cna')
         return conv_block(inputs, filters, [7, 1], layout=layout, name=name, **kwargs)
 
 
@@ -191,6 +191,7 @@ class FCN16(FCN):
             x = conv_block(x, num_classes, 1, 't', 'fcn32_2', strides=2, **kwargs)
 
             skip = conv_block(skip, num_classes, 1, 'c', 'pool', **kwargs)
+            x = cls.crop(x, skip, kwargs.get('data_format'))
             output = tf.add(x, skip, name='output')
         return output
 
@@ -263,5 +264,6 @@ class FCN8(FCN):
 
             skip2 = conv_block(skip2, num_classes, 1, 'c', name='pool2')
 
+            x = cls.crop(x, skip2, kwargs.get('data_format'))
             output = tf.add(x, skip2, name='output')
         return output
