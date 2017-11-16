@@ -955,10 +955,13 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
-        return conv_block(inputs, name=name, **kwargs)
+        kwargs = cls.fill_params('input_block', **kwargs)
+        if kwargs.get('layout'):
+            return conv_block(inputs, name=name, **kwargs)
+        return inputs
 
     @classmethod
-    def body(cls, *args, name='body', **kwargs):
+    def body(cls, inputs, name='body', **kwargs):
         """ Base layers which produce a network embedding
 
         Parameters
@@ -975,21 +978,8 @@ class TFModel(BaseModel):
 
             MyModel.body(2, inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
         """
-        return cls.block(*args, name=name, **kwargs)
-
-    @classmethod
-    def block(cls, *args, **kwargs):
-        """ A body building block which transforms inputs with a convolution block
-
-        Parameters
-        ----------
-        See :func:`.layers.conv_block`.
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        return conv_block(*args, **kwargs)
+        kwargs = cls.fill_params('body', **kwargs)
+        return conv_block(inputs, name=name, **kwargs)
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
@@ -1013,6 +1003,7 @@ class TFModel(BaseModel):
 
             MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
+        kwargs = cls.fill_params('head', **kwargs)
         x = conv_block(inputs, name=name, **kwargs)
         return x
 
@@ -1038,6 +1029,8 @@ class TFModel(BaseModel):
         ValueError if the number of outputs does not equal to the number of prefixes
         TypeError if inputs is not a Tensor or a sequence of Tensors
         """
+        kwargs = self.fill_params('output', **kwargs)
+
         if ops is None:
             ops = []
         elif not isinstance(ops, (list, tuple)):
@@ -1086,6 +1079,24 @@ class TFModel(BaseModel):
                 ctx.__exit__(None, None, None)
 
 
+    @classmethod
+    def default_config(cls):
+        """ Define a model defaults """
+        config = {}
+        config['common'] = {'batch_norm': {'momentum': .1}}
+        config['input_block'] = {}
+        config['body'] = {}
+        config['head'] = {}
+        config['output'] = {}
+        return config
+
+    @classmethod
+    def fill_params(cls, _name, **kwargs):
+        """ Fill block params from default config and kwargs """
+        config = cls.default_config()
+        config = {**config['common'], **config[_name], **kwargs}
+        return config
+
     def _build_config(self, names=None):
         """ Define a model architecture configuration
 
@@ -1115,12 +1126,12 @@ class TFModel(BaseModel):
         with tf.variable_scope('inputs'):
             self._make_inputs(names)
 
-        config = {}
-        config['default'] = self.get_from_config('default', {'batch_norm': {'momentum': .1}})
-        config['input_block'] = self.get_from_config('input_block', {})
-        config['body'] = self.get_from_config('body', {})
-        config['head'] = self.get_from_config('head', {})
-        config['output'] = self.get_from_config('output', {})
+        config = self.default_config()
+        config['common'] = {**config['common'], **self.get_from_config('common', {})}
+        config['input_block'] = {**config['input_block'], **self.get_from_config('input_block', {})}
+        config['body'] = {**config['body'], **self.get_from_config('body', {})}
+        config['head'] = {**config['head'], **self.get_from_config('head', {})}
+        config['output'] = {**config['output'], **self.get_from_config('output', {})}
         return config
 
 
@@ -1161,7 +1172,7 @@ class TFModel(BaseModel):
         """
         config = self._build_config()
 
-        defaults = {'is_training': self.is_training, **config['default']}
+        defaults = {'is_training': self.is_training, **config['common']}
         config['input_block'] = {**defaults, **config['input_block']}
         config['body'] = {**defaults, **config['body']}
         config['head'] = {**defaults, **config['head']}

@@ -8,8 +8,6 @@ def max_pooling(inputs, pool_size, strides, padding='valid', data_format='channe
 
     Parameters
     ----------
-    dim: int {1, 2, 3}
-        number of dimensions
     inputs: tf.Tensor
         input tensor
     pool_size: int
@@ -49,8 +47,6 @@ def average_pooling(inputs, pool_size, strides, padding='valid', data_format='ch
 
     Parameters
     ----------
-    dim: int {1, 2, 3}
-        number of dimensions
     inputs: tf.Tensor
         input tensor
     pool_size: int
@@ -90,8 +86,6 @@ def global_average_pooling(inputs, data_format='channels_last', name=None):
 
     Parameters
     ----------
-    dim: int {1, 2, 3}
-        number of dimensions
     inputs: tf.Tensor
         input tensor
     data_format: str
@@ -120,8 +114,6 @@ def global_max_pooling(inputs, data_format='channels_last', name=None):
 
     Parameters
     ----------
-    dim: int {1, 2, 3}
-        number of dimensions
     inputs: tf.Tensor
         input tensor
     data_format: str
@@ -167,6 +159,12 @@ def fractional_max_pooling(inputs, pooling_ratio, pseudo_random=False, overlappi
     Returns
     -------
     tf.Tensor
+
+    Notes
+    -----
+    Be aware that it is not thread safe.
+    ``tf.nn.fractional_max_pool>`` will likely cause segmentation fault in a multi-threading environment
+    (e.g. in a pipeline with prefetch)
     """
     dim = inputs.shape.ndims - 2
 

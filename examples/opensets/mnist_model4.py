@@ -27,12 +27,12 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_model('dynamic', LinkNet, 'conv',
+                .init_model('dynamic', FCN8, 'conv',
                             config={'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'inputs': dict(images={'shape': (28, 28, 1)},
                                                    masks={'shape': (28, 28), 'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
-                                    'filters': 64
+                                    #'input_block': {'filters': 16}
                                     })
                                     #'output': dict(ops=['labels', 'accuracy'])})
                 .train_model('conv', fetches='loss',
@@ -56,7 +56,7 @@ if __name__ == "__main__":
                 .import_model('conv', train_pp)
                 .init_variable('accuracy', init_on_each_run=list)
                 .predict_model('conv', fetches='accuracy', feed_dict={'images': B('images'),
-                                                                      'labels': B('labels')},
+                                                                      'masks': F(make_masks)},
                                save_to=V('accuracy'), mode='a')
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0))
     print("End testing", time() - t)
