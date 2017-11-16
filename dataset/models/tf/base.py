@@ -897,7 +897,7 @@ class TFModel(BaseModel):
         data_format : str {'channels_last', 'channels_first'}
             data format
         """
-        axis = slice(1,-1) if data_format == 'channels_last' else slice(2, None)
+        axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
         static_shape = shape_images.get_shape().as_list()[axis]
         dynamic_shape = tf.shape(shape_images)[axis]
 
