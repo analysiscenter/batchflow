@@ -243,12 +243,12 @@ class Inception_v3(TFModel):
 
             factor = [1, 7], [7, 1]
             kernel_size = [1, *factor]
-            branch_1_3 = conv_block(inputs, [filters[1]]*2+[filters[0]] , kernel_size, layout*3, name='conv_1_3',\
-                                    **kwargs)
+            branch_1_3 = conv_block(inputs, [filters[1]]*2+[filters[0]], kernel_size, layout*3,
+                                    name='conv_1_3', **kwargs)
 
             kernel_size = [1, *factor*2]
-            branch_1_7 = conv_block(inputs, [filters[1]]*4+[filters[0]], kernel_size, layout*5, name='conv_1_7',\
-                                    **kwargs)
+            branch_1_7 = conv_block(inputs, [filters[1]]*4+[filters[0]], kernel_size, layout*5,
+                                    name='conv_1_7', **kwargs)
 
             branch_pool = conv_block(inputs, filters[0], 1, 'p'+layout, name='c_pool', **{**kwargs, 'pool_strides': 1})
 
