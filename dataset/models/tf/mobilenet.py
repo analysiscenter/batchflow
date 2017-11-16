@@ -73,8 +73,8 @@ class MobileNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        sep_strides, double_filters, filters, width_factor = \
-            cls.pop(['strides', 'double_filters', 'filters', 'width_factor'], kwargs)
+        sep_strides, double_filters, width_factor = \
+            cls.pop(['strides', 'double_filters', 'width_factor'], kwargs)
 
         with tf.variable_scope(name):
             x = inputs
