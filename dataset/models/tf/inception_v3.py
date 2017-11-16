@@ -18,19 +18,25 @@ _DEFAULT_V3_ARCH = {
 
 class Inception_v3(TFModel):
     """ The base Inception_v3 model
+
     References
     ----------
     .. Christian Szegedy et al. "Rethinking the Inception Architecture for Computer Vision"
        Argxiv.org `<https://arxiv.org/abs/1512.00567>`_
+
     ** Configuration **
+
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+
     input_block : dict
+
     body : dict
         arch : dict
             parameters for each block.
             key - short name block
             item - list or dict with parameters
+
     """
     @classmethod
     def default_config(cls):
@@ -56,6 +62,7 @@ class Inception_v3(TFModel):
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
         """ Base layers
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -69,6 +76,7 @@ class Inception_v3(TFModel):
             e - expanded_block (figure 7 in paper)
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
@@ -110,6 +118,7 @@ class Inception_v3(TFModel):
     def block(cls, inputs, filters, layout='cna', name='block', **kwargs):
         """ Network building block
         For details see figure 5 in the article.
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -120,6 +129,7 @@ class Inception_v3(TFModel):
             a sequence of layers (see :meth:'.conv_block`)
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
@@ -142,6 +152,7 @@ class Inception_v3(TFModel):
     def reduction_block(cls, inputs, filters, layout='cna', name='reduction_block', **kwargs):
         """ Reduction block
         For details see figure 6 in the article.
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -152,6 +163,7 @@ class Inception_v3(TFModel):
             a sequence of layers (see :meth:'.conv_block`)
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
@@ -175,6 +187,7 @@ class Inception_v3(TFModel):
     def mixed_block(cls, inputs, filters, layout='cna', name='mixed_block', **kwargs):
         """ Mixed block
         For details see section 6 in the article.
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -185,6 +198,7 @@ class Inception_v3(TFModel):
             a sequence of layers (see :meth:'.conv_block`)
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
@@ -209,6 +223,7 @@ class Inception_v3(TFModel):
     def factor_block(cls, inputs, filters, layout='cna', name='factor_block', **kwargs):
         """ 7x7 factorization block
         For details see figure 10 in the article.
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -219,6 +234,7 @@ class Inception_v3(TFModel):
             a sequence of layers (see :meth:'.conv_block`)
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
@@ -245,6 +261,7 @@ class Inception_v3(TFModel):
     def expanded_block(cls, inputs, filters, layout='cna', name='expanded_block', **kwargs):
         """ Network building block
         For details see figure 7 in the article.
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -255,6 +272,7 @@ class Inception_v3(TFModel):
             a sequence of layers (see :meth:'.conv_block`)
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
