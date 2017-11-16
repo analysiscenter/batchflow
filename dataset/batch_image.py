@@ -90,6 +90,7 @@ class BasicImagesBatch(Batch):
 
     @property
     def image_shape(self):
+        """: tuple - shape of the images """
         return self.images.shape[1:]
 
     def assemble(self, all_res, *args, **kwargs):
