@@ -8,7 +8,8 @@ import tensorflow as tf
 sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
 from dataset.opensets import MNIST
-from dataset.models.tf import VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, Inception_v1, Inception_v3, SqueezeNet
+from dataset.models.tf import VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
+                              Inception_v1, Inception_v3, SqueezeNet, MobileNet
 
 
 if __name__ == "__main__":
@@ -20,15 +21,15 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_model('dynamic', Inception_v3, 'conv',
+                .init_model('dynamic', MobileNet, 'conv',
                             config={'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'inputs': dict(images={'shape': B('image_shape')},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     #'filters': 16, 'width_factor': 1,
-                                    'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
+                                    #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['labels', 'accuracy'])})
-                .resize(shape=(512, 512))
+                #.resize(shape=(512, 512))
                 .train_model('conv', fetches='loss',
                                      feed_dict={'images': B('images'),
                                                 'labels': B('labels')},

@@ -30,26 +30,60 @@ class BaseModel:
         if self.get_from_config('load', False):
             self.load(**self.get_from_config('load'))
 
+    @classmethod
+    def pop(cls, variables, config=None):
+        """ Return variables and remove them from config"""
+        return cls.get(variables, config, pop=True)
+
+    @classmethod
+    def get(cls, variables, config=None, pop=True):
+        """ Return variables from config """
+        unpack = False
+        if not isinstance(variables, (list, tuple)):
+            variables = list([variables])
+            unpack = True
+
+        ret_vars = []
+        for variable in variables:
+            _config = config
+            if '/' in variable:
+                var = variable.split('/')
+                prefix = var[:-1]
+                var_name = var[-1]
+            else:
+                prefix = []
+                var_name = variable
+
+            for p in prefix:
+                if p in _config:
+                    _config = _config[p]
+                else:
+                    _config = None
+                    break
+            if _config:
+                if pop:
+                    val = _config.pop(var_name)
+                else:
+                    val = _config.get(var_name)
+            else:
+                raise KeyError('Key %s not found' % variable)
+
+            ret_vars.append(val)
+
+        if unpack:
+            ret_vars = ret_vars[0]
+        else:
+            ret_vars = tuple(ret_vars)
+        return ret_vars
+
     def get_from_config(self, variable, default=None, config=None):
         """ Return a variable from config or a default value """
-        if '/' in variable:
-            var = variable.split('/')
-            prefix = var[:-1]
-            var_name = var[-1]
-        else:
-            prefix = []
-            var_name = variable
-
         config = config or self.config
-        for p in prefix:
-            if p in config:
-                config = config[p]
-            else:
-                config = None
-                break
-        if config:
-            return config.get(var_name, default)
-        return default
+        try:
+            value = self.get(variable, config)
+        except KeyError:
+            return default
+        return value
 
     def _make_inputs(self, names=None):
         """ Make model input data using config
