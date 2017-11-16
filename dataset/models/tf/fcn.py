@@ -31,10 +31,9 @@ class FCN(TFModel):
         config['input_block']['inputs'] = self.inputs['images']
         config['body']['num_classes'] = self.num_classes('masks')
         config['head']['num_classes'] = self.num_classes('masks')
-        config['head']['images'] = self.inputs['images']
+        config['head']['original_images'] = self.inputs['images']
 
         return config
-
 
     @classmethod
     def input_block(cls, inputs, input_class, name='input_block', **kwargs):
@@ -74,7 +73,7 @@ class FCN(TFModel):
         raise NotImplementedError()
 
     @classmethod
-    def head(cls, inputs, num_classes, name='head', **kwargs):
+    def head(cls, inputs, original_images, num_classes, name='head', **kwargs):
         """ Base layers
         Parameters
         ----------
@@ -91,13 +90,11 @@ class FCN(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('head', **kwargs)
-        filters = kwargs.pop('filters')
-        factor = kwargs.pop('factor')
-        images = kwargs.pop('images')
+        filters, factor = cls.pop(['filters', 'factor'], kwargs)
 
         x = conv_block(inputs, filters=num_classes, kernel_size=filters, layout='t', name=name,
                        **{**kwargs, 'strides': factor})
-        x = cls.crop(x, images, kwargs.get('data_format'))
+        x = cls.crop(x, original_images, kwargs.get('data_format'))
         return x
 
 
