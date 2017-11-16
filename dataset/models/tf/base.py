@@ -904,9 +904,9 @@ class TFModel(BaseModel):
             static_shape = shape_image.get_shape().as_list()[2:]
             dynamic_shape = tf.shape(shape_image)[2:]
         if None in inputs.get_shape().as_list()[1:] + static_shape:
-            return cls._dynamic_crop(inputs, static_shape, data_format)
+            return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
         else:
-            return cls._static_crop(inputs, static_shape, dynamic_shape, data_format)
+            return cls._static_crop(inputs, static_shape, data_format)
 
     @classmethod
     def _static_crop(cls, inputs, shape, data_format='channels_last'):
