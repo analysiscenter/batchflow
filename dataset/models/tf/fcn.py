@@ -127,7 +127,7 @@ class FCN32(FCN):
         -------
         tf.Tensor
         """
-        layout = kwargs.pop('layout', 'cna cna')
+        layout = kwargs.pop('layout', 'cnad cnad')
         return conv_block(inputs, filters, [7, 1], layout=layout, name=name, **kwargs)
 
 
