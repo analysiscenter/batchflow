@@ -4,15 +4,17 @@ import tensorflow as tf
 from . import TFModel
 from .layers import conv_block
 
-_DEFAULT_BODY_ARCH = {
+
+_DEFAULT_V3_ARCH = {
     'b': {'filters': [[64, 48, 96, 32], [64, 48, 96, 64], [64, 48, 96, 64]]},
-    'r': dict(pool_size=3, pool_strides=2, padding='valid', filters=[384, 64, 96]),
+    'r': dict(pool_size=3, pool_strides=2, padding='valid', filters=(384, 64, 96)),
     'f': {'filters': [[192, 128],
                       [192, 160],
                       [192, 160],
                       [192, 192]]},
-    'm': {'filters': [192, 320]},
-    'e': {'filters': [320, 384, 448, 192]}}
+    'm': {'filters': (192, 320)},
+    'e': {'filters': [320, 384, 448, 192]}
+}
 
 class Inception_v3(TFModel):
     """ The base Inception_v3 model
@@ -20,7 +22,7 @@ class Inception_v3(TFModel):
     References
     ----------
     .. Christian Szegedy et al. "Rethinking the Inception Architecture for Computer Vision"
-    Argxiv.org `<https://arxiv.org/abs/1512.00567>`_
+       Argxiv.org `<https://arxiv.org/abs/1512.00567>`_
 
     ** Configuration **
 
@@ -36,25 +38,29 @@ class Inception_v3(TFModel):
             item - list or dict with parameters
 
     """
+    @classmethod
+    def default_config(cls):
+        config = TFModel.default_config()
+        config['input_block'].update(dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
+                                          kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1],
+                                          pool_size=3, pool_strides=2, padding='valid'))
+        config['body']['layout'] = 'bbbrffffmee'
+        config['body']['arch'] = _DEFAULT_V3_ARCH
+        config['head'].update(dict(layout='Vdf', dropout_rate=.8))
+
+        return config
+
     def _build_config(self, names=None):
         names = names if names else ['images', 'labels']
         config = super()._build_config(names)
 
-        config['default']['data_format'] = self.data_format('images')
-
-        config['input_block'] = {**dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
-                                        kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1], pool_size=3,
-                                        padding='valid', **config['input_block'])}
-
+        config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
-
-        config['body']['arch'] = self.get_from_config('body/arch', _DEFAULT_BODY_ARCH)
-        config['head'] = {**dict(layout='Vdf', units=self.num_classes('labels'), dropout_rate=.8),
-                          **config['head']}
+        config['head']['units'] = self.num_classes('labels')
         return config
 
     @classmethod
-    def body(cls, inputs, layout='bbbrffffmee', name='body', **kwargs):
+    def body(cls, inputs, name='body', **kwargs):
         """ Base layers
 
         Parameters
@@ -75,6 +81,10 @@ class Inception_v3(TFModel):
         -------
         tf.Tensor
              """
+        kwargs = cls.fill_params('body', **kwargs)
+        arch = kwargs.pop('arch')
+        layout = kwargs.pop('layout')
+
         with tf.variable_scope(name):
             x = inputs
 
@@ -86,10 +96,12 @@ class Inception_v3(TFModel):
 
             for i, block in enumerate(layout):
                 layout_dict[block][0] += 1
-                if 'filters' in kwargs['arch'][block]:
-                    filters = kwargs['arch'][block]['filters']
-                    if isinstance(filters[0], (tuple, list)):
-                        filters = filters[layout_dict[block][0]]
+                block_no = layout_dict[block][0]
+
+                filters = arch[block].get('filters')
+                if isinstance(filters, list):
+                    filters = filters[block_no]
+
                 if block == 'b':
                     x = cls.block(x, filters, name='block-%d'%i, **kwargs)
                 elif block == 'r':
@@ -104,13 +116,14 @@ class Inception_v3(TFModel):
 
     @classmethod
     def block(cls, inputs, filters, layout='cna', name='block', **kwargs):
-        """ Newtwork building block, show in paper on figure 5.
+        """ Network building block
+        For details see figure 5 in the article.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
+        filters : tuple of 4 ints
             number of output filters
         layout : str
             a sequence of layers (see :meth:'.conv_block`)
@@ -137,13 +150,14 @@ class Inception_v3(TFModel):
 
     @classmethod
     def reduction_block(cls, inputs, filters, layout='cna', name='reduction_block', **kwargs):
-        """ Newtwork building block, show in paper on figure 6.
+        """ Reduction block
+        For details see figure 6 in the article.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
+        filters : tuple of 3 ints
             number of output filters
         layout : str
             a sequence of layers (see :meth:'.conv_block`)
@@ -171,13 +185,14 @@ class Inception_v3(TFModel):
 
     @classmethod
     def mixed_block(cls, inputs, filters, layout='cna', name='mixed_block', **kwargs):
-        """ Newtwork building block, not figure in paper, but describe in 6 section.
+        """ Mixed block
+        For details see section 6 in the article.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
+        filters : tuple of 2 ints
             number of output filters
         layout : str
             a sequence of layers (see :meth:'.conv_block`)
@@ -205,13 +220,14 @@ class Inception_v3(TFModel):
 
     @classmethod
     def factor_block(cls, inputs, filters, layout='cna', name='factor_block', **kwargs):
-        """ Newtwork building block, show in paper on figure 10.
+        """ 7x7 factorization block
+        For details see figure 10 in the article.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
+        filters : tuple of 3 int
             number of output filters
         layout : str
             a sequence of layers (see :meth:'.conv_block`)
@@ -242,13 +258,14 @@ class Inception_v3(TFModel):
 
     @classmethod
     def expanded_block(cls, inputs, filters, layout='cna', name='expanded_block', **kwargs):
-        """ Newtwork building block, show in paper on figure 7.
+        """ Network building block
+        For details see figure 7 in the article.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
+        filters : tuole of 4 ints
             number of output filters
         layout : str
             a sequence of layers (see :meth:'.conv_block`)

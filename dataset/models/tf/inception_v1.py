@@ -42,7 +42,6 @@ class Inception_v1(TFModel):
         config['input_block'].update(dict(layout='cnp cn cn p', filters=[64, 64, 192],
                                           kernel_size=[7, 3, 3], strides=[2, 1, 1],
                                           pool_size=3, pool_strides=2))
-        config['block'] = dict(layout='cna')
         config['body']['arch'] = _DEFAULT_V1_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.4))
 
@@ -111,8 +110,6 @@ class Inception_v1(TFModel):
         -------
         tf.Tensor
         """
-        kwargs = cls.fill_params('block', **kwargs)
-
         with tf.variable_scope(name):
             branch_1 = conv_block(inputs, filters[0], 1, layout, name='conv_1', **kwargs)
 
