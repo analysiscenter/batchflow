@@ -883,26 +883,24 @@ class TFModel(BaseModel):
             tf.get_collection_ref('attrs').append(graph_item)
 
     @classmethod
-    def crop(cls, inputs, shape_image, data_format='channels_last'):
-        """ Crop input tensor to a shape of a given image. If shape_image has not fully defined shape
-        (shape_image.get_shape() has at leats one None) the returned tf.Tensor will be of unknown shape except
-        the number of channels.
+    def crop(cls, inputs, shape_images, data_format='channels_last'):
+        """ Crop input tensor to a shape of a given image.
+        If shape_image has not fully defined shape (shape_image.get_shape() has at leats one None),
+        the returned tf.Tensor will be of unknown shape except the number of channels.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        shape_image : tf.Tensor
-            a source image
+        shape_images : tf.Tensor
+            a source images to which
         data_format : str {'channels_last', 'channels_first'}
             data format
         """
-        if data_format == 'channels_last':
-            static_shape = shape_image.get_shape().as_list()[1:-1]
-            dynamic_shape = tf.shape(shape_image)[1:-1]
-        else:
-            static_shape = shape_image.get_shape().as_list()[2:]
-            dynamic_shape = tf.shape(shape_image)[2:]
+        axis = slice(1,-1) if data_format == 'channels_last' else slice(2, None)
+        static_shape = shape_images.get_shape().as_list()[axis]
+        dynamic_shape = tf.shape(shape_images)[axis]
+
         if None in inputs.get_shape().as_list()[1:] + static_shape:
             return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
         else:
