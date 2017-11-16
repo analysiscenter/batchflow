@@ -6,8 +6,6 @@ from . import TFModel
 from .layers import conv_block
 
 
-
-
 class SqueezeNet(TFModel):
     """ SqueezeNet neural network
 
@@ -20,39 +18,44 @@ class SqueezeNet(TFModel):
 
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
-    layout : str
-        A sequence of blocks:
-        - f : fire block
-        - m : max-pooling
-        - b : bypass
+
+    body : dict
+        layout : str
+            A sequence of blocks:
+            - f : fire block
+            - m : max-pooling
+            - b : bypass
     """
+    @classmethod
+    def default_config(cls):
+        config = TFModel.default_config()
+
+        config['input_block'].update(dict(layout='cnap', filters=96, kernel_size=7, strides=2,
+                                          pool_size=3, pool_strides=2))
+        config['body']['layout'] = 'fffmffffmf'
+        #config['body']['layout'] = 'ffbfmbffbffmbf'
+
+        num_blocks = len(config['body']['layout'])
+        layers_filters = 16 * 2 ** np.arange(num_blocks//2)
+        layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
+        config['body']['filters'] = layers_filters
+
+        config['head'].update(dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5))
+
+        return config
 
     def _build_config(self, names=None):
         names = names if names else ['images', 'labels']
         config = super()._build_config(names)
 
-        config['default']['data_format'] = self.data_format('images')
-
-        config['input_block'] = {**dict(layout='cnap', filters=96, kernel_size=7, strides=2,
-                                        pool_size=3, pool_strides=2),
-                                 **config['input_block']}
+        config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
+        config['head']['filters'] = self.num_classes('labels')
 
-        config['body']['layout'] = self.get_from_config('layout', 'fffmffffmf')
-        #config['body']['layout'] = self.get_from_config('layout', 'ffbfmbffbffmbf')
-
-        num_blocks = len(config['body']['layout'])
-        layers_filters = self.get_from_config('filters', 16) * 2 ** np.arange(num_blocks//2)
-        layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
-        config['body']['filters'] = self.get_from_config('body/filters', layers_filters)
-
-        config['head'] = {**dict(layout='dcnaV', filters=self.num_classes('labels'),
-                                 kernel_size=1, strides=1, dropout_rate=.5),
-                          **config['head']}
         return config
 
     @classmethod
-    def body(cls, inputs, filters, layout='', name='body', **kwargs):
+    def body(cls, inputs, name='body', **kwargs):
         """ Create base VGG layers
 
         Parameters
@@ -68,6 +71,10 @@ class SqueezeNet(TFModel):
         -------
         tf.Tensor
         """
+        kwargs = cls.fill_params('body', **kwargs)
+        layout = kwargs.pop('layout')
+        filters = kwargs.pop('filters')
+
         x = inputs
         bypass = None
         with tf.variable_scope(name):
@@ -78,6 +85,7 @@ class SqueezeNet(TFModel):
                     x = cls.fire_block(x, filters=filters[i], name='fire-block-%d' % i, **kwargs)
                 elif block == 'm':
                     x = conv_block(x, layout='p', name='max-pool-%d' % i, **kwargs)
+
                 if bypass is not None:
                     bypass_channels = cls.channels_shape(bypass, kwargs.get('data_format'))
                     x_channels = cls.channels_shape(x, kwargs.get('data_format'))

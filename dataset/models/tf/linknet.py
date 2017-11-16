@@ -19,47 +19,55 @@ class LinkNet(TFModel):
 
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
-    in_filters : int
-        number of filters in the first convolution block (64 by default)
-    out_filters : int
-        number of filters in the last convolution block (32 by default)
-    num_blocks : int
-        number of downsampling/upsampling blocks (4 by default)
+
+    body : dict
+        num_blocks : int
+            number of downsampling/upsampling blocks (4 by default)
+
+        filters : list of int
+            number of filters in each block
+
+    head : dict
+        num_classes : int
+            number of semantic classes
     """
+    @classmethod
+    def default_config(cls):
+        config = TFModel.default_config()
+
+        filters = 64   # number of filters in the first block
+
+        config['input_block'].update(dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
+                                          pool_size=3, pool_strides=2))
+        config['body']['num_blocks'] = 4
+        config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters
+
+        config['head']['filters'] = filters // 2
+
+        return config
 
     def _build_config(self, names=None):
         names = names if names else ['images', 'masks']
         config = super()._build_config(names)
 
-        config['default']['data_format'] = self.data_format('images')
-
-        in_filters = self.get_from_config('in_filters', 64)
-        num_blocks = self.get_from_config('num_blocks', 4)
-        out_filters = self.get_from_config('out_filters', 32)
-
-        config['input_block'] = {**dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                        pool_size=3, pool_strides=2),
-                                 **config['input_block']}
+        config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
 
-        layers_filters = 2 ** np.arange(num_blocks) * in_filters
-        config['body']['filters'] = self.get_from_config('body/in_filters', layers_filters)
+        layers_filters = 2 ** np.arange(config['body']['num_blocks']) * config['input_block']['filters']
+        config['body']['filters'] = self.get_from_config('body/filters', layers_filters)
 
-        config['head']['filters'] = self.get_from_config('head/filters', out_filters)
         config['head']['num_classes'] = self.num_classes('masks')
 
         return config
 
     @classmethod
-    def body(cls, inputs, filters, name='body', **kwargs):
+    def body(cls, inputs, name='body', **kwargs):
         """ LinkNet body
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : tuple of int
-            number of filters
         name : str
             scope name
 
@@ -67,15 +75,18 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
+        kwargs = cls.fill_params('body', **kwargs)
+        filters = kwargs.pop('filters')
+
         with tf.variable_scope(name):
             x = inputs
             encoder_outputs = []
             for i, ifilters in enumerate(filters):
-                x = cls.downsampling_block(x, ifilters, 'downsampling-'+str(i), **kwargs)
+                x = cls.downsampling_block(x, filters=ifilters, name='downsampling-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
             for i, ifilters in enumerate(filters[::-1][1:]):
-                x = cls.upsampling_block(x, ifilters, 'upsampling-'+str(i), **kwargs)
+                x = cls.upsampling_block(x, filters=ifilters, name='upsampling-'+str(i), **kwargs)
                 x = cls.crop(x, encoder_outputs[-i-2], data_format=kwargs.get('data_format'))
                 x = tf.add(x, encoder_outputs[-2-i])
             x = cls.upsampling_block(x, filters[0], 'upsampling-'+str(i+1), **kwargs)
@@ -100,7 +111,7 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        return ResNet.double_block(inputs, filters, name=name, strides=2, **kwargs)
+        return ResNet.double_block(inputs, filters=filters, name=name, strides=2, **kwargs)
 
     @classmethod
     def upsampling_block(cls, inputs, filters, name, **kwargs):
@@ -124,15 +135,13 @@ class LinkNet(TFModel):
                           layout='cna tna cna', name=name, strides=[1, 2, 1], **kwargs)
 
     @classmethod
-    def head(cls, inputs, filters, num_classes, name='head', **kwargs):
+    def head(cls, inputs, num_classes, name='head', **kwargs):
         """ 3x3 transposed convolution, 3x3 convolution and 2x2 transposed convolution
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
-            number of filters in 3x3 convolutions
         num_classes : int
             number of classes (and number of filters in the last convolution)
         name : str
@@ -142,6 +151,8 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
+        kwargs = cls.fill_params('head', **kwargs)
+        filters = kwargs.pop('filters')
 
         x = conv_block(inputs, [filters, filters, num_classes], [3, 3, 2], layout='tna cna t',
                        strides=[2, 1, 2], name=name, **kwargs)

@@ -923,8 +923,10 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
-        kwargs = cls.make_params('input_block', **kwargs)
-        return conv_block(inputs, name=name, **kwargs)
+        kwargs = cls.fill_params('input_block', **kwargs)
+        if kwargs.get('layout'):
+            return conv_block(inputs, name=name, **kwargs)
+        return inputs
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
@@ -944,22 +946,8 @@ class TFModel(BaseModel):
 
             MyModel.body(2, inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
         """
-        kwargs = cls.make_params('body', **kwargs)
-        return cls.block(inputs, name=name, **kwargs)
-
-    @classmethod
-    def block(cls, *args, **kwargs):
-        """ A body building block which transforms inputs with a convolution block
-
-        Parameters
-        ----------
-        See :func:`.layers.conv_block`.
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        return conv_block(*args, **kwargs)
+        kwargs = cls.fill_params('body', **kwargs)
+        return conv_block(inputs, name=name, **kwargs)
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
@@ -983,7 +971,7 @@ class TFModel(BaseModel):
 
             MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
-        kwargs = cls.make_params('head', **kwargs)
+        kwargs = cls.fill_params('head', **kwargs)
         x = conv_block(inputs, name=name, **kwargs)
         return x
 
@@ -1009,7 +997,7 @@ class TFModel(BaseModel):
         ValueError if the number of outputs does not equal to the number of prefixes
         TypeError if inputs is not a Tensor or a sequence of Tensors
         """
-        kwargs = self.make_params('output', **kwargs)
+        kwargs = self.fill_params('output', **kwargs)
 
         if ops is None:
             ops = []
@@ -1060,23 +1048,22 @@ class TFModel(BaseModel):
 
 
     @classmethod
-    def _default_config(cls, name=None):
+    def default_config(cls):
         """ Define a model defaults """
         config = {}
-        config['default'] = {'batch_norm': {'momentum': .1}}
+        config['common'] = {'batch_norm': {'momentum': .1}}
         config['input_block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}
-
-        if name is not None:
-            return config[name]
         return config
 
     @classmethod
-    def make_params(cls, name, **kwargs):
-        config = cls._default_config(name)
-        return {**config, **kwargs}
+    def fill_params(cls, _name, **kwargs):
+        """ Fill block params from default config and kwargs """
+        config = cls.default_config()
+        config = {**config['common'], **config[_name], **kwargs}
+        return config
 
     def _build_config(self, names=None):
         """ Define a model architecture configuration
@@ -1107,8 +1094,8 @@ class TFModel(BaseModel):
         with tf.variable_scope('inputs'):
             self._make_inputs(names)
 
-        config = self._default_config()
-        config['default'] = {**config['default'], **self.get_from_config('default', {})}
+        config = self.default_config()
+        config['common'] = {**config['common'], **self.get_from_config('common', {})}
         config['input_block'] = {**config['input_block'], **self.get_from_config('input_block', {})}
         config['body'] = {**config['body'], **self.get_from_config('body', {})}
         config['head'] = {**config['head'], **self.get_from_config('head', {})}
@@ -1153,7 +1140,7 @@ class TFModel(BaseModel):
         """
         config = self._build_config()
 
-        defaults = {'is_training': self.is_training, **config['default']}
+        defaults = {'is_training': self.is_training, **config['common']}
         config['input_block'] = {**defaults, **config['input_block']}
         config['body'] = {**defaults, **config['body']}
         config['head'] = {**defaults, **config['head']}
