@@ -7,12 +7,12 @@ from .layers import conv_block
 
 _DEFAULT_V3_ARCH = {
     'b': {'filters': [[64, 48, 96, 32], [64, 48, 96, 64], [64, 48, 96, 64]]},
-    'r': dict(pool_size=3, pool_strides=2, padding='valid', filters=(384, 64, 96)),
+    'r': {'filters': [384, 64, 96]},
     'f': {'filters': [[192, 128],
                       [192, 160],
                       [192, 160],
                       [192, 192]]},
-    'm': {'filters': (192, 320)},
+    'm': {'filters': [192, 320]},
     'e': {'filters': [320, 384, 448, 192]}
 }
 
@@ -23,6 +23,8 @@ class Inception_v3(TFModel):
     ----------
     .. Christian Szegedy et al. "Rethinking the Inception Architecture for Computer Vision"
        Argxiv.org `<https://arxiv.org/abs/1512.00567>`_
+
+    Use the implementation from `https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py`
 
     ** Configuration **
 
@@ -70,9 +72,9 @@ class Inception_v3(TFModel):
         layout : str
             a sequence of blocks:
             b - block (figure 5 in paper)
-            r - reduction_block (figure 6 in paper)
-            f - factor_block (figure 10 in paper)
-            m - mixed_block (not figure in paper, but describe in 6 section)
+            r - reduction_block (figure 10 in paper)
+            f - factor_block (figure 6 in paper)
+            m - mixed_block (not figure in paper, but use in google own implementation)
             e - expanded_block (figure 7 in paper)
         name : str
             scope name
@@ -80,7 +82,7 @@ class Inception_v3(TFModel):
         Returns
         -------
         tf.Tensor
-             """
+        """
         kwargs = cls.fill_params('body', **kwargs)
         arch = kwargs.pop('arch')
         layout = kwargs.pop('layout')
@@ -137,7 +139,7 @@ class Inception_v3(TFModel):
         with tf.variable_scope(name):
             branch_1 = conv_block(inputs, filters[0], 1, layout, name='conv_1', **kwargs)
 
-            branch_1_3 = conv_block(inputs, [filters[1], filters[0]], [1, 3], layout*2, name='conv_1_3', **kwargs)
+            branch_1_3 = conv_block(inputs, [filters[1], filters[0]], [1, 5], layout*2, name='conv_1_3', **kwargs)
 
             branch_1_3_3 = conv_block(inputs, [filters[0]]+[filters[2]]*2, [1, 3, 3], layout*3, name='conv_1_3_3',
                                       **kwargs)
@@ -151,7 +153,7 @@ class Inception_v3(TFModel):
     @classmethod
     def reduction_block(cls, inputs, filters, layout='cna', name='reduction_block', **kwargs):
         """ Reduction block
-        For details see figure 6 in the article.
+        For details see figure 10 in the article.
 
         Parameters
         ----------
@@ -177,16 +179,15 @@ class Inception_v3(TFModel):
 
             branch_pool = conv_block(inputs, layout='p', pool_size=3, pool_strides=2, name='max_pooling',
                                      padding='valid', **kwargs)
-
+            
             axis = cls.channels_axis(kwargs['data_format'])
-
             output = tf.concat([branch_3, branch_1_3_3, branch_pool], axis, name='output')
         return output
 
     @classmethod
     def mixed_block(cls, inputs, filters, layout='cna', name='mixed_block', **kwargs):
         """ Mixed block
-        For details see section 6 in the article.
+        This block not describe in paper, but use in google own implementation in 347 line.
 
         Parameters
         ----------
@@ -212,7 +213,7 @@ class Inception_v3(TFModel):
             branch_1_7_3 = conv_block(branch_1_7, filters[0], 3, layout, name='conv_1_7_3', strides=2,
                                       padding='valid', **kwargs)
 
-            branch_pool = conv_block(inputs, layout='p', name='c_pool', padding='valid', pool_size=3,\
+            branch_pool = conv_block(inputs, layout='p', name='c_pool', padding='valid', pool_size=3,
                                      pool_strides=2, **kwargs)
 
             axis = cls.channels_axis(kwargs['data_format'])
@@ -222,7 +223,7 @@ class Inception_v3(TFModel):
     @classmethod
     def factor_block(cls, inputs, filters, layout='cna', name='factor_block', **kwargs):
         """ 7x7 factorization block
-        For details see figure 10 in the article.
+        For details see figure 6 in the article.
 
         Parameters
         ----------
@@ -247,7 +248,7 @@ class Inception_v3(TFModel):
             branch_1_3 = conv_block(inputs, [filters[1]] * 2 + [filters[0]], kernel_size, layout * 3,
                                     name='conv_1_3', **kwargs)
 
-            kernel_size = [1, *factor * 2]
+            kernel_size = [1, *factor[::-1] * 2]
             branch_1_7 = conv_block(inputs, [filters[1]] * 4 + [filters[0]], kernel_size, layout * 5,
                                     name='conv_1_7', **kwargs)
 
