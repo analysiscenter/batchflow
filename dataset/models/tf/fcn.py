@@ -18,7 +18,7 @@ class FCN(TFModel):
         config = TFModel.default_config()
 
         config['common']['dropout_rate'] = .5
-        config['input_block']['input_class'] = VGG16
+        config['input_block']['base_network'] = VGG16
         config['body']['filters'] = 100
 
         return config
@@ -36,14 +36,14 @@ class FCN(TFModel):
         return config
 
     @classmethod
-    def input_block(cls, inputs, input_class, name='input_block', **kwargs):
+    def input_block(cls, inputs, base_network, name='input_block', **kwargs):
         """ Base network
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        input_class : class
+        base_network : class
             base network class
         name : str
             scope name
@@ -53,8 +53,8 @@ class FCN(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            x = input_class.input_block(inputs, name='input_block', **kwargs)
-            x = input_class.body(x, name='body', **kwargs)
+            x = base_network.input_block(inputs, name='input_block', **kwargs)
+            x = base_network.body(x, name='body', **kwargs)
         return x
 
     @classmethod
@@ -85,6 +85,7 @@ class FCN(TFModel):
             the output image size
         num_classes : int
             number of classes
+
         Returns
         -------
         tf.Tensor
@@ -106,11 +107,15 @@ class FCN32(FCN):
 
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
-    base_network : class
-        base network (VGG16 by default)
+
+    input_block : dict
+        base_network : class
+            base network (VGG16 by default)
+
     body : dict
         filters : int
             number of filters in convolutions after base network (default=100)
+
     head : dict
         factor : int
             upsampling factor (default=32)
@@ -156,15 +161,18 @@ class FCN16(FCN):
 
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
-    base_network : class
-        base network (VGG16 by default)
+
     input_block : dict
+        base_network : class
+            base network (VGG16 by default)
         skip_name : str
             tensor name for the skip connection.
             Default='block-3/output:0' for VGG16.
+
     body : dict
         filters : int
             number of filters in convolutions after base network (default=100)
+
     head : dict
         factor : int
             upsampling factor (default=32)
@@ -227,18 +235,21 @@ class FCN8(FCN):
 
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
-    base_network : class
-        base network (VGG16 by default)
+
     input_block : dict
+        base_network : class
+            base network (VGG16 by default)
         skip1_name : str
             tensor name for the first skip connection.
             Default='block-3/output:0' for VGG16.
         skip2_name : str
             tensor name for the second skip connection.
             Default='block-2/output:0' for VGG16.
+
     body : dict
         filters : int
             number of filters in convolutions after base network (default=100)
+
     head : dict
         factor : int
             upsampling factor (default=32)

@@ -1083,6 +1083,7 @@ class TFModel(BaseModel):
         config = {}
         config['common'] = {'batch_norm': {'momentum': .1}}
         config['input_block'] = {}
+        config['block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}

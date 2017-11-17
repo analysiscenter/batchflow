@@ -9,3 +9,4 @@ from .inception_v1 import Inception_v1
 from .inception_v3 import Inception_v3
 from .squeezenet import SqueezeNet
 from .mobilenet import MobileNet
+from .densenet import DenseNet, DenseNet121, DenseNet169, DenseNet201, DenseNet264

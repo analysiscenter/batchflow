@@ -9,7 +9,6 @@ from .layers import conv_block
 _DEFAULT_BODY_ARCH = {
     'strides': [1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 2],
     'double_filters': [1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0],
-    'filters': 32,
     'width_factor': 1
 }
 

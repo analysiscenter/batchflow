@@ -56,7 +56,7 @@ def _get_layer_fn(fn, dim):
 def _unpack_args(args, layer_no, layers_max):
     new_args = {}
     for arg in args:
-        if isinstance(args[arg], (tuple, list)) and layers_max > 1:
+        if isinstance(args[arg], list) and layers_max > 1:
             arg_value = args[arg][layer_no]
         else:
             arg_value = args[arg]

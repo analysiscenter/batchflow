@@ -84,7 +84,7 @@ def preserve_shape_numba(image_shape, shape, crop=CROP_CENTER):
 
 
 
-class BasicImagesBatch(Batch):
+class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels"
 
@@ -238,7 +238,7 @@ class BasicImagesBatch(Batch):
             raise ValueError("Parameter axis can be 'h' or 'v' only")
 
 
-class ImagesBatch(BasicImagesBatch):
+class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images
 
     images are stored as numpy arrays (N, H, W) or (N, H, W, C)
@@ -367,7 +367,7 @@ class ImagesBatch(BasicImagesBatch):
         return self
 
 
-class ImagesPILBatch(BasicImagesBatch):
+class ImagesPILBatch(BaseImagesBatch):
     """ Batch class for 2D images in PIL format """
     def get_image_size(self, image):
         """ Return image size (width, height) """
