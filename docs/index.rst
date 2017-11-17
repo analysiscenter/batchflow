@@ -67,7 +67,7 @@ and call ``train_model``. Of course, you can also choose a loss function, an opt
     my_workflow = my_dataset.pipeline()
                   .init_model('dynamic', ResNet34, config={
                               'inputs': {'images': {'shape': B('image_shape')},
-                                         'labels': {'classes': 10, 'transform': 'ohe', 'name': 'targets'}})
+                                         'labels': {'classes': 10, 'transform': 'ohe', 'name': 'targets'}}})
                   .load('/some/path')
                   .some_transform()
                   .another_transform()
