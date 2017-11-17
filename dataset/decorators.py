@@ -611,11 +611,15 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 parallel = inbatch_parallel  # pylint: disable=invalid-name
 
 def njit(nogil=True):
+    """ Fake njit decorator to use when numba is not installed """
+    _ = nogil
     def njit_fake_decorator(method):
-        """ Return a fake decorator when numba is not installed """
+        """ Return a decorator """
         @functools.wraps(method)
         def wrapped_method(*args, **kwargs):
+            """ Log warning that numba is not installed which causes preformance degradation """
             logging.warning('numba is not installed. This causes a severe performance degradation for method %s'
                             % method.__name__)
             return method(*args, **kwargs)
         return wrapped_method
+    return njit_fake_decorator
