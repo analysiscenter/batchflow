@@ -179,7 +179,7 @@ class Inception_v3(TFModel):
 
             branch_pool = conv_block(inputs, layout='p', pool_size=3, pool_strides=2, name='max_pooling',
                                      padding='valid', **kwargs)
-            
+
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_3, branch_1_3_3, branch_pool], axis, name='output')
         return output
