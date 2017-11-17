@@ -177,14 +177,13 @@ class TFModel(BaseModel):
                 with tf.variable_scope('globals'):
                     self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
                     self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
+                config = self._build()
 
-                self._build()
-
-                self._make_loss()
+                self._make_loss(config)
                 self.store_to_attr('loss', tf.losses.get_total_loss())
 
                 if self.train_step is None:
-                    optimizer = self._make_optimizer()
+                    optimizer = self._make_optimizer(config)
 
                     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                     with tf.control_dependencies(update_ops):
@@ -192,7 +191,7 @@ class TFModel(BaseModel):
                 else:
                     self.store_to_attr('train_step', self.train_step)
 
-            session_config = self.get_from_config('session', {})
+            session_config = self.get('session', config, default={})
             self.session = tf.Session(**session_config)
             self.session.run(tf.global_variables_initializer())
 
@@ -268,7 +267,6 @@ class TFModel(BaseModel):
                 placeholder tensor after reshaping and transformations
         """
         # pylint:disable=too-many-statements
-
         config = self.get_from_config('inputs') or {}
         config = copy1(config)
 
@@ -389,8 +387,8 @@ class TFModel(BaseModel):
         tensor = mip(tensor, depth=depth, data_format=self.data_format(input_name))
         return tensor
 
-    def _unpack_fn_from_config(self, param, default=None):
-        par = self.get_from_config(param, default)
+    def _unpack_fn_from_config(self, param, config=None):
+        par = self.get(param, config)
 
         if par is None:
             return None, None
@@ -412,9 +410,9 @@ class TFModel(BaseModel):
 
         return par_name, par_args
 
-    def _make_loss(self):
+    def _make_loss(self, config):
         """ Return a loss function from config """
-        loss = self.get_from_config("loss")
+        loss = self.get('loss', config)
 
         if isinstance(loss, dict):
             target_scope = loss.get('targets_scope', 'inputs')
@@ -449,8 +447,8 @@ class TFModel(BaseModel):
             else:
                 tf.losses.add_loss(loss(targets, predictions))
 
-    def _make_decay(self):
-        decay_name, decay_args = self._unpack_fn_from_config('decay')
+    def _make_decay(self, config):
+        decay_name, decay_args = self._unpack_fn_from_config('decay', config)
 
         if decay_name is None:
             pass
@@ -465,8 +463,8 @@ class TFModel(BaseModel):
 
         return decay_name, decay_args
 
-    def _make_optimizer(self):
-        optimizer_name, optimizer_args = self._unpack_fn_from_config('optimizer', 'Adam')
+    def _make_optimizer(self, config):
+        optimizer_name, optimizer_args = self._unpack_fn_from_config('optimizer', config)
 
         if callable(optimizer_name):
             pass
@@ -477,7 +475,7 @@ class TFModel(BaseModel):
         else:
             raise ValueError("Unknown optimizer", optimizer_name)
 
-        decay_name, decay_args = self._make_decay()
+        decay_name, decay_args = self._make_decay(config)
         if decay_name is not None:
             optimizer_args['learning_rate'] = decay_name(**decay_args, global_step=self.global_step)
 
@@ -1087,6 +1085,8 @@ class TFModel(BaseModel):
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}
+        config['loss'] = 'ce'
+        config['optimizer'] = 'Adam'
         return config
 
     @classmethod
@@ -1181,3 +1181,5 @@ class TFModel(BaseModel):
         x = self.body(inputs=x, **config['body'])
         output = self.head(inputs=x, **config['head'])
         self.output(output, **config['output'])
+
+        return config

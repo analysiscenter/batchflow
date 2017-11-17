@@ -4,21 +4,15 @@ and define data processing and machine learning workflows even for datasets that
 
 Documentation - https://analysiscenter.github.io/dataset/
 """
-
 from setuptools import setup, find_packages
-from os import path
 import re
-from pypandoc import convert_file
-
-
-here = path.abspath(path.dirname(__file__))
 
 with open('dataset/__init__.py', 'r') as f:
     version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE).group(1)
 
 
-long_description = convert_file(path.join(here, 'README.md'), 'rst')
-
+with open('docs/index.rst', 'r') as f:
+    long_description = f.read()
 
 
 setup(
