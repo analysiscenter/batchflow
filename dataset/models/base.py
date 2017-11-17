@@ -36,7 +36,7 @@ class BaseModel:
         return cls.get(variables, config, pop=True)
 
     @classmethod
-    def get(cls, variables, config=None, pop=True):
+    def get(cls, variables, config=None, pop=False, default=None):
         """ Return variables from config """
         unpack = False
         if not isinstance(variables, (list, tuple)):
@@ -64,7 +64,7 @@ class BaseModel:
                 if pop:
                     val = _config.pop(var_name)
                 else:
-                    val = _config.get(var_name)
+                    val = _config.get(var_name, default)
             else:
                 raise KeyError('Key %s not found' % variable)
 
@@ -79,10 +79,8 @@ class BaseModel:
     def get_from_config(self, variable, default=None, config=None):
         """ Return a variable from config or a default value """
         config = config or self.config
-        try:
-            value = self.get(variable, config)
-        except KeyError:
-            return default
+        config = config.copy()
+        value = self.get(variable, config, default=default)
         return value
 
     def _make_inputs(self, names=None):
