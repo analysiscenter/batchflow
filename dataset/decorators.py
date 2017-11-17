@@ -618,8 +618,8 @@ def njit(nogil=True):
         @functools.wraps(method)
         def wrapped_method(*args, **kwargs):
             """ Log warning that numba is not installed which causes preformance degradation """
-            logging.warning('numba is not installed. This causes a severe performance degradation for method %s'
-                            % method.__name__)
+            logging.warning('numba is not installed. This causes a severe performance degradation for method %s',
+                            method.__name__)
             return method(*args, **kwargs)
         return wrapped_method
     return njit_fake_decorator
