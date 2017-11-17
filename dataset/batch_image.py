@@ -19,11 +19,10 @@ except ImportError:
 try:
     from numba import njit
 except ImportError:
-    pass
+    from .decorators import njit
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel, any_action_failed
-
 
 
 CROP_CENTER = -1

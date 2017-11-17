@@ -5,6 +5,7 @@ import threading
 import concurrent.futures as cf
 import asyncio
 import functools
+import logging
 
 from .named_expr import _DummyBatch, eval_expr
 
@@ -608,3 +609,13 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
 
 parallel = inbatch_parallel  # pylint: disable=invalid-name
+
+def njit(nogil=True):
+    def njit_fake_decorator(method):
+        """ Return a fake decorator when numba is not installed """
+        @functools.wraps(method)
+        def wrapped_method(*args, **kwargs):
+            logging.warning('numba is not installed. This causes a severe performance degradation for method %s'
+                            % method.__name__)
+            return method(*args, **kwargs)
+        return wrapped_method
