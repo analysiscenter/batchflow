@@ -1,3 +1,5 @@
+[![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/dataset)
+
 # Dataset
 
 `Dataset` helps you conveniently work with random or sequential batches of your data
