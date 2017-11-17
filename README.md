@@ -1,5 +1,4 @@
 [![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/dataset)
-
 # Dataset
 
 `Dataset` helps you conveniently work with random or sequential batches of your data
@@ -45,6 +44,25 @@ for i in range(NUM_ITERS):
     processed_batch = my_workflow.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
     # only now the actions are fired and data is changed with the workflow defined earlier
     # actions are executed one by one and here you get a fully processed batch
+```
+
+
+## Train a neural network
+`Dataset` includes ready-to-use proven architectures like VGG, Inception, ResNet and many others.
+To apply them to your data just choose the model, specify the inputs (like the number of classes or images shape)
+and call `train_model`. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.
+```python
+from dataset.models.tf import ResNet34
+
+my_workflow = my_dataset.pipeline()
+              .init_model('dynamic', ResNet34, config={
+                          'inputs': {'images': {'shape': B('image_shape')},
+                                     'labels': {'classes': 10, 'transform': 'ohe', 'name': 'targets'}})
+              .load('/some/path')
+              .some_transform()
+              .another_transform()
+              .train_model('ResNet34', feed_dict={'images': B('images'), 'labels': B('labels')})
+              .run(BATCH_SIZE, shuffle=True)
 ```
 
 For more advanced cases and detailed API see [the documentation](https://analysiscenter.github.io/dataset/).
