@@ -1087,6 +1087,8 @@ class TFModel(BaseModel):
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}
+        config['loss'] = 'ce'
+        config['optimizer'] = 'Adam'
         return config
 
     @classmethod
