@@ -1,4 +1,5 @@
 [![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/dataset)
+
 # Dataset
 
 `Dataset` helps you conveniently work with random or sequential batches of your data
@@ -49,7 +50,7 @@ for i in range(NUM_ITERS):
 
 ## Train a neural network
 `Dataset` includes ready-to-use proven architectures like VGG, Inception, ResNet and many others.
-To apply them to your data just choose the model, specify the inputs (like the number of classes or images shape)
+To apply them to your data just choose a model, specify the inputs (like the number of classes or images shape)
 and call `train_model`. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.
 ```python
 from dataset.models.tf import ResNet34
