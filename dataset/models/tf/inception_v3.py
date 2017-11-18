@@ -7,13 +7,13 @@ from .layers import conv_block
 
 _DEFAULT_V3_ARCH = {
     'b': {'filters': [[64, 48, 96, 32], [64, 48, 96, 64], [64, 48, 96, 64]]},
-    'r': {'filters': [384, 64, 96]},
+    'r': {'filters': (384, 64, 96)},
     'f': {'filters': [[192, 128],
                       [192, 160],
                       [192, 160],
                       [192, 192]]},
-    'm': {'filters': [192, 320]},
-    'e': {'filters': [320, 384, 448, 192]}
+    'm': {'filters': (192, 320)},
+    'e': {'filters': (320, 384, 448, 192)}
 }
 
 class Inception_v3(TFModel):
@@ -24,7 +24,9 @@ class Inception_v3(TFModel):
     .. Christian Szegedy et al. "Rethinking the Inception Architecture for Computer Vision"
        Argxiv.org `<https://arxiv.org/abs/1512.00567>`_
 
-    Use the implementation from `https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py`
+    Since the article misses some important details (e.g. the number of filters in all convolutions),
+    this class is based on Google's implementation from
+    `<https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py>`_
 
     ** Configuration **
 
@@ -101,7 +103,7 @@ class Inception_v3(TFModel):
                 block_no = layout_dict[block][0]
 
                 filters = arch[block].get('filters')
-                if isinstance(filters[0], list):
+                if isinstance(filters, list):
                     filters = filters[block_no]
 
                 if block == 'b':
