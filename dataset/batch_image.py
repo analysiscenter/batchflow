@@ -122,10 +122,11 @@ class BaseImagesBatch(Batch):
         raise NotImplementedError("Should be implemented in child classes")
 
     @action
-    def crop(self, component='images', origin=None, shape=None):
+    def crop(self, components='images', origin=None, shape=None):
         """ Crop all images in the batch
         Args:
-            component: string - a component name which data should be cropped
+            components: str
+                a component name which data should be cropped
             origin: can be one of:
                     - tuple - a starting point in the form of (x, y)
                     - CROP_00 - to crop from left top edge (0,0)
@@ -134,14 +135,15 @@ class BaseImagesBatch(Batch):
         """
         if origin is not None or shape is not None:
             origin = origin if origin is not None else (0, 0)
-            self._crop(component, origin, shape)
+            self._crop(components, origin, shape)
         return self
 
     @action
-    def random_crop(self, component='images', shape=None):
+    def random_crop(self, components='images', shape=None):
         """ Crop all images to a given shape and a random origin
         Args:
-            component: string - a component name which data should be cropped
+            components: str
+                a component name which data should be cropped
             shape: tuple - a crop size in the form of (width, height)
 
         Origin will be chosen at random to fit the required shape
@@ -149,25 +151,27 @@ class BaseImagesBatch(Batch):
         if shape is None:
             raise ValueError("shape cannot be None")
         else:
-            self._random_crop(component, shape)
+            self._random_crop(components, shape)
         return self
 
     @action
     @inbatch_parallel(init='indices', post='assemble')
-    def resize(self, ix, component='images', shape=(64, 64)):
+    def resize(self, ix, components='images', shape=(64, 64)):
         """ Resize all images in the batch to the given shape
         Args:
-            component: string - a component name which data should be cropped
+            components: str
+                a component name which data should be cropped
             shape: tuple - a crop size in the form of (width, height)
         """
-        return self._resize_one(ix, component, shape)
+        return self._resize_one(ix, components, shape)
 
     @action
     @inbatch_parallel(init='indices', post='assemble')
-    def random_scale(self, ix, component='images', p=1., factor=None, preserve_shape=True, crop=CROP_CENTER):
+    def random_scale(self, ix, components='images', p=1., factor=None, preserve_shape=True, crop=CROP_CENTER):
         """ Scale the content of each image in the batch with a random scale factor
         Args:
-            component: string - a component name
+            components: str
+                a component name
             p: float - a probability to apply scale
                       (0. - don't scale, .5 - scale half of images, 1 - scale all images)
             factor: tuple - min and max scale; the scale factor for each image
@@ -175,12 +179,12 @@ class BaseImagesBatch(Batch):
         """
         if factor is None:
             factor = 0.9, 1.1
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         if np.random.binomial(1, p) > 0:
             _factor = np.random.uniform(*factor)
             image_size = self.get_image_size(image)
             shape = np.round(np.array(image_size) * _factor).astype(np.int16)
-            new_image = self._resize_one(ix, component, shape)
+            new_image = self._resize_one(ix, components, shape)
             if preserve_shape:
                 new_image = self._preserve_shape(new_image, image_size, crop)
         else:
@@ -193,22 +197,24 @@ class BaseImagesBatch(Batch):
 
     @action
     @inbatch_parallel(init='indices', post='assemble')
-    def rotate(self, ix, component='images', angle=0, preserve_shape=True, **kwargs):
+    def rotate(self, ix, components='images', angle=0, preserve_shape=True, **kwargs):
         """ Rotate all images in the batch at the given angle
         Args:
-            component: string - a component name which data should be rotated
+            components: str
+                a component name which data should be rotated
             angle: float - the rotation angle in degrees.
             preserve_shape: bool - whether to keep shape after rotating
                                    (always True for images as arrays, can be False for PIL.Images)
         """
-        return self._rotate_one(ix, component, angle, preserve_shape, **kwargs)
+        return self._rotate_one(ix, components, angle, preserve_shape, **kwargs)
 
     @action
     @inbatch_parallel(init='indices', post='assemble')
-    def random_rotate(self, ix, component='images', p=1., angle=None, **kwargs):
+    def random_rotate(self, ix, components='images', p=1., angle=None, **kwargs):
         """ Rotate each image in the batch at a random angle
         Args:
-            component: string - a component name which data should be rotated
+            components: str
+                a component name which data should be rotated
             p: float - a probability to apply rotate
                        (0. - don't rotate, .5 - rotate half of images, 1 - rotate all images)
             angle: tuple - an angle range in the form of (min_angle, max_angle), in radians
@@ -217,8 +223,8 @@ class BaseImagesBatch(Batch):
             angle = angle or (-45., 45.)
             _angle = np.random.uniform(*angle)
             preserve_shape = kwargs.pop('preserve_shape', True)
-            return self._rotate_one(ix, component, _angle, preserve_shape=preserve_shape, **kwargs)
-        image = self.get(ix, component)
+            return self._rotate_one(ix, components, _angle, preserve_shape=preserve_shape, **kwargs)
+        image = self.get(ix, components)
         return image
 
     @action
@@ -247,6 +253,17 @@ class ImagesBatch(BaseImagesBatch):
         """ Return image size (width, height) """
         return image.shape[:2][::-1]
 
+    def assemble_component(self, all_res, components='images'):
+        try:
+            new_images = np.stack(all_res)
+        except ValueError as e:
+            message = str(e)
+            if "must have the same shape" in message:
+                min_shape = np.array([x.shape for x in all_res]).min(axis=0)
+                all_res = [arr[:min_shape[0], :min_shape[1]].copy() for arr in all_res]
+                new_images = np.stack(all_res)
+        setattr(self, components, new_images)
+
     def assemble(self, all_res, *args, **kwargs):
         """ Assemble the batch after a parallel action """
         _ = args, kwargs
@@ -256,33 +273,32 @@ class ImagesBatch(BaseImagesBatch):
             traceback.print_tb(all_errors[0].__traceback__)
             raise RuntimeError("Could not assemble the batch")
 
-        component = kwargs.get('component', 'images')
-        try:
-            new_images = np.stack(all_res)
-        except ValueError as e:
-            message = str(e)
-            if "must have the same shape" in message:
-                min_shape = np.array([x.shape for x in all_res]).min(axis=0)
-                all_res = [arr[:min_shape[0], :min_shape[1]].copy() for arr in all_res]
-                new_images = np.stack(all_res)
-        setattr(self, component, new_images)
+        components = kwargs.get('components', 'images')
+        if isinstance(components, (list, tuple)):
+            all_res = list(zip(*all_res))
+        else:
+            components = [components]
+            all_res = [all_res]
+        for component, res in zip(components, all_res):
+            self.assemble_component(all_res, component)
+            setattr(self, component, new_data)
         return self
 
     @action
-    def convert_to_pil(self, component='images'):
+    def convert_to_pil(self, components='images'):
         """ Convert batch data to PIL.Image format """
         if self.images is None:
             new_images = None
         else:
             new_images = np.asarray(list(None for _ in self.indices))
-            self.apply_transform(new_images, component, PIL.Image.fromarray)
+            self.apply_transform(new_images, components, PIL.Image.fromarray)
         new_data = (new_images, self.labels)
         new_batch = ImagesPILBatch(np.arange(len(self)), preloaded=new_data)
         return new_batch
 
-    def _resize_one(self, ix, component='images', shape=None):
+    def _resize_one(self, ix, components='images', shape=None):
         """ Resize one image """
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         full_shape = np.array([0 if s > 1 else -1 for s in image.shape])
         image = np.squeeze(image)
         factor = 1. * np.asarray([*shape]) / np.asarray(image.shape[:2])
@@ -305,9 +321,9 @@ class ImagesBatch(BaseImagesBatch):
         new_image[slice(*new_y), slice(*new_x)] = image[slice(*y), slice(*x)]
         return new_image
 
-    def _rotate_one(self, ix, component='images', angle=0, preserve_shape=True, **kwargs):
+    def _rotate_one(self, ix, components='images', angle=0, preserve_shape=True, **kwargs):
         """ Rotate one image """
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         kwargs['reshape'] = not preserve_shape
         new_image = scipy.ndimage.interpolation.rotate(image, angle, **kwargs)
         return new_image
@@ -322,10 +338,10 @@ class ImagesBatch(BaseImagesBatch):
             origin = origin_x, origin_y
         return origin
 
-    def _crop(self, component='images', origin=None, shape=None):
+    def _crop(self, components='images', origin=None, shape=None):
         """ Crop all images in the batch """
         if origin is not None or shape is not None:
-            images = self.get(None, component)
+            images = self.get(None, components)
 
             origin = self._calc_origin(images[0], origin, shape)
             if shape is None:
@@ -337,32 +353,32 @@ class ImagesBatch(BaseImagesBatch):
             y = slice(origin[1], origin[1] + shape[1])
             new_images = images[:, y, x].copy()
 
-            setattr(self, component, new_images)
+            setattr(self, components, new_images)
 
     def _crop_image(self, image, origin, shape):
         origin = self._calc_origin(image, origin, shape)
         new_image = image[origin[1]:origin[1] + shape[1], origin[0]:origin[1] + shape[0]].copy()
         return new_image
 
-    def _random_crop(self, component='images', shape=None):
+    def _random_crop(self, components='images', shape=None):
         if shape is not None:
-            images = self.get(None, component)
+            images = self.get(None, components)
             new_images = random_crop_numba(images, shape)
-            setattr(self, component, new_images)
+            setattr(self, components, new_images)
         return self
 
     @action
-    def fliplr(self, component='images'):
+    def fliplr(self, components='images'):
         """ Flip image horizontaly (left / right) """
-        images = self.get(None, component)
-        setattr(self, component, images[:, :, ::-1])
+        images = self.get(None, components)
+        setattr(self, components, images[:, :, ::-1])
         return self
 
     @action
-    def flipud(self, component='images'):
+    def flipud(self, components='images'):
         """ Flip image verticaly (up / down) """
-        images = self.get(None, component)
-        setattr(self, component, images[:, ::-1])
+        images = self.get(None, components)
+        setattr(self, components, images[:, ::-1])
         return self
 
 
@@ -381,9 +397,15 @@ class ImagesPILBatch(BaseImagesBatch):
             traceback.print_tb(all_errors[0].__traceback__)
             raise RuntimeError("Could not assemble the batch")
 
-        component = kwargs.get('component', 'images')
-        new_data = np.array(all_res, dtype='object')
-        setattr(self, component, new_data)
+        components = kwargs.get('components', 'images')
+        if isinstance(components, (list, tuple)):
+            all_res = list(zip(*all_res))
+        else:
+            components = [components]
+            all_res = [all_res]
+        for component, res in zip(components, all_res):
+            new_data = np.array(res, dtype='object')
+            setattr(self, component, new_data)
         return self
 
     @action
@@ -411,10 +433,10 @@ class ImagesPILBatch(BaseImagesBatch):
             new_image = None
         return new_image
 
-    def _resize_one(self, ix, component='images', shape=None, **kwargs):
+    def _resize_one(self, ix, components='images', shape=None, **kwargs):
         """ Resize one image """
         _ = kwargs
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         new_image = image.resize(shape, PIL.Image.ANTIALIAS)
         return new_image
 
@@ -425,9 +447,9 @@ class ImagesPILBatch(BaseImagesBatch):
         new_image.paste(image.crop(box), (new_x[0], new_y[0]))
         return new_image
 
-    def _rotate_one(self, ix, component='images', angle=0, preserve_shape=True, **kwargs):
+    def _rotate_one(self, ix, components='images', angle=0, preserve_shape=True, **kwargs):
         """ Rotate one image """
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         kwargs['expand'] = not preserve_shape
         new_image = image.rotate(angle, **kwargs)
         return new_image
@@ -445,16 +467,16 @@ class ImagesPILBatch(BaseImagesBatch):
         return new_image
 
     @inbatch_parallel('indices', post='assemble')
-    def _crop(self, ix, component='images', origin=None, shape=None):
+    def _crop(self, ix, components='images', origin=None, shape=None):
         """ Crop all images """
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         new_image = self._crop_image(image, origin, shape)
         return new_image
 
     @inbatch_parallel('indices', post='assemble')
-    def _random_crop(self, ix, component='images', shape=None):
+    def _random_crop(self, ix, components='images', shape=None):
         """ Crop all images with a given shape and a random origin """
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         origin_x = np.random.randint(0, image.width - shape[0])
         origin_y = np.random.randint(0, image.height - shape[1])
         new_image = self._crop_image(image, (origin_x, origin_y), shape)
@@ -462,14 +484,14 @@ class ImagesPILBatch(BaseImagesBatch):
 
     @action
     @inbatch_parallel('indices', post='assemble')
-    def fliplr(self, ix, component='images'):
+    def fliplr(self, ix, components='images'):
         """ Flip image horizontaly (left / right) """
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         return image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
 
     @action
     @inbatch_parallel('indices', post='assemble')
-    def flipud(self, ix, component='images'):
+    def flipud(self, ix, components='images'):
         """ Flip image verticaly (up / down) """
-        image = self.get(ix, component)
+        image = self.get(ix, components)
         return image.transpose(PIL.Image.FLIP_TOP_BOTTOM)
