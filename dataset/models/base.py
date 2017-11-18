@@ -32,7 +32,7 @@ class BaseModel:
             self.load(**load)
 
     @classmethod
-    def pop(cls, variables, config=None, default=None):
+    def pop(cls, variables, config=None):
         """ Return variables and remove them from config"""
         return cls.get(variables, config, pop=True)
 
