@@ -77,7 +77,7 @@ class BaseModel:
             ret_vars = tuple(ret_vars)
         return ret_vars
 
-    def _make_inputs(self, names=None):
+    def _make_inputs(self, names=None, config=None):
         """ Make model input data using config
 
         Parameters
@@ -88,7 +88,7 @@ class BaseModel:
         -------
         None or dict - where key is a variable name and a value is a corresponding variable after configuration
         """
-        _ = names
+        _ = names, config
         return None
 
     def build(self, *args, **kwargs):
