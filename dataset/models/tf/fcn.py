@@ -20,6 +20,7 @@ class FCN(TFModel):
         config['common']['dropout_rate'] = .5
         config['input_block']['base_network'] = VGG16
         config['body']['filters'] = 100
+        config['body']['upsampling_kernel'] = 3
 
         return config
 
@@ -91,9 +92,9 @@ class FCN(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('head', **kwargs)
-        filters, factor = cls.pop(['filters', 'factor'], kwargs)
+        factor = cls.pop('factor', kwargs)
 
-        x = conv_block(inputs, filters=num_classes, kernel_size=filters, layout='t', name=name,
+        x = conv_block(inputs, filters=num_classes, kernel_size=factor, layout='t', name=name,
                        **{**kwargs, 'strides': factor})
         x = cls.crop(x, original_images, kwargs.get('data_format'))
         return x
@@ -115,17 +116,16 @@ class FCN32(FCN):
     body : dict
         filters : int
             number of filters in convolutions after base network (default=100)
+        upsampling_kernel : int
+            kernel_size for upsampling (default=3)
 
     head : dict
         factor : int
             upsampling factor (default=32)
-        filters : int
-            number of filters in the final upsampling block (default=32)
     """
     @classmethod
     def default_config(cls):
         config = FCN.default_config()
-        config['head']['filters'] = 32
         config['head']['factor'] = 32
         return config
 
@@ -172,17 +172,16 @@ class FCN16(FCN):
     body : dict
         filters : int
             number of filters in convolutions after base network (default=100)
+        upsampling_kernel : int
+            kernel_size for upsampling (default=3)
 
     head : dict
         factor : int
-            upsampling factor (default=32)
-        filters : int
-            number of filters in the final upsampling block (default=32)
+            upsampling factor (default=16)
     """
     @classmethod
     def default_config(cls):
         config = FCN.default_config()
-        config['head']['filters'] = 16
         config['head']['factor'] = 16
         config['input_block']['skip_name'] = '/input_block/body/block-3/output:0'
         return config
@@ -214,12 +213,12 @@ class FCN16(FCN):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        filters = kwargs.pop('filters')
+        filters, kernel = cls.pop(['filters', 'upsampling_kernel'], kwargs)
 
         with tf.variable_scope(name):
             x, skip = inputs
             x = FCN32.body(x, filters=filters, num_classes=num_classes, name='fcn32', **kwargs)
-            x = conv_block(x, num_classes, 1, 't', 'fcn32_2', strides=2, **kwargs)
+            x = conv_block(x, num_classes, kernel, 't', 'fcn32_2', strides=2, **kwargs)
 
             skip = conv_block(skip, num_classes, 1, 'c', 'pool', **kwargs)
             x = cls.crop(x, skip, kwargs.get('data_format'))
@@ -249,17 +248,16 @@ class FCN8(FCN):
     body : dict
         filters : int
             number of filters in convolutions after base network (default=100)
+        upsampling_kernel : int
+            kernel_size for upsampling (default=3)
 
     head : dict
         factor : int
-            upsampling factor (default=32)
-        filters : int
-            number of filters in the final upsampling block (default=32)
+            upsampling factor (default=8)
     """
     @classmethod
     def default_config(cls):
         config = FCN.default_config()
-        config['head']['filters'] = 8
         config['head']['factor'] = 8
         config['input_block']['skip1_name'] = '/input_block/body/block-3/output:0'
         config['input_block']['skip2_name'] = '/input_block/body/block-2/output:0'
@@ -293,13 +291,13 @@ class FCN8(FCN):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        filters = kwargs.pop('filters')
+        filters, kernel = cls.pop(['filters', 'upsampling_kernel'], kwargs)
 
         with tf.variable_scope(name):
             x, skip1, skip2 = inputs
 
             x = FCN16.body((x, skip1), filters=filters, num_classes=num_classes, name='fcn16', **kwargs)
-            x = conv_block(x, num_classes, 1, 't', name='fcn16_2', strides=2, **kwargs)
+            x = conv_block(x, num_classes, kernel, 't', name='fcn16_2', strides=2, **kwargs)
 
             skip2 = conv_block(skip2, num_classes, 1, 'c', name='pool2')
 
