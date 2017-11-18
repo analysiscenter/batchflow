@@ -254,6 +254,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.shape[:2][::-1]
 
     def assemble_component(self, all_res, components='images'):
+        """ Assemble one component """
         try:
             new_images = np.stack(all_res)
         except ValueError as e:
@@ -280,8 +281,7 @@ class ImagesBatch(BaseImagesBatch):
             components = [components]
             all_res = [all_res]
         for component, res in zip(components, all_res):
-            self.assemble_component(all_res, component)
-            setattr(self, component, new_data)
+            self.assemble_component(res, component)
         return self
 
     @action
