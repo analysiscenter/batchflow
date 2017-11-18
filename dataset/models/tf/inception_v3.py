@@ -189,7 +189,7 @@ class Inception_v3(TFModel):
     @classmethod
     def mixed_block(cls, inputs, filters, layout='cna', name='mixed_block', **kwargs):
         """ Mixed block
-        This block not describe in paper, but use in google own implementation in 347 line.
+        This block is not described in the paper, but is used in Google's implementation in line 347.
 
         Parameters
         ----------
