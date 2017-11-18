@@ -52,12 +52,7 @@ class LinkNet(TFModel):
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
-
-        layers_filters = 2 ** np.arange(config['body']['num_blocks']) * config['input_block']['filters']
-        config['body']['filters'] = self.get_from_config('body/filters', layers_filters)
-
         config['head']['num_classes'] = self.num_classes('masks')
-
         return config
 
     @classmethod

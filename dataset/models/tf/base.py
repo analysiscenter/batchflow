@@ -195,7 +195,7 @@ class TFModel(BaseModel):
             self.session = tf.Session(**session_config)
             self.session.run(tf.global_variables_initializer())
 
-    def _make_inputs(self, names=None):
+    def _make_inputs(self, names=None, config=None):
         """ Make model input data using config
 
         In the config's inputs section it looks for ``names``, creates placeholders required, and
@@ -267,8 +267,7 @@ class TFModel(BaseModel):
                 placeholder tensor after reshaping and transformations
         """
         # pylint:disable=too-many-statements
-        config = self.get_from_config('inputs') or {}
-        config = copy1(config)
+        config = self.get('inputs', config)
 
         names = names or []
         missing_names = set(names) - set(config.keys())
@@ -1079,6 +1078,7 @@ class TFModel(BaseModel):
     def default_config(cls):
         """ Define a model defaults """
         config = {}
+        config['inputs'] = {}
         config['common'] = {'batch_norm': {'momentum': .1}}
         config['input_block'] = {}
         config['block'] = {}
@@ -1114,7 +1114,7 @@ class TFModel(BaseModel):
         #. Define parameters for :meth:`.input_block`, :meth:`.body`, :meth:`.head`::
 
             config['input_block']['inputs'] = self.inputs['images']
-            config['input_block']['filters'] = self.get_from_config('filters', 32)
+            config['input_block']['filters'] = self.get('filters', config, default=32)
             config['body']['filters'] = filters * 2
             config['head']['num_classes'] = self.num_classes('labels')
 
@@ -1122,15 +1122,17 @@ class TFModel(BaseModel):
 
             return config
         """
-        with tf.variable_scope('inputs'):
-            self._make_inputs(names)
 
         config = self.default_config()
-        config['common'] = {**config['common'], **self.get_from_config('common', {})}
-        config['input_block'] = {**config['input_block'], **self.get_from_config('input_block', {})}
-        config['body'] = {**config['body'], **self.get_from_config('body', {})}
-        config['head'] = {**config['head'], **self.get_from_config('head', {})}
-        config['output'] = {**config['output'], **self.get_from_config('output', {})}
+
+        with tf.variable_scope('inputs'):
+            self._make_inputs(names, self.config)
+
+        config['common'] = {**config['common'], **self.get('common', self.config, {})}
+        config['input_block'] = {**config['input_block'], **self.get('input_block', self.config, {})}
+        config['body'] = {**config['body'], **self.get('body', self.config, {})}
+        config['head'] = {**config['head'], **self.get('head', self.config, {})}
+        config['output'] = {**config['output'], **self.get('output', self.config, {})}
         return config
 
 

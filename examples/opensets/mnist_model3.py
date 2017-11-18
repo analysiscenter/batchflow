@@ -13,7 +13,7 @@ from dataset.models.tf import VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, Res
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 16
+    BATCH_SIZE = 4
 
     mnist = MNIST()
 
@@ -21,13 +21,13 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_model('dynamic', ResNet18, 'conv',
+                .init_model('dynamic', Inception_v3, 'conv',
                             config={'inputs': dict(images={'shape': B('image_shape')},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     #'filters': 16, 'width_factor': 1,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['labels', 'accuracy'])})
-                .resize(shape=(256, 256))
+                .resize(shape=(128, 128))
                 .train_model('conv', fetches='loss',
                                      feed_dict={'images': B('images'),
                                                 'labels': B('labels')},

@@ -25,18 +25,19 @@ class BaseModel:
     def __init__(self, name=None, config=None, *args, **kwargs):
         self.config = config or {}
         self.name = name or self.__class__.__name__
-        if self.get_from_config('build', True):
+        if self.get('build', self.config, True):
             self.build(*args, **kwargs)
-        if self.get_from_config('load', False):
-            self.load(**self.get_from_config('load'))
+        load = self.get('load', self.config, False)
+        if load:
+            self.load(**load)
 
     @classmethod
-    def pop(cls, variables, config=None):
+    def pop(cls, variables, config=None, default=None):
         """ Return variables and remove them from config"""
         return cls.get(variables, config, pop=True)
 
     @classmethod
-    def get(cls, variables, config=None, pop=False, default=None):
+    def get(cls, variables, config=None, default=None, pop=False):
         """ Return variables from config """
         unpack = False
         if not isinstance(variables, (list, tuple)):
@@ -75,13 +76,6 @@ class BaseModel:
         else:
             ret_vars = tuple(ret_vars)
         return ret_vars
-
-    def get_from_config(self, variable, default=None, config=None):
-        """ Return a variable from config or a default value """
-        config = config or self.config
-        config = config.copy()
-        value = self.get(variable, config, default=default)
-        return value
 
     def _make_inputs(self, names=None):
         """ Make model input data using config
