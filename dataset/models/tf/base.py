@@ -148,7 +148,8 @@ class TFModel(BaseModel):
        Or skip it and hard code all the parameters in unpredictable places without the possibility to
        change them easily through model's config.
 
-    #. Define build configuration (e.g. number of classes, input images, etc) be overriding :meth:`~.TFModel.build_config`.
+    #. Define build configuration (e.g. number of classes, input images, etc)
+       by overriding :meth:`~.TFModel.build_config`.
 
     #. Override :meth:`~.TFModel.input_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
        In many cases defaults and build config are just enough to build a network without additional code writing.
@@ -1149,8 +1150,8 @@ class TFModel(BaseModel):
         You need to override this method if you expect your model or its blocks to serve as a base for other models
         (e.g. VGG for FCN, ResNet for LinkNet, etc).
 
-        Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc) specific to the model,
-        but independent of anything else (like image shapes, number of classes, etc).
+        Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
+        specific to the model, but independent of anything else (like image shapes, number of classes, etc).
 
         These defaults can be changed in `._build_config` or when calling `Pipeline.init_model`.
 
@@ -1195,7 +1196,8 @@ class TFModel(BaseModel):
 
            See :meth:`._make_inputs` for details.
 
-        #. Define parameters for :meth:`.TFModel.input_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head` which depend on inputs.
+        #. Define parameters for :meth:`.TFModel.input_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head`
+           which depend on inputs.
 
         #. Don't forget to return ``config``.
 
