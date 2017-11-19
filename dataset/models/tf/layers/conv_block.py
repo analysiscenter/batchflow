@@ -141,7 +141,7 @@ def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
     Notes
     -----
     When ``layout`` includes several layers of the same type, each one can have its own parameters,
-    if corresponding args are passed as lists/tuples.
+    if corresponding args are passed as lists (not tuples).
 
     Examples
     --------
