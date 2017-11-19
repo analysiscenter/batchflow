@@ -1,4 +1,7 @@
-"""Contains class for FCN"""
+"""
+Shelhamer E. et al "`Fully Convolutional Networks for Semantic Segmentation
+<https://arxiv.org/abs/1605.06211>`_"
+"""
 import tensorflow as tf
 
 from . import TFModel, VGG16
@@ -6,13 +9,7 @@ from .layers import conv_block
 
 
 class FCN(TFModel):
-    """ Base Fully convolutional network (FCN)
-
-    References
-    ----------
-    .. Shelhamer E. et al "Fully Convolutional Networks for Semantic Segmentation"
-       Arxiv.org `<https://arxiv.org/abs/1605.06211>`_
-    """
+    """ Base Fully convolutional network (FCN) """
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
@@ -24,9 +21,9 @@ class FCN(TFModel):
 
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'masks']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
@@ -76,14 +73,13 @@ class FCN(TFModel):
     @classmethod
     def head(cls, inputs, original_images, num_classes, name='head', **kwargs):
         """ Base layers
+
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
-            number of filters
-        image_size : tuple
-            the output image size
+        original_images : tf.Tensor
+            the tensor with source images (provide the shape to upsample to)
         num_classes : int
             number of classes
 
@@ -102,7 +98,6 @@ class FCN(TFModel):
 
 class FCN32(FCN):
     """  Fully convolutional network (FCN32)
-    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
 
     **Configuration**
 
@@ -137,8 +132,6 @@ class FCN32(FCN):
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
-            number of filters
         num_classes : int
             number of classes
 
@@ -155,7 +148,6 @@ class FCN32(FCN):
 
 class FCN16(FCN):
     """  Fully convolutional network (FCN16)
-    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
 
     **Configuration**
 
@@ -203,8 +195,6 @@ class FCN16(FCN):
         ----------
         inputs : tf.Tensor
             two input tensors
-        filters : int
-            number of filters
         num_classes : int
             number of classes
 
@@ -228,7 +218,6 @@ class FCN16(FCN):
 
 class FCN8(FCN):
     """  Fully convolutional network (FCN8)
-    https://arxiv.org/abs/1605.06211 (E.Shelhamer et al, 2016)
 
     **Configuration**
 
@@ -281,8 +270,6 @@ class FCN8(FCN):
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
-            number of filters
         num_classes : int
             number of classes
 

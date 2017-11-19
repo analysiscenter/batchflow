@@ -1,4 +1,7 @@
-''' Contains DenseNet '''
+"""
+Huang G. et al. "`Densely Connected Convolutional Networks
+<https://arxiv.org/abs/1608.06993>`_"
+"""
 import tensorflow as tf
 
 from . import TFModel
@@ -8,15 +11,10 @@ from .layers import conv_block
 class DenseNet(TFModel):
     """ DenseNet
 
-    References
-    ----------
-    .. Huang G. et al. "r "Densely Connected Convolutional Networks""
-       Arxiv.org `<https://arxiv.org/abs/1608.06993>`_
-
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with keys 'images' and 'masks'. See :meth:`.TFModel._make_inputs`.
 
     input_block : dict
 
@@ -29,6 +27,22 @@ class DenseNet(TFModel):
 
         width_factor : float
             multiplier for the number of channels (default=1)
+
+    block : dict
+        parameters for dense block, including :func:`~.layers.conv_block` parameters, as well as
+
+        growth_rate : int
+            number of output filters in each layer (default=32)
+
+        bottleneck : bool
+            whether to use 1x1 convolutions in each layer (default=True)
+
+    transition_layer : dict
+        parameters for transition layers, including :func:`~.layers.conv_block` parameters, as well as
+
+        reduction_factor : float
+            a multiplier for number of output filters (default=1)
+
     """
     @classmethod
     def default_config(cls):
@@ -42,9 +56,9 @@ class DenseNet(TFModel):
         config['head'].update(dict(layout='Vf'))
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'labels']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']

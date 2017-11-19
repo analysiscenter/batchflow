@@ -1,4 +1,6 @@
-""" Contains inception_v1 network: https://arxiv.org/abs/1409.4842 """
+""" Szegedy C. et al "`Going Deeper with Convolutions
+<https://arxiv.org/abs/1409.4842>`_"
+"""
 import tensorflow as tf
 
 from . import TFModel
@@ -26,15 +28,13 @@ _DEFAULT_V1_ARCH = {
 class Inception_v1(TFModel):
     """ Inception network, version 1
 
-    References
-    ----------
-    .. Szegedy C. et al "Going Deeper with Convolutions"
-       Arxiv.org `<https://arxiv.org/abs/1409.4842>`_
-
     **Configuration**
 
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
+
+    body/arch : dict
+        architecture: network layout, block layout, number of filters in each block, pooling parameters
     """
     @classmethod
     def default_config(cls):
@@ -47,9 +47,9 @@ class Inception_v1(TFModel):
 
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'labels']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']

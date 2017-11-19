@@ -124,14 +124,21 @@ class BaseImagesBatch(Batch):
     @action
     def crop(self, components='images', origin=None, shape=None):
         """ Crop all images in the batch
-        Args:
-            components: str
-                a component name which data should be cropped
-            origin: can be one of:
-                    - tuple - a starting point in the form of (x, y)
-                    - CROP_00 - to crop from left top edge (0,0)
-                    - CROP_CENTER - to crop from center of each image
-            shape: tuple - a crop size in the form of (width, height)
+
+        Parameters
+        ----------
+        components : str
+            a component name or names which data should be cropped
+
+        origin : tuple
+            can be one of:
+
+            - tuple - a starting point in the form of (x, y)
+            - CROP_00 - to crop from left top edge (0,0)
+            - CROP_CENTER - to crop from center of each image
+
+        shape : tuple
+            a crop size in the form of (width, height)
         """
         if origin is not None or shape is not None:
             origin = origin if origin is not None else (0, 0)
@@ -141,10 +148,14 @@ class BaseImagesBatch(Batch):
     @action
     def random_crop(self, components='images', shape=None):
         """ Crop all images to a given shape and a random origin
-        Args:
-            components: str
-                a component name which data should be cropped
-            shape: tuple - a crop size in the form of (width, height)
+
+        Parameters
+        ----------
+        components : str
+            a component name or names which data should be cropped
+
+        shape : tuple
+            a crop size in the form of (width, height)
 
         Origin will be chosen at random to fit the required shape
         """
@@ -158,10 +169,14 @@ class BaseImagesBatch(Batch):
     @inbatch_parallel(init='indices', post='assemble')
     def resize(self, ix, components='images', shape=(64, 64)):
         """ Resize all images in the batch to the given shape
-        Args:
-            components: str
-                a component name which data should be cropped
-            shape: tuple - a crop size in the form of (width, height)
+
+        Parameters
+        ----------
+        components : str
+            a component name or names which data should be resized
+
+        shape : tuple
+            a crop size in the form of (width, height)
         """
         return self._resize_one(ix, components, shape)
 
@@ -169,13 +184,19 @@ class BaseImagesBatch(Batch):
     @inbatch_parallel(init='indices', post='assemble')
     def random_scale(self, ix, components='images', p=1., factor=None, preserve_shape=True, crop=CROP_CENTER):
         """ Scale the content of each image in the batch with a random scale factor
-        Args:
-            components: str
-                a component name
-            p: float - a probability to apply scale
-                      (0. - don't scale, .5 - scale half of images, 1 - scale all images)
-            factor: tuple - min and max scale; the scale factor for each image
-                              will be sampled from the uniform distribution
+
+        Parameters
+        -----------
+        components : str
+            a component name or names which data should be scaled
+
+        p : float
+            a probability to apply scale
+            (0. - don't scale, .5 - scale half of images, 1 - scale all images)
+
+        factor : tuple
+            min and max scale;
+            the scale factor for each image will be sampled from the uniform distribution
         """
         if factor is None:
             factor = 0.9, 1.1
@@ -199,12 +220,17 @@ class BaseImagesBatch(Batch):
     @inbatch_parallel(init='indices', post='assemble')
     def rotate(self, ix, components='images', angle=0, preserve_shape=True, **kwargs):
         """ Rotate all images in the batch at the given angle
-        Args:
-            components: str
-                a component name which data should be rotated
-            angle: float - the rotation angle in degrees.
-            preserve_shape: bool - whether to keep shape after rotating
-                                   (always True for images as arrays, can be False for PIL.Images)
+
+        Parameters
+        -----------
+        components : str
+            a component name or names which data should be rotated
+
+        angle : float
+            the rotation angle in degrees.
+        preserve_shape : bool
+            whether to keep shape after rotating
+            (always True for images as arrays, can be False for PIL.Images)
         """
         return self._rotate_one(ix, components, angle, preserve_shape, **kwargs)
 
@@ -212,12 +238,18 @@ class BaseImagesBatch(Batch):
     @inbatch_parallel(init='indices', post='assemble')
     def random_rotate(self, ix, components='images', p=1., angle=None, **kwargs):
         """ Rotate each image in the batch at a random angle
-        Args:
-            components: str
-                a component name which data should be rotated
-            p: float - a probability to apply rotate
-                       (0. - don't rotate, .5 - rotate half of images, 1 - rotate all images)
-            angle: tuple - an angle range in the form of (min_angle, max_angle), in radians
+
+        Parameters
+        -----------
+        components : str
+            a component name or names which data should be rotated
+
+        p : float
+            a probability to apply rotate
+            (0. - don't rotate, .5 - rotate half of images, 1 - rotate all images)
+
+        angle : tuple
+            an angle range in the form of (min_angle, max_angle), in degrees
         """
         if np.random.binomial(1, p) > 0:
             angle = angle or (-45., 45.)
@@ -230,10 +262,13 @@ class BaseImagesBatch(Batch):
     @action
     def flip(self, axis=None):
         """ Flip images
-        Args:
-            axis: 'h' for horizontal (left/right) flip
-                  'v' for vertical (up/down) flip
-            direction: 'l', 'r', 'u', 'd'
+
+        Parameters
+        ----------
+        axis : {'h', 'v'}
+            'h' for horizontal (left/right) flip
+            'v' for vertical (up/down) flip
+        direction : {'l', 'r', 'u', 'd'}
         """
         if axis == 'h':
             return self.fliplr()

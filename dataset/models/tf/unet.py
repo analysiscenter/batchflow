@@ -1,4 +1,6 @@
-"""Contains class for UNet"""
+"""  Ronneberger O. et al "`U-Net: Convolutional Networks for Biomedical Image Segmentation
+<https://arxiv.org/abs/1505.04597>`_"
+"""
 import tensorflow as tf
 import numpy as np
 
@@ -8,11 +10,6 @@ from . import TFModel
 class UNet(TFModel):
     """ UNet
 
-    References
-    ----------
-    .. Ronneberger O. et al ""
-       Arxiv.org `<https://arxiv.org/abs/1505.04597>`_
-
     **Configuration**
 
     inputs : dict
@@ -20,10 +17,10 @@ class UNet(TFModel):
 
     body : dict
         num_blocks : int
-            number of downsampling/upsampling blocks (4 by default)
+            number of downsampling/upsampling blocks (default=4)
 
         filters : list of int
-            number of filters in each block
+            number of filters in each block (default=[128, 256, 512, 1024])
 
     head : dict
         num_classes : int
@@ -42,9 +39,9 @@ class UNet(TFModel):
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'masks']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']

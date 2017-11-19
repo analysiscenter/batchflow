@@ -1,4 +1,17 @@
-""" Contains class for ResNet """
+"""
+Kaiming He et al. "`Deep Residual Learning for Image Recognition
+<https://arxiv.org/abs/1512.03385>`_"
+
+Sergey Zagoruyko, Nikos Komodakis. "`Wide Residual Networks
+<https://arxiv.org/abs/1605.07146>`_"
+
+Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
+<https://arxiv.org/abs/1611.05431>`_"
+
+Hu J. et al. "`Squeeze-and-Excitation Networks
+<https://arxiv.org/abs/1709.01507>`_"
+
+"""
 import numpy as np
 import tensorflow as tf
 
@@ -9,26 +22,14 @@ from .layers import conv_block
 class ResNet(TFModel):
     """ The base ResNet model
 
-    References
-    ----------
-    .. Kaiming He et al. "Deep Residual Learning for Image Recognition"
-       Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
-
-    .. Sergey Zagoruyko, Nikos Komodakis. "Wide Residual Networks"
-       Arxiv.org, `<https://arxiv.org/abs/1605.07146>`_
-
-    .. Xie S. et al. "Aggregated Residual Transformations for Deep Neural Networks"
-       Arxiv.org, `<https://arxiv.org/abs/1611.05431>`_
-
-    ** Configuration **
+    **Configuration**
 
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
 
     input_block : dict
-
-    filters : int
-        number of filters in the first block (default=64)
+        filters : int
+            number of filters (default=64)
 
     body : dict
         num_blocks : list of int
@@ -36,19 +37,22 @@ class ResNet(TFModel):
         filters : list of int
             number of filters in each group (default=[64, 128, 256, 512])
 
+    head : dict
+        'Vdf' with dropout_rate=.4
+
     block : dict
         bottleneck : bool
             whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
         bottleneck_factor : int
             filter shrinking factor in a bottleneck block (default=4)
         width_factor : int
-            widening factor to make WideResNet (default=4)
+            widening factor to make WideResNet (default=1)
         se_block : bool
-            whether to use squeeze-and-excitation blocks
+            whether to use squeeze-and-excitation blocks (default=0)
         se_factor : int
-            squeeze-and-excitation channels ratio
+            squeeze-and-excitation channels ratio (default=16)
         resnext : bool
-            whether to use aggregated ResNeXt block
+            whether to use aggregated ResNeXt block (default=0)
         resnext_factor : int
             the number of aggregations in ResNeXt block (default=32)
     """
@@ -66,9 +70,9 @@ class ResNet(TFModel):
 
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'labels']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
@@ -140,7 +144,6 @@ class ResNet(TFModel):
 
         Parameters
         ----------
-
         inputs : tf.Tensor
             input tensor
         filters : int
@@ -209,7 +212,6 @@ class ResNet(TFModel):
 
         Parameters
         ----------
-
         inputs : tf.Tensor
             input tensor
         filters : int
@@ -237,7 +239,6 @@ class ResNet(TFModel):
 
         Parameters
         ----------
-
         inputs : tf.Tensor
             input tensor
         filters : int
@@ -258,7 +259,6 @@ class ResNet(TFModel):
 
         Parameters
         ----------
-
         inputs : tf.Tensor
             input tensor
         filters : int
@@ -339,13 +339,7 @@ class ResNet(TFModel):
 
 
 class ResNet18(ResNet):
-    """ The original ResNet-18 architecture
-
-    References
-    ----------
-    .. Kaiming He et al. "Deep Residual Learning for Image Recognition"
-       Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
-    """
+    """ The original ResNet-18 architecture """
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
@@ -359,13 +353,7 @@ class ResNet18(ResNet):
 
 
 class ResNet34(ResNet):
-    """ The original ResNet-34 architecture
-
-    References
-    ----------
-    .. Kaiming He et al. "Deep Residual Learning for Image Recognition"
-       Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
-    """
+    """ The original ResNet-34 architecture """
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
@@ -379,13 +367,7 @@ class ResNet34(ResNet):
 
 
 class ResNet50(ResNet):
-    """ The original ResNet-50 architecture
-
-    References
-    ----------
-    .. Kaiming He et al. "Deep Residual Learning for Image Recognition"
-       Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
-    """
+    """ The original ResNet-50 architecture """
     @classmethod
     def default_config(cls):
         config = ResNet34.default_config()
@@ -394,13 +376,7 @@ class ResNet50(ResNet):
 
 
 class ResNet101(ResNet):
-    """ The original ResNet-101 architecture
-
-    References
-    ----------
-    .. Kaiming He et al. "Deep Residual Learning for Image Recognition"
-       Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
-    """
+    """ The original ResNet-101 architecture """
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
@@ -414,13 +390,7 @@ class ResNet101(ResNet):
 
 
 class ResNet152(ResNet):
-    """ The original ResNet-152 architecture
-
-    References
-    ----------
-    .. Kaiming He et al. "Deep Residual Learning for Image Recognition"
-       Arxiv.org, `<https://arxiv.org/abs/1512.03385>`_
-    """
+    """ The original ResNet-152 architecture """
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()

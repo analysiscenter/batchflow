@@ -385,7 +385,7 @@ class Batch(BaseBatch):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
         if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least one of dst and src should be attribute names, not arrays")
+            raise TypeError("At least one of dst and src should be an attribute name, not an array")
 
         if src is None:
             _args = args

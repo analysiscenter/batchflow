@@ -65,9 +65,11 @@ class TFModel(BaseModel):
 
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
 
-    session : dict - `Tensorflow session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
+    session : dict
+        `Tensorflow session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
 
-    inputs : dict - model inputs (see :meth:`._make_inputs`)
+    inputs : dict
+        model inputs (see :meth:`._make_inputs`)
 
     loss - a loss function, might be one of:
         - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
@@ -121,17 +123,62 @@ class TFModel(BaseModel):
         - ``{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}``
         - ``{'optimizer': some_optimizer_fn}``
 
-    default : dict
-        default parameters for all :func:`.layers.conv_block`s
+    common : dict
+        default parameters for all :func:`.conv_block`
 
     input_block : dict
+        :func:`.conv_block` parameters
 
     body : dict
+        :func:`.conv_block` parameters
 
     head : dict
+        :func:`.conv_block` parameters
 
     output : dict
+        not used yet
 
+
+    **How to create your own model**
+
+    #. Take a look at :func:`~.layers.conv_block` since it is widely used as a building block almost everywhere.
+
+    #. Define model defaults (e.g. number of filters, batch normalization options, etc)
+       by overriding :meth:`.TFModel.default_config`.
+       Or skip it and hard code all the parameters in unpredictable places without the possibility to
+       change them easily through model's config.
+
+    #. Define build configuration (e.g. number of classes, input images, etc) be overriding :meth:`~.TFModel.build_config`.
+
+    #. Override :meth:`~.TFModel.input_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
+       In many cases defaults and build config are just enough to build a network without additional code writing.
+
+    Things worth mentioning:
+
+    #. Input data and its parameters should be defined in configuration under ``inputs`` key.
+       See :meth:`._make_inputs` for details.
+
+    #. You might want to use a convenient multidimensional :func:`.conv_block`,
+       as well as :func:`~.layers.global_average_pooling`, :func:`~.layers.mip`, or other predefined layers.
+       Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
+
+    #. If you make dropout, batch norm, etc by hand, you might use a predefined ``self.is_training`` tensor.
+
+    #. For decay and training control there is a predefined ``self.global_step`` tensor.
+
+    #. In many cases there is no need to write a loss function, learning rate decay and optimizer
+       as they might be defined through config.
+
+    #. For a configured loss one of the inputs should have a name ``targets`` and
+       one of the tensors in your model should have a name ``predictions``.
+       They will be used in a loss function.
+
+    #. If you have defined your own loss function, call `tf.losses.add_loss(...)
+       <https://www.tensorflow.org/api_docs/python/tf/losses/add_loss>`_.
+
+    #. If you need to use your own optimizer, assign ``self.train_step`` to the train step operation.
+       Don't forget about `UPDATE_OPS control dependency
+       <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_.
     """
 
     def __init__(self, *args, **kwargs):
@@ -176,6 +223,7 @@ class TFModel(BaseModel):
                 with tf.variable_scope('globals'):
                     self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
                     self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
+
                 config = self._build()
 
                 self._make_loss(config)
@@ -198,7 +246,7 @@ class TFModel(BaseModel):
         """ Make model input data using config
 
         In the config's inputs section it looks for ``names``, creates placeholders required, and
-        makes some typical transformations (like one-hot-encoding and reshaping), if needed.
+        makes some typical transformations (like one-hot-encoding), if needed.
 
         **Configuration**
 
@@ -214,7 +262,7 @@ class TFModel(BaseModel):
             data type
 
         ``shape`` : int, tuple, list or None (default)
-            a desired tensor shape which includes the number of channels/classes and doesn't include a batch size.
+            a tensor shape which includes the number of channels/classes and doesn't include a batch size.
 
         ``classes`` : array-like or None (default)
             an array of class labels if data labels are strings or anything else except ``np.arange(num_classes)``
@@ -742,7 +790,7 @@ class TFModel(BaseModel):
         Parameters
         ----------
         fetches : tuple, list
-            `tf.Operation`s and `tf.Tensor`s to calculate
+            a sequence of `tf.Operation` and/or `tf.Tensor` to calculate
         feed_dict : dict
             input data, where key is a placeholder name and value is a numpy value
 
@@ -770,7 +818,7 @@ class TFModel(BaseModel):
         Parameters
         ----------
         fetches : tuple, list
-            `tf.Operation`s and `tf.Tensor`s to calculate
+            a sequence of `tf.Operation` and/or `tf.Tensor` to calculate
         feed_dict : dict
             input data, where key is a placeholder name and value is a numpy value
 
@@ -943,7 +991,14 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        See :func:`.layers.conv_block`.
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+
+        Notes
+        -----
+        For other parameters see :func:`.conv_block`.
 
         Returns
         -------
@@ -960,7 +1015,14 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        See :func:`.layers.conv_block`.
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+
+        Notes
+        -----
+        For other parameters see :func:`.conv_block`.
 
         Returns
         -------
@@ -981,7 +1043,14 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        See :func:`.layers.conv_block`.
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+
+        Notes
+        -----
+        For other parameters see :func:`.conv_block`.
 
         Returns
         -------
@@ -1075,7 +1144,27 @@ class TFModel(BaseModel):
 
     @classmethod
     def default_config(cls):
-        """ Define a model defaults """
+        """ Define model defaults
+
+        You need to override this method if you expect your model or its blocks to serve as a base for other models
+        (e.g. VGG for FCN, ResNet for LinkNet, etc).
+
+        Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc) specific to the model,
+        but independent of anything else (like image shapes, number of classes, etc).
+
+        These defaults can be changed in `._build_config` or when calling `Pipeline.init_model`.
+
+        Usually, it looks like::
+
+            @classmethod
+            def default_config(cls):
+                config = TFModel.default_config()
+                config['input_block'].update(dict(layout='cnap', filters=16, kernel_size=7, strides=2,
+                                                  pool_size=3, pool_strides=2))
+                config['body']['filters'] = 32
+                config['head'].update(dict(layout='cnadV', dropout_rate=.2))
+                return config
+        """
         config = {}
         config['inputs'] = {}
         config['common'] = {'batch_norm': {'momentum': .1}}
@@ -1095,31 +1184,31 @@ class TFModel(BaseModel):
         config = {**config['common'], **config[_name], **kwargs}
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         """ Define a model architecture configuration
 
         It takes just 2 steps:
 
-        #. Define names for all placeholders and make input tensors by calling ``super()._build_config(names)``::
-
-            def _build_config(se;f, names=None):
-                names = names or ['images', 'labels']
-                config = super()._build_config(names)
+        #. Define names for all placeholders and make input tensors by calling ``super().build_config(names)``.
 
            If the model config does not contain any name from ``names``, :exc:`KeyError` is raised.
 
            See :meth:`._make_inputs` for details.
 
-        #. Define parameters for :meth:`.input_block`, :meth:`.body`, :meth:`.head`::
+        #. Define parameters for :meth:`.TFModel.input_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head` which depend on inputs.
 
-            config['input_block']['inputs'] = self.inputs['images']
-            config['input_block']['filters'] = self.get('filters', config, default=32)
-            config['body']['filters'] = filters * 2
-            config['head']['num_classes'] = self.num_classes('labels')
+        #. Don't forget to return ``config``.
 
-        #. Don't forget to return ``config``.::
+        Typically it looks like this::
 
-            return config
+            def build_config(self, names=None):
+                names = names or ['images', 'labels']
+                config = super().build_config(names)
+
+                config['common']['data_format'] = self.data_format('images')
+                config['input_block']['inputs'] = self.inputs['images']
+                config['head']['num_classes'] = self.num_classes('labels')
+                return config
         """
 
         config = self.default_config()
@@ -1136,41 +1225,7 @@ class TFModel(BaseModel):
 
 
     def _build(self):
-        """ Define a model architecture
-
-        Things worth mentioning:
-
-        #. Input data and its parameters should be defined in configuration under ``inputs`` key.
-           See :meth:`._make_inputs` for details.
-
-        #. You might want to use a convenient multidimensional :func:`~.layers.conv_block`,
-           as well as :func:`~.layers.global_average_pooling`,
-           :func:`~.layers.mip`, or other predefined layers.
-           Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
-
-        #. For dropout, batch norm, etc you might use a predefined ``self.is_training`` tensor.
-
-        #. For decay and training control you might use a predefined ``self.global_step`` tensor.
-
-        #. In many cases there is no need to write a loss function, learning rate decay and optimizer
-           as they might be defined through config.
-
-        #. For a configured loss one of the inputs should have a name ``targets`` and
-           one of the tensors in your model should have a name ``predictions``.
-           They will be used in a loss function.
-
-        #. If you have defined your own loss function, call `tf.losses.add_loss(...)
-           <https://www.tensorflow.org/api_docs/python/tf/losses/add_loss>`_.
-
-        #. If you need to use your own optimizer, assign ``self.train_step`` to the train step operation.
-           Don't forget about `UPDATE_OPS control dependency
-           <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_.
-
-        Notes
-        -----
-        This method is executed within a self.graph context
-        """
-        config = self._build_config()
+        config = self.build_config()
 
         defaults = {'is_training': self.is_training, **config['common']}
         config['input_block'] = {**defaults, **config['input_block']}

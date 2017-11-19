@@ -1,4 +1,6 @@
-""" Contains SqueezeNet """
+""" Iandola F. et al. "`SqueezeNet: AlexNet-level accuracy with 50x fewer parameters and <0.5MB model size"
+<https://arxiv.org/abs/1602.07360>`_"
+"""
 import numpy as np
 import tensorflow as tf
 
@@ -9,11 +11,6 @@ from .layers import conv_block
 class SqueezeNet(TFModel):
     """ SqueezeNet neural network
 
-    References
-    ----------
-    .. Iandola F. et al. "SqueezeNet: AlexNet-level accuracy with 50x fewer parameters and <0.5MB model size"
-       Arxiv.org, `<https://arxiv.org/abs/1602.07360>`_
-
     **Configuration**
 
     inputs : dict
@@ -22,9 +19,12 @@ class SqueezeNet(TFModel):
     body : dict
         layout : str
             A sequence of blocks:
+
             - f : fire block
             - m : max-pooling
             - b : bypass
+
+            Default is 'fffmffffmf'.
     """
     @classmethod
     def default_config(cls):
@@ -44,9 +44,9 @@ class SqueezeNet(TFModel):
 
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'labels']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']

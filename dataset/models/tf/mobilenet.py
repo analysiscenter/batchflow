@@ -1,4 +1,6 @@
-''' Contains class for MobileNet '''
+""" Howard A. G. et al. "`MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications"
+<https://arxiv.org/abs/1704.04861>`_"
+"""
 
 import tensorflow as tf
 
@@ -16,15 +18,10 @@ _DEFAULT_BODY_ARCH = {
 class MobileNet(TFModel):
     """ MobileNet
 
-    References
-    ----------
-    .. Howard A. G. et al. "MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications"
-       Arxiv.org `<https://arxiv.org/abs/1704.04861>`_
-
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with keys 'images' and 'masks' (see :meth:`.TFModel._make_inputs`)
 
     input_block : dict
 
@@ -46,9 +43,9 @@ class MobileNet(TFModel):
         config['head'].update(dict(layout='Vf'))
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'labels']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']

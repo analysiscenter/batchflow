@@ -1,4 +1,6 @@
-"""Contains class for LinkNet"""
+""" Chaurasia A., Culurciello E. "`LinkNet: Exploiting Encoder Representations for Efficient Semantic Segmentation
+<https://arxiv.org/abs/1707.03718>`_"
+"""
 import tensorflow as tf
 import numpy as np
 
@@ -10,11 +12,6 @@ from .resnet import ResNet
 class LinkNet(TFModel):
     """ LinkNet
 
-    References
-    ----------
-    .. Chaurasia A., Culurciello E. "LinkNet: Exploiting Encoder Representations for Efficient Semantic Segmentation"
-       Arxiv.org `<https://arxiv.org/abs/1707.03718>`_
-
     **Configuration**
 
     inputs : dict
@@ -22,10 +19,10 @@ class LinkNet(TFModel):
 
     body : dict
         num_blocks : int
-            number of downsampling/upsampling blocks (4 by default)
+            number of downsampling/upsampling blocks (default=4)
 
         filters : list of int
-            number of filters in each block
+            number of filters in each block (default=[64, 128, 256, 512])
 
     head : dict
         num_classes : int
@@ -46,9 +43,9 @@ class LinkNet(TFModel):
 
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'masks']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']

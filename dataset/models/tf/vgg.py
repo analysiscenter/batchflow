@@ -1,4 +1,6 @@
-"""Contains class for VGG"""
+""" Simonyan K., Zisserman A. "`Very Deep Convolutional Networks for Large-Scale Image Recognition
+<https://arxiv.org/abs/1409.1556>`_"
+"""
 import tensorflow as tf
 
 from . import TFModel
@@ -31,18 +33,14 @@ _VGG7_ARCH = [
 class VGG(TFModel):
     """ Base VGG neural network
 
-    References
-    ----------
-    .. Simonyan K., Zisserman A.. "Very Deep Convolutional Networks for Large-Scale Image Recognition"
-       Arxiv.org, `<https://arxiv.org/abs/1409.1556>`_
-
     **Configuration**
 
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
 
-    body/arch : list of tuples
-        A list should contain tuples of 4 ints:
+    body/arch : list of tuple of int
+        Each list item contains parameters for one network block as a tuple of 4 ints:
+
         - number of convolution layers with 3x3 kernel
         - number of convolution layers with 1x1 kernel
         - number of filters in each layer
@@ -55,9 +53,9 @@ class VGG(TFModel):
         config['head']['units'] = [4096, 4096]
         return config
 
-    def _build_config(self, names=None):
+    def build_config(self, names=None):
         names = names if names else ['images', 'labels']
-        config = super()._build_config(names)
+        config = super().build_config(names)
 
         config['common']['data_format'] = self.data_format('images')
         config['input_block']['inputs'] = self.inputs['images']
