@@ -380,6 +380,8 @@ class TFModel(BaseModel):
             tensors[input_name] = tensor
 
             self._inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
+            if name is not None:
+                self._inputs[name] = self._inputs[input_name]
 
         self.inputs = tensors
 
@@ -1153,7 +1155,7 @@ class TFModel(BaseModel):
         Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
         specific to the model, but independent of anything else (like image shapes, number of classes, etc).
 
-        These defaults can be changed in `._build_config` or when calling `Pipeline.init_model`.
+        These defaults can be changed in `.build_config` or when calling `Pipeline.init_model`.
 
         Usually, it looks like::
 
@@ -1169,7 +1171,7 @@ class TFModel(BaseModel):
         config = {}
         config['inputs'] = {}
         config['common'] = {'batch_norm': {'momentum': .1}}
-        config['input_block'] = {}
+        config['input_block'] = {'inputs': None}
         config['block'] = {}
         config['body'] = {}
         config['head'] = {}
@@ -1218,9 +1220,11 @@ class TFModel(BaseModel):
         with tf.variable_scope('inputs'):
             self._make_inputs(names, self.config)
 
-        config.update(self.config)
+        for k in self.config:
+            self.put(k, self.config[k], config)
         config['common'] = {**config['common'], **self.get('common', self.config, {})}
         config['input_block'] = {**config['input_block'], **self.get('input_block', self.config, {})}
+        config['input_block']['inputs'] = self.inputs[config['input_block']['inputs']]
         config['body'] = {**config['body'], **self.get('body', self.config, {})}
         config['head'] = {**config['head'], **self.get('head', self.config, {})}
         config['output'] = {**config['output'], **self.get('output', self.config, {})}

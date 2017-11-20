@@ -77,6 +77,23 @@ class BaseModel:
             ret_vars = tuple(ret_vars)
         return ret_vars
 
+    @classmethod
+    def put(cls, variable, value, config):
+        """ Put a new variable into config """
+        if '/' in variable:
+            var = variable.strip('/').split('/')
+            prefix = var[:-1]
+            var_name = var[-1]
+        else:
+            prefix = []
+            var_name = variable
+
+        for p in prefix:
+            if p not in config:
+                config[p] = dict()
+            config = config[p]
+        config[var_name] = value
+
     def _make_inputs(self, names=None, config=None):
         """ Make model input data using config
 
