@@ -127,7 +127,7 @@ class TFModel(BaseModel):
         default parameters for all :func:`.conv_block`
 
     input_block : dict
-        parameters for input block, usually :func:`.conv_block` parameters.
+        parameters for the input block, usually :func:`.conv_block` parameters.
         The only required parameter here is``input_block\inputs`` which should contain a name or
         a list of names from ``inputs`` which tensors will be passed to ``input_block`` as ``inputs``.
 
@@ -137,13 +137,18 @@ class TFModel(BaseModel):
         - ``{'input_block': dict(inputs='features')}``
 
     body : dict
-        parameters for base network layers, usually :func:`.conv_block` parameters
+        parameters for the base network layers, usually :func:`.conv_block` parameters
 
     head : dict
-        parameters for head layers, usually :func:`.conv_block` parameters
+        parameters for the head layers, usually :func:`.conv_block` parameters
 
     output : dict
-        not used yet
+        ops : tuple of str
+            helper operations:
+
+            - 'accuracy' - add 'accuracy' tensor with accuracy score for predictions
+            - 'proba' - add 'predicted_proba' tensor with probabilties for predictions
+            - 'labels' - add 'predicted_labels' tensor with best match labels for predictions
 
 
     **How to create your own model**
@@ -1178,7 +1183,7 @@ class TFModel(BaseModel):
         config = {}
         config['inputs'] = {}
         config['common'] = {'batch_norm': {'momentum': .1}}
-        config['input_block'] = {'inputs': None}
+        config['input_block'] = {}
         config['block'] = {}
         config['body'] = {}
         config['head'] = {}
