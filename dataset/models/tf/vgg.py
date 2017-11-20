@@ -57,7 +57,6 @@ class VGG(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['common']['data_format'] = self.data_format(config['input_block']['inputs'])
         config['head']['units'][-1] = self.num_classes('targets')
         return config
 

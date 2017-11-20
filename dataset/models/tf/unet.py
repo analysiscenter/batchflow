@@ -40,12 +40,8 @@ class UNet(TFModel):
         return config
 
     def build_config(self, names=None):
-        names = names if names else ['images', 'masks']
         config = super().build_config(names)
-
-        config['common']['data_format'] = self.data_format('images')
-        config['input_block']['inputs'] = self.inputs['images']
-        config['head']['num_classes'] = self.num_classes('masks')
+        config['head']['num_classes'] = self.num_classes('targets')
         return config
 
     @classmethod
