@@ -1,59 +1,81 @@
 Tensorflow models
 =================
 
-Configuration
--------------
-
-.. autoclass:: dataset.models.tf.TFModel
-    :noindex:
-
-
-How to configure model inputs
------------------------------
-.. automethod:: dataset.models.tf.TFModel._make_inputs
-    :noindex:
-
 
 How to write a custom model
 ---------------------------
 
-Usually, the only thing you need is to redefine ``_build()`` method.
-
-.. automethod:: dataset.models.tf.TFModel._build
-    :noindex:
+To begin with, take a look into `conv_block <tf_layers#convolution-block>`_ documentation to find out how to write
+complex networks in just one line of code.
 
 
-Example
--------
-
-.. code-block:: python
+The simplest case you should avoid
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+All you need is just redefine ``body()`` method.
+For example, let's create a small fully convolutional network with 3x3 convolutions, batch normalization, dropout
+and a global average pooling at the end::
 
     from dataset.models.tf import TFModel
-    from dataset.models.tf.layers import conv_block, global_average_pooling
+    from dataset.models.tf.layers import conv_block
 
     class MyModel(TFModel):
-        def _build(self):
-            names = ['images', 'labels']
-            placeholders, inputs = self._make_inputs(names)
+        def body(self, **kwargs):
+            names = 'images', 'labels'
+            config = self.build_config(names)
 
-            # a number of dimensions may be defined in a model config
-            # default is 2d
-            dim = self.get_from_config('dim', 2)
+            inputs = self.inputs['images']
             num_classes = self.num_classes('labels')
 
-            x = inputs['images']
-            x = conv_block(dim, x, [32, 64, num_classes], 3, layout='cna cna cnaP', strides=2,
-                           name='my_network', training=self.is_training)
-            x = tf.identity(x, name='predictions')
+            x = conv_block(inputs, filters=[64, 128, num_classes], kernel_size=3,
+                           layout='cna cna cna dV', dropout_rate=.2)
+            return x
 
-Note that you can use this model for 1d, 2d and 3d inputs (with a proper config when initializing a model).
+Despite simplicity, this approach is highly discouraged as it prevents configuring the model within a pipeline and
+does not allow model composition, i.e. using this network components in other networks.
 
-Also take a look into `conv_block <tf_layers#convolution-block>`_ documentation to find out how to write complex networks
-in just one line of code and other sophisticated examples.
+The right way
+~~~~~~~~~~~~~
 
-Now you can train the model in a simple pipeline:
+Here we split network configuration and network definition into separate methods.::
 
-.. code-block:: python
+    from dataset.models.tf import TFModel
+    from dataset.models.tf.layers import conv_block
+
+    class MyModel(TFModel):
+        @classmethod
+        def default_config(cls):
+            config = TFModel.default_config()
+            config['body'].update(dict(filters=[64, 128], kernel_size=3, layout='cna cna'))
+            config['head'].update(dict(kernel_size=3, layout='cna dV', dropout_rate=.2))
+            return config
+
+        def build_config(self, names=None):
+            names = names if names else ['images', 'labels']
+            config = super().build_config(names)
+
+            config['common']['data_format'] = self.data_format('images')
+            config['input_block']['inputs'] = self.inputs['images']
+            config['head']['filters'] = self.num_classes('labels')
+            return config
+
+        @classmethod
+        def body(cls, inputs, name='body', **kwargs):
+            kwargs = cls.fill_params('body', **kwargs)
+            x = conv_block(inputs, **kwargs)
+            return x
+
+Note that ``default_config`` and ``body`` are now ``@classmethods`` which means that they might be called without
+instantiating a ``MyModel`` object.
+This is needed for model composition, e.g. ``MyModel`` might serve as a base network for an FCN or SSD network.
+
+However, ``build_config`` is still an ordinary method, so it is called only when an instance of ``MyModel`` is created.
+
+Thus, ``default_config`` should contain all the constants and default values which are totaly independent of the dataset
+and a specific task at hand, while ``build_config`` is intended to extract values from dataset through pipeline's initialization variables
+(for details see `Configuring a model <models#configuring-a-model>`_ and `TFModel configuration <#configuration>`_ below).
+
+
+Now you can train the model in a simple pipeline::
 
     config = {
         'loss': 'ce',
@@ -72,3 +94,18 @@ Now you can train the model in a simple pipeline:
                                 'labels': B('labels')},
                      save_to=V('loss_history'), mode='a')
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
+
+
+Configuration
+-------------
+
+.. autoclass:: dataset.models.tf.TFModel
+    :noindex:
+
+
+How to configure model inputs
+-----------------------------
+.. automethod:: dataset.models.tf.TFModel._make_inputs
+    :noindex:
+
+

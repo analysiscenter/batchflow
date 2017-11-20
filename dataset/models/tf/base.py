@@ -127,13 +127,13 @@ class TFModel(BaseModel):
         default parameters for all :func:`.conv_block`
 
     input_block : dict
-        :func:`.conv_block` parameters
+        parameters for input block, usually :func:`.conv_block` parameters
 
     body : dict
-        :func:`.conv_block` parameters
+        parameters for base network layers, usually :func:`.conv_block` parameters
 
     head : dict
-        :func:`.conv_block` parameters
+        parameters for head layers, usually :func:`.conv_block` parameters
 
     output : dict
         not used yet
@@ -244,7 +244,7 @@ class TFModel(BaseModel):
             self.session.run(tf.global_variables_initializer())
 
     def _make_inputs(self, names=None, config=None):
-        """ Make model input data using config
+        """ Create model input data from config provided
 
         In the config's inputs section it looks for ``names``, creates placeholders required, and
         makes some typical transformations (like one-hot-encoding), if needed.
