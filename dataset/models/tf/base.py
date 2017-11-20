@@ -1218,6 +1218,7 @@ class TFModel(BaseModel):
         with tf.variable_scope('inputs'):
             self._make_inputs(names, self.config)
 
+        config.update(self.config)
         config['common'] = {**config['common'], **self.get('common', self.config, {})}
         config['input_block'] = {**config['input_block'], **self.get('input_block', self.config, {})}
         config['body'] = {**config['body'], **self.get('body', self.config, {})}
