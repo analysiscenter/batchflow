@@ -71,15 +71,9 @@ class ResNet(TFModel):
         return config
 
     def build_config(self, names=None):
-        names = names if names else ['images', 'labels']
         config = super().build_config(names)
-
-        config['common']['data_format'] = self.data_format('images')
-        config['input_block']['inputs'] = self.inputs['images']
-        config['head']['units'] = self.num_classes('labels')
-
+        config['head']['units'] = self.num_classes('targets')
         return config
-
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):

@@ -40,7 +40,7 @@ class Inception_v3(Inception):
         Returns
         -------
         config : dict
-            default parameters to network
+            default parameters to build network
         """
         config = TFModel.default_config()
         config['input_block'].update(dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
