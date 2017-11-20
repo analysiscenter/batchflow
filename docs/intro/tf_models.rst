@@ -4,8 +4,8 @@ Tensorflow models
 How to write a custom model
 ---------------------------
 
-To begin with, take a look into `conv_block <tf_layers#convolution-block>`_ documentation to find out how to write
-complex networks in just one line of code. This block is is a convenient building block for concise,
+To begin with, take a look at `conv_block <tf_layers#convolution-block>`_ to find out how to write
+complex networks in just one line of code. This block is a convenient building block for concise,
 yet very expressive neural networks.
 
 The simplest case you should avoid
@@ -57,7 +57,7 @@ Here we split network configuration and network definition into separate methods
             x = conv_block(inputs, **kwargs)
             return x
 
-Note that ``default_config`` and ``body`` are now ``@classmethods`` which means that they might be called without
+Note that ``default_config`` and ``body`` are ``@classmethods`` now, which means that they might be called without
 instantiating a ``MyModel`` object.
 This is needed for model composition, e.g. when ``MyModel`` serves as a base network for an FCN or SSD network.
 
@@ -110,8 +110,8 @@ A model comprises of
 - input_block
 - body (which, in turn, might include blocks)
 - head.
-This division might seem somewhat arbitrary, though, many modern networks follow it.
 
+This division might seem somewhat arbitrary, though, many modern networks follow it.
 
 input_block
 '''''''''''
@@ -185,5 +185,3 @@ How to configure model inputs
 -----------------------------
 .. automethod:: dataset.models.tf.TFModel._make_inputs
     :noindex:
-
-
