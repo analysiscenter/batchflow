@@ -111,13 +111,13 @@ class Inception_v1(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            branch_1 = conv_block(inputs, filters[0], 1, layout, name='conv_1', **kwargs)
+            branch_1 = conv_block(inputs, layout, filters[0], 1, name='conv_1', **kwargs)
 
-            branch_3 = conv_block(inputs, [filters[1], filters[2]], [1, 3], layout*2, name='conv_3', **kwargs)
+            branch_3 = conv_block(inputs, layout*2, [filters[1], filters[2]], [1, 3], name='conv_3', **kwargs)
 
-            branch_5 = conv_block(inputs, [filters[3], filters[4]], [1, 5], layout*2, name='conv_5', **kwargs)
+            branch_5 = conv_block(inputs, layout*2, [filters[3], filters[4]], [1, 5], name='conv_5', **kwargs)
 
-            branch_pool = conv_block(inputs, filters[5], 1, 'p'+layout, 'conv_pool', **{**kwargs, 'pool_strides': 1})
+            branch_pool = conv_block(inputs, 'p'+layout, filters[5], 1, 'conv_pool', **{**kwargs, 'pool_strides': 1})
 
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_1, branch_3, branch_5, branch_pool], axis, name='output')

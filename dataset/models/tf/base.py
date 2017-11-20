@@ -127,7 +127,14 @@ class TFModel(BaseModel):
         default parameters for all :func:`.conv_block`
 
     input_block : dict
-        parameters for input block, usually :func:`.conv_block` parameters
+        parameters for input block, usually :func:`.conv_block` parameters.
+        The only required parameter here is``input_block\inputs`` which should contain a name or
+        a list of names from ``inputs`` which tensors will be passed to ``input_block`` as ``inputs``.
+
+        Examples:
+
+        - ``{'input_block/inputs': 'images'}``
+        - ``{'input_block': dict(inputs='features')}``
 
     body : dict
         parameters for base network layers, usually :func:`.conv_block` parameters
@@ -1222,9 +1229,13 @@ class TFModel(BaseModel):
 
         for k in self.config:
             self.put(k, self.config[k], config)
+
+        inputs = self.get('input_block/inputs', config)
         config['common'] = {**config['common'], **self.get('common', self.config, {})}
+        if isinstance(inputs, str):
+            config['common']['data_format'] = self.data_format(inputs)
         config['input_block'] = {**config['input_block'], **self.get('input_block', self.config, {})}
-        config['input_block']['inputs'] = self.inputs[config['input_block']['inputs']]
+        config['input_block']['inputs'] = self.inputs[inputs]
         config['body'] = {**config['body'], **self.get('body', self.config, {})}
         config['head'] = {**config['head'], **self.get('head', self.config, {})}
         config['output'] = {**config['output'], **self.get('output', self.config, {})}

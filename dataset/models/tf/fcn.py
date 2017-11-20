@@ -143,7 +143,7 @@ class FCN32(FCN):
         kwargs = cls.fill_params('body', **kwargs)
         filters = kwargs.pop('filters')
         layout = kwargs.pop('layout', 'cnad cnad')
-        return conv_block(inputs, filters, [7, 1], layout=layout, name=name, **kwargs)
+        return conv_block(inputs, filters=filters, kernel_size=[7, 1], layout=layout, name=name, **kwargs)
 
 
 class FCN16(FCN):
@@ -208,9 +208,9 @@ class FCN16(FCN):
         with tf.variable_scope(name):
             x, skip = inputs
             x = FCN32.body(x, filters=filters, num_classes=num_classes, name='fcn32', **kwargs)
-            x = conv_block(x, num_classes, kernel, 't', 'fcn32_2', strides=2, **kwargs)
+            x = conv_block(x, 't', filters=num_classes, kernel_size=kernel, name='fcn32_2', strides=2, **kwargs)
 
-            skip = conv_block(skip, num_classes, 1, 'c', 'pool', **kwargs)
+            skip = conv_block(skip, 'c', filters=num_classes, kernel_size=1, name='pool', **kwargs)
             x = cls.crop(x, skip, kwargs.get('data_format'))
             output = tf.add(x, skip, name='output')
         return output
@@ -284,9 +284,9 @@ class FCN8(FCN):
             x, skip1, skip2 = inputs
 
             x = FCN16.body((x, skip1), filters=filters, num_classes=num_classes, name='fcn16', **kwargs)
-            x = conv_block(x, num_classes, kernel, 't', name='fcn16_2', strides=2, **kwargs)
+            x = conv_block(x, 't', num_classes, kernel, name='fcn16_2', strides=2, **kwargs)
 
-            skip2 = conv_block(skip2, num_classes, 1, 'c', name='pool2')
+            skip2 = conv_block(skip2, 'c', num_classes, 1, name='pool2')
 
             x = cls.crop(x, skip2, kwargs.get('data_format'))
             output = tf.add(x, skip2, name='output')

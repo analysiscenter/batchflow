@@ -119,9 +119,9 @@ class DenseNet(TFModel):
             for i in range(num_layers):
                 block_concat = x
                 if bottleneck:
-                    x = conv_block(x, growth_rate * 4, kernel_size=1, layout=layout,
+                    x = conv_block(x, filters=growth_rate * 4, kernel_size=1, layout=layout,
                                    name='bottleneck-%d' % i, **kwargs)
-                x = conv_block(x, growth_rate, kernel_size=3, layout=layout,
+                x = conv_block(x, filters=growth_rate, kernel_size=3, layout=layout,
                                name='conv-%d' % i, **kwargs)
                 x = tf.concat([block_concat, x], axis=axis)
             x = tf.identity(x, name='output')

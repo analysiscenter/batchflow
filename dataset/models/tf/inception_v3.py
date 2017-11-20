@@ -143,14 +143,14 @@ class Inception_v3(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            branch_1 = conv_block(inputs, filters[0], 1, layout, name='conv_1', **kwargs)
+            branch_1 = conv_block(inputs, layout, filters[0], 1, name='conv_1', **kwargs)
 
-            branch_1_3 = conv_block(inputs, [filters[1], filters[0]], [1, 5], layout*2, name='conv_1_3', **kwargs)
+            branch_1_3 = conv_block(inputs, layout*2, [filters[1], filters[0]], [1, 5], name='conv_1_3', **kwargs)
 
-            branch_1_3_3 = conv_block(inputs, [filters[0]]+[filters[2]]*2, [1, 3, 3], layout*3, name='conv_1_3_3',
+            branch_1_3_3 = conv_block(inputs, layout*3, [filters[0]]+[filters[2]]*2, [1, 3, 3], name='conv_1_3_3',
                                       **kwargs)
 
-            branch_pool = conv_block(inputs, filters[3], 1, 'p'+layout, 'c_pool', **{**kwargs, 'pool_strides': 1})
+            branch_pool = conv_block(inputs, 'p'+layout, filters[3], 1, 'c_pool', **{**kwargs, 'pool_strides': 1})
 
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_1, branch_1_3, branch_1_3_3, branch_pool], axis=axis, name='output')
@@ -176,10 +176,10 @@ class Inception_v3(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            branch_3 = conv_block(inputs, filters[0], 3, layout, name='conv_3', strides=2, padding='valid', **kwargs)
+            branch_3 = conv_block(inputs, layout, filters[0], 3, name='conv_3', strides=2, padding='valid', **kwargs)
 
-            branch_1_3 = conv_block(inputs, [filters[1]]+[filters[2]], [1, 3], layout*2, name='conv_1_3', **kwargs)
-            branch_1_3_3 = conv_block(branch_1_3, filters[2], 3, layout, name='conv_1_3_3', strides=2,
+            branch_1_3 = conv_block(inputs, layout*2, [filters[1]]+[filters[2]], [1, 3], name='conv_1_3', **kwargs)
+            branch_1_3_3 = conv_block(branch_1_3, layout, filters[2], 3, name='conv_1_3_3', strides=2,
                                       padding='valid', **kwargs)
 
             branch_pool = conv_block(inputs, layout='p', pool_size=3, pool_strides=2, name='max_pooling',
@@ -210,11 +210,11 @@ class Inception_v3(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            branch_1 = conv_block(inputs, filters[0], 1, layout, name='conv_1', **kwargs)
-            branch_1_3 = conv_block(branch_1, filters[1], 3, layout, name='conv_1_3', strides=2,
+            branch_1 = conv_block(inputs, layout, filters[0], 1, name='conv_1', **kwargs)
+            branch_1_3 = conv_block(branch_1, layout, filters[1], 3, name='conv_1_3', strides=2,
                                     padding='valid', **kwargs)
 
-            branch_1_7 = conv_block(inputs, filters[0], [1, [1, 7], [7, 1]], layout*3, name='conv_1_7', **kwargs)
+            branch_1_7 = conv_block(inputs, layout*3, filters[0], [1, (1, 7), (7, 1)], name='conv_1_7', **kwargs)
             branch_1_7_3 = conv_block(branch_1_7, filters[0], 3, layout, name='conv_1_7_3', strides=2,
                                       padding='valid', **kwargs)
 
@@ -245,18 +245,18 @@ class Inception_v3(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            branch_1 = conv_block(inputs, filters[0], 1, layout, name='conv_1', **kwargs)
+            branch_1 = conv_block(inputs, layout, filters[0], 1, name='conv_1', **kwargs)
 
             factor = [1, 7], [7, 1]
             kernel_size = [1, *factor]
-            branch_1_3 = conv_block(inputs, [filters[1]] * 2 + [filters[0]], kernel_size, layout * 3,
+            branch_1_3 = conv_block(inputs, layout * 3, [filters[1]] * 2 + [filters[0]], kernel_size,
                                     name='conv_1_3', **kwargs)
 
             kernel_size = [1, *factor[::-1] * 2]
-            branch_1_7 = conv_block(inputs, [filters[1]] * 4 + [filters[0]], kernel_size, layout * 5,
+            branch_1_7 = conv_block(inputs, layout * 5, [filters[1]] * 4 + [filters[0]], kernel_size,
                                     name='conv_1_7', **kwargs)
 
-            branch_pool = conv_block(inputs, filters[0], 1, 'p'+layout, name='c_pool', **{**kwargs, 'pool_strides': 1})
+            branch_pool = conv_block(inputs, 'p'+layout, filters[0], 1, name='c_pool', **{**kwargs, 'pool_strides': 1})
 
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_1, branch_1_3, branch_1_7, branch_pool], axis=axis, name='output')
@@ -287,19 +287,19 @@ class Inception_v3(TFModel):
         """
         with tf.variable_scope(name):
             axis = cls.channels_axis(kwargs['data_format'])
-            branch_1 = conv_block(inputs, filters[0], 1, layout, name='conv_1', **kwargs)
+            branch_1 = conv_block(inputs, layout, filters[0], 1, name='conv_1', **kwargs)
 
-            branch_pool = conv_block(inputs, filters[3], 1, layout='p'+layout, name='c_pool',
+            branch_pool = conv_block(inputs, 'p'+layout, filters[3], 1, name='c_pool',
                                      **{**kwargs, 'pool_strides': 1})
 
-            branch_a1 = conv_block(inputs, filters[1], 1, layout, name='conv_a1', **kwargs)
-            branch_a1_31 = conv_block(branch_a1, filters[1], [3, 1], layout, name='conv_1_31', **kwargs)
-            branch_a1_13 = conv_block(branch_a1, filters[1], [1, 3], layout, name='conv_1_13', **kwargs)
+            branch_a1 = conv_block(inputs, layout, filters[1], 1, name='conv_a1', **kwargs)
+            branch_a1_31 = conv_block(branch_a1, layout, filters[1], [3, 1], name='conv_1_31', **kwargs)
+            branch_a1_13 = conv_block(branch_a1, layout, filters[1], [1, 3], name='conv_1_13', **kwargs)
             branch_a = tf.concat([branch_a1_31, branch_a1_13], axis=axis)
 
-            branch_b13 = conv_block(inputs, [filters[2], filters[1]], [1, 3], layout*2, name='conv_b13', **kwargs)
-            branch_b13_31 = conv_block(branch_b13, filters[1], [3, 1], layout, name='conv_b13_31', **kwargs)
-            branch_b13_13 = conv_block(branch_b13, filters[1], [1, 3], layout, name='conv_b13_13', **kwargs)
+            branch_b13 = conv_block(inputs, layout*2, [filters[2], filters[1]], [1, 3], name='conv_b13', **kwargs)
+            branch_b13_31 = conv_block(branch_b13, layout, filters[1], [3, 1], name='conv_b13_31', **kwargs)
+            branch_b13_13 = conv_block(branch_b13, layout, filters[1], [1, 3], name='conv_b13_13', **kwargs)
             branch_b = tf.concat([branch_b13_31, branch_b13_13], axis=axis)
 
             output = tf.concat([branch_1, branch_pool, branch_a, branch_b], axis=axis, name='output')

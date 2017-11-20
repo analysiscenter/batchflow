@@ -103,4 +103,4 @@ class MobileNet(TFModel):
         data_format = kwargs.get('data_format')
         num_filters = cls.channels_shape(inputs, data_format) * width_factor
         filters = [num_filters, num_filters*2] if double_filters else num_filters
-        return conv_block(inputs, filters, [3, 1], layout='sna cna', name=name, strides=[strides, 1], **kwargs)
+        return conv_block(inputs, 'sna cna', filters, [3, 1], name=name, strides=[strides, 1], **kwargs)

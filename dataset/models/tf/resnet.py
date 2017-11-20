@@ -190,7 +190,7 @@ class ResNet(TFModel):
             x_channels = cls.channels_shape(x, data_format)
 
             if inputs_channels != x_channels or strides > 1:
-                shortcut = conv_block(inputs, x_channels, 1, 'c', name='shortcut', strides=strides, **kwargs)
+                shortcut = conv_block(inputs, 'c', x_channels, 1, name='shortcut', strides=strides, **kwargs)
             else:
                 shortcut = inputs
 
@@ -250,7 +250,7 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        return conv_block(inputs, filters, 3, layout='cnacn', name=name, strides=[strides, 1], **kwargs)
+        return conv_block(inputs, 'cnacn', filters, 3, name=name, strides=[strides, 1], **kwargs)
 
 
     @classmethod
@@ -271,8 +271,8 @@ class ResNet(TFModel):
         tf.Tensor
         """
         layout = kwargs.pop('layout', None) or 'cna'
-        x = conv_block(inputs, [filters, filters, filters * bottleneck_factor], [1, 3, 1],
-                       layout*3, name=name, strides=[strides, 1, 1], **kwargs)
+        x = conv_block(inputs, layout*3, [filters, filters, filters * bottleneck_factor], [1, 3, 1],
+                       name=name, strides=[strides, 1, 1], **kwargs)
         return x
 
     @classmethod
@@ -326,7 +326,7 @@ class ResNet(TFModel):
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
             in_filters = cls.channels_shape(inputs, data_format)
-            x = conv_block(inputs, layout='Vfafa', units=[in_filters//ratio, in_filters], name='se',
+            x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
                            **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
 
             shape = [-1] + [1] * (len(cls.spatial_shape(inputs, data_format)) + 1)

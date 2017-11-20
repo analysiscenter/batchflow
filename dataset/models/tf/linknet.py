@@ -123,8 +123,8 @@ class LinkNet(TFModel):
         tf.Tensor
         """
         num_filters = inputs.get_shape()[-1].value // 4
-        return conv_block(inputs, [num_filters, num_filters, filters], [1, 3, 1],
-                          layout='cna tna cna', name=name, strides=[1, 2, 1], **kwargs)
+        return conv_block(inputs, 'cna tna cna', [num_filters, num_filters, filters], [1, 3, 1],
+                          name=name, strides=[1, 2, 1], **kwargs)
 
     @classmethod
     def head(cls, inputs, num_classes, name='head', **kwargs):
@@ -146,6 +146,6 @@ class LinkNet(TFModel):
         kwargs = cls.fill_params('head', **kwargs)
         filters = kwargs.pop('filters')
 
-        x = conv_block(inputs, [filters, filters, num_classes], [3, 3, 2], layout='tna cna t',
+        x = conv_block(inputs, 'tna cna t', [filters, filters, num_classes], [3, 3, 2],
                        strides=[2, 1, 2], name=name, **kwargs)
         return x

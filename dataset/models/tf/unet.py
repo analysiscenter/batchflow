@@ -97,7 +97,7 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        x = conv_block(inputs, filters, 3, layout='pcnacna', name=name, pool_size=2, pool_strides=2, **kwargs)
+        x = conv_block(inputs, 'pcnacna', filters, 3, name=name, pool_size=2, pool_strides=2, **kwargs)
         return x
 
     @classmethod
@@ -121,11 +121,11 @@ class UNet(TFModel):
         kernel = cls.pop('upsampling_kernel', config)
         with tf.variable_scope(name):
             x, skip = inputs
-            x = conv_block(x, filters, kernel, layout='t', name='upsample', strides=2, **kwargs)
+            x = conv_block(x, 't', filters, kernel, name='upsample', strides=2, **kwargs)
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = -1 if kwargs.get('data_format') == 'channels_last' else 1
             x = tf.concat((skip, x), axis=axis)
-            x = conv_block(x, filters, 3, layout='cnacna', name='conv', **kwargs)
+            x = conv_block(x, 'cnacna', filters, 3, name='conv', **kwargs)
         return x
 
     @classmethod

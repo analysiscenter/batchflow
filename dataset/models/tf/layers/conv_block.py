@@ -64,7 +64,7 @@ def _unpack_args(args, layer_no, layers_max):
 
     return new_args
 
-def conv_block(inputs, filters=0, kernel_size=3, layout='', name=None,
+def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True, **kwargs):
     """ Complex multi-dimensional block with a sequence of convolutions, batch normalization, activation, pooling,

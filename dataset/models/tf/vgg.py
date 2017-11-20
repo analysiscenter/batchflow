@@ -49,20 +49,16 @@ class VGG(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
+        config['input_block']['inputs'] = 'images'
         config['block'] = dict(layout='cna')
-        config['head']['units'] = [4096, 4096]
+        config['head']['units'] = [4096, 4096, 2]
+        config['head']['layout'] = 'fff'
         return config
 
     def build_config(self, names=None):
-        names = names if names else ['images', 'labels']
         config = super().build_config(names)
-
-        config['common']['data_format'] = self.data_format('images')
-        config['input_block']['inputs'] = self.inputs['images']
-        config['head']['units'] += [self.num_classes('labels')]
-        if config['head'].get('layout') is None:
-            config['head']['layout'] = 'f' * len(config['head']['units'])
-
+        config['common']['data_format'] = self.data_format(config['input_block']['inputs'])
+        config['head']['units'][-1] = self.num_classes('targets')
         return config
 
     @classmethod
@@ -118,7 +114,7 @@ class VGG(TFModel):
         layout = kwargs.pop('layout') * (depth3 + depth1) + 'p' * downscale
         kernels = [3] * depth3 + [1] * depth1
         with tf.variable_scope(name):
-            x = conv_block(inputs, filters, kernels, layout=layout, name='conv', **kwargs)
+            x = conv_block(inputs, layout, filters, kernels, name='conv', **kwargs)
             x = tf.identity(x, name='output')
         return x
 
