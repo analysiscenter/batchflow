@@ -32,34 +32,15 @@ class Inception_v3(Inception):
 
     inputs : dict
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
-
-    body : dict
-        layout : str
-            a sequence of blocks in the network:
-
-            - b - :meth:`inception block <.block>`
-            - r - :meth:`.reduction_block`
-            - f - :meth:`.factorization_block`
-            - m - :meth:`.mixed_block`
-            - e - :meth:`.expanded_block`
-
-        arch : dict
-            parameters for each block:
-
-            key : str
-                block's short name
-            value : dict
-                specific parameters (e.g. filters)
-
     """
     @classmethod
     def default_config(cls):
-        """ define the default values to inception_v3 model
+        """ Define the default parameters to inception_v3 model.
 
         Returns
         -------
         config : dict
-            default values to network
+            default parameters to network
         """
         config = TFModel.default_config()
         config['input_block'].update(dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
