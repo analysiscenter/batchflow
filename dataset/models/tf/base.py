@@ -128,7 +128,8 @@ class TFModel(BaseModel):
 
     input_block : dict
         parameters for the input block, usually :func:`.conv_block` parameters.
-        The only required parameter here is``input_block\inputs`` which should contain a name or
+
+        The only required parameter here is ``input_block/inputs`` which should contain a name or
         a list of names from ``inputs`` which tensors will be passed to ``input_block`` as ``inputs``.
 
         Examples:
@@ -1240,7 +1241,14 @@ class TFModel(BaseModel):
         if isinstance(inputs, str):
             config['common']['data_format'] = self.data_format(inputs)
         config['input_block'] = {**config['input_block'], **self.get('input_block', self.config, {})}
-        config['input_block']['inputs'] = self.inputs[inputs]
+
+        if isinstance(inputs, str):
+            config['input_block']['inputs'] = self.inputs[inputs]
+        elif isinstance(inputs, list):
+            config['input_block']['inputs'] = [self.inputs[name] for name in inputs]
+        else:
+            raise ValueError('input_block/inputs should be specified')
+
         config['body'] = {**config['body'], **self.get('body', self.config, {})}
         config['head'] = {**config['head'], **self.get('head', self.config, {})}
         config['output'] = {**config['output'], **self.get('output', self.config, {})}
