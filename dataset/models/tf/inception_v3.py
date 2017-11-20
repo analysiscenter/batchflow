@@ -3,7 +3,7 @@
 """
 import tensorflow as tf
 
-from .inception import Inception
+from .inception_main import Inception
 from . import TFModel
 from .layers import conv_block
 
