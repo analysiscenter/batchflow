@@ -9,9 +9,21 @@ A minimal config includes ``inputs`` and ``input_block`` sections::
 
     model_config = {
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'shape': 10, 'transform': 'ohe', 'name': 'targets'}),
+                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
         'input_block/inputs': 'images'
     }
+
+Inputs section contains :meth:`a description of model input data <.TFModel._make_inputs>`, its shapes, transformations needed and names of the resulting tensors.
+
+This config will create placeholders with the names ``images`` and ``labels``.
+Later, these names will be used to feed data into the model when training or predicting.
+Besides, one-hot encoding will be applied to ``labels`` and the encoded tensor will be named ``targets``.
+
+Models based on :class:`.TFModel` expect that one of the inputs has a name ``targets`` (before or after transformations),
+while ``input_block/inputs`` specifies which input (or inputs) will go through the network to turn into a tensor named ``predictions``.
+Tensors with the names ``targets`` and ``predictions`` are used to define a model loss. Or you can write your own loss in a derived model.
+
+Among other config options are ``loss``, ``optimizer``, ``decay``. Read :class:`.TFModel` documentations to find out more.
 
 A minimal pipeline consists of ``init_model`` and ``train_model``::
 
@@ -22,15 +34,6 @@ A minimal pipeline consists of ``init_model`` and ``train_model``::
                                 'labels': B('labels')},
                      save_to=V('loss_history'), mode='a')
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
-
-Inputs section contains :meth:`a description of model input data <.TFModel._make_inputs>`, its shapes, transformations needed and names.
-Later, these names will be used to feed data into the model.
-
-Models based on :class:`.TFModel` expect that one of the inputs has a name ``targets``,
-while ``input_block/inputs`` specifies which input will go through the network to turn into ``predictions``.
-Tensors with these names are used to define a model loss.
-
-Among other config options are ``loss``, ``optimizer``, ``decay``. Read :class:`.TFModel` documentations to find out more.
 
 
 How to write a custom model
@@ -203,7 +206,7 @@ Regression::
         ...
         'loss': 'mse',
         'inputs': dict(heart_signals={'shape': (4000, 1)},
-                       disease_score={'shape': 1, 'name': 'targets'})
+                       targets={'shape': 1})
         'head': dict(layout='df', units=1, dropout_rate=.2),
         'input_block/inputs': 'heart_signals'
     }
