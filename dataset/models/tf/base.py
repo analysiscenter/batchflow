@@ -241,7 +241,9 @@ class TFModel(BaseModel):
                     self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
                     self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
-                config = self._build()
+                config = self.build_config()
+                _config = self._build()
+                config = _config or config
 
                 self._make_loss(config)
                 self.store_to_attr('loss', tf.losses.get_total_loss())
