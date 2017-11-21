@@ -8,9 +8,12 @@ import tensorflow as tf
 sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
 from dataset.opensets import MNIST
-from dataset.models.tf import VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
+from dataset.models.tf import TFModel, VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
                               Inception_v1, Inception_v3, SqueezeNet, MobileNet
 
+class MyModel(TFModel):
+    def _build(self):
+        pass
 
 if __name__ == "__main__":
     BATCH_SIZE = 4
@@ -21,7 +24,7 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_model('dynamic', VGG7, 'conv',
+                .init_model('dynamic', MyModel, 'conv',
                             config={'inputs': dict(images={'shape': B('image_shape')},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images',
