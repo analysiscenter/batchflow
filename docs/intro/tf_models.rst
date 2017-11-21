@@ -1,6 +1,38 @@
 Tensorflow models
 =================
 
+How to use a model
+------------------
+A model might be used for training or inference. In both cases you need to specify a model config and a pipeline.
+
+A minimal config includes ``inputs`` and ``input_block`` sections::
+
+    model_config = {
+        'inputs': dict(images={'shape': (128, 128, 3)},
+                       labels={'shape': 10, 'transform': 'ohe', 'name': 'targets'}),
+        'input_block/inputs': 'images'
+    }
+
+A minimal pipeline consists of ``init_model`` and ``train_model``::
+
+    pipeline = my_dataset.p
+        .init_model('dynamic', MyModel, 'my_model', model_config)
+        .train_model('my_model', fetches='loss',
+                     feed_dict={'images': B('images'),
+                                'labels': B('labels')},
+                     save_to=V('loss_history'), mode='a')
+        .run(BATCH_SIZE, shuffle=True, n_epochs=5)
+
+Inputs section contains :meth:`a description of model input data <.TFModel._make_inputs>`, its shapes, transformations needed and names.
+Later, these names will be used to feed data into the model.
+
+Models based on :class:`.TFModel` expect that one of the inputs has a name ``targets``,
+while ``input_block/inputs`` specifies which input will go through the network to turn into ``predictions``.
+Tensors with these names are used to define a model loss.
+
+Among other config options are ``loss``, ``optimizer``, ``decay``. Read :class:`.TFModel` documentations to find out more.
+
+
 How to write a custom model
 ---------------------------
 
@@ -21,7 +53,7 @@ and a dense layer at the end::
     class MyModel(TFModel):
         def body(self, inputs, **kwargs):
             x = conv_block(inputs, filters=[64, 128, 256], units=10, kernel_size=3,
-                           layout='cna cna cna df', dropout_rate=.2)
+                           layout='cna cna cna df', dropout_rate=.2, **kwargs)
             return x
 
 Despite simplicity, this approach is highly discouraged as:
@@ -160,8 +192,9 @@ Classification with 10 classes::
         ...
         'loss': 'ce',
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'shape': 10, 'transform': 'ohe', 'name': 'targets'})
-        'head': dict(layout='cdV', filters=10, dropout_rate=.2)
+                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'})
+        'head': dict(layout='cdV', filters=10, dropout_rate=.2),
+        'input_block/inputs': 'images'
     }
 
 Regression::
@@ -171,7 +204,8 @@ Regression::
         'loss': 'mse',
         'inputs': dict(heart_signals={'shape': (4000, 1)},
                        disease_score={'shape': 1, 'name': 'targets'})
-        'head': dict(layout='df', units=1, dropout_rate=.2)
+        'head': dict(layout='df', units=1, dropout_rate=.2),
+        'input_block/inputs': 'heart_signals'
     }
 
 Configuration

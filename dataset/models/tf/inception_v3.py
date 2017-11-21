@@ -273,10 +273,6 @@ class Inception_v3(TFModel):
         name : str
             scope name
 
-        See also
-        --------
-        :func:`.conv_block`
-
         Returns
         -------
         tf.Tensor

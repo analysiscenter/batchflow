@@ -1,19 +1,13 @@
 
-BaseModel
-=========
-.. autoclass:: dataset.models.BaseModel
-    :members:
-    :noindex:
+.. toctree::
+    ../api/dataset.models.tf.base
+    ../api/dataset.models.tf.vgg
+    ../api/dataset.models.tf.inception
+    ../api/dataset.models.tf.resnet
+    ../api/dataset.models.tf.mobilenet
+    ../api/dataset.models.tf.squeezenet
+    ../api/dataset.models.tf.densenet
 
-Scikit learn model
-===================
-.. autoclass:: dataset.models.SklearnModel
-    :members:
-    :noindex:
-
-
-Tensorflow model
-================
-.. autoclass:: dataset.models.tf.TFModel
-    :members:
-    :noindex:
+    ../api/dataset.models.tf.fcn
+    ../api/dataset.models.tf.unet
+    ../api/dataset.models.tf.linknet

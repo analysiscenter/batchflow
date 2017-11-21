@@ -161,7 +161,7 @@ class TFModel(BaseModel):
        Or skip it and hard code all the parameters in unpredictable places without the possibility to
        change them easily through model's config.
 
-    #. Define build configuration (e.g. number of classes, input images, etc)
+    #. Define build configuration (e.g. number of classes, etc)
        by overriding :meth:`~.TFModel.build_config`.
 
     #. Override :meth:`~.TFModel.input_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
@@ -325,7 +325,7 @@ class TFModel(BaseModel):
             key : str
                 a placeholder name
             value : tf.Tensor
-                placeholder tensor after reshaping and transformations
+                an input tensor after transformations
         """
         # pylint:disable=too-many-statements
         config = self.get('inputs', config)
@@ -1221,10 +1221,7 @@ class TFModel(BaseModel):
             def build_config(self, names=None):
                 names = names or ['images', 'labels']
                 config = super().build_config(names)
-
-                config['common']['data_format'] = self.data_format('images')
-                config['input_block']['inputs'] = self.inputs['images']
-                config['head']['num_classes'] = self.num_classes('labels')
+                config['head']['num_classes'] = self.num_classes('targets')
                 return config
         """
 
