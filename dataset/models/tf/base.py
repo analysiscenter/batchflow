@@ -593,11 +593,15 @@ class TFModel(BaseModel):
             if shape:
                 kwargs['shape'] = shape
         else:
-            tensor = self.graph.get_tensor_by_name(input_name)
-            shape = tensor.get_shape().as_list()[1:]
-            config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name, data_format='channels_last')
-        config = {**config, **kwargs}
+            try:
+                tensor = self.graph.get_tensor_by_name(input_name)
+            except KeyError:
+                config = {}
+            else:
+                shape = tensor.get_shape().as_list()[1:]
+                config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name, data_format='channels_last')
 
+        config = {**config, **kwargs}
         return config
 
 
