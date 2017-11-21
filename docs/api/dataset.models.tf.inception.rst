@@ -18,3 +18,11 @@ Inception version 3
     :members:
     :undoc-members:
     :show-inheritance:
+
+Inception version 4
+-------------------
+.. automodule:: dataset.models.tf.inception_v4
+    :member-order: bysource
+    :members:
+    :undoc-members:
+    :show-inheritance:
