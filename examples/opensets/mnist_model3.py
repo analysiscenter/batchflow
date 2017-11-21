@@ -14,6 +14,7 @@ from dataset.models.tf import TFModel, VGG16, VGG19, VGG7, FCN32, ResNet18, ResN
 class MyModel(TFModel):
     def _build(self, config=None):
         tf.losses.add_loss(1.)
+        pass
 
 if __name__ == "__main__":
     BATCH_SIZE = 4
@@ -29,15 +30,16 @@ if __name__ == "__main__":
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images',
                                     'head/units': [100, 100, 10],
-                                    #'loss': None,
+                                    'loss': None,
+                                    'optimizer': None,
                                     #'filters': 16, 'width_factor': 1,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['labels', 'accuracy'])})
                 .resize(shape=(128, 128))
-                .train_model('conv', fetches='loss',
+                .train_model('conv', #fetches='loss',
                                      feed_dict={'images': B('images'),
                                                 'labels': B('labels')},
-                             save_to=V('current_loss'))
+                             save_to=V('current_loss'), use_lock=True)
                 .print_variable('current_loss')
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 

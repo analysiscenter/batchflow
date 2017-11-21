@@ -250,9 +250,10 @@ class TFModel(BaseModel):
                 if self.train_step is None:
                     optimizer = self._make_optimizer(config)
 
-                    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-                    with tf.control_dependencies(update_ops):
-                        self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
+                    if optimizer:
+                        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                        with tf.control_dependencies(update_ops):
+                            self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
                 else:
                     self.store_to_attr('train_step', self.train_step)
 
@@ -532,7 +533,7 @@ class TFModel(BaseModel):
     def _make_optimizer(self, config):
         optimizer_name, optimizer_args = self._unpack_fn_from_config('optimizer', config)
 
-        if callable(optimizer_name):
+        if optimizer_name is None or callable(optimizer_name):
             pass
         elif isinstance(optimizer_name, str) and hasattr(tf.train, optimizer_name):
             optimizer_name = getattr(tf.train, optimizer_name)
@@ -545,7 +546,10 @@ class TFModel(BaseModel):
         if decay_name is not None:
             optimizer_args['learning_rate'] = decay_name(**decay_args, global_step=self.global_step)
 
-        optimizer = optimizer_name(**optimizer_args)
+        if optimizer_name:
+            optimizer = optimizer_name(**optimizer_args)
+        else:
+            optimizer = None
 
         return optimizer
 
@@ -836,13 +840,24 @@ class TFModel(BaseModel):
                 _fetches = tuple()
             else:
                 _fetches = self._fill_fetches(fetches, default=None)
+
             if use_lock:
                 self._train_lock.acquire()
-            _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
+
+            _all_fetches = []
+            if self.train_step:
+                _all_fetches += [self.train_step]
+            if _fetches:
+                _all_fetches += [_fetches]
+            if len(_all_fetches) > 0:
+                _, output = self.session.run(_all_fetches, feed_dict=_feed_dict)
+            else:
+                output = None
+
             if use_lock:
                 self._train_lock.release()
 
-        return self._fill_output(output, _fetches)
+            return self._fill_output(output, _fetches)
 
     def predict(self, fetches=None, feed_dict=None):      # pylint: disable=arguments-differ
         """ Get predictions on the data provided
