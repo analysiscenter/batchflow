@@ -12,8 +12,8 @@ from dataset.models.tf import TFModel, VGG16, VGG19, VGG7, FCN32, ResNet18, ResN
                               Inception_v1, Inception_v3, SqueezeNet, MobileNet
 
 class MyModel(TFModel):
-    def _build(self):
-        pass
+    def _build(self, config=None):
+        tf.losses.add_loss(1.)
 
 if __name__ == "__main__":
     BATCH_SIZE = 4

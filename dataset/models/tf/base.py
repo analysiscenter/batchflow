@@ -1237,8 +1237,9 @@ class TFModel(BaseModel):
 
         config = self.default_config()
 
-        with tf.variable_scope('inputs'):
-            self._make_inputs(names, self.config)
+        if 'inputs' in self.config:
+            with tf.variable_scope('inputs'):
+                self._make_inputs(names, self.config)
 
         for k in self.config:
             self.put(k, self.config[k], config)
