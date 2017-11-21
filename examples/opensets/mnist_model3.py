@@ -29,7 +29,7 @@ if __name__ == "__main__":
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images',
                                     'head/units': [100, 100, 10],
-                                    'loss': None,
+                                    #'loss': None,
                                     #'filters': 16, 'width_factor': 1,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['labels', 'accuracy'])})

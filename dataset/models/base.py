@@ -67,7 +67,7 @@ class BaseModel:
                 else:
                     val = _config.get(var_name, default)
             else:
-                raise KeyError('Key %s not found' % variable)
+                raise KeyError("Key '%s' not found" % variable)
 
             ret_vars.append(val)
 
