@@ -5,6 +5,8 @@ import os
 import glob
 import re
 import json
+import threading
+
 import numpy as np
 import tensorflow as tf
 
@@ -203,6 +205,7 @@ class TFModel(BaseModel):
         self.global_step = None
         self.loss = None
         self.train_step = None
+        self._train_lock = threading.Lock()
         self._attrs = []
         self._to_classes = {}
         self._inputs = {}
@@ -800,7 +803,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None):   # pylint: disable=arguments-differ
+    def train(self, fetches=None, feed_dict=None, use_lock=False):   # pylint: disable=arguments-differ
         """ Train the model with the data provided
 
         Parameters
@@ -809,6 +812,8 @@ class TFModel(BaseModel):
             a sequence of `tf.Operation` and/or `tf.Tensor` to calculate
         feed_dict : dict
             input data, where key is a placeholder name and value is a numpy value
+        use_lock : bool
+            if True, the whole train step is locked, thus allowing for multithreading.
 
         Returns
         -------
@@ -824,7 +829,11 @@ class TFModel(BaseModel):
                 _fetches = tuple()
             else:
                 _fetches = self._fill_fetches(fetches, default=None)
+            if use_lock:
+                self._train_lock.acquire()
             _, output = self.session.run([self.train_step, _fetches], feed_dict=_feed_dict)
+            if use_lock:
+                self._train_lock.release()
 
         return self._fill_output(output, _fetches)
 
