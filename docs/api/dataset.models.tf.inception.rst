@@ -2,6 +2,14 @@
 Inception
 =========
 
+Base Inception
+-------------------
+.. automodule:: dataset.models.tf.inception_base
+    :member-order: bysource
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Inception version 1
 -------------------
 .. automodule:: dataset.models.tf.inception_v1
