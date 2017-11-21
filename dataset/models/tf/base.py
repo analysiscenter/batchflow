@@ -847,7 +847,7 @@ class TFModel(BaseModel):
             _all_fetches = []
             if self.train_step:
                 _all_fetches += [self.train_step]
-            if _fetches:
+            if _fetches is not None:
                 _all_fetches += [_fetches]
             if len(_all_fetches) > 0:
                 _, output = self.session.run(_all_fetches, feed_dict=_feed_dict)
