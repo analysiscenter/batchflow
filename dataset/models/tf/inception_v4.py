@@ -4,13 +4,14 @@ import tensorflow as tf
 
 from . import TFModel
 from .layers import conv_block
-from .inception_main import Inception
+from .inception_base import Inception
+
 
 _DEFAULT_V4_ARCH = {
     'A': {'filters': [[96, 64]]*4},
     'r': {'filters': (192, 224, 256, 384)},
     'B': {'filters': [[384, 192, 224, 256, 128]]*7},
-    'g': {'filters': (192, 256, 320)},
+    'G': {'filters': (192, 256, 320)},
     'C': {'filters': [[256, 384, 448, 512]]*3}}
 
 class Inception_v4(Inception):
@@ -34,7 +35,7 @@ class Inception_v4(Inception):
 
         config['input_block'].update(dict(layout='cna', filters=[32, 64, 96, 192],
                                           pool_size=3, pool_strides=2))
-        config['body']['layout'] = 'AAAArBBBBBBBgCCC'
+        config['body']['layout'] = 'AAAArBBBBBBBGCCC'
         config['body']['arch'] = _DEFAULT_V4_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.8))
         return config
@@ -115,7 +116,6 @@ class Inception_v4(Inception):
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_1, branch_1_3, branch_1_3_3, branch_pool], axis, name='output')
         return output
-
 
     @classmethod
     def inception_b_block(cls, inputs, filters, layout='cna', name='inception_b_block', **kwargs):
@@ -228,4 +228,3 @@ class Inception_v4(Inception):
 
             output = tf.concat([branch_1, branch_1_33, branch_1_5, branch_pool], axis, name='output')
         return output
-        

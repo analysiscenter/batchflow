@@ -4,6 +4,7 @@ import tensorflow as tf
 from . import TFModel
 from .layers import conv_block
 
+
 class Inception(TFModel):
     """ The base class for all inception models
 
@@ -20,7 +21,7 @@ class Inception(TFModel):
             - e - expanded_block of inception_v3 model (see :meth:`.expanded_block`)
             - A - inception block A from inception_v4 model (see :meth:`.inception_a_block')
             - B - inception block B from inception_v4 model (see :meth:`.inception_b_block`)
-            - g - grid-reduction block from inception_v4 model (see :meth:`.reduction_grid_block`)
+            - G - grid-reduction block from inception_v4 model (see :meth:`.reduction_grid_block`)
             - C - Inception block C from inception_v4 model (see :meth:`.inception_c_block`)
 
         arch : dict
@@ -84,10 +85,11 @@ class Inception(TFModel):
                     x = cls.inception_a_block(x, filters, name='inception_a_block-%d'%i, **kwargs)
                 elif block == 'B':
                     x = cls.inception_b_block(x, filters, name='inception_b_block-%d'%i, **kwargs)
-                elif block == 'g':
-                    x = cls.reduction_grid_block(x, filters, name='reduction_b_block-%d'%i, **kwargs)
+                elif block == 'G':
+                    x = cls.reduction_grid_block(x, filters, name='reduction_grid_block-%d'%i, **kwargs)
                 elif block == 'C':
                     x = cls.inception_c_block(x, filters, name='inception_c_block-%d'%i, **kwargs)
+
         return x
 
     @classmethod
