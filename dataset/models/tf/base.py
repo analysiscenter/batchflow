@@ -253,7 +253,8 @@ class TFModel(BaseModel):
                     if optimizer:
                         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                         with tf.control_dependencies(update_ops):
-                            self.store_to_attr('train_step', optimizer.minimize(self.loss, global_step=self.global_step))
+                            train_step = optimizer.minimize(self.loss, global_step=self.global_step)
+                            self.store_to_attr('train_step', train_step)
                 else:
                     self.store_to_attr('train_step', self.train_step)
 
