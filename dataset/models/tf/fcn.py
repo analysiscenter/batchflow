@@ -26,7 +26,7 @@ class FCN(TFModel):
 
         config['body']['num_classes'] = self.num_classes('targets')
         config['head']['num_classes'] = self.num_classes('targets')
-        config['head']['original_images'] = self.inputs[config['input_block']['inputs']]
+        config['head']['original_images'] = config['input_block']['inputs']
 
         return config
 
