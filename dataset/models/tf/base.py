@@ -592,7 +592,7 @@ class TFModel(BaseModel):
                 shape = (shape,)
             if shape:
                 kwargs['shape'] = shape
-        else:
+        elif isinstance(input_name, str):
             try:
                 tensor = self.graph.get_tensor_by_name(input_name)
             except KeyError:
@@ -600,6 +600,8 @@ class TFModel(BaseModel):
             else:
                 shape = tensor.get_shape().as_list()[1:]
                 config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name, data_format='channels_last')
+        else:
+            config = {}
 
         config = {**config, **kwargs}
         return config
