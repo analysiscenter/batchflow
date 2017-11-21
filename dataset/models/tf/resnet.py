@@ -7,10 +7,6 @@ Sergey Zagoruyko, Nikos Komodakis. "`Wide Residual Networks
 
 Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 <https://arxiv.org/abs/1611.05431>`_"
-
-Hu J. et al. "`Squeeze-and-Excitation Networks
-<https://arxiv.org/abs/1709.01507>`_"
-
 """
 import numpy as np
 import tensorflow as tf
@@ -301,35 +297,6 @@ class ResNet(TFModel):
                     sub_blocks.append(x)
             x = tf.add_n(sub_blocks)
         return x
-
-    @classmethod
-    def se_block(cls, inputs, ratio, name='se', **kwargs):
-        """ Squeeze and excitation block
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        ratio : int
-            squeeze ratio for the number of filters
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        with tf.variable_scope(name):
-            data_format = kwargs.get('data_format')
-            in_filters = cls.channels_shape(inputs, data_format)
-            x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
-                           **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
-
-            shape = [-1] + [1] * (len(cls.spatial_shape(inputs, data_format)) + 1)
-            axis = cls.channels_axis(data_format)
-            shape[axis] = in_filters
-            scale = tf.reshape(x, shape)
-            x = inputs * scale
-        return x
-
 
 
 class ResNet18(ResNet):
