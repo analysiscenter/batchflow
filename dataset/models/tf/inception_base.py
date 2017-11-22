@@ -16,13 +16,13 @@ class Inception(TFModel):
 
             - b - building block of Inception v1 and v3 models
             - r - reduction block (see :meth:`.reduction_block`)
-            - f - factorization_block of inception_v3 model (see :meth:`.factorization_block`)
-            - m - mixed_block of inception_v3 model (see :meth:`.mixed_block`)
-            - e - expanded_block of inception_v3 model (see :meth:`.expanded_block`)
-            - A - inception block A from inception_v4 model (see :meth:`.inception_a_block`)
-            - B - inception block B from inception_v4 model (see :meth:`.inception_b_block`)
-            - G - grid-reduction block from inception_v4 model (see :meth:`.reduction_grid_block`)
-            - C - Inception block C from inception_v4 model (see :meth:`.inception_c_block`)
+            - f - factorization_block of Inception_v3 model (see :meth:`.factorization_block`)
+            - m - mixed_block of Inception_v3 model (see :meth:`.mixed_block`)
+            - e - expanded_block of Inception_v3 model (see :meth:`.expanded_block`)
+            - A - inception block A from Inception_v4 model (see :meth:`.inception_a_block`)
+            - B - inception block B from Inception_v4 model (see :meth:`.inception_b_block`)
+            - G - grid-reduction block from Inception_v4 model (see :meth:`.reduction_grid_block`)
+            - C - Inception block C from Inception_v4 model (see :meth:`.inception_c_block`)
 
         arch : dict
             parameters for each block:
@@ -58,37 +58,38 @@ class Inception(TFModel):
             x = inputs
 
             layout_dict = {}
-            for layer in layout:
-                if layer not in layout_dict:
-                    layout_dict[layer] = [-1, 0]
-                layout_dict[layer][1] += 1
+            for block in layout:
+                if block not in layout_dict:
+                    layout_dict[block] = [-1, 0]
+                layout_dict[block][1] += 1
 
             for i, block in enumerate(layout):
                 layout_dict[block][0] += 1
                 block_no = layout_dict[block][0]
 
-                filters = arch[block].get('filters')
+                block_args = {**kwargs, **arch[block]}
+                filters = block_args.pop('filters', None)
                 if isinstance(filters, list):
                     filters = filters[block_no]
 
                 if block == 'b':
-                    x = cls.block(x, filters, name='block-%d'%i, **kwargs)
+                    x = cls.block(x, filters=filters, name='block-%d'%i, **block_args)
                 elif block == 'r':
-                    x = cls.reduction_block(x, filters, name='reduction_block-%d'%i, **kwargs)
+                    x = cls.reduction_block(x, filters=filters, name='reduction_block-%d'%i, **block_args)
                 elif block == 'f':
-                    x = cls.factorization_block(x, filters, name='factorization_block-%d'%i, **kwargs)
+                    x = cls.factorization_block(x, filters=filters, name='factorization_block-%d'%i, **block_args)
                 elif block == 'm':
-                    x = cls.mixed_block(x, filters, name='mixed_block-%d'%i, **kwargs)
+                    x = cls.mixed_block(x, filters=filters, name='mixed_block-%d'%i, **block_args)
                 elif block == 'e':
-                    x = cls.expanded_block(x, filters, name='expanded_block-%d'%i, **kwargs)
+                    x = cls.expanded_block(x, filters=filters, name='expanded_block-%d'%i, **block_args)
                 elif block == 'A':
-                    x = cls.inception_a_block(x, filters, name='inception_a_block-%d'%i, **kwargs)
+                    x = cls.inception_a_block(x, filters=filters, name='inception_a_block-%d'%i, **block_args)
                 elif block == 'B':
-                    x = cls.inception_b_block(x, filters, name='inception_b_block-%d'%i, **kwargs)
+                    x = cls.inception_b_block(x, filters=filters, name='inception_b_block-%d'%i, **block_args)
                 elif block == 'G':
-                    x = cls.reduction_grid_block(x, filters, name='reduction_grid_block-%d'%i, **kwargs)
+                    x = cls.reduction_grid_block(x, filters=filters, name='reduction_grid_block-%d'%i, **block_args)
                 elif block == 'C':
-                    x = cls.inception_c_block(x, filters, name='inception_c_block-%d'%i, **kwargs)
+                    x = cls.inception_c_block(x, filters=filters, name='inception_c_block-%d'%i, **block_args)
 
         return x
 

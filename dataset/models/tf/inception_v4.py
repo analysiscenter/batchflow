@@ -2,7 +2,6 @@
 <https://arxiv.org/abs/1602.07261>`_" """
 import tensorflow as tf
 
-from . import TFModel
 from .layers import conv_block
 from .inception_base import Inception
 
@@ -32,13 +31,18 @@ class Inception_v4(Inception):
         config : dict
             default parameters to network
         """
-        config = TFModel.default_config()
+        config = Inception.default_config()
 
         config['input_block'].update(dict(layout='cna', filters=[32, 64, 96, 192],
                                           pool_size=3, pool_strides=2))
         config['body']['layout'] = 'AAAArBBBBBBBGCCC'
         config['body']['arch'] = _DEFAULT_V4_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.8))
+        return config
+
+    def build_config(self, names=None):
+        config = super().build_config(names)
+        config['head']['units'] = self.num_classes('targets')
         return config
 
     @classmethod

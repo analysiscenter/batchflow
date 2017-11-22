@@ -3,7 +3,6 @@
 """
 import tensorflow as tf
 
-from . import TFModel
 from .layers import conv_block
 from .inception_base import Inception
 
@@ -42,13 +41,18 @@ class Inception_v3(Inception):
         config : dict
             default parameters to build network
         """
-        config = TFModel.default_config()
+        config = Inception.default_config()
         config['input_block'].update(dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
                                           kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1],
                                           pool_size=3, pool_strides=2, padding='valid'))
         config['body']['layout'] = 'bbbrffffmee'
         config['body']['arch'] = _DEFAULT_V3_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.8))
+        return config
+
+    def build_config(self, names=None):
+        config = super().build_config(names)
+        config['head']['units'] = self.num_classes('targets')
         return config
 
     @classmethod

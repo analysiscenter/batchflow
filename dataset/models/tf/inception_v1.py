@@ -3,29 +3,27 @@
 """
 import tensorflow as tf
 
-from . import TFModel
-from .layers import conv_block
+from .inception_base import Inception
+from .layers import conv_block, max_pooling
 
 
 _DEFAULT_V1_ARCH = {
-    'arch' : 'bbmbbbbbmbb',
-    'layout': 'cn',
-    'filters': [
-        [64, 96, 128, 16, 32, 32],
-        [128, 128, 192, 32, 96, 64],
-        [192, 96, 208, 16, 48, 64],
-        [160, 112, 224, 24, 64, 64],
-        [128, 128, 256, 24, 64, 64],
-        [112, 144, 288, 32, 64, 64],
-        [256, 160, 320, 32, 128, 128],
-        [256, 160, 320, 32, 128, 128],
-        [384, 192, 384, 48, 128, 128]
-    ],
-    'pool_size': 3, 'pool_strides': 2
+    'b': {'filters': [
+            [64, 96, 128, 16, 32, 32],
+            [128, 128, 192, 32, 96, 64],
+            [192, 96, 208, 16, 48, 64],
+            [160, 112, 224, 24, 64, 64],
+            [128, 128, 256, 24, 64, 64],
+            [112, 144, 288, 32, 64, 64],
+            [256, 160, 320, 32, 128, 128],
+            [256, 160, 320, 32, 128, 128],
+            [384, 192, 384, 48, 128, 128]
+         ]},
+    'r': {'layout': 'p', 'pool_size': 3, 'pool_strides': 2}
 }
 
 
-class Inception_v1(TFModel):
+class Inception_v1(Inception):
     """ Inception network, version 1
 
     **Configuration**
@@ -38,11 +36,13 @@ class Inception_v1(TFModel):
     """
     @classmethod
     def default_config(cls):
-        config = TFModel.default_config()
+        config = Inception.default_config()
+        config['common']['layout'] = 'cn'
         config['input_block'].update(dict(layout='cnp cn cn p', filters=[64, 64, 192],
                                           kernel_size=[7, 3, 3], strides=[2, 1, 1],
                                           pool_size=3, pool_strides=2))
         config['body']['arch'] = _DEFAULT_V1_ARCH
+        config['body']['layout'] = 'bbrbbbbbrbb'
         config['head'].update(dict(layout='Vdf', dropout_rate=.4))
 
         return config
@@ -51,36 +51,6 @@ class Inception_v1(TFModel):
         config = super().build_config(names)
         config['head']['units'] = self.num_classes('targets')
         return config
-
-    @classmethod
-    def body(cls, inputs, name='body', **kwargs):
-        """ Base layers
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        arch : list of dict
-            network architecture
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        kwargs = cls.fill_params('body', **kwargs)
-        filters = kwargs.pop('filters')
-        layout = kwargs.pop('layout')
-
-        with tf.variable_scope(name):
-            x = inputs
-            block_no = 0
-            for i, layer in enumerate(kwargs['arch']):
-                if layer == 'b':
-                    x = cls.block(x, filters[block_no], layout=layout, name='block-%d' % i, **kwargs)
-                    block_no += 1
-                elif layer == 'p':
-                    x = conv_block(x, layout='p', name='max-pooling-%d' % i, **kwargs)
-        return x
 
     @classmethod
     def block(cls, inputs, filters, layout='cn', name=None, **kwargs):
@@ -117,4 +87,24 @@ class Inception_v1(TFModel):
 
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_1, branch_3, branch_5, branch_pool], axis, name='output')
+        return output
+
+    @classmethod
+    def reduction_block(cls, inputs, layout='p', filters=None, name='reduction_block', **kwargs):
+        """ Reduction block.
+
+        Just a max pooling in 3x3 with strides=2
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        output = conv_block(inputs, layout, filters=filters, name=name, **kwargs)
         return output
