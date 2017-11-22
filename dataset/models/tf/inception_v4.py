@@ -14,6 +14,7 @@ _DEFAULT_V4_ARCH = {
     'G': {'filters': (192, 256, 320)},
     'C': {'filters': [[256, 384, 448, 512]]*3}}
 
+
 class Inception_v4(Inception):
     """ Inception_v4
 
@@ -24,9 +25,9 @@ class Inception_v4(Inception):
    """
     @classmethod
     def default_config(cls):
-        """ Default parameters for inception_v4 model.
+        """ Default parameters for Inception_v4 model.
 
-         Returns
+        Returns
         -------
         config : dict
             default parameters to network

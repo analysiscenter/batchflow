@@ -14,12 +14,12 @@ class Inception(TFModel):
         layout : str
             a sequence of blocks in the network:
 
-            - b - building block of inception_v3 model (see :meth:`inception block <.block>`
-            - r - reduction block (see :meth:`.reduction_block')
-            - f - factorization_block of incetoption_v3 model (see :meth:`.factorization_block`)
+            - b - building block of Inception v1 and v3 models
+            - r - reduction block (see :meth:`.reduction_block`)
+            - f - factorization_block of inception_v3 model (see :meth:`.factorization_block`)
             - m - mixed_block of inception_v3 model (see :meth:`.mixed_block`)
             - e - expanded_block of inception_v3 model (see :meth:`.expanded_block`)
-            - A - inception block A from inception_v4 model (see :meth:`.inception_a_block')
+            - A - inception block A from inception_v4 model (see :meth:`.inception_a_block`)
             - B - inception block B from inception_v4 model (see :meth:`.inception_b_block`)
             - G - grid-reduction block from inception_v4 model (see :meth:`.reduction_grid_block`)
             - C - Inception block C from inception_v4 model (see :meth:`.inception_c_block`)

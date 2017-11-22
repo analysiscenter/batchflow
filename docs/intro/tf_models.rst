@@ -67,7 +67,7 @@ Despite simplicity, this approach is highly discouraged as:
 
 The right way
 ~~~~~~~~~~~~~
-Here we split network configuration and network definition into separate methods.::
+Here we split network configuration and network definition into separate methods::
 
     from dataset.models.tf import TFModel
     from dataset.models.tf.layers import conv_block

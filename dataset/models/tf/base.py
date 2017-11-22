@@ -42,27 +42,6 @@ DECAYS = {
 class TFModel(BaseModel):
     r""" Base class for all tensorflow models
 
-    Attributes
-    ----------
-    session : tf.Session
-
-    graph : tf.Graph
-
-    is_training : tf.Tensor
-
-    global_step : tf.Tensor
-
-    loss : tf.Tensor
-
-    train_step : tf.Operation
-
-    from BaseModel:
-
-    name : str - a model name
-
-    config : dict - configuration parameters
-
-
     **Configuration**
 
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
@@ -138,6 +117,7 @@ class TFModel(BaseModel):
 
         - ``{'input_block/inputs': 'images'}``
         - ``{'input_block': dict(inputs='features')}``
+        - ``{'input_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}
 
     body : dict
         parameters for the base network layers, usually :func:`.conv_block` parameters
@@ -1188,7 +1168,6 @@ class TFModel(BaseModel):
 
             if ctx:
                 ctx.__exit__(None, None, None)
-
 
     @classmethod
     def default_config(cls):
