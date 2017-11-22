@@ -15,7 +15,7 @@ The advantages of using ``conv_block`` are:
 
 The block consist of predefined layers, among which:
 
-- convolutions (as well as dilated, separable and trasposed convolutions)
+- convolutions (as well as dilated, separable and transposed convolutions)
 - batch normalization
 - activation
 - global and spatial max pooling
@@ -41,7 +41,7 @@ Or a more sophisticated example - a full 14-layer VGG-like model in just 6 lines
             x = conv_block(x, 'cacacap', 256, 3, name='block3', **kwargs)
             x = conv_block(x, 'cacacap', 512, 3, name='block4', **kwargs)
             x = conv_block(x, 'cacacap', 512, 3, name='block5', **kwargs)
-            x = conv_block(x, num_classes, 3, layout='caP', name='classification', **kwargs)
+            x = conv_block(x, num_classes, 3, layout='cP', name='classification', **kwargs)
             output = tf.identity(x, name='predictions')
             return output
 
@@ -60,7 +60,7 @@ That's a fully working example. Just try it with a simple pipeline:
                 .init_model('dynamic', MyModel, 'conv',
                             config={'loss': 'ce',
                                     'inputs': dict(images={'shape': (28, 28, 1)},
-                                                   labels={'shape': 10, 'dtype': 'uint8',
+                                                   labels={'classes': 10, 'dtype': 'uint8',
                                                            'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images'})
                 .train_model('conv', fetches='loss', feed_dict={'images': B('images'),

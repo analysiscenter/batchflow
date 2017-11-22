@@ -99,8 +99,6 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
 
     Parameters
     ----------
-    dim : int {1, 2, 3}
-        number of dimensions
     inputs : tf.Tensor
         input tensor
     filters : int

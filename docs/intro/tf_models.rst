@@ -222,3 +222,9 @@ How to configure model inputs
 -----------------------------
 .. automethod:: dataset.models.tf.TFModel._make_inputs
     :noindex:
+
+Ready to use models
+-------------------
+.. toctree::
+
+    tf_models_zoo

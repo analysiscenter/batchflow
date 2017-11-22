@@ -8,9 +8,7 @@ Pipelines can include model definitions, training, evauluation and prediction ac
 Model class
 -----------
 
-Models are defined in model classes. You can use standard models or write your own models.
-
-.. code-block:: python
+Models are defined in model classes. You can use standard models or write your own models.::
 
    from dataset.models import BaseModel
 
@@ -40,9 +38,7 @@ Consequently, the model has an access to the pipeline and the very first batch t
 Adding a model to a pipeline
 ----------------------------
 
-First of all, a model should be initialized:
-
-.. code-block:: python
+First of all, a model should be initialized::
 
    full_workflow = my_dataset.p
                              .init_model('static', MyModel, 'my_model', config)
@@ -72,13 +68,12 @@ Read a model specfication to know how to configure it.
 
 For flexibilty ``config`` might include so called ``named expressions`` which are defined by name but substitued with their actual values:
 
-
 * ``B('name')`` - a batch component or property
 * ``V('name')`` - a pipeline variable
 * ``C('name')`` - a pipeline config option
 * ``F(name)`` - a function, method or any other callable
 
-.. code-block:: python
+::
 
    pipeline
        .init_variable('images_shape', [256, 256])
@@ -95,25 +90,22 @@ For flexibilty ``config`` might include so called ``named expressions`` which ar
 Training a model
 ----------------
 
-A train action should be stated below an initialization action:
+A train action should be stated below an initialization action::
 
-.. code-block:: python
-
-   full_workflow = my_dataset.p
+   full_workflow = (my_dataset.p
        .init_model('static', MyModel, 'my_model', config)
        ...
        .train_model('my_model', x=B('images'), y=B('labels'))
+   )
 
 ``train_model``\ 's arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.
 
 Model independent arguments are:
 
-
 * ``make_data`` - a function or method which takes a current batch and a model instance and return a dict of arguments for ``model.train(...)``.
 * ``save_to`` - a location or a sequence of locations where to store an output of ``model.train`` (if there is any).
   Could be a named expression: ``B("name")``\ , ``C("name")`` or ``V("name")``.
 * ``mode`` - could be one of:
-
 
   * ``'w'`` or ``'write'`` to rewrite a location with a new value
   * ``'a'`` or ``'append'`` to append a value to a location (e.g. if a location is a list)
@@ -122,9 +114,9 @@ Model independent arguments are:
 
   For sets and dicts ``'u'`` and ``'a'`` do the same.
 
-.. code-block:: python
+::
 
-   full_workflow = my_dataset.p
+   full_workflow = (my_dataset.p
        .init_model('static', MyModel, 'my_model', my_config)
        .init_model('dynamic', AnotherModel, 'another_model', another_config)
        .init_variable('current_loss', 0)
@@ -136,12 +128,11 @@ Model independent arguments are:
        .train_model('another_model', fetches='loss',
                     feed_dict={'x': B('images'), 'y': B('labels')},
                     save_to=V('loss_history'), mode='append')
+   )
 
 Here, parameters ``output``\ , ``x`` and ``y`` are specific to ``my_model``\ , while ``fetches`` and ``feed_dict`` are specific to ``another_model``.
 
-You can also write an action which works with a model directly.
-
-.. code-block:: python
+You can also write an action which works with a model directly.::
 
    class MyBatch(Batch):
        ...
@@ -155,27 +146,26 @@ You can also write an action which works with a model directly.
            ...
 
 
-   full_workflow = my_dataset.p
+   full_workflow = (my_dataset.p
        .init_model('static', MyModel, 'my_model', my_config)
        .init_model('dynamic', MyOtherModel, 'some_model', some_config)
        .some_preprocessing()
        .some_augmentation()
        .train_in_batch('my_model')
        .train_linked_model()
-
+   )
 
 Predicting with a model
 -----------------------
 
-``predict_model`` is very similar to `train_model <#training-a-model>`_ described above:
+``predict_model`` is very similar to `train_model <#training-a-model>`_ described above::
 
-.. code-block:: python
-
-   full_workflow = my_dataset.p
+   full_workflow = (my_dataset.p
        .init_model('static', MyModel, 'my_model', config)
        .init_variable('predicted_labels', init_on_each_run=list)
        ...
        .predict_model('my_model', x=B('images'), save_to=V('predicted_labels'))
+   )
 
 Read a model specfication to find out what it needs for predicting and what its output is.
 
@@ -183,9 +173,7 @@ Read a model specfication to find out what it needs for predicting and what its 
 Saving a model
 --------------
 
-You can write a model to a persistent storage at any time by calling ``save_model(...)``
-
-.. code-block:: python
+You can write a model to a persistent storage at any time by calling ``save_model(...)``::
 
    some_pipeline.save_model('my_model', path='/some/path')
 
@@ -203,21 +191,18 @@ which might be highly undesired).
 Models and template pipelines
 -----------------------------
 
-A template pipeline is not linked to any dataset and thus it will never run. It might be used as a building block for more complex pipelines.
+A template pipeline is not linked to any dataset and thus it will never run. It might be used as a building block for more complex pipelines.::
 
-.. code-block:: python
-
-   template_pipeline = Pipeline()
+   template_pipeline = (Pipeline()
        .init_model('static', MyModel)
        .init_model('dynamic', MyModel2)
        .prepocess()
        .normalize()
        .train_model('MyModel', ...)
        .train_model('MyModel2', ...)
+   )
 
-Linking a pipeline to a dataset creates a new pipeline that can be run.
-
-.. code-block:: python
+Linking a pipeline to a dataset creates a new pipeline that can be run.::
 
    mnist_pipeline = (template_pipeline << mnist_dataset).run(BATCH_SIZE, n_epochs=10)
    cifar_pipeline = (template_pipeline << cifar_dataset).run(BATCH_SIZE, n_epochs=10)
@@ -233,22 +218,22 @@ Importing models
 
 Models exist within pipelines. This is very convenient if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you train a model in one pipeline and later use it in an inference pipeline.
 
-This can be easily achieved with a model import.
-
-.. code-block:: python
+This can be easily achieved with a model import.::
 
    train_pipeline = (images_dataset.p
        .init_model('dynamic', Resnet50)
        .load(...)
        .random_rotate(angle=(-30, 30))
        .train_model("Resnet50")
-       .run(BATCH_SIZE, shuffle=True, n_epochs=10))
+       .run(BATCH_SIZE, shuffle=True, n_epochs=10)
+   )
 
    inference_pipeline_template = (Pipeline()
        .resize(shape=(256, 256))
        .normalize()
        .import_model("Resnet50", train_pipeline)
-       .predict_model("Resnet50"))
+       .predict_model("Resnet50")
+   )
    ...
 
    infer = (inference_pipeline_template << some_dataset).run(INFER_BATCH_SIZE, shuffle=False)
@@ -258,9 +243,7 @@ When ``inference_pipeline_template`` is run, the model ``Resnet50`` from ``train
 Parallel training
 -----------------
 
-If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, you might encounter that your model hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock can be added to an action to allow for only one concurrent execution:
-
-.. code-block:: python
+If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, you might encounter that your model hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock can be added to an action to allow for only one concurrent execution::
 
    class MyBatch(Batch):
        ...

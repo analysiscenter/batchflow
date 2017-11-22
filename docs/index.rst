@@ -62,12 +62,14 @@ Train a neural network
 Dataset includes ready-to-use proven architectures like VGG, Inception, ResNet and many others.
 To apply them to your data just choose a model, specify the inputs (like the number of classes or images shape)
 and call ``train_model``. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.::
+
     from dataset.models.tf import ResNet34
 
     my_workflow = my_dataset.pipeline()
                   .init_model('dynamic', ResNet34, config={
                               'inputs': {'images': {'shape': B('image_shape')},
-                                         'labels': {'classes': 10, 'transform': 'ohe', 'name': 'targets'}}})
+                                         'labels': {'classes': 10, 'transform': 'ohe', 'name': 'targets'}},
+                              'input_block/inputs': 'images'})
                   .load('/some/path')
                   .some_transform()
                   .another_transform()

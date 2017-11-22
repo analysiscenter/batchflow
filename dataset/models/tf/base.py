@@ -117,7 +117,7 @@ class TFModel(BaseModel):
 
         - ``{'input_block/inputs': 'images'}``
         - ``{'input_block': dict(inputs='features')}``
-        - ``{'input_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}
+        - ``{'input_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
 
     body : dict
         parameters for the base network layers, usually :func:`.conv_block` parameters
@@ -1151,7 +1151,7 @@ class TFModel(BaseModel):
             x = tf.identity(tensor, name='predictions')
             for oper in ops:
                 if oper == 'proba':
-                    self._add_output_scope(x, scope, attr_prefix, **kwargs)
+                    self._add_output_proba(x, scope, attr_prefix, **kwargs)
                 elif oper == 'labels':
                     self._add_output_labels(x, scope, attr_prefix, **kwargs)
                 elif oper == 'accuracy':

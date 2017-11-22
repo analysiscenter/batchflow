@@ -14,15 +14,15 @@ class Inception(TFModel):
         layout : str
             a sequence of blocks in the network:
 
-            - b - building block of Inception v1 and v3 models
-            - r - reduction block (see :meth:`.reduction_block`)
-            - f - factorization_block of Inception_v3 model (see :meth:`.factorization_block`)
-            - m - mixed_block of Inception_v3 model (see :meth:`.mixed_block`)
-            - e - expanded_block of Inception_v3 model (see :meth:`.expanded_block`)
-            - A - inception block A from Inception_v4 model (see :meth:`.inception_a_block`)
-            - B - inception block B from Inception_v4 model (see :meth:`.inception_b_block`)
-            - G - grid-reduction block from Inception_v4 model (see :meth:`.reduction_grid_block`)
-            - C - Inception block C from Inception_v4 model (see :meth:`.inception_c_block`)
+            - b - inception block for v1 and v3 models
+            - r - reduction block
+            - f - factorization_block for Inception_v3 model (see :meth:`.factorization_block`)
+            - m - mixed_block for Inception_v3 model (see :meth:`.mixed_block`)
+            - e - expanded_block for Inception_v3 model (see :meth:`.expanded_block`)
+            - A - inception block A for Inception_v4 model (see :meth:`.inception_a_block`)
+            - B - inception block B for Inception_v4 model (see :meth:`.inception_b_block`)
+            - C - Inception block C for Inception_v4 model (see :meth:`.inception_c_block`)
+            - G - grid-reduction block for Inception_v4 model (see :meth:`.reduction_grid_block`)
 
         arch : dict
             parameters for each block:
@@ -86,10 +86,10 @@ class Inception(TFModel):
                     x = cls.inception_a_block(x, filters=filters, name='inception_a_block-%d'%i, **block_args)
                 elif block == 'B':
                     x = cls.inception_b_block(x, filters=filters, name='inception_b_block-%d'%i, **block_args)
-                elif block == 'G':
-                    x = cls.reduction_grid_block(x, filters=filters, name='reduction_grid_block-%d'%i, **block_args)
                 elif block == 'C':
                     x = cls.inception_c_block(x, filters=filters, name='inception_c_block-%d'%i, **block_args)
+                elif block == 'G':
+                    x = cls.reduction_grid_block(x, filters=filters, name='reduction_grid_block-%d'%i, **block_args)
 
         return x
 
