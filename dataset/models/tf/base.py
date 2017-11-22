@@ -1151,23 +1151,39 @@ class TFModel(BaseModel):
             x = tf.identity(tensor, name='predictions')
             for oper in ops:
                 if oper == 'proba':
-                    proba = tf.nn.softmax(x, name='predicted_proba')
-                    self.store_to_attr(attr_prefix + 'predicted_proba', proba)
+                    self._add_output_scope(x, scope, attr_prefix, **kwargs)
                 elif oper == 'labels':
-                    data_format = kwargs.get('data_format')
-                    channels_axis = self.channels_axis(data_format)
-                    predicted_labels = tf.argmax(x, axis=channels_axis, name='predicted_labels')
-                    self.store_to_attr(attr_prefix + 'predicted_labels', predicted_labels)
+                    self._add_output_labels(x, scope, attr_prefix, **kwargs)
                 elif oper == 'accuracy':
-                    true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
-                    current_scope = self.graph.get_name_scope() + '/'
-                    predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
-                    equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
-                    accuracy = tf.reduce_mean(equals, name='accuracy')
-                    self.store_to_attr(attr_prefix + 'accuracy', accuracy)
+                    self._add_output_accuracy(x, scope, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
+
+    def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
+        _ = scope
+        proba = tf.nn.softmax(inputs, name='predicted_proba')
+        self.store_to_attr(attr_prefix + 'predicted_proba', proba)
+
+    def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
+        _ = scope
+        data_format = kwargs.get('data_format')
+        channels_axis = self.channels_axis(data_format)
+        predicted_labels = tf.argmax(inputs, axis=channels_axis, name='predicted_labels')
+        self.store_to_attr(attr_prefix + 'predicted_labels', predicted_labels)
+
+    def _add_output_accuracy(self, inputs, scope, attr_prefix, **kwargs):
+        true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
+        current_scope = self.graph.get_name_scope() + '/'
+        try:
+            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+        except KeyError:
+            self._add_output_labels(inputs, scope, attr_prefix, **kwargs)
+            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+        equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
+        accuracy = tf.reduce_mean(equals, name='accuracy')
+        self.store_to_attr(attr_prefix + 'accuracy', accuracy)
+
 
     @classmethod
     def default_config(cls):
