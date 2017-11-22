@@ -74,10 +74,6 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     ----------
     inputs : tf.Tensor
         input tensor
-    filters : int
-        number of filters in the ouput tensor
-    kernel_size : int
-        kernel size
     layout : str
         a sequence of layers:
 
@@ -96,8 +92,14 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - m - maximum intensity projection (:func:`.layers.mip`)
 
         Default is ''.
+    filters : int
+        the number of filters in the ouput tensor
+    kernel_size : int
+        kernel size
     name : str
         name of the layer that will be used as a scope.
+    units : int
+        the number of units in the dense layer
     strides : int
         Default is 1.
     padding : str
@@ -145,13 +147,13 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
     Examples
     --------
-    A simple 2d block: 3x3 conv, batch norm, relu, 2x2 max-pooling with stride 2::
+    A simple block: 3x3 conv, batch norm, relu, 2x2 max-pooling with stride 2::
 
-        x = conv_block(2, x, 32, 3, layout='cnap')
+        x = conv_block(x, 32, 3, layout='cnap')
 
     A canonical bottleneck block (1x1, 3x3, 1x1 conv with relu in-between)::
 
-        x = conv_block(2, x, [64, 64, 256], [1, 3, 1], layout='cacac')
+        x = conv_block(x, [64, 64, 256], [1, 3, 1], layout='cacac')
 
     A complex Nd block:
 

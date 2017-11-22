@@ -17,7 +17,7 @@ class MyModel(TFModel):
         pass
 
 if __name__ == "__main__":
-    BATCH_SIZE = 4
+    BATCH_SIZE = 16
 
     mnist = MNIST()
 
@@ -25,18 +25,16 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_model('dynamic', MyModel, 'conv',
+                .init_model('dynamic', VGG7, 'conv',
                             config={'inputs': dict(images={'shape': B('image_shape')},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images',
                                     'head/units': [100, 100, 10],
-                                    'loss': None,
-                                    'optimizer': None,
                                     #'filters': 16, 'width_factor': 1,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
-                                    'output': dict(ops=['labels', 'accuracy'])})
+                                    'output': dict(ops=['accuracy'])})
                 .resize(shape=(128, 128))
-                .train_model('conv', #fetches='loss',
+                .train_model('conv', fetches='loss',
                                      feed_dict={'images': B('images'),
                                                 'labels': B('labels')},
                              save_to=V('current_loss'), use_lock=True)
