@@ -183,6 +183,11 @@ class Batch(BaseBatch):
         state.pop('_data_named')
         return state
 
+    def __setstate__(self, state):
+        for k, v in state.items():
+            # this warrants that all hidden objects are reconstructed upon unpickling
+            setattr(self, k, v)
+
     @property
     def _empty_data(self):
         return None if self.components is None else self._item_class()   # pylint: disable=not-callable
@@ -256,7 +261,7 @@ class Batch(BaseBatch):
 
     def __setattr__(self, name, value):
         if self.components is not None:
-            if name == "_data":
+            if name == "_d`ata":
                 super().__setattr__(name, value)
                 if self._item_class is None:
                     self.make_item_class()
