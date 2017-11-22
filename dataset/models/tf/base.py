@@ -1161,7 +1161,7 @@ class TFModel(BaseModel):
                 ctx.__exit__(None, None, None)
 
     def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
-        _ = scope
+        _ = scope, kwargs
         proba = tf.nn.softmax(inputs, name='predicted_proba')
         self.store_to_attr(attr_prefix + 'predicted_proba', proba)
 
