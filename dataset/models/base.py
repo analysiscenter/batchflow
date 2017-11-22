@@ -25,16 +25,76 @@ class BaseModel:
     def __init__(self, name=None, config=None, *args, **kwargs):
         self.config = config or {}
         self.name = name or self.__class__.__name__
-        if self.get_from_config('build', True):
+        if self.get('build', self.config, True):
             self.build(*args, **kwargs)
-        if self.get_from_config('load', False):
-            self.load(**self.get_from_config('load'))
+        load = self.get('load', self.config, False)
+        if load:
+            self.load(**load)
 
-    def get_from_config(self, variable, default=None):
-        """ Return a variable from config or a default value """
-        return self.config.get(variable, default)
+    @classmethod
+    def pop(cls, variables, config=None):
+        """ Return variables and remove them from config"""
+        return cls.get(variables, config, pop=True)
 
-    def _make_inputs(self, names=None):
+    @classmethod
+    def get(cls, variables, config=None, default=None, pop=False):
+        """ Return variables from config """
+        unpack = False
+        if not isinstance(variables, (list, tuple)):
+            variables = list([variables])
+            unpack = True
+
+        ret_vars = []
+        for variable in variables:
+            _config = config
+            if '/' in variable:
+                var = variable.split('/')
+                prefix = var[:-1]
+                var_name = var[-1]
+            else:
+                prefix = []
+                var_name = variable
+
+            for p in prefix:
+                if p in _config:
+                    _config = _config[p]
+                else:
+                    _config = None
+                    break
+            if _config:
+                if pop:
+                    val = _config.pop(var_name)
+                else:
+                    val = _config.get(var_name, default)
+            else:
+                raise KeyError("Key '%s' not found" % variable)
+
+            ret_vars.append(val)
+
+        if unpack:
+            ret_vars = ret_vars[0]
+        else:
+            ret_vars = tuple(ret_vars)
+        return ret_vars
+
+    @classmethod
+    def put(cls, variable, value, config):
+        """ Put a new variable into config """
+        if '/' in variable:
+            var = variable.strip('/').split('/')
+            prefix = var[:-1]
+            var_name = var[-1]
+        else:
+            prefix = []
+            var_name = variable
+
+        for p in prefix:
+            if p not in config:
+                config[p] = dict()
+            config = config[p]
+        config[var_name] = value
+
+    def _make_inputs(self, names=None, config=None):
         """ Make model input data using config
 
         Parameters
@@ -45,7 +105,7 @@ class BaseModel:
         -------
         None or dict - where key is a variable name and a value is a corresponding variable after configuration
         """
-        _ = names
+        _ = names, config
         return None
 
     def build(self, *args, **kwargs):

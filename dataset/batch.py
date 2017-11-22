@@ -183,6 +183,11 @@ class Batch(BaseBatch):
         state.pop('_data_named')
         return state
 
+    def __setstate__(self, state):
+        for k, v in state.items():
+            # this warrants that all hidden objects are reconstructed upon unpickling
+            setattr(self, k, v)
+
     @property
     def _empty_data(self):
         return None if self.components is None else self._item_class()   # pylint: disable=not-callable
@@ -263,6 +268,7 @@ class Batch(BaseBatch):
                 self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
             elif name in self.components:    # pylint: disable=unsupported-membership-test
                 setattr(self._data_named, name, value)
+                super().__setattr__('_data', self._data_named.data)
             else:
                 super().__setattr__(name, value)
         else:
@@ -384,7 +390,7 @@ class Batch(BaseBatch):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
         if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least one of dst and src should be attribute names, not arrays")
+            raise TypeError("At least one of dst and src should be an attribute name, not an array")
 
         if src is None:
             _args = args

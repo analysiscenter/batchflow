@@ -714,7 +714,7 @@ class Pipeline:
         Would call a `resnet` model `train` method with a `feed_dict` argument:
         ``resnet.train(feed_dict={'x': batch.images})``
 
-        >>> pipeline.train_model('resnet', C(MyBatch.make_resnet_data))
+        >>> pipeline.train_model('resnet', MyBatch.make_resnet_data)
         Equivalent to::
 
             train_data = batch.make_resnet_data(resnet_model)
@@ -768,17 +768,17 @@ class Pipeline:
 
         >>> pipeline
             .init_variable('inferred_masks', init_on_each_run=list)
-            .predict_model('tf_unet', fetches='predicted_masks', feed_dict={'x': B('images')},
+            .predict_model('tf_unet', fetches='predictions', feed_dict={'x': B('images')},
                            save_to=V('inferred_masks'))
         Would call a `tf_unet` model `train` method with `fetches` and `feed_dict` arguments:
-        ``predictions = tf_unet.train(fetches='predicted_masks', feed_dict={'x': batch.images})``
+        ``predictions = tf_unet.train(fetches='predictions', feed_dict={'x': batch.images})``
         Predictions for each batch will be stored in a pipeline variable `inferred_masks`.
 
-        >>> pipeline.train_model('deepnet', MyBatch.make_deepnet_data)
+        >>> pipeline.predict_model('deepnet', MyBatch.make_deepnet_data)
         Equivalent to::
 
             predict_data = batch.make_deepnet_data(model=deepnet_model)
-            deepnet_model.train(**predict_data)
+            deepnet_model.predict(**predict_data)
         """
         self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
                                   'save_to': save_to, 'mode': mode})
@@ -1027,7 +1027,8 @@ class Pipeline:
                 yield batch
 
 
-    def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, on_iter=None,
+                  *args, **kwargs):
         """ Generate batches """
         target = kwargs.pop('target', 'threads')
         self._tf_session = kwargs.pop('tf_session', None)
@@ -1063,6 +1064,8 @@ class Pipeline:
                     yield batch_res
                     self._prefetch_count.get(block=True)
                     self._prefetch_count.task_done()
+                    if callable(on_iter):
+                        on_iter(batch_res)
                 else:
                     self._stop_flag = True
         else:
@@ -1073,6 +1076,8 @@ class Pipeline:
                     pass
                 else:
                     yield batch_res
+                    if callable(on_iter):
+                        on_iter(batch_res)
 
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all previous lazy actions """

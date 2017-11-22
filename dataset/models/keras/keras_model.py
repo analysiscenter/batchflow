@@ -24,8 +24,8 @@ class KerasModel(Model, BaseModel):
         """ Must return inputs and outputs. """
         input_nodes, output_nodes = self._build(**self.config)
         Model.__init__(self, input_nodes, output_nodes)
-        self.compile(loss=self.get_from_config('loss', None),
-                     optimizer=self.get_from_config('optimizer', 'sgd'))
+        self.compile(loss=self.get('loss', self.config, default=None),
+                     optimizer=self.get('optimizer', self.config, default='sgd'))
 
     def _build(self, *args, **kwargs):
         """ Must return inputs and outputs. """

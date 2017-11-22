@@ -58,7 +58,6 @@ class BaseComponentsTuple:
         return tuple(getattr(self, comp) for comp in components)
 
 
-
 class MetaComponentsTuple(type):
     """ Class factory for a component tuple """
     def __init__(cls, *args, **kwargs):
