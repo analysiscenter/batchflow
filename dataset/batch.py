@@ -261,7 +261,7 @@ class Batch(BaseBatch):
 
     def __setattr__(self, name, value):
         if self.components is not None:
-            if name == "_d`ata":
+            if name == "_data":
                 super().__setattr__(name, value)
                 if self._item_class is None:
                     self.make_item_class()
