@@ -50,7 +50,7 @@ class VGG(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['input_block']['inputs'] = 'images'
-        config['block'] = dict(layout='cna')
+        config['body']['block'] = dict(layout='cna')
         config['head']['units'] = [4096, 4096, 2]
         config['head']['layout'] = 'fff'
         return config
@@ -78,14 +78,16 @@ class VGG(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        arch = kwargs.get('arch')
+        arch = kwargs.pop('arch')
         if not isinstance(arch, (list, tuple)):
             raise TypeError("arch must be list or tuple, but {} was given.".format(type(arch)))
+        block = kwargs.pop('block')
+        block = {**block, **kwargs}
 
         x = inputs
         with tf.variable_scope(name):
             for i, block_cfg in enumerate(arch):
-                x = cls.block(x, *block_cfg, name='block-%d' % i, **kwargs)
+                x = cls.block(x, *block_cfg, name='block-%d' % i, **block)
         return x
 
     @classmethod
@@ -109,7 +111,7 @@ class VGG(TFModel):
         -------
         tf.Tensor
         """
-        kwargs = cls.fill_params('block', **kwargs)
+        kwargs = cls.fill_params('body/block', **kwargs)
         layout = kwargs.pop('layout') * (depth3 + depth1) + 'p' * downscale
         kernels = [3] * depth3 + [1] * depth1
         with tf.variable_scope(name):
