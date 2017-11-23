@@ -44,8 +44,8 @@ First of all, a model should be initialized::
                              .init_model('static', MyModel, 'my_model', config)
                              ...
 
-In ``init_model`` you state a mode (\ ``static`` or ``dynamic``\ ), a model class, an optional short model name (otherwise, a class name will be used) and an optional configuration.
-A static model is initialized immediately in the ``init_model``\ , while a dynamic model will be initialized when the pipeline is run and the very first batch flows into the pipeline.
+In ``init_model`` you state a mode (``static`` or ``dynamic``), a model class, an optional short model name (otherwise, a class name will be used) and an optional configuration.
+A static model is initialized immediately in the ``init_model``, while a dynamic model will be initialized when the pipeline is run and the very first batch flows into the pipeline.
 
 If a model was already created in another pipeline, it might be `imported <#importing-models>`_.
 
@@ -66,7 +66,7 @@ For some models only one of ``build`` or ``load`` should be specified. While oth
 
 Read a model specfication to know how to configure it.
 
-For flexibilty ``config`` might include so called ``named expressions`` which are defined by name but substitued with their actual values:
+For flexibilty ``config`` might include so called :doc:`named expressions <named_expr>` which are defined by name but substitued with their actual values:
 
 * ``B('name')`` - a batch component or property
 * ``V('name')`` - a pipeline variable
@@ -98,13 +98,13 @@ A train action should be stated below an initialization action::
        .train_model('my_model', x=B('images'), y=B('labels'))
    )
 
-``train_model``\ 's arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.
+``train_model`` arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.
 
 Model independent arguments are:
 
 * ``make_data`` - a function or method which takes a current batch and a model instance and return a dict of arguments for ``model.train(...)``.
 * ``save_to`` - a location or a sequence of locations where to store an output of ``model.train`` (if there is any).
-  Could be a named expression: ``B("name")``\ , ``C("name")`` or ``V("name")``.
+  Could be :doc:`a named expression <named_expr>`: ``B("name")``, ``C("name")`` or ``V("name")``.
 * ``mode`` - could be one of:
 
   * ``'w'`` or ``'write'`` to rewrite a location with a new value
@@ -130,7 +130,7 @@ Model independent arguments are:
                     save_to=V('loss_history'), mode='append')
    )
 
-Here, parameters ``output``\ , ``x`` and ``y`` are specific to ``my_model``\ , while ``fetches`` and ``feed_dict`` are specific to ``another_model``.
+Here, parameters ``output``, ``x`` and ``y`` are specific to ``my_model``, while ``fetches`` and ``feed_dict`` are specific to ``another_model``.
 
 You can also write an action which works with a model directly.::
 

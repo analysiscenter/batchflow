@@ -78,7 +78,6 @@ Algebra of pipelines
 
 There are two ways to define a pipeline:
 
-
 * a chain of actions
 * a pipeline algebra
 
@@ -107,9 +106,7 @@ Link a pipeline to a dataset.
 `dataset >> pipeline` or `pipeline << dataset`
 
 
-The complete example:
-
-.. code-block:: python3
+The complete example::
 
    from dataset import Pipeline
 
@@ -267,9 +264,7 @@ Updating a variable
 
 Each batch instance have a pointer to the pipeline it was created in (or `None` if the batch was created manually).
 
-So getting an access to a variable is easy:
-
-.. code-block:: python
+So getting an access to a variable is easy::
 
     class MyBatch(Batch):
         ...
@@ -279,16 +274,14 @@ So getting an access to a variable is easy:
             ...
 
 If a variable does not exist, it might be created and initialized, if `create` parameter is set to `True`.
-For a flexible initialization `default`\ , `init` and `init_on_each_run` might also be passed to `get_variable()`.
+For a flexible initialization `default`, `init` and `init_on_each_run` might also be passed to `get_variable()`.
 
 
 .. note:: An explicit variable initialization in a pipeline is a preferred way to create variables.
 
 If `create` is `False` (which is by default), then `get_variable` will raise a `KeyError` if a variable does not exist.
 
-To change a variable value just call `set_variable` within an action:
-
-.. code-block:: python
+To change a variable value just call `set_variable` within an action::
 
     class MyBatch(Batch):
         ...
@@ -298,17 +291,16 @@ To change a variable value just call `set_variable` within an action:
             self.pipeline.set_variable("variable_name", new_value)
             ...
 
-Or add `update_variable` to the pipeline:
-
-.. code-block:: python
+Or add `update_variable` to the pipeline::
 
     my_pipeline
         ...
         .update_variable("current_batch_labels", F(MyBatch.get_labels))
         .update_variable("all_labels", V('current_batch_labels'), mode='append')
 
-The first parameter specifies a variable name, and it can be a string or a named expression, returning a string.
-The second parameter is an updating value and it can be a value of any type or a named expression:
+The first parameter specifies a variable name, and it can be a string or :doc:`a named expression <named_expr>`,
+returning a string.
+The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`:
 
 * B('name') - a batch class attribute or component name
 * V('name') - a pipeline variable name
@@ -363,9 +355,7 @@ Join and merge
 Joining pipelines
 ^^^^^^^^^^^^^^^^^
 
-If you have a pipeline `images` and a pipeline `labels`, you might join them for a more convenient processing:
-
-.. code-block:: python
+If you have a pipeline `images` and a pipeline `labels`, you might join them for a more convenient processing::
 
     images_with_labels = (images.p
         .load(...)
@@ -375,16 +365,13 @@ If you have a pipeline `images` and a pipeline `labels`, you might join them for
         .some_action()
     )
 
-When this pipeline is run, the following will happen for each batch of `images`\ :
+When this pipeline is run, the following will happen for each batch of `images`:
 
-
-* the actions `load`\ , `resize` and `random_rotate` will be executed
+* the actions `load`, `resize` and `random_rotate` will be executed
 * a batch of `labels` with the same index will be created
-* the `labels` batch will be passed into `some_action` as a first argument (after `self`\ , of course).
+* the `labels` batch will be passed into `some_action` as a first argument (after `self`, of course).
 
-So, images batch class should look as follows:
-
-.. code-block:: python
+So, images batch class should look as follows::
 
    class ImagesBatch(Batch):
        def load(self, src, fmt):
@@ -399,9 +386,7 @@ So, images batch class should look as follows:
        def some_actions(self, labels_batch):
            ...
 
-You can join several sources:
-
-.. code-block:: python
+You can join several sources::
 
     full_images = (images.p
         .load(...)
@@ -411,11 +396,9 @@ You can join several sources:
         .some_action()
     )
 
-Thus, the tuple of batches from `labels` and `masks` will be passed into `some_action` as the first arguments (as always, after `self`\ ).
+Thus, the tuple of batches from `labels` and `masks` will be passed into `some_action` as the first arguments (as always, after `self`).
 
-Mostly, `join` is used as follows:
-
-.. code-block:: python
+Mostly, `join` is used as follows::
 
     full_images = (images.p
         .load(...)
@@ -429,9 +412,7 @@ See :func:`~dataset.Batch.load` for more details.
 Merging pipelines
 ^^^^^^^^^^^^^^^^^
 
-You can also merge data from two pipelines (this is not the same as `concatenating pipelines <#algebra-of-pipelines>`_).
-
-.. code-block:: python
+You can also merge data from two pipelines (this is not the same as `concatenating pipelines <#algebra-of-pipelines>`_).::
 
     images_with_augmentation = (images_dataset.p
         .load(...)
@@ -465,9 +446,8 @@ Rebatch
 
 When actions change the batch size (for instance, dropping some bad or skipping incomplete data),
 you might end up in a situation when you don't know the batch size and, what is sometimes much worse,
-batch size differs. To solve this problem, just call `rebatch`\ :
+batch size differs. To solve this problem, just call `rebatch`::
 
-.. code-block:: python
 
     images_pipeline = (images_dataset.p
         .load(...)
@@ -477,7 +457,7 @@ batch size differs. To solve this problem, just call `rebatch`\ :
         .rebatch(32)
     )
 
-Under the hood `rebatch` calls `merge`\ , so you must ensure that `merge` works properly for your specific data and write your own `merge` if needed.
+Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works properly for your specific data and write your own `merge` if needed.
 
 Models
 ------

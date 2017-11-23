@@ -32,7 +32,7 @@ In other cases it can be a list of domain-specific identificators (e.g. client i
 
    dataset_index = DatasetIndex(dataframe['client_id'])
 
-You will rarely need to work with an index directly, but if you want to do something specific you may use its `public API <../../dataset.index>`_.
+You will rarely need to work with an index directly, but if you want to do something specific you may use its :doc:`public API <../../dataset.index>`.
 
 .. _FilesIndex:
 
