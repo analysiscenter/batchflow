@@ -58,7 +58,7 @@ class ResNet(TFModel):
         config['input_block'].update(dict(layout='cnap', filters=64, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
 
-        config['body']['block'] = dict(activation=tf.nn.relu, layout='cna',
+        config['body']['block'] = dict(activation=tf.nn.relu,
                                        bottleneck=False, bottleneck_factor=4,
                                        width_factor=1,
                                        resnext=False, resnext_factor=32,
@@ -200,7 +200,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def sub_block(cls, inputs, filters, bottleneck, bottleneck_factor, name, strides=1, **kwargs):
+    def sub_block(cls, inputs, filters, bottleneck, bottleneck_factor, **kwargs):
         """ ResNet convolution block
 
         Parameters
@@ -213,21 +213,19 @@ class ResNet(TFModel):
             whether to use a simple or a bottleneck block
         bottleneck_factor : int
             filter count scaling factor
-        name : str
-            scope name
 
         Returns
         -------
         tf.Tensor
         """
         if bottleneck:
-            x = cls.bottleneck_block(inputs, filters, bottleneck_factor, name, strides=strides, **kwargs)
+            x = cls.bottleneck_block(inputs, filters=filters, bottleneck_factor=bottleneck_factor, **kwargs)
         else:
-            x = cls.simple_block(inputs, filters, name, strides=strides, **kwargs)
+            x = cls.simple_block(inputs, filters=filters, **kwargs)
         return x
 
     @classmethod
-    def simple_block(cls, inputs, filters, name, strides, **kwargs):
+    def simple_block(cls, inputs, layout='cnacn', filters=None, strides=1, **kwargs):
         """ A simple residual block with two 3x3 convolutions
 
         Parameters
@@ -243,11 +241,11 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        return conv_block(inputs, 'cnacn', filters, 3, name=name, strides=[strides, 1], **kwargs)
+        return conv_block(inputs, layout, filters=filters, kernel_size=3, strides=[strides, 1], **kwargs)
 
 
     @classmethod
-    def bottleneck_block(cls, inputs, filters, bottleneck_factor, name, strides, **kwargs):
+    def bottleneck_block(cls, inputs, layout='cnacnacn', filters=None, bottleneck_factor=4, strides=1, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
         Parameters
@@ -263,8 +261,8 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        x = conv_block(inputs, 'cnacnacn', [filters, filters, filters * bottleneck_factor], [1, 3, 1],
-                       name=name, strides=[strides, 1, 1], **kwargs)
+        x = conv_block(inputs, layout, [filters, filters, filters * bottleneck_factor], [1, 3, 1],
+                       strides=[strides, 1, 1], **kwargs)
         return x
 
     @classmethod
@@ -293,9 +291,9 @@ class ResNet(TFModel):
             for i in range(resnext_factor):
                 with tf.variable_scope('next_sub_block-%d' % i):
                     if bottleneck:
-                        x = cls.bottleneck_block(inputs, 4, bottleneck_factor=filters//4, name='conv', **kwargs)
+                        x = cls.bottleneck_block(inputs, filters=4, bottleneck_factor=filters//4, name='conv', **kwargs)
                     else:
-                        x = cls.simple_block(inputs, [4, filters], name='conv', **kwargs)
+                        x = cls.simple_block(inputs, filters=[4, filters], name='conv', **kwargs)
                     sub_blocks.append(x)
             x = tf.add_n(sub_blocks)
         return x
