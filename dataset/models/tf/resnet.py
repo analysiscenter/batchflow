@@ -33,24 +33,24 @@ class ResNet(TFModel):
         filters : list of int
             number of filters in each group (default=[64, 128, 256, 512])
 
+        block : dict
+            bottleneck : bool
+                whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
+            bottleneck_factor : int
+                filter shrinking factor in a bottleneck block (default=4)
+            width_factor : int
+                widening factor to make WideResNet (default=1)
+            se_block : bool
+                whether to use squeeze-and-excitation blocks (default=0)
+            se_factor : int
+                squeeze-and-excitation channels ratio (default=16)
+            resnext : bool
+                whether to use aggregated ResNeXt block (default=0)
+            resnext_factor : int
+                the number of aggregations in ResNeXt block (default=32)
+
     head : dict
         'Vdf' with dropout_rate=.4
-
-    block : dict
-        bottleneck : bool
-            whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
-        bottleneck_factor : int
-            filter shrinking factor in a bottleneck block (default=4)
-        width_factor : int
-            widening factor to make WideResNet (default=1)
-        se_block : bool
-            whether to use squeeze-and-excitation blocks (default=0)
-        se_factor : int
-            squeeze-and-excitation channels ratio (default=16)
-        resnext : bool
-            whether to use aggregated ResNeXt block (default=0)
-        resnext_factor : int
-            the number of aggregations in ResNeXt block (default=32)
     """
     @classmethod
     def default_config(cls):
@@ -58,11 +58,13 @@ class ResNet(TFModel):
         config['input_block'].update(dict(layout='cnap', filters=64, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
 
-        config['block'] = dict(activation=tf.nn.relu, bottleneck=0, bottleneck_factor=4, width_factor=1,
-                               resnext=False, resnext_factor=32,
-                               se_block=False, se_factor=16)
+        config['body']['block'] = dict(activation=tf.nn.relu, layout='cna',
+                                       bottleneck=False, bottleneck_factor=4,
+                                       width_factor=1,
+                                       resnext=False, resnext_factor=32,
+                                       se_block=False, se_factor=16)
 
-        config['head'].update(dict(layout='Vdf', dropout_rate=.4, units=list()))
+        config['head'].update(dict(layout='Vdf', dropout_rate=.4, units=2))
 
         return config
 
@@ -95,7 +97,8 @@ class ResNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        filters = kwargs.pop('filters')
+        filters, block_args = cls.pop(['filters', 'block'], kwargs)
+        block_args = {**kwargs, **block_args}
 
         with tf.variable_scope(name):
             x = inputs
@@ -103,7 +106,7 @@ class ResNet(TFModel):
                 with tf.variable_scope('block-%d' % i):
                     for block in range(n_blocks):
                         strides = 2 if i > 0 and block == 0 else 1
-                        x = cls.block(x, filters=filters[i], name='layer-%d' % block, strides=strides, **kwargs)
+                        x = cls.block(x, filters=filters[i], name='layer-%d' % block, strides=strides, **block_args)
         return x
 
     @classmethod
@@ -157,7 +160,7 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        kwargs = cls.fill_params('block', **kwargs)
+        kwargs = cls.fill_params('body/block', **kwargs)
         filters = kwargs.pop('filters')
         bottleneck = kwargs.pop('bottleneck')
         bottleneck_factor = kwargs.pop('bottleneck_factor')
@@ -260,8 +263,7 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        layout = kwargs.pop('layout', None) or 'cna'
-        x = conv_block(inputs, layout*3, [filters, filters, filters * bottleneck_factor], [1, 3, 1],
+        x = conv_block(inputs, 'cnacnacn', [filters, filters, filters * bottleneck_factor], [1, 3, 1],
                        name=name, strides=[strides, 1, 1], **kwargs)
         return x
 
@@ -308,8 +310,8 @@ class ResNet18(ResNet):
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [2, 2, 2, 2]
         config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters \
-                                    * config['block']['width_factor']
-        config['block']['bottleneck'] = False
+                                    * config['body']['block']['width_factor']
+        config['body']['block']['bottleneck'] = False
         return config
 
 
@@ -322,8 +324,8 @@ class ResNet34(ResNet):
         config['body']['num_blocks'] = [3, 4, 6, 3]
         filters = 64   # number of filters in the first block
         config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters \
-                                    * config['block']['width_factor']
-        config['block']['bottleneck'] = False
+                                    * config['body']['block']['width_factor']
+        config['body']['block']['bottleneck'] = False
         return config
 
 
@@ -332,7 +334,7 @@ class ResNet50(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet34.default_config()
-        config['block']['bottleneck'] = True
+        config['body']['block']['bottleneck'] = True
         return config
 
 
@@ -345,8 +347,8 @@ class ResNet101(ResNet):
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [3, 4, 23, 3]
         config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters \
-                                    * config['block']['width_factor']
-        config['block']['bottleneck'] = True
+                                    * config['body']['block']['width_factor']
+        config['body']['block']['bottleneck'] = True
         return config
 
 
@@ -359,6 +361,6 @@ class ResNet152(ResNet):
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [3, 8, 63, 3]
         config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters \
-                                    * config['block']['width_factor']
-        config['block']['bottleneck'] = True
+                                    * config['body']['block']['width_factor']
+        config['body']['block']['bottleneck'] = True
         return config

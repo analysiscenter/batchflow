@@ -1212,7 +1212,6 @@ class TFModel(BaseModel):
         config['inputs'] = {}
         config['common'] = {'batch_norm': {'momentum': .1}}
         config['input_block'] = {}
-        config['block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}
@@ -1224,7 +1223,7 @@ class TFModel(BaseModel):
     def fill_params(cls, _name, **kwargs):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
-        config = {**config['common'], **config[_name], **kwargs}
+        config = {**config['common'], **cls.get(_name, config), **kwargs}
         return config
 
     def build_config(self, names=None):
