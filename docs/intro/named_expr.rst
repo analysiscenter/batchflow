@@ -25,8 +25,8 @@ B - batch component
         .train_model(model_name, feed_dict={'features': B('features'), 'labels': B('labels')})
         ...
 
-At each iteration ``B('features')`` and `` B('labels')`` will be replaced with ``current_batch.features``
-and ``current_batch.labels``, i.e. `batch components <components>`_ or batch attributes.
+At each iteration ``B('features')`` and ``B('labels')`` will be replaced with ``current_batch.features``
+and ``current_batch.labels``, i.e. `batch components <components>`_ or attributes.
 
 
 V - pipeline variable
@@ -60,17 +60,28 @@ to assess performance of various models.
 
 F - callable
 ------------
-::
+A function which takes a batch and, possibly, a pipeline and a model.
+
+It can be a lambda function::
+
+    pipeline
+        .init_model('dynamic', MyModel, 'my_model', config={
+            'inputs': {'images': {'shape': F(lambda batch: batch.images.shape[1:])}}
+        })
+
+or a batch class method::
 
     pipeline
         .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict))
 
-::
+or a function::
 
     def get_boxes(batch, **kwargs):
         return [0, 0] + list(batch.images.shape[1:])
 
     pipeline
         ...
-        .update_variable(var_name, F(MyBatch.get_boxes))
+        .update_variable(var_name, F(get_boxes))
         ...
+
+or any other Python callable.
