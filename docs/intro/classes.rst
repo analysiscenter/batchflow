@@ -8,6 +8,7 @@ Classes and capabilities
    dataset
    batch
    pipeline
+   named_expr
    parallel
    prefetch
    models
