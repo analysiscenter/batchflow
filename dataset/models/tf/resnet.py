@@ -2,6 +2,9 @@
 Kaiming He et al. "`Deep Residual Learning for Image Recognition
 <https://arxiv.org/abs/1512.03385>`_"
 
+Kaiming He et al. "Identity Mappings in Deep Residual Networks
+<https://arxiv.org/abs/1603.05027>`_"
+
 Sergey Zagoruyko, Nikos Komodakis. "`Wide Residual Networks
 <https://arxiv.org/abs/1605.07146>`_"
 
@@ -38,6 +41,8 @@ class ResNet(TFModel):
                 whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
             bottleneck_factor : int
                 filter shrinking factor in a bottleneck block (default=4)
+            post_activation : None or callable
+                an activation to use after residual and shortcut summation (default is None)
             width_factor : int
                 widening factor to make WideResNet (default=1)
             se_block : bool
@@ -58,7 +63,7 @@ class ResNet(TFModel):
         config['input_block'].update(dict(layout='cnap', filters=64, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
 
-        config['body']['block'] = dict(activation=tf.nn.relu, downsample=False,
+        config['body']['block'] = dict(post_activation=None, downsample=False,
                                        bottleneck=False, bottleneck_factor=4,
                                        width_factor=1,
                                        resnext=False, resnext_factor=32,
@@ -140,14 +145,16 @@ class ResNet(TFModel):
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
+        filters : int or list/tuple of ints
             number of output filters
+        downsample : bool
+            whether to downsample with strides=2 in the first convolution
         resnext : bool
-            whether to use a usuall or aggregated ResNeXt block
+            whether to use an aggregated ResNeXt block
         resnext_factor : int
             cardinality for ResNeXt block
         bottleneck : bool
-            whether to use a simple or bottleneck block
+            whether to use a simple (`False`) or bottleneck (`True`) block
         bottleneck_factor : int
             the filters nultiplier in the bottleneck block
         se_block : bool
@@ -166,7 +173,7 @@ class ResNet(TFModel):
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
         resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
         se_block, se_factor = cls.pop(['se_block', 'se_factor'], kwargs)
-        activation = kwargs.get('activation')
+        post_activation = cls.pop('post_activation', kwargs)
 
         with tf.variable_scope(name):
             if resnext:
@@ -192,8 +199,8 @@ class ResNet(TFModel):
 
             x = x + shortcut
 
-            if activation:
-                x = activation(x)
+            if post_activation:
+                x = post_activation(x)
 
             x = tf.identity(x, name='output')
 
@@ -225,7 +232,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def simple_block(cls, inputs, layout='cnacn', filters=None, kernel_size=3, downsample=0, **kwargs):
+    def simple_block(cls, inputs, layout='acnacn', filters=None, kernel_size=3, downsample=0, **kwargs):
         """ A simple residual block with two 3x3 convolutions
 
         Parameters
@@ -244,9 +251,8 @@ class ResNet(TFModel):
         strides = ([2] + [1] * layout.count('c')) if downsample else 1
         return conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
 
-
     @classmethod
-    def bottleneck_block(cls, inputs, layout='cnacnacn', filters=None, kernel_size=None, bottleneck_factor=4,
+    def bottleneck_block(cls, inputs, layout='acnacnacn', filters=None, kernel_size=None, bottleneck_factor=4,
                          downsample=0, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
@@ -290,15 +296,13 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
+        _filters = 4 if bottleneck else [4, filters]
         sub_blocks = []
         with tf.variable_scope(name):
             for i in range(resnext_factor):
-                with tf.variable_scope('next_sub_block-%d' % i):
-                    if bottleneck:
-                        x = cls.bottleneck_block(inputs, filters=4, bottleneck_factor=filters//4, name='conv', **kwargs)
-                    else:
-                        x = cls.simple_block(inputs, filters=[4, filters], name='conv', **kwargs)
-                    sub_blocks.append(x)
+                x = cls.sub_block(inputs, filters=_filters, bottleneck=bottleneck, bottleneck_factor=filters//4,
+                                  name='next_sub_block-%d' % i, **kwargs)
+                sub_blocks.append(x)
             x = tf.add_n(sub_blocks)
         return x
 
