@@ -67,7 +67,7 @@ class VNet(TFModel):
             x = inputs
             encoder_outputs = []
             for i, ifilters in enumerate(filters):
-                x = cls.encoder_block(x, layout=layout[i], filters=ifilters, downsample=i>0,
+                x = cls.encoder_block(x, layout=layout[i], filters=ifilters, downsample=i > 0,
                                       name='encoder-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
@@ -93,14 +93,12 @@ class VNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        print('encoder', kwargs)
         layout, kernel_size = cls.pop(['layout', 'kernel_size'], kwargs)
         x = inputs
         with tf.variable_scope(name):
             if downsample:
                 x = conv_block(x, layout='cna', kernel_size=2, strides=2, name='downsample', **kwargs)
             x = ResNet.block(x, layout=layout, kernel_size=kernel_size, downsample=0, name='conv', **kwargs)
-            print('__________', x.shape)
         return x
 
     @classmethod
@@ -119,7 +117,6 @@ class VNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        print('decoder', kwargs)
         layout, filters, kernel_size = cls.pop(['layout', 'filters', 'kernel_size'], kwargs)
         with tf.variable_scope(name):
             x, skip = inputs
@@ -129,7 +126,6 @@ class VNet(TFModel):
             x = tf.concat((skip, x), axis=axis)
             x = ResNet.block(x, layout=layout, filters=filters, kernel_size=kernel_size, downsample=0,
                              name='conv', **kwargs)
-            print('__________', x.shape)
         return x
 
     @classmethod
