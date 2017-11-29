@@ -246,7 +246,7 @@ class ResNet(TFModel):
 
 
     @classmethod
-    def bottleneck_block(cls, inputs, layout='cnacnacn', filters=None, kernel_size=[1, 3, 1], bottleneck_factor=4,
+    def bottleneck_block(cls, inputs, layout='cnacnacn', filters=None, kernel_size=None, bottleneck_factor=4,
                          downsample=0, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
@@ -263,6 +263,7 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
+        kernel_size = [1, 3, 1] if kernel_size is None else kernel_size
         strides = ([2] + [1] * layout.count('c')) if downsample else 1
         x = conv_block(inputs, layout, [filters, filters, filters * bottleneck_factor], kernel_size=kernel_size,
                        strides=strides, **kwargs)
