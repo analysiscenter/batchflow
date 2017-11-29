@@ -1063,7 +1063,9 @@ class TFModel(BaseModel):
             MyModel.body(2, inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
         """
         kwargs = cls.fill_params('body', **kwargs)
-        return conv_block(inputs, name=name, **kwargs)
+        if kwargs.get('layout'):
+            return conv_block(inputs, name=name, **kwargs)
+        return inputs
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
@@ -1095,8 +1097,9 @@ class TFModel(BaseModel):
             MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
         kwargs = cls.fill_params('head', **kwargs)
-        x = conv_block(inputs, name=name, **kwargs)
-        return x
+        if kwargs.get('layout'):
+            return conv_block(inputs, name=name, **kwargs)
+        return inputs
 
     def output(self, inputs, ops=None, prefix=None, **kwargs):
         """ Add output operations to a model graph, like predictions, quality metrics, etc.

@@ -58,7 +58,7 @@ class ResNet(TFModel):
         config['input_block'].update(dict(layout='cnap', filters=64, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
 
-        config['body']['block'] = dict(activation=tf.nn.relu,
+        config['body']['block'] = dict(activation=tf.nn.relu, downsample=False,
                                        bottleneck=False, bottleneck_factor=4,
                                        width_factor=1,
                                        resnext=False, resnext_factor=32,
@@ -105,12 +105,13 @@ class ResNet(TFModel):
             for i, n_blocks in enumerate(kwargs['num_blocks']):
                 with tf.variable_scope('block-%d' % i):
                     for block in range(n_blocks):
-                        strides = 2 if i > 0 and block == 0 else 1
-                        x = cls.block(x, filters=filters[i], name='layer-%d' % block, strides=strides, **block_args)
+                        downsample = i > 0 and block == 0
+                        block_args['downsample'] = downsample
+                        x = cls.block(x, filters=filters[i], name='layer-%d' % block, **block_args)
         return x
 
     @classmethod
-    def double_block(cls, inputs, name='double_block', strides=1, **kwargs):
+    def double_block(cls, inputs, name='double_block', downsample=1, **kwargs):
         """ Two ResNet blocks one after another
 
         Parameters
@@ -127,8 +128,8 @@ class ResNet(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            x = cls.block(inputs, name='block-1', strides=strides, **kwargs)
-            x = cls.block(x, name='block-2', strides=1, **kwargs)
+            x = cls.block(inputs, name='block-1', downsample=downsample, **kwargs)
+            x = cls.block(x, name='block-2', downsample=0, **kwargs)
         return x
 
     @classmethod
@@ -161,29 +162,28 @@ class ResNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body/block', **kwargs)
-        filters = kwargs.pop('filters')
-        bottleneck = kwargs.pop('bottleneck')
-        bottleneck_factor = kwargs.pop('bottleneck_factor')
-        resnext_factor = kwargs.pop('resnext_factor')
-        strides = kwargs.pop('strides')
-        se_block = kwargs.pop('se_block')
-        se_factor = kwargs.pop('se_factor')
+        filters, downsample = cls.pop(['filters', 'downsample'], kwargs)
+        bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
+        resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
+        se_block, se_factor = cls.pop(['se_block', 'se_factor'], kwargs)
         activation = kwargs.get('activation')
 
         with tf.variable_scope(name):
-            if kwargs['resnext']:
+            if resnext:
                 x = cls.next_sub_block(inputs, filters, bottleneck, resnext_factor, name='sub',
-                                       strides=strides, **kwargs)
+                                       downsample=downsample, **kwargs)
             else:
                 x = cls.sub_block(inputs, filters, bottleneck, bottleneck_factor, name='sub',
-                                  strides=strides, **kwargs)
+                                  downsample=downsample, **kwargs)
 
             data_format = kwargs.get('data_format')
             inputs_channels = cls.channels_shape(inputs, data_format)
             x_channels = cls.channels_shape(x, data_format)
 
-            if inputs_channels != x_channels or strides > 1:
-                shortcut = conv_block(inputs, 'c', x_channels, 1, name='shortcut', strides=strides, **kwargs)
+            if inputs_channels != x_channels or downsample:
+                strides = 2 if downsample else 1
+                shortcut = conv_block(inputs, name='shortcut', **{**kwargs, **dict(layout='c', filters=x_channels,
+                                                                                   kernel_size=1, strides=strides)})
             else:
                 shortcut = inputs
 
@@ -225,7 +225,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def simple_block(cls, inputs, layout='cnacn', filters=None, strides=1, **kwargs):
+    def simple_block(cls, inputs, layout='cnacn', filters=None, kernel_size=3, downsample=0, **kwargs):
         """ A simple residual block with two 3x3 convolutions
 
         Parameters
@@ -241,11 +241,13 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        return conv_block(inputs, layout, filters=filters, kernel_size=3, strides=[strides, 1], **kwargs)
+        strides = ([2] + [1] * layout.count('c')) if downsample else 1
+        return conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
 
 
     @classmethod
-    def bottleneck_block(cls, inputs, layout='cnacnacn', filters=None, bottleneck_factor=4, strides=1, **kwargs):
+    def bottleneck_block(cls, inputs, layout='cnacnacn', filters=None, kernel_size=None, bottleneck_factor=4,
+                         downsample=0, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
         Parameters
@@ -261,8 +263,10 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        x = conv_block(inputs, layout, [filters, filters, filters * bottleneck_factor], [1, 3, 1],
-                       strides=[strides, 1, 1], **kwargs)
+        kernel_size = [1, 3, 1] if kernel_size is None else kernel_size
+        strides = ([2] + [1] * layout.count('c')) if downsample else 1
+        x = conv_block(inputs, layout, [filters, filters, filters * bottleneck_factor], kernel_size=kernel_size,
+                       strides=strides, **kwargs)
         return x
 
     @classmethod

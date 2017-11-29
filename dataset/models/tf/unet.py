@@ -33,7 +33,7 @@ class UNet(TFModel):
         filters = 64   # number of filters in the first block
 
         config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
-        config['body']['upsampling_kernel'] = 3
+        config['body']['upsampling_kernel'] = 2
         config['body']['num_blocks'] = 4
         config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
@@ -93,7 +93,7 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        x = conv_block(inputs, 'pcnacna', filters, 3, name=name, pool_size=2, pool_strides=2, **kwargs)
+        x = conv_block(inputs, 'pcnacna', filters, kernel_size=3, name=name, pool_size=2, pool_strides=2, **kwargs)
         return x
 
     @classmethod
@@ -117,11 +117,11 @@ class UNet(TFModel):
         kernel = cls.pop('upsampling_kernel', config)
         with tf.variable_scope(name):
             x, skip = inputs
-            x = conv_block(x, 't', filters, kernel, name='upsample', strides=2, **kwargs)
+            x = conv_block(x, 'tna', filters, kernel, name='upsample', strides=2, **kwargs)
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
-            axis = -1 if kwargs.get('data_format') == 'channels_last' else 1
+            axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat((skip, x), axis=axis)
-            x = conv_block(x, 'cnacna', filters, 3, name='conv', **kwargs)
+            x = conv_block(x, 'cnacna', filters, kernel_size=3, name='conv', **kwargs)
         return x
 
     @classmethod
