@@ -64,17 +64,23 @@ class NamedExpression:
 
 class B(NamedExpression):
     """ Batch component name """
+    def __init__(self, name=None):
+        super().__init__(name)
+
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a batch component """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models B(%s)" % name)
+        if name is None:
+            return batch
         return getattr(batch, name)
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a batch component """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
-        setattr(batch, name, value)
+        if name is not None:
+            setattr(batch, name, value)
 
 
 class C(NamedExpression):
