@@ -72,7 +72,7 @@ class B(NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models B(%s)" % name)
-        if name is None
+        if name is None:
             return batch
         return getattr(batch, name)
 
