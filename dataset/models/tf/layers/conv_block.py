@@ -4,7 +4,7 @@ import logging
 import tensorflow as tf
 
 from .core import mip, flatten
-from .conv import conv1d_transpose, separable_conv
+from .conv import conv_transpose, separable_conv
 from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling, fractional_max_pooling
 
 
@@ -12,7 +12,7 @@ ND_LAYERS = {
     'activation': None,
     'dense': tf.layers.dense,
     'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
-    'transposed_conv': [conv1d_transpose, tf.layers.conv2d_transpose, tf.layers.conv3d_transpose],
+    'transposed_conv': conv_transpose,
     'separable_conv':separable_conv,
     'max_pooling': max_pooling,
     'average_pooling': average_pooling,

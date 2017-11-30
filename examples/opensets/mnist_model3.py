@@ -9,7 +9,7 @@ sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel, VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
-                              Inception_v1, Inception_v3, Inception_v4, SqueezeNet, MobileNet
+                              Inception_v1, Inception_v3, Inception_v4, SqueezeNet, MobileNet, DenseNet121
 
 class MyModel(TFModel):
     def _build(self, config=None):
@@ -21,15 +21,18 @@ if __name__ == "__main__":
 
     mnist = MNIST()
 
-    train_template = (Pipeline()
+    train_template = (Pipeline(config=dict(model=VGG7))
+                .init_variable('model', ResNet18)
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_model('dynamic', Inception_v4, 'conv',
+                .init_model('dynamic', V('model'), 'conv',
                             config={'inputs': dict(images={'shape': B('image_shape')},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images',
+                                    'body/block/bottleneck': 1,
                                     'head/units': [100, 100, 10],
+                                    'nothing': F(lambda batch: batch.images.shape[1:]),
                                     #'filters': 16, 'width_factor': 1,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['accuracy'])})

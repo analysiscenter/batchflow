@@ -146,7 +146,7 @@ class Batch(BaseBatch):
             dataset_class = dataset
         else:
             raise TypeError("dataset should be some Dataset class or an instance of some Dataset class or None")
-        return dataset_class(self.index, preloaded=self.data)
+        return dataset_class(self.index, batch_class=type(self), preloaded=self.data)
 
     @property
     def indices(self):

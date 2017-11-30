@@ -88,7 +88,7 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     elif dim == 2:
         output = tf.layers.conv2d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
     elif dim == 3:
-        output = tf.layers.conv3d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
+        output = tf.layers.conv3d_transpose(inputs, filters, kernel_size, strides, *args, use_bias=False, **kwargs)
     return output
 
 

@@ -157,7 +157,7 @@ class DenseNet121(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 32, 32]
+        config['body']['num_blocks'] = [6, 12, 24, 32]
         return config
 
 class DenseNet169(DenseNet):
@@ -171,7 +171,7 @@ class DenseNet169(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 24, 16]
+        config['body']['num_blocks'] = [6, 12, 32, 16]
         return config
 
 class DenseNet201(DenseNet):
