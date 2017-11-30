@@ -3,8 +3,8 @@
 import os
 import threading
 
+import dill
 try:
-    import dill
     import blosc
 except ImportError:
     pass
@@ -40,6 +40,27 @@ class Batch(BaseBatch):
         super().__init__(index, *args, **kwargs)
         self._preloaded = preloaded
         self._preloaded_lock = threading.Lock()
+        self.pipeline = None
+
+    def deepcopy(self):
+        """ Return a deep copy of the batch.
+
+        Constructs a new ``Batch`` instance and then recursively copies all
+        the objects found in the original batch, except the ``pipeline``,
+        which remains unchanged.
+
+        Returns
+        -------
+        Batch
+        """
+        pipeline = self.pipeline
+        self.pipeline = None
+        dump_batch = dill.dumps(self)
+        self.pipeline = pipeline
+
+        restored_batch = dill.loads(dump_batch)
+        restored_batch.pipeline = pipeline
+        return restored_batch
 
     @classmethod
     def from_data(cls, index, data):

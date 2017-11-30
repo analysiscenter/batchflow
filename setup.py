@@ -29,6 +29,7 @@ setup(
     platforms='any',
     install_requires=[
         'numpy>=1.10',
+        'dill>=0.2.7',
     ],
     extras_require={
         'tensorflow': ['tensorflow>=1.13'],
