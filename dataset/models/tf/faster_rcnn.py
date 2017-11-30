@@ -1,3 +1,5 @@
+#pylint:cell-var-from-loop
+
 """
 Ren S. et al "`Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks
 <https://arxiv.org/abs/1506.01497>`_"
@@ -13,12 +15,13 @@ _IOU_HIGH = 0.7
 
 
 def rpn_loss(reg, clsf, true_reg, true_cls, anchor_batch):
+    """ Mixed MSE+CE Loss for RPN. """
     with tf.variable_scope('rpn_loss'):
         cls_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=true_cls, logits=clsf)
 
         anchor_batch_size_norm = tf.expand_dims(1.0 / tf.reduce_sum(anchor_batch, axis=-1), axis=0)
 
-        cls_loss = tf.matmul(anchor_batch_size_norm, cls_loss * anchor_batch)   
+        cls_loss = tf.matmul(anchor_batch_size_norm, cls_loss * anchor_batch)
         cls_loss = cls_loss / tf.cast(tf.shape(clsf)[0], dtype=tf.float32)
         cls_loss = tf.reduce_sum(cls_loss, name='cls_loss')
 
@@ -32,6 +35,7 @@ def rpn_loss(reg, clsf, true_reg, true_cls, anchor_batch):
     return loss
 
 def rcn_loss(clsf, true_cls):
+    """ CE loss for RCN. """
     with tf.variable_scope('rcn_loss'):
         true_cls = tf.one_hot(true_cls, clsf.get_shape().as_list()[-1])
         cls_loss = tf.nn.softmax_cross_entropy_with_logits(labels=true_cls, logits=clsf)
@@ -45,38 +49,38 @@ def rcn_loss(clsf, true_cls):
         loss = tf.reduce_mean(cls_loss)
     return loss
 
-def parametrize(inputs, base):
+def _parametrize(inputs, base):
     with tf.variable_scope('parametrize'):
         y = (inputs[:, :, 0] - base[:, 0]) * (1.0 / base[:, 2])
         x = (inputs[:, :, 1] - base[:, 1]) * (1.0 / base[:, 3])
-        h = tf.log(inputs[:, :, 2] * (1.0 / base[:, 2]))
-        w = tf.log(inputs[:, :, 3] * (1.0 / base[:, 3]))
-        output = tf.stack((y, x, h, w), axis=-1)
+        height = tf.log(inputs[:, :, 2] * (1.0 / base[:, 2]))
+        width = tf.log(inputs[:, :, 3] * (1.0 / base[:, 3]))
+        output = tf.stack((y, x, height, width), axis=-1)
     return output
 
-def unparametrize(inputs, base):
+def _unparametrize(inputs, base):
     with tf.variable_scope('parametrize'):
         y = inputs[:, :, 0] * base[:, 2] + base[:, 0]
         x = inputs[:, :, 1] * base[:, 3] + base[:, 1]
-        h = tf.exp(inputs[:, :, 2]) * base[:, 2]
-        w = tf.exp(inputs[:, :, 3]) * base[:, 3]
-        res = tf.stack((y, x, h, w), axis=-1) 
+        height = tf.exp(inputs[:, :, 2]) * base[:, 2]
+        width = tf.exp(inputs[:, :, 3]) * base[:, 3]
+        res = tf.stack((y, x, height, width), axis=-1)
     return res
 
-def rpn(inputs, **kwargs):
+def _rpn(inputs, **kwargs):
     with tf.variable_scope('rpn'):
         net = conv_block(inputs, 'ca', filters=512, kernel_size=3, name='conv', **kwargs)
         rpn_reg = conv_block(net, 'c', filters=4*9, kernel_size=1, name='reg', **kwargs)
         rpn_cls = conv_block(net, 'c', filters=1*9, kernel_size=1, name='cls', **kwargs)
-        
+
         spatial_net_shape = net.get_shape().as_list()[1:3]
         n_anchors = spatial_net_shape[0] * spatial_net_shape[1] * 9
-        
+
         rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4])
         rpn_cls = tf.reshape(rpn_cls, [-1, n_anchors])
     return rpn_reg, rpn_cls, n_anchors
 
-def filter_tensor(inputs, cond, *args):
+def _filter_tensor(inputs, cond, *args):
     with tf.variable_scope('filter_tensor'):
         if not callable(cond):
             callable_cond = lambda x: x > cond
@@ -87,45 +91,45 @@ def filter_tensor(inputs, cond, *args):
     return output
 
 def non_max_suppression(inputs, scores, batch_size, max_output_size, score_threshold=0.7, iou_threshold=0.7):
+    """ Perform NMS on batch of images. """
     with tf.variable_scope('nms'):
         ix = tf.constant(0)
         filtered_rois = tf.TensorArray(dtype=tf.int32, size=batch_size)
         loop_cond = lambda ix, filtered_rois: tf.less(ix, batch_size)
-        def loop_body(ix, filtered_rois): 
-            indices, score, roi = filter_tensor(scores[ix], score_threshold, inputs[ix])
+        def loop_body(ix, filtered_rois):
+            indices, score, roi = _filter_tensor(scores[ix], score_threshold, inputs[ix]) # pylint: disable=unbalanced-tuple-unpacking
             roi_corners = tf.concat([roi[:, :2], roi[:, :2]+roi[:, 2:]], axis=-1)
             roi_after_nms = tf.image.non_max_suppression(roi_corners, score, max_output_size, iou_threshold)
             filtered_rois = filtered_rois.write(ix, tf.cast(tf.gather(indices, roi_after_nms), dtype=tf.int32))
             return [ix+1, filtered_rois]
         _, res = tf.while_loop(loop_cond, loop_body, [ix, filtered_rois])
-        res = array_to_tuple(res, batch_size)
+        res = _array_to_tuple(res, batch_size)
     return res
 
-def array_to_tuple(inputs, size):
+def _array_to_tuple(inputs, size):
     with tf.variable_scope('array_to_tuple'):
         output = tf.tuple([inputs.read(i) for i in range(size)])
     return output
 
-def get_rois_and_labels(rois, labels, indices, batch_size):
+def _get_rois_and_labels(rois, labels, indices, batch_size):
     with tf.variable_scope('get_rois_and_labels'):
         output_rois = tf.TensorArray(dtype=tf.float32, size=batch_size)
         output_labels = tf.TensorArray(dtype=tf.int32, size=batch_size)
         for i, index in enumerate(indices):
             output_rois = output_rois.write(i, tf.gather_nd(rois[i], index))
             output_labels = output_labels.write(i, tf.gather_nd(labels[i], index))
-        output_rois = array_to_tuple(output_rois, batch_size)
-        output_labels = array_to_tuple(output_labels, batch_size)
+        output_rois = _array_to_tuple(output_rois, batch_size)
+        output_labels = _array_to_tuple(output_labels, batch_size)
     return output_rois, output_labels
 
 
-def roi_pooling_layer(inputs, rois, labels, factor=(1,1), shape=(7,7), name=None):
-    with tf.variable_scope('roi-pooling'):
+def roi_pooling_layer(inputs, rois, labels, factor=(1, 1), shape=(7, 7), name='roi-pooling'):
+    """ ROI pooling layer. """
+    with tf.variable_scope(name):
         image_index = tf.constant(0)
         output_tensor = tf.TensorArray(dtype=tf.float32, size=len(rois))
-        cond_images = lambda image_index, output_tensor: tf.less(image_index, len(rois))
 
-        for image_index in range(len(rois)):
-            image = inputs[image_index]
+        for image_index, image in enumerate(inputs):
             image_rois = rois[image_index]
             cropped_regions = tf.TensorArray(dtype=tf.float32, size=tf.shape(image_rois)[0])
             roi_index = tf.constant(0)
@@ -141,16 +145,16 @@ def roi_pooling_layer(inputs, rois, labels, factor=(1,1), shape=(7,7), name=None
 
                     spatial_start = tf.cast(tf.ceil(spatial_start), dtype=tf.int32)
                     spatial_size = tf.cast(tf.ceil(spatial_size), dtype=tf.int32)
-                    
-                    spatial_start = tf.maximum(tf.constant((0, 0)), spatial_start)            
+
+                    spatial_start = tf.maximum(tf.constant((0, 0)), spatial_start)
                     spatial_start = tf.minimum(tf.shape(image)[:2]-1, spatial_start)
 
                     spatial_size = tf.maximum(tf.constant((0, 0)), spatial_size)
                     spatial_size = tf.minimum(tf.shape(image)[:2]-spatial_start, spatial_size)
 
-                    start = tf.concat([spatial_start, tf.constant((0,))] , axis=0)
+                    start = tf.concat([spatial_start, tf.constant((0,))], axis=0)
                     end = tf.concat([spatial_size, (tf.shape(image)[-1], )], axis=0)
-                    
+
                     cropped = tf.slice(image, start, end)
                     cropped = tf.image.resize_images(cropped, shape)
                     cropped_regions = cropped_regions.write(roi_index, cropped)
@@ -160,7 +164,7 @@ def roi_pooling_layer(inputs, rois, labels, factor=(1,1), shape=(7,7), name=None
             res = res.stack()
             output_tensor = output_tensor.write(image_index, res)
 
-        res = array_to_tuple(output_tensor, len(rois))
+        res = _array_to_tuple(output_tensor, len(rois))
         res = tf.concat(res, axis=0)
         res.set_shape([None, *shape, inputs.get_shape().as_list()[-1]])
         labels = tf.concat(labels, axis=0)
@@ -201,15 +205,13 @@ class RPN(TFModel):
         n_anchors = map_shape[0] * map_shape[1] * 9
 
         rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4], name='rpn_reg')
-        rpn_clsf = tf.reshape(rpn_cls, [-1, n_anchors], name='rpn_clsf')
-
-        print(rpn_reg)
+        rpn_clsf = tf.reshape(rpn_clsf, [-1, n_anchors], name='rpn_clsf')
 
         anchors = tf.get_default_graph().get_tensor_by_name('RPN/inputs/anchors:0')
         anchors_reg = tf.get_default_graph().get_tensor_by_name('RPN/inputs/anchor_reg:0')
         anchors_clsf = tf.get_default_graph().get_tensor_by_name('RPN/inputs/anchor_clsf:0')
         anchors_batch = tf.get_default_graph().get_tensor_by_name('RPN/inputs/anchor_batch:0')
-        anchors_reg_param = parametrize(anchors_reg, anchors)
+        anchors_reg_param = _parametrize(anchors_reg, anchors)
 
         loss = rpn_loss(rpn_reg, rpn_clsf, anchors_reg_param, anchors_clsf, anchors_batch)
         tf.losses.add_loss(loss)
@@ -251,34 +253,34 @@ class RPN(TFModel):
         anchors = []
         for scale in scales:
             for ratio in ratios:
-                ih, iw = image_shape
-                fh, fw = map_shape
-                n = fh * fw
+                image_height, image_width = image_shape
+                map_height, map_width = map_shape
+                n = map_height * map_width
 
-                j = np.array(list(range(fh)))
+                j = np.array(list(range(map_height)))
                 j = np.expand_dims(j, 1)
-                j = np.tile(j, (1, fw))
+                j = np.tile(j, (1, map_width))
                 j = j.reshape((-1))
 
-                i = np.array(list(range(fw)))
+                i = np.array(list(range(map_width)))
                 i = np.expand_dims(i, 0)
-                i = np.tile(i, (fh, 1))
+                i = np.tile(i, (map_height, 1))
                 i = i.reshape((-1))
 
                 s = np.ones((n)) * scale
-                r0 = np.ones((n)) * ratio[0]
-                r1 = np.ones((n)) * ratio[1]
+                ratio0 = np.ones((n)) * ratio[0]
+                ratio1 = np.ones((n)) * ratio[1]
 
-                h = s * r0
-                w = s * r1
-                y = (j + 0.5) * ih / fh - h * 0.5
-                x = (i + 0.5) * iw / fw - w * 0.5
+                height = s * ratio0
+                width = s * ratio1
+                y = (j + 0.5) * image_height / map_height - height * 0.5
+                x = (i + 0.5) * image_width / map_width - width * 0.5
 
                 y, x = [np.maximum(vector, np.zeros((n))) for vector in [y, x]]
-                h = np.minimum(h, ih-y)
-                w = np.minimum(w, iw-x)
+                height = np.minimum(height, image_height-y)
+                width = np.minimum(width, image_width-x)
 
-                cur_anchors = [np.expand_dims(vector, 1) for vector in [y, x, h, w]]
+                cur_anchors = [np.expand_dims(vector, 1) for vector in [y, x, height, width]]
                 cur_anchors = np.concatenate(cur_anchors, axis=1)
                 anchors.append(np.array(cur_anchors, np.int32))
 
@@ -291,8 +293,7 @@ class RPN(TFModel):
         anchor_reg = []
         anchor_clsf = []
         anchor_labels = []
-        for ind in range(len(bboxes)): # TODO: for -> np
-            image_bboxes = bboxes[ind]
+        for ind, image_bboxes in enumerate(bboxes): # TODO: for -> np
             image_labels = labels[ind]
 
             n = anchors.shape[0]
@@ -318,13 +319,13 @@ class RPN(TFModel):
             # anchor has at least one gt-bbox with IoU >_IOU_HIGH
             image_clsf = np.array(max_ious > _IOU_HIGH, dtype=np.int32)
 
-            # anchor intersects with at least one bbox 
+            # anchor intersects with at least one bbox
             best_anchor_for_bbox = np.argmax(ious, axis=0)
             image_clsf[best_anchor_for_bbox] = 1
 
             # max IoU for anchor < _IOU_LOW
             image_clsf[np.logical_and(max_ious < _IOU_LOW, image_clsf == 0)] = -1
-            anchor_clsf.append(image_clsf)    
+            anchor_clsf.append(image_clsf)
         return np.array(anchor_reg), np.array(anchor_clsf), np.array(anchor_labels)
 
     @classmethod
@@ -355,9 +356,8 @@ class RPN(TFModel):
     @classmethod
     def create_batch(cls, anchor_clsf, batch_size=64):
         """ Create batch indices for anchors. """
-        anchor_batch =[]
-        for i in range(len(anchor_clsf)):
-            clsf = anchor_clsf[i]
+        anchor_batch = []
+        for clsf in anchor_clsf:
             batch_size = min(batch_size, len(clsf))
             positive = clsf == 1
             negative = clsf == -1
