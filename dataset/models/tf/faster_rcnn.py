@@ -1,4 +1,4 @@
-#pylint:cell-var-from-loop
+#pylint:disable=cell-var-from-loop
 
 """
 Ren S. et al "`Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks
@@ -136,7 +136,7 @@ def roi_pooling_layer(inputs, rois, labels, factor=(1, 1), shape=(7, 7), name='r
 
             cond_rois = lambda roi_index, cropped_regions: tf.less(roi_index, tf.shape(image_rois)[0])
 
-            def roi_body(roi_index, cropped_regions):
+            def _roi_body(roi_index, cropped_regions):
                 with tf.variable_scope('crop-from-image-{}'.format(image_index)):
                     roi = image_rois[roi_index]
 
@@ -160,7 +160,7 @@ def roi_pooling_layer(inputs, rois, labels, factor=(1, 1), shape=(7, 7), name='r
                     cropped_regions = cropped_regions.write(roi_index, cropped)
                 return [roi_index+1, cropped_regions]
 
-            _, res = tf.while_loop(cond_rois, roi_body, [roi_index, cropped_regions])
+            _, res = tf.while_loop(cond_rois, _roi_body, [roi_index, cropped_regions])
             res = res.stack()
             output_tensor = output_tensor.write(image_index, res)
 
