@@ -96,13 +96,13 @@ def non_max_suppression(inputs, scores, batch_size, max_output_size, score_thres
         ix = tf.constant(0)
         filtered_rois = tf.TensorArray(dtype=tf.int32, size=batch_size)
         loop_cond = lambda ix, filtered_rois: tf.less(ix, batch_size)
-        def loop_body(ix, filtered_rois):
+        def _loop_body(ix, filtered_rois):
             indices, score, roi = _filter_tensor(scores[ix], score_threshold, inputs[ix]) # pylint: disable=unbalanced-tuple-unpacking
             roi_corners = tf.concat([roi[:, :2], roi[:, :2]+roi[:, 2:]], axis=-1)
             roi_after_nms = tf.image.non_max_suppression(roi_corners, score, max_output_size, iou_threshold)
             filtered_rois = filtered_rois.write(ix, tf.cast(tf.gather(indices, roi_after_nms), dtype=tf.int32))
             return [ix+1, filtered_rois]
-        _, res = tf.while_loop(loop_cond, loop_body, [ix, filtered_rois])
+        _, res = tf.while_loop(loop_cond, _loop_body, [ix, filtered_rois])
         res = _array_to_tuple(res, batch_size)
     return res
 
