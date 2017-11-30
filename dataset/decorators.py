@@ -515,7 +515,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 futures = []
                 if nogil:
                     nogil_fn = method(self, *args, **kwargs)
-                full_kwargs = {**kwargs, **dec_kwargs}
+                full_kwargs = {**dec_kwargs, **kwargs}
                 for arg in _call_init_fn(init_fn, args, full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     if nogil:
@@ -537,7 +537,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
-                full_kwargs = {**kwargs, **dec_kwargs}
+                full_kwargs = {**dec_kwargs, **kwargs}
                 for arg in _call_init_fn(init_fn, args, full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
@@ -562,7 +562,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             init_fn, post_fn = _check_functions(self)
 
             futures = []
-            full_kwargs = {**kwargs, **dec_kwargs}
+            full_kwargs = {**dec_kwargs, **kwargs}
             for arg in _call_init_fn(init_fn, args, full_kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
                 futures.append(asyncio.ensure_future(method(self, *margs, **mkwargs)))
@@ -577,7 +577,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
             _ = kwargs.pop('n_workers', _workers_count())
             futures = []
-            full_kwargs = {**kwargs, **dec_kwargs}
+            full_kwargs = {**dec_kwargs, **kwargs}
             for arg in _call_init_fn(init_fn, args, full_kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
                 try:
