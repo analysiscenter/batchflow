@@ -3,9 +3,13 @@ Ren S. et al "`Faster R-CNN: Towards Real-Time Object Detection with Region Prop
 <https://arxiv.org/abs/1506.01497>`_"
 """
 import tensorflow as tf
+import numpy as np
 
 from . import TFModel, VGG7
 from .layers import conv_block
+
+_IOU_LOW = 0.3
+_IOU_HIGH = 0.7
 
 
 def rpn_loss(reg, clsf, true_reg, true_cls, anchor_batch):
@@ -161,3 +165,220 @@ def roi_pooling_layer(inputs, rois, labels, factor=(1,1), shape=(7,7), name=None
         res.set_shape([None, *shape, inputs.get_shape().as_list()[-1]])
         labels = tf.concat(labels, axis=0)
     return res, labels
+
+class RPN(TFModel):
+    """ Region Propoasl Network """
+    MAP_SHAPE = None
+
+    @classmethod
+    def default_config(cls):
+        config = TFModel.default_config()
+
+        config['output']['prefix'] = ['reg', 'cls']
+
+        return config
+
+    def build_config(self, names=None):
+        config = super().build_config(names)
+
+        return config
+
+    @classmethod
+    def input_block(cls, inputs, name='input_block', **kwargs):
+        return VGG7.body(inputs, **kwargs)
+
+    @classmethod
+    def body(cls, inputs, name='body', **kwargs):
+        return conv_block(inputs, 'ca', filters=512, kernel_size=3, name='feature_maps', **kwargs)
+
+    @classmethod
+    def head(cls, inputs, name='head', **kwargs):
+        rpn_reg = conv_block(inputs, 'c', filters=4*9, kernel_size=1, name='conv_reg', **kwargs)
+        rpn_clsf = conv_block(inputs, 'c', filters=1*9, kernel_size=1, name='conv_clsf', **kwargs)
+
+        map_shape = inputs.get_shape().as_list()[1:3]
+        kwargs['map_shape'].append(map_shape)
+        n_anchors = map_shape[0] * map_shape[1] * 9
+
+        rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4], name='rpn_reg')
+        rpn_clsf = tf.reshape(rpn_cls, [-1, n_anchors], name='rpn_clsf')
+
+        print(rpn_reg)
+
+        anchors = tf.get_default_graph().get_tensor_by_name('RPN/inputs/anchors:0')
+        anchors_reg = tf.get_default_graph().get_tensor_by_name('RPN/inputs/anchor_reg:0')
+        anchors_clsf = tf.get_default_graph().get_tensor_by_name('RPN/inputs/anchor_clsf:0')
+        anchors_batch = tf.get_default_graph().get_tensor_by_name('RPN/inputs/anchor_batch:0')
+        anchors_reg_param = parametrize(anchors_reg, anchors)
+
+        loss = rpn_loss(rpn_reg, rpn_clsf, anchors_reg_param, anchors_clsf, anchors_batch)
+        tf.losses.add_loss(loss)
+
+        return rpn_reg, rpn_clsf
+
+
+    def _fill_feed_dict(self, feed_dict=None, is_training=True):
+
+        bboxes = feed_dict.pop('bboxes')
+        labels = feed_dict.pop('labels')
+        map_shape = self.config['head']['map_shape'][0]
+        image_shape = feed_dict['images'].shape[1:3]
+
+        feed_dict = super()._fill_feed_dict(feed_dict, is_training)
+
+        anchors = self.create_anchors(image_shape, map_shape)
+        anchor_reg, anchor_clsf, anchor_labels = self.create_rpn_inputs(anchors, bboxes, labels)
+        anchor_batch = self.create_batch(anchor_clsf)
+        anchor_clsf = np.array(anchor_clsf == 1, dtype=np.int32)
+
+        feed_dict = {**feed_dict,
+                     self._map_name('RPN/inputs/anchors'): anchors,
+                     self._map_name('RPN/inputs/anchor_reg'): anchor_reg,
+                     self._map_name('RPN/inputs/anchor_clsf'): anchor_clsf,
+                     self._map_name('RPN/inputs/anchor_labels'): anchor_labels,
+                     self._map_name('RPN/inputs/anchor_batch'): anchor_batch}
+
+
+        return feed_dict
+
+    @classmethod
+    def create_anchors(cls, image_shape, map_shape, scales=(4, 8, 16), ratio=2):
+        """ Create anchors for image_shape depending on output_map_shape. """
+        ratios = ((np.sqrt(ratio), 1/np.sqrt(ratio)),
+                  (1, 1),
+                  (1/np.sqrt(ratio), np.sqrt(ratio)))
+
+        anchors = []
+        for scale in scales:
+            for ratio in ratios:
+                ih, iw = image_shape
+                fh, fw = map_shape
+                n = fh * fw
+
+                j = np.array(list(range(fh)))
+                j = np.expand_dims(j, 1)
+                j = np.tile(j, (1, fw))
+                j = j.reshape((-1))
+
+                i = np.array(list(range(fw)))
+                i = np.expand_dims(i, 0)
+                i = np.tile(i, (fh, 1))
+                i = i.reshape((-1))
+
+                s = np.ones((n)) * scale
+                r0 = np.ones((n)) * ratio[0]
+                r1 = np.ones((n)) * ratio[1]
+
+                h = s * r0
+                w = s * r1
+                y = (j + 0.5) * ih / fh - h * 0.5
+                x = (i + 0.5) * iw / fw - w * 0.5
+
+                y, x = [np.maximum(vector, np.zeros((n))) for vector in [y, x]]
+                h = np.minimum(h, ih-y)
+                w = np.minimum(w, iw-x)
+
+                cur_anchors = [np.expand_dims(vector, 1) for vector in [y, x, h, w]]
+                cur_anchors = np.concatenate(cur_anchors, axis=1)
+                anchors.append(np.array(cur_anchors, np.int32))
+
+        anchors = np.array(anchors).transpose(1, 0, 2).reshape(-1, 4)
+        return anchors
+
+    @classmethod
+    def create_rpn_inputs(cls, anchors, bboxes, labels):
+        """ Create reg and clsf targets of RPN. """
+        anchor_reg = []
+        anchor_clsf = []
+        anchor_labels = []
+        for ind in range(len(bboxes)): # TODO: for -> np
+            image_bboxes = bboxes[ind]
+            image_labels = labels[ind]
+
+            n = anchors.shape[0]
+            k = image_bboxes.shape[0]
+
+            # Compute the IoUs of the anchors and ground truth boxes
+            tiled_anchors = np.tile(np.expand_dims(anchors, 1), (1, k, 1))
+            tiled_bboxes = np.tile(np.expand_dims(image_bboxes, 0), (n, 1, 1))
+
+            tiled_anchors = tiled_anchors.reshape((-1, 4))
+            tiled_bboxes = tiled_bboxes.reshape((-1, 4))
+
+            ious = cls.iou_bbox(tiled_anchors, tiled_bboxes)[0]
+            ious = ious.reshape(n, k)
+
+            # Label each anchor based on its max IoU
+            max_ious = np.max(ious, axis=1)
+            best_bbox_for_anchor = np.argmax(ious, axis=1)
+
+            anchor_reg.append(image_bboxes[best_bbox_for_anchor])
+            anchor_labels.append(image_labels[best_bbox_for_anchor].reshape(-1))
+
+            # anchor has at least one gt-bbox with IoU >_IOU_HIGH
+            image_clsf = np.array(max_ious > _IOU_HIGH, dtype=np.int32)
+
+            # anchor intersects with at least one bbox 
+            best_anchor_for_bbox = np.argmax(ious, axis=0)
+            image_clsf[best_anchor_for_bbox] = 1
+
+            # max IoU for anchor < _IOU_LOW
+            image_clsf[np.logical_and(max_ious < _IOU_LOW, image_clsf == 0)] = -1
+            anchor_clsf.append(image_clsf)    
+        return np.array(anchor_reg), np.array(anchor_clsf), np.array(anchor_labels)
+
+    @classmethod
+    def iou_bbox(cls, bboxes1, bboxes2):
+        """ Compute the IoUs between bounding boxes. """
+        bboxes1 = np.array(bboxes1, np.float32)
+        bboxes2 = np.array(bboxes2, np.float32)
+
+        intersection_min_y = np.maximum(bboxes1[:, 0], bboxes2[:, 0])
+        intersection_max_y = np.minimum(bboxes1[:, 0] + bboxes1[:, 2] - 1, bboxes2[:, 0] + bboxes2[:, 2] - 1)
+        intersection_height = np.maximum(intersection_max_y - intersection_min_y + 1, np.zeros_like(bboxes1[:, 0]))
+
+        intersection_min_x = np.maximum(bboxes1[:, 1], bboxes2[:, 1])
+        intersection_max_x = np.minimum(bboxes1[:, 1] + bboxes1[:, 3] - 1, bboxes2[:, 1] + bboxes2[:, 3] - 1)
+        intersection_width = np.maximum(intersection_max_x - intersection_min_x + 1, np.zeros_like(bboxes1[:, 1]))
+
+        area_intersection = intersection_height * intersection_width
+        area_first = bboxes1[:, 2] * bboxes1[:, 3]
+        area_second = bboxes2[:, 2] * bboxes2[:, 3]
+        area_union = area_first + area_second - area_intersection
+
+        iou = area_intersection * 1.0 / area_union
+        iof = area_intersection * 1.0 / area_first
+        ios = area_intersection * 1.0 / area_second
+
+        return iou, iof, ios
+
+    @classmethod
+    def create_batch(cls, anchor_clsf, batch_size=64):
+        """ Create batch indices for anchors. """
+        anchor_batch =[]
+        for i in range(len(anchor_clsf)):
+            clsf = anchor_clsf[i]
+            batch_size = min(batch_size, len(clsf))
+            positive = clsf == 1
+            negative = clsf == -1
+            if sum(positive) + sum(negative) < batch_size:
+                batch_size = sum(positive) + sum(negative)
+            if sum(positive) < batch_size / 2:
+                positive_batch_size = sum(positive)
+                negative_batch_size = batch_size - sum(positive)
+            elif sum(negative) < batch_size / 2:
+                positive_batch_size = batch_size - sum(negative)
+                negative_batch_size = sum(negative)
+            else:
+                positive_batch_size = batch_size // 2
+                negative_batch_size = batch_size // 2
+
+            p = positive / sum(positive)
+            positive_batch = np.random.choice(len(clsf), size=positive_batch_size, replace=False, p=p)
+            p = negative / sum(negative)
+            negative_batch = np.random.choice(len(clsf), size=negative_batch_size, replace=False, p=p)
+            image_anchor_batch = np.array([False]*len(clsf))
+            image_anchor_batch[positive_batch] = True
+            image_anchor_batch[negative_batch] = True
+            anchor_batch.append(image_anchor_batch)
+        return np.array(anchor_batch)
