@@ -289,7 +289,7 @@ class RPN(TFModel):
             rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
                                                     iou_threshold=0.4, score_threshold=0.7, nonempty=True)
 
-            rcn_input_rois, rcn_input_labels = _get_rois_and_labels(rpn_reg, anchors_labels, 
+            rcn_input_rois, rcn_input_labels = _get_rois_and_labels(rpn_reg, anchors_labels,
                                                                     rcn_input_indices, batch_size)
             roi_factor = np.array(map_shape/image_shape)
 
