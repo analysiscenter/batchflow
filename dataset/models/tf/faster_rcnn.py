@@ -90,7 +90,7 @@ def _filter_tensor(inputs, cond, *args):
         output = (indices, *[tf.gather_nd(x, indices) for x in [inputs, *args]])
     return output
 
-def non_max_suppression(inputs, scores, batch_size, max_output_size, 
+def non_max_suppression(inputs, scores, batch_size, max_output_size,
                         score_threshold=0.7, iou_threshold=0.7, nonempty=False):
     """ Perform NMS on batch of images. """
     with tf.variable_scope('nms'):
@@ -102,9 +102,9 @@ def non_max_suppression(inputs, scores, batch_size, max_output_size,
             roi_corners = tf.concat([roi[:, :2], roi[:, :2]+roi[:, 2:]], axis=-1)
             roi_after_nms = tf.image.non_max_suppression(roi_corners, score, max_output_size, iou_threshold)
             if nonempty:
-                is_not_empty = lambda: filtered_rois.write(ix, 
-                                                           tf.cast(tf.gather(indices, roi_after_nms), 
-                                                           dtype=tf.int32))
+                is_not_empty = lambda: filtered_rois.write(ix,
+                                                           tf.cast(tf.gather(indices, roi_after_nms),
+                                                                   dtype=tf.int32))
                 is_empty = lambda: filtered_rois.write(ix, tf.constant([[0]]))
                 filtered_rois = tf.cond(tf.not_equal(tf.shape(indices)[0], 0), is_not_empty, is_empty)
             else:
@@ -134,14 +134,14 @@ def _get_rois_and_labels(rois, labels, indices, batch_size):
     return output_rois, output_labels
 
 
-def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), name=None):
+def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), name='roi-pooling'):
     """ ROI pooling layer with resize. """
-    with tf.variable_scope('roi-pooling'):
+    with tf.variable_scope(name):
         image_index = tf.constant(0)
         output_tuple = tf.TensorArray(dtype=tf.float32, size=len(rois))
 
-        for image_index, image in enumerate(rois):
-            image_rois = rois[image_index]
+        for image_index, image_rois in enumerate(rois):
+            image = inputs[image_index]
             cropped_regions = tf.TensorArray(dtype=tf.float32, size=tf.shape(image_rois)[0])
             roi_index = tf.constant(0)
 
@@ -289,7 +289,8 @@ class RPN(TFModel):
             rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
                                                     iou_threshold=0.4, score_threshold=0.7, nonempty=True)
 
-            rcn_input_rois, rcn_input_labels = _get_rois_and_labels(rpn_reg, anchors_labels, rcn_input_indices, batch_size)
+            rcn_input_rois, rcn_input_labels = _get_rois_and_labels(rpn_reg, anchors_labels, 
+                                                                    rcn_input_indices, batch_size)
             roi_factor = np.array(map_shape/image_shape)
 
             #rcn_input_rois = stop_gradient_tuple(rcn_input_rois)
