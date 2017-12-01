@@ -7,9 +7,7 @@ Introduction
 
 Quite often you can't just use the data itself, as it needs some specific preprocessing beforehand. And not too rarely you end up with several processing workflows which you have to use simultaneously. That is the situation when pipelines might come in handy.
 
-Firstly, you create a batch class with all necessary actions.
-
-.. code-block:: python
+Firstly, you create a batch class with all necessary actions.::
 
    class ClientTransactions(Batch):
        ...
@@ -28,15 +26,11 @@ Firstly, you create a batch class with all necessary actions.
            ...
            return self
 
-Secondly, you create a dataset (`client_index` is an instance of :ref:`DatasetIndex`):
-
-.. code-block:: python
+Secondly, you create a dataset (`client_index` is an instance of :ref:`DatasetIndex`)::
 
    ct_ds = Dataset(client_index, batch_class=ClientTranasactions)
 
-And now you can define a workflow pipeline:
-
-.. code-block:: python
+And now you can define a workflow pipeline::
 
    trans_pipeline = (ct_ds.pipeline()
                        .some_action()
@@ -44,17 +38,13 @@ And now you can define a workflow pipeline:
                        .yet_other_action())
 
 And nothing happens! Because all the actions are lazy.
-Let's run them.
-
-.. code-block:: python
+Let's run them.::
 
    trans_pipeline.run(BATCH_SIZE, shuffle=False, n_epochs=1)
 
 Now the dataset is split into batches and then all the actions are executed for each batch independently.
 
-In the very same way you can define an augmentation workflow:
-
-.. code-block:: python
+In the very same way you can define an augmentation workflow::
 
    augm_wf = (image_dataset.pipeline()
                .load('/some/path')
@@ -64,9 +54,7 @@ In the very same way you can define an augmentation workflow:
                .resize(shape=(256, 256))
    )
 
-And again, no action is executed until its result is needed.
-
-.. code-block:: python
+And again, no action is executed until its result is needed.::
 
    NUM_ITERS = 1000
    for i in range(NUM_ITERS):
@@ -111,11 +99,11 @@ The complete example::
    from dataset import Pipeline
 
    with Pipeline() as p:
-       preprocessing_pipeline = p.load('/some/path') +
-                                p.resize(shape=(256, 256)) +
-                                p.random_rotate(angle=(-30, 30)) @ .8 +
-                                p.random_transform() * 3 +
-                                p.random_crop(shape=(128, 128))
+       preprocessing_pipeline = p.load('/some/path')
+                                + p.resize(shape=(256, 256))
+                                + p.random_rotate(angle=(-30, 30)) @ .8
+                                + p.random_transform() * 3
+                                + p.random_crop(shape=(128, 128))
 
    images_prepocessing = preprocessing_pipeline << images_dataset
 
@@ -135,20 +123,15 @@ A template pipeline
                    .some_action()
                    .another_action()
 
-Or through a context manager with pipeline algebra:
-
-.. code-block:: python
+Or through a context manager with pipeline algebra::
 
    from dataset import Pipeline
 
    with Pipeline() as p:
-       my_pipeline = p.some_action() +
-                     p.another_action()
+       my_pipeline = p.some_action() + p.another_action()
 
 However, you cannot execute this pipeline as it doesn't linked to any dataset.
-On the other hand, such pipelines might be applied to different datasets:
-
-.. code-block:: python
+On the other hand, such pipelines might be applied to different datasets::
 
    cifar10_pipeline = template_preprocessing_pipeline << cifar10_dataset
    mnist_pipeline = template_preprocessing_pipeline << mnist_dataset
@@ -162,9 +145,7 @@ A dataset pipeline
                    .some_action()
                    .another_action()
 
-Or a shorter version:
-
-.. code-block:: python
+Or a shorter version::
 
    my_pipeline = my_dataset.p
                    .some_action()
@@ -331,9 +312,7 @@ Variables as locks
 
 If you use multi-threading :doc:`prefetching <prefetch>` or :doc:`in-batch parallelism <parallel>`,
 than you might require synchronization when accessing some shared resource.
-And pipeline variables might be a handy place to store locks.
-
-.. code-block:: python
+And pipeline variables might be a handy place to store locks.::
 
    class MyBatch(Batch):
        ...
@@ -447,7 +426,6 @@ Rebatch
 When actions change the batch size (for instance, dropping some bad or skipping incomplete data),
 you might end up in a situation when you don't know the batch size and, what is sometimes much worse,
 batch size differs. To solve this problem, just call `rebatch`::
-
 
     images_pipeline = (images_dataset.p
         .load(...)
