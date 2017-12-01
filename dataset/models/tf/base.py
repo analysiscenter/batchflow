@@ -1165,7 +1165,7 @@ class TFModel(BaseModel):
 
     def _add_output_predictions(self, inputs, scope, attr_prefix, **kwargs):
         _ = scope, kwargs
-        x = tf.identity(tensor, name='predictions')
+        x = tf.identity(inputs, name='predictions')
         self.store_to_attr(attr_prefix + 'predictions', x)
 
     def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
