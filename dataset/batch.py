@@ -190,14 +190,42 @@ class Batch(BaseBatch):
         res = self._data if self.components is None else self._data_named
         return res if res is not None else self._empty_data
 
-    def make_item_class(self):
+    def make_item_class(self, local=False):
         """ Create a class to handle data components """
         # pylint: disable=protected-access
         if self.components is None:
             type(self)._item_class = None
-        elif type(self)._item_class is None:
+        elif type(self)._item_class is None or not local:
             comp_class = MetaComponentsTuple(type(self).__name__ + 'Components', components=self.components)
             type(self)._item_class = comp_class
+        else:
+            comp_class = MetaComponentsTuple(type(self).__name__ + 'Components' + str(id(self)),
+                                             components=self.components)
+            self._item_class = comp_class
+
+    @action
+    def add_components(self, components):
+        """ Add new components
+
+        Parameters
+        ----------
+        components : str or list
+            new component names
+        """
+        if isinstance(components, str):
+            components = [components]
+        elif isinstance(components, tuple):
+            components = list(components)
+
+        data = self._data
+        if self.components is None:
+            self.components = components
+        else:
+            self.components = tuple(list(self.components) + components)
+        self.make_item_class(local=True)
+        self._data = data
+
+        return self
 
     def __getstate__(self):
         state = self.__dict__.copy()
