@@ -90,18 +90,21 @@ def _filter_tensor(inputs, cond, *args):
         output = (indices, *[tf.gather_nd(x, indices) for x in [inputs, *args]])
     return output
 
-def non_max_suppression(inputs, scores, batch_size, max_output_size, score_threshold=0.7, iou_threshold=0.7, nonempty=False):
+def non_max_suppression(inputs, scores, batch_size, max_output_size, 
+                        score_threshold=0.7, iou_threshold=0.7, nonempty=False):
     """ Perform NMS on batch of images. """
     with tf.variable_scope('nms'):
         ix = tf.constant(0)
         filtered_rois = tf.TensorArray(dtype=tf.int32, size=batch_size, infer_shape=False)
         loop_cond = lambda ix, filtered_rois: tf.less(ix, batch_size)
-        def _loop_body(ix, filtered_rois): 
-            indices, score, roi = _filter_tensor(scores[ix], score_threshold, inputs[ix])
+        def _loop_body(ix, filtered_rois):
+            indices, score, roi = _filter_tensor(scores[ix], score_threshold, inputs[ix]) # pylint: disable=unbalanced-tuple-unpacking
             roi_corners = tf.concat([roi[:, :2], roi[:, :2]+roi[:, 2:]], axis=-1)
             roi_after_nms = tf.image.non_max_suppression(roi_corners, score, max_output_size, iou_threshold)
             if nonempty:
-                is_not_empty = lambda: filtered_rois.write(ix, tf.cast(tf.gather(indices, roi_after_nms), dtype=tf.int32))
+                is_not_empty = lambda: filtered_rois.write(ix, 
+                                                           tf.cast(tf.gather(indices, roi_after_nms), 
+                                                           dtype=tf.int32))
                 is_empty = lambda: filtered_rois.write(ix, tf.constant([[0]]))
                 filtered_rois = tf.cond(tf.not_equal(tf.shape(indices)[0], 0), is_not_empty, is_empty)
             else:
@@ -132,13 +135,12 @@ def _get_rois_and_labels(rois, labels, indices, batch_size):
 
 
 def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), name=None):
+    """ ROI pooling layer with resize. """
     with tf.variable_scope('roi-pooling'):
         image_index = tf.constant(0)
         output_tuple = tf.TensorArray(dtype=tf.float32, size=len(rois))
-        cond_images = lambda image_index, output_tensor: tf.less(image_index, len(rois))
 
-        for image_index in range(len(rois)):
-            image = inputs[image_index]
+        for image_index, image in enumerate(rois):
             image_rois = rois[image_index]
             cropped_regions = tf.TensorArray(dtype=tf.float32, size=tf.shape(image_rois)[0])
             roi_index = tf.constant(0)
@@ -154,16 +156,16 @@ def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), name=None):
 
                     spatial_start = tf.cast(tf.ceil(spatial_start), dtype=tf.int32)
                     spatial_size = tf.cast(tf.ceil(spatial_size), dtype=tf.int32)
-                    
-                    spatial_start = tf.maximum(tf.constant((0, 0)), spatial_start)            
+
+                    spatial_start = tf.maximum(tf.constant((0, 0)), spatial_start)
                     spatial_start = tf.minimum(tf.shape(image)[:2]-1, spatial_start)
 
                     spatial_size = tf.maximum(tf.constant((0, 0)), spatial_size)
                     spatial_size = tf.minimum(tf.shape(image)[:2]-spatial_start, spatial_size)
 
-                    start = tf.concat([spatial_start, tf.constant((0,))] , axis=0)
+                    start = tf.concat([spatial_start, tf.constant((0,))], axis=0)
                     end = tf.concat([spatial_size, (tf.shape(image)[-1], )], axis=0)
-                    
+
                     cropped = tf.slice(image, start, end)
                     cropped = tf.image.resize_images(cropped, shape)
                     cropped.set_shape([*shape, image.get_shape().as_list()[-1]])
@@ -221,21 +223,22 @@ class RPN(TFModel):
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
+        _ = name
         map_shape = np.array(inputs.get_shape().as_list()[1:3])
         n_anchors = map_shape[0] * map_shape[1] * 9
         kwargs['map_shape'].append(map_shape)
         kwargs['map_shape'].append(n_anchors)
 
-        anchors = tf.placeholder(tf.float32, shape=[n_anchors, 4], name='anchors')
-        anchor_batch = tf.placeholder(tf.float32, shape=[None, n_anchors], name='anchor_batch')
-        anchor_cls = tf.placeholder(tf.float32, shape=[None, n_anchors], name='anchor_clsf')
-        anchor_labels = tf.placeholder(tf.int32, shape=[None, n_anchors], name='anchor_labels')
-        anchor_reg = tf.placeholder(tf.float32, shape=[None, n_anchors, 4], name='anchor_reg')
+        tf.placeholder(tf.float32, shape=[n_anchors, 4], name='anchors')
+        tf.placeholder(tf.float32, shape=[None, n_anchors], name='anchor_batch')
+        tf.placeholder(tf.float32, shape=[None, n_anchors], name='anchor_clsf')
+        tf.placeholder(tf.int32, shape=[None, n_anchors], name='anchor_labels')
+        tf.placeholder(tf.float32, shape=[None, n_anchors, 4], name='anchor_reg')
 
         train_mode = tf.placeholder(tf.bool, shape=(), name='train_mode')
 
-        rpn_reg, rpn_clsf, loss1 = cls.rpn_head(inputs, **kwargs)
-        rcn_cls, loss2 = cls.rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
+        rpn_reg, rpn_clsf, loss1 = cls._rpn_head(inputs, **kwargs)
+        _, loss2 = cls._rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
 
         loss = tf.cond(train_mode, lambda: loss1, lambda: loss2)
 
@@ -245,13 +248,14 @@ class RPN(TFModel):
 
 
     @classmethod
-    def rpn_head(cls, inputs, name='rpn_head', **kwargs):
+    def _rpn_head(cls, inputs, name='rpn_head', **kwargs):
         n_anchors = kwargs['map_shape'][1]
 
-        anchors = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchors:0')
-        anchor_reg = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchor_reg:0')
-        anchor_clsf = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchor_clsf:0')
-        anchor_batch = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchor_batch:0')
+        scope_name = tf.get_default_graph().get_name_scope()
+        anchors = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchors:0')
+        anchor_reg = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchor_reg:0')
+        anchor_clsf = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchor_clsf:0')
+        anchor_batch = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchor_batch:0')
 
         with tf.variable_scope(name):
 
@@ -270,12 +274,9 @@ class RPN(TFModel):
         return rpn_reg, rpn_clsf, loss
 
     @classmethod
-    def rcn_head(cls, inputs, name='rcn_head', **kwargs):
-        anchors = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchors:0')
-        anchors_reg = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchor_reg:0')
-        anchors_clsf = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchor_clsf:0')
-        anchors_batch = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchor_batch:0')
-        anchors_labels = tf.get_default_graph().get_tensor_by_name(tf.get_default_graph().get_name_scope()+'/anchor_labels:0')
+    def _rcn_head(cls, inputs, name='rcn_head', **kwargs):
+        scope_name = tf.get_default_graph().get_name_scope()
+        anchors_labels = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchor_labels:0')
 
         feature_maps, rpn_reg, rpn_cls = inputs
         map_shape = kwargs['map_shape'][0]
@@ -285,23 +286,23 @@ class RPN(TFModel):
         batch_size = 16 #rpn_reg.get_shape().as_list()[0] # ??????????????????
 
         with tf.variable_scope(name):
-            rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors, 
+            rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
                                                     iou_threshold=0.4, score_threshold=0.7, nonempty=True)
-        
+
             rcn_input_rois, rcn_input_labels = _get_rois_and_labels(rpn_reg, anchors_labels, rcn_input_indices, batch_size)
             roi_factor = np.array(map_shape/image_shape)
-            
+
             #rcn_input_rois = stop_gradient_tuple(rcn_input_rois)
             #rcn_input_labels = stop_gradient_tuple(rcn_input_labels)
-            
-            roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois, factor=roi_factor, shape=(7, 7))      
-            indices, roi_cropped, rcn_input_labels = _stack_tuple(roi_cropped, rcn_input_labels)
+
+            roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois, factor=roi_factor, shape=(7, 7))
+            indices, roi_cropped, rcn_input_labels = _stack_tuple(roi_cropped, rcn_input_labels) # pylint: disable=unbalanced-tuple-unpacking
             rcn_cls = conv_block(roi_cropped, 'f', units=10, name='output_conv')
-            
+
             loss = rcn_loss(rcn_cls, rcn_input_labels)
 
             rcn_cls = _unstack_tuple(rcn_cls, indices)
-            rcn_cls = tf.tuple(rcn_cls, name='clsf')            
+            rcn_cls = tf.tuple(rcn_cls, name='clsf')
             loss = tf.identity(loss, 'loss')
 
         return rcn_cls, loss
