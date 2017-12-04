@@ -737,6 +737,10 @@ class TFModel(BaseModel):
                 return getattr(self, name)
             elif ':' in name:
                 return name
+            else:
+                tensors = tf.get_collection(name)
+                if len(tensors) != 0:
+                    return tensors
             return name + ':0'
         return name
 
@@ -770,6 +774,7 @@ class TFModel(BaseModel):
         else:
             _fetches = fetches
         return _fetches
+
 
     def _fill_output(self, output, fetches):
         def _recast_output(out, ix=None):
@@ -1151,14 +1156,14 @@ class TFModel(BaseModel):
                 ctx = None
             attr_prefix = current_prefix + '_' if current_prefix else ''
 
-            self._add_output_predictions(x, scope, attr_prefix, **kwargs)
+            self._add_output_predictions(tensor, scope, attr_prefix, **kwargs)
             for oper in ops:
                 if oper == 'proba':
-                    self._add_output_proba(x, scope, attr_prefix, **kwargs)
+                    self._add_output_proba(tensor, scope, attr_prefix, **kwargs)
                 elif oper == 'labels':
-                    self._add_output_labels(x, scope, attr_prefix, **kwargs)
+                    self._add_output_labels(tensor, scope, attr_prefix, **kwargs)
                 elif oper == 'accuracy':
-                    self._add_output_accuracy(x, scope, attr_prefix, **kwargs)
+                    self._add_output_accuracy(tensor, scope, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)

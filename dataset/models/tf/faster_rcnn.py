@@ -67,19 +67,6 @@ def _unparametrize(inputs, base):
         res = tf.stack((y, x, height, width), axis=-1)
     return res
 
-def _rpn(inputs, **kwargs):
-    with tf.variable_scope('rpn'):
-        net = conv_block(inputs, 'ca', filters=512, kernel_size=3, name='conv', **kwargs)
-        rpn_reg = conv_block(net, 'c', filters=4*9, kernel_size=1, name='reg', **kwargs)
-        rpn_cls = conv_block(net, 'c', filters=1*9, kernel_size=1, name='cls', **kwargs)
-
-        spatial_net_shape = net.get_shape().as_list()[1:3]
-        n_anchors = spatial_net_shape[0] * spatial_net_shape[1] * 9
-
-        rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4])
-        rpn_cls = tf.reshape(rpn_cls, [-1, n_anchors])
-    return rpn_reg, rpn_cls, n_anchors
-
 def _filter_tensor(inputs, cond, *args):
     with tf.variable_scope('filter_tensor'):
         if not callable(cond):
@@ -238,7 +225,7 @@ class RPN(TFModel):
         train_mode = tf.placeholder(tf.bool, shape=(), name='train_mode')
 
         rpn_reg, rpn_clsf, loss1 = cls._rpn_head(inputs, **kwargs)
-        _, loss2 = cls._rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
+        rcn_clsf, loss2 = cls._rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
 
         loss = tf.cond(train_mode, lambda: loss1, lambda: loss2)
 
@@ -291,6 +278,10 @@ class RPN(TFModel):
 
             rcn_input_rois, rcn_input_labels = _get_rois_and_labels(rpn_reg, anchors_labels,
                                                                     rcn_input_indices, batch_size)
+            for tensor in rcn_input_rois:
+                tf.add_to_collection('roi', tensor)
+            for tensor in rcn_input_labels:
+                tf.add_to_collection('targets', tensor)
             roi_factor = np.array(map_shape/image_shape)
 
             #rcn_input_rois = stop_gradient_tuple(rcn_input_rois)
@@ -298,15 +289,17 @@ class RPN(TFModel):
 
             roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois, factor=roi_factor, shape=(7, 7))
             indices, roi_cropped, rcn_input_labels = _stack_tuple(roi_cropped, rcn_input_labels) # pylint: disable=unbalanced-tuple-unpacking
-            rcn_cls = conv_block(roi_cropped, 'f', units=10, name='output_conv')
+            rcn_clsf = conv_block(roi_cropped, 'f', units=10, name='output_conv')
 
-            loss = rcn_loss(rcn_cls, rcn_input_labels)
+            loss = rcn_loss(rcn_clsf, rcn_input_labels)
 
-            rcn_cls = _unstack_tuple(rcn_cls, indices)
-            rcn_cls = tf.tuple(rcn_cls, name='clsf')
+            rcn_clsf = _unstack_tuple(rcn_clsf, indices)
+            rcn_clsf = tf.tuple(rcn_clsf, name='clsf')
+            for tensor in rcn_clsf:
+                tf.add_to_collection('rcn_output', tensor)
             loss = tf.identity(loss, 'loss')
 
-        return rcn_cls, loss
+        return rcn_clsf, loss
 
 
     def _fill_feed_dict(self, feed_dict=None, is_training=True):
