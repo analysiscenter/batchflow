@@ -34,7 +34,7 @@ class ResNet(TFModel):
         num_blocks : list of int
             number of blocks in each group with the same number of filters.
         filters : list of int
-            number of filters in each group (default=[64, 128, 256, 512])
+            number of filters in each group
 
         block : dict
             bottleneck : bool

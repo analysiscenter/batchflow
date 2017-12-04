@@ -8,13 +8,13 @@ _CONV_LAYERS = {
     3: tf.layers.conv3d
 }
 
-def conv(dim, *args, **kwargs):
+def conv(inputs, *args, **kwargs):
     """ Nd convolution layer. Just a wrapper around ``tf.layers.conv1d``, ``conv2d``, ``conv3d``.
 
     Parameters
     ----------
-    dim : int {1, 2, 3}
-        number of dimensions
+    inputs : tf.Tensor
+        input tensor
 
     See also
     --------
@@ -22,8 +22,9 @@ def conv(dim, *args, **kwargs):
     `tf.layers.conv2d <https://www.tensorflow.org/api_docs/python/tf/layers/conv2d>`_,
     `tf.layers.conv3d <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d>`_
     """
+    dim = inputs.shape.ndims - 2
     layer_fn = _CONV_LAYERS[dim]
-    return layer_fn(*args, **kwargs)
+    return layer_fn(inputs, *args, **kwargs)
 
 def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
                      **kwargs):
@@ -133,9 +134,6 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
     if dim == 2:
         return tf.layers.separable_conv2d(inputs, filters, kernel_size, strides, padding, data_format,
                                           dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
-    elif depth_multiplier == 1:
-        output = conv_layer(inputs, filters, kernel_size, strides, padding, data_format,
-                            dilation_rate, activation, name, *args, **kwargs)
     else:
         context = None
         if name is not None:

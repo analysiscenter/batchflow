@@ -9,8 +9,9 @@ class _DummyBatch:
 
 class NamedExpression:
     """ Base class for a named expression """
-    def __init__(self, name):
+    def __init__(self, name, copy=False):
         self.name = name
+        self.copy = copy
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression """
@@ -64,8 +65,8 @@ class NamedExpression:
 
 class B(NamedExpression):
     """ Batch component name """
-    def __init__(self, name=None):
-        super().__init__(name)
+    def __init__(self, name=None, copy=True):
+        super().__init__(name, copy)
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a batch component """
@@ -73,7 +74,7 @@ class B(NamedExpression):
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models B(%s)" % name)
         if name is None:
-            return batch
+            return batch.deepcopy() if self.copy else batch
         return getattr(batch, name)
 
     def assign(self, value, batch=None, pipeline=None, model=None):

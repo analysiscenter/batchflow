@@ -70,20 +70,20 @@ class LinkNet(TFModel):
             x = inputs
             encoder_outputs = []
             for i, ifilters in enumerate(filters):
-                x = cls.downsampling_block(x, filters=ifilters, name='downsampling-'+str(i), **kwargs)
+                x = cls.encoder_block(x, filters=ifilters, name='encoder-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
             for i, ifilters in enumerate(filters[::-1][1:]):
-                x = cls.upsampling_block(x, filters=ifilters, name='upsampling-'+str(i), **kwargs)
+                x = cls.decoder_block(x, filters=ifilters, name='decoder-'+str(i), **kwargs)
                 x = cls.crop(x, encoder_outputs[-i-2], data_format=kwargs.get('data_format'))
                 x = tf.add(x, encoder_outputs[-2-i])
-            x = cls.upsampling_block(x, filters[0], 'upsampling-'+str(i+1), **kwargs)
+            x = cls.upsampling_block(x, filters[0], 'decoder-'+str(i+1), **kwargs)
             x = cls.crop(x, inputs, data_format=kwargs.get('data_format'))
 
         return x
 
     @classmethod
-    def downsampling_block(cls, inputs, filters, name, **kwargs):
+    def encoder_block(cls, inputs, filters, name, **kwargs):
         """ Two ResNet blocks of two 3x3 convolution + shortcut
 
         Parameters
@@ -99,10 +99,10 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        return ResNet.double_block(inputs, filters=filters, name=name, strides=2, **kwargs)
+        return ResNet.double_block(inputs, filters=filters, name=name, downsample=True, **kwargs)
 
     @classmethod
-    def upsampling_block(cls, inputs, filters, name, **kwargs):
+    def decoder_block(cls, inputs, filters, name, **kwargs):
         """ 1x1 convolution, 3x3 transposed convolution with stride=2 and 1x1 convolution
 
         Parameters
