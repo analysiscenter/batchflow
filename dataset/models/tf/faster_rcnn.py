@@ -145,9 +145,9 @@ def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), name='roi-pooli
                     spatial_size = tf.cast(tf.ceil(spatial_size), dtype=tf.int32)
 
                     spatial_start = tf.maximum(tf.constant((0, 0)), spatial_start)
-                    spatial_start = tf.minimum(tf.shape(image)[:2]-1, spatial_start)
+                    spatial_start = tf.minimum(tf.shape(image)[:2]-2, spatial_start)
 
-                    spatial_size = tf.maximum(tf.constant((0, 0)), spatial_size)
+                    spatial_size = tf.maximum(tf.constant((1, 1)), spatial_size)
                     spatial_size = tf.minimum(tf.shape(image)[:2]-spatial_start, spatial_size)
 
                     start = tf.concat([spatial_start, tf.constant((0,))], axis=0)
@@ -182,9 +182,8 @@ def _unstack_tuple(inputs, tensor_sizes):
     return tf.tuple(output)
 
 
-class RPN(TFModel):
-    """ Region Propoasl Network """
-    MAP_SHAPE = None
+class FasterRCNN(TFModel):
+    """ Faster Region-based convolutional neural network. """
 
     @classmethod
     def default_config(cls):
@@ -198,15 +197,18 @@ class RPN(TFModel):
         config = super().build_config(names)
         config['head']['map_shape'] = config['map_shape']
         config['head']['image_shape'] = np.array(config['inputs']['images']['shape'][:2])
+        config['head']['batch_size'] = config['batch_size']
         return config
 
-    @classmethod
-    def input_block(cls, inputs, name='input_block', **kwargs):
-        return VGG7.body(inputs, **kwargs)
+    def input_block(self, inputs, name='input_block', **kwargs):
+        train_mode = tf.placeholder(tf.bool, shape=(), name='train_mode')
+        self.store_to_attr('train_mode', train_mode)
+
+        return VGG7.body(inputs, name=name, **kwargs)
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
-        return conv_block(inputs, 'ca', filters=512, kernel_size=3, name='feature_maps', **kwargs)
+        return conv_block(inputs, 'ca', filters=512, kernel_size=3, name=name, **kwargs)
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
@@ -216,17 +218,18 @@ class RPN(TFModel):
         kwargs['map_shape'].append(map_shape)
         kwargs['map_shape'].append(n_anchors)
 
-        tf.placeholder(tf.float32, shape=[n_anchors, 4], name='anchors')
-        tf.placeholder(tf.float32, shape=[None, n_anchors], name='anchor_batch')
-        tf.placeholder(tf.float32, shape=[None, n_anchors], name='anchor_clsf')
-        tf.placeholder(tf.int32, shape=[None, n_anchors], name='anchor_labels')
-        tf.placeholder(tf.float32, shape=[None, n_anchors, 4], name='anchor_reg')
-
-        train_mode = tf.placeholder(tf.bool, shape=(), name='train_mode')
+        with tf.variable_scope('anchors'):
+            tf.placeholder(tf.float32, shape=[n_anchors, 4], name='anchors')
+            tf.placeholder(tf.float32, shape=[None, n_anchors], name='batch')
+            tf.placeholder(tf.float32, shape=[None, n_anchors], name='clsf')
+            tf.placeholder(tf.int32, shape=[None, n_anchors], name='labels')
+            tf.placeholder(tf.float32, shape=[None, n_anchors, 4], name='reg')
 
         rpn_reg, rpn_clsf, loss1 = cls._rpn_head(inputs, **kwargs)
-        rcn_clsf, loss2 = cls._rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
+        _, loss2 = cls._rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
 
+        scope_name = tf.get_default_graph().get_name_scope()
+        train_mode = tf.get_default_graph().get_tensor_by_name(scope_name+'/train_mode:0')
         loss = tf.cond(train_mode, lambda: loss1, lambda: loss2)
 
         tf.losses.add_loss(loss)
@@ -238,11 +241,11 @@ class RPN(TFModel):
     def _rpn_head(cls, inputs, name='rpn_head', **kwargs):
         n_anchors = kwargs['map_shape'][1]
 
-        scope_name = tf.get_default_graph().get_name_scope()
+        scope_name = tf.get_default_graph().get_name_scope()+'/anchors'
         anchors = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchors:0')
-        anchor_reg = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchor_reg:0')
-        anchor_clsf = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchor_clsf:0')
-        anchor_batch = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchor_batch:0')
+        anchor_reg = tf.get_default_graph().get_tensor_by_name(scope_name+'/reg:0')
+        anchor_clsf = tf.get_default_graph().get_tensor_by_name(scope_name+'/clsf:0')
+        anchor_batch = tf.get_default_graph().get_tensor_by_name(scope_name+'/batch:0')
 
         with tf.variable_scope(name):
 
@@ -262,15 +265,15 @@ class RPN(TFModel):
 
     @classmethod
     def _rcn_head(cls, inputs, name='rcn_head', **kwargs):
-        scope_name = tf.get_default_graph().get_name_scope()
-        anchors_labels = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchor_labels:0')
+        scope_name = tf.get_default_graph().get_name_scope()+'/anchors'
+        anchors_labels = tf.get_default_graph().get_tensor_by_name(scope_name+'/labels:0')
 
         feature_maps, rpn_reg, rpn_cls = inputs
         map_shape = kwargs['map_shape'][0]
         image_shape = kwargs['image_shape']
         n_anchors = map_shape[0] * map_shape[1] * 9
 
-        batch_size = 16 #rpn_reg.get_shape().as_list()[0] # ??????????????????
+        batch_size = kwargs['batch_size']
 
         with tf.variable_scope(name):
             rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
@@ -311,18 +314,14 @@ class RPN(TFModel):
 
         feed_dict = super()._fill_feed_dict(feed_dict, is_training)
 
-        anchors = self.create_anchors(image_shape, map_shape)
-        anchor_reg, anchor_clsf, anchor_labels = self.create_rpn_inputs(anchors, bboxes, labels)
-        anchor_batch = self.create_batch(anchor_clsf)
-        anchor_clsf = np.array(anchor_clsf == 1, dtype=np.int32)
+        anchors = {}
+        anchors['anchors'] = self.create_anchors(image_shape, map_shape)
+        anchors['reg'], anchors['clsf'], anchors['labels'] = self.create_rpn_inputs(anchors['anchors'], bboxes, labels)
+        anchors['batch'] = self.create_batch(anchors['clsf'])
+        anchors['clsf'] = np.array(anchors['clsf'] == 1, dtype=np.int32)
 
-        feed_dict = {**feed_dict,
-                     self._map_name('RPN/anchors'): anchors,
-                     self._map_name('RPN/anchor_reg'): anchor_reg,
-                     self._map_name('RPN/anchor_clsf'): anchor_clsf,
-                     self._map_name('RPN/anchor_labels'): anchor_labels,
-                     self._map_name('RPN/anchor_batch'): anchor_batch}
-
+        _feed_dict = {self._map_name(self.__class__.__name__+'/anchors/'+k+':0'): anchors[k] for k in anchors}
+        feed_dict = {**feed_dict, **_feed_dict}
 
         return feed_dict
 
