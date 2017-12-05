@@ -22,6 +22,8 @@ class FasterRCNN(TFModel):
         config = TFModel.default_config()
 
         config['output']['prefix'] = ['reg', 'cls']
+        config['anchors_batch'] = 64
+        config['rcn_batch'] = None
 
         return config
 
@@ -29,6 +31,8 @@ class FasterRCNN(TFModel):
         config = super().build_config(names)
         config['head']['image_shape'] = self.spatial_shape('images')
         config['head']['batch_size'] = config['batch_size']
+        self.anchors_batch = config['anchors_batch']
+        self.rcn_batch = config['rcn_batch']
         return config
 
     def input_block(self, inputs, name='input_block', **kwargs):
@@ -92,9 +96,14 @@ class FasterRCNN(TFModel):
             rpn_reg = conv_block(inputs, 'c', filters=4*9, kernel_size=1, name='conv_reg', **kwargs)
             rpn_clsf = conv_block(inputs, 'c', filters=1*9, kernel_size=1, name='conv_clsf', **kwargs)
 
-            rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4])
+            if data_format == 'channels_first':
+                rpn_reg = tf.transpose(rpn_reg, [0, 2, 3, 1])
+                rpn_clsf = tf.transpose(rpn_clsf, [0, 2, 3, 1])
 
+
+            rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4])
             rpn_clsf = tf.reshape(rpn_clsf, [-1, n_anchors])
+
             anchor_reg_param = _parametrize(anchor_reg, anchors)
 
             loss = self.rpn_loss(rpn_reg, rpn_clsf, anchor_reg_param, anchor_clsf, anchor_batch)
@@ -117,7 +126,7 @@ class FasterRCNN(TFModel):
 
         with tf.variable_scope(name):
             rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
-                                                    iou_threshold=0.4, score_threshold=0.7, nonempty=True)
+                                                    iou_threshold=0.2, score_threshold=0.7, nonempty=True)
 
             rcn_input_rois, rcn_input_labels = _get_rois_and_labels(rpn_reg, anchors_labels,
                                                                     rcn_input_indices, batch_size)
@@ -127,8 +136,8 @@ class FasterRCNN(TFModel):
                 tf.add_to_collection('targets', tensor)
             roi_factor = np.array(map_shape/image_shape)
 
-            #rcn_input_rois = stop_gradient_tuple(rcn_input_rois)
-            #rcn_input_labels = stop_gradient_tuple(rcn_input_labels)
+            rcn_input_rois = self.stop_gradient_tuple(rcn_input_rois)
+            rcn_input_labels = self.stop_gradient_tuple(rcn_input_labels)
 
             roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois, factor=roi_factor, shape=(7, 7), data_format=data_format)
             indices, roi_cropped, rcn_input_labels = _stack_tuple(roi_cropped, rcn_input_labels) # pylint: disable=unbalanced-tuple-unpacking
@@ -153,7 +162,7 @@ class FasterRCNN(TFModel):
             bboxes = feed_dict.pop('bboxes')
             labels = feed_dict.pop('labels')
             anchors['reg'], anchors['clsf'], anchors['labels'] = self.create_rpn_inputs(self.anchors, bboxes, labels)
-            anchors['batch'] = self.create_batch(anchors['clsf'])
+            anchors['batch'] = self.create_batch(anchors['clsf'], self.anchors_batch)
             anchors['clsf'] = np.array(anchors['clsf'] == 1, dtype=np.int32)
             _feed_dict = {self.anchors_placeholders[k]: anchors[k] for k in anchors}
 
@@ -161,6 +170,11 @@ class FasterRCNN(TFModel):
         feed_dict = {**feed_dict, **_feed_dict}
 
         return feed_dict
+
+    def stop_gradient_tuple(self, inputs):
+        for i in range(len(inputs)):
+            inputs[i] = tf.stop_gradient(inputs[i])
+        return inputs
 
     def create_anchors(self, scales=(4, 8, 16), ratio=2):
         """ Create anchors for image_shape depending on output_map_shape. """
@@ -205,11 +219,7 @@ class FasterRCNN(TFModel):
                 cur_anchors = np.concatenate(cur_anchors, axis=1)
                 anchors.append(np.array(cur_anchors, np.int32))
         anchors = np.array(anchors)
-        print(anchors.shape)
-        if data_format == 'channels_last':
-            anchors = anchors.transpose(1, 0, 2)
-        print(anchors.shape)
-        anchors = anchors.reshape(-1, 4)
+        anchors = anchors.transpose(1, 0, 2).reshape(-1, 4)
         return anchors
 
     @classmethod
