@@ -537,6 +537,7 @@ class Pipeline:
         action_list = action_list or self._action_list
         for action in action_list:
             _action = action.copy()
+            _action['args'] = self._get_value(action['args'], batch=batch)
             _action['kwargs'] = self._get_value(action['kwargs'], batch=batch)
 
             if _action.get('#dont_run', False):
@@ -592,20 +593,6 @@ class Pipeline:
     def _get_value(self, expr, batch=None, model=None):
         return eval_expr(expr, batch=batch, pipeline=self, model=model)
 
-    def _exec_args(self, batch, action):
-        args = []
-        for arg in action['args']:
-            value = self._get_value(arg, batch=batch)
-            args.append(value)
-        return tuple(args)
-
-    def _exec_kwargs(self, batch, action):
-        kwargs = {}
-        for arg, value in action['kwargs'].items():
-            value = self._get_value(value, batch=batch)
-            kwargs.update({arg: value})
-        return kwargs
-
     def call(self, fn, save_to=None, mode='w', *args, **kwargs):
         """ Call any function during pipeline execution
 
@@ -625,7 +612,7 @@ class Pipeline:
     def _exec_call(self, batch, action):
         fn = self._get_value(action['fn'], batch)
         if callable(fn):
-            output = fn(batch)
+            output = fn(batch, *action['args'], **action['kwargs'])
         else:
             raise TypeError("Callable is expected, but got {}".format(type(fn)))
         if action['save_to'] is not None:
