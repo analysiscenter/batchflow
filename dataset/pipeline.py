@@ -19,10 +19,10 @@ from .decorators import ModelDirectory
 from .named_expr import NamedExpression, V, eval_expr
 
 
-PIPELINE_ID = '#_pipeline'
 JOIN_ID = '#_join'
 MERGE_ID = '#_merge'
 REBATCH_ID = '#_rebatch'
+PIPELINE_ID = '#_pipeline'
 IMPORT_MODEL_ID = '#_import_model'
 TRAIN_MODEL_ID = '#_train_model'
 PREDICT_MODEL_ID = '#_predict_model'
@@ -30,6 +30,16 @@ PRINT_VARIABLE_ID = '#_print_variable'
 INC_VARIABLE_ID = '#_inc_variable'
 UPDATE_VARIABLE_ID = '#_update_variable'
 CALL_ID = '#_call'
+
+_ACTIONS = {
+    IMPORT_MODEL_ID: '_exec_import_model',
+    TRAIN_MODEL_ID: '_exec_train_model',
+    PREDICT_MODEL_ID: '_exec_predict_model',
+    PRINT_VARIABLE_ID: '_exec_print_variable',
+    INC_VARIABLE_ID: '_exec_inc_variable',
+    UPDATE_VARIABLE_ID: '_exec_update_variable',
+    CALL_ID: '_exec_call'
+}
 
 
 def mult_option(a, b):
@@ -448,8 +458,7 @@ class Pipeline:
         -------
         self - in order to use it in the pipeline chains
         """
-        self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name,
-                                  'value': value, 'mode': mode})
+        self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name, 'value': value, 'mode': mode})
         return self.append_action()
 
     def _exec_update_variable(self, batch, action):
@@ -527,8 +536,8 @@ class Pipeline:
         join_batches = None
         action_list = action_list or self._action_list
         for action in action_list:
-            #_action = self._exec_args(batch, action)
-            _action = action
+            _action = action.copy()
+            _action['kwargs'] = self._get_value(action['kwargs'], batch=batch)
 
             if _action.get('#dont_run', False):
                 pass
@@ -551,18 +560,9 @@ class Pipeline:
                 pass
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
-            elif _action['name'] == IMPORT_MODEL_ID:
-                self._exec_import_model(batch, _action)
-            elif _action['name'] == TRAIN_MODEL_ID:
-                self._exec_train_model(batch, _action)
-            elif _action['name'] == PREDICT_MODEL_ID:
-                self._exec_predict_model(batch, _action)
-            elif _action['name'] == PRINT_VARIABLE_ID:
-                self._exec_print_variable(batch, _action)
-            elif _action['name'] == UPDATE_VARIABLE_ID:
-                self._exec_update_variable(batch, _action)
-            elif _action['name'] == CALL_ID:
-                self._exec_call(batch, _action)
+            elif _action['name'] in _ACTIONS:
+                action_fn = getattr(self, _ACTIONS[_action['name']])
+                action_fn(batch, _action)
             else:
                 if join_batches is None:
                     _action_args = _action['args']
@@ -593,11 +593,18 @@ class Pipeline:
         return eval_expr(expr, batch=batch, pipeline=self, model=model)
 
     def _exec_args(self, batch, action):
-        _action = {}
-        for arg, value in action.items():
+        args = []
+        for arg in action['args']:
+            value = self._get_value(arg, batch=batch)
+            args.append(value)
+        return tuple(args)
+
+    def _exec_kwargs(self, batch, action):
+        kwargs = {}
+        for arg, value in action['kwargs'].items():
             value = self._get_value(value, batch=batch)
-            _action.update({arg: value})
-        return _action
+            kwargs.update({arg: value})
+        return kwargs
 
     def call(self, fn, save_to=None, mode='w', *args, **kwargs):
         """ Call any function during pipeline execution
