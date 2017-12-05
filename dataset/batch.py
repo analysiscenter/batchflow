@@ -204,24 +204,29 @@ class Batch(BaseBatch):
             self._item_class = comp_class
 
     @action
-    def add_components(self, components):
+    def add_components(self, components, init=None):
         """ Add new components
 
         Parameters
         ----------
         components : str or list
             new component names
+        init : array-like
+            initial component data
         """
         if isinstance(components, str):
-            components = [components]
-        elif isinstance(components, tuple):
-            components = list(components)
+            components = (components,)
+            init = (init,)
+        elif isinstance(components, list):
+            components = tuple(components)
 
         data = self._data
         if self.components is None:
             self.components = components
+            data = tuple()
         else:
-            self.components = tuple(list(self.components) + components)
+            self.components = self.components + components
+            data = data + tuple(init)
         self.make_item_class(local=True)
         self._data = data
 
