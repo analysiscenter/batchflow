@@ -657,6 +657,22 @@ class TFModel(BaseModel):
         config = self.get_tensor_config(tensor, **kwargs)
         return len(config.get('shape')) - 1
 
+    def spatial_shape(self, tensor, **kwargs):
+        """ Return the tensor spatial shape (without channels dimension)
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+
+        Returns
+        -------
+        spatial shape : tuple
+        """
+        config = self.get_tensor_config(tensor, **kwargs)
+        data_format = config.get('data_format')
+        shape = config.get('shape')[:-1] if data_format=='channels_last' else config.get('shape')[1:]
+        return shape
+
     def data_format(self, tensor, **kwargs):
         """ Return the tensor data format (channels_last or channels_first)
 
@@ -700,7 +716,7 @@ class TFModel(BaseModel):
         return tensor.get_shape().as_list()
 
     @staticmethod
-    def spatial_shape(tensor, data_format='channels_last'):
+    def get_spatial_shape(tensor, data_format='channels_last'):
         """ Return spatial shape of the input tensor
 
         Parameters
@@ -716,7 +732,7 @@ class TFModel(BaseModel):
         return shape[axis]
 
     @staticmethod
-    def channels_shape(tensor, data_format='channels_last'):
+    def get_channels_shape(tensor, data_format='channels_last'):
         """ Return number of channels in the input tensor
 
         Parameters
@@ -962,7 +978,7 @@ class TFModel(BaseModel):
     @classmethod
     def crop(cls, inputs, shape_images, data_format='channels_last'):
         """ Crop input tensor to a shape of a given image.
-        If shape_image has not fully defined shape (shape_image.get_shape() has at leats one None),
+        If shape_image has not fully defined shape (shape_image.get_shape() has at least one None),
         the returned tf.Tensor will be of unknown shape except the number of channels.
 
         Parameters
@@ -985,7 +1001,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def _static_crop(cls, inputs, shape, data_format='channels_last'):
-        input_shape = np.array(cls.spatial_shape(inputs, data_format))
+        input_shape = np.array(cls.get_spatial_shape(inputs, data_format))
 
         if np.abs(input_shape - shape).sum() > 0:
             begin = [0] * inputs.shape.ndims
@@ -1319,11 +1335,11 @@ class TFModel(BaseModel):
         """
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
-            in_filters = cls.channels_shape(inputs, data_format)
+            in_filters = cls.get_channels_shape(inputs, data_format)
             x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
                            **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
 
-            shape = [-1] + [1] * (len(cls.spatial_shape(inputs, data_format)) + 1)
+            shape = [-1] + [1] * (len(cls.get_spatial_shape(inputs, data_format)) + 1)
             axis = cls.channels_axis(data_format)
             shape[axis] = in_filters
             scale = tf.reshape(x, shape)
