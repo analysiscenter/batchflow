@@ -177,12 +177,12 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         return inputs
 
     dim = inputs.shape.ndims - 2
-    if not isinstance(dim, int) or dim < 1 or dim > 3:
+    if not isinstance(dim, int) or dim > 3:
         raise ValueError("Number of dimensions of the inputs tensor should be 1, 2 or 3, but given %d" % dim)
 
     context = None
     if name is not None:
-        context = tf.variable_scope(name)
+        context = tf.variable_scope(name, reuse=kwargs.get('reuse'))
         context.__enter__()
 
     layout_dict = {}
