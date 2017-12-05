@@ -14,73 +14,35 @@ _IOU_LOW = 0.3
 _IOU_HIGH = 0.7
 
 
-def rpn_loss(reg, clsf, true_reg, true_cls, anchor_batch):
-    """ Mixed MSE+CE Loss for RPN. """
-    with tf.variable_scope('rpn_loss'):
-        cls_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=true_cls, logits=clsf)
-
-        anchor_batch_size_norm = tf.expand_dims(1.0 / tf.reduce_sum(anchor_batch, axis=-1), axis=0)
-
-        cls_loss = tf.matmul(anchor_batch_size_norm, cls_loss * anchor_batch)
-        cls_loss = cls_loss / tf.cast(tf.shape(clsf)[0], dtype=tf.float32)
-        cls_loss = tf.reduce_sum(cls_loss, name='cls_loss')
-
-        sums = tf.reduce_sum((true_reg - reg) ** 2, axis=-1)
-
-        reg_loss = sums * true_cls * anchor_batch
-        reg_loss = tf.reduce_mean(reg_loss, axis=-1)
-        reg_loss = tf.reduce_mean(reg_loss, name='reg_loss')
-
-        loss = reg_loss * 100 + cls_loss
-    return loss
-
-def rcn_loss(clsf, true_cls):
-    """ CE loss for RCN. """
-    with tf.variable_scope('rcn_loss'):
-        true_cls = tf.one_hot(true_cls, clsf.get_shape().as_list()[-1])
-        cls_loss = tf.nn.softmax_cross_entropy_with_logits(labels=true_cls, logits=clsf)
-
-        #anchor_batch_size_norm = tf.expand_dims(1.0 / tf.reduce_sum(anchor_batch, axis=-1), axis=0)
-
-        #cls_loss = tf.matmul(anchor_batch_size_norm, cls_loss * anchor_batch)
-        #cls_loss = cls_loss / tf.cast(tf.shape(clsf)[0], dtype=tf.float32)
-        #cls_loss = tf.reduce_sum(cls_loss, name='cls_loss')
-
-        loss = tf.reduce_mean(cls_loss)
-    return loss
-
-def _parametrize(inputs, base):
-    with tf.variable_scope('parametrize'):
-        y = (inputs[:, :, 0] - base[:, 0]) * (1.0 / base[:, 2])
-        x = (inputs[:, :, 1] - base[:, 1]) * (1.0 / base[:, 3])
-        height = tf.log(inputs[:, :, 2] * (1.0 / base[:, 2]))
-        width = tf.log(inputs[:, :, 3] * (1.0 / base[:, 3]))
-        output = tf.stack((y, x, height, width), axis=-1)
-    return output
-
-def _unparametrize(inputs, base):
-    with tf.variable_scope('parametrize'):
-        y = inputs[:, :, 0] * base[:, 2] + base[:, 0]
-        x = inputs[:, :, 1] * base[:, 3] + base[:, 1]
-        height = tf.exp(inputs[:, :, 2]) * base[:, 2]
-        width = tf.exp(inputs[:, :, 3]) * base[:, 3]
-        res = tf.stack((y, x, height, width), axis=-1)
-    return res
-
-def _filter_tensor(inputs, cond, *args):
-    with tf.variable_scope('filter_tensor'):
-        if not callable(cond):
-            callable_cond = lambda x: x > cond
-        else:
-            callable_cond = cond
-        indices = tf.where(callable_cond(inputs))
-        output = (indices, *[tf.gather_nd(x, indices) for x in [inputs, *args]])
-    return output
-
 def non_max_suppression(inputs, scores, batch_size, max_output_size,
-                        score_threshold=0.7, iou_threshold=0.7, nonempty=False):
-    """ Perform NMS on batch of images. """
-    with tf.variable_scope('nms'):
+                        score_threshold=0.7, iou_threshold=0.7, nonempty=False, name='nms'):
+    """ Perform NMS on batch of images. 
+
+    Parameters
+    ----------
+        inputs: tf.Tuple
+            each components is a set of bboxes for corresponding image
+        scores: tf.Tuple
+            scores of inputs
+        batch_size:
+            size of batch of inputs
+        max_output_size:
+            maximal size of bboxes per image
+        score_threshold: float
+            bboxes with score less the score_threshold will be dropped
+        iou_threshold: float
+            bboxes with iou which is greater then iou_threshold will be merged
+        nonempty: bool
+            if True at least one bbox per image will be returned
+        name: str
+            scope name
+
+    Returns
+    -------
+        tf.Tuple
+
+    """
+    with tf.variable_scope(name):
         ix = tf.constant(0)
         filtered_rois = tf.TensorArray(dtype=tf.int32, size=batch_size, infer_shape=False)
         loop_cond = lambda ix, filtered_rois: tf.less(ix, batch_size)
@@ -101,7 +63,56 @@ def non_max_suppression(inputs, scores, batch_size, max_output_size,
         res = _array_to_tuple(res, batch_size, [-1, 1])
     return res
 
+def _parametrize(inputs, base):
+    """ Parametrize inputs coordinates with respect of base. """
+    with tf.variable_scope('parametrize'):
+        y = (inputs[:, :, 0] - base[:, 0]) * (1.0 / base[:, 2])
+        x = (inputs[:, :, 1] - base[:, 1]) * (1.0 / base[:, 3])
+        height = tf.log(inputs[:, :, 2] * (1.0 / base[:, 2]))
+        width = tf.log(inputs[:, :, 3] * (1.0 / base[:, 3]))
+        output = tf.stack((y, x, height, width), axis=-1)
+    return output
+
+def _unparametrize(inputs, base):
+    """ Unparametrize inputs coordinates with respect of base. """
+    with tf.variable_scope('parametrize'):
+        y = inputs[:, :, 0] * base[:, 2] + base[:, 0]
+        x = inputs[:, :, 1] * base[:, 3] + base[:, 1]
+        height = tf.exp(inputs[:, :, 2]) * base[:, 2]
+        width = tf.exp(inputs[:, :, 3]) * base[:, 3]
+        res = tf.stack((y, x, height, width), axis=-1)
+    return res
+
+def _filter_tensor(inputs, cond, *args):
+    """ Create indixes and elements of inputs which consists for which cond is True.
+
+    Parameters
+    ----------
+        inputs: tf.Tensor
+            input tensor
+        cond: callable or float
+            condition to choose elements. If float, elements which greater the cond will be choosen
+        *args: tf.Tensors:
+            tensors with the same shape as inputs. Will be returned corresponding elements of them.
+
+    Returns
+    -------
+        indices: tf.Tensor
+            indices of elements of inputs for which cond is True
+        tf.Tensors:
+            filtred inputs and tensors from args.
+    """
+    with tf.variable_scope('filter_tensor'):
+        if not callable(cond):
+            callable_cond = lambda x: x > cond
+        else:
+            callable_cond = cond
+        indices = tf.where(callable_cond(inputs))
+        output = (indices, *[tf.gather_nd(x, indices) for x in [inputs, *args]])
+    return output
+
 def _array_to_tuple(inputs, size, shape=None):
+    """ Convert tf.TensorArray to tf.Tuple"""
     with tf.variable_scope('array_to_tuple'):
         if shape is None:
             output = tf.tuple([inputs.read(i) for i in range(size)])
@@ -195,7 +206,6 @@ class FasterRCNN(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['map_shape'] = config['map_shape']
         config['head']['image_shape'] = np.array(config['inputs']['images']['shape'][:2])
         config['head']['batch_size'] = config['batch_size']
         return config
@@ -210,42 +220,46 @@ class FasterRCNN(TFModel):
     def body(cls, inputs, name='body', **kwargs):
         return conv_block(inputs, 'ca', filters=512, kernel_size=3, name=name, **kwargs)
 
-    @classmethod
-    def head(cls, inputs, name='head', **kwargs):
-        _ = name
-        map_shape = np.array(inputs.get_shape().as_list()[1:3])
-        n_anchors = map_shape[0] * map_shape[1] * 9
-        kwargs['map_shape'].append(map_shape)
-        kwargs['map_shape'].append(n_anchors)
-
+    def create_anchors_tensors(self):
+        n_anchors = self.n_anchors
         with tf.variable_scope('anchors'):
-            tf.placeholder(tf.float32, shape=[n_anchors, 4], name='anchors')
-            tf.placeholder(tf.float32, shape=[None, n_anchors], name='batch')
-            tf.placeholder(tf.float32, shape=[None, n_anchors], name='clsf')
-            tf.placeholder(tf.int32, shape=[None, n_anchors], name='labels')
-            tf.placeholder(tf.float32, shape=[None, n_anchors, 4], name='reg')
+            tensors = {'batch': tf.placeholder(tf.float32, shape=[None, n_anchors]),
+                       'clsf': tf.placeholder(tf.float32, shape=[None, n_anchors]),
+                       'labels': tf.placeholder(tf.int32, shape=[None, n_anchors]),
+                       'reg': tf.placeholder(tf.float32, shape=[None, n_anchors, 4])
+                      }
+            self.store_to_attr('anchors', self.create_anchors())
+            tensors['anchors'] = tf.constant(self.anchors, dtype=tf.float32)
+        self.store_to_attr('anchors_placeholders', tensors)
+        return tensors
 
-        rpn_reg, rpn_clsf, loss1 = cls._rpn_head(inputs, **kwargs)
-        _, loss2 = cls._rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
 
-        scope_name = tf.get_default_graph().get_name_scope()
-        train_mode = tf.get_default_graph().get_tensor_by_name(scope_name+'/train_mode:0')
-        loss = tf.cond(train_mode, lambda: loss1, lambda: loss2)
+    def head(self, inputs, name='head', **kwargs):
+        _ = name
+
+        self.map_shape = np.array(inputs.get_shape().as_list()[1:3])
+        self.n_anchors = self.map_shape[0] * self.map_shape[1] * 9
+        self.image_shape = kwargs['image_shape']
+        
+        self.create_anchors_tensors()
+
+        rpn_reg, rpn_clsf, loss1 = self._rpn_head(inputs, **kwargs)
+        _, loss2 = self._rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
+
+        loss = tf.cond(self.train_mode, lambda: loss1, lambda: loss2)
 
         tf.losses.add_loss(loss)
 
         return rpn_reg, rpn_clsf
 
 
-    @classmethod
-    def _rpn_head(cls, inputs, name='rpn_head', **kwargs):
-        n_anchors = kwargs['map_shape'][1]
+    def _rpn_head(self, inputs, name='rpn_head', **kwargs):
+        n_anchors = self.n_anchors
 
-        scope_name = tf.get_default_graph().get_name_scope()+'/anchors'
-        anchors = tf.get_default_graph().get_tensor_by_name(scope_name+'/anchors:0')
-        anchor_reg = tf.get_default_graph().get_tensor_by_name(scope_name+'/reg:0')
-        anchor_clsf = tf.get_default_graph().get_tensor_by_name(scope_name+'/clsf:0')
-        anchor_batch = tf.get_default_graph().get_tensor_by_name(scope_name+'/batch:0')
+        anchors = self.anchors_placeholders['anchors']
+        anchor_reg = self.anchors_placeholders['reg']
+        anchor_clsf = self.anchors_placeholders['clsf']
+        anchor_batch = self.anchors_placeholders['batch']
 
         with tf.variable_scope(name):
 
@@ -255,7 +269,7 @@ class FasterRCNN(TFModel):
             rpn_clsf = tf.reshape(rpn_clsf, [-1, n_anchors])
             anchor_reg_param = _parametrize(anchor_reg, anchors)
 
-            loss = rpn_loss(rpn_reg, rpn_clsf, anchor_reg_param, anchor_clsf, anchor_batch)
+            loss = self.rpn_loss(rpn_reg, rpn_clsf, anchor_reg_param, anchor_clsf, anchor_batch)
             loss = tf.identity(loss, 'loss')
 
             rpn_reg = tf.identity(_unparametrize(rpn_reg, anchors), 'reg')
@@ -263,16 +277,13 @@ class FasterRCNN(TFModel):
 
         return rpn_reg, rpn_clsf, loss
 
-    @classmethod
-    def _rcn_head(cls, inputs, name='rcn_head', **kwargs):
-        scope_name = tf.get_default_graph().get_name_scope()+'/anchors'
-        anchors_labels = tf.get_default_graph().get_tensor_by_name(scope_name+'/labels:0')
+    def _rcn_head(self, inputs, name='rcn_head', **kwargs):
+        anchors_labels = self.anchors_placeholders['labels']
 
         feature_maps, rpn_reg, rpn_cls = inputs
-        map_shape = kwargs['map_shape'][0]
+        map_shape = self.map_shape
+        n_anchors = self.n_anchors
         image_shape = kwargs['image_shape']
-        n_anchors = map_shape[0] * map_shape[1] * 9
-
         batch_size = kwargs['batch_size']
 
         with tf.variable_scope(name):
@@ -294,7 +305,7 @@ class FasterRCNN(TFModel):
             indices, roi_cropped, rcn_input_labels = _stack_tuple(roi_cropped, rcn_input_labels) # pylint: disable=unbalanced-tuple-unpacking
             rcn_clsf = conv_block(roi_cropped, 'f', units=10, name='output_conv')
 
-            loss = rcn_loss(rcn_clsf, rcn_input_labels)
+            loss = self.rcn_loss(rcn_clsf, rcn_input_labels)
 
             rcn_clsf = _unstack_tuple(rcn_clsf, indices)
             rcn_clsf = tf.tuple(rcn_clsf, name='clsf')
@@ -304,30 +315,30 @@ class FasterRCNN(TFModel):
 
         return rcn_clsf, loss
 
-
     def _fill_feed_dict(self, feed_dict=None, is_training=True):
 
         bboxes = feed_dict.pop('bboxes')
         labels = feed_dict.pop('labels')
-        map_shape = self.config['map_shape'][0]
+        map_shape = self.map_shape
         image_shape = feed_dict['images'].shape[1:3]
 
         feed_dict = super()._fill_feed_dict(feed_dict, is_training)
 
         anchors = {}
-        anchors['anchors'] = self.create_anchors(image_shape, map_shape)
-        anchors['reg'], anchors['clsf'], anchors['labels'] = self.create_rpn_inputs(anchors['anchors'], bboxes, labels)
+        anchors['reg'], anchors['clsf'], anchors['labels'] = self.create_rpn_inputs(self.anchors, bboxes, labels)
         anchors['batch'] = self.create_batch(anchors['clsf'])
         anchors['clsf'] = np.array(anchors['clsf'] == 1, dtype=np.int32)
 
-        _feed_dict = {self._map_name(self.__class__.__name__+'/anchors/'+k+':0'): anchors[k] for k in anchors}
+
+        _feed_dict = {self.anchors_placeholders[k]: anchors[k] for k in anchors}
         feed_dict = {**feed_dict, **_feed_dict}
 
         return feed_dict
 
-    @classmethod
-    def create_anchors(cls, image_shape, map_shape, scales=(4, 8, 16), ratio=2):
+    def create_anchors(self, scales=(4, 8, 16), ratio=2):
         """ Create anchors for image_shape depending on output_map_shape. """
+        image_shape = self.image_shape
+        map_shape = self.map_shape
         ratios = ((np.sqrt(ratio), 1/np.sqrt(ratio)),
                   (1, 1),
                   (1/np.sqrt(ratio), np.sqrt(ratio)))
@@ -464,3 +475,33 @@ class FasterRCNN(TFModel):
             image_anchor_batch[negative_batch] = True
             anchor_batch.append(image_anchor_batch)
         return np.array(anchor_batch)
+
+    @classmethod
+    def rpn_loss(cls, reg, clsf, true_reg, true_cls, anchor_batch):
+        """ Mixed MSE+CE Loss for RPN. """
+        with tf.variable_scope('rpn_loss'):
+            cls_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=true_cls, logits=clsf)
+
+            anchor_batch_size_norm = tf.expand_dims(1.0 / tf.reduce_sum(anchor_batch, axis=-1), axis=0)
+
+            cls_loss = tf.matmul(anchor_batch_size_norm, cls_loss * anchor_batch)
+            cls_loss = cls_loss / tf.cast(tf.shape(clsf)[0], dtype=tf.float32)
+            cls_loss = tf.reduce_sum(cls_loss, name='cls_loss')
+
+            sums = tf.reduce_sum((true_reg - reg) ** 2, axis=-1)
+
+            reg_loss = sums * true_cls * anchor_batch
+            reg_loss = tf.reduce_mean(reg_loss, axis=-1)
+            reg_loss = tf.reduce_mean(reg_loss, name='reg_loss')
+
+            loss = reg_loss * 100 + cls_loss
+        return loss
+
+    @classmethod
+    def rcn_loss(cls, clsf, true_cls):
+        """ CE loss for RCN. """
+        with tf.variable_scope('rcn_loss'):
+            true_cls = tf.one_hot(true_cls, clsf.get_shape().as_list()[-1])
+            cls_loss = tf.nn.softmax_cross_entropy_with_logits(labels=true_cls, logits=clsf)
+            loss = tf.reduce_mean(cls_loss)
+        return loss
