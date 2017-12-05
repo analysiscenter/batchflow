@@ -13,7 +13,7 @@ There are 4 types of named expressions:
 * B('name') - a batch class attribute or component name
 * V('name') - a pipeline variable name
 * C('name') - a pipeline config option
-* F(name) - a callable which takes a batch (could be a batch class method or a function)
+* F(name) - a callable which takes a batch (could be a batch class method or an arbitrary function)
 
 
 B - batch component
@@ -60,7 +60,7 @@ to assess performance of various models.
 
 F - callable
 ------------
-A function which takes a batch and, possibly, a pipeline and a model.
+A function which takes a batch and, possibly, other arguments.
 
 It can be a lambda function::
 
@@ -72,16 +72,28 @@ It can be a lambda function::
 or a batch class method::
 
     pipeline
-        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict))
+        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict, task='segmentation'))
 
 or a function::
 
-    def get_boxes(batch, **kwargs):
-        return [0, 0] + list(batch.images.shape[1:])
+    def get_boxes(batch, shape):
+        x_coords = slice(0, shape[0])
+        y_coords = slice(0, shape[1])
+        return batch.images[:, y_coords, x_coords]
 
     pipeline
         ...
-        .update_variable(var_name, F(get_boxes))
+        .update_variable(var_name, F(get_boxes, V('image_shape')))
         ...
 
 or any other Python callable.
+
+
+.. note:: Most of the time the first parameter passed to ``F``-function contains the current batch.
+   However, there are a few exceptions.
+
+As static models are initialized before a pipeline is run (i.e. before any batch is created),
+all ``F``-functions specified in static ``init_model`` get ``pipeline`` as a first parameter.
+
+In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
+as the second parameter.
