@@ -124,8 +124,10 @@ class FasterRCNN(TFModel):
         n_anchors = self.n_anchors
 
         with tf.variable_scope(name):
-            rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors, iou_threshold=iou_threshold,
-                                                    score_threshold=_IOU_HIGH, nonempty=True)
+            rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
+                                                    iou_threshold=iou_threshold,
+                                                    score_threshold=_IOU_HIGH,
+                                                    nonempty=True)
 
             rcn_input_rois, rcn_input_labels = self._get_rois_and_labels(rpn_reg, anchors_labels, rcn_input_indices)
 
