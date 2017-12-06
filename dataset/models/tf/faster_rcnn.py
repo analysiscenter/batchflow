@@ -105,7 +105,7 @@ class FasterRCNN(TFModel):
                 rpn_clsf = tf.transpose(rpn_clsf, [0, 2, 3, 1])
 
 
-            rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4]) 
+            rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4])
             rpn_clsf = tf.reshape(rpn_clsf, [-1, n_anchors])
 
             anchor_reg_param = self.parametrize(anchor_reg, anchors)
@@ -121,11 +121,11 @@ class FasterRCNN(TFModel):
     def _rcn_head(self, inputs, image_shape, iou_threshold, batch_size, roi_pool_shape, name='rcn_head', **kwargs):
         anchors_labels = self.anchors_placeholders['labels']
         feature_maps, rpn_reg, rpn_cls = inputs
-        n_anchors = self.n_anchors 
+        n_anchors = self.n_anchors
 
         with tf.variable_scope(name):
-            rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
-                                                    iou_threshold=iou_threshold, score_threshold=_IOU_HIGH, nonempty=True)
+            rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors, iou_threshold=iou_threshold,
+                                                    score_threshold=_IOU_HIGH, nonempty=True)
 
             rcn_input_rois, rcn_input_labels = self._get_rois_and_labels(rpn_reg, anchors_labels, rcn_input_indices)
 

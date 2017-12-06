@@ -1,3 +1,5 @@
+#pylint:disable=cell-var-from-loop
+
 """ Layers for proposal regions. """
 
 import tensorflow as tf
