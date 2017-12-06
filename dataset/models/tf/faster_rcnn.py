@@ -139,7 +139,8 @@ class FasterRCNN(TFModel):
             rcn_input_rois = self.stop_gradient_tuple(rcn_input_rois)
             rcn_input_labels = self.stop_gradient_tuple(rcn_input_labels)
 
-            roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois, factor=roi_factor, shape=(7, 7), data_format=data_format)
+            roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois, 
+                                            factor=roi_factor, shape=(7, 7), data_format=data_format)
             indices, roi_cropped, rcn_input_labels = _stack_tuple(roi_cropped, rcn_input_labels) # pylint: disable=unbalanced-tuple-unpacking
             rcn_clsf = conv_block(roi_cropped, 'f', units=10, name='output_conv', **kwargs)
 
@@ -172,13 +173,13 @@ class FasterRCNN(TFModel):
         return feed_dict
 
     def stop_gradient_tuple(self, inputs):
-        for i in range(len(inputs)):
+        """ Stop gradients through tf.Tuple. """
+        for i, _ in enumerate(inputs):
             inputs[i] = tf.stop_gradient(inputs[i])
         return inputs
 
     def create_anchors(self, scales=(4, 8, 16), ratio=2):
         """ Create anchors for image_shape depending on output_map_shape. """
-        data_format = self.data_format('images')
         image_shape = self.image_shape
         map_shape = self.map_shape
         ratios = ((np.sqrt(ratio), 1/np.sqrt(ratio)),
@@ -349,7 +350,7 @@ class FasterRCNN(TFModel):
         return loss
 
 def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), data_format='channels_last', name='roi-pooling'):
-    """ ROI pooling layer with resize instead max-pool. 
+    """ ROI pooling layer with resize instead max-pool.
 
     Parameters
     ----------
@@ -417,7 +418,7 @@ def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), data_format='ch
 
 def non_max_suppression(inputs, scores, batch_size, max_output_size,
                         score_threshold=0.7, iou_threshold=0.7, nonempty=False, name='nms'):
-    """ Perform NMS on batch of images. 
+    """ Perform NMS on batch of images.
 
     Parameters
     ----------

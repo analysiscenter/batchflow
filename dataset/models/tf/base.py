@@ -670,7 +670,7 @@ class TFModel(BaseModel):
         """
         config = self.get_tensor_config(tensor, **kwargs)
         data_format = config.get('data_format')
-        shape = config.get('shape')[:-1] if data_format=='channels_last' else config.get('shape')[1:]
+        shape = config.get('shape')[:-1] if data_format == 'channels_last' else config.get('shape')[1:]
         return shape
 
     def data_format(self, tensor, **kwargs):
