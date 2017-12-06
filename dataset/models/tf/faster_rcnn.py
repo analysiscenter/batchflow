@@ -9,7 +9,7 @@ import tensorflow as tf
 import numpy as np
 
 from . import TFModel, VGG7
-from .layers import conv_block
+from .layers import conv_block, non_max_suppression, roi_pooling_layer
 
 _IOU_LOW = 0.3
 _IOU_HIGH = 0.7
@@ -24,6 +24,9 @@ class FasterRCNN(TFModel):
         config['output']['prefix'] = ['reg', 'cls']
         config['anchors_batch'] = 64
         config['rcn_batch'] = None
+        config['roi_pool_shape'] = (7, 7)
+        config['iou_threshold'] = 0.2
+        config['input_block']['base_network'] = VGG7
 
         return config
 
@@ -31,15 +34,18 @@ class FasterRCNN(TFModel):
         config = super().build_config(names)
         config['head']['image_shape'] = self.spatial_shape('images')
         config['head']['batch_size'] = config['batch_size']
+        config['head']['iou_threshold'] = config['iou_threshold']
+        config['head']['roi_pool_shape'] = config['roi_pool_shape']
+
         self.anchors_batch = config['anchors_batch']
         self.rcn_batch = config['rcn_batch']
         return config
 
-    def input_block(self, inputs, name='input_block', **kwargs):
+    def input_block(self, inputs, base_network, name='input_block', **kwargs):
         train_mode = tf.placeholder(tf.bool, shape=(), name='train_mode')
         self.store_to_attr('train_mode', train_mode)
 
-        return VGG7.body(inputs, name=name, **kwargs)
+        return base_network.body(inputs, name=name, **kwargs)
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
@@ -60,21 +66,20 @@ class FasterRCNN(TFModel):
         return tensors
 
 
-    def head(self, inputs, name='head', **kwargs):
+    def head(self, inputs, image_shape, name='head', **kwargs):
         _ = name
 
-        data_format = kwargs['data_format']
-        if data_format == 'channels_last':
+        if kwargs['data_format'] == 'channels_last':
             self.map_shape = np.array(inputs.get_shape().as_list()[1:3])
         else:
             self.map_shape = np.array(inputs.get_shape().as_list()[2:4])
         self.n_anchors = self.map_shape[0] * self.map_shape[1] * 9
-        self.image_shape = kwargs['image_shape']
 
+        self.image_shape = image_shape
         self.create_anchors_tensors()
 
         rpn_reg, rpn_clsf, loss1 = self._rpn_head(inputs, **kwargs)
-        _, loss2 = self._rcn_head([inputs, rpn_reg, rpn_clsf], **kwargs)
+        _, loss2 = self._rcn_head([inputs, rpn_reg, rpn_clsf], image_shape, **kwargs)
 
         loss = tf.cond(self.train_mode, lambda: loss1, lambda: loss2)
 
@@ -85,7 +90,6 @@ class FasterRCNN(TFModel):
 
     def _rpn_head(self, inputs, name='rpn_head', **kwargs):
         n_anchors = self.n_anchors
-        data_format = kwargs['data_format']
         anchors = self.anchors_placeholders['anchors']
         anchor_reg = self.anchors_placeholders['reg']
         anchor_clsf = self.anchors_placeholders['clsf']
@@ -96,58 +100,53 @@ class FasterRCNN(TFModel):
             rpn_reg = conv_block(inputs, 'c', filters=4*9, kernel_size=1, name='conv_reg', **kwargs)
             rpn_clsf = conv_block(inputs, 'c', filters=1*9, kernel_size=1, name='conv_clsf', **kwargs)
 
-            if data_format == 'channels_first':
+            if kwargs['data_format'] == 'channels_first':
                 rpn_reg = tf.transpose(rpn_reg, [0, 2, 3, 1])
                 rpn_clsf = tf.transpose(rpn_clsf, [0, 2, 3, 1])
 
 
-            rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4])
+            rpn_reg = tf.reshape(rpn_reg, [-1, n_anchors, 4]) 
             rpn_clsf = tf.reshape(rpn_clsf, [-1, n_anchors])
 
-            anchor_reg_param = _parametrize(anchor_reg, anchors)
+            anchor_reg_param = self.parametrize(anchor_reg, anchors)
 
             loss = self.rpn_loss(rpn_reg, rpn_clsf, anchor_reg_param, anchor_clsf, anchor_batch)
             loss = tf.identity(loss, 'loss')
 
-            rpn_reg = tf.identity(_unparametrize(rpn_reg, anchors), 'reg')
+            rpn_reg = tf.identity(self.unparametrize(rpn_reg, anchors), 'reg')
             rpn_clsf = tf.sigmoid(rpn_clsf, 'clsf')
 
         return rpn_reg, rpn_clsf, loss
 
-    def _rcn_head(self, inputs, name='rcn_head', **kwargs):
+    def _rcn_head(self, inputs, image_shape, iou_threshold, batch_size, roi_pool_shape, name='rcn_head', **kwargs):
         anchors_labels = self.anchors_placeholders['labels']
-
         feature_maps, rpn_reg, rpn_cls = inputs
-        map_shape = self.map_shape
-        n_anchors = self.n_anchors
-        data_format = kwargs['data_format']
-        image_shape = kwargs['image_shape']
-        batch_size = kwargs['batch_size']
+        n_anchors = self.n_anchors 
 
         with tf.variable_scope(name):
             rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
-                                                    iou_threshold=0.2, score_threshold=0.7, nonempty=True)
+                                                    iou_threshold=iou_threshold, score_threshold=_IOU_HIGH, nonempty=True)
 
-            rcn_input_rois, rcn_input_labels = _get_rois_and_labels(rpn_reg, anchors_labels,
-                                                                    rcn_input_indices, batch_size)
+            rcn_input_rois, rcn_input_labels = self._get_rois_and_labels(rpn_reg, anchors_labels, rcn_input_indices)
+
             for tensor in rcn_input_rois:
                 tf.add_to_collection('roi', tensor)
             for tensor in rcn_input_labels:
                 tf.add_to_collection('targets', tensor)
-            roi_factor = np.array(map_shape/image_shape)
+            roi_factor = np.array(self.map_shape/image_shape)
 
             rcn_input_rois = self.stop_gradient_tuple(rcn_input_rois)
             rcn_input_labels = self.stop_gradient_tuple(rcn_input_labels)
 
-            roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois, 
-                                            factor=roi_factor, shape=(7, 7), data_format=data_format)
-            indices, roi_cropped, rcn_input_labels = _stack_tuple(roi_cropped, rcn_input_labels) # pylint: disable=unbalanced-tuple-unpacking
+            roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois,
+                                            factor=roi_factor, shape=roi_pool_shape, data_format=kwargs['data_format'])
+            indices, roi_cropped, rcn_input_labels = self._stack_tuple(roi_cropped, rcn_input_labels) # pylint: disable=unbalanced-tuple-unpacking
             rcn_clsf = conv_block(roi_cropped, 'f', units=10, name='output_conv', **kwargs)
 
             loss = self.rcn_loss(rcn_clsf, rcn_input_labels)
 
             rcn_clsf = tf.argmax(rcn_clsf, axis=-1)
-            rcn_clsf = _unstack_tuple(rcn_clsf, indices)
+            rcn_clsf = self._unstack_tuple(rcn_clsf, indices)
             rcn_clsf = tf.tuple(rcn_clsf, name='clsf')
             for tensor in rcn_clsf:
                 tf.add_to_collection('rcn_output', tensor)
@@ -349,205 +348,51 @@ class FasterRCNN(TFModel):
             loss = tf.reduce_mean(cls_loss)
         return loss
 
-def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), data_format='channels_last', name='roi-pooling'):
-    """ ROI pooling layer with resize instead max-pool.
+    def parametrize(self, inputs, base):
+        """ Parametrize inputs coordinates with respect of base. """
+        with tf.variable_scope('parametrize'):
+            y = (inputs[:, :, 0] - base[:, 0]) * (1.0 / base[:, 2])
+            x = (inputs[:, :, 1] - base[:, 1]) * (1.0 / base[:, 3])
+            height = tf.log(inputs[:, :, 2] * (1.0 / base[:, 2]))
+            width = tf.log(inputs[:, :, 3] * (1.0 / base[:, 3]))
+            output = tf.stack((y, x, height, width), axis=-1)
+        return output
 
-    Parameters
-    ----------
-        inputs: tf.Tensor
-            input tensor
-        rois: tf.Tuple
-            coordinates of bboxes for each image
-        factor: tuple
-            factor to transform coordinates of bboxes
-        shape: tuple
-            resize to
-        data_format: str, 'channels_last' or 'channels_first'
-        name: str
-            scope name
-
-    Return
-    ------
-        tf.Tuple
-            cropped regions
-    """
-    with tf.variable_scope(name):
-        image_index = tf.constant(0)
-        output_tuple = tf.TensorArray(dtype=tf.float32, size=len(rois))
-
-        for image_index, image_rois in enumerate(rois):
-            image = inputs[image_index]
-            if data_format == 'channels_first':
-                image = tf.transpose(image, [1, 2, 0])
-            cropped_regions = tf.TensorArray(dtype=tf.float32, size=tf.shape(image_rois)[0])
-            roi_index = tf.constant(0)
-
-            cond_rois = lambda roi_index, cropped_regions: tf.less(roi_index, tf.shape(image_rois)[0])
-
-            def _roi_body(roi_index, cropped_regions):
-                with tf.variable_scope('crop-from-image-{}'.format(image_index)):
-                    roi = image_rois[roi_index]
-
-                    spatial_start = roi[:2] * factor
-                    spatial_size = roi[2:] * factor
-
-                    spatial_start = tf.cast(tf.ceil(spatial_start), dtype=tf.int32)
-                    spatial_size = tf.cast(tf.ceil(spatial_size), dtype=tf.int32)
-
-                    spatial_start = tf.maximum(tf.constant((0, 0)), spatial_start)
-                    spatial_start = tf.minimum(tf.shape(image)[:2]-2, spatial_start)
-
-                    spatial_size = tf.maximum(tf.constant((1, 1)), spatial_size)
-                    spatial_size = tf.minimum(tf.shape(image)[:2]-spatial_start, spatial_size)
-
-                    start = tf.concat([spatial_start, tf.constant((0,))], axis=0)
-                    size = tf.concat([spatial_size, (tf.shape(image)[-1], )], axis=0)
-                    cropped = tf.slice(image, start, size)
-                    cropped = tf.image.resize_images(cropped, shape)
-                    cropped.set_shape([*shape, image.get_shape().as_list()[-1]])
-                    if data_format == 'channels_first':
-                        cropped = tf.transpose(cropped, [2, 0, 1])
-                    cropped_regions = cropped_regions.write(roi_index, cropped)
-                return [roi_index+1, cropped_regions]
-
-            _, res = tf.while_loop(cond_rois, _roi_body, [roi_index, cropped_regions])
-            res = res.stack()
-            output_tuple = output_tuple.write(image_index, res)
-        res = _array_to_tuple(output_tuple, len(rois))
-    return res
-
-def non_max_suppression(inputs, scores, batch_size, max_output_size,
-                        score_threshold=0.7, iou_threshold=0.7, nonempty=False, name='nms'):
-    """ Perform NMS on batch of images.
-
-    Parameters
-    ----------
-        inputs: tf.Tuple
-            each components is a set of bboxes for corresponding image
-        scores: tf.Tuple
-            scores of inputs
-        batch_size:
-            size of batch of inputs
-        max_output_size:
-            maximal size of bboxes per image
-        score_threshold: float
-            bboxes with score less the score_threshold will be dropped
-        iou_threshold: float
-            bboxes with iou which is greater then iou_threshold will be merged
-        nonempty: bool
-            if True at least one bbox per image will be returned
-        name: str
-            scope name
-
-    Returns
-    -------
-        tf.Tuple
-            indices of selected bboxes for each image
-
-    """
-    with tf.variable_scope(name):
-        ix = tf.constant(0)
-        filtered_rois = tf.TensorArray(dtype=tf.int32, size=batch_size, infer_shape=False)
-        loop_cond = lambda ix, filtered_rois: tf.less(ix, batch_size)
-        def _loop_body(ix, filtered_rois):
-            indices, score, roi = _filter_tensor(scores[ix], score_threshold, inputs[ix]) # pylint: disable=unbalanced-tuple-unpacking
-            roi_corners = tf.concat([roi[:, :2], roi[:, :2]+roi[:, 2:]], axis=-1)
-            roi_after_nms = tf.image.non_max_suppression(roi_corners, score, max_output_size, iou_threshold)
-            if nonempty:
-                is_not_empty = lambda: filtered_rois.write(ix,
-                                                           tf.cast(tf.gather(indices, roi_after_nms),
-                                                                   dtype=tf.int32))
-                is_empty = lambda: filtered_rois.write(ix, tf.constant([[0]]))
-                filtered_rois = tf.cond(tf.not_equal(tf.shape(indices)[0], 0), is_not_empty, is_empty)
-            else:
-                filtered_rois = filtered_rois.write(ix, tf.cast(tf.gather(indices, roi_after_nms), dtype=tf.int32))
-            return [ix+1, filtered_rois]
-        _, res = tf.while_loop(loop_cond, _loop_body, [ix, filtered_rois])
-        res = _array_to_tuple(res, batch_size, [-1, 1])
-    return res
-
-def _parametrize(inputs, base):
-    """ Parametrize inputs coordinates with respect of base. """
-    with tf.variable_scope('parametrize'):
-        y = (inputs[:, :, 0] - base[:, 0]) * (1.0 / base[:, 2])
-        x = (inputs[:, :, 1] - base[:, 1]) * (1.0 / base[:, 3])
-        height = tf.log(inputs[:, :, 2] * (1.0 / base[:, 2]))
-        width = tf.log(inputs[:, :, 3] * (1.0 / base[:, 3]))
-        output = tf.stack((y, x, height, width), axis=-1)
-    return output
-
-def _unparametrize(inputs, base):
-    """ Unparametrize inputs coordinates with respect of base. """
-    with tf.variable_scope('parametrize'):
-        y = inputs[:, :, 0] * base[:, 2] + base[:, 0]
-        x = inputs[:, :, 1] * base[:, 3] + base[:, 1]
-        height = tf.exp(inputs[:, :, 2]) * base[:, 2]
-        width = tf.exp(inputs[:, :, 3]) * base[:, 3]
-        res = tf.stack((y, x, height, width), axis=-1)
-    return res
-
-def _filter_tensor(inputs, cond, *args):
-    """ Create indixes and elements of inputs which consists for which cond is True.
-
-    Parameters
-    ----------
-        inputs: tf.Tensor
-            input tensor
-        cond: callable or float
-            condition to choose elements. If float, elements which greater the cond will be choosen
-        *args: tf.Tensors:
-            tensors with the same shape as inputs. Will be returned corresponding elements of them.
-
-    Returns
-    -------
-        indices: tf.Tensor
-            indices of elements of inputs for which cond is True
-        tf.Tensors:
-            filtred inputs and tensors from args.
-    """
-    with tf.variable_scope('filter_tensor'):
-        if not callable(cond):
-            callable_cond = lambda x: x > cond
-        else:
-            callable_cond = cond
-        indices = tf.where(callable_cond(inputs))
-        output = (indices, *[tf.gather_nd(x, indices) for x in [inputs, *args]])
-    return output
-
-def _array_to_tuple(inputs, size, shape=None):
-    """ Convert tf.TensorArray to tf.Tuple. """
-    with tf.variable_scope('array_to_tuple'):
-        if shape is None:
-            output = tf.tuple([inputs.read(i) for i in range(size)])
-        else:
-            output = tf.tuple([tf.reshape(inputs.read(i), shape) for i in range(size)])
-    return output
-
-def _get_rois_and_labels(rois, labels, indices, batch_size):
-    """ """
-    with tf.variable_scope('get_rois_and_labels'):
-        output_rois = tf.TensorArray(dtype=tf.float32, size=batch_size)
-        output_labels = tf.TensorArray(dtype=tf.int32, size=batch_size)
-        for i, index in enumerate(indices):
-            output_rois = output_rois.write(i, tf.gather_nd(rois[i], index))
-            output_labels = output_labels.write(i, tf.gather_nd(labels[i], index))
-        output_rois = _array_to_tuple(output_rois, batch_size)
-        output_labels = _array_to_tuple(output_labels, batch_size)
-    return output_rois, output_labels
+    def unparametrize(self, inputs, base):
+        """ Unparametrize inputs coordinates with respect of base. """
+        with tf.variable_scope('parametrize'):
+            y = inputs[:, :, 0] * base[:, 2] + base[:, 0]
+            x = inputs[:, :, 1] * base[:, 3] + base[:, 1]
+            height = tf.exp(inputs[:, :, 2]) * base[:, 2]
+            width = tf.exp(inputs[:, :, 3]) * base[:, 3]
+            res = tf.stack((y, x, height, width), axis=-1)
+        return res
 
 
-def _stack_tuple(inputs, *args):
-    tuple_size = len(inputs)
-    tensor_sizes = [tf.shape(inputs[i])[0] for i in range(tuple_size)]
-    outputs = [tf.concat(x, axis=0) for x in [inputs, *args]]
-    return (tensor_sizes, *outputs)
+    def _get_rois_and_labels(self, rois, labels, indices):
+        with tf.variable_scope('get_rois_and_labels'):
+            output_rois = [] #tf.TensorArray(dtype=tf.float32, size=batch_size)
+            output_labels = [] #tf.TensorArray(dtype=tf.int32, size=batch_size)
+            for i, index in enumerate(indices):
+                output_rois.append(tf.gather_nd(rois[i], index))
+                output_labels.append(tf.gather_nd(labels[i], index))
+            output_rois = tf.tuple(output_rois)
+            output_labels = tf.tuple(output_labels)
+        return output_rois, output_labels
 
-def _unstack_tuple(inputs, tensor_sizes):
-    size = len(tensor_sizes)
-    start_position = tf.constant(0)
-    output = []
-    dim = len(inputs.get_shape().as_list())-1
-    for i in range(size):
-        output.append(tf.slice(inputs, begin=[start_position, *([0]*dim)], size=[tensor_sizes[i], *([-1]*dim)]))
-        start_position = start_position + tensor_sizes[i]
-    return tf.tuple(output)
+
+    def _stack_tuple(self, inputs, *args):
+        tuple_size = len(inputs)
+        tensor_sizes = [tf.shape(inputs[i])[0] for i in range(tuple_size)]
+        outputs = [tf.concat(x, axis=0) for x in [inputs, *args]]
+        return (tensor_sizes, *outputs)
+
+    def _unstack_tuple(self, inputs, tensor_sizes):
+        size = len(tensor_sizes)
+        start_position = tf.constant(0)
+        output = []
+        dim = len(inputs.get_shape().as_list())-1
+        for i in range(size):
+            output.append(tf.slice(inputs, begin=[start_position, *([0]*dim)], size=[tensor_sizes[i], *([-1]*dim)]))
+            start_position = start_position + tensor_sizes[i]
+        return tf.tuple(output)
