@@ -482,8 +482,8 @@ class Pipeline:
         return self.append_action(*args, **kwargs)
 
     def _exec_print(self, batch, action):
-        args_value = self._get_value(action['args'])
-        kwargs_value = self._get_value(action['kwargs'])
+        args_value = self._get_value(action['args'], batch=batch)
+        kwargs_value = self._get_value(action['kwargs'], batch=batch)
 
         args = []
         if len(args_value) == 0:
