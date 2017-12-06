@@ -1175,11 +1175,11 @@ class TFModel(BaseModel):
             x = self._add_output_predictions(tensor, scope, attr_prefix, **kwargs)
             for oper in ops:
                 if oper == 'proba':
-                    self._add_output_proba(tensor, scope, attr_prefix, **kwargs)
+                    self._add_output_proba(x, scope, attr_prefix, **kwargs)
                 elif oper == 'labels':
-                    self._add_output_labels(tensor, scope, attr_prefix, **kwargs)
+                    self._add_output_labels(x, scope, attr_prefix, **kwargs)
                 elif oper == 'accuracy':
-                    self._add_output_accuracy(tensor, scope, attr_prefix, **kwargs)
+                    self._add_output_accuracy(x, scope, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
