@@ -18,15 +18,20 @@ class ResNetAttention(TFModel):
         dict with images and labels (see :meth:`._make_inputs`)
 
     body : dict
-        num_blocks : int
-            number of downsampling/upsampling blocks (default=4)
+        layout : str
+            a sequence of blocks
 
         filters : list of int
-            number of filters in each block (default=[64, 128, 256, 512])
+            number of filters in each block
+
+        trunk : dict
+            config for trunk branch
+
+        mask : dict
+            config for mask branch
 
     head : dict
-        num_classes : int
-            number of semantic classes
+        'Vf'
     """
     @classmethod
     def default_config(cls):
@@ -36,8 +41,6 @@ class ResNetAttention(TFModel):
         config['input_block'].update(dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
 
-        config['body']['layout'] = 'r2r1r0rrr'
-        config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 2, 2, 3, 3, 3]) * filters
         config['body']['trunk'] = dict(bottleneck=True)
         config['body']['mask'] = dict(bottleneck=True, pool_size=3, pool_strides=2)
 
@@ -159,3 +162,28 @@ class ResNetAttention(TFModel):
                 else:
                     x = cls.attention(x, level=int(b), filters=filters[i], name='attention-%d' % i, **kwargs)
         return x
+
+
+class ResNetAttention56(ResNetAttention):
+    """ The ResNetAttention-56 architecture """
+    @classmethod
+    def default_config(cls):
+        config = ResNetAttention.default_config()
+
+        filters = config['input_block']['filters']   # number of filters in the first block
+        config['body']['layout'] = 'r2r1r0rrr'
+        config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 2, 2, 3, 3, 3]) * filters
+
+        return config
+
+class ResNetAttention92(ResNetAttention):
+    """ The ResNetAttention-92 architecture """
+    @classmethod
+    def default_config(cls):
+        config = ResNetAttention.default_config()
+
+        filters = config['input_block']['filters']   # number of filters in the first block
+        config['body']['layout'] = 'r2r11r000rrr'
+        config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3]) * filters
+
+        return config
