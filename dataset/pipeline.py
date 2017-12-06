@@ -26,19 +26,19 @@ PIPELINE_ID = '#_pipeline'
 IMPORT_MODEL_ID = '#_import_model'
 TRAIN_MODEL_ID = '#_train_model'
 PREDICT_MODEL_ID = '#_predict_model'
-PRINT_VARIABLE_ID = '#_print_variable'
 INC_VARIABLE_ID = '#_inc_variable'
 UPDATE_VARIABLE_ID = '#_update_variable'
 CALL_ID = '#_call'
+PRINT_ID = '#_print'
 
 _ACTIONS = {
     IMPORT_MODEL_ID: '_exec_import_model',
     TRAIN_MODEL_ID: '_exec_train_model',
     PREDICT_MODEL_ID: '_exec_predict_model',
-    PRINT_VARIABLE_ID: '_exec_print_variable',
     INC_VARIABLE_ID: '_exec_inc_variable',
     UPDATE_VARIABLE_ID: '_exec_update_variable',
-    CALL_ID: '_exec_call'
+    CALL_ID: '_exec_call',
+    PRINT_ID: '_exec_print',
 }
 
 
@@ -476,17 +476,27 @@ class Pipeline:
         else:
             raise KeyError("No such variable %s exist" % var_name)
 
-    def print_variable(self, name):
-        """ Print a value of a given variable during pipeline execution """
-        self._action_list.append({'name': PRINT_VARIABLE_ID, 'var_name': name})
-        return self.append_action()
+    def print(self, *args, **kwargs):
+        """ Print a value during pipeline execution """
+        self._action_list.append({'name': PRINT_ID})
+        return self.append_action(*args, **kwargs)
 
-    def _exec_print_variable(self, batch, action):
-        if isinstance(action['var_name'], NamedExpression):
-            value = action['var_name'].get(batch)
+    def _exec_print(self, batch, action):
+        args_value = self._get_value(action['args'], batch=batch)
+        kwargs_value = self._get_value(action['kwargs'], batch=batch)
+
+        args = []
+        if len(args_value) == 0:
+            pass
+        elif len(args_value) == 1:
+            args.append(args_value[0])
         else:
-            value = self.get_variable(action['var_name'])
-        print(value)
+            args.append(args_value)
+        if len(kwargs_value) == 0:
+            pass
+        else:
+            args.append(kwargs_value)
+        print(*args)
 
     def save_to_variable(self, name, *args, **kwargs):
         """ Save a value to a given variable during pipeline execution """
