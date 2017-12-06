@@ -12,3 +12,4 @@ from .inception_v4 import Inception_v4
 from .squeezenet import SqueezeNet
 from .mobilenet import MobileNet
 from .densenet import DenseNet, DenseNet121, DenseNet169, DenseNet201, DenseNet264
+from .resattention import ResNetAttention
