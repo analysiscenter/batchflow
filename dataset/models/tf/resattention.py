@@ -95,8 +95,8 @@ class ResNetAttention(TFModel):
             c = ResNet.block(b, name='resblock_2', **kwargs)
 
             if level > 0:
-                i2 = cls.mask((b, b), level=level-1, name='submask-%d' % level, **kwargs)
-                c = ResNet.block(c + i2, name='resblock_3', **kwargs)
+                i = cls.mask((b, b), level=level-1, name='submask-%d' % level, **kwargs)
+                c = ResNet.block(c + i, name='resblock_3', **kwargs)
 
             size = cls.spatial_shape(resize_to, data_format=kwargs.get('data_format'))
             x = tf.image.resize_bilinear(c, size=size, name='interpolation')
