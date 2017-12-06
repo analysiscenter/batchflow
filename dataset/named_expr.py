@@ -63,6 +63,26 @@ class NamedExpression:
         self.get(*args, **kwargs).update(value)
 
 
+def eval_expr(expr, batch, pipeline=None, model=None):
+    """ Evaluate a named expression recursively """
+    args = dict(batch=batch, pipeline=pipeline, model=model)
+    if isinstance(expr, NamedExpression):
+        expr = expr.get(**args)
+    elif isinstance(expr, (list, tuple)):
+        _expr = []
+        for val in expr:
+            _expr.append(eval_expr(val, **args))
+        expr = type(expr)(_expr)
+    elif isinstance(expr, dict):
+        _expr = type(expr)()
+        for key, val in expr.items():
+            key = eval_expr(key, **args)
+            val = eval_expr(val, **args)
+            _expr.update({key: val})
+        expr = _expr
+    return expr
+
+
 class B(NamedExpression):
     """ Batch component name """
     def __init__(self, name=None, copy=True):
@@ -107,6 +127,11 @@ class C(NamedExpression):
 
 class F(NamedExpression):
     """ A function, method or any other callable """
+    def __init__(self, name=None, *args, **kwargs):
+        super().__init__(name)
+        self.args = args
+        self.kwargs = kwargs
+
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
@@ -118,7 +143,9 @@ class F(NamedExpression):
             args += [batch]
         if model is not None:
             args += [model]
-        return name(*args)
+        fargs = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
+        fkwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
+        return name(*args, *fargs, **fkwargs)
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
@@ -139,23 +166,3 @@ class V(NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.set_variable(name, value)
-
-
-def eval_expr(expr, batch, pipeline=None, model=None):
-    """ Evaluate a named expression recursively """
-    args = dict(batch=batch, pipeline=pipeline, model=model)
-    if isinstance(expr, NamedExpression):
-        expr = expr.get(**args)
-    elif isinstance(expr, (list, tuple)):
-        _expr = []
-        for val in expr:
-            _expr.append(eval_expr(val, **args))
-        expr = type(expr)(_expr)
-    elif isinstance(expr, dict):
-        _expr = type(expr)()
-        for key, val in expr.items():
-            key = eval_expr(key, **args)
-            val = eval_expr(val, **args)
-            _expr.update({key: val})
-        expr = _expr
-    return expr

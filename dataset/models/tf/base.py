@@ -1172,7 +1172,7 @@ class TFModel(BaseModel):
                 ctx = None
             attr_prefix = current_prefix + '_' if current_prefix else ''
 
-            self._add_output_predictions(tensor, scope, attr_prefix, **kwargs)
+            x = self._add_output_predictions(tensor, scope, attr_prefix, **kwargs)
             for oper in ops:
                 if oper == 'proba':
                     self._add_output_proba(tensor, scope, attr_prefix, **kwargs)
@@ -1188,6 +1188,7 @@ class TFModel(BaseModel):
         _ = scope, kwargs
         x = tf.identity(inputs, name='predictions')
         self.store_to_attr(attr_prefix + 'predictions', x)
+        return x
 
     def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
         _ = scope, kwargs
