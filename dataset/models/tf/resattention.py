@@ -91,15 +91,15 @@ class ResNetAttention(TFModel):
         with tf.variable_scope(name):
             inputs, resize_to = inputs
             x = conv_block(inputs, layout='p', name='pool', **kwargs)
-            x1 = ResNet.block(x, name='resblock_1', **kwargs)
-            x2 = ResNet.block(x1, name='resblock_2', **kwargs)
+            b = ResNet.block(x, name='resblock_1', **kwargs)
+            c = ResNet.block(b, name='resblock_2', **kwargs)
 
             if level > 0:
-                i2 = cls.mask((x1, x1), level=level-1, name='submask-%d' % level, **kwargs)
-                x2 = ResNet.block(x2 + i2, name='resblock_3', **kwargs)
+                i2 = cls.mask((b, b), level=level-1, name='submask-%d' % level, **kwargs)
+                c = ResNet.block(c + i2, name='resblock_3', **kwargs)
 
             size = cls.spatial_shape(resize_to, data_format=kwargs.get('data_format'))
-            x = tf.image.resize_bilinear(x2, size=size, name='interpolation')
+            x = tf.image.resize_bilinear(c, size=size, name='interpolation')
         return x
 
     @classmethod
