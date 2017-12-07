@@ -13,3 +13,4 @@ from .squeezenet import SqueezeNet
 from .mobilenet import MobileNet
 from .densenet import DenseNet, DenseNet121, DenseNet169, DenseNet201, DenseNet264
 from .resattention import ResNetAttention, ResNetAttention56, ResNetAttention92
+from .densenet_fc import DenseNetFC, DenseNetFC56, DenseNetFC67, DenseNetFC103

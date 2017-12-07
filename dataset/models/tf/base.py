@@ -486,7 +486,7 @@ class TFModel(BaseModel):
                 predictions = self.graph.get_tensor_by_name(scope + prediction_scope + "predictions:0")
                 targets = self.graph.get_tensor_by_name(scope + target_scope + "targets:0")
             except KeyError:
-                raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % self.name)
+                raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % type(self).__name__)
             else:
                 tf.losses.add_loss(loss(targets, predictions, **args))
 

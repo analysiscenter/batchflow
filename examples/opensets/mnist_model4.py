@@ -8,7 +8,7 @@ import tensorflow as tf
 sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
 from dataset.opensets import MNIST
-from dataset.models.tf import FCN32, FCN16, FCN8, LinkNet, UNet, VNet
+from dataset.models.tf import FCN32, FCN16, FCN8, LinkNet, UNet, VNet, DenseNetFC56
 
 
 def make_masks(batch, *args):
@@ -38,7 +38,7 @@ if __name__ == "__main__":
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
-                .init_model('dynamic', VNet, 'conv',
+                .init_model('dynamic', DenseNetFC56, 'conv',
                             config={'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
                                     'inputs': dict(images={'shape': (None, None, None, 1)},
@@ -48,10 +48,12 @@ if __name__ == "__main__":
                                     })
                                     #'output': dict(ops=['labels', 'accuracy'])})
                 .train_model('conv', fetches='loss',
-                                     feed_dict={'images': F(make3d_images), #B('images'),
-                                                'masks': F(make3d_masks)},
+                                     feed_dict={'images': B('images'),
+                                                'masks': F(make_masks)},
+                                     #feed_dict={'images': F(make3d_images), #B('images'),
+                                     #           'masks': F(make3d_masks)},
                              save_to=V('current_loss'))
-                .print_variable('current_loss')
+                .print(V('current_loss'))
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
     train_pp = (train_template << mnist.train)
