@@ -3,7 +3,6 @@ Fully Convolutional DenseNets for Semantic Segmentation
 <https://arxiv.org/abs/1611.09326>`_"
 """
 import tensorflow as tf
-import numpy as np
 
 from .layers import conv_block
 from . import TFModel
@@ -40,10 +39,10 @@ class DenseNetFC(TFModel):
 
         config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=12, bottleneck=False)
         config['body']['transition_up'] = dict(layout='nat', kernel_size=3, strides=2,
-                                                  pool_size=2, pool_strides=2)
+                                               pool_size=2, pool_strides=2)
         config['body']['transition_down'] = dict(layout='nacdp', kernel_size=1, strides=1,
-                                                  pool_size=2, pool_strides=2, dropout_rate=.2,
-                                                  reduction_factor=1)
+                                                 pool_size=2, pool_strides=2, dropout_rate=.2,
+                                                 reduction_factor=1)
 
         config['head'].update(dict(layout='c', kernel_size=1))
 
