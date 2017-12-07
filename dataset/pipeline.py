@@ -369,7 +369,7 @@ class Pipeline:
         self - in order to use it in the pipeline chains
         """
         if not self.has_variable(name):
-            logging.warning("Pipeline variable '%s' was not initialized", name)
+            logging.warning("Pipeline variable '%s' has not been initialized", name)
         self._variables[name].update({'value': value})
 
     def assign_variable(self, name, value):
@@ -463,18 +463,19 @@ class Pipeline:
 
     def _exec_update_variable(self, batch, action):
         var_name = self._get_value(action['var_name'], batch)
-        if self.has_variable(var_name):
-            if self._variables[var_name]['lock'] is not None:
-                self._variables[var_name]['lock'].acquire()
+        if not self.has_variable(var_name):
+            logging.warning("Pipeline variable '%s' has not been initialized", action['var_name'])
+            self.init_variable(var_name)
 
-            value = self._get_value(action['value'], batch)
+        if self._variables[var_name]['lock'] is not None:
+            self._variables[var_name]['lock'].acquire()
 
-            V(var_name).set(value, batch=batch, mode=action['mode'])
+        value = self._get_value(action['value'], batch)
 
-            if self._variables[var_name]['lock'] is not None:
-                self._variables[var_name]['lock'].release()
-        else:
-            raise KeyError("No such variable %s exist" % var_name)
+        V(var_name).set(value, batch=batch, mode=action['mode'])
+
+        if self._variables[var_name]['lock'] is not None:
+            self._variables[var_name]['lock'].release()
 
     def print(self, *args, **kwargs):
         """ Print a value during pipeline execution """

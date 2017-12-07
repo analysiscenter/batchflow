@@ -414,7 +414,7 @@ class TFModel(BaseModel):
                              "'{}' with one-hot-encoding transform".format(input_name))
 
         num_classes = self.num_classes(input_name)
-        axis = -1 if self.data_format(input_name) else 1
+        axis = -1 if self.data_format(input_name) == 'channels_last' else 1
         tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
         return tensor
 
@@ -460,17 +460,12 @@ class TFModel(BaseModel):
 
     def _make_loss(self, config):
         """ Return a loss function from config """
-        loss = self.get('loss', config)
+        loss, args = self._unpack_fn_from_config('loss', config)
 
-        if isinstance(loss, dict):
-            target_scope = loss.get('targets_scope', 'inputs')
-            target_scope = '/' + target_scope + '/' if target_scope else ''
-            prediction_scope = loss.get('predictions_scope', '')
-            prediction_scope = '/' + prediction_scope + '/' if prediction_scope else ''
-            loss = loss.get('loss')
-        else:
-            target_scope = 'inputs/'
-            prediction_scope = ''
+        target_scope = args.pop('targets_scope', 'inputs')
+        target_scope = target_scope + '/' if target_scope else ''
+        prediction_scope = args.pop('predictions_scope', '')
+        prediction_scope = prediction_scope + '/' if prediction_scope else ''
 
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
@@ -493,7 +488,7 @@ class TFModel(BaseModel):
             except KeyError:
                 raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % self.name)
             else:
-                tf.losses.add_loss(loss(targets, predictions))
+                tf.losses.add_loss(loss(targets, predictions, **args))
 
     def _make_decay(self, config):
         decay_name, decay_args = self._unpack_fn_from_config('decay', config)
@@ -604,7 +599,7 @@ class TFModel(BaseModel):
         -------
         number of channels : int
         """
-        return -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     def num_channels(self, tensor, **kwargs):
         """ Return the number of channels in the tensor
