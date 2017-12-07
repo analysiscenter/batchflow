@@ -462,6 +462,8 @@ class TFModel(BaseModel):
         """ Return a loss function from config """
         loss = self.get('loss', config)
 
+        data_format = config['output']['data_format']
+
         if isinstance(loss, dict):
             target_scope = loss.get('targets_scope', 'inputs')
             target_scope = '/' + target_scope + '/' if target_scope else ''
@@ -1192,7 +1194,8 @@ class TFModel(BaseModel):
 
     def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
         _ = scope, kwargs
-        proba = tf.nn.softmax(inputs, name='predicted_proba')
+        axis = -1 if kwargs['data_format'] == 'channels_last' else 1
+        proba = tf.nn.softmax(inputs, name='predicted_proba', dim=axis)
         self.store_to_attr(attr_prefix + 'predicted_proba', proba)
 
     def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
