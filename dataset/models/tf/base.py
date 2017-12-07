@@ -604,7 +604,7 @@ class TFModel(BaseModel):
         -------
         number of channels : int
         """
-        return -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     def num_channels(self, tensor, **kwargs):
         """ Return the number of channels in the tensor
