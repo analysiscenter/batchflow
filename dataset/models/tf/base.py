@@ -1213,6 +1213,7 @@ class TFModel(BaseModel):
         except KeyError:
             self._add_output_labels(inputs, scope, attr_prefix, **kwargs)
             predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+        predicted_labels = tf.cast(predicted_labels, true_labels.dtype)
         equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
         accuracy = tf.reduce_mean(equals, name='accuracy')
         self.store_to_attr(attr_prefix + 'accuracy', accuracy)
