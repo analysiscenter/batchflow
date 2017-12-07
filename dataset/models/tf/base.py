@@ -465,7 +465,7 @@ class TFModel(BaseModel):
         target_scope = args.pop('targets_scope', 'inputs')
         target_scope = target_scope + '/' if target_scope else ''
         prediction_scope = args.pop('predictions_scope', '')
-        prediction_scope =  prediction_scope + '/' if prediction_scope else ''
+        prediction_scope = prediction_scope + '/' if prediction_scope else ''
 
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
