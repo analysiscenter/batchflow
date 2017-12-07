@@ -59,6 +59,7 @@ class DenseNet(TFModel):
     def build_config(self, names=None):
         config = super().build_config(names)
         config['head']['units'] = self.num_classes('targets')
+        config['head']['filters'] = self.num_classes('targets')
         return config
 
     @classmethod
@@ -147,13 +148,7 @@ class DenseNet(TFModel):
 
 
 class DenseNet121(DenseNet):
-    """ The original DenseNet-121 architecture
-
-    References
-    ----------
-    .. Huang G. et al. "r "Densely Connected Convolutional Networks""
-       Arxiv.org `<https://arxiv.org/abs/1608.06993>`_
-    """
+    """ The original DenseNet-121 architecture """
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
@@ -161,13 +156,7 @@ class DenseNet121(DenseNet):
         return config
 
 class DenseNet169(DenseNet):
-    """ The original DenseNet-169 architecture
-
-    References
-    ----------
-    .. Huang G. et al. "r "Densely Connected Convolutional Networks""
-       Arxiv.org `<https://arxiv.org/abs/1608.06993>`_
-    """
+    """ The original DenseNet-169 architecture """
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
@@ -175,13 +164,7 @@ class DenseNet169(DenseNet):
         return config
 
 class DenseNet201(DenseNet):
-    """ The original DenseNet-201 architecture
-
-    References
-    ----------
-    .. Huang G. et al. "r "Densely Connected Convolutional Networks""
-       Arxiv.org `<https://arxiv.org/abs/1608.06993>`_
-    """
+    """ The original DenseNet-201 architecture """
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
@@ -189,13 +172,7 @@ class DenseNet201(DenseNet):
         return config
 
 class DenseNet264(DenseNet):
-    """ The original DenseNet-264 architecture
-
-    References
-    ----------
-    .. Huang G. et al. "r "Densely Connected Convolutional Networks""
-       Arxiv.org `<https://arxiv.org/abs/1608.06993>`_
-    """
+    """ The original DenseNet-264 architecture """
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
