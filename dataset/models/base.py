@@ -22,9 +22,8 @@ class BaseModel:
         by calling `self.load(**config['load'])`.
 
     """
-    def __init__(self, name=None, config=None, *args, **kwargs):
+    def __init__(self, config=None, *args, **kwargs):
         self.config = config or {}
-        self.name = name or self.__class__.__name__
         if self.get('build', self.config, True):
             self.build(*args, **kwargs)
         load = self.get('load', self.config, False)
