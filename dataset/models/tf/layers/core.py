@@ -65,6 +65,6 @@ def alpha_dropout(inputs, rate=0.5, noise_shape=None, seed=None, training=False,
 
     Klambauer G. et al "`Self-Normalizing Neural Networks <https://arxiv.org/abs/1706.02515>`_"
     """
-    def dropped_inputs():
+    def _dropped_inputs():
         return tf.contrib.nn.alpha_dropout(inputs, 1-rate, noise_shape=noise_shape, seed=seed)
-    return tf.cond(training, dropped_inputs, lambda: tf.identity(inputs))
+    return tf.cond(training, _dropped_inputs, lambda: tf.identity(inputs), name=name)
