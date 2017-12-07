@@ -224,10 +224,10 @@ class TFModel(BaseModel):
                 config = self.build_config()
                 self._build(config)
 
-                self._make_loss(config)
-                self.store_to_attr('loss', tf.losses.get_total_loss())
-
                 if self.train_step is None:
+                    self._make_loss(config)
+                    self.store_to_attr('loss', tf.losses.get_total_loss())
+
                     optimizer = self._make_optimizer(config)
 
                     if optimizer:
@@ -604,7 +604,7 @@ class TFModel(BaseModel):
         -------
         number of channels : int
         """
-        return -1 if data_format == "channels_last" or data_format.startswith("NC") else 1
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     def num_channels(self, tensor, **kwargs):
         """ Return the number of channels in the tensor
