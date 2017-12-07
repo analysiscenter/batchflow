@@ -206,7 +206,6 @@ class FCN16(FCN):
             x, skip = inputs
             x = FCN32.body(x, filters=filters, num_classes=num_classes, name='fcn32', **kwargs)
             x = conv_block(x, 't', filters=num_classes, kernel_size=kernel, name='fcn32_2', strides=2, **kwargs)
-
             skip = conv_block(skip, 'c', filters=num_classes, kernel_size=1, name='pool', **kwargs)
             x = cls.crop(x, skip, kwargs.get('data_format'))
             output = tf.add(x, skip, name='output')
@@ -283,7 +282,7 @@ class FCN8(FCN):
             x = FCN16.body((x, skip1), filters=filters, num_classes=num_classes, name='fcn16', **kwargs)
             x = conv_block(x, 't', num_classes, kernel, name='fcn16_2', strides=2, **kwargs)
 
-            skip2 = conv_block(skip2, 'c', num_classes, 1, name='pool2')
+            skip2 = conv_block(skip2, 'c', num_classes, 1, name='pool2', **kwargs)
 
             x = cls.crop(x, skip2, kwargs.get('data_format'))
             output = tf.add(x, skip2, name='output')

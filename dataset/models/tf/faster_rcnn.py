@@ -75,6 +75,7 @@ class FasterRCNN(TFModel):
             self.map_shape = np.array(inputs.get_shape().as_list()[2:4])
         self.n_anchors = self.map_shape[0] * self.map_shape[1] * 9
 
+        print(self.map_shape)
         self.image_shape = image_shape
         self.create_anchors_tensors()
 
@@ -250,18 +251,23 @@ class FasterRCNN(TFModel):
             max_ious = np.max(ious, axis=1)
             best_bbox_for_anchor = np.argmax(ious, axis=1)
 
-            anchor_reg.append(image_bboxes[best_bbox_for_anchor])
-            anchor_labels.append(image_labels[best_bbox_for_anchor].reshape(-1))
+            _anchor_reg = image_bboxes[best_bbox_for_anchor]
+            _anchor_labels = image_labels[best_bbox_for_anchor].reshape(-1)
 
             # anchor has at least one gt-bbox with IoU >_IOU_HIGH
             image_clsf = np.array(max_ious > _IOU_HIGH, dtype=np.int32)
 
             # anchor intersects with at least one bbox
             best_anchor_for_bbox = np.argmax(ious, axis=0)
+
             image_clsf[best_anchor_for_bbox] = 1
+            _anchor_reg[best_anchor_for_bbox] = image_bboxes
+            _anchor_labels[best_anchor_for_bbox] = image_labels
 
             # max IoU for anchor < _IOU_LOW
             image_clsf[np.logical_and(max_ious < _IOU_LOW, image_clsf == 0)] = -1
+            anchor_reg.append(_anchor_reg)
+            anchor_labels.append(_anchor_labels)
             anchor_clsf.append(image_clsf)
         return np.array(anchor_reg), np.array(anchor_clsf), np.array(anchor_labels)
 

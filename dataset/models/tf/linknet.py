@@ -77,7 +77,7 @@ class LinkNet(TFModel):
                 x = cls.decoder_block(x, filters=ifilters, name='decoder-'+str(i), **kwargs)
                 x = cls.crop(x, encoder_outputs[-i-2], data_format=kwargs.get('data_format'))
                 x = tf.add(x, encoder_outputs[-2-i])
-            x = cls.upsampling_block(x, filters[0], 'decoder-'+str(i+1), **kwargs)
+            x = cls.decoder_block(x, filters[0], 'decoder-'+str(i+1), **kwargs)
             x = cls.crop(x, inputs, data_format=kwargs.get('data_format'))
 
         return x
@@ -118,7 +118,7 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        num_filters = inputs.get_shape()[-1].value // 4
+        num_filters = cls.get_channels_shape(inputs, kwargs.get('data_format')) // 4
         return conv_block(inputs, 'cna tna cna', [num_filters, num_filters, filters], [1, 3, 1],
                           name=name, strides=[1, 2, 1], **kwargs)
 

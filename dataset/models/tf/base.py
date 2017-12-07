@@ -414,7 +414,7 @@ class TFModel(BaseModel):
                              "'{}' with one-hot-encoding transform".format(input_name))
 
         num_classes = self.num_classes(input_name)
-        axis = -1 if self.data_format(input_name) else 1
+        axis = -1 if self.data_format(input_name) == 'channels_last' else 1
         tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
         return tensor
 
@@ -604,7 +604,7 @@ class TFModel(BaseModel):
         -------
         number of channels : int
         """
-        return -1 if data_format == "channels_last" or not data_format.startswith("NC") else 0
+        return -1 if data_format == "channels_last" or data_format.startswith("NC") else 1
 
     def num_channels(self, tensor, **kwargs):
         """ Return the number of channels in the tensor
