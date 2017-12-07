@@ -224,10 +224,10 @@ class TFModel(BaseModel):
                 config = self.build_config()
                 self._build(config)
 
-                self._make_loss(config)
-                self.store_to_attr('loss', tf.losses.get_total_loss())
-
                 if self.train_step is None:
+                    self._make_loss(config)
+                    self.store_to_attr('loss', tf.losses.get_total_loss())
+
                     optimizer = self._make_optimizer(config)
 
                     if optimizer:
