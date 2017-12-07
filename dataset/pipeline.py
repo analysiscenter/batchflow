@@ -670,7 +670,6 @@ class Pipeline:
         >>> pipeline
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        model_class = self._get_value(model_class)
         name = self._get_value(name)
         with self._models_lock:
             ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
