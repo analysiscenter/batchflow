@@ -101,7 +101,7 @@ class ResNetAttention(TFModel):
                 i = cls.mask((b, b), level=level-1, name='submask-%d' % level, **kwargs)
                 c = ResNet.block(c + i, name='resblock_3', **kwargs)
 
-            size = cls.spatial_shape(resize_to, data_format=kwargs.get('data_format'))
+            size = cls.get_spatial_shape(resize_to, data_format=kwargs.get('data_format'))
             x = tf.image.resize_bilinear(c, size=size, name='interpolation')
         return x
 
@@ -131,6 +131,7 @@ class ResNetAttention(TFModel):
             x = conv_block(m, layout='nac nac', kernel_size=1, name='scale',
                            **{**kwargs, 'filters': kwargs['filters']*4})
             x = tf.sigmoid(x, name='attention_map')
+            print(x)
             x = (1 + x) * t
 
             x = ResNet.block(x, name='last', **kwargs)

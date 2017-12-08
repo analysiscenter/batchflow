@@ -118,7 +118,7 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        num_filters = inputs.get_shape()[-1].value // 4
+        num_filters = cls.get_num_channels(inputs, kwargs.get('data_format')) // 4
         return conv_block(inputs, 'cna tna cna', [num_filters, num_filters, filters], [1, 3, 1],
                           name=name, strides=[1, 2, 1], **kwargs)
 
