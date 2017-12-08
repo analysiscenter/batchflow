@@ -629,7 +629,7 @@ class TFModel(BaseModel):
         classes = config.get('classes')
         if isinstance(classes, int):
             return np.arange(classes)
-        return classes
+        return np.asarray(classes)
 
     def num_classes(self, tensor):
         """ Return the  number of classes """
