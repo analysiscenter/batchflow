@@ -335,8 +335,9 @@ class ImagesBatch(BaseImagesBatch):
         """ Resize one image """
         image = self.get(ix, components)
         full_shape = np.array([0 if s > 1 else -1 for s in image.shape])
-        image = np.squeeze(image)
-        factor = 1. * np.asarray([*shape]) / np.asarray(image.shape[:2])
+        if len(image.shape) > 2:
+            shape = list(shape) + [image.shape[3]]
+        factor = 1. * np.asarray([*shape]) / np.asarray(image.shape)
         new_image = scipy.ndimage.interpolation.zoom(image, factor, order=3)
 
         if np.any(full_shape < 0):
