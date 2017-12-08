@@ -83,8 +83,8 @@ class SqueezeNet(TFModel):
                     x = conv_block(x, 'p', name='max-pool-%d' % i, **kwargs)
 
                 if bypass is not None:
-                    bypass_channels = cls.get_channels_shape(bypass, kwargs.get('data_format'))
-                    x_channels = cls.get_channels_shape(x, kwargs.get('data_format'))
+                    bypass_channels = cls.get_num_channels(bypass, kwargs.get('data_format'))
+                    x_channels = cls.get_num_channels(x, kwargs.get('data_format'))
 
                     if x_channels != bypass_channels:
                         bypass = conv_block(bypass, 'c', x_channels, 1, name='bypass-%d' % i, **kwargs)

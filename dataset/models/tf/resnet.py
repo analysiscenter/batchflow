@@ -184,8 +184,8 @@ class ResNet(TFModel):
                                   downsample=downsample, **kwargs)
 
             data_format = kwargs.get('data_format')
-            inputs_channels = cls.get_channels_shape(inputs, data_format)
-            x_channels = cls.get_channels_shape(x, data_format)
+            inputs_channels = cls.get_num_channels(inputs, data_format)
+            x_channels = cls.get_num_channels(x, data_format)
 
             if inputs_channels != x_channels or downsample:
                 strides = 2 if downsample else 1
