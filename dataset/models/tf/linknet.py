@@ -46,10 +46,7 @@ class LinkNet(TFModel):
     def build_config(self, names=None):
         config = super().build_config(names)
         config['head']['num_classes'] = self.num_classes('targets')
-        for _, tensor_dict in self._inputs.items():
-            if tensor_dict['config']['name'] == 'targets':
-                config['head']['targets'] = tensor_dict['tensor']
-                break
+        config['head']['targets'] = self.targets
         return config
 
     @classmethod
