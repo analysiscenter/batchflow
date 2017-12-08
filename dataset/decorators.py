@@ -226,9 +226,9 @@ class ModelDirectory:
                     global_config = config or dict()
                     local_config = init_config or dict()
 
-                    global_config.update(_calc_expr(global_config))
-                    global_config.update(_calc_expr(local_config))
-                    return model_class(config=global_config)
+                    local_config = _calc_expr(local_config)
+                    local_config.update(_calc_expr(global_config))
+                    return model_class(config=local_config)
 
                 _model_definition_method.__name__ = name
                 return _model_definition_method

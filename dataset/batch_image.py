@@ -334,17 +334,10 @@ class ImagesBatch(BaseImagesBatch):
     def _resize_one(self, ix, components='images', shape=None):
         """ Resize one image """
         image = self.get(ix, components)
-        full_shape = np.array([0 if s > 1 else -1 for s in image.shape])
-        image = np.squeeze(image)
         factor = 1. * np.asarray([*shape]) / np.asarray(image.shape[:2])
+        if len(image.shape) > 2:
+            factor = np.concatenate((factor, [1.] * len(image.shape[2:])))
         new_image = scipy.ndimage.interpolation.zoom(image, factor, order=3)
-
-        if np.any(full_shape < 0):
-            new_shape = np.zeros_like(full_shape)
-            new_shape[full_shape == 0] = new_image.shape
-            new_shape[full_shape == -1] = 1
-            new_image = new_image.reshape(new_shape)
-
         return new_image
 
     def _preserve_shape(self, image, shape, crop=CROP_CENTER):
