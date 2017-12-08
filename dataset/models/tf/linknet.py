@@ -50,8 +50,6 @@ class LinkNet(TFModel):
             if tensor_dict['config']['name'] == 'targets':
                 config['head']['targets'] = tensor_dict['tensor']
                 break
-
-        # config['head']['targets'] = self._inputs['masks']['tensor']
         return config
 
     @classmethod
@@ -136,6 +134,8 @@ class LinkNet(TFModel):
         ----------
         inputs : tf.Tensor
             input tensor
+        targets : tf.Tensor
+            target tensor
         num_classes : int
             number of classes (and number of filters in the last convolution)
         name : str
