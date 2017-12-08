@@ -234,6 +234,21 @@ class Pipeline:
         """ Return index length """
         return len(self.index)
 
+    def set_config(self, config, clear=False):
+        """ Update pipeline's config
+
+        Parameters
+        ----------
+        config: dict
+            configuration parameters
+        clear : bool
+            whether to clear the current config
+        """
+        if clear:
+            self.config = {}
+        self.config.update(config)
+        return self
+
     def has_variable(self, name):
         """ Check if a variable exists
         Args:
