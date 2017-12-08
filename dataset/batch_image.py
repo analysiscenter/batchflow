@@ -336,7 +336,7 @@ class ImagesBatch(BaseImagesBatch):
         image = self.get(ix, components)
         full_shape = np.array([0 if s > 1 else -1 for s in image.shape])
         if len(image.shape) > 2:
-            shape = list(shape) + [image.shape[3]]
+            shape = list(shape) + [image.shape[2]]
         factor = 1. * np.asarray([*shape]) / np.asarray(image.shape)
         new_image = scipy.ndimage.interpolation.zoom(image, factor, order=3)
 
