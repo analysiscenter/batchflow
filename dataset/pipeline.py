@@ -345,9 +345,11 @@ class Pipeline:
 
         Parameters
         ----------
-        variables : dict
-                    key : str - a variable name,
-                    value : dict -  a variable value and params (see `init_variable`)
+        variables : dict or tuple
+            if dict
+                key : str - a variable name,
+                value : dict -  a variable value and params (see `init_variable`)
+            if tuple, contains variable names which will have None as default values
         Returns
         -------
         self - in order to use it in the pipeline chains
@@ -360,7 +362,11 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
+        if not isinstance(variables, dict):
+            variables = dict(zip(variables, [None] * len(variables)))
+
         for name, var in variables.items():
+            var = var or {}
             self.init_variable(name, **var)
         return self
 
@@ -386,6 +392,7 @@ class Pipeline:
         if not self.has_variable(name):
             logging.warning("Pipeline variable '%s' has not been initialized", name)
         self._variables[name].update({'value': value})
+        return self
 
     def assign_variable(self, name, value):
         """ Assign a value to a variable
@@ -420,12 +427,6 @@ class Pipeline:
     def delete_all_variables(self):
         """ Delete all variables """
         self._variables = dict()
-
-    def append_variable(self, name, value=None, var=None):
-        """ Append a value to a pipeline variable """
-        if value is None and var is not None:
-            value = self.get_variable(var)
-        self.get_variable(name).append(value)
 
     def inc_variable(self, name):
         """ Increment a value of a given variable during pipeline execution """
