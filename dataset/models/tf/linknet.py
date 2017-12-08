@@ -46,6 +46,12 @@ class LinkNet(TFModel):
     def build_config(self, names=None):
         config = super().build_config(names)
         config['head']['num_classes'] = self.num_classes('targets')
+        for _, tensor_dict in self._inputs.items():
+            if tensor_dict['config']['name'] == 'targets':
+                config['head']['targets'] = tensor_dict['tensor']
+                break
+
+        # config['head']['targets'] = self._inputs['masks']['tensor']
         return config
 
     @classmethod
@@ -123,7 +129,7 @@ class LinkNet(TFModel):
                           name=name, strides=[1, 2, 1], **kwargs)
 
     @classmethod
-    def head(cls, inputs, num_classes, name='head', **kwargs):
+    def head(cls, inputs, targets, num_classes, name='head', **kwargs):
         """ 3x3 transposed convolution, 3x3 convolution and 2x2 transposed convolution
 
         Parameters
@@ -144,4 +150,5 @@ class LinkNet(TFModel):
 
         x = conv_block(inputs, 'tna cna t', [filters, filters, num_classes], [3, 3, 2],
                        strides=[2, 1, 2], name=name, **kwargs)
+        x = cls.crop(x, targets)
         return x
