@@ -147,5 +147,6 @@ class LinkNet(TFModel):
 
         x = conv_block(inputs, 'tna cna t', [filters, filters, num_classes], [3, 3, 2],
                        strides=[2, 1, 2], name=name, **kwargs)
-        x = cls.crop(x, targets)
+
+        x = cls.crop(x, targets, data_format=kwargs.get('data_format'))
         return x
