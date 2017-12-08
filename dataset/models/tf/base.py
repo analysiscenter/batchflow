@@ -1268,7 +1268,7 @@ class TFModel(BaseModel):
         shape = tensor.get_shape().as_list()
         axis = TFModel.channels_axis(data_format)
         return shape[axis]
- 
+
     def shape(self, tensor, **kwargs):
         """ Return the tensor shape without batch dimension
 
@@ -1281,7 +1281,7 @@ class TFModel(BaseModel):
         shape : tuple
         """
         config = self.get_tensor_config(tensor, **kwargs)
-        return config.get('shape')     
+        return config.get('shape')
 
     @staticmethod
     def get_shape(tensor):
