@@ -5,7 +5,10 @@
     ../api/dataset.models.tf.mobilenet
     ../api/dataset.models.tf.squeezenet
     ../api/dataset.models.tf.densenet
+    ../api/dataset.models.tf.resattention
 
     ../api/dataset.models.tf.fcn
     ../api/dataset.models.tf.unet
     ../api/dataset.models.tf.linknet
+    ../api/dataset.models.tf.vnet
+    ../api/dataset.models.tf.densenet_fc

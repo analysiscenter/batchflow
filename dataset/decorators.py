@@ -209,8 +209,8 @@ class ModelDirectory:
             All other value will be used "as is".
         """
         if model_class is not None:
-            name = name or model_class.__name__
             init_config = config
+            model_class_ = model_class
 
             def _model_definition_maker():
                 def _model_definition_method(batch_or_pipe, config=None):
@@ -222,14 +222,13 @@ class ModelDirectory:
                             args = dict(batch=dummy_batch)
                         out = eval_expr(val, **args)
                         return out
-
+                    model_class = _calc_expr(model_class_)
                     global_config = config or dict()
                     local_config = init_config or dict()
 
-                    global_config.update(_calc_expr(global_config))
-                    global_config.update(_calc_expr(local_config))
-                    return model_class(name=name, config=global_config)
-
+                    local_config = _calc_expr(local_config)
+                    local_config.update(_calc_expr(global_config))
+                    return model_class(config=local_config)
 
                 _model_definition_method.__name__ = name
                 return _model_definition_method
@@ -238,6 +237,12 @@ class ModelDirectory:
             pipeline.models.update({model_method: None})
 
         if mode == 'static':
+            # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
+            dummy_batch = _DummyBatch(pipeline)
+
+            model_class = eval_expr(model_class, batch=dummy_batch)
+            name = name or model_class.__name__
+
             model_methods = ModelDirectory.find_model_method_by_name(name, pipeline, ['static'])
             if model_methods is None:
                 model_methods = ModelDirectory.find_model_method_by_name(name, None, ['static'])
@@ -246,8 +251,6 @@ class ModelDirectory:
             if len(model_methods) > 1:
                 raise ValueError("There are several models with the name '%s' in the pipeline %s" \
                                  % (name, pipeline))
-            # a model method is supposed to be in a Batch class, so dummy_batch is a fake self
-            dummy_batch = _DummyBatch(pipeline)
             _ = model_methods[0](dummy_batch)
 
 

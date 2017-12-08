@@ -460,19 +460,12 @@ class TFModel(BaseModel):
 
     def _make_loss(self, config):
         """ Return a loss function from config """
-        loss = self.get('loss', config)
+        loss, args = self._unpack_fn_from_config('loss', config)
 
-        data_format = config['output']['data_format']
-
-        if isinstance(loss, dict):
-            target_scope = loss.get('targets_scope', 'inputs')
-            target_scope = '/' + target_scope + '/' if target_scope else ''
-            prediction_scope = loss.get('predictions_scope', '')
-            prediction_scope = '/' + prediction_scope + '/' if prediction_scope else ''
-            loss = loss.get('loss')
-        else:
-            target_scope = 'inputs/'
-            prediction_scope = ''
+        target_scope = args.pop('targets_scope', 'inputs')
+        target_scope = target_scope + '/' if target_scope else ''
+        prediction_scope = args.pop('predictions_scope', '')
+        prediction_scope = prediction_scope + '/' if prediction_scope else ''
 
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
@@ -493,9 +486,9 @@ class TFModel(BaseModel):
                 predictions = self.graph.get_tensor_by_name(scope + prediction_scope + "predictions:0")
                 targets = self.graph.get_tensor_by_name(scope + target_scope + "targets:0")
             except KeyError:
-                raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % self.name)
+                raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % type(self).__name__)
             else:
-                tf.losses.add_loss(loss(targets, predictions))
+                tf.losses.add_loss(loss(targets, predictions, **args))
 
     def _make_decay(self, config):
         decay_name, decay_args = self._unpack_fn_from_config('decay', config)
@@ -636,7 +629,7 @@ class TFModel(BaseModel):
         classes = config.get('classes')
         if isinstance(classes, int):
             return np.arange(classes)
-        return classes
+        return np.asarray(classes)
 
     def num_classes(self, tensor):
         """ Return the  number of classes """

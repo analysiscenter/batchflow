@@ -3,7 +3,7 @@
 import logging
 import tensorflow as tf
 
-from .core import mip, flatten
+from .core import mip, flatten, alpha_dropout
 from .conv import conv_transpose, separable_conv
 from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling, fractional_max_pooling
 
@@ -21,6 +21,7 @@ ND_LAYERS = {
     'global_average_pooling': global_average_pooling,
     'batch_norm': tf.layers.batch_normalization,
     'dropout': tf.layers.dropout,
+    'alpha_dropout': alpha_dropout,
     'mip': mip
 }
 
@@ -37,6 +38,7 @@ C_LAYERS = {
     'V': 'global_average_pooling',
     'n': 'batch_norm',
     'd': 'dropout',
+    'D': 'alpha_dropout',
     'm': 'mip'
 }
 
@@ -46,6 +48,7 @@ _GROUP_KEYS = (
     .replace('t', 'c')
     .replace('s', 'c')
     .replace('v', 'p')
+    .replace('D', 'd')
 )
 C_GROUPS = dict(zip(_LAYERS_KEYS, _GROUP_KEYS))
 
@@ -89,6 +92,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - P - global max pooling
         - V - global average pooling
         - d - dropout
+        - D - alpha dropout
         - m - maximum intensity projection (:func:`.layers.mip`)
 
         Default is ''.
@@ -206,7 +210,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         else:
             layer_args = kwargs.get(layer_name, {})
             skip_layer = layer_args is None or layer_args is False or \
-                         isinstance(layer_args, dict) and 'disable' in layer_args and layer_args.pop('disable')
+                         isinstance(layer_args, dict) and layer_args.pop('disable', False)
 
             if skip_layer:
                 pass
@@ -250,7 +254,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 args = dict(pool_size=pool_size, strides=pool_strides, padding=padding,
                             data_format=data_format)
 
-            elif layer == 'd':
+            elif layer in ['d', 'D']:
                 if dropout_rate:
                     args = dict(rate=dropout_rate, training=is_training)
                 else:

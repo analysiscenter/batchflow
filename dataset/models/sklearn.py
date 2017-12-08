@@ -47,7 +47,7 @@ class SklearnModel(BaseModel):
     def build(self, *args, **kwargs):
         """ Define the model """
         _ = args, kwargs
-        self.estimator = self.get_from_config('estimator')
+        self.estimator = self.get('estimator', self.config)
 
     def load(self, path):
         """ Load the model.
