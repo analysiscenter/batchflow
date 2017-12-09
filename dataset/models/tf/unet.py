@@ -68,16 +68,16 @@ class UNet(TFModel):
             x = inputs
             encoder_outputs = [x]
             for i, ifilters in enumerate(filters):
-                x = cls.downsampling_block(x, ifilters, name='downsampling-'+str(i), **kwargs)
+                x = cls.encoder_block(x, ifilters, name='downsampling-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
             for i, ifilters in enumerate(filters[::-1]):
-                x = cls.upsampling_block((x, encoder_outputs[-i-2]), ifilters//2, name='upsampling-'+str(i), **kwargs)
+                x = cls.decoder_block((x, encoder_outputs[-i-2]), ifilters//2, name='upsampling-'+str(i), **kwargs)
 
         return x
 
     @classmethod
-    def downsampling_block(cls, inputs, filters, name, **kwargs):
+    def encoder_block(cls, inputs, filters, name, **kwargs):
         """ 2x2 max pooling with stride 2 and two 3x3 convolutions
 
         Parameters
@@ -97,7 +97,7 @@ class UNet(TFModel):
         return x
 
     @classmethod
-    def upsampling_block(cls, inputs, filters, name, **kwargs):
+    def decoder_block(cls, inputs, filters, name, **kwargs):
         """ 3x3 convolution and 2x2 transposed convolution
 
         Parameters
