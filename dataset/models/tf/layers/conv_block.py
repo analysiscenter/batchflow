@@ -10,6 +10,8 @@ from .pooling import max_pooling, average_pooling, global_max_pooling, global_av
 
 ND_LAYERS = {
     'activation': None,
+    'residual_start': None,
+    'residual_end': None,
     'dense': tf.layers.dense,
     'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
     'transposed_conv': conv_transpose,
@@ -27,6 +29,8 @@ ND_LAYERS = {
 
 C_LAYERS = {
     'a': 'activation',
+    'R': 'residual_start',
+    '+': 'residual_end',
     'f': 'dense',
     'c': 'conv',
     't': 'transposed_conv',
@@ -78,7 +82,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     inputs : tf.Tensor
         input tensor
     layout : str
-        a sequence of layers:
+        a sequence of operations:
 
         - c - convolution
         - t - transposed convolution
@@ -89,6 +93,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - p - max pooling
         - v - average pooling
         - r - fractional max pooling
+        - R - start residual connection
+        - + - end residual connection (includes summation)
         - P - global max pooling
         - V - global average pooling
         - d - dropout
@@ -149,15 +155,18 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     When ``layout`` includes several layers of the same type, each one can have its own parameters,
     if corresponding args are passed as lists (not tuples).
 
+    Spaces may be used to improve readability.
+
+
     Examples
     --------
     A simple block: 3x3 conv, batch norm, relu, 2x2 max-pooling with stride 2::
 
-        x = conv_block(x, 32, 3, layout='cnap')
+        x = conv_block(x, 'cnap', filters=32, kernel_size=3)
 
     A canonical bottleneck block (1x1, 3x3, 1x1 conv with relu in-between)::
 
-        x = conv_block(x, [64, 64, 256], [1, 3, 1], layout='cacac')
+        x = conv_block(x, 'nac nac nac', [64, 64, 256], [1, 3, 1])
 
     A complex Nd block:
 
@@ -172,7 +181,12 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
     ::
 
-        x = conv_block(x, [32, 32, 64], [5, 3, 3], layout='cacacand', strides=[1, 1, 2], dropout_rate=.15)
+        x = conv_block(x, 'ca ca ca nd', [32, 32, 64], [5, 3, 3], strides=[1, 1, 2], dropout_rate=.15)
+
+    A residual block::
+
+        x = conv_block(x, 'R nac nac +', [16, 16, 64], [1, 3, 1])
+
     """
     layout = layout or ''
     layout = layout.replace(' ', '')
@@ -195,6 +209,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             layout_dict[C_GROUPS[layer]] = [-1, 0]
         layout_dict[C_GROUPS[layer]][1] += 1
 
+    residuals = []
     tensor = inputs
     for i, layer in enumerate(layout):
 
@@ -207,6 +222,11 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             layer_fn = _unpack_args(args, *layout_dict[C_GROUPS[layer]])['activation']
             if layer_fn is not None:
                 tensor = layer_fn(tensor)
+        elif layer == 'R':
+            residuals += [tensor]
+        elif layer == '+':
+            tensor = tensor + residuals[-1]
+            residuals = residuals[:-1]
         else:
             layer_args = kwargs.get(layer_name, {})
             skip_layer = layer_args is None or layer_args is False or \
