@@ -24,7 +24,9 @@ ND_LAYERS = {
     'batch_norm': tf.layers.batch_normalization,
     'dropout': tf.layers.dropout,
     'alpha_dropout': alpha_dropout,
-    'mip': mip
+    'mip': mip,
+    'resize_bilinear', tf.image.resize_bilinear,
+    'resize_nn': tf.image.resize_nearest_neighbor,
 }
 
 C_LAYERS = {
@@ -43,7 +45,9 @@ C_LAYERS = {
     'n': 'batch_norm',
     'd': 'dropout',
     'D': 'alpha_dropout',
-    'm': 'mip'
+    'm': 'mip',
+    'B': 'resize_bilinear',
+    'N': 'resize_nn',
 }
 
 _LAYERS_KEYS = str(list(C_LAYERS.keys()))
@@ -53,6 +57,7 @@ _GROUP_KEYS = (
     .replace('s', 'c')
     .replace('v', 'p')
     .replace('D', 'd')
+    .replace('N', 'B')
 )
 C_GROUPS = dict(zip(_LAYERS_KEYS, _GROUP_KEYS))
 
@@ -100,6 +105,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - d - dropout
         - D - alpha dropout
         - m - maximum intensity projection (:func:`.layers.mip`)
+        - B - resize (bilinear)
+        - N - resize (nearest neighbours)
 
         Default is ''.
     filters : int
@@ -286,12 +293,15 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             elif layer == 'm':
                 args = dict(data_format=data_format)
 
+            elif layer in ['B', 'N']:
+                args = dict(size=kwargs.get('size'))
+
             if not skip_layer:
                 args = {**args, **layer_args}
                 args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
 
                 with tf.variable_scope('layer-%d' % i):
-                    tensor = layer_fn(inputs=tensor, **args)
+                    tensor = layer_fn(tensor, **args)
 
     if context is not None:
         context.__exit__(None, None, None)
