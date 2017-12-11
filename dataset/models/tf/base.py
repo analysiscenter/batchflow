@@ -1345,6 +1345,9 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
+        if factor == 1:
+            return inputs
+
         if isinstance(inputs, (list, tuple)):
             inputs, resize_to = inputs
             axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
@@ -1352,6 +1355,7 @@ class TFModel(BaseModel):
             i_shape = inputs.get_shape().as_list()[axis]
             factor = np.array(to_shape) / np.array(i_shape)
             factor = factor.astype('int32')
+
         return upsample(inputs, factor, layout, name=name, **kwargs)
 
     @classmethod
@@ -1365,20 +1369,30 @@ class TFModel(BaseModel):
         inputs : tf.Tensor
             input tensor
         pool_size : tuple of int
-            feature region sizes (e.g. [1, 2, 3, 6])
+            feature region sizes - pooling kernel sizes (e.g. [1, 2, 3, 6])
 
         Returns
         -------
         tf.Tensor
         """
         pool_size = cls.pop('pool_size', kwargs)
+        pool_op = cls.pop('pool_op', kwargs, default='mean')
+        layout = cls.pop('layout', kwargs, default='cna')
+        kernel_size = cls.pop('kernel_size', kwargs, default=1)
+        filters = cls.num_channels(inputs, kwargs['data_format'])
+        filters = cls.pop('filters', kwargs, default=filters)
         upsample_args = cls.pop('upsample', kwargs, default={})
         upsample_args = {**kwargs, **upsample_args}
 
         with tf.variable_scope(name):
             layers = []
             for level in pool_size:
-                x = conv_block(inputs, 'vcna', kernel_size=1, pool_size=level, pool_strides=level, **kwargs)
+                if level == 1:
+                    x = inputs
+                else:
+                    x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=level, pool_strides=level,
+                                   name='pool', **kwargs)
+                x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv', **kwargs)
                 x = cls.upsample(x, factor=level, **upsample_args)
                 layers.append(x)
             axis = cls.channels_axis(kwargs.get('data_format'))
