@@ -328,7 +328,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
         - R - use residual connection with bilinear additive upsampling (must be the first symbol)
         - b - bilinear resize
         - B - bilinear additive upsampling
-        - n - nearest neighbor resize
+        - N - nearest neighbor resize
         - t - transposed convolution
         - x - subpixel convolution
 
@@ -352,7 +352,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
     """
     with tf.variable_scope(name):
         if layout[0] == 'R':
-            r = resize_bilinear_additive(inputs, factor=factor, name='residual', data_format=kwargs.get(data_format))
+            r = resize_bilinear_additive(inputs, factor=factor, name='residual', data_format=kwargs.get('data_format'))
             layout = layout[1:]
         else:
             r = None

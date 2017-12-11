@@ -205,11 +205,11 @@ def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kw
 
 
 def _calc_size(inputs, factor, data_format):
-    shape = inputs.shape
+    shape = inputs.get_shape().as_list()
     channels = shape[-1] if data_format == 'channels_last' else shape[1]
     shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
-    shape = list(np.array(shape) * factor)
-    return shape
+    shape = list(np.asarray(shape) * np.asarray(factor))
+    return shape, channels
 
 def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
     """ Resize input tensor with bilinear additive technique
@@ -229,10 +229,11 @@ def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_
     -------
     tf.Tensor
     """
-    size = _calc_size(inputs, factor, data_format)
+    size, channels = _calc_size(inputs, factor, data_format)
+    layout = kwargs.get('layout', 'c')
     with tf.variable_scope(name):
         x = tf.image.resize_bilinear(inputs, size=size, name='resize')
-        x = conv(x, layout='c', filters=channels*factor**2, kernel_size=1, name='conv', **kwargs)
+        x = conv(x, layout, filters=channels*factor**2, kernel_size=1, name='conv', **kwargs)
         x = xip(x, depth=factor**2, op='sum', name='addition')
     return x
 
@@ -255,7 +256,7 @@ def resize_bilinear(inputs, factor=2, name=None, data_format='channels_last', **
     -------
     tf.Tensor
     """
-    size = _calc_size(inputs, factor, data_format)
+    size, _ = _calc_size(inputs, factor, data_format)
     return tf.image.resize_bilinear(inputs, size=size, name=name, data_format=data_format, **kwargs)
 
 
@@ -277,5 +278,5 @@ def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs
     -------
     tf.Tensor
     """
-    size = _calc_size(inputs, factor, data_format)
+    size, _ = _calc_size(inputs, factor, data_format)
     return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, data_format=data_format, **kwargs)

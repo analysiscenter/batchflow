@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..base import BaseModel
-from .layers import mip, conv_block
+from .layers import mip, conv_block, upsample
 from .losses import dice
 
 
@@ -1319,4 +1319,68 @@ class TFModel(BaseModel):
             shape[axis] = in_filters
             scale = tf.reshape(x, shape)
             x = inputs * scale
+        return x
+
+    @classmethod
+    def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):
+        """ Upsample input tensor
+
+        Parameters
+        ----------
+        inputs : tf.Tensor or tuple of two tf.Tensor
+            a tensor to resize and a tensor which size to resize to
+        factor : int
+            an upsamping scale
+        layout : str
+            resizing technique, a sequence of:
+
+            - R - use residual connection with bilinear additive upsampling (must be the first symbol)
+            - b - bilinear resize
+            - B - bilinear additive upsampling
+            - N - nearest neighbor resize
+            - t - transposed convolution
+            - x - subpixel convolution
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        if isinstance(inputs, (list, tuple)):
+            inputs, resize_to = inputs
+            axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
+            to_shape = resize_to.get_shape().as_list()[axis]
+            i_shape = inputs.get_shape().as_list()[axis]
+            factor = np.array(to_shape) / np.array(i_shape)
+            factor = factor.astype('int32')
+        return upsample(inputs, factor, layout, name=name, **kwargs)
+
+    @classmethod
+    def psp(cls, inputs, name='psp', **kwargs):
+        """ Pyramid Scene Parsing module
+
+        Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        pool_size : tuple of int
+            feature region sizes (e.g. [1, 2, 3, 6])
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        pool_size = cls.pop('pool_size', kwargs)
+        upsample = cls.pop('upsample', kwargs, {})
+        upsample = {**kwargs, **upsample}
+
+        with tf.variable_scope(name):
+            layers = []
+            for ps in pool_size:
+                x = conv_block(inputs, 'vcna', kernel_size=1, pool_size=ps, pool_strides=ps, **kwargs)
+                x = cls.upsample(x, factor=ps, **upsample)
+                layers.append(x)
+            axis = cls.channels_axis(kwargs.get('data_format'))
+            x = tf.concat(layers, axis=axis)
         return x
