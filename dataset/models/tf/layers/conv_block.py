@@ -3,8 +3,8 @@
 import logging
 import tensorflow as tf
 
-from .core import mip, flatten, alpha_dropout
-from .conv import conv_transpose, separable_conv
+from .core import mip, flatten, alpha_dropout, xip
+from .conv import conv_transpose, separable_conv, resize_bilinear_additive, resize_bilinear, resize_nn
 from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling, fractional_max_pooling
 
 
@@ -16,7 +16,7 @@ ND_LAYERS = {
     'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
     'transposed_conv': conv_transpose,
     'separable_conv':separable_conv,
-    'max_pooling': max_pooling,
+    'pooling': max_pooling,
     'average_pooling': average_pooling,
     'fractional_max_pooling': fractional_max_pooling,
     'global_max_pooling': global_max_pooling,
@@ -25,8 +25,9 @@ ND_LAYERS = {
     'dropout': tf.layers.dropout,
     'alpha_dropout': alpha_dropout,
     'mip': mip,
-    'resize_bilinear', tf.image.resize_bilinear,
-    'resize_nn': tf.image.resize_nearest_neighbor,
+    'resize', resize_bilinear,
+    'resize_bilinear_additive', resize_bilinear_additive,
+    'resize_nn': resize_nn,
 }
 
 C_LAYERS = {
@@ -37,7 +38,7 @@ C_LAYERS = {
     'c': 'conv',
     't': 'transposed_conv',
     's': 'separable_conv',
-    'p': 'max_pooling',
+    'p': 'pooling',
     'v': 'average_pooling',
     'r': 'fractional_max_pooling',
     'P': 'global_max_pooling',
@@ -46,7 +47,8 @@ C_LAYERS = {
     'd': 'dropout',
     'D': 'alpha_dropout',
     'm': 'mip',
-    'B': 'resize_bilinear',
+    'b': 'resize',
+    'B': 'resize_bilinear_additive',
     'N': 'resize_nn',
 }
 
@@ -57,7 +59,8 @@ _GROUP_KEYS = (
     .replace('s', 'c')
     .replace('v', 'p')
     .replace('D', 'd')
-    .replace('N', 'B')
+    .replace('B', 'b')
+    .replace('N', 'b')
 )
 C_GROUPS = dict(zip(_LAYERS_KEYS, _GROUP_KEYS))
 
@@ -105,8 +108,9 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - d - dropout
         - D - alpha dropout
         - m - maximum intensity projection (:func:`.layers.mip`)
-        - B - resize (bilinear)
-        - N - resize (nearest neighbours)
+        - b - resize (bilinear)
+        - B - resize (bilinear additive)
+        - N - resize (nearest neighbors)
 
         Default is ''.
     filters : int
@@ -293,8 +297,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             elif layer == 'm':
                 args = dict(data_format=data_format)
 
-            elif layer in ['B', 'N']:
-                args = dict(size=kwargs.get('size'))
+            elif layer in ['b', 'B', 'N']:
+                args = dict(factor=kwargs.get('factor'), data_format=data_format)
 
             if not skip_layer:
                 args = {**args, **layer_args}
@@ -307,3 +311,61 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         context.__exit__(None, None, None)
 
     return tensor
+
+
+def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
+    """ Upsample inputs to a given size
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        an upsamping scale
+    layout : str
+        resizing technique, a sequence of:
+
+        - R - use residual connection with bilinear additive upsampling (must be the first symbol)
+        - b - bilinear resize
+        - B - bilinear additive upsampling
+        - n - nearest neighbor resize
+        - t - transposed convolution
+        - x - subpixel convolution
+
+    Returns
+    -------
+    tf.Tensor
+
+    Examples
+    --------
+    A simple bilinear upsampling::
+
+        x = cls.upsample(inputs, factor=2, layout='b')
+
+    Upsampling with non-linear normalized transposed convolution::
+
+        x = cls.upsample(inputs, factor=2, layout='nat', kernel_size=3)
+
+    Subpixel convolution with a residual bilinear additive connection::
+
+        x = cls.upsample(inputs, factor=2, layout='Rx')
+    """
+    with tf.variable_scope(name):
+        if layout[0] == 'R':
+            r = resize_bilinear_additive(inputs, factor=factor, name='residual', data_format=kwargs.get(data_format))
+            layout = layout[1:]
+        else:
+            r = None
+
+        if 't' in layout:
+            if 'kernel_size' not in kwargs:
+                kwargs['kernel_size'] = factor
+            if 'strides' not in kwargs:
+                kwargs['strides'] = factor
+
+        x = conv_block(inputs, layout, name='upsample', factor=factor, **kwargs)
+
+        if r is not None:
+            x = x + r
+
+    return x
