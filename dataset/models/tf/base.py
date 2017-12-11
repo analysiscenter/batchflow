@@ -1372,14 +1372,14 @@ class TFModel(BaseModel):
         tf.Tensor
         """
         pool_size = cls.pop('pool_size', kwargs)
-        upsample = cls.pop('upsample', kwargs, {})
-        upsample = {**kwargs, **upsample}
+        upsample_args = cls.pop('upsample', kwargs, {})
+        upsample_args = {**kwargs, **upsample_args}
 
         with tf.variable_scope(name):
             layers = []
-            for ps in pool_size:
-                x = conv_block(inputs, 'vcna', kernel_size=1, pool_size=ps, pool_strides=ps, **kwargs)
-                x = cls.upsample(x, factor=ps, **upsample)
+            for level in pool_size:
+                x = conv_block(inputs, 'vcna', kernel_size=1, pool_size=level, pool_strides=level, **kwargs)
+                x = cls.upsample(x, factor=level, **upsample_args)
                 layers.append(x)
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat(layers, axis=axis)

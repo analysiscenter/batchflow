@@ -25,8 +25,8 @@ ND_LAYERS = {
     'dropout': tf.layers.dropout,
     'alpha_dropout': alpha_dropout,
     'mip': mip,
-    'resize', resize_bilinear,
-    'resize_bilinear_additive', resize_bilinear_additive,
+    'resize': resize_bilinear,
+    'resize_bilinear_additive': resize_bilinear_additive,
     'resize_nn': resize_nn,
 }
 

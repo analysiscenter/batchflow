@@ -1,4 +1,5 @@
 """ Contains convolutional layers """
+import numpy as np
 import tensorflow as tf
 
 from .core import xip
@@ -173,6 +174,14 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
     return output
 
 
+def _calc_size(inputs, factor, data_format):
+    shape = inputs.get_shape().as_list()
+    channels = shape[-1] if data_format == 'channels_last' else shape[1]
+    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
+    shape = list(np.asarray(shape) * np.asarray(factor))
+    return shape, channels
+
+
 def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
     """ Resize input tensor with subpixel convolution (depth to space operation)
 
@@ -192,24 +201,18 @@ def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kw
     tf.Tensor
     """
     dim = inputs.shape.ndims - 2
-
     if dim == 3:
-        df = 'NDHWC' if data_format == 'channels_last' else 'NCDHW'
+        dafo = 'NDHWC' if data_format == 'channels_last' else 'NCDHW'
     else:
-        df = 'NHWC' if data_format == 'channels_last' else 'NCHW'
+        dafo = 'NHWC' if data_format == 'channels_last' else 'NCHW'
+
+    _, channels = _calc_size(inputs, factor, data_format)
 
     with tf.variable_scope(name):
         x = conv(inputs, filters=channels*factor**2, kernel_size=1, name='conv', **kwargs)
-        x = tf.depth_to_space(x, block_size=factor, name='d2s', data_format=df)
+        x = tf.depth_to_space(x, block_size=factor, name='d2s', data_format=dafo)
     return x
 
-
-def _calc_size(inputs, factor, data_format):
-    shape = inputs.get_shape().as_list()
-    channels = shape[-1] if data_format == 'channels_last' else shape[1]
-    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
-    shape = list(np.asarray(shape) * np.asarray(factor))
-    return shape, channels
 
 def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
     """ Resize input tensor with bilinear additive technique
@@ -257,7 +260,7 @@ def resize_bilinear(inputs, factor=2, name=None, data_format='channels_last', **
     tf.Tensor
     """
     size, _ = _calc_size(inputs, factor, data_format)
-    return tf.image.resize_bilinear(inputs, size=size, name=name, data_format=data_format, **kwargs)
+    return tf.image.resize_bilinear(inputs, size=size, name=name, **kwargs)
 
 
 def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
@@ -279,4 +282,4 @@ def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs
     tf.Tensor
     """
     size, _ = _calc_size(inputs, factor, data_format)
-    return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, data_format=data_format, **kwargs)
+    return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, **kwargs)
