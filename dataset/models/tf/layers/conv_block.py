@@ -16,11 +16,8 @@ ND_LAYERS = {
     'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
     'transposed_conv': conv_transpose,
     'separable_conv':separable_conv,
-    'pooling': max_pooling,
-    'average_pooling': average_pooling,
-    'fractional_max_pooling': fractional_max_pooling,
-    'global_max_pooling': global_max_pooling,
-    'global_average_pooling': global_average_pooling,
+    'pooling': pooling,
+    'global_pooling': global_pooling,
     'batch_norm': tf.layers.batch_normalization,
     'dropout': tf.layers.dropout,
     'alpha_dropout': alpha_dropout,
@@ -28,6 +25,7 @@ ND_LAYERS = {
     'resize': resize_bilinear,
     'resize_bilinear_additive': resize_bilinear_additive,
     'resize_nn': resize_nn,
+    'subpixel_conv': subpixel_conv,
 }
 
 C_LAYERS = {
@@ -39,10 +37,9 @@ C_LAYERS = {
     't': 'transposed_conv',
     's': 'separable_conv',
     'p': 'pooling',
-    'v': 'average_pooling',
-    'r': 'fractional_max_pooling',
-    'P': 'global_max_pooling',
-    'V': 'global_average_pooling',
+    'v': 'pooling',
+    'P': 'global_pooling',
+    'V': 'global_pooling',
     'n': 'batch_norm',
     'd': 'dropout',
     'D': 'alpha_dropout',
@@ -50,6 +47,7 @@ C_LAYERS = {
     'b': 'resize',
     'B': 'resize_bilinear_additive',
     'N': 'resize_nn',
+    'X': 'subpixel_conv'
 }
 
 _LAYERS_KEYS = str(list(C_LAYERS.keys()))
@@ -58,6 +56,7 @@ _GROUP_KEYS = (
     .replace('t', 'c')
     .replace('s', 'c')
     .replace('v', 'p')
+    .replace('V', 'P')
     .replace('D', 'd')
     .replace('B', 'b')
     .replace('N', 'b')
@@ -98,12 +97,11 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - f - dense (fully connected)
         - n - batch normalization
         - a - activation
-        - p - max pooling
+        - p - pooling (default is max-pooling)
         - v - average pooling
-        - r - fractional max pooling
         - R - start residual connection
         - + - end residual connection (includes summation)
-        - P - global max pooling
+        - P - global pooling (default is max-pooling)
         - V - global average pooling
         - d - dropout
         - D - alpha dropout
@@ -135,10 +133,18 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         Default is 2.
     pool_strides : int
         Default is 2.
+    pool_op : str
+        pooling operation ('max', 'mean', 'frac')
     dropout_rate : float
         Default is 0.
     is_training : bool or tf.Tensor
         Default is True.
+    reuse : bool
+        whether to user layer variables if exist
+    pool_op : str
+        pooling operation ('max', 'mean', 'frac-max', 'frac-mean')
+    global_pool_op : str
+        global pooling operation ('max', 'mean')
 
     dense : dict
         parameters for dense layers, like initializers, regularalizers, etc
@@ -150,8 +156,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         parameters for batch normalization layers, like momentum, intiializers, etc
         If None or inculdes parameters 'off' or 'disable' set to True or 1,
         the layer will be excluded whatsoever.
-    max_pooling : dict
-        parameters for max_pooling layers, like initializers, regularalizers, etc
+    pooling : dict
+        parameters for pooling layers, like initializers, regularalizers, etc
     dropout : dict or None
         parameters for dropout layers, like noise_shape, etc
         If None or inculdes parameters 'off' or 'disable' set to True or 1,
@@ -275,15 +281,14 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 axis = -1 if data_format == 'channels_last' else 1
                 args = dict(fused=True, axis=axis, training=is_training)
 
-            elif layer == 'r':
-                args = dict(pooling_ratio=kwargs.get('pooling_ratio', 1.4142),
-                            pseudo_random=kwargs.get('pseudo_random', False),
-                            overlapping=kwargs.get('overlapping', False),
+            elif C_GROUPS[layer] == 'p':
+                if layer == 'v':
+                    pool_op = 'mean'
+                else:
+                    pool_op = kwargs.pop('pool_op', 'max')
+                args = dict(pool_op=pool_op, pool_size=pool_size, strides=pool_strides, padding=padding,
                             data_format=data_format)
 
-            elif C_GROUPS[layer] == 'p':
-                args = dict(pool_size=pool_size, strides=pool_strides, padding=padding,
-                            data_format=data_format)
 
             elif layer in ['d', 'D']:
                 if dropout_rate:
@@ -291,13 +296,17 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 else:
                     skip_layer = True
 
-            elif layer in ['P', 'V']:
-                args = dict(data_format=data_format)
+            elif C_GROUPS[layer] == 'P':
+                if layer == 'P':
+                    pool_op = kwargs.pop('global_pool_op', 'max')
+                elif layer == 'V':
+                    pool_op = 'mean'
+                args = dict(pool_op=pool_op, data_format=data_format)
 
             elif layer == 'm':
                 args = dict(data_format=data_format)
 
-            elif layer in ['b', 'B', 'N']:
+            elif layer in ['b', 'B', 'N', 'X']:
                 args = dict(factor=kwargs.get('factor'), data_format=data_format)
 
             if not skip_layer:
@@ -314,7 +323,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
 
 def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
-    """ Upsample inputs to a given size
+    """ Upsample inputs with a given factor
 
     Parameters
     ----------
@@ -330,7 +339,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
         - B - bilinear additive upsampling
         - N - nearest neighbor resize
         - t - transposed convolution
-        - x - subpixel convolution
+        - X - subpixel convolution
 
     Returns
     -------
@@ -348,8 +357,11 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
 
     Subpixel convolution with a residual bilinear additive connection::
 
-        x = cls.upsample(inputs, factor=2, layout='Rx')
+        x = cls.upsample(inputs, factor=2, layout='RX')
     """
+    if factor == 1:
+        return inputs
+
     with tf.variable_scope(name):
         if layout[0] == 'R':
             r = resize_bilinear_additive(inputs, factor=factor, name='residual', data_format=kwargs.get('data_format'))

@@ -56,9 +56,9 @@ _REDUCE_OP = {
     'sum': tf.reduce_sum,
 }
 
-def xip(inputs, depth, reduce_op='max', data_format='channels_last', name='xip'):
+def xip(inputs, depth, reduction='max', data_format='channels_last', name='xip'):
     """ Shrink the channels dimension with reduce ``op`` every ``depth`` channels """
-    reduce_op = _REDUCE_OP[reduce_op]
+    reduce_op = _REDUCE_OP[reduction]
 
     with tf.name_scope(name):
         x = tf.convert_to_tensor(inputs)
