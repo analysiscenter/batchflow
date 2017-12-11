@@ -164,7 +164,7 @@ def global_average_pooling(inputs, data_format='channels_last', name=None):
     -------
     tf.Tensor
     """
-    return global_pooling(inputs, 'mean', axis=axis, name=name)
+    return global_pooling(inputs, 'mean', data_format, name=name)
 
 
 def global_max_pooling(inputs, data_format='channels_last', name=None):
@@ -183,11 +183,11 @@ def global_max_pooling(inputs, data_format='channels_last', name=None):
     -------
     tf.Tensor
     """
-    return global_pooling(inputs, 'max', axis=axis, name=name)
+    return global_pooling(inputs, 'max', data_format, name=name)
 
 
 def fractional_pooling(inputs, pool_op, pool_size=1.4142, pseudo_random=False, overlapping=False,
-                           data_format='channels_last', **kwargs):
+                       data_format='channels_last', **kwargs):
     """ Fractional max-pooling layer.
 
     Parameters
@@ -224,11 +224,11 @@ def fractional_pooling(inputs, pool_op, pool_size=1.4142, pseudo_random=False, o
 
     _pooling_ratio = np.ones(inputs.shape.ndims)
     axis = 1 if data_format == 'channels_last' else 2
-    _pooling_ratio[axis:axis+dim] = pooling_ratio
+    _pooling_ratio[axis:axis+dim] = pool_size
     _pooling_ratio = list(_pooling_ratio)
 
     if dim == 1:
-        with tf.variable_scope(kwargs.get('name') or 'fractional_max_pooling'):
+        with tf.variable_scope(kwargs.get('name') or 'fractional_pooling'):
             axis = 2 if data_format == 'channels_last' else -1
             x = tf.expand_dims(inputs, axis=axis)
             _pooling_ratio[axis] = 1
