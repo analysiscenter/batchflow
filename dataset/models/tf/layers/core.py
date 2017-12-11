@@ -77,31 +77,3 @@ def xip(inputs, depth, op='max', data_format='channels_last', name='xip'):
 def mip(inputs, depth, data_format='channels_last', name='mip'):
     """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels """
     return xip(inputs, depth, 'max', data_format, name)
-
-
-def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
-    """ Resize input tensor
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : int
-        upsampling factor
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
-    shape = inputs.shape
-    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
-    shape = list(np.array(shape) * factor)
-
-    with tf.variable_scope(name):
-        x = tf.image.resize_bilinear(inputs, size=shape, name='resize', **kwargs)
-        x = xip(x, depth=factor**2, op='sum', name='addition')
-    return x
