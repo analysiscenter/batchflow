@@ -143,7 +143,7 @@ class DenseNet(TFModel):
         """
         kwargs = cls.fill_params('body/transition_layer', **kwargs)
         reduction_factor = cls.get('reduction_factor', kwargs)
-        num_filters = cls.get_num_channels(inputs, kwargs.get('data_format'))
+        num_filters = cls.num_channels(inputs, kwargs.get('data_format'))
         return conv_block(inputs, filters=num_filters * reduction_factor, name=name, **kwargs)
 
 
