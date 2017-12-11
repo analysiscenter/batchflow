@@ -119,7 +119,7 @@ class VNet(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         layout, filters, kernel_size = cls.pop(['layout', 'filters', 'kernel_size'], kwargs)
-        upsample_args = cls.pop('upsample', config)
+        upsample_args = cls.pop('upsample', kwargs)
 
         with tf.variable_scope(name):
             x, skip = inputs
