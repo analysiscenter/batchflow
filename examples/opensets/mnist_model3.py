@@ -23,7 +23,7 @@ if __name__ == "__main__":
     mnist = MNIST()
 
     train_template = (Pipeline(config=dict(model=VGG7))
-                .init_variable('model', DenseNet121)
+                .init_variable('model', ResNetAttention56)
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
@@ -38,7 +38,7 @@ if __name__ == "__main__":
                                     #'filters': 16, 'width_factor': 1,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['accuracy'])})
-                #.resize(shape=(16, 16))
+                .resize(shape=(64, 64))
                 .train_model('conv', fetches='loss',
                                      feed_dict={'images': B('images'),
                                                 'labels': B('labels')},

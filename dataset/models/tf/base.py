@@ -1345,12 +1345,12 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
-        if factor == 1:
+        if np.all(factor == 1):
             return inputs
 
         if isinstance(inputs, (list, tuple)):
             inputs, resize_to = inputs
-            axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
+            axis = slice(1, -1) if kwargs['data_format'] == 'channels_last' else slice(2, None)
             to_shape = resize_to.get_shape().as_list()[axis]
             i_shape = inputs.get_shape().as_list()[axis]
             factor = np.array(to_shape) / np.array(i_shape)

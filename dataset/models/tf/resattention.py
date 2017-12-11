@@ -43,6 +43,7 @@ class ResNetAttention(TFModel):
 
         config['body']['trunk'] = dict(bottleneck=True)
         config['body']['mask'] = dict(bottleneck=True, pool_size=3, pool_strides=2)
+        config['body']['mask']['upsample'] = dict(layout='b', factor=2)
 
         config['head']['layout'] = 'Vf'
 
@@ -91,6 +92,8 @@ class ResNetAttention(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body/mask', **kwargs)
+        upsample_args = cls.pop('upsample', kwargs)
+
         with tf.variable_scope(name):
             inputs, resize_to = inputs
             x = conv_block(inputs, layout='p', name='pool', **kwargs)
@@ -101,8 +104,7 @@ class ResNetAttention(TFModel):
                 i = cls.mask((b, b), level=level-1, name='submask-%d' % level, **kwargs)
                 c = ResNet.block(c + i, name='resblock_3', **kwargs)
 
-            size = cls.spatial_shape(resize_to, data_format=kwargs.get('data_format'))
-            x = tf.image.resize_bilinear(c, size=size, name='interpolation')
+            x = cls.upsample((c, resize_to), name='interpolation', data_format=kwargs['data_format'], **upsample_args)
         return x
 
     @classmethod

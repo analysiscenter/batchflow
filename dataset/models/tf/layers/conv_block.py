@@ -1,6 +1,7 @@
 """ Contains convolution layers """
 # pylint:disable=too-many-statements
 import logging
+import numpy as np
 import tensorflow as tf
 
 from .core import mip, flatten, alpha_dropout
@@ -359,7 +360,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
 
         x = cls.upsample(inputs, factor=2, layout='RX')
     """
-    if factor == 1:
+    if np.all(factor == 1):
         return inputs
 
     with tf.variable_scope(name):
