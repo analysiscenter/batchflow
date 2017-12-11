@@ -1372,7 +1372,7 @@ class TFModel(BaseModel):
         tf.Tensor
         """
         pool_size = cls.pop('pool_size', kwargs)
-        upsample_args = cls.pop('upsample', kwargs, {})
+        upsample_args = cls.pop('upsample', kwargs, default={})
         upsample_args = {**kwargs, **upsample_args}
 
         with tf.variable_scope(name):

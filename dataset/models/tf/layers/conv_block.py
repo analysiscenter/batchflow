@@ -3,7 +3,7 @@
 import logging
 import tensorflow as tf
 
-from .core import mip, flatten, alpha_dropout, xip
+from .core import mip, flatten, alpha_dropout
 from .conv import conv_transpose, separable_conv, resize_bilinear_additive, resize_bilinear, resize_nn
 from .pooling import max_pooling, average_pooling, global_max_pooling, global_average_pooling, fractional_max_pooling
 

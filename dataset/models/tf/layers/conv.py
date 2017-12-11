@@ -237,7 +237,7 @@ def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_
     with tf.variable_scope(name):
         x = tf.image.resize_bilinear(inputs, size=size, name='resize')
         x = conv(x, layout, filters=channels*factor**2, kernel_size=1, name='conv', **kwargs)
-        x = xip(x, depth=factor**2, op='sum', name='addition')
+        x = xip(x, depth=factor**2, reduce_op='sum', name='addition')
     return x
 
 
