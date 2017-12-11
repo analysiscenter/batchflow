@@ -38,7 +38,7 @@ if __name__ == "__main__":
                                     #'filters': 16, 'width_factor': 1,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['accuracy'])})
-                .resize(shape=(64, 64))
+                #.resize(shape=(64, 64))
                 .train_model('conv', fetches='loss',
                                      feed_dict={'images': B('images'),
                                                 'labels': B('labels')},

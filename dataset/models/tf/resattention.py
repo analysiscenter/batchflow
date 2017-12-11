@@ -41,7 +41,8 @@ class ResNetAttention(TFModel):
         config['input_block'].update(dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
 
-        config['body']['trunk'] = dict(bottleneck=True)
+        config['body'] = dict(bottleneck=True, downsample=False)
+        config['body']['trunk'] = dict(bottleneck=True, downsample=False)
         config['body']['mask'] = dict(bottleneck=True, pool_size=3, pool_strides=2)
         config['body']['mask']['upsample'] = dict(layout='b', factor=2)
 
@@ -155,12 +156,16 @@ class ResNetAttention(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         layout, filters = cls.pop(['layout', 'filters'], kwargs)
+        mask = cls.pop('mask', kwargs)
+        trunk = cls.pop('trunk', kwargs)
+        mask = {**kwargs, **mask}
+        trunk = {**kwargs, **trunk}
 
         x = inputs
         with tf.variable_scope(name):
             for i, b in enumerate(layout):
                 if b == 'r':
-                    x = ResNet.block(x, filters=filters[i], name='resblock-%d' % i, **kwargs)
+                    x = ResNet.block(x, filters=filters[i], name='resblock-%d' % i, **{**kwargs, 'downsample':True})
                 else:
                     x = cls.attention(x, level=int(b), filters=filters[i], name='attention-%d' % i, **kwargs)
         return x
