@@ -1339,7 +1339,7 @@ class TFModel(BaseModel):
             - B - bilinear additive upsampling
             - N - nearest neighbor resize
             - t - transposed convolution
-            - x - subpixel convolution
+            - X - subpixel convolution
 
         Returns
         -------
