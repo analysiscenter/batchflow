@@ -1,6 +1,8 @@
 """ Contains convolutional layers """
 import tensorflow as tf
 
+from .core import xip
+
 
 _CONV_LAYERS = {
     1: tf.layers.conv1d,
@@ -169,3 +171,111 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
             context.__exit__(None, None, None)
 
     return output
+
+
+def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+    """ Resize input tensor with subpixel convolution (depth to space operation)
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        upsampling factor
+    name : str
+        scope name
+    data_format : {'channels_last', 'channels_first'}
+        position of the channels dimension
+
+    Returns
+    -------
+    tf.Tensor
+    """
+    dim = inputs.shape.ndims - 2
+
+    if dim == 3:
+        df = 'NDHWC' if data_format == 'channels_last' else 'NCDHW'
+    else:
+        df = 'NHWC' if data_format == 'channels_last' else 'NCHW'
+
+    with tf.variable_scope(name):
+        x = conv(inputs, filters=channels*factor**2, kernel_size=1, name='conv', **kwargs)
+        x = tf.depth_to_space(x, block_size=factor, name='d2s', data_format=df)
+    return x
+
+
+def _calc_size(inputs, factor, data_format):
+    shape = inputs.shape
+    channels = shape[-1] if data_format == 'channels_last' else shape[1]
+    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
+    shape = list(np.array(shape) * factor)
+    return shape
+
+def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+    """ Resize input tensor with bilinear additive technique
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        upsampling factor
+    name : str
+        scope name
+    data_format : {'channels_last', 'channels_first'}
+        position of the channels dimension
+
+    Returns
+    -------
+    tf.Tensor
+    """
+    size = _calc_size(inputs, factor, data_format)
+    with tf.variable_scope(name):
+        x = tf.image.resize_bilinear(inputs, size=size, name='resize')
+        x = conv(x, layout='c', filters=channels*factor**2, kernel_size=1, name='conv', **kwargs)
+        x = xip(x, depth=factor**2, op='sum', name='addition')
+    return x
+
+
+def resize_bilinear(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+    """ Resize input tensor with bilinear method
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        upsampling factor
+    name : str
+        scope name
+    data_format : {'channels_last', 'channels_first'}
+        position of the channels dimension
+
+    Returns
+    -------
+    tf.Tensor
+    """
+    size = _calc_size(inputs, factor, data_format)
+    return tf.image.resize_bilinear(inputs, size=size, name=name, data_format=data_format, **kwargs)
+
+
+def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+    """ Resize input tensor with nearest neighbors method
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        upsampling factor
+    name : str
+        scope name
+    data_format : {'channels_last', 'channels_first'}
+        position of the channels dimension
+
+    Returns
+    -------
+    tf.Tensor
+    """
+    size = _calc_size(inputs, factor, data_format)
+    return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, data_format=data_format, **kwargs)
