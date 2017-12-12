@@ -1359,8 +1359,8 @@ class TFModel(BaseModel):
         return upsample(inputs, factor, layout, name=name, **kwargs)
 
     @classmethod
-    def psp(cls, inputs, name='psp', **kwargs):
-        """ Pyramid Scene Parsing module
+    def pyramid_pooling(cls, inputs, name='psp', **kwargs):
+        """ Pyramid Pooling module
 
         Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
 
@@ -1395,6 +1395,44 @@ class TFModel(BaseModel):
                 x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv', **kwargs)
                 x = cls.upsample(x, factor=level, **upsample_args)
                 layers.append(x)
+            axis = cls.channels_axis(kwargs.get('data_format'))
+            x = tf.concat(layers, axis=axis)
+        return x
+
+    @classmethod
+    def aspp(cls, inputs, name='aspp', **kwargs):
+        """ Atrous Spatial Pyramid Pooling module
+
+        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation <https://arxiv.org/abs/1706.05587>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        rates : tuple of int
+            dilation rates for branches (default=[6, 12, 18])
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        rates = cls.pop('rates', kwargs, default=[6, 12, 18])
+        layout = cls.pop('layout', kwargs, default='cna')
+        kernel_size = cls.pop('kernel_size', kwargs, default=3)
+
+        with tf.variable_scope(name):
+            layers = []
+            layers.append(conv_block(inputs, layout, kernel_size=1, name='conv-1x1', **kwargs))
+
+            for level in rates:
+                x = conv_block(inputs, layout, kernel_size=kernel_size, dilation_rate=level, name='conv-%d' % level,
+                              **kwargs)
+                layers.append(x)
+
+            x = global_average_pooling(inputs, **kwargs)
+            x = cls.upsample((x, inputs), layout='b', **kwargs)
+            layers.append(x)
+
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat(layers, axis=axis)
         return x
