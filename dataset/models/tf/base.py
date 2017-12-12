@@ -1419,20 +1419,24 @@ class TFModel(BaseModel):
         rates = cls.pop('rates', kwargs, default=[6, 12, 18])
         layout = cls.pop('layout', kwargs, default='cna')
         kernel_size = cls.pop('kernel_size', kwargs, default=3)
+        filters = cls.num_channels(inputs, kwargs['data_format'])
+        filters = cls.pop('filters', kwargs, default=filters)
 
         with tf.variable_scope(name):
             layers = []
-            layers.append(conv_block(inputs, layout, kernel_size=1, name='conv-1x1', **kwargs))
+            layers.append(conv_block(inputs, layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs))
 
             for level in rates:
-                x = conv_block(inputs, layout, kernel_size=kernel_size, dilation_rate=level, name='conv-%d' % level,
-                              **kwargs)
+                x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
+                               name='conv-%d' % level, **kwargs)
                 layers.append(x)
 
-            x = global_average_pooling(inputs, **kwargs)
-            x = cls.upsample((x, inputs), layout='b', **kwargs)
+            with tf.variable_scope('image_features'):
+                x = global_average_pooling(inputs, **kwargs)
+                x = cls.upsample((x, inputs), layout='b', **kwargs)
             layers.append(x)
 
             axis = cls.channels_axis(kwargs.get('data_format'))
-            x = tf.concat(layers, axis=axis)
+            x = tf.concat(layers, axis=axis, name='concat')
+            x = conv_block(inputs, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
         return x
