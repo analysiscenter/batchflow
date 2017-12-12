@@ -617,6 +617,20 @@ class TFModel(BaseModel):
         channels_axis = self.channels_axis(tensor, **kwargs)
         return shape[channels_axis] if shape else None
 
+    @staticmethod
+    def get_num_channels(tensor, data_format='channels_last'):
+        """ Return number of channels in the input tensor
+        Parameters
+        ----------
+        tensor : tf.Tensor
+        Returns
+        -------
+        shape : tuple of ints
+        """
+        shape = tensor.get_shape().as_list()
+        axis = TFModel.channels_axis(data_format)
+        return shape[axis]
+
     def has_classes(self, tensor):
         """ Check if a tensor has classes defined in the config """
         config = self.get_tensor_config(tensor)
@@ -1166,7 +1180,8 @@ class TFModel(BaseModel):
 
     def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
         _ = scope, kwargs
-        proba = tf.nn.softmax(inputs, name='predicted_proba')
+        axis = -1 if kwargs['data_format'] == 'channels_last' else 1
+        proba = tf.nn.softmax(inputs, name='predicted_proba', dim=axis)
         self.store_to_attr(attr_prefix + 'predicted_proba', proba)
 
     def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
