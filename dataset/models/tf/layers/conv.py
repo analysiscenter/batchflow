@@ -1,5 +1,8 @@
 """ Contains convolutional layers """
+import numpy as np
 import tensorflow as tf
+
+from .core import xip
 
 
 _CONV_LAYERS = {
@@ -171,44 +174,113 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
     return output
 
 
-def separable_conv1d(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                     dilation_rate=1, depth_multiplier=1, activation=None, name=None, *args, **kwargs):
-    """ Make 1d depthwise convolutions that acts separately on channels,
-    followed by a pointwise convolution that mixes channels.
+def _calc_size(inputs, factor, data_format):
+    shape = inputs.get_shape().as_list()
+    channels = shape[-1] if data_format == 'channels_last' else shape[1]
+    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
+    shape = list(np.asarray(shape) * np.asarray(factor))
+    return shape, channels
 
-    See also
-    --------
-    :func:`.separable_conv`
+
+def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+    """ Resize input tensor with subpixel convolution (depth to space operation)
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        upsampling factor
+    name : str
+        scope name
+    data_format : {'channels_last', 'channels_first'}
+        position of the channels dimension
+
+    Returns
+    -------
+    tf.Tensor
     """
-    return separable_conv(inputs, filters, kernel_size, strides, padding, data_format,
-                          dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
+    dim = inputs.shape.ndims - 2
+    if dim == 3:
+        dafo = 'NDHWC' if data_format == 'channels_last' else 'NCDHW'
+    else:
+        dafo = 'NHWC' if data_format == 'channels_last' else 'NCHW'
 
-def separable_conv2d(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                     dilation_rate=1, depth_multiplier=1, activation=None, name=None, *args, **kwargs):
-    """ Make 2d depthwise convolutions that acts separately on channels,
-    followed by a pointwise convolution that mixes channels.
+    _, channels = _calc_size(inputs, factor, data_format)
 
-    See also
-    --------
-    :func:`.separable_conv`,
-    `tf.layers.separable_conv2d <https://www.tensorflow.org/api_docs/python/tf/layers/separable_conv2d>`_
+    with tf.variable_scope(name):
+        x = conv(inputs, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
+        x = tf.depth_to_space(x, block_size=factor, name='d2s', data_format=dafo)
+    return x
 
-    Notes
-    -----
-    `tf.layers.separable_conv2d <https://www.tensorflow.org/api_docs/python/tf/layers/separable_conv2d>`_
-    is implemented using CUDA and, as a result, much faster.
+
+def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+    """ Resize input tensor with bilinear additive technique
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        upsampling factor
+    name : str
+        scope name
+    data_format : {'channels_last', 'channels_first'}
+        position of the channels dimension
+
+    Returns
+    -------
+    tf.Tensor
     """
-    return separable_conv(inputs, filters, kernel_size, strides, padding, data_format,
-                          dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
+    dim = inputs.shape.ndims - 2
+    size, channels = _calc_size(inputs, factor, data_format)
+    layout = kwargs.get('layout', 'c')
+    with tf.variable_scope(name):
+        x = tf.image.resize_bilinear(inputs, size=size, name='resize')
+        x = conv(x, layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
+        x = xip(x, depth=factor**dim, reduction='sum', name='addition')
+    return x
 
-def separable_conv3d(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                     dilation_rate=1, depth_multiplier=1, activation=None, name=None, *args, **kwargs):
-    """ Make 3d depthwise convolutions that acts separately on channels,
-    followed by a pointwise convolution that mixes channels.
 
-    See also
-    --------
-    :func:`.separable_conv`
+def resize_bilinear(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+    """ Resize input tensor with bilinear method
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        upsampling factor
+    name : str
+        scope name
+    data_format : {'channels_last', 'channels_first'}
+        position of the channels dimension
+
+    Returns
+    -------
+    tf.Tensor
     """
-    return separable_conv(inputs, filters, kernel_size, strides, padding, data_format,
-                          dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
+    size, _ = _calc_size(inputs, factor, data_format)
+    return tf.image.resize_bilinear(inputs, size=size, name=name, **kwargs)
+
+
+def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+    """ Resize input tensor with nearest neighbors method
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    factor : int
+        upsampling factor
+    name : str
+        scope name
+    data_format : {'channels_last', 'channels_first'}
+        position of the channels dimension
+
+    Returns
+    -------
+    tf.Tensor
+    """
+    size, _ = _calc_size(inputs, factor, data_format)
+    return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, **kwargs)

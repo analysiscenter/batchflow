@@ -115,15 +115,17 @@ class DenseNet(TFModel):
         with tf.variable_scope(name):
             axis = cls.channels_axis(kwargs['data_format'])
             x = inputs
+            output_concat = []
             for i in range(num_layers):
-                block_concat = x
+                if len(output_concat) > 0:
+                    x = tf.concat(output_concat + [inputs], axis=axis)
                 if bottleneck:
                     x = conv_block(x, filters=growth_rate * 4, kernel_size=1, layout=layout,
                                    name='bottleneck-%d' % i, **kwargs)
                 x = conv_block(x, filters=growth_rate, kernel_size=3, layout=layout,
                                name='conv-%d' % i, **kwargs)
-                x = tf.concat([block_concat, x], axis=axis)
-            x = tf.identity(x, name='output')
+                output_concat.append(x)
+            x = tf.concat(output_concat, axis=axis, name='output')
         return x
 
     @classmethod

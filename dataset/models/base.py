@@ -31,13 +31,21 @@ class BaseModel:
             self.load(**load)
 
     @classmethod
-    def pop(cls, variables, config=None):
+    def pop(cls, variables, config=None, **kwargs):
         """ Return variables and remove them from config"""
-        return cls.get(variables, config, pop=True)
+        return cls._get(variables, config, pop=True, **kwargs)
 
     @classmethod
-    def get(cls, variables, config=None, default=None, pop=False):
+    def get(cls, variables, config=None, default=None):
         """ Return variables from config """
+        return cls._get(variables, config, default=default, pop=False)
+
+    @classmethod
+    def _get(cls, variables, config=None, **kwargs):
+        pop = kwargs.get('pop', False)
+        has_default = 'default' in kwargs
+        default = kwargs.get('default')
+
         unpack = False
         if not isinstance(variables, (list, tuple)):
             variables = list([variables])
@@ -62,7 +70,10 @@ class BaseModel:
                     break
             if _config:
                 if pop:
-                    val = _config.pop(var_name)
+                    if has_default:
+                        val = _config.pop(var_name, default)
+                    else:
+                        val = _config.pop(var_name)
                 else:
                     val = _config.get(var_name, default)
             else:
