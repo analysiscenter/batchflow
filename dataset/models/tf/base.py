@@ -1171,13 +1171,13 @@ class TFModel(BaseModel):
 
     def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
         _ = scope
-        data_format = kwargs.get('data_format')
-        channels_axis = self.channels_axis(data_format)
+        channels_axis = self.channels_axis(kwargs.get('data_format'))
         predicted_labels = tf.argmax(inputs, axis=channels_axis, name='predicted_labels')
         self.store_to_attr(attr_prefix + 'predicted_labels', predicted_labels)
 
     def _add_output_accuracy(self, inputs, scope, attr_prefix, **kwargs):
-        true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
+        channels_axis = self.channels_axis(kwargs.get('data_format'))
+        true_labels = tf.argmax(self.targets, axis=channels_axis)
         current_scope = self.graph.get_name_scope() + '/'
         try:
             predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
