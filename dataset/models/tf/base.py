@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..base import BaseModel
-from .layers import mip, conv_block, upsample
+from .layers import mip, conv_block, upsample, global_average_pooling
 from .losses import dice
 
 
@@ -1403,7 +1403,8 @@ class TFModel(BaseModel):
     def aspp(cls, inputs, name='aspp', **kwargs):
         """ Atrous Spatial Pyramid Pooling module
 
-        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation <https://arxiv.org/abs/1706.05587>`_"
+        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation
+        <https://arxiv.org/abs/1706.05587>`_"
 
         Parameters
         ----------
