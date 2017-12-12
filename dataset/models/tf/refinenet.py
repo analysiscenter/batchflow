@@ -6,6 +6,7 @@ import numpy as np
 
 from .layers import conv_block
 from . import TFModel
+from .resnet import ResNet
 
 
 class RefineNet(TFModel):
@@ -93,7 +94,26 @@ class RefineNet(TFModel):
         -------
         tf.Tensor
         """
-        x = conv_block(inputs, 'pcnacna', filters, kernel_size=3, name=name, pool_size=2, pool_strides=2, **kwargs)
+        x = ResNet.block(inputs, filters, bottleneck=False, downsample=True, name=name, **kwargs)
+        return x
+
+    @classmethod
+    def block(cls, inputs, filters, name, **kwargs):
+        """ 2x2 max pooling with stride 2 and two 3x3 convolutions
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
         return x
 
     @classmethod
