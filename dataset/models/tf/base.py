@@ -1189,7 +1189,7 @@ class TFModel(BaseModel):
         return x
 
     @classmethod
-    def channels_axis(data_format):
+    def channels_axis(cls, data_format):
         """ Return the channels axis for the tensor
 
         Parameters
@@ -1254,7 +1254,7 @@ class TFModel(BaseModel):
         return shape[channels_axis] if shape else None
 
     @classmethod
-    def num_channels(tensor, data_format='channels_last'):
+    def num_channels(cls, tensor, data_format='channels_last'):
         """ Return number of channels in the input tensor
 
         Parameters
@@ -1284,7 +1284,7 @@ class TFModel(BaseModel):
         return config.get('shape')
 
     @classmethod
-    def shape(tensor):
+    def shape(cls, tensor):
         """ Return shape of the input tensor without batch size
 
         Parameters
@@ -1342,7 +1342,7 @@ class TFModel(BaseModel):
         return shape
 
     @classmethod
-    def spatial_shape(tensor, data_format='channels_last'):
+    def spatial_shape(cls, tensor, data_format='channels_last'):
         """ Return spatial shape of the input tensor
 
         Parameters
@@ -1385,7 +1385,7 @@ class TFModel(BaseModel):
         return tensor.get_shape().as_list()[0]
 
     @classmethod
-    def batch_size(tensor):
+    def batch_size(cls, tensor):
         """ Return batch size (the length of the first dimension) of the input tensor
 
         Parameters
