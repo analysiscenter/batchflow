@@ -617,8 +617,8 @@ class TFModel(BaseModel):
         channels_axis = self.channels_axis(tensor, **kwargs)
         return shape[channels_axis] if shape else None
 
-    @staticmethod
-    def get_num_channels(tensor, data_format='channels_last'):
+    @classmethod
+    def get_num_channels(cls, tensor, data_format='channels_last'):
         """ Return number of channels in the input tensor
         Parameters
         ----------
