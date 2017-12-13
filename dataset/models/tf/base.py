@@ -1312,7 +1312,7 @@ class TFModel(BaseModel):
         return len(config.get('shape')) - 1
 
     @classmethod
-    def spatial_dim(tensor):
+    def spatial_dim(cls, tensor):
         """ Return spatial dim of the input tensor (without channels and batch dimension)
 
         Parameters
@@ -1398,6 +1398,7 @@ class TFModel(BaseModel):
         """
         return tensor.get_shape().as_list()[0]
 
+    @classmethod
     def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):
         """ Upsample input tensor
 
@@ -1479,7 +1480,8 @@ class TFModel(BaseModel):
     def aspp(cls, inputs, name='aspp', **kwargs):
         """ Atrous Spatial Pyramid Pooling module
 
-        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation <https://arxiv.org/abs/1706.05587>`_"
+        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation 
+        <https://arxiv.org/abs/1706.05587>`_"
 
         Parameters
         ----------
