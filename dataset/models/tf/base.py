@@ -586,152 +586,16 @@ class TFModel(BaseModel):
         config = {**config, **kwargs}
         return config
 
-
-    @staticmethod
-    def channels_axis(data_format):
-        """ Return the channels axis for the tensor
-
-        Parameters
-        ----------
-        data_format : str {'channels_last', 'channels_first'}
-
-        Returns
-        -------
-        number of channels : int
-        """
-        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
-
-    def num_channels(self, tensor, **kwargs):
-        """ Return the number of channels in the tensor
-
-        Parameters
-        ----------
-        tensor : str or tf.Tensor
-
-        Returns
-        -------
-        number of channels : int
-        """
-        config = self.get_tensor_config(tensor, **kwargs)
-        shape = config.get('shape')
-        channels_axis = self.channels_axis(tensor, **kwargs)
-        return shape[channels_axis] if shape else None
-
-    def has_classes(self, tensor):
-        """ Check if a tensor has classes defined in the config """
-        config = self.get_tensor_config(tensor)
-        has = config.get('classes') is not None
-        return has
-
-    def classes(self, tensor):
-        """ Return the  number of classes """
-        config = self.get_tensor_config(tensor)
-        classes = config.get('classes')
-        if isinstance(classes, int):
-            return np.arange(classes)
-        return np.asarray(classes)
-
-    def num_classes(self, tensor):
-        """ Return the  number of classes """
-        if self.has_classes(tensor):
-            classes = self.classes(tensor)
-            return classes if isinstance(classes, int) else len(classes)
-        return self.num_channels(tensor)
-
-    def spatial_dim(self, tensor, **kwargs):
-        """ Return the tensor spatial dimensionality (without channels dimension)
-
-        Parameters
-        ----------
-        tensor : str or tf.Tensor
-
-        Returns
-        -------
-        number of spatial dimensions : int
-        """
-        config = self.get_tensor_config(tensor, **kwargs)
-        return len(config.get('shape')) - 1
-
-    def data_format(self, tensor, **kwargs):
-        """ Return the tensor data format (channels_last or channels_first)
-
-        Parameters
-        ----------
-        tensor : str or tf.Tensor
-
-        Returns
-        -------
-        data_format : str
-        """
-        config = self.get_tensor_config(tensor, **kwargs)
-        return config.get('data_format')
-
-    @staticmethod
-    def batch_size(tensor):
-        """ Return batch size (the length of the first dimension) of the input tensor
-
-        Parameters
-        ----------
-        tensor : tf.Tensor
-
-        Returns
-        -------
-        batch size : int
-        """
-        return tensor.get_shape().as_list()[0]
-
-    @staticmethod
-    def get_shape(tensor):
-        """ Return full shape of the input tensor
-
-        Parameters
-        ----------
-        tensor : tf.Tensor
-
-        Returns
-        -------
-        shape : tuple of ints
-        """
-        return tensor.get_shape().as_list()
-
-    @staticmethod
-    def spatial_shape(tensor, data_format='channels_last'):
-        """ Return spatial shape of the input tensor
-
-        Parameters
-        ----------
-        tensor : tf.Tensor
-
-        Returns
-        -------
-        shape : tuple of ints
-        """
-        shape = tensor.get_shape().as_list()
-        axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
-        return shape[axis]
-
-    @staticmethod
-    def channels_shape(tensor, data_format='channels_last'):
-        """ Return number of channels in the input tensor
-
-        Parameters
-        ----------
-        tensor : tf.Tensor
-
-        Returns
-        -------
-        shape : tuple of ints
-        """
-        shape = tensor.get_shape().as_list()
-        axis = TFModel.channels_axis(data_format)
-        return shape[axis]
-
     def _map_name(self, name):
         if isinstance(name, str):
             if hasattr(self, name):
                 return getattr(self, name)
             elif ':' in name:
                 return name
+            else:
+                tensors = tf.get_collection(name)
+                if len(tensors) != 0:
+                    return tensors
             return name + ':0'
         return name
 
@@ -765,6 +629,7 @@ class TFModel(BaseModel):
         else:
             _fetches = fetches
         return _fetches
+
 
     def _fill_output(self, output, fetches):
         def _recast_output(out, ix=None):
@@ -952,7 +817,7 @@ class TFModel(BaseModel):
     @classmethod
     def crop(cls, inputs, shape_images, data_format='channels_last'):
         """ Crop input tensor to a shape of a given image.
-        If shape_image has not fully defined shape (shape_image.get_shape() has at leats one None),
+        If shape_image has not fully defined shape (shape_image.get_shape() has at least one None),
         the returned tf.Tensor will be of unknown shape except the number of channels.
 
         Parameters
@@ -1165,8 +1030,10 @@ class TFModel(BaseModel):
         return x
 
     def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
-        _ = scope, kwargs
-        proba = tf.nn.softmax(inputs, name='predicted_proba')
+        _ = scope
+        data_format = kwargs['data_format']
+        axis = self.channels_axis(data_format)
+        proba = tf.nn.softmax(inputs, name='predicted_proba', dim=axis)
         self.store_to_attr(attr_prefix + 'predicted_proba', proba)
 
     def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
@@ -1184,6 +1051,7 @@ class TFModel(BaseModel):
         except KeyError:
             self._add_output_labels(inputs, scope, attr_prefix, **kwargs)
             predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+        predicted_labels = tf.cast(predicted_labels, true_labels.dtype)
         equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
         accuracy = tf.reduce_mean(equals, name='accuracy')
         self.store_to_attr(attr_prefix + 'accuracy', accuracy)
@@ -1310,7 +1178,7 @@ class TFModel(BaseModel):
         """
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
-            in_filters = cls.channels_shape(inputs, data_format)
+            in_filters = cls.num_channels(inputs, data_format)
             x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
                            **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
 
@@ -1320,6 +1188,216 @@ class TFModel(BaseModel):
             scale = tf.reshape(x, shape)
             x = inputs * scale
         return x
+
+    @classmethod
+    def channels_axis(cls, data_format):
+        """ Return the channels axis for the tensor
+
+        Parameters
+        ----------
+        data_format : str {'channels_last', 'channels_first'}
+
+        Returns
+        -------
+        number of channels : int
+        """
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
+
+    def data_format(self, tensor, **kwargs):
+        """ Return the tensor data format (channels_last or channels_first)
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+
+        Returns
+        -------
+        data_format : str
+        """
+        config = self.get_tensor_config(tensor, **kwargs)
+        return config.get('data_format')
+
+    def has_classes(self, tensor):
+        """ Check if a tensor has classes defined in the config """
+        config = self.get_tensor_config(tensor)
+        has = config.get('classes') is not None
+        return has
+
+    def classes(self, tensor):
+        """ Return the  number of classes """
+        config = self.get_tensor_config(tensor)
+        classes = config.get('classes')
+        if isinstance(classes, int):
+            return np.arange(classes)
+        return np.asarray(classes)
+
+    def num_classes(self, tensor):
+        """ Return the  number of classes """
+        if self.has_classes(tensor):
+            classes = self.classes(tensor)
+            return classes if isinstance(classes, int) else len(classes)
+        return self.get_num_channels(tensor)
+
+    def get_num_channels(self, tensor, **kwargs):
+        """ Return the number of channels in the tensor
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+
+        Returns
+        -------
+        number of channels : int
+        """
+        config = self.get_tensor_config(tensor, **kwargs)
+        shape = config.get('shape')
+        channels_axis = self.channels_axis(tensor, **kwargs)
+        return shape[channels_axis] if shape else None
+
+    @classmethod
+    def num_channels(cls, tensor, data_format='channels_last'):
+        """ Return number of channels in the input tensor
+
+        Parameters
+        ----------
+        tensor : tf.Tensor
+
+        Returns
+        -------
+        shape : tuple of ints
+        """
+        shape = tensor.get_shape().as_list()
+        axis = TFModel.channels_axis(data_format)
+        return shape[axis]
+
+    def get_shape(self, tensor, **kwargs):
+        """ Return the tensor shape without batch dimension
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+
+        Returns
+        -------
+        shape : tuple
+        """
+        config = self.get_tensor_config(tensor, **kwargs)
+        return config.get('shape')
+
+    @classmethod
+    def shape(cls, tensor):
+        """ Return shape of the input tensor without batch size
+
+        Parameters
+        ----------
+        tensor : tf.Tensor
+
+        Returns
+        -------
+        shape : tuple
+        """
+        return tensor.get_shape().as_list()[1:]
+
+    def get_spatial_dim(self, tensor, **kwargs):
+        """ Return the tensor spatial dimensionality (without batch and channels dimensions)
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+
+        Returns
+        -------
+        number of spatial dimensions : int
+        """
+        config = self.get_tensor_config(tensor, **kwargs)
+        return len(config.get('shape')) - 1
+
+    @classmethod
+    def spatial_dim(cls, tensor):
+        """ Return spatial dim of the input tensor (without channels and batch dimension)
+
+        Parameters
+        ----------
+        tensor : tf.Tensor
+
+        Returns
+        -------
+        dim : int
+        """
+        return len(tensor.get_shape().as_list()) - 2
+
+    def get_spatial_shape(self, tensor, **kwargs):
+        """ Return the tensor spatial shape (without batch and channels dimensions)
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+
+        Returns
+        -------
+        spatial shape : tuple
+        """
+        config = self.get_tensor_config(tensor, **kwargs)
+        data_format = config.get('data_format')
+        shape = config.get('shape')[:-1] if data_format == 'channels_last' else config.get('shape')[1:]
+        return shape
+
+    @classmethod
+    def spatial_shape(cls, tensor, data_format='channels_last'):
+        """ Return spatial shape of the input tensor
+
+        Parameters
+        ----------
+        tensor : tf.Tensor
+
+        Returns
+        -------
+        shape : tuple
+        """
+        shape = tensor.get_shape().as_list()
+        axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
+        return shape[axis]
+
+    def get_batch_size(self, tensor):
+        """ Return batch size (the length of the first dimension) of the input tensor
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+
+        Returns
+        -------
+        batch size : int or None
+        """
+        if isinstance(tensor, tf.Tensor):
+            pass
+        elif isinstance(tensor, str):
+            if tensor in self._inputs:
+                tensor = self._inputs[tensor]['placeholder']
+            else:
+                input_name = self._map_name(tensor)
+                if input_name in self._inputs:
+                    tensor = self._inputs[input_name]
+                else:
+                    tensor = self.graph.get_tensor_by_name(input_name)
+        else:
+            raise TypeError("Tensor can be tf.Tensor or string, but given %s" % type(tensor))
+
+        return tensor.get_shape().as_list()[0]
+
+    @classmethod
+    def batch_size(cls, tensor):
+        """ Return batch size (the length of the first dimension) of the input tensor
+
+        Parameters
+        ----------
+        tensor : tf.Tensor
+
+        Returns
+        -------
+        batch size : int or None
+        """
+        return tensor.get_shape().as_list()[0]
 
     @classmethod
     def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):

@@ -117,7 +117,7 @@ class UNet(TFModel):
 
         with tf.variable_scope(name):
             x, skip = inputs
-            x = cls.upsample(x, filters=filters, name='upsample', **upsample_args)
+            x = cls.upsample(x, filters=filters, name='upsample', **upsample_args, **kwargs)
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat((skip, x), axis=axis)
