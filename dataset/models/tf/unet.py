@@ -31,11 +31,10 @@ class UNet(TFModel):
         config = TFModel.default_config()
 
         filters = 64   # number of filters in the first block
-
         config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
-        config['body']['upsampling_kernel'] = 2
         config['body']['num_blocks'] = 4
         config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
+        config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         return config
 
@@ -68,16 +67,16 @@ class UNet(TFModel):
             x = inputs
             encoder_outputs = [x]
             for i, ifilters in enumerate(filters):
-                x = cls.downsampling_block(x, ifilters, name='downsampling-'+str(i), **kwargs)
+                x = cls.encoder_block(x, ifilters, name='downsampling-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
             for i, ifilters in enumerate(filters[::-1]):
-                x = cls.upsampling_block((x, encoder_outputs[-i-2]), ifilters//2, name='upsampling-'+str(i), **kwargs)
+                x = cls.decoder_block((x, encoder_outputs[-i-2]), ifilters//2, name='upsampling-'+str(i), **kwargs)
 
         return x
 
     @classmethod
-    def downsampling_block(cls, inputs, filters, name, **kwargs):
+    def encoder_block(cls, inputs, filters, name, **kwargs):
         """ 2x2 max pooling with stride 2 and two 3x3 convolutions
 
         Parameters
@@ -97,7 +96,7 @@ class UNet(TFModel):
         return x
 
     @classmethod
-    def upsampling_block(cls, inputs, filters, name, **kwargs):
+    def decoder_block(cls, inputs, filters, name, **kwargs):
         """ 3x3 convolution and 2x2 transposed convolution
 
         Parameters
@@ -114,10 +113,11 @@ class UNet(TFModel):
         tf.Tensor
         """
         config = cls.fill_params('body', **kwargs)
-        kernel = cls.pop('upsampling_kernel', config)
+        upsample_args = cls.pop('upsample', config)
+
         with tf.variable_scope(name):
             x, skip = inputs
-            x = conv_block(x, 'tna', filters, kernel, name='upsample', strides=2, **kwargs)
+            x = cls.upsample(x, filters=filters, name='upsample', **upsample_args)
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat((skip, x), axis=axis)

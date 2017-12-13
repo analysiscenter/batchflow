@@ -20,6 +20,20 @@ def flatten(inputs, name=None):
     return x
 
 
+def alpha_dropout(inputs, rate=0.5, noise_shape=None, seed=None, training=False, name=None):
+    """ Alpha dropout layer
+
+    Alpha Dropout is a dropout that maintains the self-normalizing property.
+    For an input with zero mean and unit standard deviation, the output of Alpha Dropout maintains
+    the original mean and standard deviation of the input.
+
+    Klambauer G. et al "`Self-Normalizing Neural Networks <https://arxiv.org/abs/1706.02515>`_"
+    """
+    def _dropped_inputs():
+        return tf.contrib.nn.alpha_dropout(inputs, 1-rate, noise_shape=noise_shape, seed=seed)
+    return tf.cond(training, _dropped_inputs, lambda: tf.identity(inputs), name=name)
+
+
 def maxout(inputs, depth, axis=-1, name='max'):
     """ Shrink last dimension by making max pooling every ``depth`` channels """
     with tf.name_scope(name):
@@ -35,8 +49,17 @@ def maxout(inputs, depth, axis=-1, name='max'):
         out = tf.reduce_max(tf.reshape(x, shape), axis=-1, keep_dims=False)
         return out
 
-def mip(inputs, depth, data_format='channels_last', name='mip'):
-    """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels """
+
+_REDUCE_OP = {
+    'max': tf.reduce_max,
+    'mean': tf.reduce_mean,
+    'sum': tf.reduce_sum,
+}
+
+def xip(inputs, depth, reduction='max', data_format='channels_last', name='xip'):
+    """ Shrink the channels dimension with reduce ``op`` every ``depth`` channels """
+    reduce_op = _REDUCE_OP[reduction]
+
     with tf.name_scope(name):
         x = tf.convert_to_tensor(inputs)
 
@@ -46,25 +69,11 @@ def mip(inputs, depth, data_format='channels_last', name='mip'):
         if num_layers % depth:
             split_sizes += [num_layers % depth]
 
-        splits = tf.split(x, split_sizes, axis=axis)
-        mips = []
-        for split in splits:
-            amip = tf.reduce_max(split, axis=axis)
-            mips.append(amip)
-        mips = tf.stack(mips, axis=axis)
+        xips = [reduce_op(split, axis=axis) for split in tf.split(x, split_sizes, axis=axis)]
+        xips = tf.stack(xips, axis=axis)
 
-    return mips
+    return xips
 
-
-def alpha_dropout(inputs, rate=0.5, noise_shape=None, seed=None, training=False, name=None):
-    """ Alpha dropout layer
-
-    Alpha Dropout is a dropout that maintains the self-normalizing property.
-    For an input with zero mean and unit standard deviation, the output of Alpha Dropout maintains
-    the original mean and standard deviation of the input.
-
-    Klambauer G. et al "`Self-Normalizing Neural Networks <https://arxiv.org/abs/1706.02515>`_"
-    """
-    def _dropped_inputs():
-        return tf.contrib.nn.alpha_dropout(inputs, 1-rate, noise_shape=noise_shape, seed=seed)
-    return tf.cond(training, _dropped_inputs, lambda: tf.identity(inputs), name=name)
+def mip(inputs, depth, data_format='channels_last', name='mip'):
+    """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels """
+    return xip(inputs, depth, 'max', data_format, name)

@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..base import BaseModel
-from .layers import mip, conv_block
+from .layers import mip, conv_block, upsample, global_average_pooling
 from .losses import dice
 
 
@@ -1171,13 +1171,13 @@ class TFModel(BaseModel):
 
     def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
         _ = scope
-        data_format = kwargs.get('data_format')
-        channels_axis = self.channels_axis(data_format)
+        channels_axis = self.channels_axis(kwargs.get('data_format'))
         predicted_labels = tf.argmax(inputs, axis=channels_axis, name='predicted_labels')
         self.store_to_attr(attr_prefix + 'predicted_labels', predicted_labels)
 
     def _add_output_accuracy(self, inputs, scope, attr_prefix, **kwargs):
-        true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
+        channels_axis = self.channels_axis(kwargs.get('data_format'))
+        true_labels = tf.argmax(self.targets, axis=channels_axis)
         current_scope = self.graph.get_name_scope() + '/'
         try:
             predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
@@ -1319,4 +1319,125 @@ class TFModel(BaseModel):
             shape[axis] = in_filters
             scale = tf.reshape(x, shape)
             x = inputs * scale
+        return x
+
+    @classmethod
+    def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):
+        """ Upsample input tensor
+
+        Parameters
+        ----------
+        inputs : tf.Tensor or tuple of two tf.Tensor
+            a tensor to resize and a tensor which size to resize to
+        factor : int
+            an upsamping scale
+        layout : str
+            resizing technique, a sequence of:
+
+            - R - use residual connection with bilinear additive upsampling (must be the first symbol)
+            - b - bilinear resize
+            - B - bilinear additive upsampling
+            - N - nearest neighbor resize
+            - t - transposed convolution
+            - X - subpixel convolution
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        if np.all(factor == 1):
+            return inputs
+
+        if isinstance(inputs, (list, tuple)):
+            inputs, resize_to = inputs
+            axis = slice(1, -1) if kwargs['data_format'] == 'channels_last' else slice(2, None)
+            to_shape = resize_to.get_shape().as_list()[axis]
+            i_shape = inputs.get_shape().as_list()[axis]
+            factor = np.array(to_shape) / np.array(i_shape)
+            factor = factor.astype('int32')
+
+        return upsample(inputs, factor, layout, name=name, **kwargs)
+
+    @classmethod
+    def pyramid_pooling(cls, inputs, name='psp', **kwargs):
+        """ Pyramid Pooling module
+
+        Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        pool_size : tuple of int
+            feature region sizes - pooling kernel sizes (e.g. [1, 2, 3, 6])
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        pool_size = cls.pop('pool_size', kwargs)
+        pool_op = cls.pop('pool_op', kwargs, default='mean')
+        layout = cls.pop('layout', kwargs, default='cna')
+        kernel_size = cls.pop('kernel_size', kwargs, default=1)
+        filters = cls.num_channels(inputs, kwargs['data_format'])
+        filters = cls.pop('filters', kwargs, default=filters)
+        upsample_args = cls.pop('upsample', kwargs, default={})
+        upsample_args = {**kwargs, **upsample_args}
+
+        with tf.variable_scope(name):
+            layers = []
+            for level in pool_size:
+                if level == 1:
+                    x = inputs
+                else:
+                    x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=level, pool_strides=level,
+                                   name='pool', **kwargs)
+                x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv', **kwargs)
+                x = cls.upsample(x, factor=level, **upsample_args)
+                layers.append(x)
+            axis = cls.channels_axis(kwargs.get('data_format'))
+            x = tf.concat(layers, axis=axis)
+        return x
+
+    @classmethod
+    def aspp(cls, inputs, name='aspp', **kwargs):
+        """ Atrous Spatial Pyramid Pooling module
+
+        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation
+        <https://arxiv.org/abs/1706.05587>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        rates : tuple of int
+            dilation rates for branches (default=[6, 12, 18])
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        rates = cls.pop('rates', kwargs, default=[6, 12, 18])
+        layout = cls.pop('layout', kwargs, default='cna')
+        kernel_size = cls.pop('kernel_size', kwargs, default=3)
+        filters = cls.num_channels(inputs, kwargs['data_format'])
+        filters = cls.pop('filters', kwargs, default=filters)
+
+        with tf.variable_scope(name):
+            layers = []
+            layers.append(conv_block(inputs, layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs))
+
+            for level in rates:
+                x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
+                               name='conv-%d' % level, **kwargs)
+                layers.append(x)
+
+            with tf.variable_scope('image_features'):
+                x = global_average_pooling(inputs, **kwargs)
+                x = cls.upsample((x, inputs), layout='b', **kwargs)
+            layers.append(x)
+
+            axis = cls.channels_axis(kwargs.get('data_format'))
+            x = tf.concat(layers, axis=axis, name='concat')
+            x = conv_block(inputs, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
         return x

@@ -168,7 +168,8 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        kwargs = cls.fill_params('body/block', **kwargs)
+        defaults = cls.get('body/block', ResNet.default_config())
+        kwargs = {**defaults, **kwargs}
         filters, downsample = cls.pop(['filters', 'downsample'], kwargs)
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
         resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
@@ -270,7 +271,11 @@ class ResNet(TFModel):
         tf.Tensor
         """
         kernel_size = [1, 3, 1] if kernel_size is None else kernel_size
-        strides = ([2] + [1] * layout.count('c')) if downsample else 1
+        n = layout.count('c') - 2
+        if kwargs.get('strides') is None:
+            strides = ([1, 2] + [1] * n) if downsample else 1
+        else:
+            strides = kwargs.pop('strides')
         x = conv_block(inputs, layout, [filters, filters, filters * bottleneck_factor], kernel_size=kernel_size,
                        strides=strides, **kwargs)
         return x
