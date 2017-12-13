@@ -108,11 +108,12 @@ class ResNet(TFModel):
         with tf.variable_scope(name):
             x = inputs
             for i, n_blocks in enumerate(kwargs['num_blocks']):
-                with tf.variable_scope('block-%d' % i):
+                with tf.variable_scope('group-%d' % i):
                     for block in range(n_blocks):
                         downsample = i > 0 and block == 0
                         block_args['downsample'] = downsample
-                        x = cls.block(x, filters=filters[i], name='layer-%d' % block, **block_args)
+                        x = cls.block(x, filters=filters[i], name='block-%d' % block, **block_args)
+                        x = tf.identity(x, name='output')
         return x
 
     @classmethod
@@ -123,10 +124,10 @@ class ResNet(TFModel):
         ----------
         inputs : tf.Tensor
             input tensor
-        filters : int
-            number of output filters
         name : str
             scope name
+        kwargs : dict
+            block parameters
 
         Returns
         -------
@@ -163,6 +164,8 @@ class ResNet(TFModel):
             se block ratio
         name : str
             scope name
+        kwargs : dict
+            conv_block parameters for all sub blocks
 
         Returns
         -------
@@ -221,6 +224,8 @@ class ResNet(TFModel):
             whether to use a simple or a bottleneck block
         bottleneck_factor : int
             filter count scaling factor
+        kwargs : dict
+            conv_block parameters
 
         Returns
         -------
@@ -242,8 +247,14 @@ class ResNet(TFModel):
             input tensor
         filters : int
             number of filters
+        kernel_size : int or tuple
+            convolution kernel size
+        downsample : bool
+            whether to downsample the input tensor with strides=2
         name : str
             scope name
+        kwargs : dict
+            conv_block parameters
 
         Returns
         -------
@@ -263,8 +274,14 @@ class ResNet(TFModel):
             input tensor
         filters : int
             number of filters in the first two convolutions
+        kernel_size : int or tuple
+            convolution kernel size
         bottleneck_factor : int
             scale factor for the number of filters
+        downsample : bool
+            whether to downsample the input tensor with strides=2
+        kwargs : dict
+            conv_block parameters
 
         Returns
         -------
@@ -296,6 +313,8 @@ class ResNet(TFModel):
             cardinality for ResNeXt model
         name : str
             scope name
+        kwargs : dict
+            conv_block parameters
 
         Returns
         -------
