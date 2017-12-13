@@ -439,7 +439,7 @@ class TFModel(BaseModel):
         par = self.get(param, config)
 
         if par is None:
-            return None, None
+            return None, {}
 
         if isinstance(par, (tuple, list)):
             if len(par) == 0:
