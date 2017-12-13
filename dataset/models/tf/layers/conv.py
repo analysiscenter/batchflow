@@ -209,7 +209,7 @@ def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kw
     _, channels = _calc_size(inputs, factor, data_format)
 
     with tf.variable_scope(name):
-        x = conv(inputs, filters=channels*factor**2, kernel_size=1, name='conv', **kwargs)
+        x = conv(inputs, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
         x = tf.depth_to_space(x, block_size=factor, name='d2s', data_format=dafo)
     return x
 
@@ -232,12 +232,13 @@ def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_
     -------
     tf.Tensor
     """
+    dim = inputs.shape.ndims - 2
     size, channels = _calc_size(inputs, factor, data_format)
     layout = kwargs.get('layout', 'c')
     with tf.variable_scope(name):
         x = tf.image.resize_bilinear(inputs, size=size, name='resize')
-        x = conv(x, layout, filters=channels*factor**2, kernel_size=1, name='conv', **kwargs)
-        x = xip(x, depth=factor**2, reduction='sum', name='addition')
+        x = conv(x, layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
+        x = xip(x, depth=factor**dim, reduction='sum', name='addition')
     return x
 
 
