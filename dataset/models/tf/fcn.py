@@ -278,7 +278,7 @@ class FCN8(FCN):
         kwargs = cls.fill_params('body', **kwargs)
         filters = cls.pop('filters', kwargs)
         upsample_args = kwargs['upsample']
-        
+
         with tf.variable_scope(name):
             x, skip1, skip2 = inputs
 
