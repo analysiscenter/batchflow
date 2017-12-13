@@ -67,11 +67,11 @@ class UNet(TFModel):
             x = inputs
             encoder_outputs = [x]
             for i, ifilters in enumerate(filters):
-                x = cls.encoder_block(x, ifilters, name='downsampling-'+str(i), **kwargs)
+                x = cls.encoder_block(x, ifilters, name='encoder-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
             for i, ifilters in enumerate(filters[::-1]):
-                x = cls.decoder_block((x, encoder_outputs[-i-2]), ifilters//2, name='upsampling-'+str(i), **kwargs)
+                x = cls.decoder_block((x, encoder_outputs[-i-2]), ifilters//2, name='decoder-'+str(i), **kwargs)
 
         return x
 
