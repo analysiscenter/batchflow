@@ -1030,8 +1030,9 @@ class TFModel(BaseModel):
         return x
 
     def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
-        _ = scope, kwargs
-        axis = -1 if kwargs['data_format'] == 'channels_last' else 1
+        _ = scope
+        data_format = kwargs['data_format']
+        axis = self.channels_axis(data_format)
         proba = tf.nn.softmax(inputs, name='predicted_proba', dim=axis)
         self.store_to_attr(attr_prefix + 'predicted_proba', proba)
 
@@ -1480,7 +1481,7 @@ class TFModel(BaseModel):
     def aspp(cls, inputs, name='aspp', **kwargs):
         """ Atrous Spatial Pyramid Pooling module
 
-        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation 
+        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation
         <https://arxiv.org/abs/1706.05587>`_"
 
         Parameters
