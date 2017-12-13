@@ -38,8 +38,11 @@ class LinkNet(TFModel):
                                           pool_size=3, pool_strides=2))
         config['body']['num_blocks'] = 4
         config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters
+        config['body']['upsample'] = dict(layout='tna', factor=2, kernel_size=3)
 
         config['head']['filters'] = filters // 2
+        config['head']['upsample1'] = dict(layout='tna cna', factor=2, kernel_size=3, strides=[2, 1])
+        config['head']['upsample2'] = dict(layout='t', factor=2)
 
         return config
 
@@ -119,9 +122,14 @@ class LinkNet(TFModel):
         -------
         tf.Tensor
         """
-        num_filters = inputs.get_shape()[-1].value // 4
-        return conv_block(inputs, 'cna tna cna', [num_filters, num_filters, filters], [1, 3, 1],
-                          name=name, strides=[1, 2, 1], **kwargs)
+        upsample_args = cls.pop('upsample', kwargs)
+
+        num_filters = cls.num_channels(inputs, kwargs.get('data_format')) // 4
+        with tf.variable_scope(name):
+            x = conv_block(inputs, 'cna', num_filters, kernel_size=1, name='conv_pre', **kwargs)
+            x = cls.upsample(x, filters=num_filters, name='upsample', **upsample_args)
+            x = conv_block(x, 'cna', filters, kernel_size=1, name='conv_post', **kwargs)
+        return x
 
     @classmethod
     def head(cls, inputs, targets, num_classes, name='head', **kwargs):
@@ -144,8 +152,11 @@ class LinkNet(TFModel):
         """
         kwargs = cls.fill_params('head', **kwargs)
         filters = kwargs.pop('filters')
+        upsample1_args = cls.pop('upsample1', kwargs)
+        upsample2_args = cls.pop('upsample2', kwargs)
 
-        x = conv_block(inputs, 'tna cna t', [filters, filters, num_classes], [3, 3, 2],
-                       strides=[2, 1, 2], name=name, **kwargs)
-        x = cls.crop(x, targets)
+        with tf.variable_scope(name):
+            x = cls.upsample(inputs, filters=filters, name='upsample1', **upsample1_args)
+            x = cls.upsample(x, filters=num_classes, name='upsample2', **upsample2_args)
+            x = cls.crop(x, targets, data_format=kwargs.get('data_format'))
         return x

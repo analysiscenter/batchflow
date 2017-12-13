@@ -8,7 +8,7 @@ import tensorflow as tf
 sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V, action, ImagesBatch
 from dataset.opensets import MNIST
-from dataset.models.tf import TFModel
+from dataset.models.tf import TFModel, VGG16, VGG19
 from dataset.models.tf.layers import conv_block
 
 
@@ -36,6 +36,11 @@ class MyBatch(ImagesBatch):
         return self
 
 
+def make_pp(tp, dataset, model):
+    pp = tp << dataset
+    pp.set_variable('model', model)
+    return pp
+
 if __name__ == "__main__":
     BATCH_SIZE = 128
 
@@ -45,10 +50,11 @@ if __name__ == "__main__":
     print("Start training...")
     t = time()
     train_tp = (Pipeline(config=config)
+                .init_variable('model', VGG16)
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('input_tensor_name', 'images')
-                .init_model('dynamic', MyModel, 'conv',
+                .init_model('dynamic', V('model'), 'conv',
                             config={'session': {'config': tf.ConfigProto(allow_soft_placement=True)},
                                     'loss': 'ce',
                                     'optimizer': {'name':'Adam', 'use_locking': True},
@@ -56,6 +62,7 @@ if __name__ == "__main__":
                                                    #labels={'shape': 10, 'dtype': 'uint8',
                                                    labels={'classes': (10+np.arange(10)).astype('str'),
                                                            'transform': 'ohe', 'name': 'targets'}),
+                                    'input_block/inputs': 'images',
                                     'output': dict(ops=['labels', 'accuracy'])})
                 .make_digits()
                 .train_model('conv', fetches='loss',
@@ -66,7 +73,8 @@ if __name__ == "__main__":
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
     #train_pp = (train_tp << mnist.train)
-    train_pp = (train_tp << mnist.train).run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
+    train_pp = make_pp(train_tp, mnist.train, VGG19)
+    train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0)
     print("End training", time() - t)
 
 

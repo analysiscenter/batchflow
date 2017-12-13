@@ -4,7 +4,6 @@ Fully Convolutional DenseNets for Semantic Segmentation
 """
 import tensorflow as tf
 
-from .layers import conv_block
 from . import TFModel
 from .densenet import DenseNet
 
@@ -38,8 +37,7 @@ class DenseNetFC(TFModel):
                                           pool_size=3, pool_strides=2))
 
         config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=12, bottleneck=False)
-        config['body']['transition_up'] = dict(layout='nat', kernel_size=3, strides=2,
-                                               pool_size=2, pool_strides=2)
+        config['body']['upsample'] = dict(layout='nat', factor=2, kernel_size=3)
         config['body']['transition_down'] = dict(layout='nacdp', kernel_size=1, strides=1,
                                                  pool_size=2, pool_strides=2, dropout_rate=.2,
                                                  reduction_factor=1)
@@ -70,7 +68,7 @@ class DenseNetFC(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         num_blocks, block = cls.pop(['num_blocks', 'block'], kwargs)
-        trans_up, trans_down = cls.pop(['transition_up', 'transition_down'], kwargs)
+        trans_up, trans_down = cls.pop(['upsample', 'transition_down'], kwargs)
         block = {**kwargs, **block}
         trans_up = {**kwargs, **trans_up}
         trans_down = {**kwargs, **trans_down}
@@ -166,9 +164,9 @@ class DenseNetFC(TFModel):
         -------
         tf.Tensor
         """
-        kwargs = cls.fill_params('body/transition_up', **kwargs)
+        kwargs = cls.fill_params('body/upsample', **kwargs)
         num_filters = cls.channels_shape(inputs, kwargs.get('data_format'))
-        return conv_block(inputs, filters=num_filters, name=name, **kwargs)
+        return cls.upsample(inputs, filters=num_filters, name=name, **kwargs)
 
 
 class DenseNetFC56(DenseNetFC):

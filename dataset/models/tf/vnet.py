@@ -37,6 +37,7 @@ class VNet(TFModel):
         num_blocks = len(config['body']['layout'])
         config['body']['filters'] = 2 ** np.arange(num_blocks) * filters
         config['body']['kernel_size'] = 5
+        config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='c', kernel_size=1))
         return config
 
@@ -118,9 +119,11 @@ class VNet(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         layout, filters, kernel_size = cls.pop(['layout', 'filters', 'kernel_size'], kwargs)
+        upsample_args = cls.pop('upsample', kwargs)
+
         with tf.variable_scope(name):
             x, skip = inputs
-            x = conv_block(x, layout='tna', filters=filters, kernel_size=2, name='upsample', strides=2, **kwargs)
+            x = cls.upsample(x, filters=filters, name='upsample', **upsample_args)
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat((skip, x), axis=axis)

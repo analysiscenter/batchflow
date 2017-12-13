@@ -41,8 +41,10 @@ class ResNetAttention(TFModel):
         config['input_block'].update(dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
 
-        config['body']['trunk'] = dict(bottleneck=True)
+        config['body'] = dict(bottleneck=True, downsample=False)
+        config['body']['trunk'] = dict(bottleneck=True, downsample=False)
         config['body']['mask'] = dict(bottleneck=True, pool_size=3, pool_strides=2)
+        config['body']['mask']['upsample'] = dict(layout='b', factor=2)
 
         config['head']['layout'] = 'Vf'
 
@@ -91,6 +93,8 @@ class ResNetAttention(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body/mask', **kwargs)
+        upsample_args = cls.pop('upsample', kwargs)
+
         with tf.variable_scope(name):
             inputs, resize_to = inputs
             x = conv_block(inputs, layout='p', name='pool', **kwargs)
@@ -101,8 +105,7 @@ class ResNetAttention(TFModel):
                 i = cls.mask((b, b), level=level-1, name='submask-%d' % level, **kwargs)
                 c = ResNet.block(c + i, name='resblock_3', **kwargs)
 
-            size = cls.spatial_shape(resize_to, data_format=kwargs.get('data_format'))
-            x = tf.image.resize_bilinear(c, size=size, name='interpolation')
+            x = cls.upsample((c, resize_to), name='interpolation', data_format=kwargs['data_format'], **upsample_args)
         return x
 
     @classmethod
@@ -153,12 +156,16 @@ class ResNetAttention(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         layout, filters = cls.pop(['layout', 'filters'], kwargs)
+        mask = cls.pop('mask', kwargs)
+        trunk = cls.pop('trunk', kwargs)
+        mask = {**kwargs, **mask}
+        trunk = {**kwargs, **trunk}
 
         x = inputs
         with tf.variable_scope(name):
             for i, b in enumerate(layout):
                 if b == 'r':
-                    x = ResNet.block(x, filters=filters[i], name='resblock-%d' % i, **kwargs)
+                    x = ResNet.block(x, filters=filters[i], name='resblock-%d' % i, **{**kwargs, 'downsample':True})
                 else:
                     x = cls.attention(x, level=int(b), filters=filters[i], name='attention-%d' % i, **kwargs)
         return x
