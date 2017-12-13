@@ -88,7 +88,7 @@ class FCN(TFModel):
         kwargs = cls.fill_params('head', **kwargs)
         upsample_args = cls.pop('upsample', kwargs)
 
-        x = cls.upsample(inputs, filters=num_classes, name=name, **upsample_args)
+        x = cls.upsample(inputs, filters=num_classes, name=name, **upsample_args, **kwargs)
         x = cls.crop(x, targets, kwargs.get('data_format'))
         return x
 
@@ -199,12 +199,14 @@ class FCN16(FCN):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        filters, upsample_args = cls.pop(['filters', 'upsample'], kwargs)
+        filters = cls.pop('filters', kwargs)
+        upsample_args = kwargs['upsample']
 
         with tf.variable_scope(name):
             x, skip = inputs
             x = FCN32.body(x, filters=filters, num_classes=num_classes, name='fcn32', **kwargs)
-            x = cls.upsample(x, factor=2, filters=num_classes, name='fcn32_upsample', **upsample_args)
+
+            x = cls.upsample(x, factor=2, filters=num_classes, name='fcn32_upsample', **upsample_args, **kwargs)
 
             skip = conv_block(skip, 'c', filters=num_classes, kernel_size=1, name='pool4', **kwargs)
             x = cls.crop(x, skip, kwargs.get('data_format'))
@@ -274,15 +276,16 @@ class FCN8(FCN):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        filters, upsample_args = cls.pop(['filters', 'upsample'], kwargs)
+        filters = cls.pop('filters', kwargs)
+        upsample_args = kwargs['upsample']
 
         with tf.variable_scope(name):
             x, skip1, skip2 = inputs
 
             x = FCN16.body((x, skip1), filters=filters, num_classes=num_classes, name='fcn16', **kwargs)
-            x = cls.upsample(x, factor=2, filters=num_classes, name='fcn16_upsample', **upsample_args)
+            x = cls.upsample(x, factor=2, filters=num_classes, name='fcn16_upsample', **upsample_args, **kwargs)
 
-            skip2 = conv_block(skip2, 'c', num_classes, 1, name='pool3')
+            skip2 = conv_block(skip2, 'c', num_classes, 1, name='pool3', **kwargs)
 
             x = cls.crop(x, skip2, kwargs.get('data_format'))
             output = tf.add(x, skip2, name='output')

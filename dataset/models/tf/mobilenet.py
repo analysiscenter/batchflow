@@ -97,6 +97,6 @@ class MobileNet(TFModel):
         tf.Tensor
         """
         data_format = kwargs.get('data_format')
-        num_filters = cls.channels_shape(inputs, data_format) * width_factor
+        num_filters = cls.num_channels(inputs, data_format) * width_factor
         filters = [num_filters, num_filters*2] if double_filters else num_filters
         return conv_block(inputs, 'sna cna', filters, [3, 1], name=name, strides=[strides, 1], **kwargs)
