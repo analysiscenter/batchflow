@@ -117,13 +117,15 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def double_block(cls, inputs, name='double_block', downsample=1, **kwargs):
+    def double_block(cls, inputs, name='double_block', downsample=True, **kwargs):
         """ Two ResNet blocks one after another
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
+        downsample : bool
+            whether to decrease spatial dimensions
         name : str
             scope name
         kwargs : dict
@@ -135,7 +137,7 @@ class ResNet(TFModel):
         """
         with tf.variable_scope(name):
             x = cls.block(inputs, name='block-1', downsample=downsample, **kwargs)
-            x = cls.block(x, name='block-2', downsample=0, **kwargs)
+            x = cls.block(x, name='block-2', downsample=False, **kwargs)
         return x
 
     @classmethod
@@ -149,7 +151,7 @@ class ResNet(TFModel):
         filters : int or list/tuple of ints
             number of output filters
         downsample : bool
-            whether to downsample with strides=2 in the first convolution
+            whether to decrease spatial dimensions with strides=2 in the first convolution
         resnext : bool
             whether to use an aggregated ResNeXt block
         resnext_factor : int
@@ -220,6 +222,8 @@ class ResNet(TFModel):
             input tensor
         filters : int
             number of output filters
+        downsample : bool
+            whether to decrease spatial dimensions with strides=2
         bottleneck : bool
             whether to use a simple or a bottleneck block
         bottleneck_factor : int
@@ -238,7 +242,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def simple_block(cls, inputs, layout='acnacn', filters=None, kernel_size=3, downsample=0, **kwargs):
+    def simple_block(cls, inputs, layout='acnacn', filters=None, kernel_size=3, downsample=False, **kwargs):
         """ A simple residual block with two 3x3 convolutions
 
         Parameters
@@ -250,7 +254,7 @@ class ResNet(TFModel):
         kernel_size : int or tuple
             convolution kernel size
         downsample : bool
-            whether to downsample the input tensor with strides=2
+            whether to decrease spatial dimensions with strides=2
         name : str
             scope name
         kwargs : dict
@@ -265,7 +269,7 @@ class ResNet(TFModel):
 
     @classmethod
     def bottleneck_block(cls, inputs, layout='acnacnacn', filters=None, kernel_size=None, bottleneck_factor=4,
-                         downsample=0, **kwargs):
+                         downsample=False, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
         Parameters
@@ -279,7 +283,7 @@ class ResNet(TFModel):
         bottleneck_factor : int
             scale factor for the number of filters
         downsample : bool
-            whether to downsample the input tensor with strides=2
+            whether to decrease spatial dimensions with strides=2
         kwargs : dict
             conv_block parameters
 
@@ -314,7 +318,7 @@ class ResNet(TFModel):
         name : str
             scope name
         kwargs : dict
-            conv_block parameters
+            `sub_block` parameters
 
         Returns
         -------
@@ -329,6 +333,40 @@ class ResNet(TFModel):
                 sub_blocks.append(x)
             x = tf.add_n(sub_blocks)
         return x
+
+    @classmethod
+    def make_encoder(cls, inputs, name='encoder', **kwargs):
+        """ Build the input block and the body and return encoder tensors
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+        kwargs : dict
+            input_block and body params
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        input_block = kwargs.pop('input_block', {})
+        body = kwargs.pop('body', {})
+        input_block = cls.fill_params('input_block', **kwargs, **input_block)
+        body = cls.fill_params('body', **kwargs, **body)
+
+        with tf.variable_scope(name):
+            x = cls.input_block(inputs, name='input_block', **input_block)
+            x = cls.body(x, name='body', **body)
+
+            scope = tf.get_default_graph().get_name_scope()
+            encoder_tensors = []
+            for i, _ in enumerate(body['num_blocks']):
+                tensor_name = scope + '/body/group-%d'%i + '/output:0'
+                x = tf.get_default_graph().get_tensor_by_name(tensor_name)
+                encoder_tensors.append(x)
+        return encoder_tensors
 
 
 class ResNet18(ResNet):
