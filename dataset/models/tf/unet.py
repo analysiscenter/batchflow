@@ -34,7 +34,7 @@ class UNet(TFModel):
         config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         config['body']['num_blocks'] = 4
         config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
-        config['body']['upsample'] = dict(layout='tna', factor=2)
+        config['body']['upsample'] = dict(layout='tna cna', factor=2, kernel_size=2, strides=[2, 1])
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         config['loss'] = 'ce'
 
@@ -123,7 +123,7 @@ class UNet(TFModel):
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat((skip, x), axis=axis)
-            x = conv_block(x, 'cnacna', filters, kernel_size=3, name='conv', **kwargs)
+            x = conv_block(x, 'cna cna', filters=filters, kernel_size=3, name='conv', **kwargs)
         return x
 
     @classmethod

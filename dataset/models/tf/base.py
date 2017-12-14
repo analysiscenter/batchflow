@@ -1014,7 +1014,7 @@ class TFModel(BaseModel):
 
             self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
             for oper in ops:
-                self._add_output_op(tensors, oper, oper, scope, attr_prefix, **kwargs)
+                self._add_output_op(tensor, oper, oper, scope, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
