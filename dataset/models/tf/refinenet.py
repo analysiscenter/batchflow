@@ -74,7 +74,7 @@ class RefineNet(TFModel):
             for i, tensor in enumerate(encoder_outputs[::-1]):
                 decoder_inputs = tensor if x is None else (tensor, x)
                 x = cls.decoder_block(decoder_inputs, filters=filters[i], name='decoder-'+str(i), **kwargs)
-            
+
             upsample_args = cls.pop('upsample', kwargs)
             upsample_args = {**kwargs, **upsample_args}
         return x

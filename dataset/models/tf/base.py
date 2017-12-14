@@ -1431,7 +1431,6 @@ class TFModel(BaseModel):
         """
         if np.all(factor == 1):
             return inputs
-        axis = slice(1, -1) if kwargs['data_format'] == 'channels_last' else slice(2, None)
         if isinstance(inputs, (list, tuple)):
             image, resize_to = inputs
         else:
