@@ -1000,7 +1000,6 @@ class TFModel(BaseModel):
             if not isinstance(tensor, tf.Tensor):
                 raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
 
-            scope = self.graph.get_name_scope() + '/'
             current_prefix = prefix[i]
             if current_prefix:
                 ctx = tf.variable_scope(current_prefix)
