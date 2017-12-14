@@ -43,6 +43,7 @@ class LinkNet(TFModel):
         config['head']['filters'] = filters // 2
         config['head']['upsample1'] = dict(layout='tna cna', factor=2, kernel_size=3, strides=[2, 1])
         config['head']['upsample2'] = dict(layout='t', factor=2)
+        config['loss'] = 'ce'
 
         return config
 

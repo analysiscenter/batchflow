@@ -70,6 +70,7 @@ class ResNet(TFModel):
                                        se_block=False, se_factor=16)
 
         config['head'].update(dict(layout='Vdf', dropout_rate=.4, units=2))
+        config['loss'] = 'ce'
 
         return config
 
@@ -353,8 +354,8 @@ class ResNet(TFModel):
         """
         input_block = kwargs.pop('input_block', {})
         body = kwargs.pop('body', {})
-        input_block = cls.fill_params('input_block', **kwargs, **input_block)
-        body = cls.fill_params('body', **kwargs, **body)
+        input_block = cls.fill_params('input_block', **{**kwargs, **input_block})
+        body = cls.fill_params('body', **{**kwargs, **body})
 
         with tf.variable_scope(name):
             x = cls.input_block(inputs, name='input_block', **input_block)

@@ -39,6 +39,7 @@ class VNet(TFModel):
         config['body']['kernel_size'] = 5
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='c', kernel_size=1))
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):

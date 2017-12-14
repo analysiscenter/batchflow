@@ -43,6 +43,7 @@ class DenseNetFC(TFModel):
                                                  reduction_factor=1)
 
         config['head'].update(dict(layout='c', kernel_size=1))
+        config['loss'] = 'ce'
 
         return config
 

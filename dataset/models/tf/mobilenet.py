@@ -41,6 +41,7 @@ class MobileNet(TFModel):
         config['input_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
         config['body'].update(_DEFAULT_BODY_ARCH)
         config['head'].update(dict(layout='Vf'))
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):

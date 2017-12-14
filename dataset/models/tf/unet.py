@@ -36,6 +36,7 @@ class UNet(TFModel):
         config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):

@@ -19,6 +19,7 @@ class FCN(TFModel):
         config['body']['filters'] = 100
         config['body']['upsample'] = dict(layout='t', kernel_size=4)
         config['head']['upsample'] = dict(layout='t')
+        config['loss'] = 'ce'
 
         return config
 

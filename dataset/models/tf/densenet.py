@@ -54,6 +54,7 @@ class DenseNet(TFModel):
                                                   pool_size=2, pool_strides=2,
                                                   reduction_factor=1)
         config['head'].update(dict(layout='Vf'))
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):

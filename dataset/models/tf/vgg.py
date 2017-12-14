@@ -53,6 +53,7 @@ class VGG(TFModel):
         config['body']['block'] = dict(layout='cna')
         config['head']['units'] = [4096, 4096, 2]
         config['head']['layout'] = 'fff'
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):

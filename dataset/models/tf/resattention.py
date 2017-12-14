@@ -48,6 +48,8 @@ class ResNetAttention(TFModel):
 
         config['head']['layout'] = 'Vf'
 
+        config['loss'] = 'ce'
+
         return config
 
     def build_config(self, names=None):
