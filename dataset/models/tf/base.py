@@ -1012,7 +1012,7 @@ class TFModel(BaseModel):
                 ctx = None
             attr_prefix = current_prefix + '_' if current_prefix else ''
 
-            x = self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
+            self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
             for oper in ops:
                 self._add_output_op(tensors, oper, oper, scope, attr_prefix, **kwargs)
 
