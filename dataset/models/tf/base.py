@@ -841,7 +841,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def _static_crop(cls, inputs, shape, data_format='channels_last'):
-        input_shape = np.array(cls.spatial_shape(inputs, data_format))
+        input_shape = np.array(cls.get_spatial_shape(inputs, data_format))
 
         if np.abs(input_shape - shape).sum() > 0:
             begin = [0] * inputs.shape.ndims
@@ -1188,7 +1188,7 @@ class TFModel(BaseModel):
             x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
                            **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
 
-            shape = [-1] + [1] * (len(cls.spatial_shape(inputs, data_format)) + 1)
+            shape = [-1] + [1] * (len(cls.get_spatial_shape(inputs, data_format)) + 1)
             axis = cls.channels_axis(data_format)
             shape[axis] = in_filters
             scale = tf.reshape(x, shape)
