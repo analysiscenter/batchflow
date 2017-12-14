@@ -32,7 +32,7 @@ class FasterRCNN(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['image_shape'] = self.spatial_shape('images')
+        config['head']['image_shape'] = self.get_spatial_shape('images')
         config['head']['batch_size'] = config['batch_size']
         config['head']['iou_threshold'] = config['iou_threshold']
         config['head']['roi_pool_shape'] = config['roi_pool_shape']
@@ -75,7 +75,6 @@ class FasterRCNN(TFModel):
             self.map_shape = np.array(inputs.get_shape().as_list()[2:4])
         self.n_anchors = self.map_shape[0] * self.map_shape[1] * 9
 
-        print(self.map_shape)
         self.image_shape = image_shape
         self.create_anchors_tensors()
 
