@@ -984,7 +984,7 @@ class TFModel(BaseModel):
         TypeError if inputs is not a Tensor or a sequence of Tensors
         """
         kwargs = self.fill_params('output', **kwargs)
-        predictions_op = cls.pop('predictions', kwargs, default=None)
+        predictions_op = self.pop('predictions', kwargs, default=None)
 
         if ops is None:
             ops = []
@@ -1014,20 +1014,20 @@ class TFModel(BaseModel):
 
             x = self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
             for oper in ops:
-                self._add_output_op(tensor, oper, oper, scope, attr_prefix, **kwargs)
+                self._add_output_op(tensors, oper, oper, scope, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
 
     def _add_output_op(self, inputs, oper, name, scope, attr_prefix, **kwargs):
         if oper is None:
-            self._add_output_identity(x, name, scope, attr_prefix, **kwargs)
+            self._add_output_identity(inputs, name, scope, attr_prefix, **kwargs)
         elif oper == 'proba':
-            self._add_output_proba(x, name, scope, attr_prefix, **kwargs)
+            self._add_output_proba(inputs, name, scope, attr_prefix, **kwargs)
         elif oper == 'labels':
-            self._add_output_labels(x, name, scope, attr_prefix, **kwargs)
+            self._add_output_labels(inputs, name, scope, attr_prefix, **kwargs)
         elif oper == 'accuracy':
-            self._add_output_accuracy(x, name, scope, attr_prefix, **kwargs)
+            self._add_output_accuracy(inputs, name, scope, attr_prefix, **kwargs)
 
     def _add_output_identity(self, inputs, name, scope, attr_prefix, **kwargs):
         _ = scope, kwargs
@@ -1035,20 +1035,20 @@ class TFModel(BaseModel):
         self.store_to_attr(attr_prefix + name, x)
         return x
 
-    def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
+    def _add_output_proba(self, inputs, name, scope, attr_prefix, **kwargs):
         _ = scope
         data_format = kwargs['data_format']
         axis = self.channels_axis(data_format)
         proba = tf.nn.softmax(inputs, name=name, dim=axis)
         self.store_to_attr(attr_prefix + name, proba)
 
-    def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
+    def _add_output_labels(self, inputs, name, scope, attr_prefix, **kwargs):
         _ = scope
         channels_axis = self.channels_axis(kwargs.get('data_format'))
         predicted_labels = tf.argmax(inputs, axis=channels_axis, name=name)
         self.store_to_attr(attr_prefix + name, predicted_labels)
 
-    def _add_output_accuracy(self, inputs, scope, attr_prefix, **kwargs):
+    def _add_output_accuracy(self, inputs, name, scope, attr_prefix, **kwargs):
         channels_axis = self.channels_axis(kwargs.get('data_format'))
         true_labels = tf.argmax(self.targets, axis=channels_axis)
         current_scope = self.graph.get_name_scope() + '/'
