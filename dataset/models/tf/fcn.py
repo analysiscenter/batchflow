@@ -13,13 +13,12 @@ class FCN(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-
         config['common']['dropout_rate'] = .5
         config['input_block']['base_network'] = VGG16
         config['body']['filters'] = 100
         config['body']['upsample'] = dict(layout='t', kernel_size=4)
         config['head']['upsample'] = dict(layout='t')
-
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):

@@ -36,6 +36,8 @@ class UNet(TFModel):
         config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
+        config['loss'] = 'ce'
+
         return config
 
     def build_config(self, names=None):
@@ -67,11 +69,11 @@ class UNet(TFModel):
             x = inputs
             encoder_outputs = [x]
             for i, ifilters in enumerate(filters):
-                x = cls.encoder_block(x, ifilters, name='downsampling-'+str(i), **kwargs)
+                x = cls.encoder_block(x, ifilters, name='encoder-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
             for i, ifilters in enumerate(filters[::-1]):
-                x = cls.decoder_block((x, encoder_outputs[-i-2]), ifilters//2, name='upsampling-'+str(i), **kwargs)
+                x = cls.decoder_block((x, encoder_outputs[-i-2]), ifilters//2, name='decoder-'+str(i), **kwargs)
 
         return x
 
@@ -121,7 +123,7 @@ class UNet(TFModel):
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat((skip, x), axis=axis)
-            x = conv_block(x, 'cnacna', filters, kernel_size=3, name='conv', **kwargs)
+            x = conv_block(x, 'cna cna', filters=filters, kernel_size=3, name='conv', **kwargs)
         return x
 
     @classmethod

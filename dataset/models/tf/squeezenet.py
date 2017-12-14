@@ -41,6 +41,7 @@ class SqueezeNet(TFModel):
         config['body']['filters'] = layers_filters
 
         config['head'].update(dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5))
+        config['loss'] = 'ce'
 
         return config
 
