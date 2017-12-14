@@ -34,7 +34,7 @@ class UNet(TFModel):
         config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         config['body']['num_blocks'] = 4
         config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
-        config['body']['upsample'] = dict(layout='tna cna', factor=2, kernel_size=2, strides=[2, 1])
+        config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         config['loss'] = 'ce'
 
