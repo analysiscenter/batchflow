@@ -54,6 +54,7 @@ class DenseNet(TFModel):
                                                   pool_size=2, pool_strides=2,
                                                   reduction_factor=1)
         config['head'].update(dict(layout='Vf'))
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):
@@ -115,15 +116,17 @@ class DenseNet(TFModel):
         with tf.variable_scope(name):
             axis = cls.channels_axis(kwargs['data_format'])
             x = inputs
+            output_concat = []
             for i in range(num_layers):
-                block_concat = x
+                if len(output_concat) > 0:
+                    x = tf.concat(output_concat + [inputs], axis=axis)
                 if bottleneck:
                     x = conv_block(x, filters=growth_rate * 4, kernel_size=1, layout=layout,
                                    name='bottleneck-%d' % i, **kwargs)
                 x = conv_block(x, filters=growth_rate, kernel_size=3, layout=layout,
                                name='conv-%d' % i, **kwargs)
-                x = tf.concat([block_concat, x], axis=axis)
-            x = tf.identity(x, name='output')
+                output_concat.append(x)
+            x = tf.concat(output_concat, axis=axis, name='output')
         return x
 
     @classmethod
@@ -143,7 +146,7 @@ class DenseNet(TFModel):
         """
         kwargs = cls.fill_params('body/transition_layer', **kwargs)
         reduction_factor = cls.get('reduction_factor', kwargs)
-        num_filters = cls.get_num_channels(inputs, kwargs.get('data_format'))
+        num_filters = cls.num_channels(inputs, kwargs.get('data_format'))
         return conv_block(inputs, filters=num_filters * reduction_factor, name=name, **kwargs)
 
 

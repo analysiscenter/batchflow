@@ -31,18 +31,19 @@ if __name__ == "__main__":
                             config={'inputs': dict(images={'shape': B('image_shape')},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images',
+                                    'input_block/filters': 16,
                                     #'body/block/bottleneck': 1,
                                     #'head/units': [100, 100, 10],
                                     #'nothing': F(lambda batch: batch.images.shape[1:]),
                                     #'filters': 16, 'width_factor': 1,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['accuracy'])})
-                #.resize(shape=(16, 16))
+                #.resize(shape=(64, 64))
                 .train_model('conv', fetches='loss',
                                      feed_dict={'images': B('images'),
                                                 'labels': B('labels')},
                              save_to=V('current_loss'), use_lock=True)
-                .print(V('current_loss'), model=C('model'))
+                .print(V('current_loss'), model=V('model'))
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
     train_pp = (train_template << mnist.train)

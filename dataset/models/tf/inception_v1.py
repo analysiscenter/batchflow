@@ -43,6 +43,7 @@ class Inception_v1(Inception):
         config['body']['arch'] = _DEFAULT_V1_ARCH
         config['body']['layout'] = 'bbrbbbbbrbb'
         config['head'].update(dict(layout='Vdf', dropout_rate=.4))
+        config['loss'] = 'ce'
 
         return config
 

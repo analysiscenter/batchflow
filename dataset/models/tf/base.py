@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..base import BaseModel
-from .layers import mip, conv_block
+from .layers import mip, conv_block, upsample, global_average_pooling
 from .losses import dice
 
 
@@ -439,7 +439,7 @@ class TFModel(BaseModel):
         par = self.get(param, config)
 
         if par is None:
-            return None, None
+            return None, {}
 
         if isinstance(par, (tuple, list)):
             if len(par) == 0:
@@ -984,6 +984,7 @@ class TFModel(BaseModel):
         TypeError if inputs is not a Tensor or a sequence of Tensors
         """
         kwargs = self.fill_params('output', **kwargs)
+        predictions_op = self.pop('predictions', kwargs, default=None)
 
         if ops is None:
             ops = []
@@ -1011,49 +1012,55 @@ class TFModel(BaseModel):
                 ctx = None
             attr_prefix = current_prefix + '_' if current_prefix else ''
 
-            x = self._add_output_predictions(tensor, scope, attr_prefix, **kwargs)
+            self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
             for oper in ops:
-                if oper == 'proba':
-                    self._add_output_proba(x, scope, attr_prefix, **kwargs)
-                elif oper == 'labels':
-                    self._add_output_labels(x, scope, attr_prefix, **kwargs)
-                elif oper == 'accuracy':
-                    self._add_output_accuracy(x, scope, attr_prefix, **kwargs)
+                self._add_output_op(tensors, oper, oper, scope, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
 
-    def _add_output_predictions(self, inputs, scope, attr_prefix, **kwargs):
+    def _add_output_op(self, inputs, oper, name, scope, attr_prefix, **kwargs):
+        if oper is None:
+            self._add_output_identity(inputs, name, scope, attr_prefix, **kwargs)
+        elif oper == 'proba':
+            self._add_output_proba(inputs, name, scope, attr_prefix, **kwargs)
+        elif oper == 'labels':
+            self._add_output_labels(inputs, name, scope, attr_prefix, **kwargs)
+        elif oper == 'accuracy':
+            self._add_output_accuracy(inputs, name, scope, attr_prefix, **kwargs)
+
+    def _add_output_identity(self, inputs, name, scope, attr_prefix, **kwargs):
         _ = scope, kwargs
-        x = tf.identity(inputs, name='predictions')
-        self.store_to_attr(attr_prefix + 'predictions', x)
+        x = tf.identity(inputs, name=name)
+        self.store_to_attr(attr_prefix + name, x)
         return x
 
-    def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
-        _ = scope, kwargs
-        axis = -1 if kwargs['data_format'] == 'channels_last' else 1
-        proba = tf.nn.softmax(inputs, name='predicted_proba', dim=axis)
-        self.store_to_attr(attr_prefix + 'predicted_proba', proba)
-
-    def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
+    def _add_output_proba(self, inputs, name, scope, attr_prefix, **kwargs):
         _ = scope
-        data_format = kwargs.get('data_format')
-        channels_axis = self.channels_axis(data_format)
-        predicted_labels = tf.argmax(inputs, axis=channels_axis, name='predicted_labels')
-        self.store_to_attr(attr_prefix + 'predicted_labels', predicted_labels)
+        data_format = kwargs['data_format']
+        axis = self.channels_axis(data_format)
+        proba = tf.nn.softmax(inputs, name=name, dim=axis)
+        self.store_to_attr(attr_prefix + name, proba)
 
-    def _add_output_accuracy(self, inputs, scope, attr_prefix, **kwargs):
-        true_labels = self.graph.get_tensor_by_name(scope + 'inputs/labels:0')
+    def _add_output_labels(self, inputs, name, scope, attr_prefix, **kwargs):
+        _ = scope
+        channels_axis = self.channels_axis(kwargs.get('data_format'))
+        predicted_labels = tf.argmax(inputs, axis=channels_axis, name=name)
+        self.store_to_attr(attr_prefix + name, predicted_labels)
+
+    def _add_output_accuracy(self, inputs, name, scope, attr_prefix, **kwargs):
+        channels_axis = self.channels_axis(kwargs.get('data_format'))
+        true_labels = tf.argmax(self.targets, axis=channels_axis)
         current_scope = self.graph.get_name_scope() + '/'
         try:
-            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'labels:0')
         except KeyError:
             self._add_output_labels(inputs, scope, attr_prefix, **kwargs)
-            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'labels:0')
         predicted_labels = tf.cast(predicted_labels, true_labels.dtype)
         equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
-        accuracy = tf.reduce_mean(equals, name='accuracy')
-        self.store_to_attr(attr_prefix + 'accuracy', accuracy)
+        accuracy = tf.reduce_mean(equals, name=name)
+        self.store_to_attr(attr_prefix + name, accuracy)
 
 
     @classmethod
@@ -1086,7 +1093,6 @@ class TFModel(BaseModel):
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}
-        config['loss'] = 'ce'
         config['optimizer'] = 'Adam'
         return config
 
@@ -1177,7 +1183,7 @@ class TFModel(BaseModel):
         """
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
-            in_filters = cls.get_num_channels(inputs, data_format)
+            in_filters = cls.num_channels(inputs, data_format)
             x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
                            **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
 
@@ -1188,8 +1194,8 @@ class TFModel(BaseModel):
             x = inputs * scale
         return x
 
-    @staticmethod
-    def channels_axis(data_format):
+    @classmethod
+    def channels_axis(cls, data_format):
         """ Return the channels axis for the tensor
 
         Parameters
@@ -1235,9 +1241,9 @@ class TFModel(BaseModel):
         if self.has_classes(tensor):
             classes = self.classes(tensor)
             return classes if isinstance(classes, int) else len(classes)
-        return self.num_channels(tensor)
+        return self.get_num_channels(tensor)
 
-    def num_channels(self, tensor, **kwargs):
+    def get_num_channels(self, tensor, **kwargs):
         """ Return the number of channels in the tensor
 
         Parameters
@@ -1253,8 +1259,8 @@ class TFModel(BaseModel):
         channels_axis = self.channels_axis(tensor, **kwargs)
         return shape[channels_axis] if shape else None
 
-    @staticmethod
-    def get_num_channels(tensor, data_format='channels_last'):
+    @classmethod
+    def num_channels(cls, tensor, data_format='channels_last'):
         """ Return number of channels in the input tensor
 
         Parameters
@@ -1268,8 +1274,8 @@ class TFModel(BaseModel):
         shape = tensor.get_shape().as_list()
         axis = TFModel.channels_axis(data_format)
         return shape[axis]
- 
-    def shape(self, tensor, **kwargs):
+
+    def get_shape(self, tensor, **kwargs):
         """ Return the tensor shape without batch dimension
 
         Parameters
@@ -1281,10 +1287,10 @@ class TFModel(BaseModel):
         shape : tuple
         """
         config = self.get_tensor_config(tensor, **kwargs)
-        return config.get('shape')     
+        return config.get('shape')
 
-    @staticmethod
-    def get_shape(tensor):
+    @classmethod
+    def shape(cls, tensor):
         """ Return shape of the input tensor without batch size
 
         Parameters
@@ -1293,11 +1299,11 @@ class TFModel(BaseModel):
 
         Returns
         -------
-        shape : tuple of ints
+        shape : tuple
         """
         return tensor.get_shape().as_list()[1:]
 
-    def spatial_dim(self, tensor, **kwargs):
+    def get_spatial_dim(self, tensor, **kwargs):
         """ Return the tensor spatial dimensionality (without batch and channels dimensions)
 
         Parameters
@@ -1311,8 +1317,8 @@ class TFModel(BaseModel):
         config = self.get_tensor_config(tensor, **kwargs)
         return len(config.get('shape')) - 1
 
-    @staticmethod
-    def get_spatial_dim(tensor):
+    @classmethod
+    def spatial_dim(cls, tensor):
         """ Return spatial dim of the input tensor (without channels and batch dimension)
 
         Parameters
@@ -1325,7 +1331,7 @@ class TFModel(BaseModel):
         """
         return len(tensor.get_shape().as_list()) - 2
 
-    def spatial_shape(self, tensor, **kwargs):
+    def get_spatial_shape(self, tensor, **kwargs):
         """ Return the tensor spatial shape (without batch and channels dimensions)
 
         Parameters
@@ -1341,8 +1347,8 @@ class TFModel(BaseModel):
         shape = config.get('shape')[:-1] if data_format == 'channels_last' else config.get('shape')[1:]
         return shape
 
-    @staticmethod
-    def get_spatial_shape(tensor, data_format='channels_last'):
+    @classmethod
+    def spatial_shape(cls, tensor, data_format='channels_last'):
         """ Return spatial shape of the input tensor
 
         Parameters
@@ -1351,14 +1357,41 @@ class TFModel(BaseModel):
 
         Returns
         -------
-        shape : tuple of ints
+        shape : tuple
         """
         shape = tensor.get_shape().as_list()
         axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
         return shape[axis]
 
-    @staticmethod
-    def get_batch_size(tensor):
+    def get_batch_size(self, tensor):
+        """ Return batch size (the length of the first dimension) of the input tensor
+
+        Parameters
+        ----------
+        tensor : str or tf.Tensor
+
+        Returns
+        -------
+        batch size : int or None
+        """
+        if isinstance(tensor, tf.Tensor):
+            pass
+        elif isinstance(tensor, str):
+            if tensor in self._inputs:
+                tensor = self._inputs[tensor]['placeholder']
+            else:
+                input_name = self._map_name(tensor)
+                if input_name in self._inputs:
+                    tensor = self._inputs[input_name]
+                else:
+                    tensor = self.graph.get_tensor_by_name(input_name)
+        else:
+            raise TypeError("Tensor can be tf.Tensor or string, but given %s" % type(tensor))
+
+        return tensor.get_shape().as_list()[0]
+
+    @classmethod
+    def batch_size(cls, tensor):
         """ Return batch size (the length of the first dimension) of the input tensor
 
         Parameters
@@ -1367,6 +1400,127 @@ class TFModel(BaseModel):
 
         Returns
         -------
-        batch size : int
+        batch size : int or None
         """
         return tensor.get_shape().as_list()[0]
+
+    @classmethod
+    def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):
+        """ Upsample input tensor
+
+        Parameters
+        ----------
+        inputs : tf.Tensor or tuple of two tf.Tensor
+            a tensor to resize and a tensor which size to resize to
+        factor : int
+            an upsamping scale
+        layout : str
+            resizing technique, a sequence of:
+
+            - R - use residual connection with bilinear additive upsampling (must be the first symbol)
+            - b - bilinear resize
+            - B - bilinear additive upsampling
+            - N - nearest neighbor resize
+            - t - transposed convolution
+            - X - subpixel convolution
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        if np.all(factor == 1):
+            return inputs
+
+        if isinstance(inputs, (list, tuple)):
+            inputs, resize_to = inputs
+            axis = slice(1, -1) if kwargs['data_format'] == 'channels_last' else slice(2, None)
+            to_shape = resize_to.get_shape().as_list()[axis]
+            i_shape = inputs.get_shape().as_list()[axis]
+            factor = np.array(to_shape) / np.array(i_shape)
+            factor = factor.astype('int32')
+
+        return upsample(inputs, factor, layout, name=name, **kwargs)
+
+    @classmethod
+    def pyramid_pooling(cls, inputs, name='psp', **kwargs):
+        """ Pyramid Pooling module
+
+        Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        pool_size : tuple of int
+            feature region sizes - pooling kernel sizes (e.g. [1, 2, 3, 6])
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        pool_size = cls.pop('pool_size', kwargs)
+        pool_op = cls.pop('pool_op', kwargs, default='mean')
+        layout = cls.pop('layout', kwargs, default='cna')
+        kernel_size = cls.pop('kernel_size', kwargs, default=1)
+        filters = cls.num_channels(inputs, kwargs['data_format'])
+        filters = cls.pop('filters', kwargs, default=filters)
+        upsample_args = cls.pop('upsample', kwargs, default={})
+        upsample_args = {**kwargs, **upsample_args}
+
+        with tf.variable_scope(name):
+            layers = []
+            for level in pool_size:
+                if level == 1:
+                    x = inputs
+                else:
+                    x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=level, pool_strides=level,
+                                   name='pool', **kwargs)
+                x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv', **kwargs)
+                x = cls.upsample(x, factor=level, **upsample_args)
+                layers.append(x)
+            axis = cls.channels_axis(kwargs.get('data_format'))
+            x = tf.concat(layers, axis=axis)
+        return x
+
+    @classmethod
+    def aspp(cls, inputs, name='aspp', **kwargs):
+        """ Atrous Spatial Pyramid Pooling module
+
+        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation
+        <https://arxiv.org/abs/1706.05587>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        rates : tuple of int
+            dilation rates for branches (default=[6, 12, 18])
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        rates = cls.pop('rates', kwargs, default=[6, 12, 18])
+        layout = cls.pop('layout', kwargs, default='cna')
+        kernel_size = cls.pop('kernel_size', kwargs, default=3)
+        filters = cls.num_channels(inputs, kwargs['data_format'])
+        filters = cls.pop('filters', kwargs, default=filters)
+
+        with tf.variable_scope(name):
+            layers = []
+            layers.append(conv_block(inputs, layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs))
+
+            for level in rates:
+                x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
+                               name='conv-%d' % level, **kwargs)
+                layers.append(x)
+
+            with tf.variable_scope('image_features'):
+                x = global_average_pooling(inputs, **kwargs)
+                x = cls.upsample((x, inputs), layout='b', **kwargs)
+            layers.append(x)
+
+            axis = cls.channels_axis(kwargs.get('data_format'))
+            x = tf.concat(layers, axis=axis, name='concat')
+            x = conv_block(inputs, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
+        return x

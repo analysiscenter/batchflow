@@ -41,6 +41,7 @@ class MobileNet(TFModel):
         config['input_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
         config['body'].update(_DEFAULT_BODY_ARCH)
         config['head'].update(dict(layout='Vf'))
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):
@@ -97,6 +98,6 @@ class MobileNet(TFModel):
         tf.Tensor
         """
         data_format = kwargs.get('data_format')
-        num_filters = cls.get_num_channels(inputs, data_format) * width_factor
+        num_filters = cls.num_channels(inputs, data_format) * width_factor
         filters = [num_filters, num_filters*2] if double_filters else num_filters
         return conv_block(inputs, 'sna cna', filters, [3, 1], name=name, strides=[strides, 1], **kwargs)
