@@ -3,7 +3,7 @@ import sys
 
 from .base import Baseset
 from .batch import Batch, ArrayBatch, DataFrameBatch
-from .batch_image import ImagesBatch, ImagesPILBatch, CROP_00, CROP_CENTER
+from .batch_image import ImagesBatch, ImagesPILBatch
 from .dataset import Dataset
 from .pipeline import Pipeline
 from .named_expr import B, C, F, V

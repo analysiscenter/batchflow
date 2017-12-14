@@ -25,10 +25,10 @@ from .batch import Batch
 from .decorators import action, inbatch_parallel, any_action_failed
 
 
-CROP_CENTER = -1
-CROP_00 = -2
+ACCEPTABLE_LISTS = [tuple, list, np.ndarray]
 
 
+# is it really needed? Pythonic way is faster
 @njit(nogil=True)
 def random_crop_numba(images, shape):
     """ Fill-in new_images with random crops from images """
@@ -50,9 +50,9 @@ def random_crop_numba(images, shape):
 @njit(nogil=True)
 def calc_origin(image_coord, shape_coord, crop):
     """ Return origin for preserve_shape """
-    if crop == CROP_00:
+    if crop == 'top_left':
         origin = 0
-    elif crop == CROP_CENTER:
+    elif crop == 'center':
         origin = np.abs(shape_coord - image_coord) // 2
     return origin
 
@@ -70,7 +70,7 @@ def calc_coords(image_coord, shape_coord, crop):
     return image_origin, new_image_origin, image_len
 
 @njit(nogil=True)
-def preserve_shape_numba(image_shape, shape, crop=CROP_CENTER):
+def preserve_shape_numba(image_shape, shape, crop='center'):
     """ Change the image shape by cropping and adding empty pixels to fit the given shape """
     x, new_x, len_x = calc_coords(image_shape[0], shape[0], crop)
     y, new_y, len_y = calc_coords(image_shape[1], shape[1], crop)
@@ -112,17 +112,12 @@ class BaseImagesBatch(Batch):
         """ Save data to a file or a memory object """
         return super().dump(dst, fmt, components=None, *args, **kwargs)
 
-    @action
-    def noop(self):
-        """ Do nothing """
-        return self
-
     def get_image_size(self, image):
         """ Return an image size (width, height) """
         raise NotImplementedError("Should be implemented in child classes")
 
     @action
-    def crop(self, components='images', origin=None, shape=None):
+    def crop(self, components='images', origin='top_left', shape=None):
         """ Crop all images in the batch
 
         Parameters
@@ -133,16 +128,24 @@ class BaseImagesBatch(Batch):
         origin : tuple
             can be one of:
 
-            - tuple - a starting point in the form of (x, y)
-            - CROP_00 - to crop from left top edge (0,0)
-            - CROP_CENTER - to crop from center of each image
+            - tuple - a starting point in the form of (row, column)
+            - 'top_left' - to crop from left top edge (0,0)
+            - 'center' - to crop from center of each image
 
         shape : tuple
-            a crop size in the form of (width, height)
+            a crop size in the form of (rows, columns)
+            if None is passed, then nothing is done
         """
-        if origin is not None or shape is not None:
-            origin = origin if origin is not None else (0, 0)
-            self._crop(components, origin, shape)
+        if origin not in ['top_left', 'center'] and type(origin) is not tuple:
+            raise ValueError('origin must be either in [\'top_left\', \'center\'] or a tuple')
+
+        if type(origin) in ACCEPTABLE_LISTS and len(origin) != 2:
+            raise ValueError('origin\'s length must be equal 2' )
+
+        if type(shape) not in ACCEPTABLE_LISTS:
+            raise ValueError('shape\'s type must be one of ACCEPTABLE_LISTS')
+
+        self._crop(components, origin, shape)
         return self
 
     @action
@@ -155,14 +158,14 @@ class BaseImagesBatch(Batch):
             a component name or names which data should be cropped
 
         shape : tuple
-            a crop size in the form of (width, height)
+            a crop size in the form of (rows, colums)
 
         Origin will be chosen at random to fit the required shape
         """
-        if shape is None:
-            raise ValueError("shape cannot be None")
-        else:
-            self._random_crop(components, shape)
+        if type(shape) not in ACCEPTABLE_LISTS:
+            raise ValueError('shape\'s type must be one of ACCEPTABLE_LISTS')
+
+        self._random_crop(components, shape)
         return self
 
     @action
@@ -182,7 +185,7 @@ class BaseImagesBatch(Batch):
 
     @action
     @inbatch_parallel(init='indices', post='assemble')
-    def random_scale(self, ix, components='images', p=1., factor=None, preserve_shape=True, crop=CROP_CENTER):
+    def random_scale(self, ix, components='images', p=1., factor=None, preserve_shape=True, crop='center'):
         """ Scale the content of each image in the batch with a random scale factor
 
         Parameters
@@ -212,12 +215,11 @@ class BaseImagesBatch(Batch):
             new_image = image
         return new_image
 
-    def _preserve_shape(self, image, shape, crop=CROP_CENTER):
+    def _preserve_shape(self, image, shape, crop='center'):
         """ Change the image shape by cropping and adding empty pixels to fit the given shape """
         raise NotImplementedError()
 
     @action
-    @inbatch_parallel(init='indices', post='assemble')
     def rotate(self, ix, components='images', angle=0, preserve_shape=True, **kwargs):
         """ Rotate all images in the batch at the given angle
 
@@ -232,6 +234,8 @@ class BaseImagesBatch(Batch):
             whether to keep shape after rotating
             (always True for images as arrays, can be False for PIL.Images)
         """
+
+
         return self._rotate_one(ix, components, angle, preserve_shape, **kwargs)
 
     @action
@@ -260,22 +264,29 @@ class BaseImagesBatch(Batch):
         return image
 
     @action
-    def flip(self, axis=None):
+    def flip(self, components='images', mode='lr'):
         """ Flip images
 
         Parameters
         ----------
-        axis : {'h', 'v'}
-            'h' for horizontal (left/right) flip
-            'v' for vertical (up/down) flip
-        direction : {'l', 'r', 'u', 'd'}
+        mode : {'lr', 'ud'}
+            'lr' for a left/right flip
+            'ud' for an upside down flip
         """
-        if axis == 'h':
-            return self.fliplr()
-        elif axis == 'v':
-            return self.flipud()
-        else:
-            raise ValueError("Parameter axis can be 'h' or 'v' only")
+        if mode not in ['lr', 'ud']:
+            raise ValueError("`mode` can be 'lr' or 'ud' only")
+        return self._flip(components, mode)
+
+
+    @action
+    def random_flip(self, components='images', mode='lr', p=0.5, p_lr=0.5):
+        if p > 1 or p < 0 or p_lr < 0 or p_lr > 1:
+            raise ValueError("probability must be in [0,1]")
+        if mode not in ['lr', 'ud', 'all']:
+            raise ValueError("`mode` must be one of 'lr', 'ud' and 'all'")
+
+        return self._random_flip(components, mode, p, p_lr)
+
 
 
 class ImagesBatch(BaseImagesBatch):
@@ -340,7 +351,7 @@ class ImagesBatch(BaseImagesBatch):
         new_image = scipy.ndimage.interpolation.zoom(image, factor, order=3)
         return new_image
 
-    def _preserve_shape(self, image, shape, crop=CROP_CENTER):
+    def _preserve_shape(self, image, shape, crop='center'):
         """ Change the image shape by cropping and/or adding empty pixels to fit the given shape """
         image_size = self.get_image_size(image)
         new_x, new_y, x, y = preserve_shape_numba(image_size, shape, crop)
@@ -358,56 +369,59 @@ class ImagesBatch(BaseImagesBatch):
 
     @staticmethod
     def _calc_origin(image, origin, shape):
-        if origin is None or origin == CROP_00:
+        if origin is 'top_left':
             origin = 0, 0
-        elif origin == CROP_CENTER:
-            origin_x = (image.shape[1] - shape[0]) // 2 if image.shape[1] > shape[0] else 0
-            origin_y = (image.shape[0] - shape[1]) // 2 if image.shape[0] > shape[1] else 0
-            origin = origin_x, origin_y
+        elif origin is 'center':
+            origin = np.maximum(image.shape[:2] - np.array(shape), 0) // 2
         return origin
 
-    def _crop(self, components='images', origin=None, shape=None):
-        """ Crop all images in the batch """
-        if origin is not None or shape is not None:
-            images = self.get(None, components)
-
-            origin = self._calc_origin(images[0], origin, shape)
-            if shape is None:
-                shape = images.shape[2], images.shape[1]
-            if np.all(np.array(origin) + np.array(shape) > np.array(images.shape[1:3])):
-                shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
-
-            x = slice(origin[0], origin[0] + shape[0])
-            y = slice(origin[1], origin[1] + shape[1])
-            new_images = images[:, y, x].copy()
-
-            setattr(self, components, new_images)
 
     def _crop_image(self, image, origin, shape):
         origin = self._calc_origin(image, origin, shape)
-        new_image = image[origin[1]:origin[1] + shape[1], origin[0]:origin[1] + shape[0]].copy()
-        return new_image
 
-    def _random_crop(self, components='images', shape=None):
-        if shape is not None:
-            images = self.get(None, components)
-            new_images = random_crop_numba(images, shape)
-            setattr(self, components, new_images)
-        return self
+        if np.all(origin + shape > image.shape[:2]):
+            shape = images.shape[:2] - origin
+
+        row_slice = slice(origin[0], origin[0] + shape[0])
+        column_slice = slice(origin[1], origin[1] + shape[1])
+        return image[row_slice, column_slice].copy()
+
+
+    @inbatch_parallel(init='indices', post='assemble')
+    def _crop(self, ix, components='images', origin='top_left', shape=None):
+        """ Crop all images in the batch """
+        return self._crop_image(self.get(ix, components), origin, shape)
+
+
+    @inbatch_parallel(init='indices', post='assemble')
+    def _random_crop(self, ix, components='images', shape=None):
+        image = self.get(ix, components)
+        origin = (np.random.randint(image.shape[0]-shape[0]+1),
+                  np.random.randint(image.shape[1]-shape[1]+1))
+
+        return self._crop_image(image, origin, shape)
+
+    def _flip_one(self, image, mode):
+        if mode == 'lr':
+            return image[:, ::-1]
+        elif mode == 'ud':
+            return image[::-1]
 
     @action
-    def fliplr(self, components='images'):
-        """ Flip image horizontaly (left / right) """
-        images = self.get(None, components)
-        setattr(self, components, images[:, :, ::-1])
-        return self
+    @inbatch_parallel(init='indices', post='assemble')
+    def _flip(self, ix, components='images', mode='lr'):
+        return self._flip_one(self.get(ix, components), mode)
 
     @action
-    def flipud(self, components='images'):
-        """ Flip image verticaly (up / down) """
-        images = self.get(None, components)
-        setattr(self, components, images[:, ::-1])
-        return self
+    @inbatch_parallel(init='indices', post='assemble')
+    def _random_flip(self, ix, components='images', mode='lr', p=0.5, p_lr=0.5):
+        image = self.get(ix, components)
+        if np.random.random() < p:
+            if mode == 'all':
+                return self._flip_one(image, 'lr' if np.random.random()<p_lr else 'ud')
+            else:
+                return self._flip_one(image, mode)
+        return image
 
 
 class ImagesPILBatch(BaseImagesBatch):
@@ -468,7 +482,7 @@ class ImagesPILBatch(BaseImagesBatch):
         new_image = image.resize(shape, PIL.Image.ANTIALIAS)
         return new_image
 
-    def _preserve_shape(self, image, shape, crop=CROP_CENTER):
+    def _preserve_shape(self, image, shape, crop='center'):
         new_x, new_y, x, y = preserve_shape_numba(image.size, shape, crop)
         new_image = PIL.Image.new(image.mode, shape)
         box = x[0], y[0], x[1], y[1]
@@ -484,9 +498,9 @@ class ImagesPILBatch(BaseImagesBatch):
 
     def _crop_image(self, image, origin, shape):
         """ Crop one image """
-        if origin is None or origin == CROP_00:
+        if origin is None or origin == 'top_left':
             origin = 0, 0
-        elif origin == CROP_CENTER:
+        elif origin == 'center':
             origin = (image.width - shape[0]) // 2, (image.height - shape[1]) // 2
         origin_x, origin_y = origin
         shape = shape if shape is not None else (image.width - origin_x, image.height - origin_y)
