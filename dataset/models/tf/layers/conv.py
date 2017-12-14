@@ -177,9 +177,23 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
 def _calc_size(inputs, factor, data_format):
     shape = inputs.get_shape().as_list()
     channels = shape[-1] if data_format == 'channels_last' else shape[1]
+    if None in shape[1:]:
+        shape = _dynamic_calc_shape(inputs, factor, data_format)
+    else:
+        shape = _static_calc_shape(inputs, factor, data_format)
+    return shape, channels
+
+def _static_calc_shape(inputs, factor, data_format):
+    shape = inputs.get_shape().as_list()
     shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
     shape = list(np.asarray(shape) * np.asarray(factor))
-    return shape, channels
+    return shape
+
+def _dynamic_calc_shape(inputs, factor, data_format):
+    shape = tf.shape(inputs)
+    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
+    shape = shape * np.asarray(factor)
+    return shape
 
 
 def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
@@ -236,7 +250,12 @@ def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_
     size, channels = _calc_size(inputs, factor, data_format)
     layout = kwargs.get('layout', 'c')
     with tf.variable_scope(name):
-        x = tf.image.resize_bilinear(inputs, size=size, name='resize')
+        x = inputs
+        if data_format == 'channels_first':
+            x = tf.transpose(x, [0, 2, 3, 1])
+        x = tf.image.resize_bilinear(x, size=size, name='resize')
+        if data_format == 'channels_first':
+            x = tf.transpose(x, [0, 3, 1, 2])
         x = conv(x, layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
         x = xip(x, depth=factor**dim, reduction='sum', name='addition')
     return x
@@ -261,7 +280,14 @@ def resize_bilinear(inputs, factor=2, name=None, data_format='channels_last', **
     tf.Tensor
     """
     size, _ = _calc_size(inputs, factor, data_format)
-    return tf.image.resize_bilinear(inputs, size=size, name=name, **kwargs)
+    with tf.variable_scope(name):
+        x = inputs
+        if data_format == 'channels_first':
+            x = tf.transpose(x, [0, 2, 3, 1])
+        x = tf.image.resize_bilinear(x, size=size, name='resize', **kwargs)
+        if data_format == 'channels_first':
+            x = tf.transpose(x, [0, 3, 1, 2])
+    return x
 
 
 def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs):

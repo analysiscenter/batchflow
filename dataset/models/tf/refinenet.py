@@ -36,12 +36,14 @@ class RefineNet(TFModel):
         config['body']['encoder'] = dict(base_class=ResNet101)
         config['body']['filters'] = [512, 256, 256, 256]
         config['body']['upsample'] = dict(layout='b', factor=2)
+        config['head']['upsample'] = dict(layout='b', factor=4)
         config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
         config['head']['num_classes'] = self.num_classes('targets')
+        config['head']['targets'] = self.targets
         return config
 
     @classmethod
@@ -66,16 +68,29 @@ class RefineNet(TFModel):
         filters = kwargs.pop('filters')
 
         with tf.variable_scope(name):
-            encoder_outputs = cls.make_encoder(inputs, **encoder, **kwargs)
+            encoder_outputs = cls.encoder(inputs, **encoder, **kwargs)
 
             x = None
             for i, tensor in enumerate(encoder_outputs[::-1]):
                 decoder_inputs = tensor if x is None else (tensor, x)
                 x = cls.decoder_block(decoder_inputs, filters=filters[i], name='decoder-'+str(i), **kwargs)
+
+            upsample_args = cls.pop('upsample', kwargs)
+            upsample_args = {**kwargs, **upsample_args}
         return x
 
     @classmethod
-    def encoder(cls, inputs, base_class, name, **kwargs):
+    def head(cls, inputs, targets, num_classes, name='head', **kwargs):
+
+        upsample_args = cls.pop('upsample', kwargs)
+        upsample_args = {**kwargs, **upsample_args}
+        with tf.variable_scope(name):
+            x = cls.upsample((inputs, targets), **upsample_args)
+            x = conv_block(x, layout='t', filters=num_classes, kernel_size=1, **kwargs)
+        return x
+
+    @classmethod
+    def encoder(cls, inputs, base_class, name='encoder', **kwargs):
         """ Create encoder from a base_class model
 
         Parameters
@@ -127,6 +142,8 @@ class RefineNet(TFModel):
             #filters = min([cls.num_channels(t, data_format=kwargs['data_format']) for t in inputs])
             # Residual Conv Unit
             after_rcu = []
+            if not isinstance(inputs, (list, tuple)):
+                inputs = [inputs]
             for i, tensor in enumerate(inputs):
                 x = ResNet.double_block(tensor, filters=filters, layout='acac',
                                         bottleneck=False, downsample=False,
@@ -139,14 +156,15 @@ class RefineNet(TFModel):
                 for i, tensor in enumerate(after_rcu):
                     x = conv_block(tensor, layout='ac', filters=filters, kernel_size=3,
                                    name='conv-%d' % i, **kwargs)
-                    x = cls.upsample((tensor, after_rcu[0]), layout='b', name='upsample-%d' % i, **upsample_args)
+                    if i != 0:
+                        x = cls.upsample((tensor, after_rcu[0]), name='upsample-%d' % i, **upsample_args)
                     after_mrf += x
             # free memory
             x, after_mrf = after_mrf, None
             after_rcu = None
 
             # Chained-residual pooling
-            x = tf.relu(x)
+            x = tf.nn.relu(x)
             after_crp = x
             num_pools = 4
             for i in range(num_pools):
