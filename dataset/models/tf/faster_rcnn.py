@@ -169,7 +169,11 @@ class FasterRCNN(TFModel):
             labels = feed_dict.pop('labels')
             thresholds = self.rpn_thresholds
 
-            anchors['reg'], anchors['clsf'], anchors['labels'] = self.create_rpn_inputs(self.anchors, bboxes, labels, thresholds)
+            anchors['reg'], anchors['clsf'], anchors['labels'] = self.create_rpn_inputs(self.anchors,
+                                                                                        bboxes,
+                                                                                        labels,
+                                                                                        thresholds)
+
             anchors['batch'] = self.create_anchors_batch(anchors['clsf'], self.anchors_batch)
             anchors['clsf'] = np.array(anchors['clsf'] == 1, dtype=np.int32)
             _feed_dict = {self.anchors_placeholders[k]: anchors[k] for k in anchors}
