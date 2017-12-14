@@ -1431,16 +1431,12 @@ class TFModel(BaseModel):
         """
         if np.all(factor == 1):
             return inputs
-
         axis = slice(1, -1) if kwargs['data_format'] == 'channels_last' else slice(2, None)
-
         if isinstance(inputs, (list, tuple)):
             image, resize_to = inputs
         else:
             image = inputs
-
         x = upsample(image, factor, layout, name=name, **kwargs)
-        
         if isinstance(inputs, (list, tuple)):
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x
