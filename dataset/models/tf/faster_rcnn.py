@@ -11,8 +11,6 @@ import numpy as np
 from . import TFModel, VGG7
 from .layers import conv_block, non_max_suppression, roi_pooling_layer
 
-_IOU_LOW = 0.3
-_IOU_HIGH = 0.7
 
 class FasterRCNN(TFModel):
     """ Faster Region-based convolutional neural network. """
@@ -23,9 +21,9 @@ class FasterRCNN(TFModel):
 
         config['output']['prefix'] = ['reg', 'cls']
         config['anchors_batch'] = 64
-        config['rcn_batch'] = None
-        config['roi_pool_shape'] = (7, 7)
-        config['iou_threshold'] = 0.2
+        config['rcn_batch'] = 64
+        config['nms_threshold'] = 0.2
+        config['rpn_thresholds'] = (0.3, 0.7)
         config['input_block']['base_network'] = VGG7
 
         return config
@@ -34,11 +32,12 @@ class FasterRCNN(TFModel):
         config = super().build_config(names)
         config['head']['image_shape'] = self.get_spatial_shape('images')
         config['head']['batch_size'] = config['batch_size']
-        config['head']['iou_threshold'] = config['iou_threshold']
-        config['head']['roi_pool_shape'] = config['roi_pool_shape']
+        config['head']['nms_threshold'] = config['nms_threshold']
+        config['head']['rpn_thresholds'] = config['rpn_thresholds']
+        config['head']['rcn_batch'] = config['rcn_batch']
 
         self.anchors_batch = config['anchors_batch']
-        self.rcn_batch = config['rcn_batch']
+        self.rpn_thresholds = config['rpn_thresholds']
         return config
 
     def input_block(self, inputs, base_network, name='input_block', **kwargs):
@@ -118,16 +117,21 @@ class FasterRCNN(TFModel):
 
         return rpn_reg, rpn_clsf, loss
 
-    def _rcn_head(self, inputs, image_shape, iou_threshold, batch_size, roi_pool_shape, name='rcn_head', **kwargs):
+    def _rcn_head(self, inputs, image_shape, nms_threshold, rpn_thresholds,
+                  rcn_batch, batch_size, name='rcn_head', **kwargs):
         anchors_labels = self.anchors_placeholders['labels']
         feature_maps, rpn_reg, rpn_cls = inputs
         n_anchors = self.n_anchors
 
         with tf.variable_scope(name):
             rcn_input_indices = non_max_suppression(rpn_reg, rpn_cls, batch_size, n_anchors,
-                                                    iou_threshold=iou_threshold,
-                                                    score_threshold=_IOU_HIGH,
+                                                    iou_threshold=nms_threshold,
+                                                    score_threshold=rpn_thresholds[1],
                                                     nonempty=True)
+
+            rcn_input_indices = tf.cond(self.is_training,
+                                        lambda: self.create_bbox_batch(rcn_input_indices, rcn_batch),
+                                        lambda: rcn_input_indices)
 
             rcn_input_rois, rcn_input_labels = self._get_rois_and_labels(rpn_reg, anchors_labels, rcn_input_indices)
 
@@ -141,7 +145,7 @@ class FasterRCNN(TFModel):
             rcn_input_labels = self.stop_gradient_tuple(rcn_input_labels)
 
             roi_cropped = roi_pooling_layer(feature_maps, rcn_input_rois,
-                                            factor=roi_factor, shape=roi_pool_shape, data_format=kwargs['data_format'])
+                                            factor=roi_factor, shape=(7, 7), data_format=kwargs['data_format'])
             indices, roi_cropped, rcn_input_labels = self._stack_tuple(roi_cropped, rcn_input_labels) # pylint: disable=unbalanced-tuple-unpacking
             rcn_clsf = conv_block(roi_cropped, 'f', units=10, name='output_conv', **kwargs)
 
@@ -163,8 +167,10 @@ class FasterRCNN(TFModel):
         if 'bboxes' in feed_dict:
             bboxes = feed_dict.pop('bboxes')
             labels = feed_dict.pop('labels')
-            anchors['reg'], anchors['clsf'], anchors['labels'] = self.create_rpn_inputs(self.anchors, bboxes, labels)
-            anchors['batch'] = self.create_batch(anchors['clsf'], self.anchors_batch)
+            thresholds = self.rpn_thresholds
+
+            anchors['reg'], anchors['clsf'], anchors['labels'] = self.create_rpn_inputs(self.anchors, bboxes, labels, thresholds)
+            anchors['batch'] = self.create_anchors_batch(anchors['clsf'], self.anchors_batch)
             anchors['clsf'] = np.array(anchors['clsf'] == 1, dtype=np.int32)
             _feed_dict = {self.anchors_placeholders[k]: anchors[k] for k in anchors}
 
@@ -174,7 +180,7 @@ class FasterRCNN(TFModel):
         return feed_dict
 
     def stop_gradient_tuple(self, inputs):
-        """ Stop gradients through tf.Tuple. """
+        """ Stop gradients through tf.tuple. """
         for i, _ in enumerate(inputs):
             inputs[i] = tf.stop_gradient(inputs[i])
         return inputs
@@ -225,7 +231,7 @@ class FasterRCNN(TFModel):
         return anchors
 
     @classmethod
-    def create_rpn_inputs(cls, anchors, bboxes, labels):
+    def create_rpn_inputs(cls, anchors, bboxes, labels, thresholds):
         """ Create reg and clsf targets of RPN. """
         anchor_reg = []
         anchor_clsf = []
@@ -253,8 +259,8 @@ class FasterRCNN(TFModel):
             _anchor_reg = image_bboxes[best_bbox_for_anchor]
             _anchor_labels = image_labels[best_bbox_for_anchor].reshape(-1)
 
-            # anchor has at least one gt-bbox with IoU >_IOU_HIGH
-            image_clsf = np.array(max_ious > _IOU_HIGH, dtype=np.int32)
+            # anchor has at least one gt-bbox with IoU > thresholds[1]
+            image_clsf = np.array(max_ious > thresholds[1], dtype=np.int32)
 
             # anchor intersects with at least one bbox
             best_anchor_for_bbox = np.argmax(ious, axis=0)
@@ -263,8 +269,8 @@ class FasterRCNN(TFModel):
             _anchor_reg[best_anchor_for_bbox] = image_bboxes
             _anchor_labels[best_anchor_for_bbox] = image_labels
 
-            # max IoU for anchor < _IOU_LOW
-            image_clsf[np.logical_and(max_ious < _IOU_LOW, image_clsf == 0)] = -1
+            # max IoU for anchor < thresholds[0]
+            image_clsf[np.logical_and(max_ious < thresholds[0], image_clsf == 0)] = -1
             anchor_reg.append(_anchor_reg)
             anchor_labels.append(_anchor_labels)
             anchor_clsf.append(image_clsf)
@@ -296,7 +302,7 @@ class FasterRCNN(TFModel):
         return iou, iof, ios
 
     @classmethod
-    def create_batch(cls, anchor_clsf, batch_size=64):
+    def create_anchors_batch(cls, anchor_clsf, batch_size=64):
         """ Create batch indices for anchors. """
         anchor_batch = []
         for clsf in anchor_clsf:
@@ -324,6 +330,20 @@ class FasterRCNN(TFModel):
             image_anchor_batch[negative_batch] = True
             anchor_batch.append(image_anchor_batch)
         return np.array(anchor_batch)
+
+    @classmethod
+    def create_bbox_batch(cls, inputs, batch_size=64):
+        """ Create batch indices for bboxes. """
+        batch = []
+        for indices in inputs:
+            indices = tf.random_shuffle(indices)
+            start = [0] * 2
+            size = [tf.minimum(batch_size, tf.shape(indices)[0]), -1]
+            sample = tf.slice(indices, start, size)
+            sample.set_shape([None, 1])
+            batch.append(sample)
+        batch = tf.tuple(batch)
+        return batch
 
     @classmethod
     def rpn_loss(cls, reg, clsf, true_reg, true_cls, anchor_batch):
@@ -378,8 +398,8 @@ class FasterRCNN(TFModel):
 
     def _get_rois_and_labels(self, rois, labels, indices):
         with tf.variable_scope('get_rois_and_labels'):
-            output_rois = [] #tf.TensorArray(dtype=tf.float32, size=batch_size)
-            output_labels = [] #tf.TensorArray(dtype=tf.int32, size=batch_size)
+            output_rois = []
+            output_labels = []
             for i, index in enumerate(indices):
                 output_rois.append(tf.gather_nd(rois[i], index))
                 output_labels.append(tf.gather_nd(labels[i], index))
