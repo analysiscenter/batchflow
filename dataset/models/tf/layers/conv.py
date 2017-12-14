@@ -250,7 +250,12 @@ def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_
     size, channels = _calc_size(inputs, factor, data_format)
     layout = kwargs.get('layout', 'c')
     with tf.variable_scope(name):
-        x = tf.image.resize_bilinear(inputs, size=size, name='resize')
+        x = inputs
+        if data_format == 'channels_first':
+            x = tf.transpose(x, [0, 2, 3, 1])
+        x = tf.image.resize_bilinear(x, size=size, name='resize')
+        if data_format == 'channels_first':
+            x = tf.transpose(x, [0, 3, 1, 2])        
         x = conv(x, layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
         x = xip(x, depth=factor**dim, reduction='sum', name='addition')
     return x
@@ -275,7 +280,13 @@ def resize_bilinear(inputs, factor=2, name=None, data_format='channels_last', **
     tf.Tensor
     """
     size, _ = _calc_size(inputs, factor, data_format)
-    return tf.image.resize_bilinear(inputs, size=size, name=name, **kwargs)
+    x = inputs
+    if data_format == 'channels_first':
+        x = tf.transpose(x, [0, 2, 3, 1])
+    x = tf.image.resize_bilinear(x, size=size, name='resize', **kwargs)
+    if data_format == 'channels_first':
+        x = tf.transpose(x, [0, 3, 1, 2])
+    return x
 
 
 def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
