@@ -20,6 +20,7 @@ class FCN(TFModel):
         config['body']['upsample'] = dict(layout='t', kernel_size=4)
         config['head']['upsample'] = dict(layout='t')
         config['loss'] = 'ce'
+        config['output']['predictions'] = 'proba'
 
         return config
 

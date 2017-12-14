@@ -2,7 +2,6 @@
 <https://arxiv.org/abs/1611.06612>`_"
 """
 import tensorflow as tf
-import numpy as np
 
 from .layers import conv_block
 from . import TFModel
@@ -39,6 +38,7 @@ class RefineNet(TFModel):
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         config['loss'] = 'ce'
+        config['output']['predictions'] = 'proba'
         return config
 
     def build_config(self, names=None):
@@ -71,10 +71,9 @@ class RefineNet(TFModel):
             encoder_outputs = cls.make_encoder(inputs, **encoder, **kwargs)
 
             x = None
-            for i, tensor in enumerate(encoder_outputs):
-                decoder_inputs = encoder_outputs[-i-1] if x is None else (encoder_outputs[-i-1], x)
+            for i, tensor in enumerate(encoder_outputs[::-1]):
+                decoder_inputs = tensor if x is None else (tensor, x)
                 x = cls.decoder_block(decoder_inputs, filters=filters[i], name='decoder-'+str(i), **kwargs)
-
         return x
 
     @classmethod

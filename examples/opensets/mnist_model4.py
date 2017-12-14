@@ -8,7 +8,7 @@ import tensorflow as tf
 sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
 from dataset.opensets import MNIST
-from dataset.models.tf import FCN32, FCN16, FCN8, LinkNet, UNet, VNet, DenseNetFC56
+from dataset.models.tf import FCN32, FCN16, FCN8, LinkNet, UNet, VNet, DenseNetFC56, RefineNet
 
 
 def make_masks(batch, *args):

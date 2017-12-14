@@ -40,6 +40,7 @@ class VNet(TFModel):
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='c', kernel_size=1))
         config['loss'] = 'ce'
+        config['output']['predictions'] = 'proba'
         return config
 
     def build_config(self, names=None):

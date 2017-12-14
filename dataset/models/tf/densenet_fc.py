@@ -44,6 +44,7 @@ class DenseNetFC(TFModel):
 
         config['head'].update(dict(layout='c', kernel_size=1))
         config['loss'] = 'ce'
+        config['output']['predictions'] = 'proba'
 
         return config
 
