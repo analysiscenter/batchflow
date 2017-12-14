@@ -35,8 +35,7 @@ class RefineNet(TFModel):
         config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         config['body']['encoder'] = dict(base_class=ResNet101)
         config['body']['filters'] = [512, 256, 256, 256]
-        config['body']['upsample'] = dict(layout='tna', factor=2)
-        config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
+        config['body']['upsample'] = dict(layout='b', factor=2)
         config['loss'] = 'ce'
         return config
 
