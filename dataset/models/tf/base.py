@@ -1431,12 +1431,13 @@ class TFModel(BaseModel):
         """
         if np.all(factor == 1):
             return inputs
+
+        resize_to = None
         if isinstance(inputs, (list, tuple)):
-            image, resize_to = inputs
-        else:
-            image = inputs
-        x = upsample(image, factor, layout, name=name, **kwargs)
-        if isinstance(inputs, (list, tuple)):
+            inputs, resize_to = inputs
+
+        x = upsample(inputs, factor, layout, name=name, **kwargs)
+        if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x
 
