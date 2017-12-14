@@ -984,6 +984,7 @@ class TFModel(BaseModel):
         TypeError if inputs is not a Tensor or a sequence of Tensors
         """
         kwargs = self.fill_params('output', **kwargs)
+        predictions_op = cls.pop('predictions', kwargs, default=None)
 
         if ops is None:
             ops = []
@@ -1011,50 +1012,55 @@ class TFModel(BaseModel):
                 ctx = None
             attr_prefix = current_prefix + '_' if current_prefix else ''
 
-            x = self._add_output_predictions(tensor, scope, attr_prefix, **kwargs)
+            x = self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
             for oper in ops:
-                if oper == 'proba':
-                    self._add_output_proba(x, scope, attr_prefix, **kwargs)
-                elif oper == 'labels':
-                    self._add_output_labels(x, scope, attr_prefix, **kwargs)
-                elif oper == 'accuracy':
-                    self._add_output_accuracy(x, scope, attr_prefix, **kwargs)
+                self._add_output_op(tensor, oper, oper, scope, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
 
-    def _add_output_predictions(self, inputs, scope, attr_prefix, **kwargs):
+    def _add_output_op(self, inputs, oper, name, scope, attr_prefix, **kwargs):
+        if oper is None:
+            self._add_output_identity(x, name, scope, attr_prefix, **kwargs)
+        elif oper == 'proba':
+            self._add_output_proba(x, name, scope, attr_prefix, **kwargs)
+        elif oper == 'labels':
+            self._add_output_labels(x, name, scope, attr_prefix, **kwargs)
+        elif oper == 'accuracy':
+            self._add_output_accuracy(x, name, scope, attr_prefix, **kwargs)
+
+    def _add_output_identity(self, inputs, name, scope, attr_prefix, **kwargs):
         _ = scope, kwargs
-        x = tf.identity(inputs, name='predictions')
-        self.store_to_attr(attr_prefix + 'predictions', x)
+        x = tf.identity(inputs, name=name)
+        self.store_to_attr(attr_prefix + name, x)
         return x
 
     def _add_output_proba(self, inputs, scope, attr_prefix, **kwargs):
         _ = scope
         data_format = kwargs['data_format']
         axis = self.channels_axis(data_format)
-        proba = tf.nn.softmax(inputs, name='predicted_proba', dim=axis)
-        self.store_to_attr(attr_prefix + 'predicted_proba', proba)
+        proba = tf.nn.softmax(inputs, name=name, dim=axis)
+        self.store_to_attr(attr_prefix + name, proba)
 
     def _add_output_labels(self, inputs, scope, attr_prefix, **kwargs):
         _ = scope
         channels_axis = self.channels_axis(kwargs.get('data_format'))
-        predicted_labels = tf.argmax(inputs, axis=channels_axis, name='predicted_labels')
-        self.store_to_attr(attr_prefix + 'predicted_labels', predicted_labels)
+        predicted_labels = tf.argmax(inputs, axis=channels_axis, name=name)
+        self.store_to_attr(attr_prefix + name, predicted_labels)
 
     def _add_output_accuracy(self, inputs, scope, attr_prefix, **kwargs):
         channels_axis = self.channels_axis(kwargs.get('data_format'))
         true_labels = tf.argmax(self.targets, axis=channels_axis)
         current_scope = self.graph.get_name_scope() + '/'
         try:
-            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'labels:0')
         except KeyError:
             self._add_output_labels(inputs, scope, attr_prefix, **kwargs)
-            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'predicted_labels:0')
+            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'labels:0')
         predicted_labels = tf.cast(predicted_labels, true_labels.dtype)
         equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
-        accuracy = tf.reduce_mean(equals, name='accuracy')
-        self.store_to_attr(attr_prefix + 'accuracy', accuracy)
+        accuracy = tf.reduce_mean(equals, name=name)
+        self.store_to_attr(attr_prefix + name, accuracy)
 
 
     @classmethod
