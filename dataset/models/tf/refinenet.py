@@ -35,10 +35,10 @@ class RefineNet(TFModel):
         filters = 64   # number of filters in the first block
         config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
         config['body']['encoder'] = dict(base_class=ResNet101)
-        config['body']['num_blocks'] = 4
-        config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
+        config['body']['filters'] = [512, 256, 256, 256]
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):
@@ -55,7 +55,7 @@ class RefineNet(TFModel):
         inputs : tf.Tensor
             input tensor
         filters : tuple of int
-            number of filters in downsampling blocks
+            number of filters in decoder blocks
         name : str
             scope name
 
@@ -122,11 +122,12 @@ class RefineNet(TFModel):
         -------
         tf.Tensor
         """
+        filters = cls.pop('filters', kwargs)
         upsample_args = cls.pop('upsample', kwargs)
         upsample_args = {**kwargs, **upsample_args}
 
         with tf.variable_scope(name):
-            filters = min([cls.num_channels(t, data_format=kwargs['data_format']) for t in inputs])
+            #filters = min([cls.num_channels(t, data_format=kwargs['data_format']) for t in inputs])
             # Residual Conv Unit
             after_rcu = []
             for i, tensor in enumerate(inputs):
@@ -164,7 +165,7 @@ class RefineNet(TFModel):
 
     @classmethod
     def decoder_block(cls, inputs, filters, name, **kwargs):
-        """ 3x3 convolution and 2x2 transposed convolution
+        """ Call RefineNet block
 
         Parameters
         ----------
@@ -179,37 +180,4 @@ class RefineNet(TFModel):
         -------
         tf.Tensor
         """
-        config = cls.fill_params('body', **kwargs)
-        upsample_args = cls.pop('upsample', config)
-
-        with tf.variable_scope(name):
-            x, skip = inputs
-            x = cls.upsample(x, filters=filters, name='upsample', **upsample_args)
-            x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
-            axis = cls.channels_axis(kwargs.get('data_format'))
-            x = tf.concat((skip, x), axis=axis)
-            x = conv_block(x, 'cnacna', filters, kernel_size=3, name='conv', **kwargs)
-        return x
-
-    @classmethod
-    def head(cls, inputs, num_classes, name='head', **kwargs):
-        """ Conv block followed by 1x1 convolution
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        num_classes : int
-            number of classes (and number of filters in the last 1x1 convolution)
-        name : str
-            scope name
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        kwargs = cls.fill_params('head', **kwargs)
-        with tf.variable_scope(name):
-            x = conv_block(inputs, name='conv', **kwargs)
-            x = conv_block(inputs, name='last', **{**kwargs, **dict(filters=num_classes, kernel_size=1, layout='c')})
-        return x
+        return cls.block(inputs, filters=filters, name=name, **kwargs)
