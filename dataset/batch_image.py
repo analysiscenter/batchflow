@@ -25,7 +25,7 @@ from .batch import Batch
 from .decorators import action, inbatch_parallel, any_action_failed
 
 
-ACCEPTABLE_LISTS = [tuple, list, np.ndarray]
+LIST_LIKE_OBJECTS = (tuple, list, np.ndarray)
 
 
 # is it really needed? Pythonic way is faster
@@ -103,12 +103,12 @@ class BaseImagesBatch(Batch):
         return self
 
     @action
-    def load(self, src, fmt=None, components=None, *args, **kwargs):
+    def load(self, src=None, fmt=None, components=None, *args, **kwargs):
         """ Load data """
         return super().load(src, fmt, components, *args, **kwargs)
 
     @action
-    def dump(self, dst, fmt=None, components=None, *args, **kwargs):
+    def dump(self, dst=None, fmt=None, components=None, *args, **kwargs):
         """ Save data to a file or a memory object """
         return super().dump(dst, fmt, components=None, *args, **kwargs)
 
@@ -136,14 +136,14 @@ class BaseImagesBatch(Batch):
             a crop size in the form of (rows, columns)
             if None is passed, then nothing is done
         """
-        if origin not in ['top_left', 'center'] and type(origin) is not tuple:
-            raise ValueError('origin must be either in [\'top_left\', \'center\'] or a tuple')
+        if origin not in ['top_left', 'center'] and not isinstance(origin, LIST_LIKE_OBJECTS):
+            raise ValueError('origin must be either in [\'top_left\', \'center\'] or one of LIST_LIKE_OBJECTS')
 
-        if type(origin) in ACCEPTABLE_LISTS and len(origin) != 2:
-            raise ValueError('origin\'s length must be equal 2' )
+        if isinstance(origin, LIST_LIKE_OBJECTS) and len(origin) != 2:
+            raise ValueError('origin\'s length must be equal 2')
 
-        if type(shape) not in ACCEPTABLE_LISTS:
-            raise ValueError('shape\'s type must be one of ACCEPTABLE_LISTS')
+        if not isinstance(shape, LIST_LIKE_OBJECTS):
+            raise ValueError('shape\'s type must be one of LIST_LIKE_OBJECTS')
 
         self._crop(components, origin, shape)
         return self
@@ -162,8 +162,8 @@ class BaseImagesBatch(Batch):
 
         Origin will be chosen at random to fit the required shape
         """
-        if type(shape) not in ACCEPTABLE_LISTS:
-            raise ValueError('shape\'s type must be one of ACCEPTABLE_LISTS')
+        if not isinstance(shape, LIST_LIKE_OBJECTS):
+            raise ValueError('shape\'s type must be one of LIST_LIKE_OBJECTS')
 
         self._random_crop(components, shape)
         return self
@@ -280,6 +280,7 @@ class BaseImagesBatch(Batch):
 
     @action
     def random_flip(self, components='images', mode='lr', p=0.5, p_lr=0.5):
+        ''' flip components randomly'''
         if p > 1 or p < 0 or p_lr < 0 or p_lr > 1:
             raise ValueError("probability must be in [0,1]")
         if mode not in ['lr', 'ud', 'all']:
@@ -369,9 +370,9 @@ class ImagesBatch(BaseImagesBatch):
 
     @staticmethod
     def _calc_origin(image, origin, shape):
-        if origin is 'top_left':
+        if origin == 'top_left':
             origin = 0, 0
-        elif origin is 'center':
+        elif origin == 'center':
             origin = np.maximum(image.shape[:2] - np.array(shape), 0) // 2
         return origin
 
@@ -380,7 +381,7 @@ class ImagesBatch(BaseImagesBatch):
         origin = self._calc_origin(image, origin, shape)
 
         if np.all(origin + shape > image.shape[:2]):
-            shape = images.shape[:2] - origin
+            shape = image.shape[:2] - origin
 
         row_slice = slice(origin[0], origin[0] + shape[0])
         column_slice = slice(origin[1], origin[1] + shape[1])
@@ -418,9 +419,8 @@ class ImagesBatch(BaseImagesBatch):
         image = self.get(ix, components)
         if np.random.random() < p:
             if mode == 'all':
-                return self._flip_one(image, 'lr' if np.random.random()<p_lr else 'ud')
-            else:
-                return self._flip_one(image, mode)
+                return self._flip_one(image, 'lr' if np.random.random() < p_lr else 'ud')
+            return self._flip_one(image, mode)
         return image
 
 
