@@ -151,6 +151,8 @@ class ResNet(TFModel):
             input tensor
         filters : int or list/tuple of ints
             number of output filters
+        width_factor : int
+            a factor to increase number of filters to build a wide network
         downsample : bool
             whether to decrease spatial dimensions with strides=2 in the first convolution
         resnext : bool
@@ -177,12 +179,14 @@ class ResNet(TFModel):
         defaults = cls.get('body/block', ResNet.default_config())
         kwargs = {**defaults, **kwargs}
         filters, downsample = cls.pop(['filters', 'downsample'], kwargs)
+        width_factor = cls.pop('width_factor', kwargs)
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
         resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
         se_block, se_factor = cls.pop(['se_block', 'se_factor'], kwargs)
         post_activation = cls.pop('post_activation', kwargs)
 
         with tf.variable_scope(name):
+            filters = filters * width_factor
             if resnext:
                 x = cls.next_sub_block(inputs, filters, bottleneck, resnext_factor, name='sub',
                                        downsample=downsample, **kwargs)
@@ -378,8 +382,7 @@ class ResNet18(ResNet):
 
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [2, 2, 2, 2]
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters \
-                                    * config['body']['block']['width_factor']
+        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = False
         return config
 
@@ -392,8 +395,7 @@ class ResNet34(ResNet):
 
         config['body']['num_blocks'] = [3, 4, 6, 3]
         filters = 64   # number of filters in the first block
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters \
-                                    * config['body']['block']['width_factor']
+        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = False
         return config
 
@@ -415,8 +417,7 @@ class ResNet101(ResNet):
 
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [3, 4, 23, 3]
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters \
-                                    * config['body']['block']['width_factor']
+        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = True
         return config
 
@@ -429,7 +430,6 @@ class ResNet152(ResNet):
 
         filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [3, 8, 63, 3]
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters \
-                                    * config['body']['block']['width_factor']
+        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = True
         return config
