@@ -825,6 +825,7 @@ class TFModel(BaseModel):
         data_format : str {'channels_last', 'channels_first'}
             data format
         """
+
         axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
         static_shape = shape_images.get_shape().as_list()[axis]
         dynamic_shape = tf.shape(shape_images)[axis]
@@ -836,7 +837,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def _static_crop(cls, inputs, shape, data_format='channels_last'):
-        input_shape = np.array(cls.spatial_shape(inputs, data_format))
+        input_shape = np.array(cls.get_spatial_shape(inputs, data_format))
 
         if np.abs(input_shape - shape).sum() > 0:
             begin = [0] * inputs.shape.ndims
@@ -1178,7 +1179,7 @@ class TFModel(BaseModel):
             x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
                            **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
 
-            shape = [-1] + [1] * (len(cls.spatial_shape(inputs, data_format)) + 1)
+            shape = [-1] + [1] * (len(cls.get_spatial_shape(inputs, data_format)) + 1)
             axis = cls.channels_axis(data_format)
             shape[axis] = in_filters
             scale = tf.reshape(x, shape)
@@ -1422,15 +1423,14 @@ class TFModel(BaseModel):
         if np.all(factor == 1):
             return inputs
 
+        resize_to = None
         if isinstance(inputs, (list, tuple)):
             inputs, resize_to = inputs
-            axis = slice(1, -1) if kwargs['data_format'] == 'channels_last' else slice(2, None)
-            to_shape = resize_to.get_shape().as_list()[axis]
-            i_shape = inputs.get_shape().as_list()[axis]
-            factor = np.array(to_shape) / np.array(i_shape)
-            factor = factor.astype('int32')
 
-        return upsample(inputs, factor, layout, name=name, **kwargs)
+        x = upsample(inputs, factor, layout, name=name, **kwargs)
+        if resize_to is not None:
+            x = cls.crop(x, resize_to, kwargs['data_format'])
+        return x
 
     @classmethod
     def pyramid_pooling(cls, inputs, name='psp', **kwargs):
