@@ -829,6 +829,7 @@ class TFModel(BaseModel):
         data_format : str {'channels_last', 'channels_first'}
             data format
         """
+
         axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
         static_shape = shape_images.get_shape().as_list()[axis]
         dynamic_shape = tf.shape(shape_images)[axis]
@@ -1014,7 +1015,7 @@ class TFModel(BaseModel):
 
             self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
             for oper in ops:
-                self._add_output_op(tensors, oper, oper, scope, attr_prefix, **kwargs)
+                self._add_output_op(tensor, oper, oper, scope, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
@@ -1431,15 +1432,18 @@ class TFModel(BaseModel):
         if np.all(factor == 1):
             return inputs
 
-        if isinstance(inputs, (list, tuple)):
-            inputs, resize_to = inputs
-            axis = slice(1, -1) if kwargs['data_format'] == 'channels_last' else slice(2, None)
-            to_shape = resize_to.get_shape().as_list()[axis]
-            i_shape = inputs.get_shape().as_list()[axis]
-            factor = np.array(to_shape) / np.array(i_shape)
-            factor = factor.astype('int32')
+        axis = slice(1, -1) if kwargs['data_format'] == 'channels_last' else slice(2, None)
 
-        return upsample(inputs, factor, layout, name=name, **kwargs)
+        if isinstance(inputs, (list, tuple)):
+            image, resize_to = inputs
+        else:
+            image = inputs
+
+        x = upsample(image, factor, layout, name=name, **kwargs)
+        
+        if isinstance(inputs, (list, tuple)):
+            x = cls.crop(x, resize_to, kwargs['data_format'])
+        return x
 
     @classmethod
     def pyramid_pooling(cls, inputs, name='psp', **kwargs):

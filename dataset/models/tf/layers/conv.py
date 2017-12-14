@@ -177,9 +177,23 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
 def _calc_size(inputs, factor, data_format):
     shape = inputs.get_shape().as_list()
     channels = shape[-1] if data_format == 'channels_last' else shape[1]
+    if None in shape[1:]:
+        shape = _dynamic_calc_shape(inputs, factor, data_format)
+    else:
+        shape = _static_calc_shape(inputs, factor, data_format)
+    return shape, channels
+
+def _static_calc_shape(inputs, factor, data_format):
+    shape = inputs.get_shape().as_list()
     shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
     shape = list(np.asarray(shape) * np.asarray(factor))
-    return shape, channels
+    return shape
+
+def _dynamic_calc_shape(inputs, factor, data_format):
+    shape = tf.shape(inputs)
+    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
+    shape = shape * np.asarray(factor)
+    return shape
 
 
 def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
