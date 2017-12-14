@@ -462,11 +462,6 @@ class TFModel(BaseModel):
         """ Return a loss function from config """
         loss, args = self._unpack_fn_from_config('loss', config)
 
-        target_scope = args.pop('targets_scope', 'inputs')
-        target_scope = target_scope + '/' if target_scope else ''
-        prediction_scope = args.pop('predictions_scope', '')
-        prediction_scope = prediction_scope + '/' if prediction_scope else ''
-
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
@@ -481,12 +476,13 @@ class TFModel(BaseModel):
 
         if loss is not None:
             try:
-                scope = self.graph.get_name_scope()
-                scope = scope + '/' if scope else ''
-                predictions = self.graph.get_tensor_by_name(scope + prediction_scope + "predictions:0")
-                targets = self.graph.get_tensor_by_name(scope + target_scope + "targets:0")
-            except KeyError:
-                raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % type(self).__name__)
+                predictions = getattr(self, 'predictions')
+            except AttributeError:
+                raise KeyError("Model %s does not have 'predictions' tensor" % type(self).__name__)
+            try:
+                targets = getattr(self, 'targets')
+            except AttributeError:
+                raise KeyError("Model %s does not have 'targets' tensor" % type(self).__name__)
             else:
                 tf.losses.add_loss(loss(targets, predictions, **args))
 
@@ -993,6 +989,7 @@ class TFModel(BaseModel):
 
         if not isinstance(inputs, (tuple, list)):
             inputs = [inputs]
+            prefix = prefix or 'output'
             prefix = [prefix]
 
         if len(inputs) != len(prefix):
@@ -1002,9 +999,8 @@ class TFModel(BaseModel):
             if not isinstance(tensor, tf.Tensor):
                 raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
 
-            scope = self.graph.get_name_scope()
-            scope = scope + '/' if scope else ''
-            current_prefix = prefix[i] or ''
+            scope = self.graph.get_name_scope() + '/'
+            current_prefix = prefix[i]
             if current_prefix:
                 ctx = tf.variable_scope(current_prefix)
                 ctx.__enter__()
@@ -1012,54 +1008,49 @@ class TFModel(BaseModel):
                 ctx = None
             attr_prefix = current_prefix + '_' if current_prefix else ''
 
-            self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
+            pred_prefix = '' if len(inputs) == 1 else attr_prefix
+            self._add_output_op(tensor, predictions_op, 'predictions', pred_prefix, **kwargs)
             for oper in ops:
-                self._add_output_op(tensor, oper, oper, scope, attr_prefix, **kwargs)
+                self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
 
-    def _add_output_op(self, inputs, oper, name, scope, attr_prefix, **kwargs):
+    def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
-            self._add_output_identity(inputs, name, scope, attr_prefix, **kwargs)
+            self._add_output_identity(inputs, name, attr_prefix, **kwargs)
         elif oper == 'proba':
-            self._add_output_proba(inputs, name, scope, attr_prefix, **kwargs)
+            self._add_output_proba(inputs, name, attr_prefix, **kwargs)
         elif oper == 'labels':
-            self._add_output_labels(inputs, name, scope, attr_prefix, **kwargs)
+            self._add_output_labels(inputs, name, attr_prefix, **kwargs)
         elif oper == 'accuracy':
-            self._add_output_accuracy(inputs, name, scope, attr_prefix, **kwargs)
+            self._add_output_accuracy(inputs, name, attr_prefix, **kwargs)
 
-    def _add_output_identity(self, inputs, name, scope, attr_prefix, **kwargs):
-        _ = scope, kwargs
+    def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
         x = tf.identity(inputs, name=name)
         self.store_to_attr(attr_prefix + name, x)
         return x
 
-    def _add_output_proba(self, inputs, name, scope, attr_prefix, **kwargs):
-        _ = scope
-        data_format = kwargs['data_format']
-        axis = self.channels_axis(data_format)
+    def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
+        axis = self.channels_axis(kwargs['data_format'])
         proba = tf.nn.softmax(inputs, name=name, dim=axis)
         self.store_to_attr(attr_prefix + name, proba)
 
-    def _add_output_labels(self, inputs, name, scope, attr_prefix, **kwargs):
-        _ = scope
+    def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
         channels_axis = self.channels_axis(kwargs.get('data_format'))
         predicted_labels = tf.argmax(inputs, axis=channels_axis, name=name)
         self.store_to_attr(attr_prefix + name, predicted_labels)
 
-    def _add_output_accuracy(self, inputs, name, scope, attr_prefix, **kwargs):
+    def _add_output_accuracy(self, inputs, name, attr_prefix, **kwargs):
         channels_axis = self.channels_axis(kwargs.get('data_format'))
         true_labels = tf.argmax(self.targets, axis=channels_axis)
-        current_scope = self.graph.get_name_scope() + '/'
-        try:
-            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'labels:0')
-        except KeyError:
-            self._add_output_labels(inputs, scope, attr_prefix, **kwargs)
-            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'labels:0')
-        predicted_labels = tf.cast(predicted_labels, true_labels.dtype)
-        equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
-        accuracy = tf.reduce_mean(equals, name=name)
+        if not hasattr(self, attr_prefix + 'labels'):
+            self._add_output_labels(inputs, 'labels', attr_prefix, **kwargs)
+        x = getattr(self, attr_prefix + 'labels')
+        x = tf.cast(x, true_labels.dtype)
+        x = tf.cast(tf.equal(true_labels, x), 'float')
+        accuracy = tf.reduce_mean(x, name=name)
         self.store_to_attr(attr_prefix + name, accuracy)
 
 
