@@ -359,7 +359,7 @@ class ResNet(TFModel):
         num_blocks = cls.get('num_blocks', cls.fill_params('body', **kwargs))
 
         with tf.variable_scope(name):
-            x = cls.body(x, name='body', **kwargs)
+            x = cls.body(inputs, name='body', **kwargs)
 
             scope = tf.get_default_graph().get_name_scope()
             encoder_tensors = []
