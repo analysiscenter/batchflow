@@ -341,7 +341,7 @@ class ResNet(TFModel):
 
     @classmethod
     def make_encoder(cls, inputs, name='encoder', **kwargs):
-        """ Build the input block and the body and return encoder tensors
+        """ Build the body and return encoder tensors
 
         Parameters
         ----------
@@ -350,24 +350,20 @@ class ResNet(TFModel):
         name : str
             scope name
         kwargs : dict
-            input_block and body params
+            body params
 
         Returns
         -------
         tf.Tensor
         """
-        input_block = kwargs.pop('input_block', {})
-        body = kwargs.pop('body', {})
-        input_block = cls.fill_params('input_block', **{**kwargs, **input_block})
-        body = cls.fill_params('body', **{**kwargs, **body})
+        num_blocks = cls.get('num_blocks', cls.fill_params('body', **kwargs))
 
         with tf.variable_scope(name):
-            x = cls.input_block(inputs, name='input_block', **input_block)
-            x = cls.body(x, name='body', **body)
+            x = cls.body(inputs, name='body', **kwargs)
 
             scope = tf.get_default_graph().get_name_scope()
             encoder_tensors = []
-            for i, _ in enumerate(body['num_blocks']):
+            for i, _ in enumerate(num_blocks):
                 tensor_name = scope + '/body/group-%d'%i + '/output:0'
                 x = tf.get_default_graph().get_tensor_by_name(tensor_name)
                 encoder_tensors.append(x)
