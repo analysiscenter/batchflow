@@ -857,10 +857,10 @@ class TFModel(BaseModel):
         """
 
         axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
-        static_shape = shape_images.get_shape().as_list()[axis]
-        dynamic_shape = tf.shape(shape_images)[axis]
+        static_shape = cls.spatial_shape(shape_images, data_format, False)#shape_images.get_shape().as_list()[axis]
+        dynamic_shape = cls.spatial_shape(shape_images, data_format, True)#tf.shape(shape_images)[axis]
 
-        if None in inputs.get_shape().as_list()[1:] + static_shape:
+        if None in cls.shape(inputs) + static_shape:
             return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
         else:
             return cls._static_crop(inputs, static_shape, data_format)
@@ -882,14 +882,12 @@ class TFModel(BaseModel):
 
     @classmethod
     def _dynamic_crop(cls, inputs, static_shape, dynamic_shape, data_format='channels_last'):
+        input_shape = cls.spatial_shape(inputs, data_format, True)
+        n_channels = cls.num_channels(inputs, data_format)
         if data_format == 'channels_last':
-            input_shape = tf.shape(inputs)[1:-1]
-            n_channels = inputs.get_shape().as_list()[-1]
             slice_size = [(-1,), dynamic_shape, (n_channels,)]
             output_shape = [None] * (len(static_shape) + 1) + [n_channels]
         else:
-            input_shape = tf.shape(inputs)[2:]
-            n_channels = inputs.get_shape().as_list()[1]
             slice_size = [(-1, n_channels), dynamic_shape]
             output_shape = [None, n_channels] + [None] * len(static_shape)
 
@@ -1311,17 +1309,24 @@ class TFModel(BaseModel):
         return config.get('shape')
 
     @classmethod
-    def shape(cls, tensor):
+    def shape(cls, tensor, dynamical=False):
         """ Return shape of the input tensor without batch size
 
         Parameters
         ----------
         tensor : tf.Tensor
 
+        dynamical : bool
+            if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
+
         Returns
         -------
-        shape : tuple
+        shape : tf.Tensor or list
         """
+        if dynamical:
+            shape = tf.shape(tensor)
+        else:
+            shape = tensor.get_shape().as_list()
         return tensor.get_shape().as_list()[1:]
 
     def get_spatial_dim(self, tensor, **kwargs):
@@ -1376,15 +1381,18 @@ class TFModel(BaseModel):
         ----------
         tensor : tf.Tensor
 
+        dynamical : bool
+            if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
+
         Returns
         -------
-        shape : tuple
+        shape : tf.Tensor or list
         """
         if dynamical:
             shape = tf.shape(tensor)
         else:
             shape = tensor.get_shape().as_list()
-        axis = slice(1, None)
+        axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
         return shape[axis]
 
     def get_batch_size(self, tensor):
