@@ -436,11 +436,11 @@ class TFModel(BaseModel):
         return tensor
 
     def _make_dwn(self, input_name, tensor, config):
+        _ = input_name
         factor = config.get('factor')
-        axis = -1 if self.data_format(input_name) == 'channels_last' else 1
-        size = self.shape(tensor, self.data_format, dynamical=False)
+        size = self.shape(tensor, self.data_format, False)
         if None in size[1:]:
-            size = self.shape(tensor, self.data_format, dynamical=True)
+            size = self.shape(tensor, self.data_format, True)
         size = size / factor
         size = tf.cast(size, tf.int32)
         tensor = tf.expand_dims(tensor, -1)
@@ -856,9 +856,8 @@ class TFModel(BaseModel):
             data format
         """
 
-        axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
-        static_shape = cls.spatial_shape(shape_images, data_format, False)#shape_images.get_shape().as_list()[axis]
-        dynamic_shape = cls.spatial_shape(shape_images, data_format, True)#tf.shape(shape_images)[axis]
+        static_shape = cls.spatial_shape(shape_images, data_format, False)
+        dynamic_shape = cls.spatial_shape(shape_images, data_format, True)
 
         if None in cls.shape(inputs) + static_shape:
             return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
@@ -1327,7 +1326,7 @@ class TFModel(BaseModel):
             shape = tf.shape(tensor)
         else:
             shape = tensor.get_shape().as_list()
-        return tensor.get_shape().as_list()[1:]
+        return shape[1:]
 
     def get_spatial_dim(self, tensor, **kwargs):
         """ Return the tensor spatial dimensionality (without batch and channels dimensions)
