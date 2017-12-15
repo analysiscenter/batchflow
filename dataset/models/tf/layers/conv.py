@@ -54,11 +54,11 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', d
     `tf.layers.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d_transpose>`_
     """
     axis = 1 if data_format == 'channels_last' else 2
-    up_tensor = tf.expand_dims(inputs, axis=axis)
-    conv_output = tf.layers.conv2d_transpose(up_tensor, filters=filters, kernel_size=(1, kernel_size),
-                                             strides=(1, strides), padding=padding, **kwargs)
-    output = tf.squeeze(conv_output, [axis])
-    return output
+    x = tf.expand_dims(inputs, axis=axis)
+    x = tf.layers.conv2d_transpose(x, filters=filters, kernel_size=(1, kernel_size),
+                                   strides=(1, strides), padding=padding, **kwargs)
+    x = tf.squeeze(x, [axis])
+    return x
 
 def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     """ Transposed Nd convolution layer
