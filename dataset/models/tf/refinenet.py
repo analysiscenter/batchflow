@@ -21,12 +21,14 @@ class RefineNet(TFModel):
             base_class : TFModel
                 a model implementing ``make_encoder`` method which returns tensors
                 with encoded representation of the inputs
+            **kwargs
+                parameters for base class encoder
 
         filters : list of int
             number of filters in each decoder block (default=[512, 256, 256, 256])
 
         upsample : dict
-            :meth:`~.TFModel.upsample` parameters
+            :meth:`~.TFModel.upsample` parameters to use in each decoder block
 
     head : dict
         num_classes : int
@@ -79,9 +81,6 @@ class RefineNet(TFModel):
             for i, tensor in enumerate(encoder_outputs[::-1]):
                 decoder_inputs = tensor if x is None else (tensor, x)
                 x = cls.decoder_block(decoder_inputs, filters=filters[i], name='decoder-'+str(i), **kwargs)
-
-            upsample_args = cls.pop('upsample', kwargs)
-            upsample_args = {**kwargs, **upsample_args}
         return x
 
     @classmethod
@@ -121,13 +120,15 @@ class RefineNet(TFModel):
         return x
 
     @classmethod
-    def block(cls, inputs, name='block', **kwargs):
+    def block(cls, inputs, filters=None, name='block', **kwargs):
         """ RefineNet block with Residual Conv Unit, Multi-resolution fusion and Chained-residual pooling.
 
         Parameters
         ----------
         inputs : tuple of tf.Tensor
             input tensors (the first should have the largest spatial dimension)
+        filters : int
+            the number of output filters for all convolutions within the block
         name : str
             scope name
         kwargs : dict
@@ -138,7 +139,6 @@ class RefineNet(TFModel):
         -------
         tf.Tensor
         """
-        filters = cls.pop('filters', kwargs)
         upsample_args = cls.pop('upsample', kwargs)
         upsample_args = {**kwargs, **upsample_args}
 
