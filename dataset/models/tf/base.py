@@ -850,7 +850,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def _static_crop(cls, inputs, shape, data_format='channels_last'):
-        input_shape = np.array(cls.get_spatial_shape(inputs, data_format))
+        input_shape = np.array(cls.spatial_shape(inputs, data_format))
 
         if np.abs(input_shape - shape).sum() > 0:
             begin = [0] * inputs.shape.ndims

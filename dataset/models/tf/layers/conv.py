@@ -261,7 +261,7 @@ def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_
     return x
 
 
-def resize_bilinear(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last', **kwargs):
     """ Resize input tensor with bilinear method
 
     Parameters

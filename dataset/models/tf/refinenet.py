@@ -85,11 +85,8 @@ class RefineNet(TFModel):
 
     @classmethod
     def head(cls, inputs, targets, num_classes, name='head', **kwargs):
-        upsample_args = cls.pop('upsample', kwargs)
-        upsample_args = {**kwargs, **upsample_args}
         with tf.variable_scope(name):
-            x = cls.upsample((inputs, targets), **upsample_args)
-            x = conv_block(x, layout='t', filters=num_classes, kernel_size=1, **kwargs)
+            x = conv_block(inputs, layout='c', filters=num_classes, kernel_size=1, **kwargs)
         return x
 
     @classmethod
