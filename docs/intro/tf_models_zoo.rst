@@ -12,3 +12,4 @@
     ../api/dataset.models.tf.linknet
     ../api/dataset.models.tf.vnet
     ../api/dataset.models.tf.densenet_fc
+    ../api/dataset.models.tf.refinenet

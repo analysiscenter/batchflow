@@ -52,17 +52,22 @@ class TFModel(BaseModel):
     inputs : dict
         model inputs (see :meth:`._make_inputs`)
 
-    loss - a loss function, might be one of:
-        - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
-        - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
-          (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
-        - callable
+    loss - a loss function, might be defined in one of three formats:
+        - name
+        - tuple (name, args)
+        - dict {'name': name, \**args}
+
+        where name might be one of:
+            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
+              (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
+            - callable
 
         Examples:
 
         - ``{'loss': 'mse'}``
-        - ``{'loss': 'sigmoid_cross_entropy'}``
-        - ``{'loss': tf.losses.huber_loss}``
+        - ``{'loss': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}``
+        - ``{'loss': tf.losses.huber_loss, 'reduction': tf.losses.Reduction.MEAN}``
         - ``{'loss': external_loss_fn}``
 
     decay - a learning rate decay algorithm might be defined in one of three formats:
@@ -126,12 +131,20 @@ class TFModel(BaseModel):
         parameters for the head layers, usually :func:`.conv_block` parameters
 
     output : dict
+        predictions : str
+            operation to apply for body output tensor to make the network predictions.
+            The tensor's name is 'predictions' which is later used in the loss function.
         ops : tuple of str
-            helper operations:
+            additional operations
+        prefix : str or tuple of str
+            prefixes for additional output tensor names (default='output')
 
-            - 'accuracy' - add 'accuracy' tensor with accuracy score for predictions
-            - 'proba' - add 'predicted_proba' tensor with probabilties for predictions
-            - 'labels' - add 'predicted_labels' tensor with best match labels for predictions
+        Operations supported are:
+
+            - ``None`` - do nothing (identity)
+            - 'accuracy' - accuracy metrics (the share of ``true_labels == predicted_labels``)
+            - 'proba' - multiclass probabilities (softmax)
+            - 'labels' - most probable labels (argmax)
 
 
     **How to create your own model**
