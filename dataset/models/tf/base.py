@@ -388,24 +388,28 @@ class TFModel(BaseModel):
 
     def _make_transform(self, input_name, tensor, config):
         if config is not None:
-            transform_name = config.get('transform')
-            if isinstance(transform_name, str):
-                transforms = {
-                    'ohe': self._make_ohe,
-                    'mip': self._make_mip
-                }
+            transform_names = config.get('transform')
+            if not isinstance(transform_names, list):
+                transform_names = [transform_names]
+            for transform_name in transform_names:
+                if isinstance(transform_name, str):
+                    transforms = {
+                        'ohe': self._make_ohe,
+                        'mip': self._make_mip,
+                        'dwn': self._make_dwn
+                    }
 
-                kwargs = dict()
-                if transform_name.startswith('mip'):
-                    parts = transform_name.split('@')
-                    transform_name = parts[0].strip()
-                    kwargs['depth'] = int(parts[1])
+                    kwargs = dict()
+                    if transform_name.startswith('mip'):
+                        parts = transform_name.split('@')
+                        transform_name = parts[0].strip()
+                        kwargs['depth'] = int(parts[1])
 
-                tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
-            elif callable(transform_name):
-                tensor = transform_name(tensor)
-            elif transform_name:
-                raise ValueError("Unknown transform {}".format(transform_name))
+                    tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
+                elif callable(transform_name):
+                    tensor = transform_name(tensor)
+                elif transform_name:
+                    raise ValueError("Unknown transform {}".format(transform_name))
         return tensor
 
     def _make_ohe(self, input_name, tensor, config):
@@ -416,6 +420,19 @@ class TFModel(BaseModel):
         num_classes = self.num_classes(input_name)
         axis = -1 if self.data_format(input_name) == 'channels_last' else 1
         tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
+        return tensor
+
+    def _make_dwn(self, input_name, tensor, config):
+        factor = config.get('factor')
+        axis = -1 if self.data_format(input_name) == 'channels_last' else 1
+        size = self.spatial_shape(tensor, self.data_format, channels=False, dynamical=False)
+        if None in size[1:]:
+            size = self.spatial_shape(tensor, self.data_format, channels=False, dynamical=True)
+        size = size / factor
+        size = tf.cast(size, tf.int32)
+        tensor = tf.expand_dims(tensor, -1)
+        tensor = tf.image.resize_nearest_neighbor(tensor, size)
+        tensor = tf.squeeze(tensor, [-1])
         return tensor
 
     def to_classes(self, tensor, input_name, name=None):
@@ -1339,7 +1356,7 @@ class TFModel(BaseModel):
         return shape
 
     @classmethod
-    def spatial_shape(cls, tensor, data_format='channels_last'):
+    def spatial_shape(cls, tensor, data_format='channels_last', channels=True, dynamical=False):
         """ Return spatial shape of the input tensor
 
         Parameters
@@ -1350,8 +1367,14 @@ class TFModel(BaseModel):
         -------
         shape : tuple
         """
-        shape = tensor.get_shape().as_list()
-        axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
+        if dynamical:
+            shape = tf.shape(tensor)
+        else:
+            shape = tensor.get_shape().as_list()
+        if channels:
+            axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
+        else:
+            axis = slice(1, None)
         return shape[axis]
 
     def get_batch_size(self, tensor):
