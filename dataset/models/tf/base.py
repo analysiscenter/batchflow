@@ -438,9 +438,9 @@ class TFModel(BaseModel):
     def _make_dwn(self, input_name, tensor, config):
         _ = input_name
         factor = config.get('factor')
-        size = self.shape(tensor, self.data_format, False)
+        size = self.shape(tensor, False)
         if None in size[1:]:
-            size = self.shape(tensor, self.data_format, True)
+            size = self.shape(tensor, True)
         size = size / factor
         size = tf.cast(size, tf.int32)
         tensor = tf.expand_dims(tensor, -1)
