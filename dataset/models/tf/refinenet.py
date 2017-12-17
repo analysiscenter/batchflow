@@ -153,6 +153,7 @@ class RefineNet(TFModel):
                                         bottleneck=False, downsample=False,
                                         name='rcu-%d' % i, **kwargs)
                 after_rcu.append(x)
+            inputs = None
 
             # Multi-resolution fusion
             with tf.variable_scope('mrf'):

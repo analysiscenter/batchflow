@@ -55,7 +55,7 @@ class Inception(TFModel):
         arch, layout = cls.pop(['arch', 'layout'], kwargs)
 
         with tf.variable_scope(name):
-            x = inputs
+            x, inputs = inputs, None
 
             layout_dict = {}
             for block in layout:

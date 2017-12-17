@@ -75,7 +75,7 @@ class DenseNetFC(TFModel):
         trans_down = {**kwargs, **trans_down}
 
         with tf.variable_scope(name):
-            x = inputs
+            x, inputs = inputs, None
             encoder_outputs = []
             for i, num_layers in enumerate(num_blocks[:-1]):
                 x = cls.encoder_block(x, num_layers=num_layers, name='encoder-'+str(i), **block)
