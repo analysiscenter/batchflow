@@ -5,7 +5,8 @@ import numpy as np
 import tensorflow as tf
 
 from .core import mip, flatten, alpha_dropout
-from .conv import conv_transpose, separable_conv, resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
+from .conv import conv_transpose, separable_conv
+from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
 from .pooling import pooling, global_pooling
 
 
