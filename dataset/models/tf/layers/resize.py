@@ -28,6 +28,56 @@ def _dynamic_calc_shape(inputs, factor, data_format):
     shape = tf.cast(shape, dtype=tf.int32)
     return shape
 
+def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
+    dim = inputs.shape.ndims - 2
+    if dim == 2:
+        dafo = 'NHWC' if data_format == 'channels_last' else 'NCHW'
+        return tf.depth_to_space(inputs, block_size, name, data_format=dafo)
+    else:
+        if data_format == 'channels_first':
+            inputs = tf.transpose(inputs, [0] + list(range(2, dim+2)) + [1])
+        x = depth_to_space(inputs, block_size, name)
+        if data_format == 'channels_first':
+            x = tf.transpose(x, [0, dim+2] + list(range(1, dim+1)))
+        return x
+        
+
+def depth_to_space(inputs, block_size, name='d2s'):
+    dim = inputs.shape.ndims - 2
+    if dim == 2:
+        conv_layer = tf.nn.conv2d_transpose
+    elif dim == 3:
+        conv_layer = tf.nn.conv3d_transpose
+    with tf.variable_scope(name):
+        shape = inputs.get_shape().as_list()[1:]
+        channels = shape[-1]
+        output_shape = tf.concat([(tf.shape(inputs)[0],), tf.shape(inputs)[1:-1]*block_size, (tf.shape(inputs)[-1], )], axis=-1)
+        slices = [np.arange(0, channels, block_size ** dim)+i for i in range(block_size ** dim)]
+        tensors = []
+        for i in range(block_size ** dim):
+            zero_filter = np.zeros(block_size ** dim)
+            selective_filter = np.zeros(block_size ** dim)
+            selective_filter[i] = 1
+            zero_filter = zero_filter.reshape([block_size]*dim)
+            selective_filter = selective_filter.reshape([block_size]*dim)
+            
+            fltr = []
+            for j in range(channels):
+                _filter = [zero_filter] * channels
+                _filter[j] = selective_filter
+                _filter = np.stack(_filter, axis=-1)
+                fltr.append(_filter)
+            fltr = np.stack(fltr, axis=-1)
+            fltr = np.transpose(fltr, axes=list(range(dim))+[dim+2-2, dim+2-1])        
+            fltr = tf.constant(fltr, tf.float32)
+            print(fltr, inputs, output_shape)
+            x = conv_layer(inputs, fltr, output_shape, [1] + [block_size] * dim + [1])
+            x.set_shape([None] + list(np.array(shape[:-1]) * block_size) + [channels/(block_size ** dim)])
+            x = tf.gather(x, slices[i], axis=-1)
+            tensors.append(x)
+        x = tf.add_n(tensors)
+    return x, tensors
+
 
 def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
     """ Resize input tensor with subpixel convolution (depth to space operation)

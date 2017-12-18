@@ -1,5 +1,4 @@
 """ Contains convolutional layers """
-import numpy as np
 import tensorflow as tf
 
 
@@ -130,7 +129,7 @@ def _common_separable_conv(transpose, inputs, filters, kernel_size, strides, pad
                                     name='pointwise', *args, **kwargs)
         else:
             output = conv(depthwise_conv, filters, 1, 1, padding, data_format, 1, activation,
-                            name='pointwise', *args, **kwargs)
+                          name='pointwise', *args, **kwargs)
     else:
         output = depthwise_conv
 
@@ -181,7 +180,7 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
                                           dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
     else:
         return _common_separable_conv(False, inputs, filters, kernel_size, strides, padding, data_format,
-                                        dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
+                                      dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
 
 def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
                              dilation_rate=1, depth_multiplier=1, activation=None, name=None, *args, **kwargs):
