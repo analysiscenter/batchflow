@@ -24,9 +24,9 @@ class BaseModel:
     """
     def __init__(self, config=None, *args, **kwargs):
         self.config = config or {}
-        if self.get('build', self.config, True):
+        if self.get('build', self.config, default=True):
             self.build(*args, **kwargs)
-        load = self.get('load', self.config, False)
+        load = self.get('load', self.config, default=False)
         if load:
             self.load(**load)
 
@@ -77,7 +77,10 @@ class BaseModel:
                 else:
                     val = _config.get(var_name, default)
             else:
-                raise KeyError("Key '%s' not found" % variable)
+                if has_default:
+                    val = default
+                else:
+                    raise KeyError("Key '%s' not found" % variable)
 
             ret_vars.append(val)
 
