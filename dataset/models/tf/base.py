@@ -401,24 +401,28 @@ class TFModel(BaseModel):
 
     def _make_transform(self, input_name, tensor, config):
         if config is not None:
-            transform_name = config.get('transform')
-            if isinstance(transform_name, str):
-                transforms = {
-                    'ohe': self._make_ohe,
-                    'mip': self._make_mip
-                }
+            transform_names = config.get('transform')
+            if not isinstance(transform_names, list):
+                transform_names = [transform_names]
+            for transform_name in transform_names:
+                if isinstance(transform_name, str):
+                    transforms = {
+                        'ohe': self._make_ohe,
+                        'mip': self._make_mip,
+                        'mask_downsampling': self._make_mask_downsampling
+                    }
 
-                kwargs = dict()
-                if transform_name.startswith('mip'):
-                    parts = transform_name.split('@')
-                    transform_name = parts[0].strip()
-                    kwargs['depth'] = int(parts[1])
+                    kwargs = dict()
+                    if transform_name.startswith('mip'):
+                        parts = transform_name.split('@')
+                        transform_name = parts[0].strip()
+                        kwargs['depth'] = int(parts[1])
 
-                tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
-            elif callable(transform_name):
-                tensor = transform_name(tensor)
-            elif transform_name:
-                raise ValueError("Unknown transform {}".format(transform_name))
+                    tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
+                elif callable(transform_name):
+                    tensor = transform_name(tensor)
+                elif transform_name:
+                    raise ValueError("Unknown transform {}".format(transform_name))
         return tensor
 
     def _make_ohe(self, input_name, tensor, config):
@@ -429,6 +433,20 @@ class TFModel(BaseModel):
         num_classes = self.num_classes(input_name)
         axis = -1 if self.data_format(input_name) == 'channels_last' else 1
         tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
+        return tensor
+
+    def _make_mask_downsampling(self, input_name, tensor, config):
+        """ Perform mask downsampling with factor from config of tensor. """
+        _ = input_name
+        factor = config.get('factor')
+        size = self.shape(tensor, False)
+        if None in size[1:]:
+            size = self.shape(tensor, True)
+        size = size / factor
+        size = tf.cast(size, tf.int32)
+        tensor = tf.expand_dims(tensor, -1)
+        tensor = tf.image.resize_nearest_neighbor(tensor, size)
+        tensor = tf.squeeze(tensor, [-1])
         return tensor
 
     def to_classes(self, tensor, input_name, name=None):
@@ -839,18 +857,17 @@ class TFModel(BaseModel):
             data format
         """
 
-        axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
-        static_shape = shape_images.get_shape().as_list()[axis]
-        dynamic_shape = tf.shape(shape_images)[axis]
+        static_shape = cls.spatial_shape(shape_images, data_format, False)
+        dynamic_shape = cls.spatial_shape(shape_images, data_format, True)
 
-        if None in inputs.get_shape().as_list()[1:] + static_shape:
+        if None in cls.shape(inputs) + static_shape:
             return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
         else:
             return cls._static_crop(inputs, static_shape, data_format)
 
     @classmethod
     def _static_crop(cls, inputs, shape, data_format='channels_last'):
-        input_shape = np.array(cls.get_spatial_shape(inputs, data_format))
+        input_shape = np.array(cls.spatial_shape(inputs, data_format))
 
         if np.abs(input_shape - shape).sum() > 0:
             begin = [0] * inputs.shape.ndims
@@ -865,14 +882,12 @@ class TFModel(BaseModel):
 
     @classmethod
     def _dynamic_crop(cls, inputs, static_shape, dynamic_shape, data_format='channels_last'):
+        input_shape = cls.spatial_shape(inputs, data_format, True)
+        n_channels = cls.num_channels(inputs, data_format)
         if data_format == 'channels_last':
-            input_shape = tf.shape(inputs)[1:-1]
-            n_channels = inputs.get_shape().as_list()[-1]
             slice_size = [(-1,), dynamic_shape, (n_channels,)]
             output_shape = [None] * (len(static_shape) + 1) + [n_channels]
         else:
-            input_shape = tf.shape(inputs)[2:]
-            n_channels = inputs.get_shape().as_list()[1]
             slice_size = [(-1, n_channels), dynamic_shape]
             output_shape = [None, n_channels] + [None] * len(static_shape)
 
@@ -1294,18 +1309,25 @@ class TFModel(BaseModel):
         return config.get('shape')
 
     @classmethod
-    def shape(cls, tensor):
+    def shape(cls, tensor, dynamic=False):
         """ Return shape of the input tensor without batch size
 
         Parameters
         ----------
         tensor : tf.Tensor
 
+        dynamic : bool
+            if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
+
         Returns
         -------
-        shape : tuple
+        shape : tf.Tensor or list
         """
-        return tensor.get_shape().as_list()[1:]
+        if dynamic:
+            shape = tf.shape(tensor)
+        else:
+            shape = tensor.get_shape().as_list()
+        return shape[1:]
 
     def get_spatial_dim(self, tensor, **kwargs):
         """ Return the tensor spatial dimensionality (without batch and channels dimensions)
@@ -1352,18 +1374,24 @@ class TFModel(BaseModel):
         return shape
 
     @classmethod
-    def spatial_shape(cls, tensor, data_format='channels_last'):
+    def spatial_shape(cls, tensor, data_format='channels_last', dynamic=False):
         """ Return spatial shape of the input tensor
 
         Parameters
         ----------
         tensor : tf.Tensor
 
+        dynamic : bool
+            if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
+
         Returns
         -------
-        shape : tuple
+        shape : tf.Tensor or list
         """
-        shape = tensor.get_shape().as_list()
+        if dynamic:
+            shape = tf.shape(tensor)
+        else:
+            shape = tensor.get_shape().as_list()
         axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
         return shape[axis]
 
