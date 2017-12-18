@@ -85,7 +85,7 @@ class DenseNet(TFModel):
         transition = {**kwargs, **transition}
 
         with tf.variable_scope(name):
-            x = inputs
+            x, inputs = inputs, None
             for i, num_layers in enumerate(num_blocks):
                 x = cls.block(x, num_layers=num_layers, name='block-%d' % i, **block)
                 if i < len(num_blocks) - 1:

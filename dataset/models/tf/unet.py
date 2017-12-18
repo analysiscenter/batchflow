@@ -66,7 +66,7 @@ class UNet(TFModel):
         filters = kwargs.pop('filters')
 
         with tf.variable_scope(name):
-            x = inputs
+            x, inputs = inputs, None
             encoder_outputs = [x]
             for i, ifilters in enumerate(filters):
                 x = cls.encoder_block(x, ifilters, name='encoder-'+str(i), **kwargs)
@@ -119,6 +119,7 @@ class UNet(TFModel):
 
         with tf.variable_scope(name):
             x, skip = inputs
+            inputs = None
             x = cls.upsample(x, filters=filters, name='upsample', **upsample_args, **kwargs)
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = cls.channels_axis(kwargs.get('data_format'))
@@ -146,5 +147,5 @@ class UNet(TFModel):
         kwargs = cls.fill_params('head', **kwargs)
         with tf.variable_scope(name):
             x = conv_block(inputs, name='conv', **kwargs)
-            x = conv_block(inputs, name='last', **{**kwargs, **dict(filters=num_classes, kernel_size=1, layout='c')})
+            x = conv_block(x, name='last', **{**kwargs, **dict(filters=num_classes, kernel_size=1, layout='c')})
         return x

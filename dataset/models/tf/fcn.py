@@ -203,6 +203,7 @@ class FCN16(FCN):
 
         with tf.variable_scope(name):
             x, skip = inputs
+            inputs = None
             x = FCN32.body(x, filters=filters, num_classes=num_classes, name='fcn32', **kwargs)
 
             x = cls.upsample(x, factor=2, filters=num_classes, name='fcn32_upsample', **upsample_args, **kwargs)
@@ -280,6 +281,7 @@ class FCN8(FCN):
 
         with tf.variable_scope(name):
             x, skip1, skip2 = inputs
+            inputs = None
 
             x = FCN16.body((x, skip1), filters=filters, num_classes=num_classes, name='fcn16', **kwargs)
             x = cls.upsample(x, factor=2, filters=num_classes, name='fcn16_upsample', **upsample_args, **kwargs)
