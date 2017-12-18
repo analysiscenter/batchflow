@@ -409,7 +409,7 @@ class TFModel(BaseModel):
                     transforms = {
                         'ohe': self._make_ohe,
                         'mip': self._make_mip,
-                        'dwn': self._make_dwn
+                        'mask_downsampling': self._make_mask_downsampling
                     }
 
                     kwargs = dict()
@@ -435,7 +435,8 @@ class TFModel(BaseModel):
         tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
         return tensor
 
-    def _make_dwn(self, input_name, tensor, config):
+    def _make_mask_downsampling(self, input_name, tensor, config):
+        """ Perform mask downsampling with factor from config of tensor. """
         _ = input_name
         factor = config.get('factor')
         size = self.shape(tensor, False)
@@ -1308,21 +1309,21 @@ class TFModel(BaseModel):
         return config.get('shape')
 
     @classmethod
-    def shape(cls, tensor, dynamical=False):
+    def shape(cls, tensor, dynamic=False):
         """ Return shape of the input tensor without batch size
 
         Parameters
         ----------
         tensor : tf.Tensor
 
-        dynamical : bool
+        dynamic : bool
             if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
 
         Returns
         -------
         shape : tf.Tensor or list
         """
-        if dynamical:
+        if dynamic:
             shape = tf.shape(tensor)
         else:
             shape = tensor.get_shape().as_list()
@@ -1373,21 +1374,21 @@ class TFModel(BaseModel):
         return shape
 
     @classmethod
-    def spatial_shape(cls, tensor, data_format='channels_last', dynamical=False):
+    def spatial_shape(cls, tensor, data_format='channels_last', dynamic=False):
         """ Return spatial shape of the input tensor
 
         Parameters
         ----------
         tensor : tf.Tensor
 
-        dynamical : bool
+        dynamic : bool
             if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
 
         Returns
         -------
         shape : tf.Tensor or list
         """
-        if dynamical:
+        if dynamic:
             shape = tf.shape(tensor)
         else:
             shape = tensor.get_shape().as_list()
