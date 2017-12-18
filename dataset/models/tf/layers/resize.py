@@ -92,48 +92,58 @@ def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_
         x = xip(x, depth=factor**dim, reduction='sum', name='addition')
     return x
 
-def resize_bilinear_1d(inputs, size, name, **kwargs):
+def resize_bilinear_1d(inputs, size, name='resize', **kwargs):
+    """ Resize 1D input tensor with bilinear method.
+    
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    size : tf.Tensor or list
+        size of the output image
+    name : str
+        scope name
+
+    Returns
+    -------
+    tf.Tensor
+    """
     x = tf.expand_dims(inputs, axis=1)
     size = tf.concat([[1], size], axis=-1)
-    x = tf.image.resize_bilinear(x, size=size, name='resize', **kwargs)
+    x = tf.image.resize_bilinear(x, size=size, name=name, **kwargs)
     x = tf.squeeze(x, [1])
     return x
 
 def resize_bilinear_3d(tensor, size, name, **kwargs):
+    """ Resize 3D input tensor with bilinear method.
+    
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        a tensor to resize
+    size : tf.Tensor or list
+        size of the output image
+    name : str
+        scope name
+
+    Returns
+    -------
+    tf.Tensor
+    """
     tensor = _resize_along_axis(tensor, size, name, 2, **kwargs)
     tensor = _resize_except_axis(tensor, size, name, 2, **kwargs)
     return tensor
 
 def _resize_along_axis(inputs, size, name, axis, **kwargs):
+    """ Resize 3D input tensor to size along just one axis. """
     except_axis = (axis + 1) % 3
     not_resized_axis = (axis + 2) % 3
     size, _ = _calc_size_after_resize(inputs, size, axis)
     output = _resize_except_axis(inputs, size, name, except_axis, **kwargs)
     return output
 
-def _calc_size_after_resize(inputs, size, axis):
-    if not isinstance(axis, list):
-        axis = [axis]
-    except_axis = list(set(range(3)) - set(axis))
-    if isinstance(size, tf.Tensor):
-        size = tf.unstack(size)
-        for i in except_axis:
-            size[i] = tf.shape(inputs)[i+1]
-        size = tf.stack(size)
-        static_size = [None] * 4 + [inputs.get_shape().as_list()[-1]]
-    else:
-        size = size[:]
-        static_size = inputs.get_shape().as_list()
-        if None in static_size[1:]:
-            size[except_axis] = tf.shape(inputs)[except_axis+1]
-            size = tf.stack(size)
-        else:
-            for i in except_axis:
-                size[i] = static_size[i+1]
-            static_size[1:4] = size
-    return size, static_size
-
 def _resize_except_axis(inputs, size, name, axis, **kwargs):
+    """ Resize 3D input tensor to size except just one axis. """
     perm = np.arange(5)
     reverse_perm = np.arange(5)
 
@@ -176,6 +186,28 @@ def _resize_except_axis(inputs, size, name, axis, **kwargs):
     array.set_shape(static_shape)
     array = tf.transpose(array, reverse_perm)
     return array
+
+def _calc_size_after_resize(inputs, size, axis):
+    if not isinstance(axis, list):
+        axis = [axis]
+    except_axis = list(set(range(3)) - set(axis))
+    if isinstance(size, tf.Tensor):
+        size = tf.unstack(size)
+        for i in except_axis:
+            size[i] = tf.shape(inputs)[i+1]
+        size = tf.stack(size)
+        static_size = [None] * 4 + [inputs.get_shape().as_list()[-1]]
+    else:
+        size = size[:]
+        static_size = inputs.get_shape().as_list()
+        if None in static_size[1:]:
+            size[except_axis] = tf.shape(inputs)[except_axis+1]
+            size = tf.stack(size)
+        else:
+            for i in except_axis:
+                size[i] = static_size[i+1]
+            static_size[1:4] = size
+    return size, static_size
 
 
 def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last', **kwargs):
