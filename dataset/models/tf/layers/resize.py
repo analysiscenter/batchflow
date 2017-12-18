@@ -2,6 +2,7 @@
 import numpy as np
 import tensorflow as tf
 
+from .conv import conv
 from .core import xip
 
 def _calc_size(inputs, factor, data_format):
@@ -94,7 +95,7 @@ def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_
 
 def resize_bilinear_1d(inputs, size, name='resize', **kwargs):
     """ Resize 1D input tensor with bilinear method.
-    
+
     Parameters
     ----------
     inputs : tf.Tensor
@@ -114,9 +115,9 @@ def resize_bilinear_1d(inputs, size, name='resize', **kwargs):
     x = tf.squeeze(x, [1])
     return x
 
-def resize_bilinear_3d(tensor, size, name, **kwargs):
+def resize_bilinear_3d(tensor, size, name='resize', **kwargs):
     """ Resize 3D input tensor with bilinear method.
-    
+
     Parameters
     ----------
     inputs : tf.Tensor
@@ -130,19 +131,19 @@ def resize_bilinear_3d(tensor, size, name, **kwargs):
     -------
     tf.Tensor
     """
-    tensor = _resize_along_axis(tensor, size, name, 2, **kwargs)
-    tensor = _resize_except_axis(tensor, size, name, 2, **kwargs)
+    with tf.variable_scope(name):
+        tensor = _resize_along_axis(tensor, size, 2, **kwargs)
+        tensor = _resize_except_axis(tensor, size, 2, **kwargs)
     return tensor
 
-def _resize_along_axis(inputs, size, name, axis, **kwargs):
+def _resize_along_axis(inputs, size, axis, **kwargs):
     """ Resize 3D input tensor to size along just one axis. """
     except_axis = (axis + 1) % 3
-    not_resized_axis = (axis + 2) % 3
     size, _ = _calc_size_after_resize(inputs, size, axis)
-    output = _resize_except_axis(inputs, size, name, except_axis, **kwargs)
+    output = _resize_except_axis(inputs, size, except_axis, **kwargs)
     return output
 
-def _resize_except_axis(inputs, size, name, axis, **kwargs):
+def _resize_except_axis(inputs, size, axis, **kwargs):
     """ Resize 3D input tensor to size except just one axis. """
     perm = np.arange(5)
     reverse_perm = np.arange(5)
@@ -160,22 +161,22 @@ def _resize_except_axis(inputs, size, name, axis, **kwargs):
     perm[1:4] = spatial_perm
     reverse_perm[1:4] = reverse_spatial_perm
     x = tf.transpose(inputs, perm)
-    
+
     if isinstance(size, tf.Tensor):
         size = tf.unstack(size)
         size = [size[i-1] for i in spatial_perm]
         size = tf.stack(size)
     else:
         size = [size[i-1] for i in spatial_perm]
-    
-    real_size, static_shape = _calc_size_after_resize(x, size, [0,1])
+
+    real_size, static_shape = _calc_size_after_resize(x, size, [0, 1])
     real_size = size[:-1]
     array = tf.TensorArray(tf.float32, size=tf.shape(x)[-2])
-    sl = [slice(None)] * 5
-    
+    partial_sl = [slice(None)] * 5
+
     def _loop(idx, array):
-        sl[-2] = idx
-        tensor = x[sl]
+        partial_sl[-2] = idx
+        tensor = x[partial_sl]
         tensor = tf.image.resize_bilinear(tensor, size=real_size, name='resize_2d', **kwargs)
         array = array.write(idx, tensor)
         return [idx+1, array]
