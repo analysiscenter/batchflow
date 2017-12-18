@@ -29,8 +29,8 @@ def _dynamic_calc_shape(inputs, factor, data_format):
     return shape
 
 def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
-    """ 2d and 3d depth_to_space transformation. 
-    
+    """ 2d and 3d depth_to_space transformation.
+
     Parameters
     ----------
     inputs : tf.Tensor
@@ -39,7 +39,7 @@ def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
 
     name : str
         scope name
-    
+
     data_format : {'channels_last', 'channels_first'}
         position of the channels dimension
 
@@ -69,7 +69,7 @@ def _depth_to_space(inputs, block_size, name='d2s'):
     with tf.variable_scope(name):
         shape = inputs.get_shape().as_list()[1:]
         channels = shape[-1]
-        output_shape = tf.concat([(tf.shape(inputs)[0],), tf.shape(inputs)[1:-1]*block_size, 
+        output_shape = tf.concat([(tf.shape(inputs)[0],), tf.shape(inputs)[1:-1]*block_size,
                                   (tf.shape(inputs)[-1], )], axis=-1)
         slices = [np.arange(0, channels, block_size ** dim)+i for i in range(block_size ** dim)]
         tensors = []
