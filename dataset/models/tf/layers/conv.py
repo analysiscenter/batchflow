@@ -117,7 +117,7 @@ def _common_separable_conv(transpose, inputs, filters, kernel_size, strides, pad
                                         activation, name='slice-%d' % channel, *args, **kwargs)
         else:
             slice_conv = conv_transpose(input_slice, depth_multiplier, kernel_size, strides, padding, data_format,
-                                        dilation_rate, activation, name='slice-%d' % channel, *args, **kwargs)            
+                                        dilation_rate, activation, name='slice-%d' % channel, *args, **kwargs)
         depthwise_layers.append(slice_conv)
 
     # Concatenate the per-channel convolutions along the channel dimension.
