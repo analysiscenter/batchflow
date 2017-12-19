@@ -3,7 +3,6 @@ Improve Semantic Segmentation by Global Convolutional Network
 <https://arxiv.org/abs/1703.02719>`_"
 """
 import tensorflow as tf
-import numpy as np
 
 from .layers import conv_block
 from . import TFModel
@@ -19,15 +18,23 @@ class GlobalConvolutionNetwork(TFModel):
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
 
     body : dict
-        num_blocks : int
-            number of downsampling/upsampling blocks (default=4)
-
-        filters : list of int
-            number of filters in each block (default=[64, 128, 256, 512])
+        encoder : dict
+            base_class : TFModel
+                encoder model class (should implement ``make_encoder``)
+            filters : list of int
+                number of filters in encoder convolutions
+        block : dict
+            parameters for Global Convolution Network conv block
+        br : dict
+            parameters for boundary refinement conv block
+        upsample : dict
+            parameters for upsampling in decoders
 
     head : dict
         num_classes : int
             number of semantic classes
+        upsample : dict
+            parameters for upsampling
     """
     @classmethod
     def default_config(cls):
@@ -65,20 +72,18 @@ class GlobalConvolutionNetwork(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        block, br, encoder, upsample = cls.pop(['block', 'br', 'encoder', 'upsample'], kwargs)
+        block, br_block, encoder, upsample = cls.pop(['block', 'br', 'encoder', 'upsample'], kwargs)
 
         with tf.variable_scope(name):
-            encoder_outputs = cls.encoder(inputs, block=block, br=br, encoder=encoder, **kwargs)
+            encoder_outputs = cls.encoder(inputs, block=block, br=br_block, encoder=encoder, **kwargs)
 
-            for i, x in  enumerate(encoder_outputs[::-1][1:]):
+            encoder_outputs = [inputs] + encoder_outputs
+            for i, x in enumerate(encoder_outputs[:0:-1]):
                 with tf.variable_scope('decoder-%d' % i):
                     x = cls.decoder_block(x, encoder_outputs[-i-2], **upsample, **kwargs)
-                    x = tf.add(x, encoder_outputs[-i-2])
-                    x = cls.boundary_refinement(x, name='BR', **br, **kwargs)
-            i += 1
-            with tf.variable_scope('decoder-%d' % i):
-                x = cls.decoder_block(x, inputs, name='decoder-%d' % i, **upsample, **kwargs)
-                x = cls.boundary_refinement(x, name='BR', **br, **kwargs)
+                    if i < len(encoder_outputs) - 2:
+                        x = tf.add(x, encoder_outputs[-i-2])
+                    x = cls.boundary_refinement(x, name='BR', **br_block, **kwargs)
         return x
 
     @classmethod
