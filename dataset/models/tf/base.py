@@ -493,6 +493,7 @@ class TFModel(BaseModel):
         """ Return a loss function from config """
         loss, args = self._unpack_fn_from_config('loss', config)
 
+        add_loss = False
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
@@ -501,7 +502,7 @@ class TFModel(BaseModel):
         elif isinstance(loss, str):
             loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
         elif callable(loss):
-            pass
+            add_loss = True
         else:
             raise ValueError("Unknown loss", loss)
 
@@ -515,7 +516,9 @@ class TFModel(BaseModel):
             except AttributeError:
                 raise KeyError("Model %s does not have 'targets' tensor" % type(self).__name__)
             else:
-                tf.losses.add_loss(loss(targets, predictions, **args))
+                tensor_loss = loss(targets, predictions, **args)
+                if add_loss:
+                    tf.losses.add_loss(tensor_loss)
 
     def _make_decay(self, config):
         decay_name, decay_args = self._unpack_fn_from_config('decay', config)
@@ -1152,9 +1155,9 @@ class TFModel(BaseModel):
         for k in self.config:
             self.put(k, self.config[k], config)
 
-        if 'inputs' in self.config:
+        if 'inputs' in config:
             with tf.variable_scope('inputs'):
-                self._make_inputs(names, self.config)
+                self._make_inputs(names, config)
             inputs = self.get('input_block/inputs', config)
 
             if isinstance(inputs, str):
@@ -1182,36 +1185,6 @@ class TFModel(BaseModel):
         x = self.body(inputs=x, **config['body'])
         output = self.head(inputs=x, **config['head'])
         self.output(output, **config['output'])
-
-    @classmethod
-    def se_block(cls, inputs, ratio, name='se', **kwargs):
-        """ Squeeze and excitation block
-
-        Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        ratio : int
-            squeeze ratio for the number of filters
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        with tf.variable_scope(name):
-            data_format = kwargs.get('data_format')
-            in_filters = cls.num_channels(inputs, data_format)
-            x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
-                           **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
-
-            shape = [-1] + [1] * (len(cls.get_spatial_shape(inputs, data_format)) + 1)
-            axis = cls.channels_axis(data_format)
-            shape[axis] = in_filters
-            scale = tf.reshape(x, shape)
-            x = inputs * scale
-        return x
 
     @classmethod
     def channels_axis(cls, data_format):
@@ -1437,6 +1410,36 @@ class TFModel(BaseModel):
         return tensor.get_shape().as_list()[0]
 
     @classmethod
+    def se_block(cls, inputs, ratio, name='se', **kwargs):
+        """ Squeeze and excitation block
+
+        Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        ratio : int
+            squeeze ratio for the number of filters
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        with tf.variable_scope(name):
+            data_format = kwargs.get('data_format')
+            in_filters = cls.num_channels(inputs, data_format)
+            x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
+                           **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
+
+            shape = [-1] + [1] * (len(cls.get_spatial_shape(inputs, data_format)) + 1)
+            axis = cls.channels_axis(data_format)
+            shape[axis] = in_filters
+            scale = tf.reshape(x, shape)
+            x = inputs * scale
+        return x
+
+    @classmethod
     def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):
         """ Upsample input tensor
 
@@ -1465,9 +1468,10 @@ class TFModel(BaseModel):
 
         resize_to = None
         if isinstance(inputs, (list, tuple)):
-            inputs, resize_to = inputs
+            x, resize_to = inputs
+            inputs = None
 
-        x = upsample(inputs, factor, layout, name=name, **kwargs)
+        x = upsample(x, factor, layout, name=name, **kwargs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x
@@ -1498,13 +1502,14 @@ class TFModel(BaseModel):
         upsample_args = cls.pop('upsample', kwargs, default={})
         upsample_args = {**kwargs, **upsample_args}
 
+        x, inputs = inputs, None
         with tf.variable_scope(name):
             layers = []
             for level in pool_size:
                 if level == 1:
-                    x = inputs
+                    pass
                 else:
-                    x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=level, pool_strides=level,
+                    x = conv_block(x, 'p', pool_op=pool_op, pool_size=level, pool_strides=level,
                                    name='pool', **kwargs)
                 x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv', **kwargs)
                 x = cls.upsample(x, factor=level, **upsample_args)
@@ -1553,5 +1558,5 @@ class TFModel(BaseModel):
 
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat(layers, axis=axis, name='concat')
-            x = conv_block(inputs, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
+            x = conv_block(x, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
         return x

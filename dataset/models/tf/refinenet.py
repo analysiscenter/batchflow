@@ -86,7 +86,8 @@ class RefineNet(TFModel):
     @classmethod
     def head(cls, inputs, targets, num_classes, name='head', **kwargs):
         with tf.variable_scope(name):
-            x = cls.crop(inputs, targets, kwargs['data_format'])
+            x, inputs = inputs, None
+            x = cls.crop(x, targets, kwargs['data_format'])
             x = conv_block(x, layout='c', filters=num_classes, kernel_size=1, **kwargs)
         return x
 
@@ -151,6 +152,7 @@ class RefineNet(TFModel):
                                         bottleneck=False, downsample=False,
                                         name='rcu-%d' % i, **kwargs)
                 after_rcu.append(x)
+            inputs = None
 
             # Multi-resolution fusion
             with tf.variable_scope('mrf'):

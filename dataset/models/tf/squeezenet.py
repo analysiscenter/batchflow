@@ -72,7 +72,7 @@ class SqueezeNet(TFModel):
         layout = kwargs.pop('layout')
         filters = kwargs.pop('filters')
 
-        x = inputs
+        x, inputs = inputs, None
         bypass = None
         with tf.variable_scope(name):
             for i, block in enumerate(layout):
@@ -109,7 +109,8 @@ class SqueezeNet(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            x = conv_block(inputs, layout, filters, 1, name='squeeze-1x1', **kwargs)
+            x, inputs = inputs, None
+            x = conv_block(x, layout, filters, 1, name='squeeze-1x1', **kwargs)
 
             exp1 = conv_block(x, layout, filters*4, 1, name='expand-1x1', **kwargs)
             exp3 = conv_block(x, layout, filters*4, 3, name='expand-3x3', **kwargs)

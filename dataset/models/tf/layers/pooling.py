@@ -135,7 +135,9 @@ def global_pooling(inputs, pool_op, data_format='channels_last', name=None):
     """
     dim = inputs.shape.ndims - 2
     axis = 1 if data_format == 'channels_last' else 2
-    if dim == 2:
+    if dim == 1:
+        pass
+    elif dim == 2:
         axis = [axis, axis+1]
     elif dim == 3:
         axis = [axis, axis+1, axis+2]

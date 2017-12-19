@@ -127,7 +127,8 @@ class LinkNet(TFModel):
 
         num_filters = cls.num_channels(inputs, kwargs.get('data_format')) // 4
         with tf.variable_scope(name):
-            x = conv_block(inputs, 'cna', num_filters, kernel_size=1, name='conv_pre', **kwargs)
+            x, inputs = inputs, None
+            x = conv_block(x, 'cna', num_filters, kernel_size=1, name='conv_pre', **kwargs)
             x = cls.upsample(x, filters=num_filters, name='upsample', **upsample_args, **kwargs)
             x = conv_block(x, 'cna', filters, kernel_size=1, name='conv_post', **kwargs)
         return x
@@ -157,7 +158,8 @@ class LinkNet(TFModel):
         upsample2_args = cls.pop('upsample2', kwargs)
 
         with tf.variable_scope(name):
-            x = cls.upsample(inputs, filters=filters, name='upsample1', **upsample1_args, **kwargs)
+            x, inputs = inputs, None
+            x = cls.upsample(x, filters=filters, name='upsample1', **upsample1_args, **kwargs)
             x = cls.upsample(x, filters=num_classes, name='upsample2', **upsample2_args, **kwargs)
             x = cls.crop(x, targets, data_format=kwargs.get('data_format'))
         return x

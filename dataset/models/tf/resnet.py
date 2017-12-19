@@ -107,7 +107,7 @@ class ResNet(TFModel):
         block_args = {**kwargs, **block_args}
 
         with tf.variable_scope(name):
-            x = inputs
+            x, inputs = inputs, None
             for i, n_blocks in enumerate(kwargs['num_blocks']):
                 with tf.variable_scope('group-%d' % i):
                     for block in range(n_blocks):
