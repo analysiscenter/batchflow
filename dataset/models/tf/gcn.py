@@ -105,7 +105,7 @@ class GlobalConvolutionNetwork(TFModel):
         """
         encoder = cls.fill_params('body/encoder', **kwargs.pop('encoder', {}))
         base_class = cls.pop('base_class', encoder)
-        block, br = cls.pop(['block', 'br'], kwargs)
+        block, br_block = cls.pop(['block', 'br'], kwargs)
 
         with tf.variable_scope(name):
             base_tensors = base_class.make_encoder(inputs, name='base', **{**kwargs, **encoder})
@@ -113,7 +113,7 @@ class GlobalConvolutionNetwork(TFModel):
             for i, tensor in enumerate(base_tensors):
                 with tf.variable_scope('encoder-%d' % i):
                     x = cls.block(tensor, name='GCN', **block, **kwargs)
-                    x = cls.boundary_refinement(x, name='BR', **br, **kwargs)
+                    x = cls.boundary_refinement(x, name='BR', **br_block, **kwargs)
                 encoder_tensors.append(x)
         return encoder_tensors
 
