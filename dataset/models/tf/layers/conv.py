@@ -23,6 +23,7 @@ def conv(inputs, *args, **kwargs):
         3: tf.layers.conv3d
     }
     layer_fn = conv_layers[dim]
+    print(args, kwargs)
     return layer_fn(inputs, *args, **kwargs)
 
 def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
@@ -59,7 +60,34 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', d
 
 def conv1d_transpose_nn(value, filters, output_shape, strides,
                         padding='SAME', data_format='NWC', name=None):
-    """ Analogue of the tf.nn.conv2d_transpose. """
+    """ Transposed 1D convolution layer. Analogue of the tf.nn.conv2d_transpose.
+    
+    Parameters
+    ----------
+    value : tf.Tensor
+        input tensor
+    filters : tf.Tensor
+        convolutional filter
+    output_shape : tf.Tensor
+        the output shape of the deconvolution op
+    strides : list
+        the stride of the sliding window for each dimension of the input tensor
+    padding : str
+        'VALID' or 'SAME'. Default - 'SAME'.
+    data_format : str
+        'NWC' or 'NCW'. Default - 'NWC'.
+    name : str
+        scope name
+
+    Returns
+    -------
+    tf.Tensor
+
+    See also
+    --------
+    `tf.nn.conv2d_transpose <https://www.tensorflow.org/api_docs/python/tf/nn/conv2d_transpose>`_,
+    `tf.nn.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/nn/conv3d_transpose>`_
+    """
     axis = 1 if data_format == 'NWC' else 2
     value = tf.expand_dims(value, axis=axis)
     filters = tf.expand_dims(filters, axis=0)
@@ -108,12 +136,27 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
 
 
 def _common_separable_conv(transpose, inputs, filters, kernel_size, strides, padding, data_format,
-                           dilation_rate, depth_multiplier, activation, name, *args, **kwargs):
+                           dilation_rate, depth_multiplier, activation, name, **kwargs):
     dim = inputs.shape.ndims - 2
     context = None
     if name is not None:
         context = tf.variable_scope(name)
         context.__enter__()
+    if transpose:
+        conv_layer = conv_transpose
+    else:
+        conv_layer = conv
+
+    kwargs = {'kernel_size': kernel_size,
+              'strides': strides,
+              'padding': padding,
+              'data_format': data_format,
+              'dilation_rate': dilation_rate,
+              'activation': activation,
+              **kwargs}
+
+    if transpose:
+        kwargs.pop('dilation_rate')
 
     inputs_shape = inputs.get_shape().as_list()
     axis = -1 if data_format == 'channels_last' else 1
@@ -127,24 +170,26 @@ def _common_separable_conv(transpose, inputs, filters, kernel_size, strides, pad
         start[axis] = channel
 
         input_slice = tf.slice(inputs, start, size)
-        if transpose:
-            slice_conv = conv_transpose(input_slice, depth_multiplier, kernel_size, strides, padding, data_format,
-                                        activation, name='slice-%d' % channel, *args, **kwargs)
-        else:
-            slice_conv = conv_transpose(input_slice, depth_multiplier, kernel_size, strides, padding, data_format,
-                                        dilation_rate, activation, name='slice-%d' % channel, *args, **kwargs)
+
+        _kwargs = {**kwargs, 'inputs': input_slice, 'filters': depth_multiplier, 'name': 'slice-%d' % channel}
+        
+        slice_conv = conv_layer(**_kwargs)
         depthwise_layers.append(slice_conv)
 
     # Concatenate the per-channel convolutions along the channel dimension.
     depthwise_conv = tf.concat(depthwise_layers, axis=axis)
 
     if channels_in * depth_multiplier != filters:
-        if transpose:
-            output = conv_transpose(depthwise_conv, filters, 1, 1, padding, data_format, activation,
-                                    name='pointwise', *args, **kwargs)
-        else:
-            output = conv(depthwise_conv, filters, 1, 1, padding, data_format, 1, activation,
-                          name='pointwise', *args, **kwargs)
+        _kwargs = {**kwargs, 
+                   'inputs': depthwise_conv,
+                   'filters': filters,
+                   'kernel_size': 1,
+                   'strides': 1,
+                   'name': 'pointwise'}
+        if not transpose:
+            kwargs['dilation_rate'] = 1
+
+        output = conv_layer(**_kwargs)
     else:
         output = depthwise_conv
 
@@ -154,7 +199,7 @@ def _common_separable_conv(transpose, inputs, filters, kernel_size, strides, pad
     return output
 
 def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                   dilation_rate=1, depth_multiplier=1, activation=None, name=None, *args, **kwargs):
+                   dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
     """ Make Nd depthwise convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
@@ -195,10 +240,10 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
                                           dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
     else:
         return _common_separable_conv(False, inputs, filters, kernel_size, strides, padding, data_format,
-                                      dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
+                                      dilation_rate, depth_multiplier, activation, name, **kwargs)
 
 def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                             dilation_rate=1, depth_multiplier=1, activation=None, name=None, *args, **kwargs):
+                             depth_multiplier=1, activation=None, name=None, **kwargs):
     """ Make Nd depthwise transpose convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
@@ -216,8 +261,6 @@ def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='s
         padding mode, can be 'same' or 'valid'. Default - 'same',
     data_format : str
         'channels_last' or 'channels_first'. Default - 'channels_last'.
-    dilation_rate : int
-        Default is 1.
     depth_multiplier : int
         The number of depthwise convolution output channels for each input channel.
         The total number of depthwise convolution output channels will be equal to
@@ -233,5 +276,5 @@ def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='s
 
     """
     output = _common_separable_conv(True, inputs, filters, kernel_size, strides, padding, data_format,
-                                    dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
+                                    None, depth_multiplier, activation, name, **kwargs)
     return output
