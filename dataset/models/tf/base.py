@@ -1122,7 +1122,8 @@ class TFModel(BaseModel):
     def fill_params(cls, _name, **kwargs):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
-        config = {**config['common'], **cls.get(_name, config), **kwargs}
+        _config = cls.get(_name, config)
+        config = {**config['common'], **_config, **kwargs}
         return config
 
     def build_config(self, names=None):
@@ -1469,7 +1470,8 @@ class TFModel(BaseModel):
         resize_to = None
         if isinstance(inputs, (list, tuple)):
             x, resize_to = inputs
-            inputs = None
+        else:
+            x = inputs
 
         x = upsample(x, factor, layout, name=name, **kwargs)
         if resize_to is not None:
