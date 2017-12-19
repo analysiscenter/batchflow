@@ -77,7 +77,8 @@ def _depth_to_space(inputs, block_size, name='d2s'):
             raise ValueError('channels of the inputs must be divisible by block_size ** {}'.format(dim))
         output_shape = tf.concat([(tf.shape(inputs)[0],), tf.shape(inputs)[1:-1]*block_size,
                                   (tf.shape(inputs)[-1], )], axis=-1)
-        slices = [np.arange(0, channels // (block_size ** dim))+i for i in range(0, channels, channels // (block_size ** dim))]
+        slices = [np.arange(0, channels // (block_size ** dim))+i 
+                  for i in range(0, channels, channels // (block_size ** dim))]
         tensors = []
         for i in range(block_size ** dim):
             zero_filter = np.zeros(block_size ** dim)
@@ -129,7 +130,7 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
     _, channels = _calc_size(inputs, factor, data_format)
 
     with tf.variable_scope(name):
-        x = conv(inputs, filters=channels*factor**dim, kernel_size=1, name='conv', data_format = data_format, **kwargs)
+        x = conv(inputs, filters=channels*factor**dim, kernel_size=1, name='conv', data_format=data_format, **kwargs)
         x = depth_to_space(x, block_size=factor, name='d2s', data_format=data_format)
     return x
 

@@ -61,7 +61,7 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', d
 def conv1d_transpose_nn(value, filters, output_shape, strides,
                         padding='SAME', data_format='NWC', name=None):
     """ Transposed 1D convolution layer. Analogue of the tf.nn.conv2d_transpose.
-    
+
     Parameters
     ----------
     value : tf.Tensor
@@ -172,7 +172,7 @@ def _common_separable_conv(transpose, inputs, filters, kernel_size, strides, pad
         input_slice = tf.slice(inputs, start, size)
 
         _kwargs = {**kwargs, 'inputs': input_slice, 'filters': depth_multiplier, 'name': 'slice-%d' % channel}
-        
+
         slice_conv = conv_layer(**_kwargs)
         depthwise_layers.append(slice_conv)
 
@@ -180,7 +180,7 @@ def _common_separable_conv(transpose, inputs, filters, kernel_size, strides, pad
     depthwise_conv = tf.concat(depthwise_layers, axis=axis)
 
     if channels_in * depth_multiplier != filters:
-        _kwargs = {**kwargs, 
+        _kwargs = {**kwargs,
                    'inputs': depthwise_conv,
                    'filters': filters,
                    'kernel_size': 1,
@@ -237,7 +237,7 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
 
     if dim == 2:
         return tf.layers.separable_conv2d(inputs, filters, kernel_size, strides, padding, data_format,
-                                          dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
+                                          dilation_rate, depth_multiplier, activation, name, **kwargs)
     else:
         return _common_separable_conv(False, inputs, filters, kernel_size, strides, padding, data_format,
                                       dilation_rate, depth_multiplier, activation, name, **kwargs)

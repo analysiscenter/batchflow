@@ -1,13 +1,7 @@
 """ Contains convolution layers """
-# pylint:disable=too-many-statements
-import logging
-import numpy as np
 import tensorflow as tf
 
-from .core import mip, flatten, alpha_dropout
-from .conv import conv_transpose, separable_conv
 from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
-from .pooling import pooling, global_pooling
 from .block import _conv_block
 
 
