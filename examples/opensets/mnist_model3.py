@@ -23,7 +23,7 @@ if __name__ == "__main__":
     mnist = MNIST()
 
     train_template = (Pipeline(config=dict(model=VGG7))
-                .init_variable('model', ResNetAttention56)
+                .init_variable('model', ResNet18)
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
@@ -35,7 +35,8 @@ if __name__ == "__main__":
                                     #'body/block/bottleneck': 1,
                                     #'head/units': [100, 100, 10],
                                     #'nothing': F(lambda batch: batch.images.shape[1:]),
-                                    #'filters': 16, 'width_factor': 1,
+                                    #'body/block/filters': 16,
+                                    'body/block/width_factor': 2,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['accuracy'])})
                 #.resize(shape=(64, 64))
@@ -59,8 +60,8 @@ if __name__ == "__main__":
     test_pp = (mnist.test.p
                 .import_model('conv', train_pp)
                 .init_variable('accuracy', init_on_each_run=list)
-                .predict_model('conv', fetches='accuracy', feed_dict={'images': B('images'),
-                                                                      'labels': B('labels')},
+                .predict_model('conv', fetches='output_accuracy', feed_dict={'images': B('images'),
+                                                                             'labels': B('labels')},
                                save_to=V('accuracy'), mode='a')
                 .run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=True, prefetch=0))
     print("End testing", time() - t)

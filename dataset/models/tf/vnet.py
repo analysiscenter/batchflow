@@ -67,7 +67,7 @@ class VNet(TFModel):
         layout, filters = cls.pop(['layout', 'filters'], kwargs)
 
         with tf.variable_scope(name):
-            x = inputs
+            x, inputs = inputs, None
             encoder_outputs = []
             for i, ifilters in enumerate(filters):
                 x = cls.encoder_block(x, layout=layout[i], filters=ifilters, downsample=i > 0,
@@ -97,7 +97,7 @@ class VNet(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         layout, kernel_size = cls.pop(['layout', 'kernel_size'], kwargs)
-        x = inputs
+        x, inputs = inputs, None
         with tf.variable_scope(name):
             if downsample:
                 x = conv_block(x, layout='cna', kernel_size=2, strides=2, name='downsample', **kwargs)
@@ -125,6 +125,7 @@ class VNet(TFModel):
 
         with tf.variable_scope(name):
             x, skip = inputs
+            inputs = None
             x = cls.upsample(x, filters=filters, name='upsample', **upsample_args, **kwargs)
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = cls.channels_axis(kwargs.get('data_format'))

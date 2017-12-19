@@ -98,8 +98,9 @@ class ResNetAttention(TFModel):
         upsample_args = cls.pop('upsample', kwargs)
 
         with tf.variable_scope(name):
-            inputs, resize_to = inputs
-            x = conv_block(inputs, layout='p', name='pool', **kwargs)
+            x, resize_to = inputs
+            inputs = None
+            x = conv_block(x, layout='p', name='pool', **kwargs)
             b = ResNet.block(x, name='resblock_1', **kwargs)
             c = ResNet.block(b, name='resblock_2', **kwargs)
 
@@ -128,7 +129,8 @@ class ResNetAttention(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            x = ResNet.block(inputs, name='initial', **kwargs)
+            x, inputs = inputs, None
+            x = ResNet.block(x, name='initial', **kwargs)
 
             t = cls.trunk(x, **kwargs)
             m = cls.mask((x, t), level=level, **kwargs)
@@ -136,6 +138,7 @@ class ResNetAttention(TFModel):
             x = conv_block(m, layout='nac nac', kernel_size=1, name='scale',
                            **{**kwargs, 'filters': kwargs['filters']*4})
             x = tf.sigmoid(x, name='attention_map')
+            print(x)
             x = (1 + x) * t
 
             x = ResNet.block(x, name='last', **kwargs)
@@ -163,7 +166,7 @@ class ResNetAttention(TFModel):
         mask = {**kwargs, **mask}
         trunk = {**kwargs, **trunk}
 
-        x = inputs
+        x, inputs = inputs, None
         with tf.variable_scope(name):
             for i, b in enumerate(layout):
                 if b == 'r':

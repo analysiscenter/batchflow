@@ -52,17 +52,22 @@ class TFModel(BaseModel):
     inputs : dict
         model inputs (see :meth:`._make_inputs`)
 
-    loss - a loss function, might be one of:
-        - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
-        - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
-          (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
-        - callable
+    loss - a loss function, might be defined in one of three formats:
+        - name
+        - tuple (name, args)
+        - dict {'name': name, \**args}
+
+        where name might be one of:
+            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
+              (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
+            - callable
 
         Examples:
 
         - ``{'loss': 'mse'}``
-        - ``{'loss': 'sigmoid_cross_entropy'}``
-        - ``{'loss': tf.losses.huber_loss}``
+        - ``{'loss': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}``
+        - ``{'loss': tf.losses.huber_loss, 'reduction': tf.losses.Reduction.MEAN}``
         - ``{'loss': external_loss_fn}``
 
     decay - a learning rate decay algorithm might be defined in one of three formats:
@@ -126,12 +131,20 @@ class TFModel(BaseModel):
         parameters for the head layers, usually :func:`.conv_block` parameters
 
     output : dict
+        predictions : str
+            operation to apply for body output tensor to make the network predictions.
+            The tensor's name is 'predictions' which is later used in the loss function.
         ops : tuple of str
-            helper operations:
+            additional operations
+        prefix : str or tuple of str
+            prefixes for additional output tensor names (default='output')
 
-            - 'accuracy' - add 'accuracy' tensor with accuracy score for predictions
-            - 'proba' - add 'predicted_proba' tensor with probabilties for predictions
-            - 'labels' - add 'predicted_labels' tensor with best match labels for predictions
+        Operations supported are:
+
+            - ``None`` - do nothing (identity)
+            - 'accuracy' - accuracy metrics (the share of ``true_labels == predicted_labels``)
+            - 'proba' - multiclass probabilities (softmax)
+            - 'labels' - most probable labels (argmax)
 
 
     **How to create your own model**
@@ -388,24 +401,28 @@ class TFModel(BaseModel):
 
     def _make_transform(self, input_name, tensor, config):
         if config is not None:
-            transform_name = config.get('transform')
-            if isinstance(transform_name, str):
-                transforms = {
-                    'ohe': self._make_ohe,
-                    'mip': self._make_mip
-                }
+            transform_names = config.get('transform')
+            if not isinstance(transform_names, list):
+                transform_names = [transform_names]
+            for transform_name in transform_names:
+                if isinstance(transform_name, str):
+                    transforms = {
+                        'ohe': self._make_ohe,
+                        'mip': self._make_mip,
+                        'mask_downsampling': self._make_mask_downsampling
+                    }
 
-                kwargs = dict()
-                if transform_name.startswith('mip'):
-                    parts = transform_name.split('@')
-                    transform_name = parts[0].strip()
-                    kwargs['depth'] = int(parts[1])
+                    kwargs = dict()
+                    if transform_name.startswith('mip'):
+                        parts = transform_name.split('@')
+                        transform_name = parts[0].strip()
+                        kwargs['depth'] = int(parts[1])
 
-                tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
-            elif callable(transform_name):
-                tensor = transform_name(tensor)
-            elif transform_name:
-                raise ValueError("Unknown transform {}".format(transform_name))
+                    tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
+                elif callable(transform_name):
+                    tensor = transform_name(tensor)
+                elif transform_name:
+                    raise ValueError("Unknown transform {}".format(transform_name))
         return tensor
 
     def _make_ohe(self, input_name, tensor, config):
@@ -416,6 +433,20 @@ class TFModel(BaseModel):
         num_classes = self.num_classes(input_name)
         axis = -1 if self.data_format(input_name) == 'channels_last' else 1
         tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
+        return tensor
+
+    def _make_mask_downsampling(self, input_name, tensor, config):
+        """ Perform mask downsampling with factor from config of tensor. """
+        _ = input_name
+        factor = config.get('factor')
+        size = self.shape(tensor, False)
+        if None in size[1:]:
+            size = self.shape(tensor, True)
+        size = size / factor
+        size = tf.cast(size, tf.int32)
+        tensor = tf.expand_dims(tensor, -1)
+        tensor = tf.image.resize_nearest_neighbor(tensor, size)
+        tensor = tf.squeeze(tensor, [-1])
         return tensor
 
     def to_classes(self, tensor, input_name, name=None):
@@ -462,11 +493,7 @@ class TFModel(BaseModel):
         """ Return a loss function from config """
         loss, args = self._unpack_fn_from_config('loss', config)
 
-        target_scope = args.pop('targets_scope', 'inputs')
-        target_scope = target_scope + '/' if target_scope else ''
-        prediction_scope = args.pop('predictions_scope', '')
-        prediction_scope = prediction_scope + '/' if prediction_scope else ''
-
+        add_loss = False
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
@@ -475,20 +502,23 @@ class TFModel(BaseModel):
         elif isinstance(loss, str):
             loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
         elif callable(loss):
-            pass
+            add_loss = True
         else:
             raise ValueError("Unknown loss", loss)
 
         if loss is not None:
             try:
-                scope = self.graph.get_name_scope()
-                scope = scope + '/' if scope else ''
-                predictions = self.graph.get_tensor_by_name(scope + prediction_scope + "predictions:0")
-                targets = self.graph.get_tensor_by_name(scope + target_scope + "targets:0")
-            except KeyError:
-                raise KeyError("Model %s does not have 'predictions' or 'targets' tensors" % type(self).__name__)
+                predictions = getattr(self, 'predictions')
+            except AttributeError:
+                raise KeyError("Model %s does not have 'predictions' tensor" % type(self).__name__)
+            try:
+                targets = getattr(self, 'targets')
+            except AttributeError:
+                raise KeyError("Model %s does not have 'targets' tensor" % type(self).__name__)
             else:
-                tf.losses.add_loss(loss(targets, predictions, **args))
+                tensor_loss = loss(targets, predictions, **args)
+                if add_loss:
+                    tf.losses.add_loss(tensor_loss)
 
     def _make_decay(self, config):
         decay_name, decay_args = self._unpack_fn_from_config('decay', config)
@@ -830,11 +860,10 @@ class TFModel(BaseModel):
             data format
         """
 
-        axis = slice(1, -1) if data_format == 'channels_last' else slice(2, None)
-        static_shape = shape_images.get_shape().as_list()[axis]
-        dynamic_shape = tf.shape(shape_images)[axis]
+        static_shape = cls.spatial_shape(shape_images, data_format, False)
+        dynamic_shape = cls.spatial_shape(shape_images, data_format, True)
 
-        if None in inputs.get_shape().as_list()[1:] + static_shape:
+        if None in cls.shape(inputs) + static_shape:
             return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
         else:
             return cls._static_crop(inputs, static_shape, data_format)
@@ -856,14 +885,12 @@ class TFModel(BaseModel):
 
     @classmethod
     def _dynamic_crop(cls, inputs, static_shape, dynamic_shape, data_format='channels_last'):
+        input_shape = cls.spatial_shape(inputs, data_format, True)
+        n_channels = cls.num_channels(inputs, data_format)
         if data_format == 'channels_last':
-            input_shape = tf.shape(inputs)[1:-1]
-            n_channels = inputs.get_shape().as_list()[-1]
             slice_size = [(-1,), dynamic_shape, (n_channels,)]
             output_shape = [None] * (len(static_shape) + 1) + [n_channels]
         else:
-            input_shape = tf.shape(inputs)[2:]
-            n_channels = inputs.get_shape().as_list()[1]
             slice_size = [(-1, n_channels), dynamic_shape]
             output_shape = [None, n_channels] + [None] * len(static_shape)
 
@@ -994,6 +1021,7 @@ class TFModel(BaseModel):
 
         if not isinstance(inputs, (tuple, list)):
             inputs = [inputs]
+            prefix = prefix or 'output'
             prefix = [prefix]
 
         if len(inputs) != len(prefix):
@@ -1003,9 +1031,7 @@ class TFModel(BaseModel):
             if not isinstance(tensor, tf.Tensor):
                 raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
 
-            scope = self.graph.get_name_scope()
-            scope = scope + '/' if scope else ''
-            current_prefix = prefix[i] or ''
+            current_prefix = prefix[i]
             if current_prefix:
                 ctx = tf.variable_scope(current_prefix)
                 ctx.__enter__()
@@ -1013,54 +1039,49 @@ class TFModel(BaseModel):
                 ctx = None
             attr_prefix = current_prefix + '_' if current_prefix else ''
 
-            self._add_output_op(tensor, predictions_op, 'predictions', scope, attr_prefix, **kwargs)
+            pred_prefix = '' if len(inputs) == 1 else attr_prefix
+            self._add_output_op(tensor, predictions_op, 'predictions', pred_prefix, **kwargs)
             for oper in ops:
-                self._add_output_op(tensor, oper, oper, scope, attr_prefix, **kwargs)
+                self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
 
             if ctx:
                 ctx.__exit__(None, None, None)
 
-    def _add_output_op(self, inputs, oper, name, scope, attr_prefix, **kwargs):
+    def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
-            self._add_output_identity(inputs, name, scope, attr_prefix, **kwargs)
+            self._add_output_identity(inputs, name, attr_prefix, **kwargs)
         elif oper == 'proba':
-            self._add_output_proba(inputs, name, scope, attr_prefix, **kwargs)
+            self._add_output_proba(inputs, name, attr_prefix, **kwargs)
         elif oper == 'labels':
-            self._add_output_labels(inputs, name, scope, attr_prefix, **kwargs)
+            self._add_output_labels(inputs, name, attr_prefix, **kwargs)
         elif oper == 'accuracy':
-            self._add_output_accuracy(inputs, name, scope, attr_prefix, **kwargs)
+            self._add_output_accuracy(inputs, name, attr_prefix, **kwargs)
 
-    def _add_output_identity(self, inputs, name, scope, attr_prefix, **kwargs):
-        _ = scope, kwargs
+    def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
         x = tf.identity(inputs, name=name)
         self.store_to_attr(attr_prefix + name, x)
         return x
 
-    def _add_output_proba(self, inputs, name, scope, attr_prefix, **kwargs):
-        _ = scope
-        data_format = kwargs['data_format']
-        axis = self.channels_axis(data_format)
+    def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
+        axis = self.channels_axis(kwargs['data_format'])
         proba = tf.nn.softmax(inputs, name=name, dim=axis)
         self.store_to_attr(attr_prefix + name, proba)
 
-    def _add_output_labels(self, inputs, name, scope, attr_prefix, **kwargs):
-        _ = scope
+    def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
         channels_axis = self.channels_axis(kwargs.get('data_format'))
         predicted_labels = tf.argmax(inputs, axis=channels_axis, name=name)
         self.store_to_attr(attr_prefix + name, predicted_labels)
 
-    def _add_output_accuracy(self, inputs, name, scope, attr_prefix, **kwargs):
+    def _add_output_accuracy(self, inputs, name, attr_prefix, **kwargs):
         channels_axis = self.channels_axis(kwargs.get('data_format'))
         true_labels = tf.argmax(self.targets, axis=channels_axis)
-        current_scope = self.graph.get_name_scope() + '/'
-        try:
-            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'labels:0')
-        except KeyError:
-            self._add_output_labels(inputs, scope, attr_prefix, **kwargs)
-            predicted_labels = self.graph.get_tensor_by_name(current_scope + 'labels:0')
-        predicted_labels = tf.cast(predicted_labels, true_labels.dtype)
-        equals = tf.cast(tf.equal(true_labels, predicted_labels), 'float')
-        accuracy = tf.reduce_mean(equals, name=name)
+        if not hasattr(self, attr_prefix + 'labels'):
+            self._add_output_labels(inputs, 'labels', attr_prefix, **kwargs)
+        x = getattr(self, attr_prefix + 'labels')
+        x = tf.cast(x, true_labels.dtype)
+        x = tf.cast(tf.equal(true_labels, x), 'float')
+        accuracy = tf.reduce_mean(x, name=name)
         self.store_to_attr(attr_prefix + name, accuracy)
 
 
@@ -1134,9 +1155,9 @@ class TFModel(BaseModel):
         for k in self.config:
             self.put(k, self.config[k], config)
 
-        if 'inputs' in self.config:
+        if 'inputs' in config:
             with tf.variable_scope('inputs'):
-                self._make_inputs(names, self.config)
+                self._make_inputs(names, config)
             inputs = self.get('input_block/inputs', config)
 
             if isinstance(inputs, str):
@@ -1164,36 +1185,6 @@ class TFModel(BaseModel):
         x = self.body(inputs=x, **config['body'])
         output = self.head(inputs=x, **config['head'])
         self.output(output, **config['output'])
-
-    @classmethod
-    def se_block(cls, inputs, ratio, name='se', **kwargs):
-        """ Squeeze and excitation block
-
-        Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        ratio : int
-            squeeze ratio for the number of filters
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        with tf.variable_scope(name):
-            data_format = kwargs.get('data_format')
-            in_filters = cls.num_channels(inputs, data_format)
-            x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
-                           **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
-
-            shape = [-1] + [1] * (len(cls.spatial_shape(inputs, data_format)) + 1)
-            axis = cls.channels_axis(data_format)
-            shape[axis] = in_filters
-            scale = tf.reshape(x, shape)
-            x = inputs * scale
-        return x
 
     @classmethod
     def channels_axis(cls, data_format):
@@ -1291,18 +1282,25 @@ class TFModel(BaseModel):
         return config.get('shape')
 
     @classmethod
-    def shape(cls, tensor):
+    def shape(cls, tensor, dynamic=False):
         """ Return shape of the input tensor without batch size
 
         Parameters
         ----------
         tensor : tf.Tensor
 
+        dynamic : bool
+            if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
+
         Returns
         -------
-        shape : tuple
+        shape : tf.Tensor or list
         """
-        return tensor.get_shape().as_list()[1:]
+        if dynamic:
+            shape = tf.shape(tensor)
+        else:
+            shape = tensor.get_shape().as_list()
+        return shape[1:]
 
     def get_spatial_dim(self, tensor, **kwargs):
         """ Return the tensor spatial dimensionality (without batch and channels dimensions)
@@ -1349,18 +1347,24 @@ class TFModel(BaseModel):
         return shape
 
     @classmethod
-    def spatial_shape(cls, tensor, data_format='channels_last'):
+    def spatial_shape(cls, tensor, data_format='channels_last', dynamic=False):
         """ Return spatial shape of the input tensor
 
         Parameters
         ----------
         tensor : tf.Tensor
 
+        dynamic : bool
+            if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
+
         Returns
         -------
-        shape : tuple
+        shape : tf.Tensor or list
         """
-        shape = tensor.get_shape().as_list()
+        if dynamic:
+            shape = tf.shape(tensor)
+        else:
+            shape = tensor.get_shape().as_list()
         axis = slice(1, -1) if data_format == "channels_last" else slice(2, None)
         return shape[axis]
 
@@ -1406,6 +1410,36 @@ class TFModel(BaseModel):
         return tensor.get_shape().as_list()[0]
 
     @classmethod
+    def se_block(cls, inputs, ratio, name='se', **kwargs):
+        """ Squeeze and excitation block
+
+        Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        ratio : int
+            squeeze ratio for the number of filters
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        with tf.variable_scope(name):
+            data_format = kwargs.get('data_format')
+            in_filters = cls.num_channels(inputs, data_format)
+            x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
+                           **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
+
+            shape = [-1] + [1] * (len(cls.get_spatial_shape(inputs, data_format)) + 1)
+            axis = cls.channels_axis(data_format)
+            shape[axis] = in_filters
+            scale = tf.reshape(x, shape)
+            x = inputs * scale
+        return x
+
+    @classmethod
     def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):
         """ Upsample input tensor
 
@@ -1434,9 +1468,10 @@ class TFModel(BaseModel):
 
         resize_to = None
         if isinstance(inputs, (list, tuple)):
-            inputs, resize_to = inputs
+            x, resize_to = inputs
+            inputs = None
 
-        x = upsample(inputs, factor, layout, name=name, **kwargs)
+        x = upsample(x, factor, layout, name=name, **kwargs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x
@@ -1467,13 +1502,14 @@ class TFModel(BaseModel):
         upsample_args = cls.pop('upsample', kwargs, default={})
         upsample_args = {**kwargs, **upsample_args}
 
+        x, inputs = inputs, None
         with tf.variable_scope(name):
             layers = []
             for level in pool_size:
                 if level == 1:
-                    x = inputs
+                    pass
                 else:
-                    x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=level, pool_strides=level,
+                    x = conv_block(x, 'p', pool_op=pool_op, pool_size=level, pool_strides=level,
                                    name='pool', **kwargs)
                 x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv', **kwargs)
                 x = cls.upsample(x, factor=level, **upsample_args)
@@ -1522,5 +1558,5 @@ class TFModel(BaseModel):
 
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat(layers, axis=axis, name='concat')
-            x = conv_block(inputs, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
+            x = conv_block(x, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
         return x

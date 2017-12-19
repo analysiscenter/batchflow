@@ -19,6 +19,9 @@ dataset.models.tf
     dataset.models.tf.linknet
     dataset.models.tf.vnet
     dataset.models.tf.densenet_fc
+    dataset.models.tf.refinenet
+
+    dataset.models.tf.faster_rcnn
 
     Custom layers and blocks <dataset.models.tf.layers>
     Custom losses <dataset.models.tf.losses>

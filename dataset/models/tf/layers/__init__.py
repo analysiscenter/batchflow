@@ -8,3 +8,4 @@ from .conv import conv1d_transpose, conv_transpose, separable_conv, subpixel_con
 from .pooling import max_pooling, average_pooling, pooling, \
                      global_pooling, global_average_pooling, global_max_pooling, \
                      fractional_pooling
+from .roi import roi_pooling_layer, non_max_suppression

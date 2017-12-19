@@ -12,6 +12,7 @@ from .inception_v4 import Inception_v4
 from .squeezenet import SqueezeNet
 from .mobilenet import MobileNet
 from .densenet import DenseNet, DenseNet121, DenseNet169, DenseNet201, DenseNet264
+from .faster_rcnn import FasterRCNN
 from .resattention import ResNetAttention, ResNetAttention56, ResNetAttention92
 from .densenet_fc import DenseNetFC, DenseNetFC56, DenseNetFC67, DenseNetFC103
 from .refinenet import RefineNet

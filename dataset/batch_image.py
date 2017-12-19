@@ -95,6 +95,18 @@ class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels"
 
+    def convert_args_type(self, *args):
+        args_to_return = []
+        for argument in args:
+            if isinstance(argument, BaseArg):
+                args_to_return.append(argument)
+            elif callable(argument):
+                args_to_return.append(CallArg(argument))
+            else:
+                args_to_return.append(ConstArg(argument))
+        return args_to_return if len(args_to_return) > 1 else args_to_return[0]
+
+
     @property
     def image_shape(self):
         """: tuple - shape of the images """
@@ -321,6 +333,17 @@ class BaseImagesBatch(Batch):
 
     @action
     @inbatch_parallel(init='indices', post='assemble')
+    def shift(self, ix,components='images', p=1., shift=[1,1] , **kwargs):
+
+        p, shift = convert_args_type(p, shift)
+        image = self.get(ix, components)
+        if np.random.random() < p():
+            return _shift_image(image, shift(), **kwargs)
+        return image
+
+
+    @action
+    @inbatch_parallel(init='indices', post='assemble')
     def pad(self, ix, components='images', **kwargs):
         """ pad an image. kwargs are passed to the corresponding function in a child class
         """
@@ -334,7 +357,7 @@ class BaseImagesBatch(Batch):
         Parameters
         ----------
         p : float, tuple, callable
-            the probabilities of inverting channels.
+            probabilities of inverting channels.
             - float - invert all channels at once with the given probability
             - tuple - (first channel invert prob, second channel invert prob, ...) - invert each channel
                       with the given probability (or don't, if the probability is not given)
@@ -357,13 +380,42 @@ class BaseImagesBatch(Batch):
             return self._invert(image, channels)
         return image
 
+    # @action
+    # @inbatch_parallel(init='indices', post='assemble')
+    # def multiply(self, ix, components='images', p=1., multiplier=(0.5, 0.5, 0.5)):
+    #     p, multiplier = self.convert_args_type(p, multiplier)()
+    #     component = self.get(ix, components)
+    #     if np.random.binomial(1, p):
+
+
+
     @action
     def normalize(self, components='images'):
         """divide pixel's intencities by 255"""
-
+        # img = self.get(None, components)
+        # print(img.shape)
         setattr(self, components, self.get(None, components) / 255.)
         return self
 
+
+    @action
+    @inbatch_parallel(init='indices', post='assemble')
+    def salt_and_pepper(self, ix, components='images', mode=0.5, p=1):
+        """ set pixels' intensities to 0 (pepper) or 255 (salt) randomly. Each pixel is chosen
+        uniformly with probability equals p then salt si
+
+        Parameters
+        ----------
+        p : float, callable, BaseArg
+            probability of applying this transform for one pixel
+            - float - apply this transform to each pixel with the given probability
+            - callable - apply this transform to each pixel with the sampled probability
+
+        mode : float, callable, BaseArg
+            probability of choosing pepper
+        """
+        mode, p = convert_args_type(mode, p)
+        return self._salt_and_pepper(self.get(ix, components), mode(), p())
 
 
 #------------------------------------------------------------------------------------------------
@@ -475,8 +527,13 @@ class ImagesBatch(BaseImagesBatch):
         factor = np.asarray(shape) / np.asarray(image.shape[:2])
         if len(image.shape) > 2:
             factor = np.concatenate((factor, [1.] * len(image.shape[2:])))
-        new_image = scipy.ndimage.interpolation.zoom(image, factor, order=3)
+        new_image = scipy.ndimage.interpolation.zoom(image, factor, order=0)
         return new_image
+
+
+    @staticmethod
+    def _shift_image(image, shift, **kwargs):
+        return scipy.ndimage.interpolation.shift(image, shift=shift, **kwargs)
 
     @staticmethod
     def _rotate_image(image, angle, preserve_shape, **kwargs):
@@ -498,10 +555,27 @@ class ImagesBatch(BaseImagesBatch):
 
     @staticmethod
     def _invert(image, channels):
-        inv_multiplier = np.zeros(image.shape[-1], dtype=np.int16)
+        inv_multiplier = np.zeros(image.shape[-1], dtype=np.float32)
         inv_multiplier[np.asarray(channels)] = 255
-        return np.abs(np.ones(image.shape, dtype=np.int16)*inv_multiplier - image.astype(np.int16)).astype(np.uint8)
+        return np.abs(np.ones(image.shape, dtype=np.float32)*inv_multiplier - image.astype(np.float32)).astype(np.uint8)
 
+    @staticmethod
+    def _salt_and_pepper(image, mode=0.5, p=1):
+        p = np.asarray(p).reshape(-1)
+        mode = np.asarray(mode).reshape(-1)
+        if mode.shape != p.shape:
+            raise ValueError('shapes of `p` and `mode` must coincide')
+        if len(p) == 1:
+            mask = np.random.binomial(1, p, size=image.shape[:2])
+            noise = 0 + 255 * np.random.binomial(1, mode, size=(mask.sum(),1))
+            # noise = 0 * np.ones((mask.sum(),1))
+            image = image.copy()
+            image[mask != 0] = noise
+            # print(image[mask != 0])
+            return image
+        else:
+            if len(p) != image.shape[-1]:
+                raise ValueError('`p` must be given to every channel if len(p) > 1')
 
 
 #------------------------------------------------------------------------------------------------

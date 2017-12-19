@@ -17,11 +17,18 @@ class RefineNet(TFModel):
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
 
     body : dict
-        num_blocks : int
-            number of downsampling/upsampling blocks (default=4)
+        encoder : dict
+            base_class : TFModel
+                a model implementing ``make_encoder`` method which returns tensors
+                with encoded representation of the inputs
+            **kwargs
+                parameters for base class encoder
 
         filters : list of int
-            number of filters in each block (default=[128, 256, 512, 1024])
+            number of filters in each decoder block (default=[512, 256, 256, 256])
+
+        upsample : dict
+            :meth:`~.TFModel.upsample` parameters to use in each decoder block
 
     head : dict
         num_classes : int
@@ -32,11 +39,11 @@ class RefineNet(TFModel):
         config = TFModel.default_config()
 
         filters = 64   # number of filters in the first block
-        config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
+        config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3,
+                                          strides=1, pool_strides=1))
         config['body']['encoder'] = dict(base_class=ResNet101)
         config['body']['filters'] = [512, 256, 256, 256]
         config['body']['upsample'] = dict(layout='b', factor=2)
-        config['head']['upsample'] = dict(layout='b', factor=4)
         config['loss'] = 'ce'
         return config
 
@@ -74,19 +81,14 @@ class RefineNet(TFModel):
             for i, tensor in enumerate(encoder_outputs[::-1]):
                 decoder_inputs = tensor if x is None else (tensor, x)
                 x = cls.decoder_block(decoder_inputs, filters=filters[i], name='decoder-'+str(i), **kwargs)
-
-            upsample_args = cls.pop('upsample', kwargs)
-            upsample_args = {**kwargs, **upsample_args}
         return x
 
     @classmethod
     def head(cls, inputs, targets, num_classes, name='head', **kwargs):
-
-        upsample_args = cls.pop('upsample', kwargs)
-        upsample_args = {**kwargs, **upsample_args}
         with tf.variable_scope(name):
-            x = cls.upsample((inputs, targets), **upsample_args)
-            x = conv_block(x, layout='t', filters=num_classes, kernel_size=1, **kwargs)
+            x, inputs = inputs, None
+            x = cls.crop(x, targets, kwargs['data_format'])
+            x = conv_block(x, layout='c', filters=num_classes, kernel_size=1, **kwargs)
         return x
 
     @classmethod
@@ -117,13 +119,15 @@ class RefineNet(TFModel):
         return x
 
     @classmethod
-    def block(cls, inputs, name='block', **kwargs):
+    def block(cls, inputs, filters=None, name='block', **kwargs):
         """ RefineNet block with Residual Conv Unit, Multi-resolution fusion and Chained-residual pooling.
 
         Parameters
         ----------
         inputs : tuple of tf.Tensor
             input tensors (the first should have the largest spatial dimension)
+        filters : int
+            the number of output filters for all convolutions within the block
         name : str
             scope name
         kwargs : dict
@@ -134,7 +138,6 @@ class RefineNet(TFModel):
         -------
         tf.Tensor
         """
-        filters = cls.pop('filters', kwargs)
         upsample_args = cls.pop('upsample', kwargs)
         upsample_args = {**kwargs, **upsample_args}
 
@@ -149,6 +152,7 @@ class RefineNet(TFModel):
                                         bottleneck=False, downsample=False,
                                         name='rcu-%d' % i, **kwargs)
                 after_rcu.append(x)
+            inputs = None
 
             # Multi-resolution fusion
             with tf.variable_scope('mrf'):
@@ -173,7 +177,7 @@ class RefineNet(TFModel):
                 after_crp += x
 
             x, after_crp = after_crp, None
-            x = ResNet.double_block(x, layout='acac', filters=filters, bottleneck=False, downsample=False,
+            x = ResNet.double_block(x, layout='ac ac', filters=filters, bottleneck=False, downsample=False,
                                     name='rcu-last', **kwargs)
             x = tf.identity(x, name='output')
         return x
