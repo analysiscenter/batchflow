@@ -493,6 +493,7 @@ class TFModel(BaseModel):
         """ Return a loss function from config """
         loss, args = self._unpack_fn_from_config('loss', config)
 
+        add_loss = False
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
@@ -501,7 +502,7 @@ class TFModel(BaseModel):
         elif isinstance(loss, str):
             loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
         elif callable(loss):
-            pass
+            add_loss = True
         else:
             raise ValueError("Unknown loss", loss)
 
@@ -515,7 +516,9 @@ class TFModel(BaseModel):
             except AttributeError:
                 raise KeyError("Model %s does not have 'targets' tensor" % type(self).__name__)
             else:
-                tf.losses.add_loss(loss(targets, predictions, **args))
+                tensor_loss = loss(targets, predictions, **args)
+                if add_loss:
+                    tf.losses.add_loss(tensor_loss)
 
     def _make_decay(self, config):
         decay_name, decay_args = self._unpack_fn_from_config('decay', config)
