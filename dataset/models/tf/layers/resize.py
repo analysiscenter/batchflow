@@ -2,7 +2,7 @@
 import numpy as np
 import tensorflow as tf
 
-from .conv import conv
+from .conv import conv, conv1d_transpose_nn
 from .core import xip
 
 def _calc_size(inputs, factor, data_format):
@@ -27,6 +27,7 @@ def _dynamic_calc_shape(inputs, factor, data_format):
     shape = shape * np.asarray(factor)
     shape = tf.cast(shape, dtype=tf.int32)
     return shape
+
 
 def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
     """ 2d and 3d depth_to_space transformation.
@@ -56,22 +57,26 @@ def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
             inputs = tf.transpose(inputs, [0] + list(range(2, dim+2)) + [1])
         x = _depth_to_space(inputs, block_size, name)
         if data_format == 'channels_first':
-            x = tf.transpose(x, [0, dim+2] + list(range(1, dim+1)))
-        return x
+            x = tf.transpose(x, [0, dim+1] + list(range(1, dim+1)))
+    return x
 
 
 def _depth_to_space(inputs, block_size, name='d2s'):
     dim = inputs.shape.ndims - 2
-    if dim == 2:
+    if dim == 1:
+        conv_layer = conv1d_transpose_nn
+    elif dim == 2:
         conv_layer = tf.nn.conv2d_transpose
     elif dim == 3:
         conv_layer = tf.nn.conv3d_transpose
     with tf.variable_scope(name):
         shape = inputs.get_shape().as_list()[1:]
         channels = shape[-1]
+        if channels % (block_size ** dim) != 0:
+            raise ValueError('channels of the inputs must be divisible by block_size ** {}'.format(dim))
         output_shape = tf.concat([(tf.shape(inputs)[0],), tf.shape(inputs)[1:-1]*block_size,
                                   (tf.shape(inputs)[-1], )], axis=-1)
-        slices = [np.arange(0, channels, block_size ** dim)+i for i in range(block_size ** dim)]
+        slices = [np.arange(0, channels // (block_size ** dim))+i for i in range(0, channels, channels // (block_size ** dim))]
         tensors = []
         for i in range(block_size ** dim):
             zero_filter = np.zeros(block_size ** dim)
@@ -86,15 +91,18 @@ def _depth_to_space(inputs, block_size, name='d2s'):
                 _filter = np.stack(_filter, axis=-1)
                 fltr.append(_filter)
             fltr = np.stack(fltr, axis=-1)
-            fltr = np.transpose(fltr, axes=list(range(dim))+[dim+2-2, dim+2-1])
+            fltr = np.transpose(fltr, axes=list(range(dim))+[dim, dim+1])
             fltr = tf.constant(fltr, tf.float32)
-            print(fltr, inputs, output_shape)
             x = conv_layer(inputs, fltr, output_shape, [1] + [block_size] * dim + [1])
-            x.set_shape([None] + list(np.array(shape[:-1]) * block_size) + [channels/(block_size ** dim)])
+            if None in shape[:-1]:
+                resized_shape = shape[:-1]
+            else:
+                resized_shape = list(np.array(shape[:-1]) * block_size)
+            x.set_shape([None] + resized_shape + [channels/(block_size ** dim)])
             x = tf.gather(x, slices[i], axis=-1)
             tensors.append(x)
         x = tf.add_n(tensors)
-    return x, tensors
+    return x
 
 
 def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kwargs):

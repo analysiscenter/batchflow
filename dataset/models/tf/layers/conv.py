@@ -56,6 +56,21 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', d
     x = tf.squeeze(x, [axis])
     return x
 
+
+def conv1d_transpose_nn(value, filters, output_shape, strides,
+                        padding='SAME', data_format='NWC', name=None):
+    """ Analogue of the tf.nn.conv2d_transpose. """
+    axis = 1 if data_format == 'NWC' else 2
+    value = tf.expand_dims(value, axis=axis)
+    filters = tf.expand_dims(filters, axis=0)
+    output_shape = tf.concat([output_shape[:axis], (1, ), output_shape[axis:]], axis=-1)
+    data_format = 'NHWC' if data_format == 'NWC' else 'NCHW'
+    strides = strides[:axis] + [1] + strides[axis:]
+    x = tf.nn.conv2d_transpose(value, filters, output_shape, strides,
+                               padding, data_format, name)
+    x = tf.squeeze(x, [axis])
+    return x
+
 def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     """ Transposed Nd convolution layer
 
