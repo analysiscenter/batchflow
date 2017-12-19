@@ -50,6 +50,7 @@ from .decorators import action, inbatch_parallel, any_action_failed
 
 
 class BaseArg():
+    """Base class which wraps arguments passed to the batch's actions"""
     def __init__(self):
         pass
 
@@ -58,6 +59,7 @@ class BaseArg():
 
 
 class ConstArg(BaseArg):
+    """Wrapper for the constant argument"""
     def __init__(self, value):
         self.value = value
 
@@ -65,23 +67,25 @@ class ConstArg(BaseArg):
         return self.value
 
 
-class DistArg(BaseArg):
-    def __init__(self, distribution, **kwargs):
-        if not callable(distribution):
-            raise ValueError('distribution must be a callable function without arguments')
-        self.distribution = lambda : distribution(**kwargs)
+class CallArg(BaseArg):
+    """Wrapper for the callable argument"""
+    def __init__(self, function, **kwargs):
+        if not callable(function):
+            raise ValueError('`function` must be a callable without arguments')
+        self.function = lambda : function(**kwargs)
 
     def __call__(self):
-        return self.distribution()
+        return self.function()
 
 
 def convert_args_type(*args):
+    """convert raw arguments to the instances of the BaseArg class's children"""
     args_to_return = []
     for argument in args:
         if isinstance(argument, BaseArg):
             args_to_return.append(argument)
         elif callable(argument):
-            args_to_return.append(DistArg(argument))
+            args_to_return.append(CallArg(argument))
         else:
             args_to_return.append(ConstArg(argument))
     return args_to_return if len(args_to_return) > 1 else args_to_return[0]
@@ -129,18 +133,19 @@ class BaseImagesBatch(Batch):
         Parameters
         ----------
         components : str
-            name of the component to be cropped
+            name of the component to crop
 
-        origin : tuple
-            can be one of:
-
+        origin : tuple, BaseArg
+            Upper-left corner of the cropping box. Can be one of:
             - tuple - a starting point in the form of (row, column)
-            - 'top_left' - crop from left top edge (0,0)
-            - 'center' - crop from center of each image
-            - 'random' - crop at random position
+            - 'top_left' - crop an image such that upper-left corners of
+                           an image and the cropping box coincide
+            - 'center' - crop an image such that centers of
+                         an image and the cropping box coincide
+            - 'random' - place the upper-left corner of the cropping box at a random position
 
-        shape : tuple
-            crop size in the form of (rows, columns)
+        shape : tuple, BaseArg
+            - tuple - crop size in the form of (rows, columns)
         """
 
         origin, shape = convert_args_type(origin, shape)
@@ -169,11 +174,12 @@ class BaseImagesBatch(Batch):
         Parameters
         ----------
         components : str
-            name of the component to be resized
+            name of the component to resize
 
-        shape : tuple
-            crop size in the form of (width, height)
+        shape : tuple, BaseArg
+            resulting shape in the following form: (number of rows, number of columns)
         """
+
         shape = convert_args_type(shape)()
         return self._resize_image(self.get(ix, components), shape)
 
@@ -190,21 +196,32 @@ class BaseImagesBatch(Batch):
         Parameters
         -----------
         components : str
-            name of the component to be scaled
+            name of the component to scale
 
-        p : float
-            probability of applying scale to an element of the batch
-            (0. - don't scale, .5 - scale half of images, 1 - scale all images)
+        p : float, BaseArg
+            probability of applying this action to an element of the batch
+            (0. - don't apply, .5 - apply to approximately one half of images, 1 - apply to all images)
 
-        factor : (tuple_1, tuple_2) or tuple
-            (1) if tuple is passed then one factor is sampled from U(tuple) and it is applied to all axes
-            (2) if (tuple_1, tuple_2) is passed then sampling and scaling are applied to each axis separately
+        factor : float, tuple, callable, BaseArg
+            resulting shape is obtained as original_shape * factor
+            - float - scale all axes with the given factor
+            - tuple (factor_1, factort_2, ...) - scale each axis with the given factor separately
+            - callable - get factor's value from callable
 
-        preserve_shape : bool
+        preserve_shape : bool, BaseArg
             whether to preserve the shape of the image after scaling
 
-        origin : {'center', 'top_left', tuple}
-            origin of the rescaled image on the black background (relevant if `factor` < 1 and `preserve_shape` is True)
+        origin : {'center', 'top_left', 'random'}, tuple, callable, BaseArg
+            Relevant only if `preserve_shape` is True. Position of the scaled image with respect to the original one's shape.
+            - 'center' - place the center of the rescaled image on the center of the original one and crop
+                         the rescaled image accordingly
+            - 'top_left' - place the upper-left corner of the rescaled image on the upper-left of the original one and crop
+                         the rescaled image accordingly
+            - 'random' - place the upper-left corner of the rescaled image on the randomly sampled position in the original one.
+                         Position is sampled uniformly such that there is no need for cropping.
+            - tuple - place the upper-left corner of the rescaled image on the given position in the original one.
+            - callable - place the upper-left corner of the rescaled image on the given position in the original one.
+                         Position is obtained from callable.
         """
         factor, preserve_shape, origin, p = convert_args_type(factor, preserve_shape, origin, p)
 
@@ -214,44 +231,39 @@ class BaseImagesBatch(Batch):
 
         image = self.get(ix, components)
         if np.random.random() < p:
-            # if isinstance(factor[0], tuple):
-            #     _factor = np.random.uniform((factor[0][0], factor[1][0]),
-            #                                 (factor[0][1], factor[1][1]))
-            # else:
-            #     _factor = np.random.uniform(*factor)
             factor = factor()
             if np.any(np.asarray(factor) <= 0):
                 raise ValueError("factor must be greater than 0")
-
-            origin = origin()
-            print(origin)
-            if isinstance(origin, str) and origin not in ['top_left', 'center']:
-                raise ValueError('origin must be either in [\'top_left\', \'center\'] or be a tuple')
-
             image_shape = self.get_image_shape(image)
             rescaled_shape = np.ceil(np.array(image_shape) * factor).astype(np.int16)
             rescaled_image = self._resize_image(image, rescaled_shape)
             if preserve_shape():
+                origin = origin()
+                if isinstance(origin, str) and origin not in ['top_left', 'center', 'random']:
+                    raise ValueError('str value of origin must be one of [\'top_left\', \'center\', \'random\']')
+                if isinstance(origin, str) and origin == 'random':
+                    origin = (np.random.randint(image.shape[0]-rescaled_image.shape[0]+1),
+                              np.random.randint(image.shape[1]-rescaled_image.shape[1]+1))
                 rescaled_image = self._preserve_shape(image, rescaled_image, origin)
         return rescaled_image
 
     @action
     @inbatch_parallel(init='indices', post='assemble')
     def rotate(self, ix, components='images', angle=30, p=1., **kwargs):
-        """ Rotate each image in the batch at a random angle
+        """ Rotate each image in the batch
 
         Parameters
         -----------
         components : str
-            name of the component to be rotated
+            name of the component to rotate
 
-        p : float
-            probability of applying this action to an image
-            (0. - don't rotate, .5 - rotate half of images, 1 - rotate all images)
+        p : float, BaseArg
+            probability of applying this action to an element of the batch
+            (0. - don't apply, .5 - apply to approximately one half of images, 1 - apply to all images)
 
-        angle : tuple or float
-            angle's range to sample from in the form of (min_angle, max_angle), in degrees.
-            if float is passed than determenistic rotation will be perfomed
+        angle : float, callable, BaseArg
+            float - image is rotated by the given angle
+            callable - image is rotated by the angle sampled from callable
         """
 
         angle, p = convert_args_type(angle, p)
@@ -263,13 +275,8 @@ class BaseImagesBatch(Batch):
         image = self.get(ix, components)
         if np.random.random() < p:
             angle = angle()
-
-            # angle = angle or (-45., 45.)
-            # if not isinstance(angle, (float, int)):
-            #     angle = np.random.uniform(*(angle))
-
             preserve_shape = kwargs.pop('preserve_shape', True)
-            return self._rotate_image(image, angle, preserve_shape=preserve_shape, **kwargs)
+            image = self._rotate_image(image, angle, preserve_shape=preserve_shape, **kwargs)
         return image
 
 
@@ -281,15 +288,18 @@ class BaseImagesBatch(Batch):
         Parameters
         ----------
         components : str
-            name of the component to be flipped
-        mode : {'lr', 'ud', float}
-            'lr' for a left/right flip
-            'ud' for an upside down flip
-            'all' for one of the two previous ones (probability of choosing 'lr' is specified by `p_lr`)
-        p : float
-            probability of doing this action
-        p_lr : float
-            probability of choosing 'lr' (relevant if 'all' is passed to `mode`)
+            name of the component to flip
+
+        mode : {'lr', 'ud'}, float, callable
+            probability of applying the left\right flip.
+            - 'lr' - apply the left\right flip (alias for mode=1)
+            - 'ud' - apply the upside\down flip (alias for mode=0)
+            - float - apply the left\right flip with the given probability
+            - callable - apply the left\right flip with the probability sampled from callable
+
+        p : float, BaseArg
+            probability of applying this action to an element of the batch
+            (0. - don't apply, .5 - apply to approximately one half of images, 1 - apply to all images)
         """
         p, mode = convert_args_type(p, mode)
 
@@ -301,9 +311,6 @@ class BaseImagesBatch(Batch):
         if np.random.random() < p:
             mode = mode()
             mode_is_number = isinstance(mode, (int, float))
-            # print(mode_is_number)
-            # print(mode not in ['lr'])
-            # print()
             if (mode not in ['lr', 'ud'] and not mode_is_number)\
                     or (mode_is_number and (mode < 0 or mode > 1)):
                 raise ValueError("`mode` must be one of 'lr', 'ud' or float in [0,1] but {0} is passed".format(mode))
@@ -315,11 +322,7 @@ class BaseImagesBatch(Batch):
     @action
     @inbatch_parallel(init='indices', post='assemble')
     def pad(self, ix, components='images', **kwargs):
-        """ pad image
-
-        Parameters
-        ----------
-        padding : (left, right, top, bottom) in pixels
+        """ pad an image. kwargs are passed to the corresponding function in a child class
         """
         return self._pad(self.get(ix, components), **kwargs)
 
@@ -330,11 +333,11 @@ class BaseImagesBatch(Batch):
 
         Parameters
         ----------
-        p : (first channel invert prob, second channel invert prob, ...) or float
-                    the probabilities of inverting channels. If float is given,
-                    then it's decided whether to invert all channels,
-                    otherwise each channel will be inverted
-                    with the given probability (or won't, if there is no probability)
+        p : float, tuple, callable
+            the probabilities of inverting channels.
+            - float - invert all channels at once with the given probability
+            - tuple - (first channel invert prob, second channel invert prob, ...) - invert each channel
+                      with the given probability (or don't, if the probability is not given)
         """
         p = convert_args_type(p)()
 
@@ -356,7 +359,7 @@ class BaseImagesBatch(Batch):
 
     @action
     def normalize(self, components='images'):
-        """divide each pixel intencity by 255"""
+        """divide pixel's intencities by 255"""
 
         setattr(self, components, self.get(None, components) / 255.)
         return self
@@ -443,22 +446,14 @@ class ImagesBatch(BaseImagesBatch):
 
 
     @staticmethod
-    def put_on_background(background, image, origin):
-        # if origin in ['top_left', 'center']:
-
+    def _put_on_background(background, image, origin):
         if not isinstance(origin, str):
-            # image_origin = ImagesBatch._calc_origin(background.shape[:2], origin, image.shape[:2])
             b_origin = origin
             image = ImagesBatch._crop_image(image, 'top_left', np.asarray(background.shape[:2]) - origin).copy()
         else:
-            print(origin)
-            print(image.shape)
-            print(background.shape)
             b_origin = ImagesBatch._calc_origin(  background.shape[:2], origin, image.shape[:2])
             origin = ImagesBatch._calc_origin(image.shape[:2], origin,  background.shape[:2])
-            print(origin)
             image = ImagesBatch._crop_image(image, origin, background.shape[:2]).copy()
-
 
         slice_rows = slice(b_origin[0], b_origin[0]+image.shape[0])
         slice_columns = slice(b_origin[1], b_origin[1]+image.shape[1])
@@ -471,14 +466,7 @@ class ImagesBatch(BaseImagesBatch):
     def _preserve_shape(original_image, rescaled_image, origin='center'):
         """ Change the image shape by cropping and/or adding empty pixels to fit the given shape """
         new_image = np.zeros(original_image.shape, dtype=np.uint8)
-        return ImagesBatch.put_on_background(new_image, rescaled_image, origin)
-        # rescaled_shape = rescaled_image.shape[:2]
-        # rescaled_image = ImagesBatch._crop_image(rescaled_image, origin, new_image.shape[:2])
-        # origin = ImagesBatch._calc_origin(new_image.shape[:2], origin, rescaled_shape)
-        # slice_rows = slice(origin[0], origin[0]+rescaled_image.shape[0])
-        # slice_columns = slice(origin[1], origin[1]+rescaled_image.shape[1])
-        # new_image[slice_rows, slice_columns] = rescaled_image
-        # return new_image
+        return ImagesBatch._put_on_background(new_image, rescaled_image, origin)
 
 
     @staticmethod
@@ -495,7 +483,7 @@ class ImagesBatch(BaseImagesBatch):
         """ Rotate an image """
         kwargs['reshape'] = not preserve_shape
         new_image = scipy.ndimage.interpolation.rotate(image, angle, **kwargs)
-        return new_image
+        return new_image.copy()
 
     @staticmethod
     def _flip_image(image, mode):
