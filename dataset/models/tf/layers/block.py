@@ -20,7 +20,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
         'transposed_conv': conv_transpose,
         'separable_conv':separable_conv,
-        'separable_conv_transpose': separable_conv_transpose
+        'separable_conv_transpose': separable_conv_transpose,
         'pooling': pooling,
         'global_pooling': global_pooling,
         'batch_norm': tf.layers.batch_normalization,
@@ -140,7 +140,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 if filters is None or filters == 0:
                     raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
 
-            elif layer == 's':
+            elif layer == 'C':
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             data_format=data_format, dilation_rate=dilation_rate, depth_multiplier=depth_multiplier)
                 if filters is None or filters == 0:
@@ -149,6 +149,12 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             elif layer == 't':
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             data_format=data_format)
+                if filters is None or filters == 0:
+                    raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
+
+            elif layer == 'T':
+                args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
+                            data_format=data_format, depth_multiplier=depth_multiplier)
                 if filters is None or filters == 0:
                     raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
 
