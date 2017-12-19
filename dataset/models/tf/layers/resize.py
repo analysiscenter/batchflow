@@ -77,7 +77,7 @@ def _depth_to_space(inputs, block_size, name='d2s'):
             raise ValueError('channels of the inputs must be divisible by block_size ** {}'.format(dim))
         output_shape = tf.concat([(tf.shape(inputs)[0],), tf.shape(inputs)[1:-1]*block_size,
                                   (tf.shape(inputs)[-1], )], axis=-1)
-        slices = [np.arange(0, channels // (block_size ** dim))+i 
+        slices = [np.arange(0, channels // (block_size ** dim))+i
                   for i in range(0, channels, channels // (block_size ** dim))]
         tensors = []
         for i in range(block_size ** dim):
@@ -337,5 +337,8 @@ def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs
     -------
     tf.Tensor
     """
+    dim = inputs.shape.ndims
+    if dim != 4:
+        raise ValueError("inputs must be Tensor of rank but {} was given".format(dim))
     size, _ = _calc_size(inputs, factor, data_format)
     return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, **kwargs)

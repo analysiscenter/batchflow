@@ -1,4 +1,5 @@
 """ Contains convolution layers """
+import numpy as np
 import tensorflow as tf
 
 from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
@@ -34,7 +35,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
         - c - convolution
         - t - transposed convolution
-        - s - separable convolution
+        - C - separable convolution
+        - T - separable transposed convolution
         - f - dense (fully connected)
         - n - batch normalization
         - a - activation

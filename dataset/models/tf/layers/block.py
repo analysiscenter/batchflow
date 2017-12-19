@@ -1,18 +1,17 @@
 """ Contains convolution block """
 # pylint:disable=too-many-statements
 import logging
-import numpy as np
 import tensorflow as tf
 
 from .core import mip, flatten, alpha_dropout
-from .conv import conv_transpose, separable_conv
+from .conv import conv_transpose, separable_conv, separable_conv_transpose
 from .pooling import pooling, global_pooling
 
 def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True,
                 layout_dict=None, **kwargs):
-    
+
     nd_layers = {
         'activation': None,
         'residual_start': None,
@@ -21,6 +20,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
         'transposed_conv': conv_transpose,
         'separable_conv':separable_conv,
+        'separable_conv_transpose': separable_conv_transpose
         'pooling': pooling,
         'global_pooling': global_pooling,
         'batch_norm': tf.layers.batch_normalization,
@@ -36,7 +36,8 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         'f': 'dense',
         'c': 'conv',
         't': 'transposed_conv',
-        's': 'separable_conv',
+        'C': 'separable_conv',
+        'T': 'separable_conv_transpose',
         'p': 'pooling',
         'v': 'pooling',
         'P': 'global_pooling',
@@ -50,7 +51,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
     if layout_dict is not None:
         nd_layers = {**nd_layers, **layout_dict[0]}
-        c_layers = {**c_layers, **layout_dict[1]} 
+        c_layers = {**c_layers, **layout_dict[1]}
     _layers_keys = str(list(c_layers.keys()))
     _group_keys = (
         _layers_keys
