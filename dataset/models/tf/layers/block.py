@@ -41,6 +41,10 @@ C_LAYERS = {
     'd': 'dropout',
     'D': 'alpha_dropout',
     'm': 'mip',
+    'b': 'resize',
+    'B': 'resize_bilinear_additive',
+    'N': 'resize_nn',
+    'X': 'subpixel_conv'
 }
 
 def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
@@ -50,10 +54,9 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
 
     if layout_dict is None:
-        layout_dict = [dict(), dict()]
-    nd_layers = {**ND_LAYERS, **layout_dict[0]}
-    c_layers = {**C_LAYERS, **layout_dict[1]}
-    _layers_keys = str(list(c_layers.keys()))
+        layout_dict = dict()
+    nd_layers = {**ND_LAYERS, **layout_dict}
+    _layers_keys = str(list(C_LAYERS.keys()))
     _group_keys = (
         _layers_keys
         .replace('t', 'c')
@@ -110,7 +113,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     for i, layer in enumerate(layout):
 
         layout_dict[c_groups[layer]][0] += 1
-        layer_name = c_layers[layer]
+        layer_name = C_LAYERS[layer]
         layer_fn = _get_layer_fn(layer_name, dim)
 
         if layer == 'a':

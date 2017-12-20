@@ -10,14 +10,7 @@ ND_LAYERS = {
     'resize': resize_bilinear,
     'resize_bilinear_additive': resize_bilinear_additive,
     'resize_nn': resize_nn,
-    'subpixel_conv': subpixel_conv,
-}
-
-C_LAYERS = {
-    'b': 'resize',
-    'B': 'resize_bilinear_additive',
-    'N': 'resize_nn',
-    'X': 'subpixel_conv'
+    'subpixel_conv': subpixel_conv
 }
 
 def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
@@ -151,7 +144,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     tensor = _conv_block(inputs, layout, filters, kernel_size, name,
                          strides, padding, data_format, dilation_rate, depth_multiplier,
                          activation, pool_size, pool_strides, dropout_rate, is_training,
-                         layout_dict=[ND_LAYERS, C_LAYERS], **kwargs)
+                         layout_dict=ND_LAYERS, **kwargs)
     return tensor
 
 

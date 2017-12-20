@@ -134,7 +134,7 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     return output
 
 
-def _separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
+def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
                     dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
     dim = inputs.shape.ndims - 2
     context = None
@@ -196,8 +196,7 @@ def _separable_conv(inputs, filters, kernel_size, strides=1, padding='same', dat
 
     return output
 
-def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                   dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
+def separable_conv(inputs, *args, **kwargs):
     """ Make Nd depthwise convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
@@ -220,11 +219,11 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
     depth_multiplier : int
         The number of depthwise convolution output channels for each input channel.
         The total number of depthwise convolution output channels will be equal to
-        ``num_filters_in`` * ``depth_multiplier``.
+        ``num_filters_in`` * ``depth_multiplier``. Default - 1.
     activation : callable
         Default is `tf.nn.relu`.
     name : str
-        The name of the layer
+        The name of the layer. Default - None.
 
     Returns
     -------
@@ -234,14 +233,11 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
     dim = inputs.shape.ndims - 2
 
     if dim == 2:
-        return tf.layers.separable_conv2d(inputs, filters, kernel_size, strides, padding, data_format,
-                                          dilation_rate, depth_multiplier, activation, name, **kwargs)
+        return tf.layers.separable_conv2d(inputs, *args, **kwargs)
     else:
-        return _separable_conv(False, inputs, filters, kernel_size, strides, padding, data_format,
-                               dilation_rate, depth_multiplier, activation, name, **kwargs)
+        return _separable_conv(False, inputs, *args, **kwargs)
 
-def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                             depth_multiplier=1, activation=None, name=None, **kwargs):
+def separable_conv_transpose(inputs, *args, **kwargs):
     """ Make Nd depthwise transpose convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
@@ -256,23 +252,22 @@ def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='s
     strides : int
         convolution stride. Default is 1.
     padding : str
-        padding mode, can be 'same' or 'valid'. Default - 'same',
+        padding mode, can be 'same' or 'valid'. Default - 'same'.
     data_format : str
         'channels_last' or 'channels_first'. Default - 'channels_last'.
     depth_multiplier : int
         The number of depthwise convolution output channels for each input channel.
         The total number of depthwise convolution output channels will be equal to
-        ``num_filters_in`` * ``depth_multiplier``.
+        ``num_filters_in`` * ``depth_multiplier``. Deafault - 1.
     activation : callable
         Default is `tf.nn.relu`.
     name : str
-        The name of the layer
+        The name of the layer. Default - None.
 
     Returns
     -------
     tf.Tensor
 
     """
-    output = _separable_conv(True, inputs, filters, kernel_size, strides, padding, data_format,
-                             None, depth_multiplier, activation, name, **kwargs)
+    output = _separable_conv(True, inputs, *args, **kwargs)
     return output
