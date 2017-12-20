@@ -405,7 +405,7 @@ def _make_action_wrapper(action_method, _model_name=None, _use_lock=None):
 def action(*args, **kwargs):
     """ Decorator for action methods in :class:`~dataset.Batch` classes
 
-    Examples ::
+    Examples
     --------
 
     .. code-block:: python

@@ -170,6 +170,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
         - t - transposed convolution
         - T - separable transposed convolution
         - X - subpixel convolution
+
         all other :meth:`.conv_block` layers are also allowed.
 
     Returns

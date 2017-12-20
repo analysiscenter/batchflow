@@ -9,7 +9,6 @@ A dataset may be so large that it does not fit into memory and thus you cannot p
 
 The value of ids in the index is important only in 2 situations:
 
-
 * in `load` `action-method <batch#action-methods>`_ , when batch gets data from some external source like `batch_items = external_source[batch.indices]` and thus the external source should contain those indices, otherwise `load` will fail. Similarly, when data is loaded from files, indices usually point to those files and their full paths (see `FilesIndex`_ below).
 * in item selection - `batch[some_item_id]` - so the index should contain the id you're referring to.
 
@@ -32,7 +31,7 @@ In other cases it can be a list of domain-specific identificators (e.g. client i
 
    dataset_index = DatasetIndex(dataframe['client_id'])
 
-You will rarely need to work with an index directly, but if you want to do something specific you may use its :doc:`public API <../../dataset.index>`.
+You will rarely need to work with an index directly, but if you want to do something specific you may use its :doc:`public API <../api/dataset.index>`.
 
 .. _FilesIndex:
 
