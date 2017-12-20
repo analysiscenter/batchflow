@@ -1081,7 +1081,7 @@ class TFModel(BaseModel):
         x = getattr(self, attr_prefix + 'labels')
         x = tf.cast(x, true_labels.dtype)
         x = tf.cast(tf.equal(true_labels, x), 'float')
-        accuracy = tf.reduce_mean(x, name=name)
+        accuracy = tf.reduce_mean(x, axis=channels_axis, name=name)
         self.store_to_attr(attr_prefix + name, accuracy)
 
 
