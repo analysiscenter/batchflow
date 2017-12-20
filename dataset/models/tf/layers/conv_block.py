@@ -6,7 +6,7 @@ from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpix
 from .block import _conv_block
 
 
-ND_LAYERS = {
+FUNC_LAYERS = {
     'resize': resize_bilinear,
     'resize_bilinear_additive': resize_bilinear_additive,
     'resize_nn': resize_nn,
@@ -35,8 +35,6 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - a - activation
         - p - pooling (default is max-pooling)
         - v - average pooling
-        - R - start residual connection
-        - + - end residual connection (includes summation)
         - P - global pooling (default is max-pooling)
         - V - global average pooling
         - d - dropout
@@ -45,6 +43,9 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - b - resize (bilinear)
         - B - resize (bilinear additive)
         - N - resize (nearest neighbors)
+        - R - start residual connection
+        - A - start residual connection with bilinear additive upsampling
+        - + - end residual connection (includes summation)
 
         Default is ''.
     filters : int
@@ -81,6 +82,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         pooling operation ('max', 'mean', 'frac-max', 'frac-mean')
     global_pool_op : str
         global pooling operation ('max', 'mean')
+    factor : int or tuple of int
+        upsampling factor
 
     dense : dict
         parameters for dense layers, like initializers, regularalizers, etc
@@ -144,7 +147,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     tensor = _conv_block(inputs, layout, filters, kernel_size, name,
                          strides, padding, data_format, dilation_rate, depth_multiplier,
                          activation, pool_size, pool_strides, dropout_rate, is_training,
-                         layout_dict=ND_LAYERS, **kwargs)
+                         func_layers=FUNC_LAYERS, **kwargs)
     return tensor
 
 
@@ -160,13 +163,14 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
     layout : str
         resizing technique, a sequence of:
 
-        - R - use residual connection with bilinear additive upsampling (must be the first symbol)
+        - A - use residual connection with bilinear additive upsampling (must be the first symbol)
         - b - bilinear resize
         - B - bilinear additive upsampling
         - N - nearest neighbor resize
         - t - transposed convolution
         - T - separable transposed convolution
         - X - subpixel convolution
+        all other :meth:`.conv_block` layers are also allowed.
 
     Returns
     -------
@@ -189,22 +193,12 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
     if np.all(factor == 1):
         return inputs
 
-    with tf.variable_scope(name):
-        if layout[0] == 'R':
-            r = resize_bilinear_additive(inputs, factor=factor, name='residual', data_format=kwargs.get('data_format'))
-            layout = layout[1:]
-        else:
-            r = None
+    if 't' in layout or 'T' in layout:
+        if 'kernel_size' not in kwargs:
+            kwargs['kernel_size'] = factor
+        if 'strides' not in kwargs:
+            kwargs['strides'] = factor
 
-        if 't' in layout:
-            if 'kernel_size' not in kwargs:
-                kwargs['kernel_size'] = factor
-            if 'strides' not in kwargs:
-                kwargs['strides'] = factor
-
-        x = conv_block(inputs, layout, name='upsample', factor=factor, **kwargs)
-
-        if r is not None:
-            x = x + r
+    x = conv_block(inputs, layout, name=name, factor=factor, **kwargs)
 
     return x

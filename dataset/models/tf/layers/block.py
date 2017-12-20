@@ -4,15 +4,16 @@ import logging
 import tensorflow as tf
 
 from .core import mip, flatten, alpha_dropout
-from .conv import conv_transpose, separable_conv, separable_conv_transpose
+from .conv import conv, conv_transpose, separable_conv, separable_conv_transpose
 from .pooling import pooling, global_pooling
 
-ND_LAYERS = {
+
+FUNC_LAYERS = {
     'activation': None,
     'residual_start': None,
     'residual_end': None,
     'dense': tf.layers.dense,
-    'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
+    'conv': conv,
     'transposed_conv': conv_transpose,
     'separable_conv':separable_conv,
     'separable_conv_transpose': separable_conv_transpose,
@@ -27,6 +28,7 @@ ND_LAYERS = {
 C_LAYERS = {
     'a': 'activation',
     'R': 'residual_start',
+    'A': 'residual_start',
     '+': 'residual_end',
     'f': 'dense',
     'c': 'conv',
@@ -50,13 +52,14 @@ C_LAYERS = {
 def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True,
-                layout_dict=None, **kwargs):
+                c_layers=None, func_layers=None, **kwargs):
 
 
-    if layout_dict is None:
-        layout_dict = dict()
-    nd_layers = {**ND_LAYERS, **layout_dict}
-    _layers_keys = str(list(C_LAYERS.keys()))
+    c_layers = c_layers or {}
+    c_layers = {**C_LAYERS, **c_layers}
+    func_layers = func_layers or {}
+    func_layers = {**FUNC_LAYERS, **func_layers}
+    _layers_keys = str(list(c_layers.keys()))
     _group_keys = (
         _layers_keys
         .replace('t', 'c')
@@ -67,12 +70,9 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         .replace('D', 'd')
         .replace('B', 'b')
         .replace('N', 'b')
+        .replace('A', 'b')
     )
     c_groups = dict(zip(_layers_keys, _group_keys))
-
-    def _get_layer_fn(fn, dim):
-        f = nd_layers[fn]
-        return f if callable(f) or f is None else f[dim-1]
 
     def _unpack_args(args, layer_no, layers_max):
         new_args = {}
@@ -114,7 +114,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
         layout_dict[c_groups[layer]][0] += 1
         layer_name = C_LAYERS[layer]
-        layer_fn = _get_layer_fn(layer_name, dim)
+        layer_fn = func_layers[layer_name]
 
         if layer == 'a':
             args = dict(activation=activation)
@@ -123,6 +123,11 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 tensor = layer_fn(tensor)
         elif layer == 'R':
             residuals += [tensor]
+        elif layer == 'A':
+            args = dict(factor=kwargs.get('factor'), data_format=data_format)
+            args = _unpack_args(args, *layout_dict[c_groups[layer]])
+            t = FUNC_LAYERS['resize_bilinear_additive'](tensor, **args, name='rba-%d' % i)
+            residuals += [t]
         elif layer == '+':
             tensor = tensor + residuals[-1]
             residuals = residuals[:-1]

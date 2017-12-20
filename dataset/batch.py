@@ -455,7 +455,7 @@ class Batch(BaseBatch):
             _args = args
         else:
             if isinstance(src, str):
-                pos = self.get_pos(None, dst, ix)
+                pos = self.get_pos(None, src, ix)
                 src_attr = getattr(self, src)[pos]
             else:
                 pos = self.get_pos(None, dst, ix)
