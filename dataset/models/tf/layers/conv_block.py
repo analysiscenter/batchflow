@@ -193,7 +193,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
     if np.all(factor == 1):
         return inputs
 
-    if 't' in layout:
+    if 't' in layout or 'T' in layout:
         if 'kernel_size' not in kwargs:
             kwargs['kernel_size'] = factor
         if 'strides' not in kwargs:
