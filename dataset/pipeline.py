@@ -350,6 +350,7 @@ class Pipeline:
                 key : str - a variable name,
                 value : dict -  a variable value and params (see `init_variable`)
             if tuple, contains variable names which will have None as default values
+
         Returns
         -------
         self - in order to use it in the pipeline chains

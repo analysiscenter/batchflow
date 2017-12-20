@@ -21,8 +21,8 @@ class RefineNet(TFModel):
             base_class : TFModel
                 a model implementing ``make_encoder`` method which returns tensors
                 with encoded representation of the inputs
-            **kwargs
-                parameters for base class encoder
+            other args
+                parameters for base class ``make_encoder`` method
 
         filters : list of int
             number of filters in each decoder block (default=[512, 256, 256, 256])
@@ -105,11 +105,7 @@ class RefineNet(TFModel):
         name : str
             scope name
         kwargs : dict
-            input_block : dict
-                input_block parameters for ``base_class`` model
-            body : dict
-                body parameters for ``base_class`` model
-            and any other ``conv_block`` params.
+            parameters for ``make_encoder`` method
 
         Returns
         -------

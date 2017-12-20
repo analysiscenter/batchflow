@@ -438,7 +438,7 @@ class Batch(BaseBatch):
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
-        *args, **kwargs
+        args, kwargs
             parameters passed to ``func``
 
         Notes
@@ -493,7 +493,7 @@ class Batch(BaseBatch):
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
-        *args, **kwargs
+        args, kwargs
             parameters passed to ``func``
 
         Notes

@@ -6,5 +6,5 @@ Exceptions
 
 
 SkipBatchException
-======
+==================
 .. autoclass:: dataset.SkipBatchException
