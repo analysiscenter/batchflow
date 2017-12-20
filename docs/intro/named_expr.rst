@@ -1,4 +1,4 @@
-
+=================
 Named expressions
 =================
 As pipelines are declarative you might need a way to address data which exists only when the pipeline is executed.
@@ -17,7 +17,7 @@ There are 4 types of named expressions:
 
 
 B - batch component
--------------------
+===================
 ::
 
     pipeline
@@ -30,7 +30,7 @@ and ``current_batch.labels``, i.e. `batch components <components>`_ or attribute
 
 
 V - pipeline variable
----------------------
+=====================
 ::
 
     pipeline
@@ -42,7 +42,7 @@ At each iteration ``V('model_name')`` will be replaced with the current value of
 
 
 C - config option
------------------
+=================
 ::
 
     config = dict(model=ResNet18, model_config=model_config)
@@ -59,7 +59,7 @@ to assess performance of various models.
 
 
 F - callable
-------------
+============
 A function which takes a batch and, possibly, other arguments.
 
 It can be a lambda function::

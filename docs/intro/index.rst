@@ -1,9 +1,9 @@
-
+=====
 Index
 =====
 
 Why the index is needed?
-------------------------
+========================
 
 A dataset may be so large that it does not fit into memory and thus you cannot process it at once. That is why each data item in the `Dataset` should have an unique id. It does not have to be meaningful (like a card number or a transaction id), sometimes it may be just a hash or an ordered number. However, each index item should address exactly one data item (which in turn can have a complex structure, like a list, an array, a dataframe, or even a graph).
 
@@ -17,7 +17,7 @@ Evereywhere else the particular id value is pretty meaningless as all operations
 .. _DatasetIndex:
 
 DatasetIndex
-------------
+============
 
 `DatasetIndex` is a base index class which stores a sequence of unique ids for your data items. In the simplest case it might be just an ordered sequence of numbers (0, 1, 2, 3,..., e.g. `numpy.arange(len(dataset))`\ ).
 
@@ -36,7 +36,7 @@ You will rarely need to work with an index directly, but if you want to do somet
 .. _FilesIndex:
 
 FilesIndex
-----------
+==========
 
 When data comes from a file system, it might be convenient to use `FilesIndex`.
 

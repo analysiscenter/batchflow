@@ -1,9 +1,9 @@
-
+========================
 Within batch parallelism
 ========================
 
 Basic usage
------------
+===========
 
 The ``inbatch_parallel`` decorator allows to run a method in parallel:
 
@@ -20,12 +20,12 @@ The ``inbatch_parallel`` decorator allows to run a method in parallel:
            return some_value
 
 Parallelized methods
---------------------
+====================
 
 You can parallelize actions as well as ordinary methods.
 
 Decorator arguments
--------------------
+===================
 
 init='some_method'
 ^^^^^^^^^^^^^^^^^^
@@ -45,8 +45,9 @@ target='threads'
 Optional.
 Specifies a parallelization engine, should be one of ``threads``, ``async``, ``mpc``, ``for``.
 
+
 Additional decorator arguments
-------------------------------
+==============================
 
 You can pass any other arguments to the decorator and they will be passed further to ``init`` and ``post`` functions.
 
@@ -98,7 +99,7 @@ Using this technique you can pass an action name to the ``init`` function:
 However, usually you might consider writing specific init / post functions for different actions.
 
 Init function
--------------
+=============
 
 Init function defines how to parallelize the decorated method. It returns a list of arguments for each invocation of the parallelized action.
 So if you want to run 10 parallel copies of the method, ``init`` should return a list of 10 items. Usually you run the method once for each item in the batch. However you might also run one method per 10 or 100 or any other number of items if it is beneficial for your specific circumstances (memory, performance, etc.)
@@ -237,7 +238,7 @@ Standard init functions
 Most of the times you don't need to write your own init function as you might use standard ones:
 
 ``indices``
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -247,7 +248,7 @@ Most of the times you don't need to write your own init function as you might us
 The first argument (after ``self``) contains an id (from index) of each data item.
 
 ``items``
-~~~~~~~~~~~~~
+~~~~~~~~~
 
 .. code-block:: python
 
@@ -257,7 +258,7 @@ The first argument (after ``self``) contains an id (from index) of each data ite
 The first argument (after ``self``) contains an item itself (i.e. i-th element of batch - ``batch[i]``).
 
 ``run_once``
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -279,7 +280,7 @@ If data components are defined, they might be used as init-functions:
 The first argument (after ``self``) contains an i-th image (i.e. ``batch.images[i]``).
 
 Post function
--------------
+=============
 
 When all parallelized tasks are finished, the ``post`` function is called.
 
@@ -371,7 +372,7 @@ However, ``numba`` or ``cython`` allow for a real multithreading.
 Here all batch items will be updated simultaneously.
 
 Targets
--------
+=======
 
 There are 4 targets available: ``threads``, ``async``, ``mpc``, ``for``.
 
@@ -437,8 +438,9 @@ This is not only convenient but also might have a much better performance than `
 
 It is also useful for debugging: you can replace ``mpc`` or ``threads`` with ``for`` in order to debug the code in a simple single-threaded fasion and then switch to parallel invocations.
 
+
 Arguments with default values
------------------------------
+=============================
 
 If you have a function with default arguments, you may call it without passing those arguments.
 
@@ -487,8 +489,9 @@ You might also return a `partial <https://docs.python.org/3/library/functools.ht
        def some_action(self, arg1, arg2, arg3=10)
            return partial(mpc_fn, arg3=arg3)
 
+
 Number of parallel jobs
------------------------
+=======================
 
 By default each action runs as many parallel tasks as the number of cores your computer/server has. That is why sometimes you might want to run fewer or more tasks. Then you can specify this number in each action call with ``n_workers`` option:
 

@@ -43,9 +43,10 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - b - resize (bilinear)
         - B - resize (bilinear additive)
         - N - resize (nearest neighbors)
+        - X - subpixel convolution
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
-        - + - end residual connection (includes summation)
+        - + - end residual connection with summation
 
         Default is ''.
     filters : int
@@ -163,7 +164,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
     layout : str
         resizing technique, a sequence of:
 
-        - A - use residual connection with bilinear additive upsampling (must be the first symbol)
+        - A - use residual connection with bilinear additive upsampling
         - b - bilinear resize
         - B - bilinear additive upsampling
         - N - nearest neighbor resize
@@ -171,7 +172,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
         - T - separable transposed convolution
         - X - subpixel convolution
 
-        all other :meth:`.conv_block` layers are also allowed.
+        all other :func:`.conv_block` layers are also allowed.
 
     Returns
     -------
@@ -181,15 +182,15 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
     --------
     A simple bilinear upsampling::
 
-        x = cls.upsample(inputs, factor=2, layout='b')
+        x = upsample(inputs, factor=2, layout='b')
 
     Upsampling with non-linear normalized transposed convolution::
 
-        x = cls.upsample(inputs, factor=2, layout='nat', kernel_size=3)
+        x = upsample(inputs, factor=2, layout='nat', kernel_size=3)
 
     Subpixel convolution with a residual bilinear additive connection::
 
-        x = cls.upsample(inputs, factor=2, layout='RX')
+        x = upsample(inputs, factor=2, layout='AX+')
     """
     if np.all(factor == 1):
         return inputs

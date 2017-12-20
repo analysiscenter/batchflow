@@ -1,4 +1,4 @@
-
+===========
 Batch class
 ===========
 
@@ -6,12 +6,12 @@ Batch class holds the data and contains processing functions.
 Normally, you never create batch instances, as they are created in the `Dataset` or `Pipeline` batch generators.
 
 Index
------
+=====
 
 `Batch` class stores the :doc:`index <index>` of all data items which belong to the batch. You can access the index through `self.index` (it is an instance of :ref:`DatasetIndex` or its child). The sequence of indices is also available as `self.indices`.
 
 Data
-----
+====
 
 The base :class:`~dataset.Batch` class has a private property :attr:`~dataset.Batch._data` which you can use to store your data in. Just call :func:`~dataset.Batch.put_into_data`. After that, you can access data through a public property :attr:`~dataset.Batch.data`. This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.::
 
@@ -67,7 +67,7 @@ For instance, you can load components from different sources, or save components
 
 
 Action methods
---------------
+==============
 
 `Action`-methods form a public API of the batch class which is available in :doc:`pipelines <pipeline>`. If you operate directly with the batch class instances, you don't need `action`-methods. However, pipelines provide the most convenient interface to process the whole dataset and to separate data processing steps and model training / validation cycles.
 
@@ -85,8 +85,9 @@ In order to convert a batch class method to an action you add `@action` decorato
 Take into account that an `action`-method should return an instance of some `Batch`-class: the very same one or some other class.
 If an `action` changes the instance's data directly, it may simply return `self`.
 
+
 Models and model-based actions
-------------------------------
+==============================
 
 To get access to a model just call :func:`~dataset.Batch.get_model_by_name` within actions or ordinary batch class methods.::
 
@@ -106,10 +107,11 @@ Actions might be linked to certain models::
            resnet34.train(...)
            return self
 
-For more details see `Working with models <models>`_.
+For more details see :doc:`Working with models <models>`.
+
 
 Running methods in parallel
----------------------------
+===========================
 
 As a batch can be quite large it might make sense to parallel the computations. And it is pretty easy to do::
 
@@ -123,10 +125,11 @@ As a batch can be quite large it might make sense to parallel the computations. 
            # process just one item
            return some_value
 
-For further details see `how to make parallel actions <parallel>`_.
+For further details see :doc:`how to make parallel actions <parallel>`.
+
 
 Writing your own Batch
-----------------------
+======================
 
 Constructor should include `*args` and `*kwargs`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

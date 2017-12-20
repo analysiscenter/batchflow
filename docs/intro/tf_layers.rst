@@ -1,16 +1,19 @@
+============================
 Tensorflow layers and losses
 ============================
 
+.. _conv_block:
+
 Convolution block
------------------
+=================
 The module :mod:`.models.tf.layers` includes a :func:`convolution building block <.models.tf.layers.conv_block>`
 which helps building complex networks in a concise way.
 
 The advantages of using ``conv_block`` are:
 
-- it helps to create more sophisticated networks with fewer lines of code;
+- it helps to create sophisticated networks with fewer lines of code;
 - it allows to build multidimensional models with the same code (namely 1d, 2d, and 3d);
-- it contains new layers missing in TensorFlow (e.g. separable 1d and 3d convolutions, 1d transposed convolutions, mip);
+- it contains convenient layers missing in TensorFlow (e.g. separable 1d and 3d convolutions, 1d transposed convolutions, mip);
 - it uses a fast CuDNN implementation of batch norm;
 
 The block consist of predefined layers, among which:
@@ -99,8 +102,19 @@ However, in terms of training performance and prediction accuracy the following 
     x = conv_block(x, 'Cna Cna Cna CnaP', [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
                    depth_multiplier=[1, 2, 2, 1], training=self.is_training)
 
+Residual blocks can also be created::
+
+    x = conv_block(x, 'R nac nac +', 32, 3)
+
+A small residual network as a one-liner::
+
+    x = conv_block(x, 'cna' + 'R nac nac +'*3 + 'dV', [32, 64, 64, 128, 128, 256, 256], 3)
+
+For the full list of available layers see :func:`~.models.tf.layers.conv_block` description.
+
+
 Transposed convolution
--------------------------
+======================
 
 .. autofunction:: dataset.models.tf.layers.conv_transpose
     :noindex:
@@ -110,14 +124,13 @@ Transposed convolution
 
 
 Separable convolution
----------------------
+=====================
 .. autofunction:: dataset.models.tf.layers.separable_conv
     :noindex:
 
 
 Pooling
--------
-
+=======
 .. autofunction:: dataset.models.tf.layers.pooling
     :noindex:
 
@@ -142,8 +155,9 @@ Pooling
 .. autofunction:: dataset.models.tf.layers.mip
     :noindex:
 
+
 Flatten
--------
+=======
 .. autofunction:: dataset.models.tf.layers.flatten
     :noindex:
 
@@ -152,11 +166,12 @@ Flatten
 
 
 Maximum intensity projection
-----------------------------
+============================
 .. autofunction:: dataset.models.tf.layers.mip
     :noindex:
 
+
 Upsampling
-----------
+==========
 .. autofunction:: dataset.models.tf.layers.upsample
     :noindex:
