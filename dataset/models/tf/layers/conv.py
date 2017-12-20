@@ -1,11 +1,7 @@
 """ Contains convolutional layers """
-import numpy as np
 import tensorflow as tf
 
-from .core import xip
-
-
-_CONV_LAYERS = {
+CONV_LAYERS = {
     1: tf.layers.conv1d,
     2: tf.layers.conv2d,
     3: tf.layers.conv3d
@@ -26,7 +22,7 @@ def conv(inputs, *args, **kwargs):
     `tf.layers.conv3d <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d>`_
     """
     dim = inputs.shape.ndims - 2
-    layer_fn = _CONV_LAYERS[dim]
+    layer_fn = CONV_LAYERS[dim]
     return layer_fn(inputs, *args, **kwargs)
 
 def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
@@ -57,6 +53,48 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', d
     x = tf.expand_dims(inputs, axis=axis)
     x = tf.layers.conv2d_transpose(x, filters=filters, kernel_size=(1, kernel_size),
                                    strides=(1, strides), padding=padding, **kwargs)
+    x = tf.squeeze(x, [axis])
+    return x
+
+
+def conv1d_transpose_nn(value, filters, output_shape, strides,
+                        padding='SAME', data_format='NWC', name=None):
+    """ Transposed 1D convolution layer. Analogue of the tf.nn.conv2d_transpose.
+
+    Parameters
+    ----------
+    value : tf.Tensor
+        input tensor
+    filters : tf.Tensor
+        convolutional filter
+    output_shape : tf.Tensor
+        the output shape of the deconvolution op
+    strides : list
+        the stride of the sliding window for each dimension of the input tensor
+    padding : str
+        'VALID' or 'SAME'. Default - 'SAME'.
+    data_format : str
+        'NWC' or 'NCW'. Default - 'NWC'.
+    name : str
+        scope name
+
+    Returns
+    -------
+    tf.Tensor
+
+    See also
+    --------
+    `tf.nn.conv2d_transpose <https://www.tensorflow.org/api_docs/python/tf/nn/conv2d_transpose>`_,
+    `tf.nn.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/nn/conv3d_transpose>`_
+    """
+    axis = 1 if data_format == 'NWC' else 2
+    value = tf.expand_dims(value, axis=axis)
+    filters = tf.expand_dims(filters, axis=0)
+    output_shape = tf.concat([output_shape[:axis], (1, ), output_shape[axis:]], axis=-1)
+    data_format = 'NHWC' if data_format == 'NWC' else 'NCHW'
+    strides = strides[:axis] + [1] + strides[axis:]
+    x = tf.nn.conv2d_transpose(value, filters, output_shape, strides,
+                               padding, data_format, name)
     x = tf.squeeze(x, [axis])
     return x
 
@@ -96,8 +134,69 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     return output
 
 
-def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                   dilation_rate=1, depth_multiplier=1, activation=None, name=None, *args, **kwargs):
+def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
+                    dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
+    dim = inputs.shape.ndims - 2
+    context = None
+    if name is not None:
+        context = tf.variable_scope(name)
+        context.__enter__()
+    if transpose:
+        conv_layer = conv_transpose
+    else:
+        conv_layer = conv
+
+    kwargs = {'kernel_size': kernel_size,
+              'strides': strides,
+              'padding': padding,
+              'data_format': data_format,
+              'activation': activation,
+              **kwargs}
+
+    if not transpose:
+        kwargs['dilation_rate'] = dilation_rate
+
+    inputs_shape = inputs.get_shape().as_list()
+    axis = -1 if data_format == 'channels_last' else 1
+    size = [-1] * (dim + 2)
+    size[axis] = 1
+    channels_in = inputs_shape[axis]
+
+    depthwise_layers = []
+    for channel in range(channels_in):
+        start = [0] * (dim + 2)
+        start[axis] = channel
+
+        input_slice = tf.slice(inputs, start, size)
+
+        _kwargs = {**kwargs, 'inputs': input_slice, 'filters': depth_multiplier, 'name': 'slice-%d' % channel}
+
+        slice_conv = conv_layer(**_kwargs)
+        depthwise_layers.append(slice_conv)
+
+    # Concatenate the per-channel convolutions along the channel dimension.
+    depthwise_conv = tf.concat(depthwise_layers, axis=axis)
+
+    if channels_in * depth_multiplier != filters:
+        _kwargs = {**kwargs,
+                   'inputs': depthwise_conv,
+                   'filters': filters,
+                   'kernel_size': 1,
+                   'strides': 1,
+                   'name': 'pointwise'}
+        if not transpose:
+            _kwargs['dilation_rate'] = 1
+
+        output = conv_layer(**_kwargs)
+    else:
+        output = depthwise_conv
+
+    if context is not None:
+        context.__exit__(None, None, None)
+
+    return output
+
+def separable_conv(inputs, *args, **kwargs):
     """ Make Nd depthwise convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
@@ -120,11 +219,11 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
     depth_multiplier : int
         The number of depthwise convolution output channels for each input channel.
         The total number of depthwise convolution output channels will be equal to
-        ``num_filters_in`` * ``depth_multiplier``.
+        ``num_filters_in`` * ``depth_multiplier``. Default - 1.
     activation : callable
         Default is `tf.nn.relu`.
     name : str
-        The name of the layer
+        The name of the layer. Default - None.
 
     Returns
     -------
@@ -132,181 +231,43 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
 
     """
     dim = inputs.shape.ndims - 2
-    conv_layer = _CONV_LAYERS[dim]
 
     if dim == 2:
-        return tf.layers.separable_conv2d(inputs, filters, kernel_size, strides, padding, data_format,
-                                          dilation_rate, depth_multiplier, activation, name, *args, **kwargs)
+        return tf.layers.separable_conv2d(inputs, *args, **kwargs)
     else:
-        context = None
-        if name is not None:
-            context = tf.variable_scope(name)
-            context.__enter__()
+        return _separable_conv(False, inputs, *args, **kwargs)
 
-        inputs_shape = inputs.get_shape().as_list()
-        axis = -1 if data_format == 'channels_last' else 1
-        size = [-1] * (dim + 2)
-        size[axis] = 1
-        channels_in = inputs_shape[axis]
+def separable_conv_transpose(inputs, *args, **kwargs):
+    """ Make Nd depthwise transpose convolutions that acts separately on channels,
+    followed by a pointwise convolution that mixes channels.
 
-        depthwise_layers = []
-        for channel in range(channels_in):
-            start = [0] * (dim + 2)
-            start[axis] = channel
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        input tensor
+    filters : int
+        number of filters in the ouput tensor
+    kernel_size : int
+        kernel size
+    strides : int
+        convolution stride. Default is 1.
+    padding : str
+        padding mode, can be 'same' or 'valid'. Default - 'same'.
+    data_format : str
+        'channels_last' or 'channels_first'. Default - 'channels_last'.
+    depth_multiplier : int
+        The number of depthwise convolution output channels for each input channel.
+        The total number of depthwise convolution output channels will be equal to
+        ``num_filters_in`` * ``depth_multiplier``. Deafault - 1.
+    activation : callable
+        Default is `tf.nn.relu`.
+    name : str
+        The name of the layer. Default - None.
 
-            input_slice = tf.slice(inputs, start, size)
-            slice_conv = conv_layer(input_slice, depth_multiplier, kernel_size, strides, padding, data_format,
-                                    dilation_rate, activation, name='slice-%d' % channel, *args, **kwargs)
-            depthwise_layers.append(slice_conv)
+    Returns
+    -------
+    tf.Tensor
 
-        # Concatenate the per-channel convolutions along the channel dimension.
-        depthwise_conv = tf.concat(depthwise_layers, axis=axis)
-
-        if channels_in * depth_multiplier != filters:
-            output = conv_layer(depthwise_conv, filters, 1, 1, padding, data_format, 1, activation,
-                                name='pointwise', *args, **kwargs)
-        else:
-            output = depthwise_conv
-
-        if context is not None:
-            context.__exit__(None, None, None)
-
+    """
+    output = _separable_conv(True, inputs, *args, **kwargs)
     return output
-
-
-def _calc_size(inputs, factor, data_format):
-    shape = inputs.get_shape().as_list()
-    channels = shape[-1] if data_format == 'channels_last' else shape[1]
-    if None in shape[1:]:
-        shape = _dynamic_calc_shape(inputs, factor, data_format)
-    else:
-        shape = _static_calc_shape(inputs, factor, data_format)
-    return shape, channels
-
-def _static_calc_shape(inputs, factor, data_format):
-    shape = inputs.get_shape().as_list()
-    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
-    shape = list(np.asarray(shape) * np.asarray(factor))
-    return shape
-
-def _dynamic_calc_shape(inputs, factor, data_format):
-    shape = tf.shape(inputs)
-    shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
-    shape = shape * np.asarray(factor)
-    return shape
-
-
-def subpixel_conv(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
-    """ Resize input tensor with subpixel convolution (depth to space operation)
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : int
-        upsampling factor
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
-    dim = inputs.shape.ndims - 2
-    if dim == 3:
-        dafo = 'NDHWC' if data_format == 'channels_last' else 'NCDHW'
-    else:
-        dafo = 'NHWC' if data_format == 'channels_last' else 'NCHW'
-
-    _, channels = _calc_size(inputs, factor, data_format)
-
-    with tf.variable_scope(name):
-        x = conv(inputs, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
-        x = tf.depth_to_space(x, block_size=factor, name='d2s', data_format=dafo)
-    return x
-
-
-def resize_bilinear_additive(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
-    """ Resize input tensor with bilinear additive technique
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : int
-        upsampling factor
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
-    dim = inputs.shape.ndims - 2
-    size, channels = _calc_size(inputs, factor, data_format)
-    layout = kwargs.get('layout', 'c')
-    with tf.variable_scope(name):
-        x = inputs
-        if data_format == 'channels_first':
-            x = tf.transpose(x, [0, 2, 3, 1])
-        x = tf.image.resize_bilinear(x, size=size, name='resize')
-        if data_format == 'channels_first':
-            x = tf.transpose(x, [0, 3, 1, 2])
-        x = conv(x, layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
-        x = xip(x, depth=factor**dim, reduction='sum', name='addition')
-    return x
-
-
-def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last', **kwargs):
-    """ Resize input tensor with bilinear method
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : int
-        upsampling factor
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
-    size, _ = _calc_size(inputs, factor, data_format)
-    with tf.variable_scope(name):
-        x = inputs
-        if data_format == 'channels_first':
-            x = tf.transpose(x, [0, 2, 3, 1])
-        x = tf.image.resize_bilinear(x, size=size, name='resize', **kwargs)
-        if data_format == 'channels_first':
-            x = tf.transpose(x, [0, 3, 1, 2])
-    return x
-
-
-def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
-    """ Resize input tensor with nearest neighbors method
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : int
-        upsampling factor
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
-    size, _ = _calc_size(inputs, factor, data_format)
-    return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, **kwargs)
