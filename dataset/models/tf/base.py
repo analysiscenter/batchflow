@@ -1469,7 +1469,9 @@ class TFModel(BaseModel):
         resize_to = None
         if isinstance(inputs, (list, tuple)):
             x, resize_to = inputs
-            inputs = None
+        else:
+            x = inputs
+        inputs = None
 
         x = upsample(x, factor, layout, name=name, **kwargs)
         if resize_to is not None:

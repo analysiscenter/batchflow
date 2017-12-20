@@ -304,10 +304,7 @@ def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last'
         if data_format == 'channels_first':
             perm = [0] + list(range(2, inputs.shape.ndims)) + [1]
             perm_reverse = [0, inputs.shape.ndims-1] + list(range(1, inputs.shape.ndims-1))
-        else:
-            perm = list(range(inputs.shape.ndims))
-            perm_reverse = perm
-        x = tf.transpose(x, perm)
+            x = tf.transpose(x, perm)
         dim = inputs.shape.ndims - 2
         if dim == 1:
             x = resize_bilinear_1d(x, size=size, name='resize_1d', **kwargs)
@@ -315,7 +312,8 @@ def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last'
             x = tf.image.resize_bilinear(x, size=size, name='resize_2d', **kwargs)
         elif dim == 3:
             x = resize_bilinear_3d(x, size=size, name='resize_3d', **kwargs)
-        x = tf.transpose(x, perm_reverse)
+        if data_format == 'channels_first':
+            x = tf.transpose(x, perm_reverse)
     return x
 
 
@@ -339,6 +337,6 @@ def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs
     """
     dim = inputs.shape.ndims
     if dim != 4:
-        raise ValueError("inputs must be Tensor of rank but {} was given".format(dim))
+        raise ValueError("inputs must be Tensor of rank 4 but {} was given".format(dim))
     size, _ = _calc_size(inputs, factor, data_format)
     return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, **kwargs)

@@ -7,56 +7,58 @@ from .core import mip, flatten, alpha_dropout
 from .conv import conv_transpose, separable_conv, separable_conv_transpose
 from .pooling import pooling, global_pooling
 
+ND_LAYERS = {
+    'activation': None,
+    'residual_start': None,
+    'residual_end': None,
+    'dense': tf.layers.dense,
+    'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
+    'transposed_conv': conv_transpose,
+    'separable_conv':separable_conv,
+    'separable_conv_transpose': separable_conv_transpose,
+    'pooling': pooling,
+    'global_pooling': global_pooling,
+    'batch_norm': tf.layers.batch_normalization,
+    'dropout': tf.layers.dropout,
+    'alpha_dropout': alpha_dropout,
+    'mip': mip
+}
+
+C_LAYERS = {
+    'a': 'activation',
+    'R': 'residual_start',
+    '+': 'residual_end',
+    'f': 'dense',
+    'c': 'conv',
+    't': 'transposed_conv',
+    'C': 'separable_conv',
+    'T': 'separable_conv_transpose',
+    'p': 'pooling',
+    'v': 'pooling',
+    'P': 'global_pooling',
+    'V': 'global_pooling',
+    'n': 'batch_norm',
+    'd': 'dropout',
+    'D': 'alpha_dropout',
+    'm': 'mip',
+}
+
 def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True,
                 layout_dict=None, **kwargs):
 
-    nd_layers = {
-        'activation': None,
-        'residual_start': None,
-        'residual_end': None,
-        'dense': tf.layers.dense,
-        'conv': [tf.layers.conv1d, tf.layers.conv2d, tf.layers.conv3d],
-        'transposed_conv': conv_transpose,
-        'separable_conv':separable_conv,
-        'separable_conv_transpose': separable_conv_transpose,
-        'pooling': pooling,
-        'global_pooling': global_pooling,
-        'batch_norm': tf.layers.batch_normalization,
-        'dropout': tf.layers.dropout,
-        'alpha_dropout': alpha_dropout,
-        'mip': mip
-    }
 
-    c_layers = {
-        'a': 'activation',
-        'R': 'residual_start',
-        '+': 'residual_end',
-        'f': 'dense',
-        'c': 'conv',
-        't': 'transposed_conv',
-        'C': 'separable_conv',
-        'T': 'separable_conv_transpose',
-        'p': 'pooling',
-        'v': 'pooling',
-        'P': 'global_pooling',
-        'V': 'global_pooling',
-        'n': 'batch_norm',
-        'd': 'dropout',
-        'D': 'alpha_dropout',
-        'm': 'mip',
-    }
-
-
-    if layout_dict is not None:
-        nd_layers = {**nd_layers, **layout_dict[0]}
-        c_layers = {**c_layers, **layout_dict[1]}
+    if layout_dict is None:
+        layout_dict = [dict(), dict()]
+    nd_layers = {**ND_LAYERS, **layout_dict[0]}
+    c_layers = {**C_LAYERS, **layout_dict[1]}
     _layers_keys = str(list(c_layers.keys()))
     _group_keys = (
         _layers_keys
         .replace('t', 'c')
-        .replace('s', 'c')
+        .replace('C', 'c')
+        .replace('T', 'c')
         .replace('v', 'p')
         .replace('V', 'P')
         .replace('D', 'd')
@@ -82,8 +84,10 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
     layout = layout or ''
     layout = layout.replace(' ', '')
+
+    logger = logging.getLogger('conv_block')
     if len(layout) == 0:
-        logging.warning('conv_block: layout is empty, so there is nothing to do, just returning inputs.')
+        logger.warning('conv_block: layout is empty, so there is nothing to do, just returning inputs.')
         return inputs
 
     dim = inputs.shape.ndims - 2

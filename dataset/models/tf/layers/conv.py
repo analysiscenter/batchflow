@@ -23,7 +23,6 @@ def conv(inputs, *args, **kwargs):
         3: tf.layers.conv3d
     }
     layer_fn = conv_layers[dim]
-    print(args, kwargs)
     return layer_fn(inputs, *args, **kwargs)
 
 def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
@@ -135,7 +134,7 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     return output
 
 
-def _common_separable_conv(transpose, inputs, filters, kernel_size, strides, padding, data_format,
+def _separable_conv(transpose, inputs, filters, kernel_size, strides, padding, data_format,
                            dilation_rate, depth_multiplier, activation, name, **kwargs):
     dim = inputs.shape.ndims - 2
     context = None
@@ -239,7 +238,7 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
         return tf.layers.separable_conv2d(inputs, filters, kernel_size, strides, padding, data_format,
                                           dilation_rate, depth_multiplier, activation, name, **kwargs)
     else:
-        return _common_separable_conv(False, inputs, filters, kernel_size, strides, padding, data_format,
+        return _separable_conv(False, inputs, filters, kernel_size, strides, padding, data_format,
                                       dilation_rate, depth_multiplier, activation, name, **kwargs)
 
 def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
@@ -275,6 +274,6 @@ def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='s
     tf.Tensor
 
     """
-    output = _common_separable_conv(True, inputs, filters, kernel_size, strides, padding, data_format,
+    output = _separable_conv(True, inputs, filters, kernel_size, strides, padding, data_format,
                                     None, depth_multiplier, activation, name, **kwargs)
     return output
