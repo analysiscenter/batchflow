@@ -135,7 +135,7 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
 
 
 def _separable_conv(transpose, inputs, filters, kernel_size, strides, padding, data_format,
-                           dilation_rate, depth_multiplier, activation, name, **kwargs):
+                    dilation_rate, depth_multiplier, activation, name, **kwargs):
     dim = inputs.shape.ndims - 2
     context = None
     if name is not None:
@@ -239,7 +239,7 @@ def separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data
                                           dilation_rate, depth_multiplier, activation, name, **kwargs)
     else:
         return _separable_conv(False, inputs, filters, kernel_size, strides, padding, data_format,
-                                      dilation_rate, depth_multiplier, activation, name, **kwargs)
+                               dilation_rate, depth_multiplier, activation, name, **kwargs)
 
 def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
                              depth_multiplier=1, activation=None, name=None, **kwargs):
@@ -275,5 +275,5 @@ def separable_conv_transpose(inputs, filters, kernel_size, strides=1, padding='s
 
     """
     output = _separable_conv(True, inputs, filters, kernel_size, strides, padding, data_format,
-                                    None, depth_multiplier, activation, name, **kwargs)
+                             None, depth_multiplier, activation, name, **kwargs)
     return output
