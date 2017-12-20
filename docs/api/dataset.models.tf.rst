@@ -20,6 +20,7 @@ dataset.models.tf
     dataset.models.tf.vnet
     dataset.models.tf.densenet_fc
     dataset.models.tf.refinenet
+    dataset.models.tf.gcn
 
     dataset.models.tf.faster_rcnn
 

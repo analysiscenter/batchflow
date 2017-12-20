@@ -42,8 +42,7 @@ Or a more sophisticated example - a full 14-layer VGG-like model in just 6 lines
             x = conv_block(x, 'cacacap', 512, 3, name='block4', **kwargs)
             x = conv_block(x, 'cacacap', 512, 3, name='block5', **kwargs)
             x = conv_block(x, num_classes, 3, layout='cP', name='classification', **kwargs)
-            output = tf.identity(x, name='predictions')
-            return output
+            return x
 
 That's a fully working example. Just try it with a simple pipeline:
 
@@ -66,8 +65,8 @@ That's a fully working example. Just try it with a simple pipeline:
                 .train_model('conv', fetches='loss', feed_dict={'images': B('images'),
                                                                 'labels': B('labels')},
                              save_to=V('current_loss'), mode='a')
-                .print_variable('current_loss')
-                .run(128, shuffle=True, n_epochs=2))
+                .print(V('current_loss'))
+                .run(batch_size=128, shuffle=True, n_epochs=2))
 
 When ``layout`` includes several layers of the same type, each one can have its own parameters,
 if corresponding arguments are passed as lists.
@@ -95,9 +94,9 @@ Or the earlier defined 14-layers VGG network as a one-liner::
 
     x = conv_block(x, 'cacap'*2 + 'cacacap'*3 + 'caP', [64]*2 + [128]*2 + [256]*3 + [512]*6 + [num_classes], 3)
 
-However, in terms of training performance and prediction accuracy the following block with strided separable (grouped) convolutions and dropout will usually perform much better::
+However, in terms of training performance and prediction accuracy the following block with strided separable convolutions and dropout will usually perform much better::
 
-    x = conv_block(x, 'cna cna cna cnaP', [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
+    x = conv_block(x, 'Cna Cna Cna CnaP', [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
                    depth_multiplier=[1, 2, 2, 1], training=self.is_training)
 
 Transposed convolution
@@ -115,15 +114,12 @@ Separable convolution
 .. autofunction:: dataset.models.tf.layers.separable_conv
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.separable_conv1d
-    :noindex:
-
-.. autofunction:: dataset.models.tf.layers.separable_conv3d
-    :noindex:
-
 
 Pooling
 -------
+
+.. autofunction:: dataset.models.tf.layers.pooling
+    :noindex:
 
 .. autofunction:: dataset.models.tf.layers.max_pooling
     :noindex:
@@ -131,13 +127,16 @@ Pooling
 .. autofunction:: dataset.models.tf.layers.average_pooling
     :noindex:
 
+.. autofunction:: dataset.models.tf.layers.fractional_pooling
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.global_pooling
+    :noindex:
+
 .. autofunction:: dataset.models.tf.layers.global_max_pooling
     :noindex:
 
 .. autofunction:: dataset.models.tf.layers.global_average_pooling
-    :noindex:
-
-.. autofunction:: dataset.models.tf.layers.fractional_max_pooling
     :noindex:
 
 .. autofunction:: dataset.models.tf.layers.mip
@@ -155,4 +154,9 @@ Flatten
 Maximum intensity projection
 ----------------------------
 .. autofunction:: dataset.models.tf.layers.mip
+    :noindex:
+
+Upsampling
+----------
+.. autofunction:: dataset.models.tf.layers.upsample
     :noindex:
