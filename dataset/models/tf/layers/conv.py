@@ -1,6 +1,11 @@
 """ Contains convolutional layers """
 import tensorflow as tf
 
+CONV_LAYERS = {
+    1: tf.layers.conv1d,
+    2: tf.layers.conv2d,
+    3: tf.layers.conv3d
+}
 
 def conv(inputs, *args, **kwargs):
     """ Nd convolution layer. Just a wrapper around ``tf.layers.conv1d``, ``conv2d``, ``conv3d``.
@@ -17,12 +22,7 @@ def conv(inputs, *args, **kwargs):
     `tf.layers.conv3d <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d>`_
     """
     dim = inputs.shape.ndims - 2
-    conv_layers = {
-        1: tf.layers.conv1d,
-        2: tf.layers.conv2d,
-        3: tf.layers.conv3d
-    }
-    layer_fn = conv_layers[dim]
+    layer_fn = CONV_LAYERS[dim]
     return layer_fn(inputs, *args, **kwargs)
 
 def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',

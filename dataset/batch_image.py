@@ -326,7 +326,7 @@ class ImagesBatch(BaseImagesBatch):
             new_images = None
         else:
             new_images = np.asarray(list(None for _ in self.indices))
-            self.apply_transform(new_images, components, PIL.Image.fromarray)
+            self.apply_transform(PIL.Image.fromarray, dst=new_images, src=components)
         new_data = (new_images, self.labels)
         new_batch = ImagesPILBatch(np.arange(len(self)), preloaded=new_data)
         return new_batch
@@ -441,7 +441,7 @@ class ImagesPILBatch(BaseImagesBatch):
         """ Convert images from PIL.Image format to an array """
         if self.images is not None:
             new_images = list(None for _ in self.indices)
-            self.apply_transform(new_images, 'images', self._convert_to_array_one, dtype=dtype)
+            self.apply_transform(self._convert_to_array_one, dst=new_images, src='images', dtype=dtype)
             new_images = np.stack(new_images)
         else:
             new_images = None

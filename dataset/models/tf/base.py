@@ -1122,7 +1122,8 @@ class TFModel(BaseModel):
     def fill_params(cls, _name, **kwargs):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
-        config = {**config['common'], **cls.get(_name, config), **kwargs}
+        _config = cls.get(_name, config)
+        config = {**config['common'], **_config, **kwargs}
         return config
 
     def build_config(self, names=None):
