@@ -416,7 +416,7 @@ class Batch(BaseBatch):
 
     @action
     @inbatch_parallel(init='indices')
-    def apply_transform(self, ix,  func, *args, src=None, dst=None, **kwargs):
+    def apply_transform(self, ix, func, *args, src=None, dst=None, **kwargs):
         """ Apply a function to each item in the batch
 
         Parameters
