@@ -19,14 +19,14 @@ def _static_calc_shape(inputs, factor, data_format):
     shape = inputs.get_shape().as_list()
     shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
     shape = np.asarray(shape) * np.asarray(factor)
-    shape = list(np.array(shape, dtype=np.int32))
+    shape = list(np.ceil(shape, dtype=np.int32))
     return shape
 
 def _dynamic_calc_shape(inputs, factor, data_format):
     shape = tf.cast(tf.shape(inputs), dtype=tf.float32)
     shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
     shape = shape * np.asarray(factor)
-    shape = tf.cast(shape, dtype=tf.int32)
+    shape = tf.cast(tf.ceil(shape), dtype=tf.int32)
     return shape
 
 
