@@ -2,7 +2,7 @@
 Kaiming He et al. "`Deep Residual Learning for Image Recognition
 <https://arxiv.org/abs/1512.03385>`_"
 
-Kaiming He et al. "Identity Mappings in Deep Residual Networks
+Kaiming He et al. "`Identity Mappings in Deep Residual Networks
 <https://arxiv.org/abs/1603.05027>`_"
 
 Sergey Zagoruyko, Nikos Komodakis. "`Wide Residual Networks

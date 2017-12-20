@@ -1,8 +1,9 @@
+=================
 Tensorflow models
 =================
 
 How to use a model
-------------------
+==================
 A model might be used for training or inference. In both cases you need to specify a model config and a pipeline.
 
 A minimal config includes ``inputs`` and ``input_block`` sections::
@@ -31,20 +32,18 @@ A minimal pipeline consists of ``init_model`` and ``train_model``::
         .init_model('dynamic', MyModel, 'my_model', model_config)
         .train_model('my_model', fetches='loss',
                      feed_dict={'images': B('images'),
-                                'labels': B('labels')},
-                     save_to=V('loss_history'), mode='a')
+                                'labels': B('labels')})
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
 
 
 How to write a custom model
----------------------------
+===========================
 
-To begin with, take a look at `conv_block <tf_layers#convolution-block>`_ to find out how to write
-complex networks in just one line of code. This block is a convenient building block for concise,
-yet very expressive neural networks.
+To begin with, take a look at :ref:`conv_block <conv_block>` to find out how to write complex networks in just one line of code.
+This block is a convenient building block for concise, yet very expressive neural networks.
 
 The simplest case you should avoid
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 Just redefine ``body()`` method.
 
 For example, let's create a small fully convolutional network with 3 layers of 3x3 convolutions, batch normalization, dropout
@@ -55,8 +54,8 @@ and a dense layer at the end::
 
     class MyModel(TFModel):
         def body(self, inputs, **kwargs):
-            x = conv_block(inputs, filters=[64, 128, 256], units=10, kernel_size=3,
-                           layout='cna cna cna df', dropout_rate=.2, **kwargs)
+            x = conv_block(inputs, layout='cna cna cna df', filters=[64, 128, 256], units=10, kernel_size=3,
+                           dropout_rate=.2, **kwargs)
             return x
 
 Despite simplicity, this approach is highly discouraged as:
@@ -66,7 +65,7 @@ Despite simplicity, this approach is highly discouraged as:
 - the model does not allow model composition, i.e. using this model components in other models.
 
 The right way
-~~~~~~~~~~~~~
+-------------
 Here we split network configuration and network definition into separate methods::
 
     from dataset.models.tf import TFModel
@@ -139,7 +138,7 @@ As a result, the very same model class might be used
 
 
 Model structure
-~~~~~~~~~~~~~~~
+---------------
 A model comprises of
 
 - input_block
@@ -211,20 +210,20 @@ Regression::
         'input_block/inputs': 'heart_signals'
     }
 
-Configuration
--------------
 
+Configuration
+=============
 .. autoclass:: dataset.models.tf.TFModel
     :noindex:
 
 
 How to configure model inputs
------------------------------
+=============================
 .. automethod:: dataset.models.tf.TFModel._make_inputs
     :noindex:
 
-Ready to use models
--------------------
-.. toctree::
 
-    tf_models_zoo
+Ready to use models
+===================
+
+Visit a zoo of :doc:`implemented architectures <tf_models_zoo>`

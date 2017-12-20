@@ -1,3 +1,7 @@
+===================
+Ready to use models
+===================
+
 .. toctree::
     ../api/dataset.models.tf.vgg
     ../api/dataset.models.tf.inception
