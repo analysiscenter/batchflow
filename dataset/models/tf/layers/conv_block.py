@@ -199,6 +199,6 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
         if 'strides' not in kwargs:
             kwargs['strides'] = factor
 
-    x = conv_block(inputs, layout, name='upsample', factor=factor, **kwargs)
+    x = conv_block(inputs, layout, name=name, factor=factor, **kwargs)
 
     return x
