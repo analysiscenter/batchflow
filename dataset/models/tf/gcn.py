@@ -41,7 +41,8 @@ class GlobalConvolutionNetwork(TFModel):
         config = TFModel.default_config()
 
         config['input_block'].update(dict(layout='cna', filters=64, kernel_size=7, strides=2))
-        config['body']['encoder'] = dict(base_class=ResNet101, filters=[256, 512, 1024, 2048])
+        #config['body']['encoder'] = dict(base_class=ResNet101, filters=[256, 512, 1024, 2048])
+        config['body']['encoder'] = dict(base_class=ResNet101, filters=[64, 128, 256, 512])
         config['body']['block'] = dict(layout='cn cn', filters=21, kernel_size=11)
         config['body']['br'] = dict(layout='cn', bottleneck=False, downsample=False)
         config['body']['upsample'] = dict(layout='tna', factor=2, kernel_size=4)

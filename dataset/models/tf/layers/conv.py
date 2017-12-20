@@ -134,8 +134,8 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     return output
 
 
-def _separable_conv(transpose, inputs, filters, kernel_size, strides, padding, data_format,
-                    dilation_rate, depth_multiplier, activation, name, **kwargs):
+def _separable_conv(inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
+                    dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
     dim = inputs.shape.ndims - 2
     context = None
     if name is not None:
@@ -150,12 +150,11 @@ def _separable_conv(transpose, inputs, filters, kernel_size, strides, padding, d
               'strides': strides,
               'padding': padding,
               'data_format': data_format,
-              'dilation_rate': dilation_rate,
               'activation': activation,
               **kwargs}
 
-    if transpose:
-        kwargs.pop('dilation_rate')
+    if not transpose:
+        kwargs['dilation_rate'] = dilation_rate
 
     inputs_shape = inputs.get_shape().as_list()
     axis = -1 if data_format == 'channels_last' else 1
@@ -186,7 +185,7 @@ def _separable_conv(transpose, inputs, filters, kernel_size, strides, padding, d
                    'strides': 1,
                    'name': 'pointwise'}
         if not transpose:
-            kwargs['dilation_rate'] = 1
+            _kwargs['dilation_rate'] = 1
 
         output = conv_layer(**_kwargs)
     else:

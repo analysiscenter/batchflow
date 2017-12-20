@@ -31,23 +31,26 @@ def _dynamic_calc_shape(inputs, factor, data_format):
 
 
 def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
-    """ 2d and 3d depth_to_space transformation.
+    """ 1d, 2d and 3d depth_to_space transformation.
 
     Parameters
     ----------
     inputs : tf.Tensor
-
+        a tensor to resize
     block_size : int
-
+        An int that is >= 2. The size of the spatial block
     name : str
         scope name
-
     data_format : {'channels_last', 'channels_first'}
         position of the channels dimension
 
     Returns
     -------
     tf.Tensor
+
+    See also
+    --------
+    `tf.depth_to_space <https://www.tensorflow.org/api_docs/python/tf/depth_to_space>`_
     """
     dim = inputs.shape.ndims - 2
     if dim == 2:

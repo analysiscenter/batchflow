@@ -151,7 +151,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     tensor = _conv_block(inputs, layout, filters, kernel_size, name,
                          strides, padding, data_format, dilation_rate, depth_multiplier,
                          activation, pool_size, pool_strides, dropout_rate, is_training,
-                         [ND_LAYERS, C_LAYERS], **kwargs)
+                         layout_dict=[ND_LAYERS, C_LAYERS], **kwargs)
     return tensor
 
 
@@ -172,6 +172,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
         - B - bilinear additive upsampling
         - N - nearest neighbor resize
         - t - transposed convolution
+        - T - separable transposed convolution
         - X - subpixel convolution
 
     Returns
