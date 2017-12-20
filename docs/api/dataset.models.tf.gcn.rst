@@ -1,6 +1,6 @@
-===
+==========================
 Global Convolution Network
-===
+==========================
 
 .. automodule:: dataset.models.tf.gcn
     :member-order: bysource

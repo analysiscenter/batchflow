@@ -115,12 +115,6 @@ Separable convolution
 .. autofunction:: dataset.models.tf.layers.separable_conv
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.separable_conv1d
-    :noindex:
-
-.. autofunction:: dataset.models.tf.layers.separable_conv3d
-    :noindex:
-
 
 Pooling
 -------
@@ -137,7 +131,7 @@ Pooling
 .. autofunction:: dataset.models.tf.layers.global_average_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.fractional_max_pooling
+.. autofunction:: dataset.models.tf.layers.fractional_pooling
     :noindex:
 
 .. autofunction:: dataset.models.tf.layers.mip
