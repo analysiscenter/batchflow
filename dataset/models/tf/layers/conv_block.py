@@ -3,39 +3,25 @@ import numpy as np
 import tensorflow as tf
 
 from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
-from .block import _conv_block, C_LAYERS, FUNC_LAYERS, LAYER_KEYS, GROUP_KEYS, C_GROUPS
+from .block import _conv_block, _update_layers
 
 
-_C_LAYERS = {
+_update_layers({
     'A': 'residual_bilinear_additive',
     'b': 'resize_bilinear',
     'B': 'resize_bilinear_additive',
     'N': 'resize_nn',
     'X': 'subpixel_conv'
-}
-C_LAYERS.update(_C_LAYERS)
-
-FUNC_LAYERS.update({
+},
+{
     'residual_bilinear_additive': None,
     'resize_bilinear': resize_bilinear,
     'resize_bilinear_additive': resize_bilinear_additive,
     'resize_nn': resize_nn,
     'subpixel_conv': subpixel_conv
-})
-
-new_layers = str(list(_C_LAYERS.keys()))
-LAYER_KEYS += new_layers
-GROUP_KEYS += new_layers
-
-GROUP_KEYS = (
-    GROUP_KEYS
-    .replace('A', 'b')
-    .replace('B', 'b')
-    .replace('N', 'b')
-    .replace('X', 'b')
+},
+{'A': 'b', 'B': 'b', 'N': 'b', 'X': 'b'}
 )
-
-C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
 
 
 def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,

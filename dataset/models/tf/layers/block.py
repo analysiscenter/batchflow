@@ -45,7 +45,7 @@ C_LAYERS = {
     'm': 'mip',
 }
 
-LAYER_KEYS = str(list(C_LAYERS.keys()))
+LAYER_KEYS = ''.join(list(C_LAYERS.keys()))
 GROUP_KEYS = (
     LAYER_KEYS
     .replace('t', 'c')
@@ -58,12 +58,22 @@ GROUP_KEYS = (
 
 C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
 
+def _update_layers(symbols, funcs, groups):
+    global C_LAYERS, FUNC_LAYERS, LAYER_KEYS, GROUP_KEYS, C_GROUPS
+    C_LAYERS.update(symbols)
+    FUNC_LAYERS.update(funcs)
+    new_layers = ''.join(list(symbols.keys()))
+    LAYER_KEYS += new_layers
+    GROUP_KEYS += new_layers
+    for k, v in groups.items():
+        GROUP_KEYS = GROUP_KEYS.replace(k, v)
+    C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
+
 
 def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True,
                 **kwargs):
-
 
     def _unpack_args(args, layer_no, layers_max):
         new_args = {}
