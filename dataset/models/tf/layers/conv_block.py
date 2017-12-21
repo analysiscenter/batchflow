@@ -3,15 +3,37 @@ import numpy as np
 import tensorflow as tf
 
 from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
-from .block import _conv_block
+from .block import _conv_block, C_LAYERS, FUNC_LAYERS, LAYER_KEYS, GROUP_KEYS
 
 
-FUNC_LAYERS = {
-    'resize': resize_bilinear,
+_C_LAYERS = {
+    'A': 'residual_bilinear_additive',
+    'b': 'resize_bilinear',
+    'B': 'resize_bilinear_additive',
+    'N': 'resize_nn',
+    'X': 'subpixel_conv'
+}
+C_LAYERS.update(_C_LAYERS)
+
+FUNC_LAYERS.update({
+    'residual_bilinear_additive': None,
+    'resize_bilinear': resize_bilinear,
     'resize_bilinear_additive': resize_bilinear_additive,
     'resize_nn': resize_nn,
     'subpixel_conv': subpixel_conv
-}
+})
+
+LAYER_KEYS += str(list(_C_LAYERS.keys()))
+GROUP_KEYS += str(list(_C_LAYERS.keys()))
+
+GROUP_KEYS = (
+    GROUP_KEYS
+    .replace('A', 'b')
+    .replace('B', 'b')
+    .replace('N', 'b')
+    .replace('X', 'b')
+)
+
 
 def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
@@ -103,6 +125,12 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         parameters for dropout layers, like noise_shape, etc
         If None or inculdes parameters 'off' or 'disable' set to True or 1,
         the layer will be excluded whatsoever.
+    subpixel_conv : dict or None
+        parameters for subpixel convolution (layout, activation, etc)
+    resize_bilinear : dict or None
+        parameters for bilinear resize
+    resize_bilinear_additive : dict or None
+        parameters for bilinear additive resize (layout, activation, etc)
 
     Returns
     -------
@@ -149,7 +177,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     tensor = _conv_block(inputs, layout, filters, kernel_size, name,
                          strides, padding, data_format, dilation_rate, depth_multiplier,
                          activation, pool_size, pool_strides, dropout_rate, is_training,
-                         func_layers=FUNC_LAYERS, **kwargs)
+                         **kwargs)
     return tensor
 
 
