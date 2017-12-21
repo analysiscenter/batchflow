@@ -59,7 +59,7 @@ GROUP_KEYS = (
 C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
 
 def _update_layers(symbols, funcs, groups):
-    global C_LAYERS, FUNC_LAYERS, LAYER_KEYS, GROUP_KEYS, C_GROUPS
+    global LAYER_KEYS, GROUP_KEYS, C_GROUPS
     C_LAYERS.update(symbols)
     FUNC_LAYERS.update(funcs)
     new_layers = ''.join(list(symbols.keys()))
