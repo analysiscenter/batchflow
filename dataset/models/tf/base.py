@@ -1156,7 +1156,7 @@ class TFModel(BaseModel):
         for k in self.config:
             self.put(k, self.config[k], config)
 
-        if 'inputs' in config:
+        if config.get('inputs'):
             with tf.variable_scope('inputs'):
                 self._make_inputs(names, config)
             inputs = self.get('input_block/inputs', config)
