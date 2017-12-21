@@ -585,6 +585,7 @@ class Pipeline:
                     else:
                         batch, _ = _action['merge_fn']([batch] + join_batches)
                     join_batches = None
+                    batch.pipeline = self
             elif _action['name'] == REBATCH_ID:
                 pass
             elif _action['name'] == PIPELINE_ID:
