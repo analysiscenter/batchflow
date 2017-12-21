@@ -131,6 +131,10 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         elif layer == '+':
             tensor = tensor + residuals[-1]
             residuals = residuals[:-1]
+        elif layer == '.':
+            axis = -1 if data_format == 'channels_last' else 1
+            tensor = tf.concat([tensor, residuals[-1]], axis=axis, name='concat-%d' % i)
+            residuals = residuals[:-1]
         else:
             layer_args = kwargs.get(layer_name, {})
             skip_layer = layer_args is None or layer_args is False or \

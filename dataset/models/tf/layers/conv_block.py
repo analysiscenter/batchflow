@@ -46,7 +46,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - X - subpixel convolution
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
-        - + - end residual connection with summation
+        - `+` - end residual connection with summation
+        - `.` - end residual connection with concatenation
 
         Default is ''.
     filters : int
