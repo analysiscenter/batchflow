@@ -585,7 +585,6 @@ class Pipeline:
                     else:
                         batch, _ = _action['merge_fn']([batch] + join_batches)
                     join_batches = None
-                    batch.pipeline = self
             elif _action['name'] == REBATCH_ID:
                 pass
             elif _action['name'] == PIPELINE_ID:
@@ -604,6 +603,8 @@ class Pipeline:
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)
+
+            batch.pipeline = self
         return batch
 
     def _needs_exec(self, action):
