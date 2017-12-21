@@ -603,6 +603,8 @@ class Pipeline:
 
                 if 'tf_queue' in _action:
                     self._put_batch_into_tf_queue(batch, _action)
+
+            batch.pipeline = self
         return batch
 
     def _needs_exec(self, action):

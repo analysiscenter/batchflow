@@ -28,8 +28,8 @@ FUNC_LAYERS = {
 C_LAYERS = {
     'a': 'activation',
     'R': 'residual_start',
-    'A': 'residual_start',
     '+': 'residual_end',
+    '.': 'residual_end',
     'f': 'dense',
     'c': 'conv',
     't': 'transposed_conv',
@@ -43,36 +43,37 @@ C_LAYERS = {
     'd': 'dropout',
     'D': 'alpha_dropout',
     'm': 'mip',
-    'b': 'resize',
-    'B': 'resize_bilinear_additive',
-    'N': 'resize_nn',
-    'X': 'subpixel_conv'
 }
+
+LAYER_KEYS = ''.join(list(C_LAYERS.keys()))
+GROUP_KEYS = (
+    LAYER_KEYS
+    .replace('t', 'c')
+    .replace('C', 'c')
+    .replace('T', 'c')
+    .replace('v', 'p')
+    .replace('V', 'P')
+    .replace('D', 'd')
+)
+
+C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
+
+def _update_layers(symbols, funcs, groups):
+    global LAYER_KEYS, GROUP_KEYS, C_GROUPS
+    C_LAYERS.update(symbols)
+    FUNC_LAYERS.update(funcs)
+    new_layers = ''.join(list(symbols.keys()))
+    LAYER_KEYS += new_layers
+    GROUP_KEYS += new_layers
+    for k, v in groups.items():
+        GROUP_KEYS = GROUP_KEYS.replace(k, v)
+    C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
+
 
 def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True,
-                c_layers=None, func_layers=None, **kwargs):
-
-
-    c_layers = c_layers or {}
-    c_layers = {**C_LAYERS, **c_layers}
-    func_layers = func_layers or {}
-    func_layers = {**FUNC_LAYERS, **func_layers}
-    _layers_keys = str(list(c_layers.keys()))
-    _group_keys = (
-        _layers_keys
-        .replace('t', 'c')
-        .replace('C', 'c')
-        .replace('T', 'c')
-        .replace('v', 'p')
-        .replace('V', 'P')
-        .replace('D', 'd')
-        .replace('B', 'b')
-        .replace('N', 'b')
-        .replace('A', 'b')
-    )
-    c_groups = dict(zip(_layers_keys, _group_keys))
+                **kwargs):
 
     def _unpack_args(args, layer_no, layers_max):
         new_args = {}
@@ -104,32 +105,36 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
     layout_dict = {}
     for layer in layout:
-        if c_groups[layer] not in layout_dict:
-            layout_dict[c_groups[layer]] = [-1, 0]
-        layout_dict[c_groups[layer]][1] += 1
+        if C_GROUPS[layer] not in layout_dict:
+            layout_dict[C_GROUPS[layer]] = [-1, 0]
+        layout_dict[C_GROUPS[layer]][1] += 1
 
     residuals = []
     tensor = inputs
     for i, layer in enumerate(layout):
 
-        layout_dict[c_groups[layer]][0] += 1
+        layout_dict[C_GROUPS[layer]][0] += 1
         layer_name = C_LAYERS[layer]
-        layer_fn = func_layers[layer_name]
+        layer_fn = FUNC_LAYERS[layer_name]
 
         if layer == 'a':
             args = dict(activation=activation)
-            layer_fn = _unpack_args(args, *layout_dict[c_groups[layer]])['activation']
+            layer_fn = _unpack_args(args, *layout_dict[C_GROUPS[layer]])['activation']
             if layer_fn is not None:
                 tensor = layer_fn(tensor)
         elif layer == 'R':
             residuals += [tensor]
         elif layer == 'A':
             args = dict(factor=kwargs.get('factor'), data_format=data_format)
-            args = _unpack_args(args, *layout_dict[c_groups[layer]])
+            args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
             t = FUNC_LAYERS['resize_bilinear_additive'](tensor, **args, name='rba-%d' % i)
             residuals += [t]
         elif layer == '+':
             tensor = tensor + residuals[-1]
+            residuals = residuals[:-1]
+        elif layer == '.':
+            axis = -1 if data_format == 'channels_last' else 1
+            tensor = tf.concat([tensor, residuals[-1]], axis=axis, name='concat-%d' % i)
             residuals = residuals[:-1]
         else:
             layer_args = kwargs.get(layer_name, {})
@@ -174,7 +179,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 axis = -1 if data_format == 'channels_last' else 1
                 args = dict(fused=True, axis=axis, training=is_training)
 
-            elif c_groups[layer] == 'p':
+            elif C_GROUPS[layer] == 'p':
                 if layer == 'v':
                     pool_op = 'mean'
                 else:
@@ -189,7 +194,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 else:
                     skip_layer = True
 
-            elif c_groups[layer] == 'P':
+            elif C_GROUPS[layer] == 'P':
                 if layer == 'P':
                     pool_op = kwargs.pop('global_pool_op', 'max')
                 elif layer == 'V':
@@ -204,7 +209,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
             if not skip_layer:
                 args = {**args, **layer_args}
-                args = _unpack_args(args, *layout_dict[c_groups[layer]])
+                args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
 
                 with tf.variable_scope('layer-%d' % i):
                     tensor = layer_fn(tensor, **args)

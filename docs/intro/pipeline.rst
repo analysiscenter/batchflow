@@ -8,7 +8,7 @@ Introduction
 
 Quite often you can't just use the data itself, as it needs some specific preprocessing beforehand. And not too rarely you end up with several processing workflows which you have to use simultaneously. That is the situation when pipelines might come in handy.
 
-Firstly, you create a batch class with all necessary actions.::
+Firstly, you create a batch class with all necessary actions::
 
    class ClientTransactions(Batch):
        ...
@@ -23,7 +23,7 @@ Firstly, you create a batch class with all necessary actions.::
            return self
 
        @action
-       def yet_other_action(self):
+       def yet_another_action(self):
            ...
            return self
 
@@ -36,7 +36,7 @@ And now you can define a workflow pipeline::
    trans_pipeline = (ct_ds.pipeline()
                        .some_action()
                        .other_action(param=2)
-                       .yet_other_action())
+                       .yet_another_action())
 
 And nothing happens! Because all the actions are lazy.
 Let's run them.::

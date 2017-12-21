@@ -3,15 +3,29 @@ import numpy as np
 import tensorflow as tf
 
 from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
-from .block import _conv_block
+from .block import _conv_block, _update_layers
 
 
-FUNC_LAYERS = {
-    'resize': resize_bilinear,
+_NEW_LAYERS = {
+    'A': 'residual_bilinear_additive',
+    'b': 'resize_bilinear',
+    'B': 'resize_bilinear_additive',
+    'N': 'resize_nn',
+    'X': 'subpixel_conv'
+}
+
+_NEW_FUNCS = {
+    'residual_bilinear_additive': None,
+    'resize_bilinear': resize_bilinear,
     'resize_bilinear_additive': resize_bilinear_additive,
     'resize_nn': resize_nn,
     'subpixel_conv': subpixel_conv
 }
+
+_NEW_GROUPS = {'A': 'b', 'B': 'b', 'N': 'b', 'X': 'b'}
+
+_update_layers(_NEW_LAYERS, _NEW_FUNCS, _NEW_GROUPS)
+
 
 def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
@@ -46,7 +60,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - X - subpixel convolution
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
-        - + - end residual connection with summation
+        - `+` - end residual connection with summation
+        - `.` - end residual connection with concatenation
 
         Default is ''.
     filters : int
@@ -102,6 +117,12 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         parameters for dropout layers, like noise_shape, etc
         If None or inculdes parameters 'off' or 'disable' set to True or 1,
         the layer will be excluded whatsoever.
+    subpixel_conv : dict or None
+        parameters for subpixel convolution (layout, activation, etc)
+    resize_bilinear : dict or None
+        parameters for bilinear resize
+    resize_bilinear_additive : dict or None
+        parameters for bilinear additive resize (layout, activation, etc)
 
     Returns
     -------
@@ -148,7 +169,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     tensor = _conv_block(inputs, layout, filters, kernel_size, name,
                          strides, padding, data_format, dilation_rate, depth_multiplier,
                          activation, pool_size, pool_strides, dropout_rate, is_training,
-                         func_layers=FUNC_LAYERS, **kwargs)
+                         **kwargs)
     return tensor
 
 
