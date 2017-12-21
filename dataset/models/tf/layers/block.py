@@ -54,9 +54,6 @@ GROUP_KEYS = (
     .replace('v', 'p')
     .replace('V', 'P')
     .replace('D', 'd')
-    .replace('B', 'b')
-    .replace('N', 'b')
-    .replace('A', 'b')
 )
 
 C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
