@@ -5,9 +5,7 @@ Within batch parallelism
 Basic usage
 ===========
 
-The ``inbatch_parallel`` decorator allows to run a method in parallel:
-
-.. code-block:: python
+The ``inbatch_parallel`` decorator allows to run a method in parallel::
 
    from dataset import Batch, inbatch_parallel, action
 
@@ -66,23 +64,17 @@ You can pass any other arguments to the decorator and they will be passed furthe
        def _post_default(self, list_of_res, clear_data):
            ...
 
-All these arguments should be named argments only. So you should not write like this:
-
-.. code-block:: python
+All these arguments should be named argments only. So you should not write like this::
 
    @inbatch_parallel('_init_default', '_post_default', 'threads', clear_data)
 
 It might sometimes works though. But no guarantees.
 
-The preferred way is:
-
-.. code-block:: python
+The preferred way is::
 
    @inbatch_parallel(init='_init_default', post='_post_default', target='threads', clear_data=False)
 
-Using this technique you can pass an action name to the ``init`` function:
-
-.. code-block:: python
+Using this technique you can pass an action name to the ``init`` function::
 
    class MyBatch(Batch):
    ...
@@ -104,9 +96,7 @@ Init function
 Init function defines how to parallelize the decorated method. It returns a list of arguments for each invocation of the parallelized action.
 So if you want to run 10 parallel copies of the method, ``init`` should return a list of 10 items. Usually you run the method once for each item in the batch. However you might also run one method per 10 or 100 or any other number of items if it is beneficial for your specific circumstances (memory, performance, etc.)
 
-The simplest ``init`` just returns a sequence of indices:
-
-.. code-block:: python
+The simplest ``init`` just returns a sequence of indices::
 
    class MyBatch(Batch):
    ...
@@ -118,9 +108,7 @@ The simplest ``init`` just returns a sequence of indices:
 
 For a batch of 10 items ``some_action`` will be called 10 times as ``some_action(index1)``, ``some_action(index2)``, ..., ``some_action(index10)``.
 
-You may define as many arguments as you need:
-
-.. code-block:: python
+You may define as many arguments as you need::
 
    class MyBatch(Batch):
    ...
@@ -139,9 +127,7 @@ Here the action will be fired as:
 
 **Attention!** It cannot be a tuple of 2 arguments (see below why).
 
-You can also pass named arguments:
-
-.. code-block:: python
+You can also pass named arguments::
 
    class MyBatch(Batch):
    ...
@@ -156,9 +142,7 @@ And the action will be fired as:
 
 ``...``
 
-And you can also combine positional and named arguments:
-
-.. code-block:: python
+And you can also combine positional and named arguments::
 
    class MyBatch(Batch):
    ...
@@ -175,17 +159,13 @@ So the action will be fired as:
 
 Thus, 2-items tuple is reserved for this situation (1st item is a list of positional arguments and 2nd is a dict of named arguments).
 
-That is why you cannot pass a tuple of 2 arguments:
-
-.. code-block:: python
+That is why you cannot pass a tuple of 2 arguments::
 
        ...
        item_args = tuple(some_arg, some_other_arg)
        ...
 
-Instead make it a list:
-
-.. code-block:: python
+Instead make it a list::
 
        ...
        item_args = list(some_arg, some_other_arg)
@@ -194,43 +174,21 @@ Instead make it a list:
 Init's additional arguments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Take into account that all arguments passed into actions are also passed into the ``init`` function. So when you call:
-
-.. code-block:: python
+Take into account that all arguments passed into actions are also passed into the ``init`` function. So when you call::
 
    some_pipeline.some_parallel_action(10, 12, my_arg=12)
 
-The ``init`` function will be called like that:
-
-.. code-block:: python
+The ``init`` function will be called like that::
 
    init_function(10, 12, my_arg=12)
 
 This is convenient when you need to initialize some additional variables depending on the arguments. For instance, to create a numpy array of a certain shape filled with specific values or set up a random state or even pass additional arguments back to action methods.
 
-If you have specified `additional decorator arguments <#additional-decorator-arguments>`_\ , they are also passed to the ``init`` function:
-
-.. code-block:: python
+If you have specified `additional decorator arguments <#additional-decorator-arguments>`_,
+they are also passed to the ``init`` function::
 
    init_function(10, 12, my_arg=12, arg_from_parallel_decorator=True)
 
-``run_once`` for no parallelism
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-You cannot call an ``async`` action in pipelines, because ``async``-methods should be ``awaited`` for. This is where ``@inbatch_parallel`` might be helpful without any parallelism whatsoever. All you need is ``run_once`` init-function:
-
-.. code-block:: python
-
-   class MyBatch(Batch):
-       ...
-       @inbatch_parallel(init='run_once', target='async')
-       async def read_some_data(self, src, fmt='raw'):
-           ...
-   ...
-   some_pipeline
-       .do_whatever_you_want()
-       .read_some_data('/some/path')
-       .do_something_else()
 
 Standard init functions
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -259,20 +217,25 @@ The first argument (after ``self``) contains an item itself (i.e. i-th element o
 
 ``run_once``
 ~~~~~~~~~~~~
+You cannot call an ``async`` action in pipelines, because ``async``-methods should be ``awaited`` for. This is where ``@inbatch_parallel`` might be helpful without any parallelism whatsoever. All you need is ``run_once`` init-function::
 
-.. code-block:: python
-
+   class MyBatch(Batch):
+       ...
        @inbatch_parallel(init='run_once')
-       def some_method(self, rg1, arg2):
+       async def read_some_data(self, src, fmt='raw'):
+           ...
+   ...
+   some_pipeline
+       .do_whatever_you_want()
+       .read_some_data('/some/path')
+       .do_something_else()
 
-No additional arguments is passed and ``some_method`` will be executed only once.
+No additional arguments is passed to ``read_some_data`` and it will be executed only once.
 
 data components
 ~~~~~~~~~~~~~~~
 
-If data components are defined, they might be used as init-functions:
-
-.. code-block:: python
+If data components are defined, they might be used as init-functions::
 
        @inbatch_parallel(init='images')
        def some_method(self, image, arg1, arg2):
@@ -459,9 +422,7 @@ If you have a function with default arguments, you may call it without passing t
 However, when you call it this way, the default arguments are not available externally (in particular, in decorators).
 This is the problem for ``mpc`` parallelism.
 
-The best solutions would be not to use default values at all, but if you really need them, you should copy them into parallelized functions:
-
-.. code-block:: python
+The best solutions would be not to use default values at all, but if you really need them, you should copy them into parallelized functions::
 
    def mpc_fn(item, arg1, arg2, arg3=10):
        # ...
@@ -473,9 +434,7 @@ The best solutions would be not to use default values at all, but if you really 
        def some_action(self, arg1, arg2, arg3=10)
            return mpc_fn
 
-You might also return a `partial <https://docs.python.org/3/library/functools.html#functools.partial>`_ with these arguments:
-
-.. code-block:: python
+You might also return a `partial <https://docs.python.org/3/library/functools.html#functools.partial>`_ with these arguments::
 
    from functools import
 
@@ -493,9 +452,7 @@ You might also return a `partial <https://docs.python.org/3/library/functools.ht
 Number of parallel jobs
 =======================
 
-By default each action runs as many parallel tasks as the number of cores your computer/server has. That is why sometimes you might want to run fewer or more tasks. Then you can specify this number in each action call with ``n_workers`` option:
-
-.. code-block:: python
+By default each action runs as many parallel tasks as the number of cores your computer/server has. That is why sometimes you might want to run fewer or more tasks. Then you can specify this number in each action call with ``n_workers`` option::
 
    some_pipeline.parallel_action(some_arg, n_workers=3)
 
