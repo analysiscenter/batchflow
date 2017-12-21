@@ -999,6 +999,7 @@ class TFModel(BaseModel):
 
         ops : a sequence of str
             operation names::
+            - 'sigmoid' - add ``sigmoid(inputs)``
             - 'proba' - add ``softmax(inputs)``
             - 'labels' - add ``argmax(inputs)``
             - 'accuracy' - add ``mean(predicted_labels == true_labels)``
@@ -1050,6 +1051,8 @@ class TFModel(BaseModel):
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
             self._add_output_identity(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'sigmoid':
+            self._add_output_sigmoid(inputs, name, attr_prefix, **kwargs)
         elif oper == 'proba':
             self._add_output_proba(inputs, name, attr_prefix, **kwargs)
         elif oper == 'labels':
@@ -1062,6 +1065,10 @@ class TFModel(BaseModel):
         x = tf.identity(inputs, name=name)
         self.store_to_attr(attr_prefix + name, x)
         return x
+
+    def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
+        proba = tf.sigmoid(inputs, name=name)
+        self.store_to_attr(attr_prefix + name, proba)
 
     def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
         axis = self.channels_axis(kwargs['data_format'])
