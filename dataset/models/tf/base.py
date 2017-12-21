@@ -1067,6 +1067,7 @@ class TFModel(BaseModel):
         return x
 
     def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
         proba = tf.sigmoid(inputs, name=name)
         self.store_to_attr(attr_prefix + name, proba)
 
