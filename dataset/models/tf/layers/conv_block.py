@@ -6,22 +6,25 @@ from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpix
 from .block import _conv_block, _update_layers
 
 
-_update_layers({
+_NEW_LAYERS = {
     'A': 'residual_bilinear_additive',
     'b': 'resize_bilinear',
     'B': 'resize_bilinear_additive',
     'N': 'resize_nn',
     'X': 'subpixel_conv'
-},
-{
+}
+
+_NEW_FUNCS = {
     'residual_bilinear_additive': None,
     'resize_bilinear': resize_bilinear,
     'resize_bilinear_additive': resize_bilinear_additive,
     'resize_nn': resize_nn,
     'subpixel_conv': subpixel_conv
-},
-{'A': 'b', 'B': 'b', 'N': 'b', 'X': 'b'}
-)
+}
+
+_NEW_GROUPS = {'A': 'b', 'B': 'b', 'N': 'b', 'X': 'b'}
+
+_update_layers(_NEW_LAYERS, _NEW_FUNCS, _NEW_GROUPS)
 
 
 def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
