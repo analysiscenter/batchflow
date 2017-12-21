@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
-from .block import _conv_block, C_LAYERS, FUNC_LAYERS, LAYER_KEYS, GROUP_KEYS
+from .block import _conv_block, C_LAYERS, FUNC_LAYERS, LAYER_KEYS, GROUP_KEYS, C_GROUPS
 
 
 _C_LAYERS = {
@@ -23,8 +23,9 @@ FUNC_LAYERS.update({
     'subpixel_conv': subpixel_conv
 })
 
-LAYER_KEYS += str(list(_C_LAYERS.keys()))
-GROUP_KEYS += str(list(_C_LAYERS.keys()))
+new_layers = str(list(_C_LAYERS.keys()))
+LAYER_KEYS += new_layers
+GROUP_KEYS += new_layers
 
 GROUP_KEYS = (
     GROUP_KEYS
@@ -33,6 +34,8 @@ GROUP_KEYS = (
     .replace('N', 'b')
     .replace('X', 'b')
 )
+
+C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
 
 
 def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
