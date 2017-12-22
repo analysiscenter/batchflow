@@ -122,6 +122,9 @@ Transposed convolution
 .. autofunction:: dataset.models.tf.layers.conv1d_transpose
     :noindex:
 
+.. autofunction:: dataset.models.tf.layers.separable_conv_transpose
+    :noindex:
+
 
 Separable convolution
 =====================
@@ -174,4 +177,16 @@ Maximum intensity projection
 Upsampling
 ==========
 .. autofunction:: dataset.models.tf.layers.upsample
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.resize_bilinear
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.resize_bilinear_additive
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.subpixel_conv
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.depth_to_space
     :noindex:
