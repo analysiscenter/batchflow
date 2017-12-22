@@ -207,6 +207,9 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             elif layer in ['b', 'B', 'N', 'X']:
                 args = dict(factor=kwargs.get('factor'), data_format=data_format)
 
+            else:
+                raise ValueError('Unknown layer symbol - %c' % layer)
+
             if not skip_layer:
                 args = {**args, **layer_args}
                 args = _unpack_args(args, *layout_dict[C_GROUPS[layer]])
