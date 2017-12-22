@@ -19,7 +19,7 @@ def _static_calc_shape(inputs, factor, data_format):
     shape = inputs.get_shape().as_list()
     shape = shape[1:-1] if data_format == 'channels_last' else shape[2:]
     shape = np.asarray(shape) * np.asarray(factor)
-    shape = list(np.ceil(shape, dtype=np.int32))
+    shape = list(np.ceil(shape).astype(np.int32))
     return shape
 
 def _dynamic_calc_shape(inputs, factor, data_format):

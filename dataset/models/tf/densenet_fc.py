@@ -166,7 +166,7 @@ class DenseNetFC(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body/upsample', **kwargs)
-        num_filters = cls.channels_shape(inputs, kwargs.get('data_format'))
+        num_filters = cls.num_channels(inputs, kwargs.get('data_format'))
         return cls.upsample(inputs, filters=num_filters, name=name, **kwargs)
 
 
