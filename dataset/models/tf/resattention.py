@@ -138,7 +138,7 @@ class ResNetAttention(TFModel):
             x = conv_block(m, layout='nac nac', kernel_size=1, name='scale',
                            **{**kwargs, 'filters': kwargs['filters']*4})
             x = tf.sigmoid(x, name='attention_map')
-            print(x)
+
             x = (1 + x) * t
 
             x = ResNet.block(x, name='last', **kwargs)
