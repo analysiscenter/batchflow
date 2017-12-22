@@ -8,6 +8,9 @@ from .conv import conv, conv_transpose, separable_conv, separable_conv_transpose
 from .pooling import pooling, global_pooling
 
 
+logger = logging.getLogger('conv_block')
+
+
 FUNC_LAYERS = {
     'activation': None,
     'residual_start': None,
@@ -83,13 +86,11 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             else:
                 arg_value = args[arg]
             new_args.update({arg: arg_value})
-
         return new_args
 
     layout = layout or ''
     layout = layout.replace(' ', '')
 
-    logger = logging.getLogger('conv_block')
     if len(layout) == 0:
         logger.warning('conv_block: layout is empty, so there is nothing to do, just returning inputs.')
         return inputs
@@ -187,7 +188,6 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 args = dict(pool_op=pool_op, pool_size=pool_size, strides=pool_strides, padding=padding,
                             data_format=data_format)
 
-
             elif layer in ['d', 'D']:
                 if dropout_rate:
                     args = dict(rate=dropout_rate, training=is_training)
@@ -202,10 +202,13 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 args = dict(pool_op=pool_op, data_format=data_format)
 
             elif layer == 'm':
-                args = dict(data_format=data_format)
+                args = dict(depth=kwargs.get('depth'), data_format=data_format)
 
             elif layer in ['b', 'B', 'N', 'X']:
                 args = dict(factor=kwargs.get('factor'), data_format=data_format)
+
+            else:
+                raise ValueError('Unknown layer symbol - %s' % layer)
 
             if not skip_layer:
                 args = {**args, **layer_args}
