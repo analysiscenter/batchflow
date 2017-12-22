@@ -84,7 +84,7 @@ class Pipeline:
                     if self.get_last_action_proba() is None:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
             self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
-            self.models = pipeline.models.copy()
+            self.models = {**pipeline.models}
 
         self._tf_session = None
 
@@ -135,10 +135,10 @@ class Pipeline:
             raise ValueError("Cannot add pipelines with different datasets")
 
         new_p1 = cls.from_pipeline(pipe1)
-        new_p2 = cls.from_pipeline(pipe2)
-        new_p1._action_list += new_p2._action_list[:]
-        new_p1._variables = {**pipe1._variables, **pipe2._variables}
-        new_p1.dataset = pipe1.dataset or pipe2.dataset
+        new_p1._action_list += pipe2._action_list[:]
+        new_p1._variables.update(**pipe2._variables)
+        new_p1.models.update(pipe2.models)
+        new_p1.dataset = new_p1.dataset or pipe2.dataset
         return new_p1
 
     def get_last_action_proba(self):
@@ -152,9 +152,7 @@ class Pipeline:
     def __add__(self, other):
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
-        if other.num_actions > 0:
-            return self.concat(self, other)
-        return self
+        return self.concat(self, other)
 
     def __matmul__(self, other):
         if self.num_actions == 0:
@@ -328,11 +326,8 @@ class Pipeline:
         if not self.has_variable(name):
             with self._variables_lock:
                 if not self.has_variable(name):
-                    if not isinstance(init_on_each_run, bool):
-                        if callable(init_on_each_run):
-                            init = init_on_each_run
-                        else:
-                            default = default or init_on_each_run
+                    if callable(init_on_each_run):
+                        init = init_on_each_run
                         init_on_each_run = True
                     lock = threading.Lock() if lock else None
                     self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run,
