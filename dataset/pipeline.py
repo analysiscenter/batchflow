@@ -326,11 +326,8 @@ class Pipeline:
         if not self.has_variable(name):
             with self._variables_lock:
                 if not self.has_variable(name):
-                    if not isinstance(init_on_each_run, bool):
-                        if callable(init_on_each_run):
-                            init = init_on_each_run
-                        else:
-                            default = default or init_on_each_run
+                    if callable(init_on_each_run):
+                        init = init_on_each_run
                         init_on_each_run = True
                     lock = threading.Lock() if lock else None
                     self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run,
