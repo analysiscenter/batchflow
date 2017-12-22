@@ -135,8 +135,7 @@ class Pipeline:
             raise ValueError("Cannot add pipelines with different datasets")
 
         new_p1 = cls.from_pipeline(pipe1)
-        new_p2 = cls.from_pipeline(pipe2)
-        new_p1._action_list += new_p2._action_list[:]
+        new_p1._action_list += pipe2._action_list[:]
         new_p1._variables = {**pipe1._variables, **pipe2._variables}
         new_p1.dataset = pipe1.dataset or pipe2.dataset
         return new_p1
@@ -152,9 +151,7 @@ class Pipeline:
     def __add__(self, other):
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
-        if other.num_actions > 0:
-            return self.concat(self, other)
-        return self
+        return self.concat(self, other)
 
     def __matmul__(self, other):
         if self.num_actions == 0:
