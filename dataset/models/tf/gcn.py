@@ -78,11 +78,12 @@ class GlobalConvolutionNetwork(TFModel):
             encoder_outputs = cls.encoder(inputs, block=block, br=br_block, encoder=encoder, **kwargs)
 
             encoder_outputs = [inputs] + encoder_outputs
-            for i, x in enumerate(encoder_outputs[:0:-1]):
+            x = encoder_outputs[-1]
+            for i, tensor in enumerate(encoder_outputs[-2::-1]):
                 with tf.variable_scope('decoder-%d' % i):
-                    x = cls.decoder_block(x, encoder_outputs[-i-2], **upsample, **kwargs)
+                    x = cls.decoder_block(x, tensor, **upsample, **kwargs)
                     if i < len(encoder_outputs) - 2:
-                        x = tf.add(x, encoder_outputs[-i-2])
+                        x = tf.add(x, tensor)
                     x = cls.boundary_refinement(x, name='BR', **br_block, **kwargs)
         return x
 
