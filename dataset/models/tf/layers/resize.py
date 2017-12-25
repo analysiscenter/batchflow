@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from .block import _conv_block as conv_block
-from .conv import conv, conv1d_transpose_nn
+from .conv import conv1d_transpose_nn
 from .core import xip
 
 def _calc_size(inputs, factor, data_format):
