@@ -132,10 +132,10 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
 
     _, channels = _calc_size(inputs, factor, data_format)
     layout = kwargs.get('layout', 'c')
+    kwargs['filters'] = channels*factor**dim
 
     with tf.variable_scope(name):
-        x = conv(inputs, layout, filters=channels*factor**dim, kernel_size=1, name='conv',
-                 data_format=data_format, **kwargs)
+        x = conv_block(inputs, layout, kernel_size=1, name='conv', data_format=data_format, **kwargs)
         x = depth_to_space(x, block_size=factor, name='d2s', data_format=data_format)
     return x
 
