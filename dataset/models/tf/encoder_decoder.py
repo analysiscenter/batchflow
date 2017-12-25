@@ -125,7 +125,10 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
-        x = conv_block(inputs, name=name, **kwargs)
+        if kwargs.get('layout') is not None:
+            x = conv_block(inputs, name=name, **kwargs)
+        else:
+            x = inputs
         return x
 
     @classmethod
@@ -145,7 +148,7 @@ class EncoderDecoder(TFModel):
         -------
         list of tf.Tensor
         """
-        steps = kwargs.get('num_stages', len(inputs)-1)
+        steps = kwargs.pop('num_stages', len(inputs)-1)
         factor = kwargs.pop('factor')
         if isinstance(factor, int):
             factor = int(factor ** (1/steps))
