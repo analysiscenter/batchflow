@@ -247,7 +247,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def simple_block(cls, inputs, layout='acnacn', filters=None, kernel_size=3, downsample=False, **kwargs):
+    def simple_block(cls, inputs, layout='acn acn', filters=None, kernel_size=3, downsample=False, **kwargs):
         """ A simple residual block with two 3x3 convolutions
 
         Parameters
@@ -269,11 +269,12 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        strides = ([2] + [1] * layout.count('c')) if downsample else 1
+        n = layout.count('c') + layout.count('C')
+        strides = ([2] + [1] * n) if downsample else 1
         return conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
 
     @classmethod
-    def bottleneck_block(cls, inputs, layout='acnacnacn', filters=None, kernel_size=None, bottleneck_factor=4,
+    def bottleneck_block(cls, inputs, layout='acn acn acn', filters=None, kernel_size=None, bottleneck_factor=4,
                          downsample=False, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
@@ -297,7 +298,7 @@ class ResNet(TFModel):
         tf.Tensor
         """
         kernel_size = [1, 3, 1] if kernel_size is None else kernel_size
-        n = layout.count('c') - 2
+        n = layout.count('c') + layout.count('C') - 2
         if kwargs.get('strides') is None:
             strides = ([1, 2] + [1] * n) if downsample else 1
         else:

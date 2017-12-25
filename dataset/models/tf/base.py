@@ -247,6 +247,12 @@ class TFModel(BaseModel):
                         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                         with tf.control_dependencies(update_ops):
                             train_step = optimizer.minimize(self.loss, global_step=self.global_step)
+                            #all_vars = tf.trainable_variables()
+                            #var_grad = optimizer.compute_gradients(self.loss, all_vars)
+                            #for i, (g, v) in enumerate(var_grad):
+                            #    print(i, g)
+                            #    print('  ', v)
+                            #train_step = optimizer.apply_gradients(var_grad)
                             self.store_to_attr('train_step', train_step)
                 else:
                     self.store_to_attr('train_step', self.train_step)
@@ -1482,7 +1488,10 @@ class TFModel(BaseModel):
             x = inputs
         inputs = None
 
-        x = upsample(x, factor, layout, name=name, **kwargs)
+        if kwargs.get('filters') is None:
+            kwargs['filters'] = cls.num_channels(x, kwargs['data_format'])
+
+        x = upsample(x, factor=factor, layout=layout, name=name, **kwargs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x

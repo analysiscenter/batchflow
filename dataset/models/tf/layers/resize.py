@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from .block import _conv_block as conv_block
-from .conv import conv, conv1d_transpose_nn
+from .conv import conv1d_transpose_nn
 from .core import xip
 
 def _calc_size(inputs, factor, data_format):
@@ -131,11 +131,11 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
     dim = inputs.shape.ndims - 2
 
     _, channels = _calc_size(inputs, factor, data_format)
-    layout = kwargs.get('layout', 'c')
+    layout = kwargs.get('layout', 'cna')
+    kwargs['filters'] = channels*factor**dim
 
     with tf.variable_scope(name):
-        x = conv(inputs, layout, filters=channels*factor**dim, kernel_size=1, name='conv',
-                 data_format=data_format, **kwargs)
+        x = conv_block(inputs, layout, kernel_size=1, name='conv', data_format=data_format, **kwargs)
         x = depth_to_space(x, block_size=factor, name='d2s', data_format=data_format)
     return x
 
@@ -160,7 +160,7 @@ def resize_bilinear_additive(inputs, factor=2, name='bilinear_additive', data_fo
     """
     dim = inputs.shape.ndims - 2
     _, channels = _calc_size(inputs, factor, data_format)
-    layout = kwargs.get('layout', 'c')
+    layout = kwargs.get('layout', 'cna')
     with tf.variable_scope(name):
         x = resize_bilinear(inputs, factor, name=name, data_format=data_format, **kwargs)
         x = conv_block(x, layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)

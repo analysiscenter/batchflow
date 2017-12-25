@@ -53,11 +53,11 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - V - global average pooling
         - d - dropout
         - D - alpha dropout
-        - m - maximum intensity projection (:func:`.layers.mip`)
-        - b - resize (bilinear)
-        - B - resize (bilinear additive)
-        - N - resize (nearest neighbors)
-        - X - subpixel convolution
+        - m - maximum intensity projection (:func:`~.layers.mip`)
+        - b - upsample with bilinear resize
+        - B - upsample with bilinear additive resize
+        - N - upsample with nearest neighbors resize
+        - X - upsample with subpixel convolution (:func:`~.layers.subpixel_conv`)
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
         - `+` - end residual connection with summation
@@ -100,6 +100,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         global pooling operation ('max', 'mean')
     factor : int or tuple of int
         upsampling factor
+    upsampling_layout : str
+        layout for upsampling layers
 
     dense : dict
         parameters for dense layers, like initializers, regularalizers, etc

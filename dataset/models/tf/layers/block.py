@@ -206,6 +206,8 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
             elif layer in ['b', 'B', 'N', 'X']:
                 args = dict(factor=kwargs.get('factor'), data_format=data_format)
+                if kwargs.get('upsampling_layout'):
+                    args['layout'] = kwargs.get('upsampling_layout')
 
             else:
                 raise ValueError('Unknown layer symbol - %s' % layer)
