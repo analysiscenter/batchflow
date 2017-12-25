@@ -160,7 +160,7 @@ def resize_bilinear_additive(inputs, factor=2, name='bilinear_additive', data_fo
     """
     dim = inputs.shape.ndims - 2
     _, channels = _calc_size(inputs, factor, data_format)
-    layout = kwargs.get('layout', 'c')
+    layout = kwargs.get('layout', 'cna')
     with tf.variable_scope(name):
         x = resize_bilinear(inputs, factor, name=name, data_format=data_format, **kwargs)
         x = conv_block(x, layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
