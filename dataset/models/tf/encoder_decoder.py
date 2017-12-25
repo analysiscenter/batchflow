@@ -38,7 +38,7 @@ class EncoderDecoder(TFModel):
         config = TFModel.default_config()
         config['body']['encoder'] = dict(base_class=ResNet18)
         config['body']['decoder'] = dict(layout='tna', factor=2)
-        config['body']['embedding'] = dict(layout='nac', filters=1)
+        config['body']['embedding'] = dict(layout='cna', filters=1)
         config['loss'] = 'mse'
         return config
 
@@ -146,10 +146,15 @@ class EncoderDecoder(TFModel):
         list of tf.Tensor
         """
         steps = kwargs.get('num_stages', len(inputs)-1)
-        factor = int(kwargs.pop('factor') ** (1/steps))
+        factor = kwargs.pop('factor')
+        if isinstance(factor, int):
+            factor = int(factor ** (1/steps))
+            factor = [factor]
+        elif not isinstance(factor, list):
+            raise TypeError('factor should be int or list of int, but %s was given' % type(factor))
 
         with tf.variable_scope(name):
             x = inputs[-1]
             for i in range(steps):
-                x = cls.upsample(x, factor=factor, name='decoder-'+str(i), **kwargs)
+                x = cls.upsample(x, factor=factor[i], name='decoder-'+str(i), **kwargs)
         return x
