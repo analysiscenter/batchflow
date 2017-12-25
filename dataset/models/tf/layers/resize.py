@@ -131,7 +131,7 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
     dim = inputs.shape.ndims - 2
 
     _, channels = _calc_size(inputs, factor, data_format)
-    layout = kwargs.get('layout', 'c')
+    layout = kwargs.get('layout', 'cna')
     kwargs['filters'] = channels*factor**dim
 
     with tf.variable_scope(name):
