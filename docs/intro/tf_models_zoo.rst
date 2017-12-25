@@ -11,6 +11,8 @@ Ready to use models
     ../api/dataset.models.tf.densenet
     ../api/dataset.models.tf.resattention
 
+    ../api/dataset.models.tf.encoder_decoder
+
     ../api/dataset.models.tf.fcn
     ../api/dataset.models.tf.unet
     ../api/dataset.models.tf.linknet
