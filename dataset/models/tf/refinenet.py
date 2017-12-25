@@ -84,11 +84,11 @@ class RefineNet(TFModel):
         return x
 
     @classmethod
-    def head(cls, inputs, targets, num_classes, name='head', **kwargs):
+    def head(cls, inputs, targets, num_classes, layout='c', kernel_size=1, name='head', **kwargs):
         with tf.variable_scope(name):
             x, inputs = inputs, None
             x = cls.crop(x, targets, kwargs['data_format'])
-            x = conv_block(x, layout='c', filters=num_classes, kernel_size=1, **kwargs)
+            x = conv_block(x, layout, filters=num_classes, kernel_size=kernel_size, **kwargs)
         return x
 
     @classmethod
@@ -157,7 +157,7 @@ class RefineNet(TFModel):
                     x = conv_block(tensor, layout='ac', filters=filters, kernel_size=3,
                                    name='conv-%d' % i, **kwargs)
                     if i != 0:
-                        x = cls.upsample((tensor, after_rcu[0]), name='upsample-%d' % i, **upsample_args)
+                        x = cls.upsample((x, after_rcu[0]), name='upsample-%d' % i, **upsample_args)
                     after_mrf += x
             # free memory
             x, after_mrf = after_mrf, None

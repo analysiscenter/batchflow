@@ -55,7 +55,7 @@ class EncoderDecoder(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['body']['encoder'] = dict(base_class=ResNet18)
-        config['body']['decoder'] = dict(layout='tna', factor=2)
+        config['body']['decoder'] = dict(layout='tna', factor=8, num_stages=3)
         config['body']['embedding'] = dict(layout='cna', filters=8)
         config['loss'] = 'mse'
         return config

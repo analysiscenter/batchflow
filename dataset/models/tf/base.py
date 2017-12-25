@@ -247,12 +247,6 @@ class TFModel(BaseModel):
                         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                         with tf.control_dependencies(update_ops):
                             train_step = optimizer.minimize(self.loss, global_step=self.global_step)
-                            #all_vars = tf.trainable_variables()
-                            #var_grad = optimizer.compute_gradients(self.loss, all_vars)
-                            #for i, (g, v) in enumerate(var_grad):
-                            #    print(i, g)
-                            #    print('  ', v)
-                            #train_step = optimizer.apply_gradients(var_grad)
                             self.store_to_attr('train_step', train_step)
                 else:
                     self.store_to_attr('train_step', self.train_step)
