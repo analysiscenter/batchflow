@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from .layers import conv_block
 from . import TFModel
-from .resnet import ResNet, ResNet101
+from .resnet import ResNet18
 
 
 class EncoderDecoder(TFModel):
@@ -36,9 +36,7 @@ class EncoderDecoder(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-
-        filters = 64   # number of filters in the first block
-        config['body']['encoder'] = dict(base_class=ResNet101)
+        config['body']['encoder'] = dict(base_class=ResNet18)
         config['body']['decoder'] = dict(layout='tna', factor=2)
         config['body']['embedding'] = dict(layout='nac', filters=1)
         config['loss'] = 'mse'
@@ -46,7 +44,6 @@ class EncoderDecoder(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['num_classes'] = self.num_classes('targets')
         config['head']['targets'] = self.targets
         return config
 
@@ -81,10 +78,11 @@ class EncoderDecoder(TFModel):
         return x
 
     @classmethod
-    def head(cls, inputs, targets, num_classes, name='head', **kwargs):
+    def head(cls, inputs, targets, name='head', **kwargs):
         with tf.variable_scope(name):
             x = cls.crop(inputs, targets, kwargs['data_format'])
-            x = conv_block(x, layout='c', filters=1, kernel_size=1, **kwargs)
+            channels = cls.num_channels(targets)
+            x = conv_block(x, layout='c', filters=channels, kernel_size=1, **kwargs)
         return x
 
     @classmethod
@@ -149,7 +147,9 @@ class EncoderDecoder(TFModel):
         """
         steps = kwargs.get('num_stages', len(inputs)-1)
         factor = int(kwargs.pop('factor') ** (1/steps))
-        x = inputs[-1]
-        for i in range(steps):
-            x = cls.upsample(x, factor=factor, name='decoder-'+str(i), **kwargs)
+
+        with tf.variable_scope(name):
+            x = inputs[-1]
+            for i in range(steps):
+                x = cls.upsample(x, factor=factor, name='decoder-'+str(i), **kwargs)
         return x
