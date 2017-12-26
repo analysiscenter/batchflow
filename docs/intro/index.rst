@@ -42,7 +42,7 @@ When data comes from a file system, it might be convenient to use `FilesIndex`.
 
 .. code-block:: python
 
-   files_index = FilesIndex("/path/to/some/files/*.csv")
+   files_index = FilesIndex(path="/path/to/some/files/*.csv")
 
 Thus `files_index` will contain the list of filenames that match a given mask.
 The details of mask specification may be found in the :func:`~glob.glob` documentation.
@@ -50,20 +50,16 @@ The details of mask specification may be found in the :func:`~glob.glob` documen
 No file extensions
 ^^^^^^^^^^^^^^^^^^
 
-When filenames contain extensions which are not a part of the id, then they may be stripped with an option `no_ext`\ :
+When filenames contain extensions which are not a part of the id, then they may be stripped with an option `no_ext`\ ::
 
-.. code-block:: python
-
-   dataset_index = FilesIndex("/path/to/some/files/*.csv", no_ext=True)
+   dataset_index = FilesIndex(path="/path/to/some/files/*.csv", no_ext=True)
 
 Sorting
 ^^^^^^^
 
-Since order may be random, you may want to sort your index items:
+Since order may be random, you may want to sort your index items::
 
-.. code-block:: python
-
-   dataset_index = FilesIndex("/path/to/some/files/*.csv", sort=True)
+   dataset_index = FilesIndex(path="/path/to/some/files/*.csv", sort=True)
 
 However, this rarely makes any sense.
 
@@ -74,16 +70,14 @@ Sometimes you need directories, not files. For instance, a CT images dataset inc
 
 .. code-block:: python
 
-   dirs_index = FilesIndex("/path/to/archive/2016-*/scans/*", dirs=True)
+   dirs_index = FilesIndex(path="/path/to/archive/2016-*/scans/*", dirs=True)
 
 Here `dirs_index` will contain a list of all subdirectories names.
 
 Numerous sources
 ^^^^^^^^^^^^^^^^
 
-If files you are interested in are located in different places you may still build one united index:
-
-.. code-block:: python
+If files you are interested in are located in different places you may still build one united index::
 
    dataset_index = FilesIndex(["/current/year/data/*", "/path/to/archive/2016/*", "/previous/years/*"])
 
@@ -93,9 +87,7 @@ Creating your own index class
 Constructor
 ^^^^^^^^^^^
 
-We highly recommend to use the following pattern:
-
-.. code-block:: python
+We highly recommend to use the following pattern::
 
    class MyIndex(DatasetIndex):
        def __init__(self, index, my_arg, *args, **kwargs):

@@ -245,6 +245,9 @@ Short names for decay: exp, invtime, naturalexp, const, poly.
 Short names for optimizer: 'Adam', 'Adagrad', 'GradientDescent' and any other optimizer from
 `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ without the word `Optimizer`.
 
+.. note:: To allow for parallel training `use_locking <https://www.tensorflow.org/api_docs/python/tf/train/Optimizer#__init__>`_ should be set to ``True``. For example::
+
+    {'optimizer': 'Adam', 'use_locking': True}
 
 For more detail see :class:`.TFModel` documentation.
 
@@ -347,6 +350,35 @@ As a result, the very same model class might be used
 - with different configurations
 - for various tasks
 - with heterogenous data.
+
+
+Things worth mentioning:
+
+#. Override :meth:`~.TFModel.input_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
+   In many cases config is just enough to build a network without additional code writing.
+
+#. Input data and its parameters should be defined in configuration under ``inputs`` key.
+   See :meth:`._make_inputs` for details.
+
+#. You might want to use a convenient multidimensional :func:`.conv_block` and other predefined :doc:`layers <tf_layers>`.
+   Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
+
+#. If you make dropout, batch norm, etc by hand, you might use a predefined ``self.is_training`` tensor.
+
+#. For decay and training control there is a predefined ``self.global_step`` tensor.
+
+#. In many cases there is no need to write a loss function, learning rate decay and optimizer
+   as they might be defined through config.
+
+#. For a configured loss one of the inputs should have a name ``targets`` and
+   one of the output tensors should be named ``predictions``.
+
+#. If you have defined your own loss function, call `tf.losses.add_loss(...)
+   <https://www.tensorflow.org/api_docs/python/tf/losses/add_loss>`_.
+
+#. If you need to use your own optimizer, assign ``self.train_step`` to the train step operation.
+   Don't forget about `UPDATE_OPS control dependency
+   <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_.
 
 
 Ready to use models
