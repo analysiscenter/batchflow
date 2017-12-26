@@ -95,8 +95,8 @@ class TFModel(BaseModel):
 
             where name might be one of:
 
-            - short name (e.g. 'Adam', 'Adagrad', any optimiser from
-              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ without a word `Optimiser`)
+            - short name (e.g. 'Adam', 'Adagrad', any optimizer from
+              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ without a word `Optimizer`)
             - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
               (e.g. 'FtlrOptimizer')
             - a callable
