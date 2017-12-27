@@ -1,6 +1,6 @@
-===================
-Ready to use models
-===================
+=================
+Predefined models
+=================
 
 .. toctree::
     ../api/dataset.models.tf.vgg
