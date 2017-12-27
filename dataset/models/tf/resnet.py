@@ -176,8 +176,7 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        defaults = cls.get('body/block', ResNet.default_config())
-        kwargs = {**defaults, **kwargs}
+        kwargs = cls.fill_params('body/block', **kwargs)
         filters, downsample = cls.pop(['filters', 'downsample'], kwargs)
         width_factor = cls.pop('width_factor', kwargs)
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
