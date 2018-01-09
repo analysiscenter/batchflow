@@ -374,7 +374,7 @@ class BaseImagesBatch(Batch):
             if np.any(np.random.random() < p):
                 channels = list(range(image.shape[-1]))
         else:
-            channels = np.where(np.random.uniform(size=len(p)) > p)[0]
+            channels = np.where(np.random.uniform(size=len(p)) < p)[0]
 
         if len(channels) > 0:
             return self._invert(image, channels)
