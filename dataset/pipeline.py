@@ -365,23 +365,51 @@ class Pipeline:
             if var['init_on_each_run']:
                 self.set_variable(name, var['default'] if var['init'] is None else var['init']())
 
-    def set_variable(self, name, value):
+    def lock_variable(self, name):
+        if self._variables[name]['lock'] is not None:
+            self._variables[name]['lock'].acquire()
+
+    def unlock_variable(self, name):
+        if self._variables[name]['lock'] is not None:
+            self._variables[name]['lock'].release()
+
+    def set_variable(self, name, value, mode='w'):
         """ Set a variable value
         If the variable does not exists, it will be created, however, the warning will be displayed that
         the variable was not initialized.
 
         Parameters
         ----------
-        name : str - a name of the variable
-        value - a value for the variable
+        name : str or a named expression - a variable name
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        mode : str
+            a method to update a variable value, could be one of:
+
+            - 'w' or 'write' to rewrite a variable with a new value. This is a default mode.
+            - 'a' or 'append' to append a value to a variable (e.g. if a variable is a list).
+            - 'e' or 'extend' to extend a variable with a new value (e.g. if a variable is a list).
+            - 'u' or 'update' to update a variable with a new value (e.g. if a variable is a dict).
+
+            For sets and dicts 'a' and 'u' do exactly the same.
 
         Returns
         -------
         self - in order to use it in the pipeline chains
         """
-        if not self.has_variable(name):
-            logging.warning("Pipeline variable '%s' has not been initialized", name)
-        self._variables[name].update({'value': value})
+        var_name = self._get_value(name)
+
+        if not self.has_variable(var_name):
+            logging.warning("Pipeline variable '%s' has not been initialized", var_name)
+            self.init_variable(var_name)
+
+        self.lock_variable(var_name)
+        value = self._get_value(value)
+        V(var_name).set(value, pipeline=self, mode=mode)
+        self.unlock_variable(var_name)
+
         return self
 
     def assign_variable(self, name, value):
@@ -434,7 +462,7 @@ class Pipeline:
             raise KeyError("No such variable %s exists", action['var_name'])
 
     def update_variable(self, name, value=None, mode='w'):
-        """ Update a value of a given variable during pipeline execution
+        """ Update a value of a given variable lazily during pipeline execution
 
         Parameters
         ----------
@@ -473,15 +501,10 @@ class Pipeline:
             logging.warning("Pipeline variable '%s' has not been initialized", action['var_name'])
             self.init_variable(var_name)
 
-        if self._variables[var_name]['lock'] is not None:
-            self._variables[var_name]['lock'].acquire()
-
+        self.lock_variable(var_name)
         value = self._get_value(action['value'], batch)
-
         V(var_name).set(value, batch=batch, mode=action['mode'])
-
-        if self._variables[var_name]['lock'] is not None:
-            self._variables[var_name]['lock'].release()
+        self.unlock_variable(var_name)
 
     def print(self, *args, **kwargs):
         """ Print a value during pipeline execution """
