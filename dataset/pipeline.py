@@ -499,6 +499,12 @@ class Pipeline:
         Returns
         -------
         self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        Unlike :meth:`~.Pipeline.set_variable` this method does not change a value of the variable immediately
+        so it should be used in pipeline definition chains only.
+        ``set_variable`` is imperative and may be used to change variable value within actions.
         """
         self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name, 'value': value, 'mode': mode})
         return self.append_action()
