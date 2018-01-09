@@ -366,10 +366,12 @@ class Pipeline:
                 self.set_variable(name, var['default'] if var['init'] is None else var['init']())
 
     def lock_variable(self, name):
+        """ Acquire a variable lock to prevent race condition and allow mutlithreaded pipeline execution """
         if self._variables[name]['lock'] is not None:
             self._variables[name]['lock'].acquire()
 
     def unlock_variable(self, name):
+        """ Release a previsouly acquired variable lock """
         if self._variables[name]['lock'] is not None:
             self._variables[name]['lock'].release()
 
@@ -398,6 +400,12 @@ class Pipeline:
         Returns
         -------
         self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        Unlike :meth:`~.Pipeline.update_variable` this method sets a new value immediately.
+        So ``set_variable`` is imperative and may be used within actions, while ``update_variable``
+        is declarative and should be used in pipeline definition chains.
         """
         var_name = self._get_value(name)
 
