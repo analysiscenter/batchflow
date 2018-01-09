@@ -165,4 +165,4 @@ class V(NamedExpression):
         """ Assign a value to a pipeline variable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
-        pipeline.set_variable(name, value)
+        pipeline.assign_variable(name, value, batch=batch)
