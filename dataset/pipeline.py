@@ -7,10 +7,6 @@ import asyncio
 import logging
 import queue as q
 import numpy as np
-try:
-    import tensorflow as tf
-except ImportError:
-    pass
 
 from .batch_base import BaseBatch
 from .base import Baseset
@@ -84,9 +80,7 @@ class Pipeline:
                     if self.get_last_action_proba() is None:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
             self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
-            self.models = pipeline.models.copy()
-
-        self._tf_session = None
+            self.models = {**pipeline.models}
 
         self._stop_flag = False
         self._executor = None
@@ -135,10 +129,10 @@ class Pipeline:
             raise ValueError("Cannot add pipelines with different datasets")
 
         new_p1 = cls.from_pipeline(pipe1)
-        new_p2 = cls.from_pipeline(pipe2)
-        new_p1._action_list += new_p2._action_list[:]
-        new_p1._variables = {**pipe1._variables, **pipe2._variables}
-        new_p1.dataset = pipe1.dataset or pipe2.dataset
+        new_p1._action_list += pipe2._action_list[:]
+        new_p1._variables.update(**pipe2._variables)
+        new_p1.models.update(pipe2.models)
+        new_p1.dataset = new_p1.dataset or pipe2.dataset
         return new_p1
 
     def get_last_action_proba(self):
@@ -152,9 +146,7 @@ class Pipeline:
     def __add__(self, other):
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
-        if other.num_actions > 0:
-            return self.concat(self, other)
-        return self
+        return self.concat(self, other)
 
     def __matmul__(self, other):
         if self.num_actions == 0:
@@ -328,11 +320,8 @@ class Pipeline:
         if not self.has_variable(name):
             with self._variables_lock:
                 if not self.has_variable(name):
-                    if not isinstance(init_on_each_run, bool):
-                        if callable(init_on_each_run):
-                            init = init_on_each_run
-                        else:
-                            default = default or init_on_each_run
+                    if callable(init_on_each_run):
+                        init = init_on_each_run
                         init_on_each_run = True
                     lock = threading.Lock() if lock else None
                     self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run,
@@ -350,6 +339,7 @@ class Pipeline:
                 key : str - a variable name,
                 value : dict -  a variable value and params (see `init_variable`)
             if tuple, contains variable names which will have None as default values
+
         Returns
         -------
         self - in order to use it in the pipeline chains
@@ -600,8 +590,7 @@ class Pipeline:
 
                 batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
 
-                if 'tf_queue' in _action:
-                    self._put_batch_into_tf_queue(batch, _action)
+            batch.pipeline = self
         return batch
 
     def _needs_exec(self, action):
@@ -934,63 +923,6 @@ class Pipeline:
                                    'pipeline': self, 'merge_fn': merge_fn})
         return new_p.append_action()
 
-    def put_into_tf_queue(self, session=None, queue=None, get_tensor=None):
-        """ Insert a tensorflow queue after the action"""
-        if len(self._action_list) > 0:
-            action = dict()
-            action['tf_session'] = session
-            action['tf_queue'] = queue
-            action['get_tensor'] = get_tensor
-            action['tf_enqueue_op'] = None
-            action['tf_placeholders'] = None
-            action['tf_action_lock'] = threading.Lock()
-            self._action_list[-1].update(action)
-        else:
-            raise RuntimeError('tf_queue should be precedeed by at least one action')
-        return self
-
-    @staticmethod
-    def _get_dtypes(tensors=None, action=None):
-        if tensors:
-            return [tensor.dtype for tensor in tensors]
-        return [placeholder.dtype for placeholder in action['tf_placeholders']]
-
-    def _create_tf_queue(self, tensors, action):
-        if action['tf_session'] is None:
-            action['tf_session'] = self._tf_session
-        if action['tf_session'] is None:
-            raise ValueError("Tensorflow session cannot be None")
-        maxsize = 1 if self._prefetch_queue is None else self._prefetch_queue.maxsize
-        with action['tf_session'].graph.as_default():
-            action['tf_queue'] = tf.FIFOQueue(capacity=maxsize, dtypes=self._get_dtypes(tensors, action))
-
-    @staticmethod
-    def _get_tf_placeholders(tensors, action):
-        tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
-        with action['tf_session'].graph.as_default():
-            placeholders = [tf.placeholder(dtype=tensor.dtype) for tensor in tensors]
-        return placeholders
-
-    @staticmethod
-    def _get_tensor(batch, action):
-        if action['get_tensor'] is None:
-            return batch.data
-        return action['get_tensor'](batch)
-
-    def _put_batch_into_tf_queue(self, batch, action):
-        tensors = self._get_tensor(batch, action)
-        tensors = tensors if isinstance(tensors, tuple) else tuple([tensors])
-        if action['tf_queue'] is None:
-            with action['tf_action_lock']:
-                if action['tf_queue'] is None:
-                    self._create_tf_queue(tensors, action)
-        if action['tf_enqueue_op'] is None:
-            with action['tf_action_lock']:
-                if action['tf_enqueue_op'] is None:
-                    action['tf_placeholders'] = self._get_tf_placeholders(tensors, action)
-                    action['tf_enqueue_op'] = action['tf_queue'].enqueue(action['tf_placeholders'])
-        action['tf_session'].run(action['tf_enqueue_op'], feed_dict=dict(zip(action['tf_placeholders'], tensors)))
-
 
     def _put_batches_into_queue(self, gen_batch):
         while not self._stop_flag:
@@ -1097,7 +1029,6 @@ class Pipeline:
                   *args, **kwargs):
         """ Generate batches """
         target = kwargs.pop('target', 'threads')
-        self._tf_session = kwargs.pop('tf_session', None)
 
         if len(self._action_list) > 0 and self._action_list[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(batch_size, shuffle, n_epochs, drop_last, prefetch, *args, **kwargs)

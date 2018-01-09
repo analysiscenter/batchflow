@@ -21,8 +21,8 @@ class RefineNet(TFModel):
             base_class : TFModel
                 a model implementing ``make_encoder`` method which returns tensors
                 with encoded representation of the inputs
-            **kwargs
-                parameters for base class encoder
+            other args
+                parameters for base class ``make_encoder`` method
 
         filters : list of int
             number of filters in each decoder block (default=[512, 256, 256, 256])
@@ -84,11 +84,11 @@ class RefineNet(TFModel):
         return x
 
     @classmethod
-    def head(cls, inputs, targets, num_classes, name='head', **kwargs):
+    def head(cls, inputs, targets, num_classes, layout='c', kernel_size=1, name='head', **kwargs):
         with tf.variable_scope(name):
             x, inputs = inputs, None
             x = cls.crop(x, targets, kwargs['data_format'])
-            x = conv_block(x, layout='c', filters=num_classes, kernel_size=1, **kwargs)
+            x = conv_block(x, layout, filters=num_classes, kernel_size=kernel_size, **kwargs)
         return x
 
     @classmethod
@@ -105,11 +105,7 @@ class RefineNet(TFModel):
         name : str
             scope name
         kwargs : dict
-            input_block : dict
-                input_block parameters for ``base_class`` model
-            body : dict
-                body parameters for ``base_class`` model
-            and any other ``conv_block`` params.
+            parameters for ``make_encoder`` method
 
         Returns
         -------
@@ -161,7 +157,7 @@ class RefineNet(TFModel):
                     x = conv_block(tensor, layout='ac', filters=filters, kernel_size=3,
                                    name='conv-%d' % i, **kwargs)
                     if i != 0:
-                        x = cls.upsample((tensor, after_rcu[0]), name='upsample-%d' % i, **upsample_args)
+                        x = cls.upsample((x, after_rcu[0]), name='upsample-%d' % i, **upsample_args)
                     after_mrf += x
             # free memory
             x, after_mrf = after_mrf, None

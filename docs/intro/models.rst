@@ -1,4 +1,4 @@
-
+===================
 Working with models
 ===================
 
@@ -6,9 +6,9 @@ Pipelines can include model definitions, training, evauluation and prediction ac
 
 
 Model class
------------
+===========
 
-Models are defined in model classes. You can use standard models or write your own models.::
+Models are defined in model classes. You can take ready to use architectures or write your own models.::
 
    from dataset.models import BaseModel
 
@@ -16,14 +16,11 @@ Models are defined in model classes. You can use standard models or write your o
        def _build(self, *args, **kwargs):
            #... do whatever you want
 
-See below `Writing your own model`_.
-
 
 Model types
------------
+===========
 
 There are two modes of model definition:
-
 
 * static
 * dynamic
@@ -36,7 +33,7 @@ Consequently, the model has an access to the pipeline and the very first batch t
 
 
 Adding a model to a pipeline
-----------------------------
+============================
 
 First of all, a model should be initialized::
 
@@ -51,7 +48,7 @@ If a model was already created in another pipeline, it might be `imported <#impo
 
 
 Configuring a model
--------------------
+===================
 
 Most often than not models have many options and hyperparameters which define the model structure (e.g. number and types of layers for a neural network or a number and depth of trees for forests), as well as a training procedure (e.g. an optimization algorithm or regularization constants).
 
@@ -68,7 +65,7 @@ Read a model specfication to know how to configure it.
 
 For flexibilty ``config`` might include so called :doc:`named expressions <named_expr>` which are defined by name but substitued with their actual values:
 
-* ``B('name')`` - a batch component or property
+* ``B('name')`` - a batch component or attribute
 * ``V('name')`` - a pipeline variable
 * ``C('name')`` - a pipeline config option
 * ``F(name)`` - a function, method or any other callable
@@ -88,7 +85,7 @@ For flexibilty ``config`` might include so called :doc:`named expressions <named
 
 
 Training a model
-----------------
+================
 
 A train action should be stated below an initialization action::
 
@@ -156,7 +153,7 @@ You can also write an action which works with a model directly.::
    )
 
 Predicting with a model
------------------------
+=======================
 
 ``predict_model`` is very similar to `train_model <#training-a-model>`_ described above::
 
@@ -171,7 +168,7 @@ Read a model specfication to find out what it needs for predicting and what its 
 
 
 Saving a model
---------------
+==============
 
 You can write a model to a persistent storage at any time by calling ``save_model(...)``::
 
@@ -189,7 +186,7 @@ which might be highly undesired).
 
 
 Models and template pipelines
------------------------------
+=============================
 
 A template pipeline is not linked to any dataset and thus it will never run. It might be used as a building block for more complex pipelines.::
 
@@ -214,7 +211,7 @@ Whilst, a separate instance of a dynamic model will be created in each children 
 
 
 Importing models
-----------------
+================
 
 Models exist within pipelines. This is very convenient if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you train a model in one pipeline and later use it in an inference pipeline.
 
@@ -240,8 +237,9 @@ This can be easily achieved with a model import.::
 
 When ``inference_pipeline_template`` is run, the model ``Resnet50`` from ``train_pipeline`` will be imported.
 
+
 Parallel training
------------------
+=================
 
 If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, you might encounter that your model hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock can be added to an action to allow for only one concurrent execution::
 
@@ -253,23 +251,9 @@ If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, 
            model.train(input_images=self.images, input_labels=self.labels)
            return self
 
-However, as far as ``tensorflow`` is concerned, its optimizers have a parameter `use_locking <https://www.tensorflow.org/api_docs/python/tf/train/Optimizer#__init__>`_ which allows for concurrent updates when set to ``True``.
+However, as far as ``TensorFlow`` is concerned, its optimizers have a parameter `use_locking <https://www.tensorflow.org/api_docs/python/tf/train/Optimizer#__init__>`_ which allows for concurrent updates when set to ``True``.
 
 
-Models zoo
-----------
-.. toctree::
-
-    models_zoo
-
-
-Writing your own model
-----------------------
-
-- `How to write TensorFlow models <tf_models#how-to-write-a-custom-model>`_
-
-
-Layers and losses
------------------
-
-- :doc:`TensorFlow layers <tf_layers>`
+Ready to use models
+===================
+See documentation for :doc:`Tensorflow models <tf_models>` and the list of :doc:`implemented architectures <tf_models_zoo>`.

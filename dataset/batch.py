@@ -321,6 +321,8 @@ class Batch(BaseBatch):
                     self.make_item_class()
                 self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
             elif name in self.components:    # pylint: disable=unsupported-membership-test
+                if self._data_named is None:
+                    _ = self.data
                 setattr(self._data_named, name, value)
                 super().__setattr__('_data', self._data_named.data)
             else:
@@ -416,25 +418,30 @@ class Batch(BaseBatch):
 
     @action
     @inbatch_parallel(init='indices')
-    def apply_transform(self, ix, dst, src, func, *args, **kwargs):
+    def apply_transform(self, ix, func, *args, src=None, dst=None, **kwargs):
         """ Apply a function to each item in the batch
 
         Parameters
         ----------
-        dst : str or array
-            the destination to put the result in, can be:
-
-            - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
+        func : callable
+            a function to apply to each item from the source
 
         src : str or array
             the source to get data from, can be:
 
+            - None
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
-        func : callable
-            a function to apply to each item from the source
+        dst : str or array
+            the destination to put the result in, can be:
+
+            - None
+            - str - a component name, e.g. 'images' or 'masks'
+            - array-like - a numpy-array, list, etc
+
+        args, kwargs
+            parameters passed to ``func``
 
         Notes
         -----
@@ -450,39 +457,46 @@ class Batch(BaseBatch):
             _args = args
         else:
             if isinstance(src, str):
-                src_attr = self.get(ix, src)
+                pos = self.get_pos(None, src, ix)
+                src_attr = getattr(self, src)[pos]
             else:
                 pos = self.get_pos(None, dst, ix)
                 src_attr = src[pos]
             _args = tuple([src_attr, *args])
 
         if isinstance(dst, str):
-            dst_attr = self.get(component=dst)
+            dst_attr = getattr(self, dst)
             pos = self.get_pos(None, dst, ix)
         else:
             dst_attr = dst
             pos = self.get_pos(None, src, ix)
-        dst_attr[pos] = func(*_args, **kwargs)
+        if dst_attr is not None:
+            dst_attr[pos] = func(*_args, **kwargs)
 
     @action
-    def apply_transform_all(self, dst, src, func, *args, **kwargs):
+    def apply_transform_all(self, func, *args, src=None, dst=None, **kwargs):
         """ Apply a function the whole batch at once
 
         Parameters
         ----------
-        dst : str or array
-            the destination to put the result in, can be:
+        func : callable
+            a function to apply to each item from the source
 
-            - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
         src : str or array
             the source to get data from, can be:
 
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
-        func : callable
-            a function to apply to each item from the source
+        dst : str or array
+            the destination to put the result in, can be:
+
+            - None
+            - str - a component name, e.g. 'images' or 'masks'
+            - array-like - a numpy-array, list, etc
+
+        args, kwargs
+            parameters passed to ``func``
 
         Notes
         -----
@@ -498,13 +512,15 @@ class Batch(BaseBatch):
             _args = args
         else:
             if isinstance(src, str):
-                src_attr = self.get(component=src)
+                src_attr = getattr(self, src)
             else:
                 src_attr = src
             _args = tuple([src_attr, *args])
 
         tr_res = func(*_args, **kwargs)
-        if isinstance(dst, str):
+        if dst is None:
+            pass
+        elif isinstance(dst, str):
             setattr(self, dst, tr_res)
         else:
             dst[:] = tr_res

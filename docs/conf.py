@@ -81,11 +81,14 @@ todo_include_todos = False
 #
 html_theme = 'classic'
 #html_theme = 'nature'
+html_theme = 'bizstyle'
 #html_theme = 'sphinx_rtd_theme'
 
-#html_theme_options = {
+html_theme_options = {
 #    "rightsidebar": "false"
-#}
+#    'collapsiblesidebar': True,
+#    'navigation_depth': 3,
+}
 
 
 # Add any paths that contain custom static files (such as style sheets) here,

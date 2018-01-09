@@ -52,26 +52,22 @@ Parameters
 Iterating over a dataset
 ------------------------
 
-And now you can conveniently iterate over the dataset:
+And now you can conveniently iterate over the dataset::
 
-.. code-block:: python
+    BATCH_SIZE = 200
+    for client_batch in client_dataset.gen_batch(BATCH_SIZE, shuffle=False, n_epochs=1):
+        # client_batch is an instance of Batch class which holds an index of the subset of the original dataset
+        # so you can do anything you want with that batch
+        # for instance, load some data, as the batch is empty when initialized
+        batch_with_data = client_batch.load(client_data)
 
-   BATCH_SIZE = 200
-   for client_batch in client_dataset.gen_batch(BATCH_SIZE, shuffle=False, n_epochs=1):
-       # client_batch is an instance of DataFrameBatch which holds an index of the subset of the original dataset
-       # so you can do anything you want with that batch
-       # for instance, load some data, as the batch is empty when initialized
-       batch_with_data = client_batch.load(client_data)
+You might also create batches with `next_batch` function::
 
-You might also create batches with `next_batch` function:
-
-.. code-block:: python
-
-   NUM_ITERS = 1000
-   for i in range(NUM_ITERS):
-       client_batch = client_dataset.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
-       batch_with_data = client_batch.load(client_data)
-       # ...
+    NUM_ITERS = 1000
+    for i in range(NUM_ITERS):
+        client_batch = client_dataset.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
+        batch_with_data = client_batch.load(client_data)
+        # ...
 
 The only difference is that :func:`~dataset.Dataset.gen_batch` is a generator,
 while :func:`~dataset.Dataset.next_batch` is just an ordinary method.

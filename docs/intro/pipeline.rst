@@ -1,13 +1,14 @@
+========
 Pipeline
 ========
 
 
 Introduction
-------------
+============
 
 Quite often you can't just use the data itself, as it needs some specific preprocessing beforehand. And not too rarely you end up with several processing workflows which you have to use simultaneously. That is the situation when pipelines might come in handy.
 
-Firstly, you create a batch class with all necessary actions.::
+Firstly, you create a batch class with all necessary actions::
 
    class ClientTransactions(Batch):
        ...
@@ -22,7 +23,7 @@ Firstly, you create a batch class with all necessary actions.::
            return self
 
        @action
-       def yet_other_action(self):
+       def yet_another_action(self):
            ...
            return self
 
@@ -35,7 +36,7 @@ And now you can define a workflow pipeline::
    trans_pipeline = (ct_ds.pipeline()
                        .some_action()
                        .other_action(param=2)
-                       .yet_other_action())
+                       .yet_another_action())
 
 And nothing happens! Because all the actions are lazy.
 Let's run them.::
@@ -61,8 +62,9 @@ And again, no action is executed until its result is needed.::
        image_batch = augm_wf.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None)
        # only now the actions are fired and data is changed with the workflow defined earlier
 
+
 Algebra of pipelines
---------------------
+====================
 
 There are two ways to define a pipeline:
 
@@ -89,7 +91,7 @@ Execute the pipeline with the given probability.
 `p.random_rotate(angle=(-30, 30)) @ 0.5`
 
 `>>` and `<<`
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^
 Link a pipeline to a dataset.
 `dataset >> pipeline` or `pipeline << dataset`
 
@@ -107,8 +109,9 @@ The complete example::
 
    images_prepocessing = preprocessing_pipeline << images_dataset
 
+
 Creating pipelines
-------------------
+==================
 
 Pipelines can be created from scratch or from a dataset.
 
@@ -153,8 +156,9 @@ Or a shorter version::
 
 Every call to `dataset.pipeline()` or `dataset.p` creates a new pipeline.
 
+
 Running pipelines
------------------
+=================
 
 There are 4 ways to execute a pipeline.
 
@@ -209,8 +213,9 @@ Lazy run
 
 You can add `run` with `lazy=True` as the last action in the pipeline and then call `run()` or `next_batch()` without arguments at all.
 
+
 Pipeline variables
-------------------
+==================
 
 Sometimes batches can be processed in a "do and forget" manner: when you take a batch, make some data transformations and then switch to another batch.
 However, not infrequently you might need to remember some parameters or intermediate results (e.g. a value of loss function or accuracy on every batch
@@ -329,7 +334,7 @@ And pipeline variables might be a handy place to store locks.::
                    ...
 
 Join and merge
---------------
+==============
 
 Joining pipelines
 ^^^^^^^^^^^^^^^^^
@@ -420,8 +425,9 @@ The default `Batch.merge` just concatenate data from both batches, thus making a
 
 Take into account that the default `merge` also changes index to `numpy.arange(new_size)`.
 
+
 Rebatch
--------
+=======
 
 When actions change the batch size (for instance, dropping some bad or skipping incomplete data),
 you might end up in a situation when you don't know the batch size and, what is sometimes much worse,
@@ -437,12 +443,12 @@ batch size differs. To solve this problem, just call `rebatch`::
 
 Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works properly for your specific data and write your own `merge` if needed.
 
-Models
-------
 
+Models
+======
 See :doc:`Working with models <models>`.
 
-API
----
 
+API
+===
 See :doc:`pipelines API <../api/dataset.pipeline>`.

@@ -31,7 +31,7 @@ class Inception(TFModel):
                 block's short name
             value : dict
                 specific parameters (e.g. filters)
-"""
+    """
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
         """ Base layers.

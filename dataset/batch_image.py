@@ -503,6 +503,7 @@ class ImagesBatch(BaseImagesBatch):
             b_origin = origin
             image = ImagesBatch._crop_image(image, 'top_left', np.asarray(background.shape[:2]) - origin).copy()
         else:
+<<<<<<< HEAD
             b_origin = ImagesBatch._calc_origin(  background.shape[:2], origin, image.shape[:2])
             origin = ImagesBatch._calc_origin(image.shape[:2], origin,  background.shape[:2])
             image = ImagesBatch._crop_image(image, origin, background.shape[:2]).copy()
@@ -512,6 +513,13 @@ class ImagesBatch(BaseImagesBatch):
         new_image = background.copy()
         new_image[slice_rows, slice_columns] = image
         return new_image
+=======
+            new_images = np.asarray(list(None for _ in self.indices))
+            self.apply_transform(PIL.Image.fromarray, dst=new_images, src=components)
+        new_data = (new_images, self.labels)
+        new_batch = ImagesPILBatch(np.arange(len(self)), preloaded=new_data)
+        return new_batch
+>>>>>>> fabb3e43da49852bb0ce483e1da8173bddfb5162
 
 
     @staticmethod
@@ -613,7 +621,7 @@ class ImagesPILBatch(BaseImagesBatch):
         """ Convert images from PIL.Image format to an array """
         if self.images is not None:
             new_images = list(None for _ in self.indices)
-            self.apply_transform(new_images, 'images', self._convert_to_array_one, dtype=dtype)
+            self.apply_transform(self._convert_to_array_one, dst=new_images, src='images', dtype=dtype)
             new_images = np.stack(new_images)
         else:
             new_images = None

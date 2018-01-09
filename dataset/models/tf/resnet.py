@@ -2,7 +2,7 @@
 Kaiming He et al. "`Deep Residual Learning for Image Recognition
 <https://arxiv.org/abs/1512.03385>`_"
 
-Kaiming He et al. "Identity Mappings in Deep Residual Networks
+Kaiming He et al. "`Identity Mappings in Deep Residual Networks
 <https://arxiv.org/abs/1603.05027>`_"
 
 Sergey Zagoruyko, Nikos Komodakis. "`Wide Residual Networks
@@ -114,7 +114,7 @@ class ResNet(TFModel):
                         downsample = i > 0 and block == 0
                         block_args['downsample'] = downsample
                         x = cls.block(x, filters=filters[i], name='block-%d' % block, **block_args)
-                        x = tf.identity(x, name='output')
+                    x = tf.identity(x, name='output')
         return x
 
     @classmethod
@@ -176,8 +176,7 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        defaults = cls.get('body/block', ResNet.default_config())
-        kwargs = {**defaults, **kwargs}
+        kwargs = cls.fill_params('body/block', **kwargs)
         filters, downsample = cls.pop(['filters', 'downsample'], kwargs)
         width_factor = cls.pop('width_factor', kwargs)
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
@@ -247,7 +246,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def simple_block(cls, inputs, layout='acnacn', filters=None, kernel_size=3, downsample=False, **kwargs):
+    def simple_block(cls, inputs, layout='acn acn', filters=None, kernel_size=3, downsample=False, **kwargs):
         """ A simple residual block with two 3x3 convolutions
 
         Parameters
@@ -269,11 +268,12 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        strides = ([2] + [1] * layout.count('c')) if downsample else 1
+        n = layout.count('c') + layout.count('C')
+        strides = ([2] + [1] * n) if downsample else 1
         return conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
 
     @classmethod
-    def bottleneck_block(cls, inputs, layout='acnacnacn', filters=None, kernel_size=None, bottleneck_factor=4,
+    def bottleneck_block(cls, inputs, layout='acn acn acn', filters=None, kernel_size=None, bottleneck_factor=4,
                          downsample=False, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
@@ -297,7 +297,7 @@ class ResNet(TFModel):
         tf.Tensor
         """
         kernel_size = [1, 3, 1] if kernel_size is None else kernel_size
-        n = layout.count('c') - 2
+        n = layout.count('c') + layout.count('C') - 2
         if kwargs.get('strides') is None:
             strides = ([1, 2] + [1] * n) if downsample else 1
         else:

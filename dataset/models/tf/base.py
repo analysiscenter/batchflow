@@ -95,8 +95,8 @@ class TFModel(BaseModel):
 
             where name might be one of:
 
-            - short name (e.g. 'Adam', 'Adagrad', any optimiser from
-              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ without a word `Optimiser`)
+            - short name (e.g. 'Adam', 'Adagrad', any optimizer from
+              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ without a word `Optimizer`)
             - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
               (e.g. 'FtlrOptimizer')
             - a callable
@@ -999,6 +999,7 @@ class TFModel(BaseModel):
 
         ops : a sequence of str
             operation names::
+            - 'sigmoid' - add ``sigmoid(inputs)``
             - 'proba' - add ``softmax(inputs)``
             - 'labels' - add ``argmax(inputs)``
             - 'accuracy' - add ``mean(predicted_labels == true_labels)``
@@ -1050,6 +1051,8 @@ class TFModel(BaseModel):
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
             self._add_output_identity(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'sigmoid':
+            self._add_output_sigmoid(inputs, name, attr_prefix, **kwargs)
         elif oper == 'proba':
             self._add_output_proba(inputs, name, attr_prefix, **kwargs)
         elif oper == 'labels':
@@ -1062,6 +1065,11 @@ class TFModel(BaseModel):
         x = tf.identity(inputs, name=name)
         self.store_to_attr(attr_prefix + name, x)
         return x
+
+    def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
+        proba = tf.sigmoid(inputs, name=name)
+        self.store_to_attr(attr_prefix + name, proba)
 
     def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
         axis = self.channels_axis(kwargs['data_format'])
@@ -1081,7 +1089,7 @@ class TFModel(BaseModel):
         x = getattr(self, attr_prefix + 'labels')
         x = tf.cast(x, true_labels.dtype)
         x = tf.cast(tf.equal(true_labels, x), 'float')
-        accuracy = tf.reduce_mean(x, name=name)
+        accuracy = tf.reduce_mean(x, axis=channels_axis, name=name)
         self.store_to_attr(attr_prefix + name, accuracy)
 
 
@@ -1122,7 +1130,8 @@ class TFModel(BaseModel):
     def fill_params(cls, _name, **kwargs):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
-        config = {**config['common'], **cls.get(_name, config), **kwargs}
+        _config = cls.get(_name, config)
+        config = {**config['common'], **_config, **kwargs}
         return config
 
     def build_config(self, names=None):
@@ -1155,7 +1164,7 @@ class TFModel(BaseModel):
         for k in self.config:
             self.put(k, self.config[k], config)
 
-        if 'inputs' in config:
+        if config.get('inputs'):
             with tf.variable_scope('inputs'):
                 self._make_inputs(names, config)
             inputs = self.get('input_block/inputs', config)
@@ -1469,9 +1478,14 @@ class TFModel(BaseModel):
         resize_to = None
         if isinstance(inputs, (list, tuple)):
             x, resize_to = inputs
-            inputs = None
+        else:
+            x = inputs
+        inputs = None
 
-        x = upsample(x, factor, layout, name=name, **kwargs)
+        if kwargs.get('filters') is None:
+            kwargs['filters'] = cls.num_channels(x, kwargs['data_format'])
+
+        x = upsample(x, factor=factor, layout=layout, name=name, **kwargs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x

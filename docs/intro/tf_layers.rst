@@ -1,16 +1,19 @@
+============================
 Tensorflow layers and losses
 ============================
 
+.. _conv_block:
+
 Convolution block
------------------
+=================
 The module :mod:`.models.tf.layers` includes a :func:`convolution building block <.models.tf.layers.conv_block>`
 which helps building complex networks in a concise way.
 
 The advantages of using ``conv_block`` are:
 
-- it helps to create more sophisticated networks with fewer lines of code;
+- it helps to create sophisticated networks with fewer lines of code;
 - it allows to build multidimensional models with the same code (namely 1d, 2d, and 3d);
-- it contains new layers missing in TensorFlow (e.g. separable 1d and 3d convolutions, 1d transposed convolutions, mip);
+- it contains convenient layers missing in TensorFlow (e.g. separable 1d and 3d convolutions, 1d transposed convolutions, mip);
 - it uses a fast CuDNN implementation of batch norm;
 
 The block consist of predefined layers, among which:
@@ -42,8 +45,7 @@ Or a more sophisticated example - a full 14-layer VGG-like model in just 6 lines
             x = conv_block(x, 'cacacap', 512, 3, name='block4', **kwargs)
             x = conv_block(x, 'cacacap', 512, 3, name='block5', **kwargs)
             x = conv_block(x, num_classes, 3, layout='cP', name='classification', **kwargs)
-            output = tf.identity(x, name='predictions')
-            return output
+            return x
 
 That's a fully working example. Just try it with a simple pipeline:
 
@@ -66,8 +68,8 @@ That's a fully working example. Just try it with a simple pipeline:
                 .train_model('conv', fetches='loss', feed_dict={'images': B('images'),
                                                                 'labels': B('labels')},
                              save_to=V('current_loss'), mode='a')
-                .print_variable('current_loss')
-                .run(128, shuffle=True, n_epochs=2))
+                .print(V('current_loss'))
+                .run(batch_size=128, shuffle=True, n_epochs=2))
 
 When ``layout`` includes several layers of the same type, each one can have its own parameters,
 if corresponding arguments are passed as lists.
@@ -95,13 +97,24 @@ Or the earlier defined 14-layers VGG network as a one-liner::
 
     x = conv_block(x, 'cacap'*2 + 'cacacap'*3 + 'caP', [64]*2 + [128]*2 + [256]*3 + [512]*6 + [num_classes], 3)
 
-However, in terms of training performance and prediction accuracy the following block with strided separable (grouped) convolutions and dropout will usually perform much better::
+However, in terms of training performance and prediction accuracy the following block with strided separable convolutions and dropout will usually perform much better::
 
-    x = conv_block(x, 'cna cna cna cnaP', [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
+    x = conv_block(x, 'Cna Cna Cna CnaP', [16, 32, 64, num_classes], 3, strides=[2, 2, 2, 1], dropout_rate=.15,
                    depth_multiplier=[1, 2, 2, 1], training=self.is_training)
 
+Residual blocks can also be created::
+
+    x = conv_block(x, 'R nac nac +', 32, 3)
+
+A small residual network as a one-liner::
+
+    x = conv_block(x, 'cna' + 'R nac nac +'*3 + 'dV', [32, 64, 64, 128, 128, 256, 256], 3)
+
+For the full list of available layers see :func:`~.models.tf.layers.conv_block` description.
+
+
 Transposed convolution
--------------------------
+======================
 
 .. autofunction:: dataset.models.tf.layers.conv_transpose
     :noindex:
@@ -109,26 +122,31 @@ Transposed convolution
 .. autofunction:: dataset.models.tf.layers.conv1d_transpose
     :noindex:
 
+.. autofunction:: dataset.models.tf.layers.separable_conv_transpose
+    :noindex:
+
 
 Separable convolution
----------------------
+=====================
 .. autofunction:: dataset.models.tf.layers.separable_conv
-    :noindex:
-
-.. autofunction:: dataset.models.tf.layers.separable_conv1d
-    :noindex:
-
-.. autofunction:: dataset.models.tf.layers.separable_conv3d
     :noindex:
 
 
 Pooling
--------
+=======
+.. autofunction:: dataset.models.tf.layers.pooling
+    :noindex:
 
 .. autofunction:: dataset.models.tf.layers.max_pooling
     :noindex:
 
 .. autofunction:: dataset.models.tf.layers.average_pooling
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.fractional_pooling
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.global_pooling
     :noindex:
 
 .. autofunction:: dataset.models.tf.layers.global_max_pooling
@@ -137,14 +155,12 @@ Pooling
 .. autofunction:: dataset.models.tf.layers.global_average_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.fractional_max_pooling
-    :noindex:
-
 .. autofunction:: dataset.models.tf.layers.mip
     :noindex:
 
+
 Flatten
--------
+=======
 .. autofunction:: dataset.models.tf.layers.flatten
     :noindex:
 
@@ -153,6 +169,24 @@ Flatten
 
 
 Maximum intensity projection
-----------------------------
+============================
 .. autofunction:: dataset.models.tf.layers.mip
+    :noindex:
+
+
+Upsampling
+==========
+.. autofunction:: dataset.models.tf.layers.upsample
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.resize_bilinear
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.resize_bilinear_additive
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.subpixel_conv
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.depth_to_space
     :noindex:
