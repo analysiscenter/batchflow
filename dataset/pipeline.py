@@ -397,16 +397,16 @@ class Pipeline:
 
             For sets and dicts 'a' and 'u' do exactly the same.
 
-        Returns
-        -------
-        self - in order to use it in the pipeline chains
-
         Notes
         -----
         Unlike :meth:`~.Pipeline.update_variable` this method sets a new value immediately.
         So ``set_variable`` is imperative and may be used within actions, while ``update_variable``
         is declarative and should be used in pipeline definition chains.
         """
+        V(name).set(value, batch=batch, pipeline=self, mode=mode)
+
+    def assign_variable(self, name, value, batch=None):
+        """ Assign a value to a variable """
         var_name = self._get_value(name, batch=batch)
 
         if not self.has_variable(var_name):
@@ -417,14 +417,6 @@ class Pipeline:
         value = self._get_value(value, batch=batch)
         self._variables[name].update({'value': value})
         self.unlock_variable(var_name)
-
-        return self
-
-    def assign_variable(self, name, value):
-        """ Assign a value to a variable
-        Same as `set_variable(name, value)`.
-        """
-        return self.set_variable(name, value)
 
     def delete_variable(self, name):
         """ Delete a variable
@@ -502,8 +494,8 @@ class Pipeline:
 
         Notes
         -----
-        Unlike :meth:`~.Pipeline.set_variable` this method does not change a value of the variable immediately
-        so it should be used in pipeline definition chains only.
+        Unlike :meth:`~.Pipeline.set_variable` this method does not change a value of the variable
+        until the pipeline is run. So it should be used in pipeline definition chains only.
         ``set_variable`` is imperative and may be used to change variable value within actions.
         """
         self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name, 'value': value, 'mode': mode})
