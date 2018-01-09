@@ -88,7 +88,7 @@ class DenseNet(TFModel):
             x, inputs = inputs, None
             for i, n_layers in enumerate(num_layers):
                 x = cls.block(x, num_layers=n_layers, name='block-%d' % i, **block)
-                if i < len(num_blocks) - 1:
+                if i < len(num_layers) - 1:
                     x = cls.transition_layer(x, name='transition-%d' % i, **transition)
         return x
 
@@ -115,18 +115,16 @@ class DenseNet(TFModel):
 
         with tf.variable_scope(name):
             axis = cls.channels_axis(kwargs['data_format'])
+            p = inputs
             x = inputs
-            output_concat = []
             for i in range(num_layers):
-                if len(output_concat) > 0:
-                    x = tf.concat(output_concat + [inputs], axis=axis)
                 if bottleneck:
                     x = conv_block(x, filters=growth_rate * 4, kernel_size=1, layout=layout,
                                    name='bottleneck-%d' % i, **kwargs)
                 x = conv_block(x, filters=growth_rate, kernel_size=3, layout=layout,
                                name='conv-%d' % i, **kwargs)
-                output_concat.append(x)
-            x = tf.concat(output_concat, axis=axis, name='output')
+                x = tf.concat([p, x], axis=axis, name='concat-%d' % i)
+                p = x
         return x
 
     @classmethod
