@@ -9,7 +9,7 @@ sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel, VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
-                              Inception_v1, Inception_v3, Inception_v4, SqueezeNet, MobileNet, DenseNet121, \
+                              Inception_v1, Inception_v3, Inception_v4, InceptionResNet_v2, SqueezeNet, MobileNet, DenseNet121, \
                               ResNetAttention56
 
 class MyModel(TFModel):
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     mnist = MNIST()
 
     train_template = (Pipeline(config=dict(model=VGG7))
-                .init_variable('model', ResNet18)
+                .init_variable('model', InceptionResNet_v2)
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_variable('pred_label', init_on_each_run=list)
@@ -31,15 +31,15 @@ if __name__ == "__main__":
                             config={'inputs': dict(images={'shape': B('image_shape')},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images',
-                                    'input_block/filters': 16,
+                                    #'input_block/filters': 16,
                                     #'body/block/bottleneck': 1,
                                     #'head/units': [100, 100, 10],
                                     #'nothing': F(lambda batch: batch.images.shape[1:]),
                                     #'body/block/filters': 16,
-                                    'body/block/width_factor': 2,
+                                    #'body/block/width_factor': 2,
                                     #'body': dict(se_block=1, se_factor=4, resnext=1, resnext_factor=4, bottleneck=1),
                                     'output': dict(ops=['accuracy'])})
-                #.resize(shape=(64, 64))
+                .resize(shape=(64, 64))
                 .train_model('conv', fetches='loss',
                                      feed_dict={'images': B('images'),
                                                 'labels': B('labels')},

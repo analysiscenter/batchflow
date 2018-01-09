@@ -34,3 +34,11 @@ Inception version 4
     :members:
     :undoc-members:
     :show-inheritance:
+
+Inception-ResNet version 2
+--------------------------
+.. automodule:: dataset.models.tf.inception_resnet_v2
+    :member-order: bysource
+    :members:
+    :undoc-members:
+    :show-inheritance:
