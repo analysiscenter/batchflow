@@ -375,7 +375,7 @@ class Pipeline:
         if self._variables[name]['lock'] is not None:
             self._variables[name]['lock'].release()
 
-    def set_variable(self, name, value, mode='w'):
+    def set_variable(self, name, value, mode='w', batch=None):
         """ Set a variable value
         If the variable does not exists, it will be created, however, the warning will be displayed that
         the variable was not initialized.
@@ -407,15 +407,15 @@ class Pipeline:
         So ``set_variable`` is imperative and may be used within actions, while ``update_variable``
         is declarative and should be used in pipeline definition chains.
         """
-        var_name = self._get_value(name)
+        var_name = self._get_value(name, batch=batch)
 
         if not self.has_variable(var_name):
             logging.warning("Pipeline variable '%s' has not been initialized", var_name)
             self.init_variable(var_name)
 
         self.lock_variable(var_name)
-        value = self._get_value(value)
-        V(var_name).set(value, pipeline=self, mode=mode)
+        value = self._get_value(value, batch=batch)
+        self._variables[name].update({'value': value})
         self.unlock_variable(var_name)
 
         return self
@@ -504,15 +504,7 @@ class Pipeline:
         return self.append_action()
 
     def _exec_update_variable(self, batch, action):
-        var_name = self._get_value(action['var_name'], batch)
-        if not self.has_variable(var_name):
-            logging.warning("Pipeline variable '%s' has not been initialized", action['var_name'])
-            self.init_variable(var_name)
-
-        self.lock_variable(var_name)
-        value = self._get_value(action['value'], batch)
-        V(var_name).set(value, batch=batch, mode=action['mode'])
-        self.unlock_variable(var_name)
+        self.set_variable(action['var_name'], action['value'], action['mode'], batch=batch)
 
     def print(self, *args, **kwargs):
         """ Print a value during pipeline execution """
