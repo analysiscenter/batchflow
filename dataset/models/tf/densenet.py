@@ -80,14 +80,14 @@ class DenseNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        num_blocks, block, transition = cls.pop(['num_blocks', 'block', 'transition_layer'], kwargs)
+        num_layers, block, transition = cls.pop(['num_layers', 'block', 'transition_layer'], kwargs)
         block = {**kwargs, **block}
         transition = {**kwargs, **transition}
 
         with tf.variable_scope(name):
             x, inputs = inputs, None
-            for i, num_layers in enumerate(num_blocks):
-                x = cls.block(x, num_layers=num_layers, name='block-%d' % i, **block)
+            for i, n_layers in enumerate(num_layers):
+                x = cls.block(x, num_layers=n_layers, name='block-%d' % i, **block)
                 if i < len(num_blocks) - 1:
                     x = cls.transition_layer(x, name='transition-%d' % i, **transition)
         return x
@@ -155,7 +155,7 @@ class DenseNet121(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 24, 32]
+        config['body']['num_layers'] = [6, 12, 24, 32]
         return config
 
 class DenseNet169(DenseNet):
@@ -163,7 +163,7 @@ class DenseNet169(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 32, 16]
+        config['body']['num_layers'] = [6, 12, 32, 16]
         return config
 
 class DenseNet201(DenseNet):
@@ -171,7 +171,7 @@ class DenseNet201(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 48, 32]
+        config['body']['num_layers'] = [6, 12, 48, 32]
         return config
 
 class DenseNet264(DenseNet):
@@ -179,5 +179,5 @@ class DenseNet264(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 64, 48]
+        config['body']['num_layers'] = [6, 12, 64, 48]
         return config
