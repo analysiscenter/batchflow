@@ -13,6 +13,7 @@ import tensorflow as tf
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample, global_average_pooling
 from .losses import dice
+from .train import piecewise_constant
 
 
 LOSSES = {
@@ -33,7 +34,7 @@ DECAYS = {
     'exp': tf.train.exponential_decay,
     'invtime': tf.train.inverse_time_decay,
     'naturalexp': tf.train.natural_exp_decay,
-    'const': tf.train.piecewise_constant,
+    'const': piecewise_constant,
     'poly': tf.train.polynomial_decay
 }
 
@@ -73,7 +74,7 @@ class TFModel(BaseModel):
     decay - a learning rate decay algorithm might be defined in one of three formats:
         - name
         - tuple (name, args)
-        - dict {'name': name, \**args}
+        - dict {'name': name, **args}
 
         where name might be one of:
 
@@ -85,7 +86,7 @@ class TFModel(BaseModel):
         Examples:
 
         - ``{'decay': 'exp'}``
-        - ``{'decay': ('polynomial_decay', {'decay_steps':10000})}``
+        - ``{'decay': ('polynomial_decay', {'decay_steps': 10000})}``
         - ``{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}``
 
     optimizer - an optimizer might be defined in one of three formats:
