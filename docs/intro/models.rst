@@ -61,7 +61,7 @@ Global options:
 
 For some models only one of ``build`` or ``load`` should be specified. While other models might need a building phase even if a model is loaded from a disk.
 
-Read a model specfication to know how to configure it.
+Read a model specification to know how to configure it.
 
 For flexibilty ``config`` might include so called :doc:`named expressions <named_expr>` which are defined by name but substitued with their actual values:
 

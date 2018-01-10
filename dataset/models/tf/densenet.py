@@ -19,14 +19,8 @@ class DenseNet(TFModel):
     input_block : dict
 
     body : dict
-        strides : list of int
-            strides in separable convolutions
-
-        double_filters : list of bool
-            if True, number of filters in 1x1 covolution will be doubled
-
-        width_factor : float
-            multiplier for the number of channels (default=1)
+        num_layers : list of int
+            number of layers in dense blocks
 
         block : dict
             parameters for dense block, including :func:`~.layers.conv_block` parameters, as well as
