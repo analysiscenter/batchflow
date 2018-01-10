@@ -80,15 +80,15 @@ class DenseNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        num_blocks, block, transition = cls.pop(['num_blocks', 'block', 'transition_layer'], kwargs)
+        num_layers, block, transition = cls.pop(['num_layers', 'block', 'transition_layer'], kwargs)
         block = {**kwargs, **block}
         transition = {**kwargs, **transition}
 
         with tf.variable_scope(name):
             x, inputs = inputs, None
-            for i, num_layers in enumerate(num_blocks):
-                x = cls.block(x, num_layers=num_layers, name='block-%d' % i, **block)
-                if i < len(num_blocks) - 1:
+            for i, n_layers in enumerate(num_layers):
+                x = cls.block(x, num_layers=n_layers, name='block-%d' % i, **block)
+                if i < len(num_layers) - 1:
                     x = cls.transition_layer(x, name='transition-%d' % i, **transition)
         return x
 
@@ -115,18 +115,16 @@ class DenseNet(TFModel):
 
         with tf.variable_scope(name):
             axis = cls.channels_axis(kwargs['data_format'])
+            p = inputs
             x = inputs
-            output_concat = []
             for i in range(num_layers):
-                if len(output_concat) > 0:
-                    x = tf.concat(output_concat + [inputs], axis=axis)
                 if bottleneck:
                     x = conv_block(x, filters=growth_rate * 4, kernel_size=1, layout=layout,
                                    name='bottleneck-%d' % i, **kwargs)
                 x = conv_block(x, filters=growth_rate, kernel_size=3, layout=layout,
                                name='conv-%d' % i, **kwargs)
-                output_concat.append(x)
-            x = tf.concat(output_concat, axis=axis, name='output')
+                x = tf.concat([p, x], axis=axis, name='concat-%d' % i)
+                p = x
         return x
 
     @classmethod
@@ -155,7 +153,7 @@ class DenseNet121(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 24, 32]
+        config['body']['num_layers'] = [6, 12, 24, 32]
         return config
 
 class DenseNet169(DenseNet):
@@ -163,7 +161,7 @@ class DenseNet169(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 32, 16]
+        config['body']['num_layers'] = [6, 12, 32, 16]
         return config
 
 class DenseNet201(DenseNet):
@@ -171,7 +169,7 @@ class DenseNet201(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 48, 32]
+        config['body']['num_layers'] = [6, 12, 48, 32]
         return config
 
 class DenseNet264(DenseNet):
@@ -179,5 +177,5 @@ class DenseNet264(DenseNet):
     @classmethod
     def default_config(cls):
         config = DenseNet.default_config()
-        config['body']['num_blocks'] = [6, 12, 64, 48]
+        config['body']['num_layers'] = [6, 12, 64, 48]
         return config
