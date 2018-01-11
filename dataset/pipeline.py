@@ -326,7 +326,7 @@ class Pipeline:
                     lock = threading.Lock() if lock else None
                     self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run,
                                                  lock=lock)
-                    self.set_variable(name, default if init is None else init())
+                    self.assign_variable(name, default if init is None else init())
         return self
 
     def init_variables(self, variables):
@@ -363,7 +363,7 @@ class Pipeline:
     def _init_variables_before_run(self):
         for name, var in self._variables.items():
             if var['init_on_each_run']:
-                self.set_variable(name, var['default'] if var['init'] is None else var['init']())
+                self.assign_variable(name, var['default'] if var['init'] is None else var['init']())
 
     def lock_variable(self, name):
         """ Acquire a variable lock to prevent race condition and allow mutlithreaded pipeline execution """
