@@ -98,15 +98,6 @@ To get access to a model just call :func:`~dataset.Batch.get_model_by_name` with
            my_model = self.get_model_by_name(model_name)
            my_model.train(...)
 
-Actions might be linked to certain models::
-
-   class MyBatch(Batch):
-       ...
-       @action(model='my_resnet34')
-       def train_resnet(self, resnet34):
-           resnet34.train(...)
-           return self
-
 For more details see :doc:`Working with models <models>`.
 
 

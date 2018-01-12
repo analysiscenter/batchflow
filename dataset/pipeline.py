@@ -11,8 +11,8 @@ import numpy as np
 from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
-from .decorators import ModelDirectory
 from .named_expr import NamedExpression, V, eval_expr
+from .model_dir import ModelDirectory
 
 
 JOIN_ID = '#_join'
@@ -58,18 +58,19 @@ class Pipeline:
     def __init__(self, dataset=None, config=None, pipeline=None, proba=None, repeat=None):
         self._variables = {}
         self._variables_lock = threading.Lock()
-        self._models_lock = threading.Lock()
 
         if pipeline is None:
             self.dataset = dataset
-            self.config = deepcopy(config) if config is not None else {}
+            self.config = config or {}
             self._action_list = []
             self.delete_all_variables()
             self._lazy_run = None
-            self.models = dict()
+            self.models = ModelDirectory()
         else:
             self.dataset = pipeline.dataset
-            self.config = None if pipeline.config is None else deepcopy(pipeline.config)
+            config = config or {}
+            _config = pipeline.config or {}
+            self.config = {**config, **_config}
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
             self.init_variables(pipeline._variables)  # pylint: disable=protected-access
             if self.num_actions == 1:
@@ -80,7 +81,7 @@ class Pipeline:
                     if self.get_last_action_proba() is None:
                         self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
             self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
-            self.models = {**pipeline.models}
+            self.models = pipeline.models.copy()
 
         self._stop_flag = False
         self._executor = None
@@ -130,8 +131,9 @@ class Pipeline:
 
         new_p1 = cls.from_pipeline(pipe1)
         new_p1._action_list += pipe2._action_list[:]
+        new_p1.config.update(pipe2.config)
         new_p1._variables.update(**pipe2._variables)
-        new_p1.models.update(pipe2.models)
+        new_p1.models += pipe2.models
         new_p1.dataset = new_p1.dataset or pipe2.dataset
         return new_p1
 
@@ -656,9 +658,9 @@ class Pipeline:
             self._save_output(batch, None, output, action['save_to'], action['mode'])
 
     def get_model_by_name(self, name, batch=None):
-        """ Get a model specification by its name """
-        models = ModelDirectory.get_model_by_name(name, pipeline=self, batch=batch)
-        return models
+        """ Retrieve a model by its name """
+        name = self._get_value(name, batch=batch)
+        return self.models.get_model_by_name(name, batch=batch)
 
     def init_model(self, mode, model_class=None, name=None, config=None):
         """ Initialize a static or dynamic model
@@ -671,15 +673,7 @@ class Pipeline:
         name : str
             a name for the model. Default - a model class name.
         config : dict
-            model configurations parameters, where each key and value could be named expressions
-
-            - B('name') - a batch class attribute or component name
-            - V('name') - a pipeline variable name
-            - C('name') - a pipeline config option
-            - F(name) - a callable which takes a batch for dynamic models or a pipeline for static models
-
-            These expressions will be substituted by their actual values.
-            All other value will be used "as is".
+            model configurations parameters, where each key and value could be named expressions.
 
         Examples
         --------
@@ -696,38 +690,38 @@ class Pipeline:
         >>> pipeline
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        name = self._get_value(name)
-        with self._models_lock:
-            ModelDirectory.init_model(mode, model_class, name, pipeline=self, config=config)
+        self.models.init_model(mode, model_class, name, config=config)
         return self
 
-    def import_model(self, name, source):
+    def import_model(self, model_name, source, name=None):
         """ Import a model from another pipeline
 
         Parameters
         ----------
-        name : str - a name of the model to import
-        source : pipeline or model - a pipeline that holds a model or a model itself
+        model_name : str
+            a name of the model to import
+        source : pipeline
+            a pipeline that holds a model
+        name : str
+            a name with which the model is stored in this pipeline
         """
-        self._action_list.append({'name': IMPORT_MODEL_ID, 'model_name': name, 'source': source})
+        self._action_list.append({'name': IMPORT_MODEL_ID, 'source_name': model_name, 'source': source,
+                                  'model_name': name, 'ref': True})
         return self.append_action()
 
-    def _exec_import_model(self, _, action):
-        model_name = self._get_value(action['model_name'])
-        if ModelDirectory.find_model_by_name(model_name, pipeline=self) is None:
-            with self._models_lock:
-                if ModelDirectory.find_model_by_name(model_name, pipeline=self) is None:
-                    if isinstance(action['source'], Pipeline):
-                        ModelDirectory.import_model_from(model_name, action['source'], self)
-                    else:
-                        ModelDirectory.import_model(model_name, action['source'], self)
+    def _exec_import_model(self, batch, action):
+        model_name = self._get_value(action['model_name'], batch=batch)
+        source_name = self._get_value(action['source_name'], batch=batch)
+        source = self._get_value(action['source'], batch=batch)
+        self.models.import_model(source_name, source, model_name)
 
     def train_model(self, name, make_data=None, save_to=None, mode='w', *args, **kwargs):
         """ Train a model
 
         Parameters
         ----------
-        name : str - a model name
+        name : str
+            a model name
 
         make_data : a callable or a named expression
             a function or method to transform batch data to train parameters.
@@ -859,8 +853,6 @@ class Pipeline:
         return self.append_action(*args, **kwargs)
 
     def _make_model_args(self, batch, action, model):
-        map_data = lambda item: self._get_value(item, batch=batch, model=model)
-
         make_data = action['make_data'] or {}
         args = tuple()
         kwargs = dict()
@@ -868,7 +860,7 @@ class Pipeline:
         if callable(make_data):
             kwargs = make_data(batch=batch, model=model)
         else:
-            kwargs = map_data(make_data)
+            kwargs = self._get_value(make_data, batch=batch, model=model)
         if not isinstance(kwargs, dict):
             raise TypeError("make_data should return a dict with kwargs", make_data)
 
@@ -907,15 +899,13 @@ class Pipeline:
                     save_to[i] = item
 
     def _exec_train_model(self, batch, action):
-        model_name = self._get_value(action['model_name'])
-        model = self.get_model_by_name(model_name, batch=batch)
+        model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         output = model.train(*args, **kwargs)
         self._save_output(batch, model, output, action['save_to'], action['mode'])
 
     def _exec_predict_model(self, batch, action):
-        model_name = self._get_value(action['model_name'])
-        model = self.get_model_by_name(model_name, batch=batch)
+        model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         predictions = model.predict(*args, **kwargs)
         self._save_output(batch, model, predictions, action['save_to'], action['mode'])
@@ -923,7 +913,7 @@ class Pipeline:
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
-        model = ModelDirectory.get_model_by_name(name, pipeline=self)
+        model = self.get_model_by_name(name)
         model.save(*args, **kwargs)
 
     def join(self, *pipelines):
