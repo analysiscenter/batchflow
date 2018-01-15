@@ -14,7 +14,7 @@ from dataset.models import BaseModel
 class MyModel(BaseModel):
     """An example of a model class """
     def build(self, *args, **kwargs):
-        print("___________________ MyModel initialized")
+        print("____ MyModel initialized")
 
     def train(self, *args, **kwargs):
         return 1, 2, 3
@@ -25,61 +25,6 @@ class MyModel(BaseModel):
 class MyBatch(Batch):
     def __init__(self, index, *args, **kwargs):
         super().__init__(index)
-
-    @model(mode='global')
-    def global_model():
-        print("Building a global model")
-        with tf.variable_scope("global"):
-            input_data = tf.placeholder('float', [None, 3])
-            model_output = tf.square(tf.reduce_sum(input_data))
-        return [input_data, model_output]
-
-    @action(model='global_model')
-    def train_global(self, model_spec):
-        print("        action for a global model", model_spec)
-        input_data, model_output = model_spec
-        session = self.pipeline.get_variable("session")
-        res = session.run(model_output, feed_dict={input_data: self.data})
-        #print("        ", int(res))
-        return self
-
-    @model(mode='static')
-    def static_model(pipeline):
-        print("Building a static model")
-        with pipeline.get_variable("session").graph.as_default():
-            with tf.variable_scope("static"):
-                input_data = tf.placeholder('float', [None, 3])
-                model_output = tf.square(tf.reduce_sum(input_data))
-        print("Static model is ready")
-        return [input_data, model_output]
-
-    @action(model='static_model')
-    def train_static(self, model_spec):
-        t1 = time()
-        print("\n ================= train static ====================")
-        print("model_spec", model_spec)
-        input_data, model_output = model_spec
-        session = self.pipeline.get_variable("session")
-        t = time()
-        res = session.run(model_output, feed_dict={input_data: self.data})
-        te = time()
-        print(te - t, te - t1)
-        #print("        ", int(res))
-        return self
-
-    @model(mode='dynamic')
-    def dynamic_model(self, config=None):
-        print("Building a dynamic model with shape", self.data.shape)
-        print("Model config", config)
-        with self.pipeline.get_variable("session").graph.as_default():
-            with tf.variable_scope("dynamic"):
-                input_data = tf.placeholder('float', [None, self.data.shape[1]])
-                model_output = tf.square(tf.reduce_sum(input_data))
-        print("\n ***************** define dynamic *******************")
-        print("----- default graph")
-        print(tf.get_default_graph().get_operations())
-        print()
-        return [input_data, model_output]
 
     @action(use_lock='__train_dynamic')
     def train_dynamic(self):
@@ -149,24 +94,16 @@ config = dict(dynamic_model=dict(arg1=0, arg2=0))
 
 # Create a template pipeline
 template_pp = (Pipeline(config=config)
-                .init_variable("session", init=tf.Session)
                 .init_variable("loss history", init=list, init_on_each_run=True)
-                .init_model("static_model")
+                .init_model("static_model", MyModel)
 )
 
 # Create another template
 pp2 = (template_pp
-        .init_variable("session", sess)
         .init_variable("print lock", init=threading.Lock)
         .init_model("dynamic", MyModel, "my_model", config=F(MyBatch.make_data_for_dynamic))
         .init_model("dynamic", MyModel, "my_model2")
-        #.init_model("MyModel")
         .load(data)
-        #.train_global()
-        .train_static()
-        #.train_dynamic()
-        .train_in_batch("dynamic_model")
-        #.train_model("MyModel")
         .train_model("my_model")
         .train_model("my_model2", save_to=V('output'))
         .run(K//10, n_epochs=1, shuffle=False, drop_last=False, lazy=True)
@@ -182,7 +119,6 @@ print("============== start run ==================")
 t = time()
 res = (pp2 << ds_data).run()
 print(time() - t)
-#ModelDirectory.print()
 
 
 print("-------------------------------------------------")
@@ -198,20 +134,12 @@ for batch in res.gen_batch(K, n_epochs=1, drop_last=True, prefetch=Q*0):
 
 print("Stop iterating:", time() - t)
 
-#ModelDirectory.print()
 
-print("loss:", res.get_variable("loss history"))
-
-print("global:", res.get_model_by_name("global_model"))
-
-print("dynamic:", res.get_model_by_name("dynamic_model"))
 
 pp3 = (Pipeline()
-           .init_variable("session", sess)
            .import_model("my_model2", res)
            .load(data)
            .train_model("my_model2")
-           #.test_dynamic()
 )
 
 print("--------------------------------------------")
@@ -225,5 +153,3 @@ for batch in res2.gen_batch(3, n_epochs=1, drop_last=True, prefetch=Q*0):
 res3 = pp3 << ds_data
 print("predict")
 res3.run(3, n_epochs=1)
-
-#print(res2.get_model_by_name("dynamic_model"))

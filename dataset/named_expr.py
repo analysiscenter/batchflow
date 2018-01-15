@@ -63,9 +63,12 @@ class NamedExpression:
         self.get(*args, **kwargs).update(value)
 
 
-def eval_expr(expr, batch, pipeline=None, model=None):
+def eval_expr(expr, batch=None, pipeline=None, model=None):
     """ Evaluate a named expression recursively """
+    if batch is None:
+        batch = _DummyBatch(pipeline)
     args = dict(batch=batch, pipeline=pipeline, model=model)
+
     if isinstance(expr, NamedExpression):
         expr = expr.get(**args)
     elif isinstance(expr, (list, tuple)):
@@ -92,7 +95,7 @@ class B(NamedExpression):
         """ Return a value of a batch component """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         if isinstance(batch, _DummyBatch):
-            raise ValueError("Batch expressions are not allowed in static models B(%s)" % name)
+            raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
         if name is None:
             return batch.deepcopy() if self.copy else batch
         return getattr(batch, name)

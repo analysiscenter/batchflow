@@ -30,6 +30,11 @@ class BaseModel:
         if load:
             self.load(**load)
 
+    @property
+    def name(self):
+        """: str - the class name (serve as a default for a model name) """
+        return self.__class__.__name__
+
     @classmethod
     def pop(cls, variables, config=None, **kwargs):
         """ Return variables and remove them from config"""
