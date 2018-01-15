@@ -1,5 +1,4 @@
 """ Contains named expression classes"""
-import functools
 import numpy as np
 
 
@@ -178,9 +177,10 @@ class R(NamedExpression):
     def __init__(self, name=None, *args, **kwargs):
         super().__init__(name)
         if callable(name):
-            self.random = lambda : name(*args, **kwargs)
+            self.random = lambda: name(*args, **kwargs)
         elif isinstance(name, str) and hasattr(np.random, name):
-            self.random = lambda : getattr(np.random, name)(*args, **kwargs)
+            name = getattr(np.random, name)
+            self.random = lambda: name(*args, **kwargs)
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a random variable """
