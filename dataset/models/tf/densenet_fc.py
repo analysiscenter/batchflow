@@ -17,7 +17,7 @@ class DenseNetFC(TFModel):
         dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
 
     body : dict
-        num_blocks : list of int
+        num_layers : list of int
             number of layers in downsampling/upsampling blocks
 
         block : dict
@@ -68,7 +68,7 @@ class DenseNetFC(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        num_blocks, block = cls.pop(['num_blocks', 'block'], kwargs)
+        num_layers, block = cls.pop(['num_layers', 'block'], kwargs)
         trans_up, trans_down = cls.pop(['upsample', 'transition_down'], kwargs)
         block = {**kwargs, **block}
         trans_up = {**kwargs, **trans_up}
@@ -77,18 +77,18 @@ class DenseNetFC(TFModel):
         with tf.variable_scope(name):
             x, inputs = inputs, None
             encoder_outputs = []
-            for i, num_layers in enumerate(num_blocks[:-1]):
-                x = cls.encoder_block(x, num_layers=num_layers, name='encoder-'+str(i), **block)
+            for i, n_layers in enumerate(num_layers[:-1]):
+                x = cls.encoder_block(x, num_layers=n_layers, name='encoder-'+str(i), **block)
                 encoder_outputs.append(x)
                 x = cls.transition_down(x, name='transition_down-%d' % i, **trans_down)
 
             axis = cls.channels_axis(kwargs.get('data_format'))
-            for i, num_layers in enumerate(num_blocks[::-1][:-1]):
-                x = cls.decoder_block(x, num_layers=num_layers, name='decoder-'+str(i), **block)
+            for i, n_layers in enumerate(num_layers[::-1][:-1]):
+                x = cls.decoder_block(x, num_layers=n_layers, name='decoder-'+str(i), **block)
                 x = cls.transition_up(x, name='transition_up-%d' % i, **trans_up)
                 x = cls.crop(x, encoder_outputs[-i-1], data_format=kwargs.get('data_format'))
                 x = tf.concat((x, encoder_outputs[-i-1]), axis=axis)
-            x = cls.decoder_block(x, num_layers=num_blocks[0], name='decoder-'+str(i+1), **block)
+            x = cls.decoder_block(x, num_layers=num_layers[0], name='decoder-'+str(i+1), **block)
         return x
 
     @classmethod
@@ -175,7 +175,7 @@ class DenseNetFC56(DenseNetFC):
     @classmethod
     def default_config(cls):
         config = DenseNetFC.default_config()
-        config['body']['num_blocks'] = [4] * 6
+        config['body']['num_layers'] = [4] * 6
         config['body']['block']['growth_rate'] = 12
         return config
 
@@ -184,7 +184,7 @@ class DenseNetFC67(DenseNetFC):
     @classmethod
     def default_config(cls):
         config = DenseNetFC.default_config()
-        config['body']['num_blocks'] = [5] * 6
+        config['body']['num_layers'] = [5] * 6
         config['body']['block']['growth_rate'] = 16
         return config
 
@@ -193,7 +193,7 @@ class DenseNetFC103(DenseNetFC):
     @classmethod
     def default_config(cls):
         config = DenseNetFC.default_config()
-        config['body']['num_blocks'] = [4, 5, 7, 10, 12, 15]
+        config['body']['num_layers'] = [4, 5, 7, 10, 12, 15]
         config['body']['block']['growth_rate'] = 16
         return config
 

@@ -23,7 +23,7 @@ except ImportError:
     pass
 
 from .dsindex import DatasetIndex, FilesIndex
-from .decorators import action, inbatch_parallel, ModelDirectory, any_action_failed
+from .decorators import action, inbatch_parallel, any_action_failed
 from .dataset import Dataset
 from .batch_base import BaseBatch
 from .components import MetaComponentsTuple
@@ -403,7 +403,7 @@ class Batch(BaseBatch):
 
     def get_model_by_name(self, model_name):
         """ Return a model specification given its name """
-        return ModelDirectory.get_model_by_name(model_name, batch=self)
+        return self.pipeline.get_model_by_name(model_name, batch=self)
 
     def get_errors(self, all_res):
         """ Return a list of errors from a parallel action """
