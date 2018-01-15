@@ -2,7 +2,7 @@
 import threading
 import logging
 
-from .named_expr import NamedExpression, eval_expr
+from .named_expr import eval_expr
 
 
 class Variable:
@@ -49,15 +49,18 @@ class Variable:
         self.set(value)
 
     def lock(self):
+        """ Acquire lock """
         if self._lock:
             self._lock.acquire()
 
     def unlock(self):
+        """ Release lock """
         if self._lock:
             self._lock.release()
 
 
 class VariableDirectory:
+    """ Storage for pipeline variables """
     def __init__(self):
         self.variables = {}
         self._lock = threading.Lock()
@@ -69,7 +72,7 @@ class VariableDirectory:
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self.lock = threading.Lock()
+        self._lock = threading.Lock()
 
     def lock(self, name=None):
         """ Lock the directory itself or a variable """
@@ -103,6 +106,7 @@ class VariableDirectory:
         return new_dir
 
     def items(self):
+        """ Return a sequence of (name, params) for all variables """
         for v in self.variables:
             var = self.variables[v].__getstate__()
             var.pop('value')
@@ -121,23 +125,23 @@ class VariableDirectory:
                 if not self.exists(name):
                     self.variables[name] = Variable(*args, pipeline=pipeline, **kwargs)
 
-    def create_many(self, variables):
+    def create_many(self, variables, pipeline=None):
         """ Create many variables at once """
         if isinstance(variables, (tuple, list)):
             variables = dict(zip(variables, [None] * len(variables)))
 
         for name, var in variables.items():
             var = var or {}
-            args = var.pop('args', ())
+            var.pop('args', ())
             kwargs = var.pop('kwargs', {})
-            self.create(name, **var, **kwargs)
+            self.create(name, **var, **kwargs, pipeline=pipeline)
 
     def init_on_run(self, pipeline=None):
         """ Initialize all variables before a pipeline is run """
         with self._lock:
             for v in self.variables:
                 if self.variables[v].init_on_each_run:
-                    self.variables[v].init(pipeline=pipeline)
+                    self.variables[v].initialize(pipeline=pipeline)
 
     def get(self, name, *args, create=False, pipeline=None, **kwargs):
         """ Return a variable value """

@@ -1,7 +1,6 @@
 """ Contains pipeline class """
 import traceback
 import concurrent.futures as cf
-import threading
 import asyncio
 import logging
 import queue as q
@@ -71,7 +70,7 @@ class Pipeline:
             self.config = {**config, **_config}
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
             self.variables = VariableDirectory()
-            self.variables.create_many(pipeline.variables)
+            self.variables.create_many(pipeline.variables, pipeline=self)
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
@@ -336,7 +335,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        self.variables.create_many(name, variables)
+        self.variables.create_many(variables)
         return self
 
     def _init_variables_before_run(self):
