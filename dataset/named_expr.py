@@ -174,18 +174,15 @@ class V(NamedExpression):
 
 class R(NamedExpression):
     """ A random value """
-    def __init__(self, name=None, *args, **kwargs):
-        super().__init__(name)
-        if callable(name):
-            self.random = lambda: name(*args, **kwargs)
-        elif isinstance(name, str) and hasattr(np.random, name):
-            name = getattr(np.random, name)
-            self.random = lambda: name(*args, **kwargs)
-
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a random variable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
-        return self.random()
+        if callable(name):
+            random = lambda: name(*args, **kwargs)
+        elif isinstance(name, str) and hasattr(np.random, name):
+            name = getattr(np.random, name)
+            random = lambda: name(*args, **kwargs)
+        return random()
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
