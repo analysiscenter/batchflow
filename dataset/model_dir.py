@@ -17,7 +17,6 @@ class NonInitializedModel:
         if isinstance(self.model_class, NamedExpression):
             raise ValueError("Model name should be explicitly set if a model class is a named expression",
                              self.model_class)
-        print(self.model_class)
         return self.model_class.__name__
 
 
@@ -28,8 +27,6 @@ class ModelDirectory:
         self.lock = threading.Lock()
 
     def __repr__(self):
-        #for m in self.models:
-        #    print(m, ':', self.models[m])
         return repr(self.models)
 
     def copy(self):
