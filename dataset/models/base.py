@@ -32,6 +32,7 @@ class BaseModel:
 
     @property
     def name(self):
+        """: str - the class name (serve as a default for a model name) """
         return self.__class__.__name__
 
     @classmethod

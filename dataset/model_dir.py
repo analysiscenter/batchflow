@@ -12,7 +12,7 @@ class NonInitializedModel:
 
     @property
     def name(self):
-        """ : str - a model name """
+        """: str - the model class name (serve as a default for a model name) """
         if isinstance(self.model_class, NamedExpression):
             raise ValueError("Model name should be explicitly set if a model class is a named expression",
                              self.model_class)
