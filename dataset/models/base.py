@@ -118,7 +118,7 @@ class BaseModel:
 
     @classmethod
     def parse(cls, config):
-        """ Parse config. """
+        """ Parse flatten config with slashes. """
         new_config = dict()
         for key, value in config.items():
             if isinstance(value, dict):
@@ -128,7 +128,7 @@ class BaseModel:
 
     @classmethod
     def flatten(cls, config):
-        """ Transform nested dict to flatten dict. """
+        """ Transform nested dict into flatten dict. """
         new_config = dict()
         for key, value in config.items():
             if isinstance(value, dict):
