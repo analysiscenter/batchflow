@@ -188,7 +188,9 @@ class R(NamedExpression):
             name = getattr(np.random, name)
         else:
             raise TypeError('Random distribution should be a callable or a numpy distribution')
-        return name(*self.args, **self.kwargs)
+        args = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
+        kwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
+        return name(*args, **kwargs)
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """

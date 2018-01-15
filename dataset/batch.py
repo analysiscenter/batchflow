@@ -180,6 +180,11 @@ class Batch(BaseBatch):
         return len(self.index)
 
     @property
+    def len(self):
+        """: int - number of items in the batch """
+        return len(self.index)
+
+    @property
     def data(self):
         """: tuple or named components - batch data """
         if self._data is None and self._preloaded is not None:
