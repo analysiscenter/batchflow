@@ -1,5 +1,4 @@
 """ Contains pipeline class """
-from copy import deepcopy
 import traceback
 import concurrent.futures as cf
 import threading

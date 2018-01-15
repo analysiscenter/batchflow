@@ -17,7 +17,6 @@ def _workers_count():
     return cpu_count * 4
 
 
-
 def _make_action_wrapper_with_args(use_lock=None):    # pylint: disable=redefined-outer-name
     return functools.partial(_make_action_wrapper, _use_lock=use_lock)
 

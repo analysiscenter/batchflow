@@ -1,9 +1,7 @@
 """ Pipeline decorators """
-import functools
 import threading
-import logging
 
-from .named_expr import NamedExpression, _DummyBatch, eval_expr
+from .named_expr import NamedExpression, eval_expr
 
 
 class NonInitializedModel:
@@ -14,6 +12,7 @@ class NonInitializedModel:
 
     @property
     def name(self):
+        """ : str - a model name """
         if isinstance(self.model_class, NamedExpression):
             raise ValueError("Model name should be explicitly set if a model class is a named expression",
                              self.model_class)
@@ -30,14 +29,27 @@ class ModelDirectory:
         return repr(self.models)
 
     def copy(self):
+        """ Make a shallow copy of the directory """
         new_md = ModelDirectory()
         new_md.models = {**self.models}
         return new_md
 
     def eval_expr(self, expr, batch=None):
+        """ Evaluate all named expressions in a given data structure """
         return eval_expr(expr, batch=batch)
 
     def get(self, name):
+        """ Retrieve a model from a directory without building it
+
+        Parameters
+        ----------
+        name : str
+            model name
+
+        Returns
+        -------
+        model
+        """
         return self.models.get(name)
 
     def get_model_by_name(self, name, batch=None):
@@ -104,7 +116,6 @@ class ModelDirectory:
         name = name or source_name
         if ref:
             self.add_model(name, model)
-
 
     def __add__(self, other):
         if not isinstance(other, ModelDirectory):
