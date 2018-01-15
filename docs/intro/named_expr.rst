@@ -8,12 +8,13 @@ Batches appear only when the pipeline is run. This is where **named expressions*
 A named expression specifies a substitution rule. When the pipeline is being executed,
 a named expression is replaced with the value calculated according to that rule.
 
-There are 4 types of named expressions:
+There are 5 types of named expressions:
 
 * B('name') - a batch class attribute or component name
 * V('name') - a pipeline variable name
 * C('name') - a pipeline config option
 * F(name) - a callable which takes a batch (could be a batch class method or an arbitrary function)
+* R('name') - a random value
 
 
 B - batch component
@@ -97,3 +98,14 @@ all ``F``-functions specified in static ``init_model`` get ``pipeline`` as a fir
 
 In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
 as the second parameter.
+
+
+R - random value
+================
+A sample from a random distribution. All `numpy distributions <https://docs.scipy.org/doc/numpy/reference/routines.random.html>`_ are supported::
+
+    pipeline
+        .some_action(R('uniform'))
+        .other_action(R('beta', 1, 1))
+        .yet_other_action(R('poisson', lam=4, size=(2, 5)))
+
