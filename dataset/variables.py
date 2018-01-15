@@ -148,7 +148,7 @@ class VariableDirectory:
         create = create or len(args) + len(kwargs) > 0
         if not self.exists(name):
             if create:
-                self.variable.create(name, *args, pipeline=self, **kwargs)
+                self.variable.create(name, *args, pipeline=pipeline, **kwargs)
             else:
                 raise KeyError("Variable '%s' does not exists" % name)
         var = self.variables[name].get()
