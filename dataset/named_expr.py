@@ -22,6 +22,7 @@ class NamedExpression:
 
     def set(self, value, batch=None, pipeline=None, model=None, mode='w'):
         """ Set a value to a named expression """
+        value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
         if mode in ['a', 'append']:
             self.append(value, batch=batch, pipeline=pipeline, model=model)
         elif mode in ['e', 'extend']:
@@ -163,7 +164,8 @@ class V(NamedExpression):
         """ Return a value of a pipeline variable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
-        return pipeline.get_variable(name)
+        value = pipeline.get_variable(name)
+        return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline variable """

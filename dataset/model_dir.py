@@ -25,6 +25,13 @@ class ModelDirectory:
         self.models = {}
         self.lock = threading.Lock()
 
+    def __getstate__(self):
+        return {'models': self.models}
+
+    def __setstate__(self, state):
+        self.models = state['models']
+        self.lock = threading.Lock()
+
     def __repr__(self):
         return repr(self.models)
 

@@ -1,0 +1,164 @@
+""" Contains Variable class and Variables storage class """
+import threading
+import logging
+
+from .named_expr import NamedExpression, eval_expr
+
+
+class Variable:
+    """ Pipeline variable """
+    def __init__(self, default=None, init=None, init_on_each_run=None, lock=True, pipeline=None, *args, **kwargs):
+        self.default = default
+        self.init = init
+        self.args = args
+        self.kwargs = kwargs
+        self.init_on_each_run = False
+        if callable(init_on_each_run):
+            self.init = init_on_each_run
+            self.init_on_each_run = True
+        self._lock = threading.Lock() if lock else None
+        self.value = None
+        self.initialize(pipeline=pipeline)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_lock'] = state['_lock'] is not None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._lock = threading.Lock() if state['_lock'] else None
+
+    def get(self):
+        """ Return a variable value """
+        return self.value
+
+    def set(self, value):
+        """ Assign a variable value """
+        self.value = value
+
+    def initialize(self, pipeline=None):
+        """ Initialize a variable value """
+        if self.init:
+            args = eval_expr(self.args, pipeline=pipeline)
+            kwargs = eval_expr(self.kwargs, pipeline=pipeline)
+            value = self.init(*args, **kwargs)
+        else:
+            value = self.default
+        value = eval_expr(value, pipeline=pipeline)
+        self.set(value)
+
+    def lock(self):
+        if self._lock:
+            self._lock.acquire()
+
+    def unlock(self):
+        if self._lock:
+            self._lock.release()
+
+
+class VariableDirectory:
+    def __init__(self):
+        self.variables = {}
+        self._lock = threading.Lock()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop('_lock')
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.lock = threading.Lock()
+
+    def lock(self, name=None):
+        """ Lock the directory itself or a variable """
+        if name is None:
+            if self._lock:
+                self._lock.acquire()
+        else:
+            self.variables[name].lock()
+
+    def unlock(self, name=None):
+        """ Unlock the directory itself or a variable """
+        if name is None:
+            if self._lock:
+                self._lock.release()
+        else:
+            self.variables[name].unlock()
+
+
+    def copy(self):
+        """ Make a shallow copy of the directory """
+        new_dir = VariableDirectory()
+        new_dir.variables = {**self.variables}
+        return new_dir
+
+    def __add__(self, other):
+        if not isinstance(other, VariableDirectory):
+            raise TypeError("VariableDirectory is expected, but given '%s'" % type(other).__name__)
+
+        new_dir = self.copy()
+        new_dir.variables.update(other.variables)
+        return new_dir
+
+    def items(self):
+        for v in self.variables:
+            var = self.variables[v].__getstate__()
+            var.pop('value')
+            var['lock'] = var['_lock']
+            var.pop('_lock')
+            yield v, var
+
+    def exists(self, name):
+        """ Checks if a variable already exists """
+        return name in self.variables
+
+    def create(self, name, *args, pipeline=None, **kwargs):
+        """ Create a variable """
+        if not self.exists(name):
+            with self._lock:
+                if not self.exists(name):
+                    self.variables[name] = Variable(*args, pipeline=pipeline, **kwargs)
+
+    def create_many(self, variables):
+        """ Create many variables at once """
+        if isinstance(variables, (tuple, list)):
+            variables = dict(zip(variables, [None] * len(variables)))
+
+        for name, var in variables.items():
+            var = var or {}
+            args = var.pop('args', ())
+            kwargs = var.pop('kwargs', {})
+            self.create(name, **var, **kwargs)
+
+    def init_on_run(self, pipeline=None):
+        """ Initialize all variables before a pipeline is run """
+        with self._lock:
+            for v in self.variables:
+                if self.variables[v].init_on_each_run:
+                    self.variables[v].init(pipeline=pipeline)
+
+    def get(self, name, *args, create=False, pipeline=None, **kwargs):
+        """ Return a variable value """
+        create = create or len(args) + len(kwargs) > 0
+        if not self.exists(name):
+            if create:
+                self.variable.create(name, *args, pipeline=self, **kwargs)
+            else:
+                raise KeyError("Variable '%s' does not exists" % name)
+        var = self.variables[name].get()
+        return var
+
+    def set(self, name, value):
+        """ Set a variable value """
+        if not self.exists(name):
+            raise KeyError("Variable '%s' does not exist" % name)
+        self.variables[name].set(value)
+
+    def delete(self, name):
+        """ Remove the variable with a given name """
+        if not self.exists(name):
+            logging.warning("Variable '%s' does not exist", name)
+        else:
+            self.variables.pop(name)

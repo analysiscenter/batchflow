@@ -12,6 +12,7 @@ from .base import Baseset
 from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
 from .model_dir import ModelDirectory
+from .variables import VariableDirectory
 
 
 JOIN_ID = '#_join'
@@ -55,23 +56,22 @@ def hashable(x):
 class Pipeline:
     """ Pipeline """
     def __init__(self, dataset=None, config=None, pipeline=None, proba=None, repeat=None):
-        self._variables = {}
-        self._variables_lock = threading.Lock()
 
         if pipeline is None:
             self.dataset = dataset
             self.config = config or {}
             self._action_list = []
-            self.delete_all_variables()
             self._lazy_run = None
             self.models = ModelDirectory()
+            self.variables = VariableDirectory()
         else:
             self.dataset = pipeline.dataset
             config = config or {}
             _config = pipeline.config or {}
             self.config = {**config, **_config}
             self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
-            self.init_variables(pipeline._variables)  # pylint: disable=protected-access
+            self.variables = VariableDirectory()
+            self.variables.create_many(pipeline.variables)
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
@@ -131,7 +131,7 @@ class Pipeline:
         new_p1 = cls.from_pipeline(pipe1)
         new_p1._action_list += pipe2._action_list[:]
         new_p1.config.update(pipe2.config)
-        new_p1._variables.update(**pipe2._variables)
+        new_p1.variables += pipe2.variables
         new_p1.models += pipe2.models
         new_p1.dataset = new_p1.dataset or pipe2.dataset
         return new_p1
@@ -206,12 +206,14 @@ class Pipeline:
                                   'proba': proba, 'repeat': repeat})
 
     def __getstate__(self):
-        return {'dataset': self.dataset, 'action_list': self._action_list, 'variables': self._variables}
+        return {'dataset': self.dataset, 'action_list': self._action_list, 'variables': self.variables,
+                'models': self.models}
 
     def __setstate__(self, state):
         self.dataset = state['dataset']
         self._action_list = state['action_list']
-        self._variables = state['variables']
+        self.variables = state['variables']
+        self.models = state['models']
 
     @property
     def index(self):
@@ -244,17 +246,22 @@ class Pipeline:
 
     def has_variable(self, name):
         """ Check if a variable exists
-        Args:
-            name: string - a name of the variable
-        Return:
-            True if the variable exists
-        """
-        return hashable(name) and name in self._variables
 
-    def get_variable(self, name, default=None, init=None, init_on_each_run=None, create=False):
+        Parameters
+        ----------
+        name : str
+            a name of the variable
+
+        Returns
+        -------
+        True if the variable exists
+        """
+        return hashable(name) and self.variables.exists(name)
+
+    def get_variable(self, name, *args, create=False, **kwargs):
         """ Return a variable value.
 
-        If the variable does not exists, it will be created and initialized (see `init_variable` below)
+        If the variable does not exists, it might be created and initialized (see `init_variable` below)
 
         Parameters
         ----------
@@ -262,13 +269,8 @@ class Pipeline:
             a name of the variable
         create : bool
             whether to create a variable if it does not exist. Default is `False`.
-            If `init` or `init_on_each_run` is specified, then the variable will created regardless of `create`.
-        default
-            a value for the variable if it does not exists
-        init : callable
-            a function which returns the default value
-        init_on_each_run : callable
-            same as `init` but initializes the variable before each run
+        args, kwargs
+            parameters for init_variable if create is True
 
         Returns
         -------
@@ -278,14 +280,7 @@ class Pipeline:
         ------
         `KeyError` if a variable does not exist
         """
-        create = callable(init) or callable(init_on_each_run) or create
-        if not self.has_variable(name):
-            if create:
-                self.init_variable(name, default, init, init_on_each_run)
-            else:
-                raise KeyError("No such variable '%s' exists" % name)
-        var = self._variables.get(name)
-        return var.get('value', default)
+        return self.variables.get(name, *args, create=create, pipeline=self, **kwargs)
 
     def init_variable(self, name, default=None, init=None, init_on_each_run=None, lock=True, *args, **kwargs):
         """ Create a variable if not exists.
@@ -297,8 +292,6 @@ class Pipeline:
             a name of the variable
         default
             an initial value for the variable
-        init : callable
-            a function which returns the default value
         init_on_each_run : callable
             same as `init` but initializes the variable before each run
         lock : bool
@@ -317,17 +310,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        _ = args, kwargs
-        if not self.has_variable(name):
-            with self._variables_lock:
-                if not self.has_variable(name):
-                    if callable(init_on_each_run):
-                        init = init_on_each_run
-                        init_on_each_run = True
-                    lock = threading.Lock() if lock else None
-                    self._variables[name] = dict(default=default, init=init, init_on_each_run=init_on_each_run,
-                                                 lock=lock)
-                    self.assign_variable(name, default if init is None else init())
+        self.variables.create(name, default, init, init_on_each_run, lock, *args, **kwargs)
         return self
 
     def init_variables(self, variables):
@@ -353,28 +336,11 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        if not isinstance(variables, dict):
-            variables = dict(zip(variables, [None] * len(variables)))
-
-        for name, var in variables.items():
-            var = var or {}
-            self.init_variable(name, **var)
+        self.variables.create_many(name, variables)
         return self
 
     def _init_variables_before_run(self):
-        for name, var in self._variables.items():
-            if var['init_on_each_run']:
-                self.assign_variable(name, var['default'] if var['init'] is None else var['init']())
-
-    def lock_variable(self, name):
-        """ Acquire a variable lock to prevent race condition and allow mutlithreaded pipeline execution """
-        if self._variables[name]['lock'] is not None:
-            self._variables[name]['lock'].acquire()
-
-    def unlock_variable(self, name):
-        """ Release a previsouly acquired variable lock """
-        if self._variables[name]['lock'] is not None:
-            self._variables[name]['lock'].release()
+        self.variables.init_on_run(pipeline=self)
 
     def set_variable(self, name, value, mode='w', batch=None):
         """ Set a variable value
@@ -414,10 +380,10 @@ class Pipeline:
             logging.warning("Pipeline variable '%s' has not been initialized", var_name)
             self.init_variable(var_name)
 
-        self.lock_variable(var_name)
+        self.variables.lock(var_name)
         value = self._get_value(value, batch=batch)
-        self._variables[name].update({'value': value})
-        self.unlock_variable(var_name)
+        self.variables.set(var_name, value)
+        self.variables.unlock(var_name)
 
     def delete_variable(self, name):
         """ Delete a variable
@@ -425,16 +391,14 @@ class Pipeline:
 
         Parameters
         ----------
-        name : str - a name of the variable
+        name : str
+            a name of the variable
 
         Returns
         -------
         self - in order to use it in the pipeline chains
         """
-        if not self.has_variable(name):
-            logging.warning("Pipeline variable '%s' does not exist", name)
-        else:
-            self._variables.pop(name)
+        self.variables.delete(name)
         return self
 
     def del_variable(self, name):
@@ -445,7 +409,7 @@ class Pipeline:
 
     def delete_all_variables(self):
         """ Delete all variables """
-        self._variables = dict()
+        self.variables = VariableDirectory()
 
     def inc_variable(self, name):
         """ Increment a value of a given variable during pipeline execution """
@@ -454,11 +418,9 @@ class Pipeline:
 
     def _exec_inc_variable(self, _, action):
         if self.has_variable(action['var_name']):
-            if self._variables[action['var_name']]['lock'] is not None:
-                with self._variables[action['var_name']]['lock']:
-                    self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
-            else:
-                self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
+            self.variables.lock(action['var_name'])
+            self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
+            self.variables.unlock(action['var_name'])
         else:
             raise KeyError("No such variable %s exists", action['var_name'])
 
@@ -816,6 +778,7 @@ class Pipeline:
         - V('name') - a pipeline variable name
         - C('name') - a pipeline config option
         - F(name) - a callable which takes (batch, model)
+        - R('name') - a random value from a distribution 'name'
 
         These expressions are substituted by their actual values.
         All other value will be used "as is".
