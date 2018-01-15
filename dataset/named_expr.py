@@ -1,4 +1,6 @@
 """ Contains named expression classes"""
+import functools
+import numpy as np
 
 
 class _DummyBatch:
@@ -169,3 +171,23 @@ class V(NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.assign_variable(name, value, batch=batch)
+
+
+class R(NamedExpression):
+    """ A random value """
+    def __init__(self, name=None, *args, **kwargs):
+        super().__init__(name)
+        if callable(name):
+            self.random = lambda : name(*args, **kwargs)
+        elif isinstance(name, str) and hasattr(np.random, name):
+            self.random = lambda : getattr(np.random, name)(*args, **kwargs)
+
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a value of a random variable """
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        return self.random()
+
+    def assign(self, *args, **kwargs):
+        """ Assign a value by calling a callable """
+        _ = args, kwargs
+        raise NotImplementedError("Assigning a value to a random variable is not supported")
