@@ -269,7 +269,7 @@ class Pipeline:
         create : bool
             whether to create a variable if it does not exist. Default is `False`.
         args, kwargs
-            parameters for init_variable if create is True
+            parameters for :meth:`.init_variable` if ``create`` is True.
 
         Returns
         -------
@@ -291,10 +291,14 @@ class Pipeline:
             a name of the variable
         default
             an initial value for the variable
+        init : callable
+            a function returning a default value
         init_on_each_run : callable
             same as `init` but initializes the variable before each run
         lock : bool
             whether to lock a variable before each update (default: True)
+        args, kwargs
+            parameters for init function
 
         Returns
         -------
@@ -309,7 +313,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        self.variables.create(name, default, init, init_on_each_run, lock, *args, **kwargs)
+        self.variables.create(name, default, init, init_on_each_run, lock, pipeline=self, *args, **kwargs)
         return self
 
     def init_variables(self, variables):
@@ -320,7 +324,7 @@ class Pipeline:
         variables : dict or tuple
             if dict
                 key : str - a variable name,
-                value : dict -  a variable value and params (see `init_variable`)
+                value : dict -  a variable value and init params (see :meth:`.init_variable`)
             if tuple, contains variable names which will have None as default values
 
         Returns
@@ -373,14 +377,14 @@ class Pipeline:
 
     def assign_variable(self, name, value, batch=None):
         """ Assign a value to a variable """
-        var_name = self._get_value(name, batch=batch)
+        var_name = self._eval_expr(name, batch=batch)
 
         if not self.has_variable(var_name):
             logging.warning("Pipeline variable '%s' has not been initialized", var_name)
             self.init_variable(var_name)
 
         self.variables.lock(var_name)
-        value = self._get_value(value, batch=batch)
+        value = self._eval_expr(value, batch=batch)
         self.variables.set(var_name, value)
         self.variables.unlock(var_name)
 
@@ -433,13 +437,6 @@ class Pipeline:
         value
             an updating value, could be a value of any type or a named expression
 
-            - B('name') - a batch class attribute or component name
-            - V('name') - a pipeline variable name
-            - C('name') - a pipeline config option
-            - F(name) - a callable which takes a batch (could be a batch class method or a function)
-
-            These expressions will be substituted for their real value.
-
         mode : str
             a method to update a variable value, could be one of:
 
@@ -472,8 +469,8 @@ class Pipeline:
         return self.append_action(*args, **kwargs)
 
     def _exec_print(self, batch, action):
-        args_value = self._get_value(action['args'], batch=batch)
-        kwargs_value = self._get_value(action['kwargs'], batch=batch)
+        args_value = self._eval_expr(action['args'], batch=batch)
+        kwargs_value = self._eval_expr(action['kwargs'], batch=batch)
 
         args = []
         if len(args_value) == 0:
@@ -537,8 +534,8 @@ class Pipeline:
         action_list = action_list or self._action_list
         for action in action_list:
             _action = action.copy()
-            _action['args'] = self._get_value(action['args'], batch=batch)
-            _action['kwargs'] = self._get_value(action['kwargs'], batch=batch)
+            _action['args'] = self._eval_expr(action['args'], batch=batch)
+            _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
 
             if _action.get('#dont_run', False):
                 pass
@@ -589,7 +586,7 @@ class Pipeline:
         batch_res.pipeline = self
         return batch_res
 
-    def _get_value(self, expr, batch=None, model=None):
+    def _eval_expr(self, expr, batch=None, model=None):
         return eval_expr(expr, batch=batch, pipeline=self, model=model)
 
     def call(self, fn, save_to=None, mode='w', *args, **kwargs):
@@ -609,7 +606,7 @@ class Pipeline:
         return self.append_action(*args, **kwargs)
 
     def _exec_call(self, batch, action):
-        fn = self._get_value(action['fn'], batch)
+        fn = self._eval_expr(action['fn'], batch)
         if callable(fn):
             output = fn(batch, *action['args'], **action['kwargs'])
         else:
@@ -619,7 +616,7 @@ class Pipeline:
 
     def get_model_by_name(self, name, batch=None):
         """ Retrieve a model by its name """
-        name = self._get_value(name, batch=batch)
+        name = self._eval_expr(name, batch=batch)
         return self.models.get_model_by_name(name, batch=batch)
 
     def init_model(self, mode, model_class=None, name=None, config=None):
@@ -670,9 +667,9 @@ class Pipeline:
         return self.append_action()
 
     def _exec_import_model(self, batch, action):
-        model_name = self._get_value(action['model_name'], batch=batch)
-        source_name = self._get_value(action['source_name'], batch=batch)
-        source = self._get_value(action['source'], batch=batch)
+        model_name = self._eval_expr(action['model_name'], batch=batch)
+        source_name = self._eval_expr(action['source_name'], batch=batch)
+        source = self._eval_expr(action['source'], batch=batch)
         self.models.import_model(source_name, source, model_name)
 
     def train_model(self, name, make_data=None, save_to=None, mode='w', *args, **kwargs):
@@ -712,6 +709,7 @@ class Pipeline:
         - V('name') - a pipeline variable name
         - C('name') - a pipeline config option
         - F(name) - a callable which takes (batch, model)
+        - R('name') - a random value from a given distribution
 
         These expressions are substituted by their actual values.
         All other value will be used "as is".
@@ -821,13 +819,13 @@ class Pipeline:
         if callable(make_data):
             kwargs = make_data(batch=batch, model=model)
         else:
-            kwargs = self._get_value(make_data, batch=batch, model=model)
+            kwargs = self._eval_expr(make_data, batch=batch, model=model)
         if not isinstance(kwargs, dict):
             raise TypeError("make_data should return a dict with kwargs", make_data)
 
         kwargs = {**action['kwargs'], **kwargs}
 
-        kwargs = self._get_value(kwargs, batch=batch, model=model)
+        kwargs = self._eval_expr(kwargs, batch=batch, model=model)
 
         return args, kwargs
 

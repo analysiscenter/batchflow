@@ -23,7 +23,7 @@ if __name__ == "__main__":
     mnist = MNIST()
 
     train_template = (Pipeline(config=dict(model=VGG7))
-                .init_variable('model', VGG7)
+                .init_variable('model', C('model'))
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
                 .init_model('dynamic', V('model'), 'conv',
