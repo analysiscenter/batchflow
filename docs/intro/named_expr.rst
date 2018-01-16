@@ -14,7 +14,7 @@ There are 5 types of named expressions:
 * V('name') - a pipeline variable name
 * C('name') - a pipeline config option
 * F(name) - a callable which takes a batch (could be a batch class method or an arbitrary function)
-* F_(name) - a an arbitrary callable (the current batch won't be passed as a parameter)
+* \F_(name) - a an arbitrary callable (the current batch won't be passed as a parameter)
 * R('name') - a random value
 
 
@@ -95,13 +95,14 @@ or any other Python callable.
    However, there are a few exceptions.
 
 As static models are initialized before a pipeline is run (i.e. before any batch is created),
-all ``F``-functions specified in static ``init_model`` get ``pipeline`` as a first parameter.
+all ``F``-functions specified in static ``init_model`` get ``pipeline`` as the first parameter.
 
 In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
 as the second parameter. So you can adapt the function to specific models.
 
-F_ - callable
-=============
+
+\F_ - callable
+==============
 A function which takes arbitrary arguments.::
 
     pipeline
@@ -112,7 +113,7 @@ A function which takes arbitrary arguments.::
 
 R - random value
 ================
-A sample from a random distribution. All `numpy distributions <https://docs.scipy.org/doc/numpy/reference/routines.random.html>`_ are supported::
+A sample from a random distribution. All `numpy distributions <https://docs.scipy.org/doc/numpy/reference/routines.random.html#distributions>`_ are supported::
 
     pipeline
         .some_action(R('uniform'))

@@ -206,13 +206,14 @@ class Pipeline:
 
     def __getstate__(self):
         return {'dataset': self.dataset, 'action_list': self._action_list, 'variables': self.variables,
-                'models': self.models}
+                'models': self.models, 'lazy_run': self._lazy_run}
 
     def __setstate__(self, state):
         self.dataset = state['dataset']
         self._action_list = state['action_list']
         self.variables = state['variables']
         self.models = state['models']
+        self._lazy_run = state['lazy_run']
 
     @property
     def index(self):
