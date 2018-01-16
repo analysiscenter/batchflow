@@ -85,7 +85,6 @@ class VariableDirectory:
         else:
             self.variables[name].unlock()
 
-
     def copy(self):
         """ Make a shallow copy of the directory """
         new_dir = VariableDirectory()
