@@ -14,6 +14,7 @@ There are 5 types of named expressions:
 * V('name') - a pipeline variable name
 * C('name') - a pipeline config option
 * F(name) - a callable which takes a batch (could be a batch class method or an arbitrary function)
+* F_(name) - a an arbitrary callable (the current batch won't be passed as a parameter)
 * R('name') - a random value
 
 
@@ -97,7 +98,16 @@ As static models are initialized before a pipeline is run (i.e. before any batch
 all ``F``-functions specified in static ``init_model`` get ``pipeline`` as a first parameter.
 
 In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
-as the second parameter.
+as the second parameter. So you can adapt the function to specific models.
+
+F_ - callable
+=============
+A function which takes arbitrary arguments.::
+
+    pipeline
+        ...
+        .init_variable('logfile', F_(open, 'file.log', 'w'))
+        ...
 
 
 R - random value

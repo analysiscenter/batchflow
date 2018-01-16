@@ -229,7 +229,7 @@ Initializing a variable
     my_pipeline = (my_dataset.p
         .init_variable("my_variable", 100)
         .init_variable("some_counter", init_on_each_run=0)
-        .init_variable("var with init function", init=my_init_function)
+        .init_variable("var with init function", F_(my_init_function))
         .init_variable("loss_history", init_on_each_run=list)
         .first_action()
         .second_action()
@@ -292,6 +292,7 @@ The second parameter is an updating value and it can be a value of any type or :
 * V('name') - a pipeline variable name
 * C('name') - a pipeline config option
 * F(name) - a callable which takes a batch (could be a batch class method or a function)
+* R('name') - a random value from a given distribution
 
 Mode could be one of:
 
