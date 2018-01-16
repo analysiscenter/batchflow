@@ -131,23 +131,25 @@ class C(NamedExpression):
 
 
 class F(NamedExpression):
-    """ A function, method or any other callable """
-    def __init__(self, name=None, *args, **kwargs):
+    """ A function, method or any other callable that takes a batch or a pipeline and possibly other arguments """
+    def __init__(self, name=None, _pass=True, *args, **kwargs):
         super().__init__(name)
         self.args = args
         self.kwargs = kwargs
+        self._pass = _pass
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         args = []
-        if isinstance(batch, _DummyBatch) or batch is None:
-            _pipeline = batch.pipeline if batch is not None else pipeline
-            args += [_pipeline]
-        else:
-            args += [batch]
-        if model is not None:
-            args += [model]
+        if self._pass:
+            if isinstance(batch, _DummyBatch) or batch is None:
+                _pipeline = batch.pipeline if batch is not None else pipeline
+                args += [_pipeline]
+            else:
+                args += [batch]
+            if model is not None:
+                args += [model]
         fargs = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
         fkwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
         return name(*args, *fargs, **fkwargs)
@@ -156,6 +158,11 @@ class F(NamedExpression):
         """ Assign a value by calling a callable """
         _ = args, kwargs
         raise NotImplementedError("Assigning a value with a callable is not supported")
+
+class F_(F):
+    """ A function, method or any other callable """
+    def __init__(self, name=None, *args, **kwargs):
+        super().__init__(name, _pass=False, *args, **kwargs)
 
 
 class V(NamedExpression):

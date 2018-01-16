@@ -2,20 +2,21 @@
 import threading
 import logging
 
-from .named_expr import eval_expr
+from .named_expr import eval_expr, F_
 
 
 class Variable:
     """ Pipeline variable """
-    def __init__(self, default=None, init=None, init_on_each_run=None, lock=True, pipeline=None, *args, **kwargs):
+    def __init__(self, default=None, init_on_each_run=False, lock=True, pipeline=None):
         self.default = default
-        self.init = init
-        self.args = args
-        self.kwargs = kwargs
-        self.init_on_each_run = False
-        if callable(init_on_each_run):
-            self.init = init_on_each_run
+        if init_on_each_run is not None and not isinstance(init_on_each_run, bool):
+            if callable(init_on_each_run):
+                self.default = F_(init_on_each_run)
+            else:
+                self.default = init_on_each_run
             self.init_on_each_run = True
+        else:
+            self.init_on_each_run = init_on_each_run
         self._lock = threading.Lock() if lock else None
         self.value = None
         self.initialize(pipeline=pipeline)
@@ -39,13 +40,7 @@ class Variable:
 
     def initialize(self, pipeline=None):
         """ Initialize a variable value """
-        if self.init:
-            args = eval_expr(self.args, pipeline=pipeline)
-            kwargs = eval_expr(self.kwargs, pipeline=pipeline)
-            value = self.init(*args, **kwargs)
-        else:
-            value = self.default
-        value = eval_expr(value, pipeline=pipeline)
+        value = eval_expr(self.default, pipeline=pipeline)
         self.set(value)
 
     def lock(self):
