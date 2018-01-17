@@ -159,7 +159,7 @@ class F(NamedExpression):
         _ = args, kwargs
         raise NotImplementedError("Assigning a value with a callable is not supported")
 
-class F_(F):
+class L(F):
     """ A function, method or any other callable """
     def __init__(self, name=None, *args, **kwargs):
         super().__init__(name, _pass=False, *args, **kwargs)

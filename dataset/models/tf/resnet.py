@@ -24,7 +24,7 @@ class ResNet(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'labels' (see :meth:`._make_inputs`)
 
     input_block : dict
         filters : int

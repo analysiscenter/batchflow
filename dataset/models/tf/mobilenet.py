@@ -21,9 +21,10 @@ class MobileNet(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`.TFModel._make_inputs`)
+        dict with 'images' and 'labels' (see :meth:`.TFModel._make_inputs`)
 
     input_block : dict
+        parameters for the initial block (default is 'cna', 32, 3, strides=2)
 
     body : dict
         strides : list of int

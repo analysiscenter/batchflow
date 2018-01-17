@@ -13,7 +13,7 @@ class EncoderDecoder(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with 'images' key (see :meth:`._make_inputs`)
+        dict with 'images' (see :meth:`._make_inputs`)
 
     body : dict
         encoder : dict
@@ -31,7 +31,7 @@ class EncoderDecoder(TFModel):
                 number of upsampling blocks
             factor : int or list of int
                 if int, the total upsampling factor for all blocks combined.
-                if list, upsampling factor for each block.
+                if list, upsampling factors for each block.
             layout : str
                 upsampling method (see :func:`~.layers.upsample`)
 
@@ -67,7 +67,7 @@ class EncoderDecoder(TFModel):
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
-        """ Base layers
+        """ Create encoder, embedding and decoder
 
         Parameters
         ----------
@@ -99,6 +99,7 @@ class EncoderDecoder(TFModel):
 
     @classmethod
     def head(cls, inputs, targets, name='head', **kwargs):
+        """ Linear convolutions with kernel 1 """
         with tf.variable_scope(name):
             x = cls.crop(inputs, targets, kwargs['data_format'])
             channels = cls.num_channels(targets)
@@ -153,7 +154,7 @@ class EncoderDecoder(TFModel):
 
     @classmethod
     def decoder(cls, inputs, name='decoder', **kwargs):
-        """ Create decoder from a base_class model
+        """ Create decoder with a given number of upsampling stages
 
         Parameters
         ----------
@@ -166,7 +167,7 @@ class EncoderDecoder(TFModel):
 
         Returns
         -------
-        list of tf.Tensor
+        tf.Tensor
         """
         steps = kwargs.pop('num_stages', len(inputs)-1)
         factor = kwargs.pop('factor')

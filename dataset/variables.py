@@ -2,7 +2,7 @@
 import threading
 import logging
 
-from .named_expr import eval_expr, F_
+from .named_expr import eval_expr, L
 
 
 class Variable:
@@ -11,7 +11,7 @@ class Variable:
         self.default = default
         if init_on_each_run is not None and not isinstance(init_on_each_run, bool):
             if callable(init_on_each_run):
-                self.default = F_(init_on_each_run)
+                self.default = L(init_on_each_run)
             else:
                 self.default = init_on_each_run
             self.init_on_each_run = True
@@ -84,7 +84,6 @@ class VariableDirectory:
                 self._lock.release()
         else:
             self.variables[name].unlock()
-
 
     def copy(self):
         """ Make a shallow copy of the directory """

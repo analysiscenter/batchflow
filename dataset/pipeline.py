@@ -181,7 +181,10 @@ class Pipeline:
 
     def __getattr__(self, name):
         """ Check if an unknown attr is an action from some batch class """
-        if self._is_batch_method(name):
+        if name[:2] == '__' and name[-2:] == '__':
+            # if a magic method is not defined, throw an error
+            raise AttributeError()
+        elif self._is_batch_method(name):
             self._action_list.append({'name': name})
             return self.append_action
         else:
@@ -203,16 +206,6 @@ class Pipeline:
         """ Add a nested pipeline to the log of future actions """
         self._action_list.append({'name': PIPELINE_ID, 'pipeline': pipeline,
                                   'proba': proba, 'repeat': repeat})
-
-    def __getstate__(self):
-        return {'dataset': self.dataset, 'action_list': self._action_list, 'variables': self.variables,
-                'models': self.models}
-
-    def __setstate__(self, state):
-        self.dataset = state['dataset']
-        self._action_list = state['action_list']
-        self.variables = state['variables']
-        self.models = state['models']
 
     @property
     def index(self):
