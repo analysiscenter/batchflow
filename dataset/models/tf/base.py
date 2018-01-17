@@ -1442,7 +1442,7 @@ class TFModel(BaseModel):
             x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
                            **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
 
-            shape = [-1] + [1] * (len(cls.get_spatial_shape(inputs, data_format)) + 1)
+            shape = [-1] + [1] * (len(cls.spatial_shape(inputs, data_format)) + 1)
             axis = cls.channels_axis(data_format)
             shape[axis] = in_filters
             scale = tf.reshape(x, shape)
