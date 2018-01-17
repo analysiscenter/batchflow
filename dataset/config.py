@@ -8,9 +8,9 @@ class Config:
         if config is None:
             self.config = dict()
         elif isinstance(config, Config):
-            self.config = deepcopy(config.config)
+            self.config = self.parse(deepcopy(config.config))
         elif isinstance(config, dict):
-            self.config = deepcopy(config)
+            self.config = self.parse(deepcopy(config))
 
     def pop(self, variables, config=None, **kwargs):
         """ Return variables and remove them from config.
