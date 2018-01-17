@@ -273,7 +273,7 @@ class ImagesBatch(BaseImagesBatch):
         if len(image.shape) > 2:
             factor = np.concatenate((factor, [1.] * len(image.shape[2:])))
         order = kwargs.pop('order', 0)
-        new_image = scipy.ndimage.interpolation.zoom(image, factor, order, *args, **kwargs)
+        new_image = scipy.ndimage.interpolation.zoom(image, factor, order=order, *args, **kwargs)
         return new_image
 
 
