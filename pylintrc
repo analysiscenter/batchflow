@@ -14,11 +14,11 @@ max-statements=50
 ignored-modules=numpy,cv2
 
 [MESSAGE CONTROL]
-disable=no-member,no-value-for-parameter,no-self-use,too-many-locals,too-few-public-methods,too-many-public-methods,too-many-branches,unsubscriptable-object,redefined-variable-type,too-many-star-expressions,duplicate-code,not-context-manager,too-many-lines,global-statement
+disable=no-member,no-value-for-parameter,no-self-use,too-many-locals,too-few-public-methods,too-many-public-methods,too-many-branches,unsubscriptable-object,redefined-variable-type,too-many-star-expressions,duplicate-code,not-context-manager,too-many-lines,global-statement, locally-disabled
 
 [BASIC]
 class-rgx=[A-Z_][a-zA-Z0-9_]+$
-good-names=a,b,c,d,f,i,j,k,l,m,n,o,p,q,r,s,t,v,x,y,z,e,ex,_,ix,fn,B,C,V,F,R,logger
+good-names=a,b,c,d,f,i,j,k,l,m,n,o,p,q,r,s,t,v,x,y,z,e,ex,_,ix,fn,B,C,V,F,L,R,logger
 
 [MISCELLANEOUS]
 notes=

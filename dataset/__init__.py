@@ -6,7 +6,7 @@ from .batch import Batch, ArrayBatch, DataFrameBatch
 from .batch_image import ImagesBatch, ImagesPILBatch
 from .dataset import Dataset
 from .pipeline import Pipeline
-from .named_expr import B, C, F, V, R
+from .named_expr import B, C, F, L, V, R
 from .jointdataset import JointDataset, FullDataset
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed

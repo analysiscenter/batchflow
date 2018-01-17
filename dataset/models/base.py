@@ -116,6 +116,29 @@ class BaseModel:
         else:
             config[var_name] = value
 
+    @classmethod
+    def parse(cls, config):
+        """ Parse flatten config with slashes. """
+        new_config = dict()
+        for key, value in config.items():
+            if isinstance(value, dict):
+                value = cls.parse(value)
+            cls.put(key, value, new_config)
+        return new_config
+
+    @classmethod
+    def flatten(cls, config):
+        """ Transform nested dict into flatten dict. """
+        new_config = dict()
+        for key, value in config.items():
+            if isinstance(value, dict):
+                value = cls.flatten(value)
+                for _key, _value in value.items():
+                    new_config[key+'/'+_key] = _value
+            else:
+                new_config[key] = value
+        return new_config
+
     def _make_inputs(self, names=None, config=None):
         """ Make model input data using config
 

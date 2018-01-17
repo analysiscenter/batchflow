@@ -20,7 +20,7 @@ class Inception_v4(Inception):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
    """
     @classmethod
     def default_config(cls):
