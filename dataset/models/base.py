@@ -57,7 +57,6 @@ class BaseModel:
             unpack = True
 
         ret_vars = []
-        config = cls.parse(config)
         for variable in variables:
             _config = config
             if '/' in variable:
