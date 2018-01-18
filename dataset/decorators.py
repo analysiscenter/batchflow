@@ -234,7 +234,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             """ Wrap a method in a required parallel engine """
             if asyncio.iscoroutinefunction(method) or target in ['async', 'a']:
                 return wrap_with_async(self, args, kwargs)
-            if target in ['threads', 't']:
+            elif target in ['threads', 't']:
                 return wrap_with_threads(self, args, kwargs)
             elif target in ['mpc', 'm']:
                 return wrap_with_mpc(self, args, kwargs)
