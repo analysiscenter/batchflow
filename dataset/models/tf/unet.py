@@ -13,7 +13,7 @@ class UNet(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
 
     body : dict
         num_blocks : int

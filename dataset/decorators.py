@@ -152,22 +152,17 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 mkwargs.update(kwargs)
             return margs, mkwargs
 
-        def wrap_with_threads(self, args, kwargs, nogil=False):
+        def wrap_with_threads(self, args, kwargs):
             """ Run a method in parallel """
             init_fn, post_fn = _check_functions(self)
 
             n_workers = kwargs.pop('n_workers', _workers_count())
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
-                if nogil:
-                    nogil_fn = method(self, *args, **kwargs)
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for arg in _call_init_fn(init_fn, args, full_kwargs):
                     margs, mkwargs = _make_args(arg, args, kwargs)
-                    if nogil:
-                        one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
-                    else:
-                        one_ft = executor.submit(method, self, *margs, **mkwargs)
+                    one_ft = executor.submit(method, self, *margs, **mkwargs)
                     futures.append(one_ft)
 
                 timeout = kwargs.get('timeout', None)
@@ -218,7 +213,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
         def wrap_with_for(self, args, kwargs):
-            """ Run a method in parallel """
+            """ Run a method sequentially (without parallelism) """
             init_fn, post_fn = _check_functions(self)
 
             _ = kwargs.pop('n_workers', _workers_count())
@@ -228,8 +223,6 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 margs, mkwargs = _make_args(arg, args, kwargs)
                 try:
                     one_ft = method(self, *margs, **mkwargs)
-                    if callable(one_ft):
-                        one_ft = one_ft(*margs, **mkwargs)
                 except Exception as e:   # pylint: disable=broad-except
                     one_ft = e
                 futures.append(one_ft)
@@ -239,12 +232,10 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
         @functools.wraps(method)
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method in a required parallel engine """
-            if asyncio.iscoroutinefunction(method) or target == 'async':
+            if asyncio.iscoroutinefunction(method) or target in ['async', 'a']:
                 return wrap_with_async(self, args, kwargs)
-            if target in ['threads', 't']:
+            elif target in ['threads', 't']:
                 return wrap_with_threads(self, args, kwargs)
-            elif target == 'nogil':
-                return wrap_with_threads(self, args, kwargs, nogil=True)
             elif target in ['mpc', 'm']:
                 return wrap_with_mpc(self, args, kwargs)
             elif target in ['for', 'f']:

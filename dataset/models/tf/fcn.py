@@ -98,7 +98,7 @@ class FCN32(FCN):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
 
     input_block : dict
         base_network : class
@@ -147,7 +147,7 @@ class FCN16(FCN):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
 
     input_block : dict
         base_network : class
@@ -220,7 +220,7 @@ class FCN8(FCN):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
 
     input_block : dict
         base_network : class

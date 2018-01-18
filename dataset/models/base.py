@@ -38,17 +38,17 @@ class BaseModel:
         return self.__class__.__name__
 
     @classmethod
-    def pop(cls, variables, config=None, **kwargs):
+    def pop(cls, variables, config, **kwargs):
         """ Return variables and remove them from config"""
         return Config().pop(variables, config, **kwargs)
 
     @classmethod
-    def get(cls, variables, config=None, default=None):
+    def get(cls, variables, config, default=None):
         """ Return variables from config """
         return Config().get(variables, config, default=default)
 
     @classmethod
-    def _get(cls, variables, config=None, **kwargs):
+    def _get(cls, variables, config, **kwargs):
         return Config()._get(variables, config, **kwargs)
 
     @classmethod
