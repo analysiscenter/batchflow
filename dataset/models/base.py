@@ -48,10 +48,6 @@ class BaseModel:
         return Config().get(variables, config, default=default)
 
     @classmethod
-    def _get(cls, variables, config, **kwargs):
-        return Config()._get(variables, config, **kwargs)
-
-    @classmethod
     def put(cls, variable, value, config):
         """ Put a new variable into config """
         return Config().put(variable, value, config)

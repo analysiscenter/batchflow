@@ -87,7 +87,10 @@ class Config:
                     else:
                         val = _config.pop(var_name)
                 else:
-                    val = _config.get(var_name, default)
+                    if has_default:
+                        val = _config.get(var_name, default)
+                    else:
+                        val = _config[var_name]
             else:
                 if has_default:
                     val = default
@@ -189,9 +192,7 @@ class Config:
         return other.__add__(self)
 
     def __getitem__(self, key):
-        value = self.get(key)
-        if value is None:
-            raise KeyError(key)
+        value = self._get(key)
         return value
 
     def __setitem__(self, key, value):
