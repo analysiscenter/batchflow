@@ -4,43 +4,52 @@ from copy import deepcopy
 
 class Config:
     """ Class for configs that can be represented as nested dicts with easy indexing by slashes. """
-    def __init__(self, config=None):
+    def __init__(self, config=None, **kwargs):
         if config is None:
             self.config = dict()
         elif isinstance(config, Config):
-            self.config = self.parse(deepcopy(config.config))
+            self.config = deepcopy(config.config)
         elif isinstance(config, dict):
             self.config = self.parse(deepcopy(config))
+        self.update(**kwargs)
 
     def pop(self, variables, config=None, **kwargs):
         """ Return variables and remove them from config.
+
         Parameters
         ----------
         variables : str or list of strs
             names of variables. '/' is used to get value from nested dict.
-        config : dict or None
+        config : dict, Config or None
             if None variables will be getted from self.config.
 
         Returns
         -------
-        new_config : dict
+        single value or a tuple
         """
-        return self._get(variables, config, pop=True, **kwargs)
+        if isinstance(config, Config):
+            return config.pop(variables, None, **kwargs)
+        else:
+            return self._get(variables, config, pop=True, **kwargs)
 
     def get(self, variables, config=None, default=None):
         """ Return variables from config.
+
         Parameters
         ----------
         variables : str or list of strs
             names of variables. '/' is used to get value from nested dict.
-        config : dict or None
+        config : dict, Config or None
             if None variables will be getted from self.config.
 
         Returns
         -------
-        new_config : dict
+        single value or a tuple
         """
-        return self._get(variables, config, default=default, pop=False)
+        if isinstance(config, Config):
+            return config.get(variables, None, default)
+        else:
+            return self._get(variables, config, default=default, pop=False)
 
     def _get(self, variables, config=None, **kwargs):
         if config is None:
@@ -95,19 +104,19 @@ class Config:
 
     def put(self, variable, value, config=None):
         """ Put a new variable into config.
+
         Parameters
         ----------
         variable : str
             variable to add. '/' is used to put value into nested dict.
-        value : obj
-        config : dict or None
+        value : masc
+        config : dict, Config or None
             if None value will be putted into self.config.
-        Returns
-        -------
-        new_config : dict
         """
         if config is None:
             config = self.config
+        elif isinstance(config, Config):
+            config = config.config
         variable = variable.strip('/')
         if '/' in variable:
             var = variable.split('/')
@@ -130,12 +139,14 @@ class Config:
         """ Parse flatten config with slashes.
         Parameters
         ----------
-        config : dict
+        config : dict or Config
 
         Returns
         -------
         new_config : dict
         """
+        if isinstance(config, Config):
+            return config.config
         new_config = dict()
         for key, value in config.items():
             if isinstance(value, dict):
@@ -147,7 +158,7 @@ class Config:
         """ Transform nested dict into flatten dict.
         Parameters
         ----------
-        config : dict or None
+        config : dict, Config or None
             if None self.config will be parsed else config.
         Returns
         -------
@@ -155,6 +166,8 @@ class Config:
         """
         if config is None:
             config = self.config
+        elif isinstance(config, Config):
+            config = config.config
         new_config = dict()
         for key, value in config.items():
             if isinstance(value, dict):
@@ -175,8 +188,56 @@ class Config:
             other = Config(other)
         return other.__add__(self)
 
-    def __getitem__(self, ind):
-        return self.get(ind)
+    def __getitem__(self, key):
+        value = self.get(key)
+        if value is None:
+            raise KeyError(key)
+        return value
+
+    def __setitem__(self, key, value):
+        self.put(key, value)
+
+    def __delitem__(self, key):
+        self.pop(key)
+
+    def __len__(self):
+        return len(self.config)
+
+    def items(self, flatten=False):
+        """ Return config items. """
+        if flatten:
+            return self.flatten().items()
+        else:
+            return self.config.items()
+
+    def keys(self, flatten=False):
+        """ Return config keys. """
+        if flatten:
+            return self.flatten().keys()
+        else:
+            return self.config.keys()
+
+    def values(self, flatten=False):
+        """ Return config values. """
+        if flatten:
+            return self.flatten().values()
+        else:
+            return self.config.values()
+
+    def update(self, other=None, **kwargs):
+        """ Update config with values from other. """
+        other = dict() if other is None else other
+        if hasattr(other, 'keys'):
+            for key in other:
+                self[key] = other[key]
+        else:
+            for key, value in other:
+                self[key] = value
+        for key, value in kwargs.items():
+            self[key] = value
+
+    def __iter__(self):
+        return iter(self.config)
 
     def __repr__(self):
         return "Config(" + str(self.config) + ")"
