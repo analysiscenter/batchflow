@@ -1,6 +1,6 @@
 """ Contains a base model class"""
 
-from .. import Config
+from ..config import Config
 
 class BaseModel:
     """ Base class for all models
