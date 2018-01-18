@@ -31,7 +31,7 @@ class BaseModel:
             self.load(**load)
 
     @property
-    def name(self):
+    def default_name(self):
         """: str - the class name (serve as a default for a model name) """
         return self.__class__.__name__
 

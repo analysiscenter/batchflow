@@ -12,7 +12,7 @@ class NonInitializedModel:
         self.config = config
 
     @property
-    def name(self):
+    def default_name(self):
         """: str - the model class name (serve as a default for a model name) """
         if isinstance(self.model_class, NamedExpression):
             raise ValueError("Model name should be explicitly set if a model class is a named expression",
@@ -95,7 +95,7 @@ class ModelDirectory:
     def add_model(self, name, model):
         """ Add a model to the directory """
         if name is None:
-            name = model.name
+            name = model.default_name
         with self.lock:
             self.models.update({name: model})
 
