@@ -1,6 +1,7 @@
 """ Pipeline decorators """
 import threading
 
+from .models import BaseModel
 from .named_expr import NamedExpression, eval_expr
 
 
@@ -117,12 +118,15 @@ class ModelDirectory:
             model = NonInitializedModel(model_class, config)
         self.add_model(name, model)
 
-    def import_model(self, source_name, source, name, ref=True):
-        """ Import model from another pipeline """
-        model = source.models.get(source_name)
-        name = name or source_name
-        if ref:
-            self.add_model(name, model)
+    def import_model(self, source, pipeline=None, name=None):
+        """ Import model from another pipeline or a model itself """
+        if isinstance(source, BaseModel):
+            model = source
+        else:
+            model = pipeline.models.get(source)
+            name = name or source
+
+        self.add_model(name, model)
 
     def __add__(self, other):
         if not isinstance(other, ModelDirectory):
