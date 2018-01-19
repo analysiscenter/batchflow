@@ -305,15 +305,15 @@ class FilesIndex(DatasetIndex):
 
     Create a sorted index of files in a directory:
 
-    >>> fi = FilesIndex('/path/to/data/files/*', sort=True)
+    >>> fi = FilesIndex(path='/path/to/data/files/*', sort=True)
 
     Create an index of directories through all subdirectories:
 
-    >>> fi = FilesIndex('/path/to/data/archive*/patient*', dirs=True)
+    >>> fi = FilesIndex(path='/path/to/data/archive*/patient*', dirs=True)
 
     Create an index of files in several directories, and file extensions are ignored:
 
-    >>> fi = FilesIndex(['/path/to/archive/2016/*','/path/to/current/file/*'], no_ext=True)
+    >>> fi = FilesIndex(path=['/path/to/archive/2016/*','/path/to/current/file/*'], no_ext=True)
 
     To get a path to the file call `get_fullpath(index_id)`:
 
