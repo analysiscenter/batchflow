@@ -1,16 +1,14 @@
 """ Config class"""
 
-from copy import deepcopy
-
 class Config:
     """ Class for configs that can be represented as nested dicts with easy indexing by slashes. """
     def __init__(self, config=None, **kwargs):
         if config is None:
             self.config = dict()
         elif isinstance(config, Config):
-            self.config = deepcopy(config.config)
+            self.config = config.config
         elif isinstance(config, dict):
-            self.config = self.parse(deepcopy(config))
+            self.config = self.parse(config)
         self.update(**kwargs)
 
     def pop(self, variables, config=None, **kwargs):
