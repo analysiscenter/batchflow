@@ -1,5 +1,7 @@
 """ Contains a base model class"""
 
+from ..config import Config
+
 class BaseModel:
     """ Base class for all models
 
@@ -23,10 +25,10 @@ class BaseModel:
 
     """
     def __init__(self, config=None, *args, **kwargs):
-        self.config = config or {}
-        if self.get('build', self.config, default=True):
+        self.config = Config(config) or Config()
+        if self.config.get('build', default=True):
             self.build(*args, **kwargs)
-        load = self.get('load', self.config, default=False)
+        load = self.config.get('load', default=False)
         if load:
             self.load(**load)
 
@@ -36,108 +38,19 @@ class BaseModel:
         return self.__class__.__name__
 
     @classmethod
-    def pop(cls, variables, config=None, **kwargs):
+    def pop(cls, variables, config, **kwargs):
         """ Return variables and remove them from config"""
-        return cls._get(variables, config, pop=True, **kwargs)
+        return Config().pop(variables, config, **kwargs)
 
     @classmethod
-    def get(cls, variables, config=None, default=None):
+    def get(cls, variables, config, default=None):
         """ Return variables from config """
-        return cls._get(variables, config, default=default, pop=False)
-
-    @classmethod
-    def _get(cls, variables, config=None, **kwargs):
-        pop = kwargs.get('pop', False)
-        has_default = 'default' in kwargs
-        default = kwargs.get('default')
-
-        unpack = False
-        if not isinstance(variables, (list, tuple)):
-            variables = list([variables])
-            unpack = True
-
-        ret_vars = []
-        for variable in variables:
-            _config = config
-            if '/' in variable:
-                var = variable.split('/')
-                prefix = var[:-1]
-                var_name = var[-1]
-            else:
-                prefix = []
-                var_name = variable
-
-            for p in prefix:
-                if p in _config:
-                    _config = _config[p]
-                else:
-                    _config = None
-                    break
-            if _config:
-                if pop:
-                    if has_default:
-                        val = _config.pop(var_name, default)
-                    else:
-                        val = _config.pop(var_name)
-                else:
-                    val = _config.get(var_name, default)
-            else:
-                if has_default:
-                    val = default
-                else:
-                    raise KeyError("Key '%s' not found" % variable)
-
-            ret_vars.append(val)
-
-        if unpack:
-            ret_vars = ret_vars[0]
-        else:
-            ret_vars = tuple(ret_vars)
-        return ret_vars
+        return Config().get(variables, config, default=default)
 
     @classmethod
     def put(cls, variable, value, config):
         """ Put a new variable into config """
-        variable = variable.strip('/')
-        if '/' in variable:
-            var = variable.split('/')
-            prefix = var[:-1]
-            var_name = var[-1]
-        else:
-            prefix = []
-            var_name = variable
-
-        for p in prefix:
-            if p not in config:
-                config[p] = dict()
-            config = config[p]
-        if var_name in config and isinstance(config[var_name], dict) and isinstance(value, dict):
-            config[var_name].update(value)
-        else:
-            config[var_name] = value
-
-    @classmethod
-    def parse(cls, config):
-        """ Parse flatten config with slashes. """
-        new_config = dict()
-        for key, value in config.items():
-            if isinstance(value, dict):
-                value = cls.parse(value)
-            cls.put(key, value, new_config)
-        return new_config
-
-    @classmethod
-    def flatten(cls, config):
-        """ Transform nested dict into flatten dict. """
-        new_config = dict()
-        for key, value in config.items():
-            if isinstance(value, dict):
-                value = cls.flatten(value)
-                for _key, _value in value.items():
-                    new_config[key+'/'+_key] = _value
-            else:
-                new_config[key] = value
-        return new_config
+        return Config().put(variable, value, config)
 
     def _make_inputs(self, names=None, config=None):
         """ Make model input data using config
