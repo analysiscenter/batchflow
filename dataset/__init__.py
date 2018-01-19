@@ -1,5 +1,5 @@
-""" Dataset enables a fast processing of large dataset using flexible pipelines """
 # pylint : disable=wrong-import-position
+""" Dataset enables a fast processing of large dataset using flexible pipelines """
 
 import sys
 
