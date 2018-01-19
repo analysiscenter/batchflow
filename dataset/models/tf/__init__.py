@@ -11,7 +11,7 @@ from .inception_v3 import Inception_v3
 from .inception_v4 import Inception_v4
 from .inception_resnet_v2 import InceptionResNet_v2
 from .squeezenet import SqueezeNet
-from .mobilenet import MobileNet
+from .mobilenet import MobileNet, MobileNet_v2
 from .densenet import DenseNet, DenseNet121, DenseNet169, DenseNet201, DenseNet264
 from .faster_rcnn import FasterRCNN
 from .resattention import ResNetAttention, ResNetAttention56, ResNetAttention92

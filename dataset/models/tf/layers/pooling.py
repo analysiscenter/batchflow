@@ -115,7 +115,7 @@ def pooling(inputs, pool_op, *args, **kwargs):
     return x
 
 
-def global_pooling(inputs, pool_op, data_format='channels_last', name=None):
+def global_pooling(inputs, pool_op, data_format='channels_last', keep_dims=False, name=None):
     """ Multi-dimensional global pooling layer.
 
     Parameters
@@ -145,9 +145,9 @@ def global_pooling(inputs, pool_op, data_format='channels_last', name=None):
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
     if pool_op == 'max':
-        x = tf.reduce_max(inputs, axis=axis, name=name)
+        x = tf.reduce_max(inputs, axis=axis, keep_dims=keep_dims, name=name)
     elif pool_op in ['mean', 'average', 'avg']:
-        x = tf.reduce_mean(inputs, axis=axis, name=name)
+        x = tf.reduce_mean(inputs, axis=axis, keep_dims=keep_dims, name=name)
     return x
 
 def global_average_pooling(inputs, data_format='channels_last', name=None):

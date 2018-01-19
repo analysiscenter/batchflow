@@ -474,7 +474,10 @@ class Pipeline:
             pass
         else:
             args.append(kwargs_value)
-        print(*args)
+        try:
+            print(*args)
+        except OSError:
+            pass
 
     def save_to_variable(self, name, *args, **kwargs):
         """ Save a value to a given variable during pipeline execution """

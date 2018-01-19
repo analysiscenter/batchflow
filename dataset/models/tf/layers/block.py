@@ -199,7 +199,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                     pool_op = kwargs.pop('global_pool_op', 'max')
                 elif layer == 'V':
                     pool_op = 'mean'
-                args = dict(pool_op=pool_op, data_format=data_format)
+                args = dict(pool_op=pool_op, data_format=data_format, keep_dims=kwargs.get('keep_dims', False))
 
             elif layer == 'm':
                 args = dict(depth=kwargs.get('depth'), data_format=data_format)
