@@ -103,19 +103,19 @@ class MobileNet(TFModel):
         -------
         tf.Tensor
         """
-        num_filters = cls.num_channels(inputs, kwargs.get('data_format')) * width_factor
+        num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * width_factor)
         filters = [num_filters, num_filters*2] if double_filters else num_filters
         return conv_block(inputs, 'Cna cna', filters, [3, 1], name=name, strides=[strides, 1], **kwargs)
 
 
 _V2_DEFAULT_BODY = [
-    dict(repeats=1, filters=16, expension_factor=1, strides=1),
-    dict(repeats=2, filters=24, expension_factor=6, strides=2),
-    dict(repeats=3, filters=32, expension_factor=6, strides=2),
-    dict(repeats=4, filters=64, expension_factor=6, strides=2),
-    dict(repeats=3, filters=96, expension_factor=6, strides=1),
-    dict(repeats=3, filters=160, expension_factor=6, strides=2),
-    dict(repeats=1, filters=320, expension_factor=6, strides=1),
+    dict(repeats=1, filters=16, expansion_factor=1, strides=1),
+    dict(repeats=2, filters=24, expansion_factor=6, strides=2),
+    dict(repeats=3, filters=32, expansion_factor=6, strides=2),
+    dict(repeats=4, filters=64, expansion_factor=6, strides=2),
+    dict(repeats=3, filters=96, expansion_factor=6, strides=1),
+    dict(repeats=3, filters=160, expansion_factor=6, strides=2),
+    dict(repeats=1, filters=320, expansion_factor=6, strides=1),
 ]
 
 class MobileNet_v2(TFModel):
@@ -146,14 +146,13 @@ class MobileNet_v2(TFModel):
         config['common'].update(dict(activation=tf.nn.relu6))
         config['input_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
         config['body'].update(dict(width_factor=1, layout=_V2_DEFAULT_BODY))
-        config['head'].update(dict(layout='cnaV', kernel_size=1, strides=1))
+        config['head'].update(dict(layout='cnaVcnV', filters=[1280, 2], kernel_size=1, keep_dims=[True, False]))
         config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['units'] = self.num_classes('targets')
-        config['head']['filters'] = self.num_classes('targets')
+        config['head']['filters'][-1] = self.num_classes('targets')
         return config
 
     @classmethod
@@ -184,22 +183,26 @@ class MobileNet_v2(TFModel):
                 for k in range(repeats):
                     if k > 0:
                         block['strides'] = 1
-                    x = cls.block(x, **block, residual=k>0, name='block-%d' % i, **kwargs)
+                    x = cls.block(x, **block, residual=k > 0, name='block-%d' % i, **kwargs)
                     i += 1
         return x
 
     @classmethod
-    def block(cls, inputs, filters, residual=False, strides=1, expension_factor=6, width_factor=1, name=None, **kwargs):
+    def block(cls, inputs, filters, residual=False, strides=1, expansion_factor=6, width_factor=1, name=None, **kwargs):
         """ A network building block consisting of a separable depthwise convolution and 1x1 pointwise covolution.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
+        filters : int
+            number of output filters
+        residual : boold
+            whether to make a residual connection
         strides : int
-            strides in separable convolution
-        double_filters : bool
-            if True number of filters in 1x1 covolution will be doubled
+            stride for 3x3 convolution
+        expansion_factor : int
+            multiplier for the number of filters in internal convolutions
         width_factor : float
             multiplier for the number of filters
         name : str
@@ -209,7 +212,7 @@ class MobileNet_v2(TFModel):
         -------
         tf.Tensor
         """
-        num_filters = cls.num_channels(inputs, kwargs.get('data_format')) * expension_factor
+        num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
         conv_filters = [num_filters, num_filters, filters]
         x = conv_block(inputs, 'cna Cna cn', conv_filters, [1, 3, 1], name=name, strides=[1, strides, 1], **kwargs)
         if residual:

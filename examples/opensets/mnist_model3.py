@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     mnist = MNIST()
 
-    train_template = (Pipeline(config=dict(model=MobileNet))
+    train_template = (Pipeline(config=dict(model=MobileNet_v2))
                 .init_variable('model', C('model'))
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
