@@ -18,4 +18,4 @@ from .decorators import action, inbatch_parallel, parallel, any_action_failed
 from .exceptions import SkipBatchException
 
 
-__version__ = '0.2.1'
+__version__ = '0.3.0'
