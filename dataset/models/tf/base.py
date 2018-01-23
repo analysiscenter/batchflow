@@ -6,6 +6,7 @@ import glob
 import re
 import json
 import threading
+import contextlib
 
 import numpy as np
 import tensorflow as tf
@@ -46,6 +47,11 @@ class TFModel(BaseModel):
     **Configuration**
 
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
+
+    device : str or callable
+        if str, a device name (e.g. '/device:GPU:0').
+        if callable, a function which takes an operation and returns a device name for it.
+        See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
 
     session : dict
         `Tensorflow session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
@@ -207,16 +213,6 @@ class TFModel(BaseModel):
 
         super().__init__(*args, **kwargs)
 
-
-    def __enter__(self):
-        """ Enter the model graph context """
-        self._graph_context = self.graph.as_default()
-        return self._graph_context.__enter__()
-
-    def __exit__(self, exception_type, exception_value, exception_traceback):
-        """ Exit the model graph context """
-        return self._graph_context.__exit__(exception_type, exception_value, exception_traceback)
-
     def build(self, *args, **kwargs):
         """ Build the model
 
@@ -229,7 +225,16 @@ class TFModel(BaseModel):
            <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_
         #. Create a tensorflow session
         """
-        with self.graph.as_default():
+
+        def device_context(config):
+            if 'device' in self.config:
+                device = self.config.get('device')
+                context = self.graph.device(device)
+            else:
+                context = contextlib.ExitStack()
+            return context
+
+        with self.graph.as_default(), device_context(self.config):
             with tf.variable_scope(self.__class__.__name__):
                 with tf.variable_scope('globals'):
                     self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
