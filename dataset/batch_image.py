@@ -26,21 +26,21 @@ from .decorators import action, inbatch_parallel, any_action_failed
 from .utils import partialmethod
 
 
-def transform_actions(prefix='', suffix='', decorator=None):
+def transform_actions(prefix='', suffix='', wrapper=None):
     """ Transforms classmethods that have names like <prefix><name><suffix> to pipeline's actions executed in parallel.
 
     First, it finds all *class methods* which names have the form <prefix><method_name><suffix>
     (ignores those that start and end with '__').
 
-    Then, all found classmethods are decorated through ``decorator`` and resulting
+    Then, all found classmethods are decorated through ``wrapper`` and resulting
     methods are added to the class with the names of the form <method_name>.
 
     Parameters
     ----------
     prefix : str
     suffix : str
-    decorator : str
-        name of the decorator inside ``Batch`` class
+    wrapper : str
+        name of the wrapper inside ``Batch`` class
 
     Examples
     --------
@@ -71,15 +71,15 @@ def transform_actions(prefix='', suffix='', decorator=None):
         for method_name, method in cls.__dict__.copy().items():
             if method_name.startswith(prefix) and method_name.endswith(suffix) and\
                not method_name.startswith('__') and not method_name.endswith('__'):
-                def wrapper():
+                def __wrapper():
                     wrapped_method = method
                     def func(self, src='images', dst='images', *args, **kwargs):
-                        return getattr(cls, decorator)(self, wrapped_method, src=src, dst=dst,
+                        return getattr(cls, wrapper)(self, wrapped_method, src=src, dst=dst,
                                                        use_self=True, *args, **kwargs)
                     return func
                 name_slice = slice(len(prefix), -len(suffix))
                 wrapped_method_name = method_name[name_slice]
-                setattr(cls, wrapped_method_name, action(wrapper()))
+                setattr(cls, wrapped_method_name, action(__wrapper()))
         return cls
     return __decorator
 
@@ -136,7 +136,8 @@ class BaseImagesBatch(Batch):
         components : str
             component to load
         """
-        return scipy.ndimage.open(self._make_path(src, ix))
+        _ = self, ix, src, components
+        raise NotImplementedError("Must be implemented in a child class")
 
     @action
     def load(self, src=None, fmt=None, components=None, *args, **kwargs):
@@ -176,7 +177,8 @@ class BaseImagesBatch(Batch):
         components : str
             component to save.
         """
-        scipy.misc.imsave(self._make_path(dst, ix), self.get(ix, components))
+        _ = self, ix, dst, components
+        raise NotImplementedError("Must be implemented in a child class")
 
     @action
     def dump(self, dst=None, fmt=None, components="images", *args, **kwargs):
@@ -200,8 +202,8 @@ class BaseImagesBatch(Batch):
         return super().dump(dst, fmt, components, *args, **kwargs)
 
 
-@transform_actions(prefix='_', suffix='_all', decorator='apply_transform_all')
-@transform_actions(prefix='_', suffix='_', decorator='apply_transform')
+@transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
+@transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
@@ -212,6 +214,39 @@ class ImagesBatch(BaseImagesBatch):
     def image_shape(self):
         """: tuple - shape of the image """
         return self.images.shape[1:]
+
+    @inbatch_parallel(init='indices', post='assemble', target='async')
+    def _load_image(self, ix, src=None, components="images"):
+        """ Wrapper for scipy.ndimage.open.
+
+        .. note:: only works with a single component
+
+        Parameters
+        ----------
+        path : str, None
+        ix : str
+            element's index (filename)
+        components : str
+            component to load
+        """
+        return scipy.ndimage.open(self._make_path(src, ix))
+
+    @inbatch_parallel(init='indices', target='async')
+    def _dump_image(self, dst=None, components='images'):
+        """ Save image to dst.
+
+        Actually a wrapper for scipy.misc.imsave.
+
+        .. note:: `components` must be str
+
+        Parameters
+        ----------
+        dst : str
+            Folder where to dump. If dst is None then it is determined from index.
+        components : str
+            component to save.
+        """
+        scipy.misc.imsave(self._make_path(dst, ix), self.get(ix, components))
 
     def _assemble_component(self, all_res, components='images', **kwargs):
         """ Assemble one component after parallel execution.
@@ -594,7 +629,9 @@ class ImagesBatch(BaseImagesBatch):
         image[..., channels] = inv_multiplier - image[..., channels]
         return image
 
-    def _salt_all(self, images, indices, p_pixel=.015, salt=255):
+
+
+    def _salt_(self, image, p_pixel=.015, salt=255):
         """ set random pixel on image to the givan value
 
         every pixel will be set to ``salt`` value with probability ``p_pixel``
@@ -617,11 +654,9 @@ class ImagesBatch(BaseImagesBatch):
         np.ndarray : flavoured image
         """
 
-        salted = images[indices]
-        mask_salt = np.random.binomial(1, p_pixel, size=salted.shape[:3])
-        salted[mask_salt != 0] = salt
-        images[indices] = salted
-        return images
+        mask_salt = np.random.binomial(1, p_pixel, size=image.shape[:2]).astype(bool)
+        image[mask_salt] = salt
+        return image
 
     def _threshold(self, image, low=0., high=1., dtype=np.uint8):
         """ truncate image's pixels
