@@ -160,7 +160,7 @@ Every call to `dataset.pipeline()` or `dataset.p` creates a new pipeline.
 Running pipelines
 =================
 
-There are 4 ways to execute a pipeline.
+There are 5 ways to execute a pipeline.
 
 Batch generator
 ^^^^^^^^^^^^^^^
@@ -212,6 +212,13 @@ Lazy run
         # do whatever you want
 
 You can add `run` with `lazy=True` as the last action in the pipeline and then call `run()` or `next_batch()` without arguments at all.
+
+
+Single execution
+^^^^^^^^^^^^^^^^
+A pipeline might be run one batch only with :meth:`~.Pipeline.execute_for`::
+
+    res_batch = my_pipeline.execute_for(batch)
 
 
 Pipeline variables
