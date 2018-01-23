@@ -60,7 +60,6 @@ class BaseCIFAR(ImagesOpenset):
 
         self._train_index = DatasetIndex(np.arange(len(train_data[0])))
         self._test_index = DatasetIndex(np.arange(len(test_data[0])))
-
         return train_data, test_data
 
 

@@ -6,6 +6,7 @@ from functools import wraps
 def partialmethod(func, *frozen_args, **frozen_kwargs):
     """Wrap a method with partial application of given positional and keyword
     arguments.
+
     Parameters
     ----------
     func : callable
@@ -14,6 +15,7 @@ def partialmethod(func, *frozen_args, **frozen_kwargs):
         Fixed positional arguments.
     frozen_kwargs : misc
         Fixed keyword arguments.
+
     Returns
     -------
     method : callable

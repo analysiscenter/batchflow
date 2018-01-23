@@ -2,6 +2,7 @@
 
 import os
 import threading
+from inspect import ismethod
 
 import dill
 try:
@@ -422,8 +423,8 @@ class Batch(BaseBatch):
         return self
 
     @action
-    @inbatch_parallel(init='indices')
-    def apply_transform(self, ix, func, *args, src=None, dst=None, **kwargs):
+    @inbatch_parallel(init='indices', post='_assemble')
+    def apply_transform(self, ix, func, *args, src=None, dst=None, p=1., use_self=False, **kwargs):
         """ Apply a function to each item in the batch
 
         Parameters
@@ -476,10 +477,16 @@ class Batch(BaseBatch):
             dst_attr = dst
             pos = self.get_pos(None, src, ix)
         if dst_attr is not None:
-            dst_attr[pos] = func(*_args, **kwargs)
+            if np.random.binomial(1, p):
+                if use_self:
+                    return func(self, *_args, **kwargs)
+                else:
+                    return func(*_args, **kwargs)
+            else:
+                return src_attr
 
     @action
-    def apply_transform_all(self, func, *args, src=None, dst=None, **kwargs):
+    def apply_transform_all(self, func, *args, src=None, dst=None, p=1., use_self=False, **kwargs):
         """ Apply a function the whole batch at once
 
         Parameters
@@ -499,6 +506,9 @@ class Batch(BaseBatch):
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
+
+        p : float
+            probability of applying transform to an element in the batch
 
         args, kwargs
             parameters passed to ``func``
@@ -521,8 +531,15 @@ class Batch(BaseBatch):
             else:
                 src_attr = src
             _args = tuple([src_attr, *args])
-
-        tr_res = func(*_args, **kwargs)
+        indices = np.where(np.random.binomial(1, p, len(self)))[0]
+        # print(func.__func__)
+        if len(indices):
+            if use_self:
+                tr_res = func(self, indices=indices, *_args, **kwargs)
+            else:
+                tr_res = func(indices=indices, *_args, **kwargs)
+        else:
+            tr_res = src_attr
         if dst is None:
             pass
         elif isinstance(dst, str):
@@ -545,11 +562,11 @@ class Batch(BaseBatch):
             file_name = os.path.join(os.path.abspath(src), str(ix) + '.' + ext)
         return file_name
 
-    def _assemble_load(self, all_res, *args, **kwargs):
+    def _assemble(self, all_res, *args, **kwargs):
         _ = all_res, args, kwargs
         return self
 
-    @inbatch_parallel('indices', post='_assemble_load', target='f')
+    @inbatch_parallel('indices', post='_assemble', target='f')
     def _load_blosc(self, ix, src=None, components=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src, 'blosc')

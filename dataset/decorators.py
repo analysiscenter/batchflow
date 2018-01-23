@@ -161,9 +161,29 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 futures = []
                 if nogil:
                     nogil_fn = method(self, *args, **kwargs)
+                param_purpose = None
+                if 'param_isfor' in kwargs:
+                    param_purpose = kwargs.pop('param_isfor')
                 full_kwargs = {**dec_kwargs, **kwargs}
-                for arg in _call_init_fn(init_fn, args, full_kwargs):
+                # print(method)
+
+                # print('dec_kwargs', dec_kwargs)
+                # print('full_kwargs', full_kwargs)
+
+                # print('full', full_kwargs)
+                # print('args', args)
+                # print('purpose', param_purpose)
+                # print('kwargs',kwargs)
+                params = {}
+                if not param_purpose is None:
+                    for param, purpose in param_purpose.items():
+                        if purpose == 'all':
+                            params[param] = full_kwargs.pop(param)
+
+                for i, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(arg, args, kwargs)
+                    for k, v in params.items():
+                        kwargs[k] = v[i]
                     if nogil:
                         one_ft = executor.submit(nogil_fn, *margs, **mkwargs)
                     else:
