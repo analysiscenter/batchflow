@@ -162,6 +162,11 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 param_purpose = None
                 if 'param_isfor' in kwargs:
                     param_purpose = kwargs.pop('param_isfor')
+                params = {}
+                if not param_purpose is None:
+                    for param, purpose in param_purpose.items():
+                        if purpose == 'all':
+                            params[param] = kwargs.pop(param)
                 full_kwargs = {**dec_kwargs, **kwargs}
                 # print(method)
 
@@ -172,16 +177,15 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 # print('args', args)
                 # print('purpose', param_purpose)
                 # print('kwargs',kwargs)
-                params = {}
-                if not param_purpose is None:
-                    for param, purpose in param_purpose.items():
-                        if purpose == 'all':
-                            params[param] = full_kwargs.pop(param)
+
 
                 for i, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                     margs, mkwargs = _make_args(arg, args, kwargs)
+                    # print('before:', mkwargs, margs)
                     for k, v in params.items():
-                        kwargs[k] = v[i]
+                        mkwargs[k] = v[i]
+                    # print('after', mkwargs)
+                    # print('*'*50)
                     one_ft = executor.submit(method, self, *margs, **mkwargs)
                     futures.append(one_ft)
 

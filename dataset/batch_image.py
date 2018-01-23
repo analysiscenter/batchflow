@@ -231,14 +231,12 @@ class ImagesBatch(BaseImagesBatch):
         except ValueError as e:
             message = str(e)
             if "must have the same shape" in message:
-                print('kek')
                 preserve_shape = kwargs.get('preserve_shape', False)
                 if preserve_shape:
                     min_shape = np.array([x.shape for x in all_res]).min(axis=0)
                     all_res = [arr[:min_shape[0], :min_shape[1]].copy() for arr in all_res]
                     new_images = np.stack(all_res)
                 else:
-                    print('cheburek')
                     new_images = np.array(all_res, dtype=object)
             else:
                 raise e
@@ -311,7 +309,7 @@ class ImagesBatch(BaseImagesBatch):
                           np.random.randint(background_shape[1]-image_shape[1]+1))
         return np.asarray(origin, dtype=np.int)
 
-    def _scale_(self, image, factor, preserve_shape, origin='top_left'):
+    def _scale_(self, image, factor, preserve_shape, origin='center'):
         """ Scale the content of each image in the batch.
 
         Resulting shape is obtained as original_shape * factor.
