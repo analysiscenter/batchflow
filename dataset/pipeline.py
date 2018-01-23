@@ -274,7 +274,7 @@ class Pipeline:
         """
         return self.variables.get(name, *args, create=create, pipeline=self, **kwargs)
 
-    def init_variable(self, name, default=None, init_on_each_run=False, lock=True, *args, **kwargs):
+    def init_variable(self, name, default=None, init_on_each_run=False, lock=True):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
 
@@ -288,8 +288,6 @@ class Pipeline:
             whether to initialize the variable before each run
         lock : bool
             whether to lock a variable before each update (default: True)
-        args, kwargs
-            parameters for init function
 
         Returns
         -------
@@ -304,7 +302,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        self.variables.create(name, default, init_on_each_run, lock, pipeline=self, *args, **kwargs)
+        self.variables.create(name, default, init_on_each_run, lock=lock, pipeline=self)
         return self
 
     def init_variables(self, variables):
@@ -474,7 +472,10 @@ class Pipeline:
             pass
         else:
             args.append(kwargs_value)
-        print(*args)
+        try:
+            print(*args)
+        except OSError:
+            pass
 
     def save_to_variable(self, name, *args, **kwargs):
         """ Save a value to a given variable during pipeline execution """
@@ -569,7 +570,20 @@ class Pipeline:
             return True
         return np.random.binomial(1, action['proba']) == 1
 
-    def _exec(self, batch, new_loop=False):
+    def execute_for(self, batch, new_loop=False):
+        """ Run a pipeline for one batch
+
+        Parameters
+        ----------
+        batch
+            an input batch
+        new_loop : bool
+            whether to create a new :class:`async loop <asyncio.BaseEventLoop>`.
+
+        Returns
+        -------
+        a batch - an output from the last action in the pipeline
+        """
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
         batch.pipeline = self
@@ -641,27 +655,27 @@ class Pipeline:
         self.models.init_model(mode, model_class, name, config=config)
         return self
 
-    def import_model(self, model_name, source, name=None):
+    def import_model(self, model, pipeline=None, name=None):
         """ Import a model from another pipeline
 
         Parameters
         ----------
-        model_name : str
-            a name of the model to import
-        source : pipeline
+        model : str or model
+            a name of the model to import or a model itself
+        pipeline : Pipeline
             a pipeline that holds a model
         name : str
             a name with which the model is stored in this pipeline
         """
-        self._action_list.append({'name': IMPORT_MODEL_ID, 'source_name': model_name, 'source': source,
-                                  'model_name': name, 'ref': True})
+        self._action_list.append({'name': IMPORT_MODEL_ID, 'source': model, 'pipeline': pipeline,
+                                  'model_name': name})
         return self.append_action()
 
     def _exec_import_model(self, batch, action):
         model_name = self._eval_expr(action['model_name'], batch=batch)
-        source_name = self._eval_expr(action['source_name'], batch=batch)
         source = self._eval_expr(action['source'], batch=batch)
-        self.models.import_model(source_name, source, model_name)
+        pipeline = self._eval_expr(action['pipeline'], batch=batch)
+        self.models.import_model(source, pipeline, model_name)
 
     def train_model(self, name, make_data=None, save_to=None, mode='w', *args, **kwargs):
         """ Train a model
@@ -893,7 +907,7 @@ class Pipeline:
             except StopIteration:
                 break
             else:
-                future = self._executor.submit(self._exec, batch, new_loop=True)
+                future = self._executor.submit(self.execute_for, batch, new_loop=True)
                 self._prefetch_queue.put(future, block=True)
         self._prefetch_queue.put(None, block=True)
 
@@ -1029,7 +1043,7 @@ class Pipeline:
         else:
             for batch in batch_generator:
                 try:
-                    batch_res = self._exec(batch)
+                    batch_res = self.execute_for(batch)
                 except SkipBatchException:
                     pass
                 else:
@@ -1040,7 +1054,7 @@ class Pipeline:
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all previous lazy actions """
         batch = self.dataset.create_batch(batch_index, *args, **kwargs)
-        batch_res = self._exec(batch)
+        batch_res = self.execute_for(batch)
         return batch_res
 
     def next_batch(self, *args, **kwargs):

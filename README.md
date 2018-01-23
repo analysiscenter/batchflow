@@ -119,7 +119,7 @@ from .dataset import Dataset
 ## Citing Dataset
 Please cite Dataset in your publications if it helps your research.
 
-[![DOI](https://zenodo.org/badge/84835419.svg)](https://zenodo.org/badge/latestdoi/84835419)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1041203.svg)](https://doi.org/10.5281/zenodo.1041203)
 
 ```
 Roman Kh et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203

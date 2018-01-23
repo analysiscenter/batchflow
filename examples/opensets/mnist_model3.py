@@ -9,7 +9,8 @@ sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
 from dataset.opensets import MNIST
 from dataset.models.tf import TFModel, VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
-                              Inception_v1, Inception_v3, Inception_v4, InceptionResNet_v2, SqueezeNet, MobileNet, DenseNet121, \
+                              Inception_v1, Inception_v3, Inception_v4, InceptionResNet_v2, \
+                              SqueezeNet, MobileNet, MobileNet_v2, DenseNet121, \
                               ResNetAttention56
 
 class MyModel(TFModel):
@@ -22,7 +23,7 @@ if __name__ == "__main__":
 
     mnist = MNIST()
 
-    train_template = (Pipeline(config=dict(model=VGG7))
+    train_template = (Pipeline(config=dict(model=MobileNet_v2))
                 .init_variable('model', C('model'))
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
@@ -32,7 +33,7 @@ if __name__ == "__main__":
                                     'input_block/inputs': 'images',
                                     #'input_block/filters': 16,
                                     #'body/block/bottleneck': 1,
-                                    'head/units': [100, 100, 10],
+                                    #'head/units': [100, 100, 10],
                                     #'nothing': F(lambda batch: batch.images.shape[1:]),
                                     #'body/block/filters': 16,
                                     #'body/block/width_factor': 2,
@@ -49,7 +50,6 @@ if __name__ == "__main__":
     train_pp = (train_template << mnist.train)
     print("Start training...")
     t = time()
-    print(train_pp)
     train_pp.run(BATCH_SIZE, shuffle=True, n_epochs=1, drop_last=False, prefetch=0)
     print("End training", time() - t)
 

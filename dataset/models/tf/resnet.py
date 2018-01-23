@@ -268,7 +268,7 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        n = layout.count('c') + layout.count('C')
+        n = layout.count('c') + layout.count('C') - 1
         strides = ([2] + [1] * n) if downsample else 1
         return conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
 

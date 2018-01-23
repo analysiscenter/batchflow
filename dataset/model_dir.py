@@ -1,6 +1,7 @@
 """ Pipeline decorators """
 import threading
 
+from .models import BaseModel
 from .named_expr import NamedExpression, eval_expr
 
 
@@ -11,7 +12,7 @@ class NonInitializedModel:
         self.config = config
 
     @property
-    def name(self):
+    def default_name(self):
         """: str - the model class name (serve as a default for a model name) """
         if isinstance(self.model_class, NamedExpression):
             raise ValueError("Model name should be explicitly set if a model class is a named expression",
@@ -94,7 +95,7 @@ class ModelDirectory:
     def add_model(self, name, model):
         """ Add a model to the directory """
         if name is None:
-            name = model.name
+            name = model.default_name
         with self.lock:
             self.models.update({name: model})
 
@@ -117,12 +118,15 @@ class ModelDirectory:
             model = NonInitializedModel(model_class, config)
         self.add_model(name, model)
 
-    def import_model(self, source_name, source, name, ref=True):
-        """ Import model from another pipeline """
-        model = source.models.get(source_name)
-        name = name or source_name
-        if ref:
-            self.add_model(name, model)
+    def import_model(self, source, pipeline=None, name=None):
+        """ Import model from another pipeline or a model itself """
+        if isinstance(source, BaseModel):
+            model = source
+        else:
+            model = pipeline.models.get(source)
+            name = name or source
+
+        self.add_model(name, model)
 
     def __add__(self, other):
         if not isinstance(other, ModelDirectory):

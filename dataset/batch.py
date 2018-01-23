@@ -181,7 +181,7 @@ class Batch(BaseBatch):
         return len(self.index)
 
     @property
-    def len(self):
+    def size(self):
         """: int - number of items in the batch """
         return len(self.index)
 
