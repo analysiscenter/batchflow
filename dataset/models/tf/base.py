@@ -226,7 +226,7 @@ class TFModel(BaseModel):
         #. Create a tensorflow session
         """
 
-        def device_context():
+        def _device_context():
             if 'device' in self.config:
                 device = self.config.get('device')
                 context = self.graph.device(device)
@@ -234,7 +234,7 @@ class TFModel(BaseModel):
                 context = contextlib.ExitStack()
             return context
 
-        with self.graph.as_default(), device_context():
+        with self.graph.as_default(), _device_context():
             with tf.variable_scope(self.__class__.__name__):
                 with tf.variable_scope('globals'):
                     self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
