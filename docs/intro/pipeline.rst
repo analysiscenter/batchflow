@@ -216,7 +216,7 @@ You can add `run` with `lazy=True` as the last action in the pipeline and then c
 
 Single execution
 ^^^^^^^^^^^^^^^^
-A pipeline might be run one batch only with :meth:`~.Pipeline.execute_for`::
+A pipeline might be run for one batch only with :meth:`~.Pipeline.execute_for`::
 
     res_batch = my_pipeline.execute_for(batch)
 
