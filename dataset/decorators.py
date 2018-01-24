@@ -7,6 +7,8 @@ import asyncio
 import functools
 import logging
 
+from .named_expr import NamedExpression
+
 
 def _workers_count():
     cpu_count = 0
@@ -135,7 +137,29 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             else:
                 return post_fn(all_results, *args, **kwargs)
 
-        def _make_args(init_args, args, kwargs):
+        def _prepare_args(self, args, kwargs):
+            params = list()
+
+            def _get_value(value, pos=None, name=None):
+                if isinstance(value, NamedExpression):
+                    if pos is not None:
+                        params.append(pos)
+                    elif name is not None:
+                        params.append(name)
+                    v = value.get(batch=self)
+                    return v
+                return value
+
+            _args = []
+            for i, v in enumerate(args):
+                _args.append(_get_value(v, pos=i))
+            _kwargs = {}
+            for k, v in kwargs.items():
+                _kwargs.update({k: _get_value(v, name=k)})
+
+            return _args, _kwargs, params
+
+        def _make_args(iteration, init_args, args, kwargs, params=None):
             """ Make args, kwargs tuple """
             if isinstance(init_args, tuple) and len(init_args) == 2:
                 margs, mkwargs = init_args
@@ -146,10 +170,24 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 margs = init_args
                 mkwargs = dict()
             margs = margs if isinstance(margs, (list, tuple)) else [margs]
+
+            if params:
+                _args = list(args)
+                _kwargs = {**kwargs}
+                for k in params:
+                    if isinstance(k, str):
+                        _kwargs[k] = _kwargs[k][iteration]
+                    else:
+                        _args[k] = _args[k][iteration]
+            else:
+                _args = args
+                _kwargs = kwargs
+
             if len(args) > 0:
-                margs = list(margs) + list(args)
+                margs = list(margs) + list(_args)
             if len(kwargs) > 0:
-                mkwargs.update(kwargs)
+                mkwargs.update(_kwargs)
+
             return margs, mkwargs
 
         def wrap_with_threads(self, args, kwargs):
@@ -159,9 +197,10 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             n_workers = kwargs.pop('n_workers', _workers_count())
             with cf.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
+                args, kwargs, params = _prepare_args(self, args, kwargs)
                 full_kwargs = {**dec_kwargs, **kwargs}
-                for arg in _call_init_fn(init_fn, args, full_kwargs):
-                    margs, mkwargs = _make_args(arg, args, kwargs)
+                for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
+                    margs, mkwargs = _make_args(iteration, arg, args, kwargs, params)
                     one_ft = executor.submit(method, self, *margs, **mkwargs)
                     futures.append(one_ft)
 
@@ -178,9 +217,10 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             with cf.ProcessPoolExecutor(max_workers=n_workers) as executor:
                 futures = []
                 mpc_func = method(self, *args, **kwargs)
+                args, kwargs, params = _prepare_args(self, args, kwargs)
                 full_kwargs = {**dec_kwargs, **kwargs}
-                for arg in _call_init_fn(init_fn, args, full_kwargs):
-                    margs, mkwargs = _make_args(arg, args, kwargs)
+                for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
+                    margs, mkwargs = _make_args(iteration, arg, args, kwargs, params)
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
                     futures.append(one_ft)
 
@@ -203,9 +243,10 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             init_fn, post_fn = _check_functions(self)
 
             futures = []
+            args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
-            for arg in _call_init_fn(init_fn, args, full_kwargs):
-                margs, mkwargs = _make_args(arg, args, kwargs)
+            for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
+                margs, mkwargs = _make_args(iteration, arg, args, kwargs, params)
                 futures.append(asyncio.ensure_future(method(self, *margs, **mkwargs)))
 
             loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
@@ -218,9 +259,10 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
             _ = kwargs.pop('n_workers', _workers_count())
             futures = []
+            args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
-            for arg in _call_init_fn(init_fn, args, full_kwargs):
-                margs, mkwargs = _make_args(arg, args, kwargs)
+            for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
+                margs, mkwargs = _make_args(iteration, arg, args, kwargs, params)
                 try:
                     one_ft = method(self, *margs, **mkwargs)
                 except Exception as e:   # pylint: disable=broad-except
@@ -231,16 +273,21 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
         @functools.wraps(method)
         def wrapped_method(self, *args, **kwargs):
-            """ Wrap a method in a required parallel engine """
-            if asyncio.iscoroutinefunction(method) or target in ['async', 'a']:
+            """ Wrap a method with a required parallel engine """
+            if 'target' in kwargs:
+                _target = kwargs.pop('target')
+            else:
+                _target = target
+
+            if asyncio.iscoroutinefunction(method) or _target in ['async', 'a']:
                 return wrap_with_async(self, args, kwargs)
-            elif target in ['threads', 't']:
+            elif _target in ['threads', 't']:
                 return wrap_with_threads(self, args, kwargs)
-            elif target in ['mpc', 'm']:
+            elif _target in ['mpc', 'm']:
                 return wrap_with_mpc(self, args, kwargs)
-            elif target in ['for', 'f']:
+            elif _target in ['for', 'f']:
                 return wrap_with_for(self, args, kwargs)
-            raise ValueError('Wrong parallelization target:', target)
+            raise ValueError('Wrong parallelization target:', _target)
         return wrapped_method
     return inbatch_parallel_decorator
 
