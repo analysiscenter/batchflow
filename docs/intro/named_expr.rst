@@ -16,6 +16,7 @@ There are 5 types of named expressions:
 * F(name) - a callable which takes a batch (could be a batch class method or an arbitrary function)
 * L(name) - an arbitrary callable (the current batch won't be passed as a parameter)
 * R('name') - a random value
+* S('name') - a sampler function from a random distribution
 
 
 B - batch component
@@ -119,4 +120,21 @@ A sample from a random distribution. All `numpy distributions <https://docs.scip
         .some_action(R('uniform'))
         .other_action(R('beta', 1, 1))
         .yet_other_action(R('poisson', lam=4, size=(2, 5)))
+        .one_more_action(R('normal', 0, 1, size=15, seed=42))
 
+S - a random sampler
+====================
+Almost like ``R``, but when evaluated it returns not a sample, but an ``R``-expression.
+
+It comes in handy for parallel actions so that :doc:`@inbatch_parallel <parallel>` could determine that
+different random values should be passed to parallel invocations of the action.
+
+For instance, each item in the batch will be rotated at its own angle::
+
+    pipeline
+        .rotate(angle=S('uniform', -30, 30))
+
+Every image in the batch gets a noise of the same intensity (7%), but of a different color::
+
+    pipeline.
+        .add_color_noise(p=.07, color=S('uniform', 0, 255))

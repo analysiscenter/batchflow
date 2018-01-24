@@ -183,8 +183,12 @@ class V(NamedExpression):
 
 class R(NamedExpression):
     """ A random value """
-    def __init__(self, name=None, *args, **kwargs):
+    def __init__(self, name=None, *args, state=None, seed=None, **kwargs):
         super().__init__(name)
+        if isinstance(state, np.random.RandomState):
+            self.random_state = state
+        else:
+            self.random_state = np.random.RandomState(seed)
         self.args = args
         self.kwargs = kwargs
 
@@ -194,14 +198,38 @@ class R(NamedExpression):
         if callable(name):
             pass
         elif isinstance(name, str) and hasattr(np.random, name):
-            name = getattr(np.random, name)
+            name = getattr(self.random_state, name)
         else:
             raise TypeError('Random distribution should be a callable or a numpy distribution')
         args = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
         kwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
+
         return name(*args, **kwargs)
 
     def assign(self, *args, **kwargs):
-        """ Assign a value by calling a callable """
+        """ Assign a value """
         _ = args, kwargs
         raise NotImplementedError("Assigning a value to a random variable is not supported")
+
+    def __repr__(self):
+        return 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs) + ')'
+
+
+class S(NamedExpression):
+    """ A sampler for random values """
+    def __init__(self, name=None, *args, size=None, **kwargs):
+        super().__init__(name)
+        size = size if size is not None else B('size')
+        self.value = R(self.name, *args, **kwargs, size=size)
+
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return an R-expression """
+        return self.value
+
+    def assign(self, *args, **kwargs):
+        """ Assign a value """
+        _ = args, kwargs
+        raise NotImplementedError("Assigning a value to a sampler is not supported")
+
+    def __repr__(self):
+        return 'S(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs) + ', size=', self.size + ')'
