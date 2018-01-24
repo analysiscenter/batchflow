@@ -1,5 +1,5 @@
 """ Contains Batch classes for images """
-
+import os
 import traceback
 
 import numpy as np
@@ -8,22 +8,13 @@ try:
 except ImportError:
     pass
 try:
-    import PIL.Image
-except ImportError:
-    pass
-try:
     import scipy.ndimage
     import scipy.misc.imsave
 except ImportError:
     pass
-try:
-    from numba import njit
-except ImportError:
-    from .decorators import njit
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel, any_action_failed
-from .utils import partialmethod
 
 
 def transform_actions(prefix='', suffix='', wrapper=None):
@@ -72,11 +63,12 @@ def transform_actions(prefix='', suffix='', wrapper=None):
             if method_name.startswith(prefix) and method_name.endswith(suffix) and\
                not method_name.startswith('__') and not method_name.endswith('__'):
                 def __wrapper():
+                    #pylint: disable=cell-var-from-loop
                     wrapped_method = method
-                    def func(self, src='images', dst='images', *args, **kwargs):
+                    def __func(self, src='images', dst='images', *args, **kwargs):
                         return getattr(cls, wrapper)(self, wrapped_method, src=src, dst=dst,
-                                                       use_self=True, *args, **kwargs)
-                    return func
+                                                     use_self=True, *args, **kwargs)
+                    return __func
                 name_slice = slice(len(prefix), -len(suffix))
                 wrapped_method_name = method_name[name_slice]
                 setattr(cls, wrapped_method_name, action(__wrapper()))
@@ -87,8 +79,8 @@ def transform_actions(prefix='', suffix='', wrapper=None):
 class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels"
-
-    def _assemble(self, all_res, *args, **kwargs):
+    #pylint: disable=arguments-differ
+    def _assemble(self, all_res, components='images', *args, **kwargs):
         """ Assemble the batch after a parallel action.
 
         Parameters
@@ -103,7 +95,7 @@ class BaseImagesBatch(Batch):
         -------
         self
         """
-        _ = all_res, args, kwargs
+        _ = all_res, args, kwargs, components
         raise NotImplementedError("Must be implemented in a child class")
 
     def _make_path(self, path, ix):
@@ -163,7 +155,7 @@ class BaseImagesBatch(Batch):
         return self
 
     @inbatch_parallel(init='indices', target='async')
-    def _dump_image(self, dst=None, components='images'):
+    def _dump_image(self, ix, dst=None, components='images'):
         """ Save image to dst.
 
         Actually a wrapper for scipy.misc.imsave.
@@ -232,7 +224,7 @@ class ImagesBatch(BaseImagesBatch):
         return scipy.ndimage.open(self._make_path(src, ix))
 
     @inbatch_parallel(init='indices', target='async')
-    def _dump_image(self, dst=None, components='images'):
+    def _dump_image(self, ix, dst=None, components='images'):
         """ Save image to dst.
 
         Actually a wrapper for scipy.misc.imsave.
@@ -476,10 +468,10 @@ class ImagesBatch(BaseImagesBatch):
         np.ndarray : image after described actions
         """
         return self._put_on_background_(self._crop_(transformed_image,
-                                                  'top_left' if origin != 'center' else 'center',
-                                                  original_image.shape[:2]),
-                                       np.zeros(original_image.shape, dtype=np.uint8),
-                                       origin)
+                                                    'top_left' if origin != 'center' else 'center',
+                                                    original_image.shape[:2]),
+                                        np.zeros(original_image.shape, dtype=np.uint8),
+                                        origin)
 
     def _resize_(self, image, shape=None, order=0, *args, **kwargs):
         """ Resize an image to the given shape
@@ -561,7 +553,7 @@ class ImagesBatch(BaseImagesBatch):
 
         return scipy.ndimage.interpolation.rotate(image, angle=angle, order=order, *args, **kwargs)
 
-    def _flip_all(self, images=None, indices=[], mode='lr'):
+    def _flip_all(self, images=None, indices=None, mode='lr'):
         """ Flip images in the batch.
 
         Parameters

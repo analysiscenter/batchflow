@@ -9,18 +9,66 @@ Components
 
 The class has two components: ``images`` and ``labels``.
 
-Actions
--------
+Augmentation
+------------
 
 ImagesBatch provides typical augmentation actions:
 
 * :meth:`crop <~dataset.ImagesBatch._crop_>` -- crop rectangular area from an image
-* :meth:`~dataset.ImagesBatch._flip__all` -- flip image (left to right or upside down)
-* :meth: bla bla bla
-* ...
-* ...
+* :meth:`flip <~dataset.ImagesBatch._flip__all>` -- flip an image (left to right or upside down)
+* :meth:`scale <~dataset.ImagesBatch._scale_>` -- scale an image (stretch or tie)
+* :meth:`put_on_background <~dataset.ImagesBatch._put_on_background_>` -- put an image on a given background
+* :meth:`resize <~dataset.ImagesBatch._resize_>` -- resize an image a to given shape
+* :meth:`shift <~dataset.ImagesBatch._shift_>` -- shift an image (cropping pixels that are out of scope)
+* :meth:`rotate <~dataset.ImagesBatch._rotate_>` -- rotate an image by angle in degrees
+* :meth:`pad <~dataset.ImagesBatch._pad_>` -- add constant values to the border of an image (enlarging the last's shape)
+* :meth:`invert <~dataset.ImagesBatch._invert_>` -- invert given channels in an image
+* :meth:`salt <~dataset.ImagesBatch._salt_>` -- set pixels in random positions to given colour
+* :meth:`multiply <~dataset.ImagesBatch._multiply_>` -- multiply an image by given number
+* :meth:`add <~dataset.ImagesBatch._add_>` -- add given term to an image
 
-Examples, note about image and indices
+.. note:: All these methods can be executed for randomly sampled images from a batch. You just need to specify ``p`` while calling an action (probability of applying an action to an image).
+
+.. note:: Use ``R`` or ``S`` `named expressions :ref:<named_expr>` to sample arguments for actions. In the first case argument will be sampled for all images in a batch. If ``S`` is passed then argument will be sampled for each image.
+
+Examples:
+
+All images in a batch are rotated by 10 degrees:
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .rotate(angle=10)
+        ...
+
+All images in a batch are rotated by the common angle sampled from the normal distribution
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .rotate(angle=R('normal', loc=0, scale=1))
+        ...
+
+Each image in a batch are rotated by its own sampled angle
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .rotate(angle=S('normal', loc=0, scale=1))
+        ...
+
+
+Rotate each image with probability 0.7 by its own sampled angle
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .rotate(angle=S('normal', loc=0, scale=1), p=0.7)
+        ...
 
 
 Loading from files
@@ -74,7 +122,7 @@ This method is actually wrapped with :meth:`~dataset.Batch.apply_transform`. And
 
 .. note:: If you define these actions in a child class then you must decorate it with ``@transform_actions(prefix='_', suffix='_', wrapper='apply_transform')``
 
-*Example*
+Example:
 
 .. code-block:: python
 
@@ -106,7 +154,7 @@ To use this action in a pipeline you must write:
 
 .. note:: All actions written in this way can be applied with given probability to every image. To achieve this, pass parameter ``p`` to an action, like ``flip(mode='lr', p=0.5)``
 
-.. note:: These actions are performed each in its own thread. To change it (for example, execute in asynchronous mode), pass parameter `target` (``.flip(mode='lr', target='a')``). For more detail, see :doc:`<parallel>`.
+.. note:: These actions are performed for every image each in its own thread. To change it (for example, execute in asynchronous mode), pass parameter `target` (``.flip(mode='lr', target='a')``). For more detail, see :doc:`<parallel>`.
 
 
 ``_method_name_all``
@@ -122,7 +170,7 @@ This method is actually wrapped with :meth:`~dataset.Batch.apply_transform_all`.
 
 .. note:: If you define these actions in a child class then you must decorate it with ``@transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')``
 
-*Example*
+Example:
 
 .. code-block:: python
 
@@ -152,7 +200,7 @@ To use this action in a pipeline you must write:
 
 .. note:: All actions written in this way can be applied with given probability to every image. To achieve this, pass parameter ``p`` to an action, like ``flip(mode='lr', p=0.5)``
 
-.. note:: These actions are performed each in its own thread. To change it (for example, execute in asynchronous mode), pass parameter `target` (``.flip(mode='lr', target='a')``). For more detail, see :doc:`<parallel>`.
+.. note:: These actions are performed each in one thread for all batch. Please note that you can't pass ``S`` named expression as an argument (because one transformation is applied to every choozen image).
 
 
 Assembling after parallel execution
