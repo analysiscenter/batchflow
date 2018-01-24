@@ -388,12 +388,12 @@ class FilesIndex(DatasetIndex):
     @staticmethod
     def build_key(fullpathname, no_ext=False):
         """ Create index item from full path name. """
+        key_name = os.path.basename(fullpathname)
         if no_ext:
-            dot_position = fullpathname.rfind('.')
+            dot_position = key_name.rfind('.')
             dot_position = dot_position if dot_position > 0 else len(key_name)
             key_name = key_name[:dot_position]
-        else:
-            key_name = os.path.basename(fullpathname)
+
         return key_name, fullpathname
 
     def get_fullpath(self, key):

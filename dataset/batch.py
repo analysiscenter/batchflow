@@ -2,7 +2,6 @@
 
 import os
 import threading
-from inspect import ismethod
 
 import dill
 try:
