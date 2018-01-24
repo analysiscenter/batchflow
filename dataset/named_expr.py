@@ -184,6 +184,9 @@ class V(NamedExpression):
 class R(NamedExpression):
     """ A random value """
     def __init__(self, name=None, *args, state=None, seed=None, **kwargs):
+        if not (callable(name) or isinstance(name, (str, NamedExpression))):
+            args = (name,) + args
+            name = 'choice'
         super().__init__(name)
         if isinstance(state, np.random.RandomState):
             self.random_state = state
