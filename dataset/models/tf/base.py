@@ -261,6 +261,11 @@ class TFModel(BaseModel):
             self.session = tf.Session(**session_config)
             self.session.run(tf.global_variables_initializer())
 
+    def reset(self):
+        """ Reset the trained model to allow a new training from scratch """
+        with self.session.graph:
+            self.session.run(tf.global_variables_initializer())
+
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
 
