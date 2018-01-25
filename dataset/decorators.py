@@ -7,7 +7,7 @@ import asyncio
 import functools
 import logging
 
-from .named_expr import NamedExpression
+from .named_expr import P
 
 
 def _workers_count():
@@ -151,13 +151,12 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
             params = list()
 
             def _get_value(value, pos=None, name=None):
-                print('value', value)
-                if isinstance(value, NamedExpression):
+                if isinstance(value, P):
                     if pos is not None:
                         params.append(pos)
                     elif name is not None:
                         params.append(name)
-                    v = value.get(batch=self)
+                    v = value.get(batch=self, parallel=True)
                     return v
                 return value
 

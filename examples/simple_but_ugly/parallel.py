@@ -104,9 +104,9 @@ if __name__ == "__main__":
             .load(data)
             .print("Start batch")
             #.action_p(S('uniform', 10, 15))
-            .action_a("async", S('poisson', 5.5))
-            .action_i(S([500, 600]))
-            .action_t(S('normal', 10, 2), target='f')
+            .action_a("async", P(R('poisson', 5.5)))
+            .action_i(P(R([500, 600])))
+            .action_t(P(R('normal', 10, 2)), target='f')
             #.action1(arg2=14)
             .print("End batch"))
 
