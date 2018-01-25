@@ -9,7 +9,7 @@ class Config:
             self.config = config.config
         elif isinstance(config, dict):
             self.config = self.parse(config)
-        self.update(**kwargs)
+        self.update(**self.parse(kwargs))
 
     def pop(self, variables, config=None, **kwargs):
         """ Return variables and remove them from config.
