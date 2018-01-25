@@ -62,7 +62,7 @@ def transform_actions(prefix='', suffix='', wrapper=None):
                 def __wrapper():
                     #pylint: disable=cell-var-from-loop
                     wrapped_method = method
-                    def __func(self, src='images', dst='images', *args, **kwargs):
+                    def __func(self, *args, src='images', dst='images', **kwargs):
                         return getattr(cls, wrapper)(self, wrapped_method, src=src, dst=dst,
                                                      use_self=True, *args, **kwargs)
                     return __func
@@ -77,7 +77,7 @@ class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels"
     #pylint: disable=arguments-differ
-    def _assemble(self, all_res, components='images', *args, **kwargs):
+    def _assemble(self, all_res, *args, components='images', **kwargs):
         """ Assemble the batch after a parallel action.
 
         Parameters
@@ -132,7 +132,7 @@ class BaseImagesBatch(Batch):
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
-    def load(self, src=None, fmt=None, components=None, *args, **kwargs):
+    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
         """ Load data.
 
         .. note:: if `fmt='images'` than there must be single component.
@@ -172,7 +172,7 @@ class BaseImagesBatch(Batch):
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
-    def dump(self, dst=None, fmt=None, components="images", *args, **kwargs):
+    def dump(self, *args, dst=None, fmt=None, components="images", **kwargs):
         """ Dump data.
 
         .. note:: if `fmt='images'` than there must be single component.
@@ -212,12 +212,10 @@ class ImagesBatch(BaseImagesBatch):
     def image_shape(self):
         """: tuple - shape of the image """
         if isinstance(self.images.dtype, object):
-            _, shapes_count = np.unique(list(map(lambda x: x.shape, self.images)),
-                                        return_counts=True, axis=0)
+            _, shapes_count = np.unique([image.shape for image in self.images], return_counts=True, axis=0)
             if len(shapes_count) == 1:
                 return self.images.shape[1:]
             else:
-                print(list(map(lambda x: x.shape, self.images)))
                 raise RuntimeError('Images have different shapes')
         return self.images.shape[1:]
 
@@ -287,7 +285,8 @@ class ImagesBatch(BaseImagesBatch):
                 raise e
         setattr(self, components, new_images)
 
-    def _assemble(self, all_res, components='images', *args, **kwargs):
+    #pylint: disable=arguments-differ
+    def _assemble(self, *args, all_res, components='images', **kwargs):
         """ Assemble the batch after a parallel action.
 
         Parameters
@@ -491,7 +490,7 @@ class ImagesBatch(BaseImagesBatch):
                                         np.zeros(original_image.shape, dtype=np.uint8),
                                         origin)
 
-    def _resize_(self, image, shape=None, order=0, *args, **kwargs):
+    def _resize_(self, image, *args, shape=None, order=0, **kwargs):
         """ Resize an image to the given shape
 
         Actually a wrapper for scipy.ndimage.interpolation.zoom method. *args and **kwargs are passed to the last.
@@ -521,7 +520,7 @@ class ImagesBatch(BaseImagesBatch):
         new_image = scipy.ndimage.interpolation.zoom(image, factor, order=order, *args, **kwargs)
         return new_image
 
-    def _shift_(self, image, order=0, *args, **kwargs):
+    def _shift_(self, *args, image, order=0, **kwargs):
         """ Shift an image.
 
         Actually a wrapper for scipy.ndimage.interpolation.shift. *args and **kwargs are passed to the last.
@@ -547,7 +546,7 @@ class ImagesBatch(BaseImagesBatch):
 
         return scipy.ndimage.interpolation.shift(image, order=order, *args, **kwargs)
 
-    def _rotate_(self, image, angle, order=0, *args, **kwargs):
+    def _rotate_(self, *args, image, angle, order=0, **kwargs):
         """ Rotate an image.
 
         Actually a wrapper for scipy.ndimage.interpolation.rotate. *args and **kwargs are passed to the last.
@@ -595,7 +594,7 @@ class ImagesBatch(BaseImagesBatch):
             images[indices] = images[indices, ::-1]
         return images
 
-    def _pad_(self, image, *args, **kwargs):
+    def _pad_(self, *args, image, **kwargs):
         """ Pad an image.
 
         Actually a wrapper for np.pad.
@@ -644,7 +643,7 @@ class ImagesBatch(BaseImagesBatch):
 
 
 
-    def _salt_(self, image, p_noise=.015, color=255, size=(1,1)):
+    def _salt_(self, image, p_noise=.015, color=255, size=(1, 1)):
         """ set random pixel on image to givan value
 
         every pixel will be set to ``color`` value with probability ``p_noise``
@@ -675,7 +674,7 @@ class ImagesBatch(BaseImagesBatch):
         """
         mask_size = np.asarray(self._get_image_shape(image))
         mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
-        if (size == (1,1) or size == 1) and not callable(color):
+        if (size == (1, 1) or size == 1) and not callable(color):
             image[mask_salt] = color
         else:
             size_lambda = size if callable(size) else lambda: size
@@ -712,8 +711,8 @@ class ImagesBatch(BaseImagesBatch):
             if len(low) != image.shape[-1]:
                 raise RuntimeError("``len(low)`` must coincide with the number of channels")
             for channel, low_channel in enumerate(low):
-                pixels_to_truncate = image[...,channel] < low_channel
-                image[...,channel][pixels_to_truncate] = low_channel
+                pixels_to_truncate = image[..., channel] < low_channel
+                image[..., channel][pixels_to_truncate] = low_channel
         if isinstance(high, Number):
             image[image > high] = high
         else:
@@ -721,8 +720,8 @@ class ImagesBatch(BaseImagesBatch):
                 raise RuntimeError("``len(high)`` must coincide with the number of channels")
 
             for channel, high_channel in enumerate(high):
-                pixels_to_truncate = image[...,channel] > high_channel
-                image[...,channel][pixels_to_truncate] = high_channel
+                pixels_to_truncate = image[..., channel] > high_channel
+                image[..., channel][pixels_to_truncate] = high_channel
         return image.astype(dtype)
 
     def _multiply_(self, image, multiplier=1., low=0., high=1., preserve_type=True):
