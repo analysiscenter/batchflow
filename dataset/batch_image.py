@@ -336,7 +336,7 @@ class ImagesBatch(BaseImagesBatch):
                           np.random.randint(background_shape[1]-image_shape[1]+1))
         return np.asarray(origin, dtype=np.int)
 
-    def _scale_(self, image, factor, preserve_shape, origin='center'):
+    def _scale_(self, image, factor, preserve_shape=False, origin='center'):
         """ Scale the content of each image in the batch.
 
         Resulting shape is obtained as original_shape * factor.
