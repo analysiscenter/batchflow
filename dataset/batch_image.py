@@ -1,12 +1,9 @@
 """ Contains Batch classes for images """
 import os
 import traceback
+from numbers import Number
 
 import numpy as np
-try:
-    import blosc   # pylint: disable=unused-import
-except ImportError:
-    pass
 try:
     import scipy.ndimage
     import scipy.misc.imsave
@@ -114,9 +111,8 @@ class BaseImagesBatch(Batch):
         """
         return self.index.get_fullpath(ix) if path is None else os.path.join(path, ix)
 
-    @inbatch_parallel(init='indices', post='assemble', target='async')
     def _load_image(self, ix, src=None, components="images"):
-        """ Wrapper for scipy.ndimage.open.
+        """ Loads image
 
         .. note:: only works with a single component
 
@@ -127,6 +123,10 @@ class BaseImagesBatch(Batch):
             element's index (filename)
         components : str
             component to load
+
+        Returns
+        -------
+        np.ndarray : Loaded image.
         """
         _ = self, ix, src, components
         raise NotImplementedError("Must be implemented in a child class")
@@ -135,6 +135,8 @@ class BaseImagesBatch(Batch):
     def load(self, src=None, fmt=None, components=None, *args, **kwargs):
         """ Load data.
 
+        .. note:: if `fmt='images'` than there must be single component.
+
         Parameters
         ----------
         src : str, None
@@ -142,7 +144,7 @@ class BaseImagesBatch(Batch):
         fmt : {'image', 'blosc', 'csv', 'hdf5', 'feather'}
             Format of the file to download.
         components : str, sequence
-            components to download. Note that if `fmt='images'` than components must be str.
+            components to download.
 
         Returns
         -------
@@ -154,13 +156,10 @@ class BaseImagesBatch(Batch):
             super().load(src, fmt, components, *args, **kwargs)
         return self
 
-    @inbatch_parallel(init='indices', target='async')
     def _dump_image(self, ix, dst=None, components='images'):
-        """ Save image to dst.
+        """ Saves image to dst.
 
-        Actually a wrapper for scipy.misc.imsave.
-
-        .. note:: `components` must be str
+        .. note:: only works with a single component
 
         Parameters
         ----------
@@ -176,6 +175,9 @@ class BaseImagesBatch(Batch):
     def dump(self, dst=None, fmt=None, components="images", *args, **kwargs):
         """ Dump data.
 
+        .. note:: if `fmt='images'` than there must be single component.
+
+
         Parameters
         ----------
         dst : str, None
@@ -183,7 +185,7 @@ class BaseImagesBatch(Batch):
         fmt : {'image', 'blosc', 'csv', 'hdf5', 'feather'}
             Format of the file to save.
         components : str, sequence
-            components to save. Note that if `fmt='images'` than components must be str.
+            components to save.
 
         Returns
         -------
@@ -202,12 +204,24 @@ class ImagesBatch(BaseImagesBatch):
     Images are stored as numpy arrays (N, H, W, C).
     """
 
+    @classmethod
+    def _get_image_shape(cls, image):
+        return image.shape[:2]
+
     @property
     def image_shape(self):
         """: tuple - shape of the image """
+        if isinstance(self.images.dtype, object):
+            _, shapes_count = np.unique(list(map(lambda x: x.shape, self.images)),
+                                        return_counts=True, axis=0)
+            if len(shapes_count) == 1:
+                return self.images.shape[1:]
+            else:
+                print(list(map(lambda x: x.shape, self.images)))
+                raise RuntimeError('Images have different shapes')
         return self.images.shape[1:]
 
-    @inbatch_parallel(init='indices', post='assemble', target='async')
+    @inbatch_parallel(init='indices', post='assemble')
     def _load_image(self, ix, src=None, components="images"):
         """ Wrapper for scipy.ndimage.open.
 
@@ -220,16 +234,20 @@ class ImagesBatch(BaseImagesBatch):
             element's index (filename)
         components : str
             component to load
+
+        Returns
+        -------
+        np.ndarray : Loaded image
         """
         return scipy.ndimage.open(self._make_path(src, ix))
 
-    @inbatch_parallel(init='indices', target='async')
+    @inbatch_parallel(init='indices')
     def _dump_image(self, ix, dst=None, components='images'):
         """ Save image to dst.
 
         Actually a wrapper for scipy.misc.imsave.
 
-        .. note:: `components` must be str
+        .. note:: only works with a single component
 
         Parameters
         ----------
@@ -260,7 +278,7 @@ class ImagesBatch(BaseImagesBatch):
             if "must have the same shape" in message:
                 preserve_shape = kwargs.get('preserve_shape', False)
                 if preserve_shape:
-                    min_shape = np.array([x.shape for x in all_res]).min(axis=0)
+                    min_shape = np.array([self._get_image_shape(x) for x in all_res]).min(axis=0)
                     all_res = [arr[:min_shape[0], :min_shape[1]].copy() for arr in all_res]
                     new_images = np.stack(all_res)
                 else:
@@ -374,8 +392,7 @@ class ImagesBatch(BaseImagesBatch):
         """
         if np.any(np.asarray(factor) <= 0):
             raise ValueError("factor must be greater than 0")
-        image_shape = image.shape[:-1]
-        rescaled_shape = np.ceil(np.array(image_shape) * factor).astype(np.int16)
+        rescaled_shape = np.ceil(np.array(self._get_image_shape(image)) * factor).astype(np.int16)
         rescaled_image = self._resize_(image, rescaled_shape)
         if preserve_shape:
             rescaled_image = self._preserve_shape(image, rescaled_image, origin)
@@ -408,10 +425,10 @@ class ImagesBatch(BaseImagesBatch):
         -------
         np.ndarray : cropped image
         """
-
-        origin = self._calc_origin(shape, origin, image.shape[:2])
-        if np.all(origin + shape > image.shape[:2]):
-            shape = image.shape[:2] - origin
+        image_shape = self._get_image_shape(image)
+        origin = self._calc_origin(shape, origin, image_shape)
+        if np.all(origin + shape > image_shape):
+            shape = image_shape - origin
 
         row_slice = slice(origin[0], origin[0] + shape[0])
         column_slice = slice(origin[1], origin[1] + shape[1])
@@ -435,12 +452,13 @@ class ImagesBatch(BaseImagesBatch):
         -------
         np.ndarray : the image placed on the background
         """
+        image_shape = self._get_image_shape(image)
+        background_shape = self._get_image_shape(background)
+        origin = self._calc_origin(image_shape, origin, background_shape)
+        image = self._crop_(image, 'top_left', np.asarray(background_shape) - origin).copy()
 
-        origin = self._calc_origin(image.shape[:2], origin, background.shape[:2])
-        image = self._crop_(image, 'top_left', np.asarray(background.shape[:2]) - origin).copy()
-
-        slice_rows = slice(origin[0], origin[0]+image.shape[0])
-        slice_columns = slice(origin[1], origin[1]+image.shape[1])
+        slice_rows = slice(origin[0], origin[0]+image_shape[0])
+        slice_columns = slice(origin[1], origin[1]+image_shape[1])
 
         new_image = background.copy()
         new_image[slice_rows, slice_columns] = image
@@ -469,7 +487,7 @@ class ImagesBatch(BaseImagesBatch):
         """
         return self._put_on_background_(self._crop_(transformed_image,
                                                     'top_left' if origin != 'center' else 'center',
-                                                    original_image.shape[:2]),
+                                                    self._get_image_shape(original_image)),
                                         np.zeros(original_image.shape, dtype=np.uint8),
                                         origin)
 
@@ -495,10 +513,11 @@ class ImagesBatch(BaseImagesBatch):
         -------
         np.ndarray : resized image
         """
-
-        factor = np.asarray(shape) / np.asarray(image.shape[:2])
+        image_shape = self._get_image_shape(image)
+        factor = np.asarray(shape) / np.asarray(image_shape)
         if len(image.shape) > 2:
-            factor = np.concatenate((factor, [1.] * len(image.shape[2:])))
+            factor = np.concatenate((factor,
+                                     [1.]*(len(image.shape)-len(image_shape))))
         new_image = scipy.ndimage.interpolation.zoom(image, factor, order=order, *args, **kwargs)
         return new_image
 
@@ -562,8 +581,10 @@ class ImagesBatch(BaseImagesBatch):
             component to get an image from
         p : float
             probability of applying the transforms
-        image : np.ndarray
-            image to flip
+        images : np.ndarray
+            batch of images
+        indices : sequence
+            indices of images to flip
         mode : {'lr', 'ud'}
             - 'lr' - apply the left/right flip
             - 'ud' - apply the upside/down flip
@@ -623,10 +644,10 @@ class ImagesBatch(BaseImagesBatch):
 
 
 
-    def _salt_(self, image, p_pixel=.015, salt=255):
-        """ set random pixel on image to the givan value
+    def _salt_(self, image, p_noise=.015, color=255, size=(1,1)):
+        """ set random pixel on image to givan value
 
-        every pixel will be set to ``salt`` value with probability ``p_pixel``
+        every pixel will be set to ``color`` value with probability ``p_noise``
 
         Parameters
         ----------
@@ -636,43 +657,73 @@ class ImagesBatch(BaseImagesBatch):
             probability of applying the transforms
         image : np.ndarray
             image to flavour with species
-        p_pixel : float
+        p_noise : float
             probability of salting a pixel
-        salt : float, int, tuple
-            salt's value
+        color : float, int, sequence, callable
+            color's value.
+            - int, float, sequence -- value of color
+            - callable -- color is sampled for every chosen pixel (rules are the same as for int, float and sequence)
+        size : int, sequence of int, callable
+            size of salt
+            - int -- square salt with side ``size``
+            - sequence -- recangular salt in the form (row, columns)
+            - callable -- size is sampled for every chosen pixel (rules are the same as for int and sequence)
 
         Returns
         -------
         np.ndarray : flavoured image
         """
-
-        mask_salt = np.random.binomial(1, p_pixel, size=image.shape[:2]).astype(bool)
-        image[mask_salt] = salt
+        mask_size = np.asarray(self._get_image_shape(image))
+        mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
+        if (size == (1,1) or size == 1) and not callable(color):
+            image[mask_salt] = color
+        else:
+            size_lambda = size if callable(size) else lambda: size
+            color_lambda = color if callable(color) else lambda: color
+            mask_salt = np.where(mask_salt)
+            for i in range(len(mask_salt[0])):
+                current_size = size_lambda()
+                current_size = (current_size, current_size) if isinstance(current_size, Number) else current_size
+                left_top = np.asarray((mask_salt[0][i], mask_salt[1][i]))
+                right_bottom = np.minimum(left_top + current_size, self._get_image_shape(image))
+                image[left_top[0]:right_bottom[0], left_top[1]:right_bottom[1]] = color_lambda()
         return image
 
-    def _threshold(self, image, low=0., high=1., dtype=np.uint8):
+    def _threshold_(self, image, low=0., high=1., dtype=np.uint8):
         """ truncate image's pixels
 
         Parameters
         ----------
-        image : np.ndarray
-            image to truncate
-        low : int, float
-            lower threshold
-        high : int, float
-            higher threshold
+        low : int, float, sequence
+            lower threshold, if sequence is given then apply it to every channel
+        high : int, float, sequence
+            higher threshold, if sequence is given then apply it to every channel
         dtype : np.dtype
-            dtype of returned image
+            dtype of returned images
+        !!! ADD DOCS
 
         Returns
         -------
-        np.ndarray : truncated image
+        np.ndarray : truncated images
         """
+        if isinstance(low, Number):
+            image[image < low] = low
+        else:
+            if len(low) != image.shape[-1]:
+                raise RuntimeError("``len(low)`` must coincide with the number of channels")
+            for channel, low_channel in enumerate(low):
+                pixels_to_truncate = image[...,channel] < low_channel
+                image[...,channel][pixels_to_truncate] = low_channel
+        if isinstance(high, Number):
+            image[image > high] = high
+        else:
+            if len(high) != image.shape[-1]:
+                raise RuntimeError("``len(high)`` must coincide with the number of channels")
 
-        image[image < low] = low
-        image[image > high] = high
+            for channel, high_channel in enumerate(high):
+                pixels_to_truncate = image[...,channel] > high_channel
+                image[...,channel][pixels_to_truncate] = high_channel
         return image.astype(dtype)
-
 
     def _multiply_(self, image, multiplier=1., low=0., high=1., preserve_type=True):
         """multiply each pixel by the given multiplier
@@ -684,7 +735,7 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             probability of applying the transforms
         image : np.ndarray
-        multiplier : float
+        multiplier : float, sequence
         low : actual pixel's value is equal max(value, low)
         high : actual pixel's value is equal min(value, high)
 
@@ -693,7 +744,7 @@ class ImagesBatch(BaseImagesBatch):
         np.ndarray : transformed image
         """
         dtype = image.dtype if preserve_type else np.float
-        return self._threshold(multiplier * image.astype(np.float), low, high, dtype)
+        return self._threshold_(multiplier * image.astype(np.float), low, high, dtype)
 
     def _add_(self, image, term=0., low=0., high=1., preserve_type=True):
         """add term to each pixel
@@ -705,7 +756,7 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             probability of applying the transforms
         image : np.ndarray
-        term : float
+        term : float, sequence
         low : actual pixel's value is equal max(value, low)
         high : actual pixel's value is equal min(value, high)
 
@@ -714,4 +765,4 @@ class ImagesBatch(BaseImagesBatch):
         np.ndarray : transformed image
         """
         dtype = image.dtype if preserve_type else np.float
-        return self._threshold(term + image.astype(np.float), low, high, dtype)
+        return self._threshold_(term + image.astype(np.float), low, high, dtype)
