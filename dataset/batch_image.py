@@ -1,6 +1,5 @@
 """ Contains Batch classes for images """
 import os
-import traceback
 from numbers import Number
 
 import numpy as np
@@ -11,7 +10,7 @@ except ImportError:
     pass
 
 from .batch import Batch
-from .decorators import action, inbatch_parallel, any_action_failed
+from .decorators import action, inbatch_parallel
 
 
 def transform_actions(prefix='', suffix='', wrapper=None):
@@ -55,45 +54,27 @@ def transform_actions(prefix='', suffix='', wrapper=None):
 
     Now each image will be flipped with probability 0.7.
     """
-    def __decorator(cls):
+    def _decorator(cls):
         for method_name, method in cls.__dict__.copy().items():
             if method_name.startswith(prefix) and method_name.endswith(suffix) and\
                not method_name.startswith('__') and not method_name.endswith('__'):
-                def __wrapper():
+                def _wrapper():
                     #pylint: disable=cell-var-from-loop
                     wrapped_method = method
-                    def __func(self, *args, src='images', dst='images', **kwargs):
+                    def _func(self, *args, src='images', dst='images', **kwargs):
                         return getattr(cls, wrapper)(self, wrapped_method, src=src, dst=dst,
                                                      use_self=True, *args, **kwargs)
-                    return __func
+                    return _func
                 name_slice = slice(len(prefix), -len(suffix))
                 wrapped_method_name = method_name[name_slice]
-                setattr(cls, wrapped_method_name, action(__wrapper()))
+                setattr(cls, wrapped_method_name, action(_wrapper()))
         return cls
-    return __decorator
+    return _decorator
 
 
 class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels"
-    #pylint: disable=arguments-differ
-    def _assemble(self, all_res, *args, components='images', **kwargs):
-        """ Assemble the batch after a parallel action.
-
-        Parameters
-        ----------
-        all_res : list
-            processed components of the batch
-
-        components : str, sequence
-            names of the components to assemble
-
-        Returns
-        -------
-        self
-        """
-        _ = all_res, args, kwargs, components
-        raise NotImplementedError("Must be implemented in a child class")
 
     def _make_path(self, path, ix):
         """ Compose path.
@@ -107,93 +88,99 @@ class BaseImagesBatch(Batch):
         Returns
         -------
         path : str
-            joined path if path is not None else element's path specified in the batch's index
+            Joined path if path is not None else element's path specified in the batch's index.
         """
+
         return self.index.get_fullpath(ix) if path is None else os.path.join(path, ix)
 
-    def _load_image(self, ix, src=None, components="images"):
-        """ Loads image
+    def _load_image(self, ix, src=None, dst="images"):
+        """ Loads image.
 
-        .. note:: only works with a single component
+        .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
 
         Parameters
         ----------
-        path : str, None
-        ix : str
-            element's index (filename)
-        components : str
-            component to load
+        src : str, None
+            path to the folder with an image. If src is None then it is determined from the index.
+        dst : str
+            Component to write images to.
 
-        Returns
-        -------
-        np.ndarray : Loaded image.
+        Raises
+        ------
+        NotImplementedError
+            If this method is not defined in a child class
         """
-        _ = self, ix, src, components
+
+        _ = self, ix, src, dst
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
     def load(self, *args, src=None, fmt=None, components=None, **kwargs):
         """ Load data.
 
-        .. note:: if `fmt='images'` than there must be single component.
+        .. note:: if `fmt='images'` than ``components`` must be a single component (str).
+        .. note:: All parameters must be named only.
 
         Parameters
         ----------
         src : str, None
-            Path to the folder with data. If src is None then path is determined from index.
+            Path to the folder with data. If src is None then path is determined from the index.
         fmt : {'image', 'blosc', 'csv', 'hdf5', 'feather'}
             Format of the file to download.
         components : str, sequence
             components to download.
-
-        Returns
-        -------
-        self
         """
-        if fmt == 'image':
-            self._load_image(src, components)
-        else:
-            super().load(src, fmt, components, *args, **kwargs)
-        return self
 
-    def _dump_image(self, ix, dst=None, components='images'):
+        if fmt == 'image':
+            return self._load_image(src, dst=components)
+        return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
+
+    def _dump_image(self, ix, src='images', dst=None):
         """ Saves image to dst.
 
-        .. note:: only works with a single component
+        .. note:: Please note that ``src`` must be ``str`` only, sequence is not allowed here.
 
         Parameters
         ----------
+        src : str
+            Component to get images from.
         dst : str
             Folder where to dump. If dst is None then it is determined from index.
-        components : str
-            component to save.
+
+        Raises
+        ------
+        NotImplementedError
+            If this method is not defined in a child class
         """
-        _ = self, ix, dst, components
+
+        _ = self, ix, src, dst
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
     def dump(self, *args, dst=None, fmt=None, components="images", **kwargs):
         """ Dump data.
 
-        .. note:: if `fmt='images'` than there must be single component.
+        .. note:: If `fmt='images'` than ``dst`` must be a single component (str).
 
+        .. note:: All parameters must be named only.
 
         Parameters
         ----------
         dst : str, None
-            Path to the folder where to dump. If dst is None then path is determined from index.
+            Path to the folder where to dump. If dst is None then path is determined from the index.
         fmt : {'image', 'blosc', 'csv', 'hdf5', 'feather'}
             Format of the file to save.
         components : str, sequence
-            components to save.
+            Components to save.
 
         Returns
         -------
         self
         """
+
         if fmt == 'image':
-            self._dump_image(dst, components)
-        return super().dump(dst, fmt, components, *args, **kwargs)
+            return self._dump_image(components, dst)
+        return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
 @transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
@@ -210,7 +197,7 @@ class ImagesBatch(BaseImagesBatch):
 
     @property
     def image_shape(self):
-        """: tuple - shape of the image """
+        """: tuple - shape of the image"""
         if isinstance(self.images.dtype, object):
             _, shapes_count = np.unique([image.shape for image in self.images], return_counts=True, axis=0)
             if len(shapes_count) == 1:
@@ -219,106 +206,75 @@ class ImagesBatch(BaseImagesBatch):
                 raise RuntimeError('Images have different shapes')
         return self.images.shape[1:]
 
-    @inbatch_parallel(init='indices', post='assemble')
-    def _load_image(self, ix, src=None, components="images"):
-        """ Wrapper for scipy.ndimage.open.
+    @inbatch_parallel(init='indices', post='_assemble')
+    def _load_image(self, ix, src=None, dst="images"):
+        """ Loads image
 
-        .. note:: only works with a single component
-
-        Parameters
-        ----------
-        path : str, None
-        ix : str
-            element's index (filename)
-        components : str
-            component to load
-
-        Returns
-        -------
-        np.ndarray : Loaded image
-        """
-        return scipy.ndimage.open(self._make_path(src, ix))
-
-    @inbatch_parallel(init='indices')
-    def _dump_image(self, ix, dst=None, components='images'):
-        """ Save image to dst.
-
-        Actually a wrapper for scipy.misc.imsave.
-
-        .. note:: only works with a single component
+        .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
 
         Parameters
         ----------
+        src : str, None
+            Path to the folder with an image. If src is None then it is determined from the index.
         dst : str
-            Folder where to dump. If dst is None then it is determined from index.
-        components : str
-            component to save.
-        """
-        scipy.misc.imsave(self._make_path(dst, ix), self.get(ix, components))
-
-    def _assemble_component(self, all_res, components='images', **kwargs):
-        """ Assemble one component after parallel execution.
-
-        Parameters
-        ----------
-        all_res : sequence, array_like
-            Results after inbatch_parallel.
-        components : str
-            component to assemble
-        preserve_shape : bool
-            If True then all images are cropped from the top left corner to have similar shapes.
-            Shape is chosen to be minimal among given images.
-        """
-        try:
-            new_images = np.stack(all_res)
-        except ValueError as e:
-            message = str(e)
-            if "must have the same shape" in message:
-                preserve_shape = kwargs.get('preserve_shape', False)
-                if preserve_shape:
-                    min_shape = np.array([self._get_image_shape(x) for x in all_res]).min(axis=0)
-                    all_res = [arr[:min_shape[0], :min_shape[1]].copy() for arr in all_res]
-                    new_images = np.stack(all_res)
-                else:
-                    new_images = np.array(all_res, dtype=object)
-            else:
-                raise e
-        setattr(self, components, new_images)
-
-    #pylint: disable=arguments-differ
-    def _assemble(self, *args, all_res, components='images', **kwargs):
-        """ Assemble the batch after a parallel action.
-
-        Parameters
-        ----------
-        all_res : sequence, array_like
-            results from parallel action
-        components : str, sequence
-            components to assemble
-        dst : str
-            if `components` is not one of (list, tuple, str)
-            then the value of `dst` will be used instead `components`
+            Component to write images to.
 
         Returns
         -------
         self
         """
-        _ = args
-        if any_action_failed(all_res):
-            all_errors = self.get_errors(all_res)
-            print(all_errors)
-            traceback.print_tb(all_errors[0].__traceback__)
-            raise RuntimeError("Could not assemble the batch")
-        if not isinstance(components, (list, tuple, str)):
-            components = kwargs.get('dst', 'images')
-        if isinstance(components, (list, tuple)):
-            all_res = list(zip(*all_res))
-        else:
-            components = [components]
-            all_res = [all_res]
-        for component, res in zip(components, all_res):
-            self._assemble_component(res, component, **kwargs)
-        return self
+
+        return scipy.ndimage.open(self._make_path(src, ix))
+
+    @inbatch_parallel(init='indices')
+    def _dump_image(self, ix, src='images', dst=None):
+        """ Saves image to dst.
+
+        .. note:: Please note that ``src`` must be ``str`` only, sequence is not allowed here.
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from.
+        dst : str
+            Folder where to dump. If dst is None then it is determined from index.
+
+        Returns
+        -------
+        self
+        """
+
+        scipy.misc.imsave(self._make_path(dst, ix), self.get(ix, src))
+
+    def _assemble_component(self, result, *args, component='images', **kwargs):
+        """ Assemble one component after parallel execution.
+
+        Parameters
+        ----------
+        result : sequence, array_like
+            Results after inbatch_parallel.
+        component : str
+            component to assemble
+        preserve_shape : bool
+            If True then all images are cropped from the top left corner to have similar shapes.
+            Shape is chosen to be minimal among given images.
+        """
+
+        try:
+            new_images = np.stack(result)
+        except ValueError as e:
+            message = str(e)
+            if "must have the same shape" in message:
+                preserve_shape = kwargs.get('preserve_shape', False)
+                if preserve_shape:
+                    min_shape = np.array([self._get_image_shape(x) for x in result]).min(axis=0)
+                    result = [arr[:min_shape[0], :min_shape[1]].copy() for arr in result]
+                    new_images = np.stack(result)
+                else:
+                    new_images = np.array(result, dtype=object)
+            else:
+                raise e
+        setattr(self, component, new_images)
 
     def _calc_origin(self, image_shape, origin, background_shape):
         """ Calculate coordinate of the input image with respect to the background.
@@ -343,6 +299,7 @@ class ImagesBatch(BaseImagesBatch):
         -------
         sequence : calculated origin in the form (row, column)
         """
+
         if isinstance(origin, str):
             if origin == 'top_left':
                 origin = 0, 0
@@ -360,12 +317,6 @@ class ImagesBatch(BaseImagesBatch):
 
         Parameters
         -----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
-        image : np.ndarray
-            image to scale
         factor : float, sequence
             resulting shape is obtained as original_shape * factor
             - float - scale all axes with the given factor
@@ -384,15 +335,21 @@ class ImagesBatch(BaseImagesBatch):
             - 'random' - place the upper-left corner of the rescaled image on the randomly sampled position
                          in the original one. Position is sampled uniformly such that there is no need for cropping.
             - sequence - place the upper-left corner of the rescaled image on the given position in the original one.
-
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
         Returns
         -------
-        np.ndarray : rescaled image
+        self
         """
+
         if np.any(np.asarray(factor) <= 0):
             raise ValueError("factor must be greater than 0")
         rescaled_shape = np.ceil(np.array(self._get_image_shape(image)) * factor).astype(np.int16)
-        rescaled_image = self._resize_(image, rescaled_shape)
+        rescaled_image = self._resize_(image, shape=rescaled_shape)
         if preserve_shape:
             rescaled_image = self._preserve_shape(image, rescaled_image, origin)
         return rescaled_image
@@ -404,14 +361,10 @@ class ImagesBatch(BaseImagesBatch):
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
         image : np.ndarray
         origin : sequence
             Upper-left corner of the cropping box. Can be one of:
-            - sequence - a starting point in the form of (row, column)
+            - sequence - corner's coordinates in the form of (row, column)
             - 'top_left' - crop an image such that upper-left corners of
                            an image and the cropping box coincide
             - 'center' - crop an image such that centers of
@@ -419,11 +372,18 @@ class ImagesBatch(BaseImagesBatch):
             - 'random' - place the upper-left corner of the cropping box at a random position
         shape : sequence
             - sequence - crop size in the form of (rows, columns)
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : cropped image
+        self
         """
+
         image_shape = self._get_image_shape(image)
         origin = self._calc_origin(shape, origin, image_shape)
         if np.all(origin + shape > image_shape):
@@ -434,23 +394,23 @@ class ImagesBatch(BaseImagesBatch):
         return image[row_slice, column_slice].copy()
 
     def _put_on_background_(self, image, background, origin):
-        """ Put an image on a background at origin
+        """ Put an image on a background at given origin
 
         Parameters
         ----------
-        image : np.ndarray
-        background : np.array
+        background : np.ndarray
         origin : sequence, str
             Upper-left corner of the cropping box. Can be one of:
-            - sequence - a starting point in the form of (row, column)
+            - sequence - corner's coordinates in the form of (row, column).
             - 'top_left' - crop an image such that upper-left corners of an image and the cropping box coincide.
             - 'center' - crop an image such that centers of an image and the cropping box coincide.
             - 'random' - place the upper-left corner of the cropping box at a random position.
 
         Returns
         -------
-        np.ndarray : the image placed on the background
+        self
         """
+
         image_shape = self._get_image_shape(image)
         background_shape = self._get_image_shape(background)
         origin = self._calc_origin(image_shape, origin, background_shape)
@@ -473,9 +433,9 @@ class ImagesBatch(BaseImagesBatch):
         origin : {'center', 'top_left', 'random'}, sequence
             Position of the transformed image with respect to the original one's shape.
             - 'center' - place the center of the transformed image on the center of the original one and crop
-                         the transformed image accordingly
+                         the transformed image accordingly.
             - 'top_left' - place the upper-left corner of the transformed image on the upper-left of the original one
-                           and crop the transformed image accordingly
+                           and crop the transformed image accordingly.
             - 'random' - place the upper-left corner of the transformed image on the randomly sampled position
                          in the original one. Position is sampled uniformly such that there is no need for cropping.
             - sequence - place the upper-left corner of the transformed image on the given position in the original one.
@@ -484,6 +444,7 @@ class ImagesBatch(BaseImagesBatch):
         -------
         np.ndarray : image after described actions
         """
+
         return self._put_on_background_(self._crop_(transformed_image,
                                                     'top_left' if origin != 'center' else 'center',
                                                     self._get_image_shape(original_image)),
@@ -493,25 +454,27 @@ class ImagesBatch(BaseImagesBatch):
     def _resize_(self, image, *args, shape=None, order=0, **kwargs):
         """ Resize an image to the given shape
 
-        Actually a wrapper for scipy.ndimage.interpolation.zoom method. *args and **kwargs are passed to the last.
+        Calls scipy.ndimage.interpolation.zoom method with *args and **kwargs.
+        ``factor`` is computed from the given image and shape
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
-        image : np.ndarray
-            image to resize
         shape : sequence
-            resulting shape in the following form: (number of rows, number of columns)
+            Resulting shape in the following form: (number of rows, number of columns).
         order : int
             The order of the spline interpolation, default is 0. The order has to be in the range 0-5.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : resized image
+        self
         """
+
         image_shape = self._get_image_shape(image)
         factor = np.asarray(shape) / np.asarray(image_shape)
         if len(image.shape) > 2:
@@ -520,53 +483,53 @@ class ImagesBatch(BaseImagesBatch):
         new_image = scipy.ndimage.interpolation.zoom(image, factor, order=order, *args, **kwargs)
         return new_image
 
-    def _shift_(self, *args, image, order=0, **kwargs):
+    def _shift_(self, image, *args, order=0, **kwargs):
         """ Shift an image.
 
         Actually a wrapper for scipy.ndimage.interpolation.shift. *args and **kwargs are passed to the last.
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
-        image : np.ndarray
-            image to shift
+        order : int
+            The order of the spline interpolation, default is 0. The order has to be in the range 0-5.
         shift : float or sequence
             The shift along the axes. If a float, shift is the same for each axis.
             If a sequence, shift should contain one value for each axis.
-        order : int
-            The order of the spline interpolation, default is 0. The order has to be in the range 0-5.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : shifted image
+        self
         """
 
         return scipy.ndimage.interpolation.shift(image, order=order, *args, **kwargs)
 
-    def _rotate_(self, *args, image, angle, order=0, **kwargs):
+    def _rotate_(self, image, *args, angle, order=0, **kwargs):
         """ Rotate an image.
 
         Actually a wrapper for scipy.ndimage.interpolation.rotate. *args and **kwargs are passed to the last.
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
-        image : np.ndarray
-            image to rotate
         angle : float
             The rotation angle in degrees.
         order : int
             The order of the spline interpolation, default is 0. The order has to be in the range 0-5.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : shifted image
+        self
         """
 
         return scipy.ndimage.interpolation.rotate(image, angle=angle, order=order, *args, **kwargs)
@@ -576,63 +539,71 @@ class ImagesBatch(BaseImagesBatch):
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
-        images : np.ndarray
-            batch of images
-        indices : sequence
-            indices of images to flip
         mode : {'lr', 'ud'}
             - 'lr' - apply the left/right flip
             - 'ud' - apply the upside/down flip
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
         """
+
         if mode == 'lr':
             images[indices] = images[indices, :, ::-1]
         elif mode == 'ud':
             images[indices] = images[indices, ::-1]
         return images
 
-    def _pad_(self, *args, image, **kwargs):
+    def _pad_(self, image, *args, **kwargs):
         """ Pad an image.
 
         Actually a wrapper for np.pad.
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
         pad_width : sequence, array_like, int
             Number of values padded to the edges of each axis. ((before_1, after_1), ... (before_N, after_N))
             unique pad widths for each axis. ((before, after),) yields same before and after pad for each axis. (pad,)
             or int is a shortcut for before = after = pad width for all axes.
         mode : str or function
             mode of padding. For more details see np.pad
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : padded image
+        self
         """
+
         return np.pad(image, *args, **kwargs)
 
     def _invert_(self, image, channels='all'):
-        """ Invert channels
+        """ Invert givn channels.
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
         channels : int, sequence
-            channels indices to invert.
+            Indices of the channels to invert.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : inverted image
+        self
         """
 
         if channels == 'all':
@@ -641,37 +612,36 @@ class ImagesBatch(BaseImagesBatch):
         image[..., channels] = inv_multiplier - image[..., channels]
         return image
 
-
-
     def _salt_(self, image, p_noise=.015, color=255, size=(1, 1)):
-        """ set random pixel on image to givan value
+        """ Set random pixel on image to givan value.
 
-        every pixel will be set to ``color`` value with probability ``p_noise``
+        Every pixel will be set to ``color`` value with probability ``p_noise``.
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
-        image : np.ndarray
-            image to flavour with species
         p_noise : float
-            probability of salting a pixel
+            Probability of salting a pixel.
         color : float, int, sequence, callable
-            color's value.
+            Color's value.
             - int, float, sequence -- value of color
             - callable -- color is sampled for every chosen pixel (rules are the same as for int, float and sequence)
         size : int, sequence of int, callable
-            size of salt
+            Size of salt
             - int -- square salt with side ``size``
             - sequence -- recangular salt in the form (row, columns)
             - callable -- size is sampled for every chosen pixel (rules are the same as for int and sequence)
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : flavoured image
+        self
         """
+
         mask_size = np.asarray(self._get_image_shape(image))
         mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
         if (size == (1, 1) or size == 1) and not callable(color):
@@ -689,22 +659,30 @@ class ImagesBatch(BaseImagesBatch):
         return image
 
     def _threshold_(self, image, low=0., high=1., dtype=np.uint8):
-        """ truncate image's pixels
+        """ Truncate image's pixels.
 
         Parameters
         ----------
         low : int, float, sequence
-            lower threshold, if sequence is given then apply it to every channel
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately
         high : int, float, sequence
-            higher threshold, if sequence is given then apply it to every channel
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately
         dtype : np.dtype
-            dtype of returned images
-        !!! ADD DOCS
+            dtype of truncated images.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : truncated images
+        self
         """
+
         if isinstance(low, Number):
             image[image < low] = low
         else:
@@ -725,43 +703,61 @@ class ImagesBatch(BaseImagesBatch):
         return image.astype(dtype)
 
     def _multiply_(self, image, multiplier=1., low=0., high=1., preserve_type=True):
-        """multiply each pixel by the given multiplier
+        """ Multiply each pixel by the given multiplier.
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
-        image : np.ndarray
         multiplier : float, sequence
-        low : actual pixel's value is equal max(value, low)
-        high : actual pixel's value is equal min(value, high)
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        preserve_type : bool
+            Whether to preserve ``dtype`` of transformed images.
+            If ``False`` is given then the resulting type will be ``np.float``.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : transformed image
+        self
         """
+
         dtype = image.dtype if preserve_type else np.float
         return self._threshold_(multiplier * image.astype(np.float), low, high, dtype)
 
     def _add_(self, image, term=0., low=0., high=1., preserve_type=True):
-        """add term to each pixel
+        """ Add term to each pixel.
 
         Parameters
         ----------
-        components : str
-            component to get an image from
-        p : float
-            probability of applying the transforms
-        image : np.ndarray
         term : float, sequence
-        low : actual pixel's value is equal max(value, low)
-        high : actual pixel's value is equal min(value, high)
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        preserve_type : bool
+            Whether to preserve ``dtype`` of transformed images.
+            If ``False`` is given then the resulting type will be ``np.float``.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
-        np.ndarray : transformed image
+        self
         """
+
         dtype = image.dtype if preserve_type else np.float
         return self._threshold_(term + image.astype(np.float), low, high, dtype)

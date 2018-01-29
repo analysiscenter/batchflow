@@ -1,6 +1,7 @@
 """ Contains basic Batch classes """
 
 import os
+import traceback
 import threading
 
 import dill
@@ -191,7 +192,7 @@ class Batch(BaseBatch):
             # load data the first time it's requested
             with self._preloaded_lock:
                 if self._data is None and self._preloaded is not None:
-                    self.load(self._preloaded)
+                    self.load(src=self._preloaded)
         res = self._data if self.components is None else self._data_named
         return res if res is not None else self._empty_data
 
@@ -340,8 +341,7 @@ class Batch(BaseBatch):
         if self.components is None:
             _src = data
         else:
-            _src = data if isinstance(data, tuple) else tuple([data])
-
+            _src = data if isinstance(data, tuple) or data is None else tuple([data])
         _src = self.get_items(self.indices, _src)
 
         if components is None:
@@ -469,20 +469,11 @@ class Batch(BaseBatch):
                 src_attr = src[pos]
             _args = tuple([src_attr, *args])
 
-        if isinstance(dst, str):
-            dst_attr = getattr(self, dst)
-            pos = self.get_pos(None, dst, ix)
-        else:
-            dst_attr = dst
-            pos = self.get_pos(None, src, ix)
-        if dst_attr is not None:
-            if np.random.binomial(1, p):
-                if use_self:
-                    return func(self, *_args, **kwargs)
-                else:
-                    return func(*_args, **kwargs)
-            else:
-                return src_attr
+        if np.random.binomial(1, p):
+            if use_self:
+                return func(self, *_args, **kwargs)
+            return func(*_args, **kwargs)
+        return src_attr
 
     @action
     def apply_transform_all(self, func, *args, src=None, dst=None, p=1., use_self=False, **kwargs):
@@ -531,7 +522,6 @@ class Batch(BaseBatch):
                 src_attr = src
             _args = tuple([src_attr, *args])
         indices = np.where(np.random.binomial(1, p, len(self)))[0]
-        # print(func.__func__)
         if len(indices):
             if use_self:
                 tr_res = func(self, indices=indices, *_args, **kwargs)
@@ -561,8 +551,58 @@ class Batch(BaseBatch):
             file_name = os.path.join(os.path.abspath(src), str(ix) + '.' + ext)
         return file_name
 
-    def _assemble(self, all_res, *args, **kwargs):
-        _ = all_res, args, kwargs
+    def _assemble_component(self, result, *args, component, **kwargs):
+        """ Assemble one component after parallel execution.
+
+        Parameters
+        ----------
+        result : sequence, np.ndarray
+            Values to put into ``component``
+        component : str
+            Component to assemble.
+        """
+
+        _ = args, kwargs
+        try:
+            new_items = np.stack(result)
+        except ValueError as e:
+            message = str(e)
+            if "must have the same shape" in message:
+                new_items = np.array(result, dtype=object)
+            else:
+                raise e
+        setattr(self, component, new_items)
+
+    def _assemble(self, all_results, *args, dst=None, **kwargs):
+        """ Assembles the batch after a parallel action.
+
+        Parameters
+        ----------
+        all_results : sequence
+            Results after inbatch_parallel.
+        dst : str, sequence, np.ndarray
+            Components to assemble
+
+        Returns
+        -------
+        self
+        """
+
+        _ = args
+        if any_action_failed(all_results):
+            all_errors = self.get_errors(all_results)
+            print(all_errors)
+            traceback.print_tb(all_errors[0].__traceback__)
+            raise RuntimeError("Could not assemble the batch")
+        if dst is None:
+            dst = self.components
+        if isinstance(dst, (list, tuple, np.ndarray)):
+            all_results = list(zip(*all_results))
+        else:
+            dst = [dst]
+            all_results = [all_results]
+        for component, result in zip(dst, all_results):
+            self._assemble_component(result, component=component, **kwargs)
         return self
 
     @inbatch_parallel('indices', post='_assemble', target='f')
@@ -651,9 +691,8 @@ class Batch(BaseBatch):
 
         return self
 
-
     @action
-    def load(self, src=None, fmt=None, components=None, *args, **kwargs):
+    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
         """ Load data from another array or a file.
 
         Parameters
@@ -684,7 +723,7 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def dump(self, dst=None, fmt=None, components=None, *args, **kwargs):
+    def dump(self, *args, dst=None, fmt=None, components=None, **kwargs):
         """ Save data to another array or a file.
 
         Parameters
