@@ -9,5 +9,6 @@ dataset
    dataset.dataset.rst
    dataset.batch.rst
    dataset.pipeline.rst
+   dataset.named_expressions.rst
    dataset.decorators.rst
    dataset.exceptions.rst

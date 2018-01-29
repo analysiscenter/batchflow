@@ -7,7 +7,7 @@ import asyncio
 import functools
 import logging
 
-from .named_expr import NamedExpression
+from .named_expr import P
 
 
 def _workers_count():
@@ -82,7 +82,7 @@ def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """
     return any(isinstance(res, Exception) for res in results)
 
-def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
+def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kwargs):
     """ Decorator for parallel methods in :class:`~dataset.Batch` classes"""
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
@@ -94,18 +94,28 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             if init is None:
                 raise ValueError("init cannot be None")
             else:
-                try:
-                    init_fn = getattr(self, init)
-                except AttributeError:
-                    raise ValueError("init should refer to a method or property of the class", type(self).__name__,
-                                     "returning the list of arguments")
+                if isinstance(init, str):
+                    try:
+                        init_fn = getattr(self, init)
+                    except AttributeError:
+                        raise ValueError("init should refer to a method or property of the class", type(self).__name__,
+                                         "returning the list of arguments")
+                elif callable(init):
+                    init_fn = init
+                else:
+                    init_fn = lambda *a, **k: init
             if post is not None:
-                try:
-                    post_fn = getattr(self, post)
-                except AttributeError:
-                    raise ValueError("post should refer to a method of the class", type(self).__name__)
+                if isinstance(init, str):
+                    try:
+                        post_fn = getattr(self, post)
+                    except AttributeError:
+                        raise ValueError("post should refer to a method of the class", type(self).__name__)
+                elif callable(post):
+                    post_fn = post
+                else:
+                    post_fn = lambda *a, **k: post
                 if not callable(post_fn):
-                    raise ValueError("post should refer to a method of the class", type(self).__name__)
+                    raise ValueError("post should refer to a callable or a method of the batch class")
             else:
                 post_fn = None
             return init_fn, post_fn
@@ -141,12 +151,12 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             params = list()
 
             def _get_value(value, pos=None, name=None):
-                if isinstance(value, NamedExpression):
+                if isinstance(value, P):
                     if pos is not None:
                         params.append(pos)
                     elif name is not None:
                         params.append(name)
-                    v = value.get(batch=self)
+                    v = value.get(batch=self, parallel=True)
                     return v
                 return value
 
@@ -159,7 +169,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
 
             return _args, _kwargs, params
 
-        def _make_args(iteration, init_args, args, kwargs, params=None):
+        def _make_args(self, iteration, init_args, args, kwargs, params=None):
             """ Make args, kwargs tuple """
             if isinstance(init_args, tuple) and len(init_args) == 2:
                 margs, mkwargs = init_args
@@ -188,6 +198,9 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             if len(kwargs) > 0:
                 mkwargs.update(_kwargs)
 
+            if _use_self and self:
+                margs = [self] + margs
+
             return margs, mkwargs
 
         def wrap_with_threads(self, args, kwargs):
@@ -200,8 +213,8 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 args, kwargs, params = _prepare_args(self, args, kwargs)
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
-                    margs, mkwargs = _make_args(iteration, arg, args, kwargs, params)
-                    one_ft = executor.submit(method, self, *margs, **mkwargs)
+                    margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
+                    one_ft = executor.submit(method, *margs, **mkwargs)
                     futures.append(one_ft)
 
                 timeout = kwargs.get('timeout', None)
@@ -220,7 +233,7 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
                 args, kwargs, params = _prepare_args(self, args, kwargs)
                 full_kwargs = {**dec_kwargs, **kwargs}
                 for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
-                    margs, mkwargs = _make_args(iteration, arg, args, kwargs, params)
+                    margs, mkwargs = _make_args(None, iteration, arg, args, kwargs, params)
                     one_ft = executor.submit(mpc_func, *margs, **mkwargs)
                     futures.append(one_ft)
 
@@ -246,8 +259,8 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
-                margs, mkwargs = _make_args(iteration, arg, args, kwargs, params)
-                futures.append(asyncio.ensure_future(method(self, *margs, **mkwargs)))
+                margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
+                futures.append(asyncio.ensure_future(method(*margs, **mkwargs)))
 
             loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
 
@@ -262,9 +275,9 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
             args, kwargs, params = _prepare_args(self, args, kwargs)
             full_kwargs = {**dec_kwargs, **kwargs}
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
-                margs, mkwargs = _make_args(iteration, arg, args, kwargs, params)
+                margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
                 try:
-                    one_ft = method(self, *margs, **mkwargs)
+                    one_ft = method(*margs, **mkwargs)
                 except Exception as e:   # pylint: disable=broad-except
                     one_ft = e
                 futures.append(one_ft)
@@ -274,6 +287,9 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
         @functools.wraps(method)
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method with a required parallel engine """
+            if not _use_self:
+                args = (self,) + args
+                self = None
             if 'target' in kwargs:
                 _target = kwargs.pop('target')
             else:
@@ -292,7 +308,8 @@ def inbatch_parallel(init, post=None, target='threads', **dec_kwargs):
     return inbatch_parallel_decorator
 
 
-parallel = inbatch_parallel  # pylint: disable=invalid-name
+parallel = functools.partial(inbatch_parallel, _use_self=False)  # pylint:disable=invalid-name
+
 
 def njit(nogil=True):
     """ Fake njit decorator to use when numba is not installed """

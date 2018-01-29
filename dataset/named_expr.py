@@ -64,6 +64,9 @@ class NamedExpression:
         or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update) """
         self.get(*args, **kwargs).update(value)
 
+    def __repr__(self):
+        return type(self).__name__ + '(' + str(self.name) + ')'
+
 
 def eval_expr(expr, batch=None, pipeline=None, model=None):
     """ Evaluate a named expression recursively """
@@ -89,7 +92,22 @@ def eval_expr(expr, batch=None, pipeline=None, model=None):
 
 
 class B(NamedExpression):
-    """ Batch component name """
+    """ Batch component or attribute name
+
+    Notes
+    -----
+    ``B()`` return the batch itself.
+
+    To avoid unexpected data changes the copy of the batch may be returned, if ``copy=True``.
+
+    Examples
+    --------
+    ::
+
+        B('size')
+        B('images_shape')
+        B(copy=True)
+    """
     def __init__(self, name=None, copy=True):
         super().__init__(name, copy)
 
@@ -110,7 +128,15 @@ class B(NamedExpression):
 
 
 class C(NamedExpression):
-    """ A pipeline config option """
+    """ A pipeline config option
+
+    Examples
+    --------
+    ::
+
+        C('model_class')
+        C('GPU')
+    """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline config """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
@@ -131,7 +157,15 @@ class C(NamedExpression):
 
 
 class F(NamedExpression):
-    """ A function, method or any other callable that takes a batch or a pipeline and possibly other arguments """
+    """ A function, method or any other callable that takes a batch or a pipeline and possibly other arguments
+
+    Examples
+    --------
+    ::
+
+        F(MyBatch.rotate, angle=30)
+        F(prepare_data, 115, item=10)
+    """
     def __init__(self, name=None, _pass=True, *args, **kwargs):
         super().__init__(name)
         self.args = args
@@ -166,7 +200,15 @@ class L(F):
 
 
 class V(NamedExpression):
-    """ Pipeline variable name """
+    """ Pipeline variable name
+
+    Examples
+    --------
+    ::
+
+        V('model_name')
+        V('loss_history')
+    """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline variable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
@@ -182,8 +224,24 @@ class V(NamedExpression):
 
 
 class R(NamedExpression):
-    """ A random value """
-    def __init__(self, name=None, *args, state=None, seed=None, **kwargs):
+    """ A random value
+
+    Notes
+    -----
+    If `size` is needed, it should be specified as a named, not a positional argument.
+
+    Examples
+    --------
+    ::
+
+        R('normal', 0, 1)
+        R('poisson', lam=5.5, seed=42, size=3)
+        R(['metro', 'taxi', 'bike'], p=[.6, .1, .3], size=10)
+    """
+    def __init__(self, name=None, *args, state=None, seed=None, size=None, **kwargs):
+        if not (callable(name) or isinstance(name, (str, NamedExpression))):
+            args = (name,) + args
+            name = 'choice'
         super().__init__(name)
         if isinstance(state, np.random.RandomState):
             self.random_state = state
@@ -191,17 +249,20 @@ class R(NamedExpression):
             self.random_state = np.random.RandomState(seed)
         self.args = args
         self.kwargs = kwargs
+        self.size = size
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a random variable """
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         if callable(name):
             pass
-        elif isinstance(name, str) and hasattr(np.random, name):
+        elif isinstance(name, str) and hasattr(self.random_state, name):
             name = getattr(self.random_state, name)
         else:
             raise TypeError('Random distribution should be a callable or a numpy distribution')
         args = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
+        if self.size is not None:
+            self.kwargs['size'] = self.size
         kwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
 
         return name(*args, **kwargs)
@@ -215,21 +276,63 @@ class R(NamedExpression):
         return 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs) + ')'
 
 
-class S(NamedExpression):
-    """ A sampler for random values """
-    def __init__(self, name=None, *args, size=None, **kwargs):
-        super().__init__(name)
-        size = size if size is not None else B('size')
-        self.value = R(self.name, *args, **kwargs, size=size)
+class W(NamedExpression):
+    """ A wrapper which returns the wrapped named expression without evaluating it
 
+    Examples
+    --------
+    ::
+
+        N(V('variable'))
+        N(B(copy=True))
+        N(R('normal', 0, 1, size=B('size')))
+    """
     def get(self, batch=None, pipeline=None, model=None):
-        """ Return an R-expression """
-        return self.value
+        """ Return a wrapped named expression """
+        _ = batch, pipeline, model
+        return self.name
 
     def assign(self, *args, **kwargs):
         """ Assign a value """
         _ = args, kwargs
-        raise NotImplementedError("Assigning a value to a sampler is not supported")
+        raise NotImplementedError("Assigning a value to a wrapper is not supported")
 
-    def __repr__(self):
-        return 'S(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs) + ', size=', self.size + ')'
+
+class P(W):
+    """ A wrapper for parallel actions
+
+    Notes
+    -----
+    For ``R``-expressions the default ``size`` will be ``B('size')``.
+
+    Examples
+    --------
+    Each image in the batch will be rotated at its own angle::
+
+        pipeline
+            .rotate(angle=P(R('normal', 0, 1)))
+
+    Without ``P`` all images in the batch will be rotated at the same angle,
+    as an angle randomized across batches only::
+
+        pipeline
+            .rotate(angle=R('normal', 0, 1))
+
+    Generate 10 categorical random samples::
+
+        pipeline
+            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=10))
+
+    If a batch size is greater than 10, than an exception will be raised as there is not enough
+    values for each parallel invocations of an action.
+    """
+    def __init__(self, name=None):
+        if isinstance(name, R):
+            name.size = name.size if name.size is not None else B('size')
+        super().__init__(name)
+
+    def get(self, batch=None, pipeline=None, model=None, parallel=False):   # pylint:disable=arguments-differ
+        """ Return a wrapped named expression """
+        if parallel:
+            return self.name.get(batch=batch, pipeline=pipeline, model=model)
+        return self
