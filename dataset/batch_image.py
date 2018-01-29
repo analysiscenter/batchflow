@@ -1,13 +1,13 @@
 """ Contains Batch classes for images """
 import os
+from textwrap import dedent
 from numbers import Number
+from functools import wraps
 
 import numpy as np
-try:
-    import scipy.ndimage
-    import scipy.misc.imsave
-except ImportError:
-    pass
+import scipy.ndimage.interpolation as sp_actions
+import scipy.ndimage
+from scipy.misc import imsave
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel
@@ -61,6 +61,7 @@ def transform_actions(prefix='', suffix='', wrapper=None):
                 def _wrapper():
                     #pylint: disable=cell-var-from-loop
                     wrapped_method = method
+                    @wraps(wrapped_method)
                     def _func(self, *args, src='images', dst='images', **kwargs):
                         return getattr(cls, wrapper)(self, wrapped_method, src=src, dst=dst,
                                                      use_self=True, *args, **kwargs)
@@ -70,6 +71,33 @@ def transform_actions(prefix='', suffix='', wrapper=None):
                 setattr(cls, wrapped_method_name, action(_wrapper()))
         return cls
     return _decorator
+
+
+from functools import update_wrapper
+def add_methods(transformations=None, prefix='_', suffix='_'):
+    def _decorator(cls):
+        for func_name, func in transformations.items():
+            def _method_decorator():
+                added_func = func
+                @wraps(added_func)
+                def _method(self, *args, **kwargs):
+                    return added_func(*args, **kwargs)
+                return _method
+            method_name = ''.join((prefix, func_name, suffix))
+            added_method = _method_decorator()
+            setattr(cls, method_name, added_method)
+        return cls
+
+    if transformations is None:
+        transformations = {}
+        hooks = ['input : ndarray', 'input : array_like']
+        for function_name in scipy.ndimage.__dict__['__all__']:
+            function = getattr(scipy.ndimage, function_name)
+            doc = getattr(function, '__doc__')
+            if doc is not None and (hooks[0] in doc or hooks[1] in doc):
+                transformations[function_name] = function
+    return _decorator
+
 
 
 class BaseImagesBatch(Batch):
@@ -185,6 +213,7 @@ class BaseImagesBatch(Batch):
 
 @transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
 @transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
+@add_methods(transformations=None, prefix='_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
@@ -244,7 +273,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        scipy.misc.imsave(self._make_path(dst, ix), self.get(ix, src))
+        imsave(self._make_path(dst, ix), self.get(ix, src))
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
         """ Assemble one component after parallel execution.
@@ -454,7 +483,7 @@ class ImagesBatch(BaseImagesBatch):
     def _resize_(self, image, *args, shape=None, order=0, **kwargs):
         """ Resize an image to the given shape
 
-        Calls scipy.ndimage.interpolation.zoom method with *args and **kwargs.
+        Calls sp_actions.zoom method with *args and **kwargs.
         ``factor`` is computed from the given image and shape
 
         Parameters
@@ -480,13 +509,13 @@ class ImagesBatch(BaseImagesBatch):
         if len(image.shape) > 2:
             factor = np.concatenate((factor,
                                      [1.]*(len(image.shape)-len(image_shape))))
-        new_image = scipy.ndimage.interpolation.zoom(image, factor, order=order, *args, **kwargs)
+        new_image = sp_actions.zoom(image, factor, order=order, *args, **kwargs)
         return new_image
 
-    def _shift_(self, image, *args, order=0, **kwargs):
+    # def _shift_(self, image, *args, order=0, **kwargs):
         """ Shift an image.
 
-        Actually a wrapper for scipy.ndimage.interpolation.shift. *args and **kwargs are passed to the last.
+        Actually a wrapper for sp_actions.shift. *args and **kwargs are passed to the last.
 
         Parameters
         ----------
@@ -507,12 +536,12 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return scipy.ndimage.interpolation.shift(image, order=order, *args, **kwargs)
+        # return sp_actions.shift(image, order=order, *args, **kwargs)
 
-    def _rotate_(self, image, *args, angle, order=0, **kwargs):
+    # def _rotate_(self, image, *args, angle, order=0, **kwargs):
         """ Rotate an image.
 
-        Actually a wrapper for scipy.ndimage.interpolation.rotate. *args and **kwargs are passed to the last.
+        Actually a wrapper for sp_actions.rotate. *args and **kwargs are passed to the last.
 
         Parameters
         ----------
@@ -532,7 +561,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return scipy.ndimage.interpolation.rotate(image, angle=angle, order=order, *args, **kwargs)
+        # return sp_actions.rotate(image, angle=angle, order=order, *args, **kwargs)
 
     def _flip_all(self, images=None, indices=None, mode='lr'):
         """ Flip images in the batch.
@@ -560,7 +589,7 @@ class ImagesBatch(BaseImagesBatch):
             images[indices] = images[indices, ::-1]
         return images
 
-    def _pad_(self, image, *args, **kwargs):
+    # def _pad_(self, image, *args, **kwargs):
         """ Pad an image.
 
         Actually a wrapper for np.pad.
@@ -585,7 +614,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return np.pad(image, *args, **kwargs)
+        # return np.pad(image, *args, **kwargs)
 
     def _invert_(self, image, channels='all'):
         """ Invert givn channels.
