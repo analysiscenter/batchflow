@@ -51,9 +51,10 @@ class MNIST(ImagesOpenset):
             self._test_index = DatasetIndex(np.arange(len(test_data[0])))
         return train_data, test_data
 
-    @parallel(init='_get_from_urls', post='_gather_data')
+    @parallel(init='_get_from_urls', _use_self=True, post='_gather_data')
     def download(self, url, content):    # pylint:disable=arguments-differ
         """ Load data from the web site """
+        print('Downloading', url)
         tmpdir = tempfile.gettempdir()
         filename = os.path.basename(url)
         localname = os.path.join(tmpdir, filename)
