@@ -68,6 +68,28 @@ class NamedExpression:
         return type(self).__name__ + '(' + str(self.name) + ')'
 
 
+class W(NamedExpression):
+    """ A wrapper which returns the wrapped named expression without evaluating it
+
+    Examples
+    --------
+    ::
+
+        N(V('variable'))
+        N(B(copy=True))
+        N(R('normal', 0, 1, size=B('size')))
+    """
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a wrapped named expression """
+        _ = batch, pipeline, model
+        return self.name
+
+    def assign(self, *args, **kwargs):
+        """ Assign a value """
+        _ = args, kwargs
+        raise NotImplementedError("Assigning a value to a wrapper is not supported")
+
+
 def eval_expr(expr, batch=None, pipeline=None, model=None):
     """ Evaluate a named expression recursively """
     if batch is None:
@@ -75,7 +97,11 @@ def eval_expr(expr, batch=None, pipeline=None, model=None):
     args = dict(batch=batch, pipeline=pipeline, model=model)
 
     if isinstance(expr, NamedExpression):
-        expr = expr.get(**args)
+        _expr = expr.get(**args)
+        if isinstance(_expr, NamedExpression) and not isinstance(expr, W):
+            expr = eval_expr(_expr, **args)
+        else:
+            expr = _expr
     elif isinstance(expr, (list, tuple)):
         _expr = []
         for val in expr:
@@ -274,28 +300,6 @@ class R(NamedExpression):
 
     def __repr__(self):
         return 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs) + ')'
-
-
-class W(NamedExpression):
-    """ A wrapper which returns the wrapped named expression without evaluating it
-
-    Examples
-    --------
-    ::
-
-        N(V('variable'))
-        N(B(copy=True))
-        N(R('normal', 0, 1, size=B('size')))
-    """
-    def get(self, batch=None, pipeline=None, model=None):
-        """ Return a wrapped named expression """
-        _ = batch, pipeline, model
-        return self.name
-
-    def assign(self, *args, **kwargs):
-        """ Assign a value """
-        _ = args, kwargs
-        raise NotImplementedError("Assigning a value to a wrapper is not supported")
 
 
 class P(W):
