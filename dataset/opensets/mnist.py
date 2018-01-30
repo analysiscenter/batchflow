@@ -13,14 +13,11 @@ from .. import parallel, any_action_failed
 
 class MNIST(ImagesOpenset):
     """ MNIST dataset
-
     Examples
     --------
     .. code-block:: python
-
         # download MNIST data, split into train/test and create dataset instances
         mnist = MNIST()
-
         # iterate over the dataset
         for batch in mnist.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
             # do something with a batch
@@ -54,6 +51,7 @@ class MNIST(ImagesOpenset):
     @parallel(init='_get_from_urls', _use_self=True, post='_gather_data')
     def download(self, url, content):    # pylint:disable=arguments-differ
         """ Load data from the web site """
+        print('Downloading', url)
         tmpdir = tempfile.gettempdir()
         filename = os.path.basename(url)
         localname = os.path.join(tmpdir, filename)

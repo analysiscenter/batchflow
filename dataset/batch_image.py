@@ -1,6 +1,5 @@
 """ Contains Batch classes for images """
 import os
-from textwrap import dedent
 from numbers import Number
 from functools import wraps
 
@@ -107,9 +106,11 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
     def _decorator(cls):
         for func_name, func in transformations.items():
             def _method_decorator():
+                #pylint: disable=cell-var-from-loop
                 added_func = func
                 @wraps(added_func)
                 def _method(self, *args, **kwargs):
+                    _ = self
                     return added_func(*args, **kwargs)
                 return _method
             method_name = ''.join((prefix, func_name, suffix))
@@ -411,7 +412,7 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         image : np.ndarray
-        origin : sequence
+        origin : sequence, str
             Upper-left corner of the cropping box. Can be one of:
             - sequence - corner's coordinates in the form of (row, column)
             - 'top_left' - crop an image such that upper-left corners of
@@ -532,57 +533,6 @@ class ImagesBatch(BaseImagesBatch):
         new_image = sp_actions.zoom(image, factor, order=order, *args, **kwargs)
         return new_image
 
-    # def _shift_(self, image, *args, order=0, **kwargs):
-        """ Shift an image.
-
-        Actually a wrapper for sp_actions.shift. *args and **kwargs are passed to the last.
-
-        Parameters
-        ----------
-        order : int
-            The order of the spline interpolation, default is 0. The order has to be in the range 0-5.
-        shift : float or sequence
-            The shift along the axes. If a float, shift is the same for each axis.
-            If a sequence, shift should contain one value for each axis.
-        src : str
-            Component to get images from. Default is 'images'.
-        dst : str
-            Component to write images to. Default is 'images'.
-        p : float
-            Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
-        """
-
-        # return sp_actions.shift(image, order=order, *args, **kwargs)
-
-    # def _rotate_(self, image, *args, angle, order=0, **kwargs):
-        """ Rotate an image.
-
-        Actually a wrapper for sp_actions.rotate. *args and **kwargs are passed to the last.
-
-        Parameters
-        ----------
-        angle : float
-            The rotation angle in degrees.
-        order : int
-            The order of the spline interpolation, default is 0. The order has to be in the range 0-5.
-        src : str
-            Component to get images from. Default is 'images'.
-        dst : str
-            Component to write images to. Default is 'images'.
-        p : float
-            Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
-        """
-
-        # return sp_actions.rotate(image, angle=angle, order=order, *args, **kwargs)
-
     def _flip_all(self, images=None, indices=None, mode='lr'):
         """ Flip images in the batch.
 
@@ -609,33 +559,6 @@ class ImagesBatch(BaseImagesBatch):
             images[indices] = images[indices, ::-1]
         return images
 
-    # def _pad_(self, image, *args, **kwargs):
-        """ Pad an image.
-
-        Actually a wrapper for np.pad.
-
-        Parameters
-        ----------
-        pad_width : sequence, array_like, int
-            Number of values padded to the edges of each axis. ((before_1, after_1), ... (before_N, after_N))
-            unique pad widths for each axis. ((before, after),) yields same before and after pad for each axis. (pad,)
-            or int is a shortcut for before = after = pad width for all axes.
-        mode : str or function
-            mode of padding. For more details see np.pad
-        src : str
-            Component to get images from. Default is 'images'.
-        dst : str
-            Component to write images to. Default is 'images'.
-        p : float
-            Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
-        """
-
-        # return np.pad(image, *args, **kwargs)
-
     def _invert_(self, image, channels='all'):
         """ Invert givn channels.
 
@@ -657,8 +580,8 @@ class ImagesBatch(BaseImagesBatch):
 
         if channels == 'all':
             channels = list(range(image.shape[-1]))
-        inv_multiplier = 255 if np.issubdtype(image.dtype, np.integer) else 1.
-        image[..., channels] = inv_multiplier - image[..., channels]
+        max_intencity = 255 if np.issubdtype(image.dtype, np.integer) else 1.
+        image[..., channels] = max_intencity - image[..., channels]
         return image
 
     def _salt_(self, image, p_noise=.015, color=255, size=(1, 1)):
@@ -811,24 +734,177 @@ class ImagesBatch(BaseImagesBatch):
         dtype = image.dtype if preserve_type else np.float
         return self._threshold_(term + image.astype(np.float), low, high, dtype)
 
-
-    def _to_greyscale_all(self, images, indices, keepdims=False):
+    def _to_greyscale_all(self, images, indices, keepdims=True):
         """ Set image's pixels to their mean among all channels
+
+        .. note:: Images' shape must provide last axis for channels
 
         Parameters
         ----------
+        keepdims : bool
+            Whether to preserve the number of channels
         src : str
             Component to get images from. Default is 'images'.
         dst : str
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-        keepdims : bool
-            Whether to preserve the number of channels
+
+        Returns
+        -------
+        self
+        """
+        _ = indices
+        return images.mean(axis=-1, keepdims=keepdims).astype(images.dtype)
+
+    def _posterize_all(self, images, indices, colors_number=3):
+        """ Posterizes images.
+
+        More concretely, it quantizes pixels' values so that they have``colors_number`` colours.
+
+        Parameters
+        ----------
+        colors : int
+            Number of colours.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
         Returns
         -------
         self
         """
 
-        return images.mean(axis=-1, keepdims=keepdims).astype(images.dtype)
+        dtype = images.dtype
+        max_bin = 256 if np.issubdtype(dtype, np.integer) else 1.0001
+        max_intencity = 255 if np.issubdtype(dtype, np.integer) else 1.
+
+        bins = np.linspace(0, max_bin, colors_number+1)
+        color_indices = np.digitize(images[indices], bins) - 1
+        colors = np.linspace(0, max_intencity, colors_number)
+
+        images[indices] = colors[color_indices]
+        return images
+
+    def _fill_crop_(self, image, origins, shapes, colors):
+        """ Fills given areas ('crops') with color
+
+        .. note:: It is assumed that ``origins``, ``shapes`` and ``colors`` have the same length.
+
+        Parameters
+        ----------
+        origins : sequence
+            Every element of this sequence is the upper-left corner of a filled box. Can be one of:
+            - sequence - corner's coordinates in the form of (row, column).
+            - 'top_left' - crop an image such that upper-left corners of
+                           an image and the filled box coincide.
+            - 'center' - crop an image such that centers of
+                         an image and the filled box coincide.
+            - 'random' - place the upper-left corner of the filled box at a random position.
+        shapes : sequence
+            Every element of this sequence is the shape of a filled box. Can be one of:
+            - sequence - crop size in the form of (rows, columns)
+            - int - shape has squared form
+        colors : sequence
+            Every element of this sequence is the colour of a filled box. Can be one of:
+            - sequence - (r,g,b) form
+            - number - grayscale
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        def _get_shape(shape):
+            return (shape, shape) if isinstance(shape, Number) else shape
+
+        def _get_origin(shape, origin):
+            if isinstance(origin, str):
+                origin = self._calc_origin(shape, origin, image_shape)
+            return origin
+
+        image_shape = self._get_image_shape(image)
+        for origin, shape, color in zip(origins, shapes, colors):
+            shape = _get_shape(shape)
+            origin = _get_origin(shape, origin)
+            right_bottom = (min(origin[0] + shape[0], image_shape[0]),
+                            min(origin[1] + shape[1], image_shape[1]))
+            image[origin[0]:right_bottom[0], origin[1]:right_bottom[1]] = color
+
+        return image
+
+    def _assemble_patches(self, patches, *args, dst, **kwargs):
+        """ Assembles patches after parallel execution.
+
+        Parameters
+        ----------
+        patches : sequence
+            Patches to gather. pathces.shape must be like (batch.size, patches_i, patch_height, patch_width, n_channels)
+        dst : str
+            Component to put patches in.
+        """
+
+        _ = args, kwargs
+        new_items = np.concatenate(patches)
+        setattr(self, dst, new_items)
+
+    @action
+    @inbatch_parallel(init='indices', post='_assemble_patches')
+    def split_to_patches(self, ix, patch_shape, stride=1, droplast=False, src='images', dst=None):
+        """ Splits image to patches.
+
+        Small images with the same shape (``patch_shape``) are cropped from the original one with stride ``stride``.
+
+        Parameters
+        ----------
+        patch_shape : int, sequence
+            Patch's shape in the from (rows, columns). If int is given then patches have square shape.
+        stride : int, square
+            Step of the moving window from which patches are cropped. If int is given then the window has square shape.
+        droplast : bool
+            Whether to drop patches whose window covers area out of the image.
+            If False is passed then these patches are cropped from the edge of an image. See more in tutorials.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        _ = dst
+        image = self.get(ix, src)
+        image_shape = self._get_image_shape(image)
+        stride = (stride, stride) if isinstance(stride, Number) else stride
+        patch_shape = (patch_shape, patch_shape) if isinstance(patch_shape, Number) else patch_shape
+        patches = []
+
+        def _iterate_columns(row_from, row_to):
+            column = 0
+            while column < image_shape[1]-patch_shape[1]+1:
+                patches.append(image[row_from:row_to, column:column+patch_shape[1]])
+                column += stride[1]
+            if not droplast and column + patch_shape[1] != image_shape[1]:
+                patches.append(image[row_from:row_to, image_shape[1]-patch_shape[1]:image_shape[1]])
+
+        row = 0
+        while row < image_shape[0]-patch_shape[0]+1:
+            _iterate_columns(row, row+patch_shape[0])
+            row += stride[0]
+        if not droplast and row + patch_shape[0] != image_shape[0]:
+            _iterate_columns(image_shape[0]-patch_shape[0], image_shape[0])
+
+        return np.stack(patches)

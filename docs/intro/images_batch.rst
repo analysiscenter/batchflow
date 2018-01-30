@@ -19,17 +19,20 @@ ImagesBatch provides typical augmentation actions:
 * :meth:`scale <~dataset.ImagesBatch._scale_>` -- scale an image (stretch or tie)
 * :meth:`put_on_background <~dataset.ImagesBatch._put_on_background_>` -- put an image on a given background
 * :meth:`resize <~dataset.ImagesBatch._resize_>` -- resize an image a to given shape
-* :meth:`shift <~dataset.ImagesBatch._shift_>` -- shift an image (cropping pixels that are out of scope)
-* :meth:`rotate <~dataset.ImagesBatch._rotate_>` -- rotate an image by angle in degrees
 * :meth:`pad <~dataset.ImagesBatch._pad_>` -- add constant values to the border of an image (enlarging the last's shape)
 * :meth:`invert <~dataset.ImagesBatch._invert_>` -- invert given channels in an image
 * :meth:`salt <~dataset.ImagesBatch._salt_>` -- set pixels in random positions to given colour
+* :meth:`threshold <~dataset.ImagesBatch._threshold_>` -- truncate pixels' values
 * :meth:`multiply <~dataset.ImagesBatch._multiply_>` -- multiply an image by given number
 * :meth:`add <~dataset.ImagesBatch._add_>` -- add given term to an image
+* :meth:`posterize <~dataset.ImagesBatch._posterize_>` -- posterize an image
+* :meth:`to_greyscale <~dataset.ImagesBatch._to_greyscale_>` -- leave one ('grey') channel
+
+Perhaps, any function from scipy.ndimage is accesible as an action. Just use it as a usual action (without specifying input parameter). At least `rotate`, `gaussian_filter` and `affine_transform` work as expected.
 
 .. note:: All these methods can be executed for randomly sampled images from a batch. You just need to specify ``p`` while calling an action (probability of applying an action to an image).
 
-.. note:: Use ``R`` or ``S`` `named expressions :ref:<named_expr>` to sample arguments for actions. In the first case argument will be sampled for all images in a batch. If ``S`` is passed then argument will be sampled for each image.
+.. note:: Use ``R()`` or ``P(R())`` `named expressions :ref:<named_expr>` to sample arguments for actions. In the first case argument will be sampled for all images in a batch. If ``P(R())`` is passed then argument will be sampled for each image.
 
 Examples:
 
@@ -207,9 +210,16 @@ Assembling after parallel execution
 -----------------------------------
 
 
-To assemble images after parallel execution you can use :meth:`~dataset.ImagesBatch._assemble` method.
+To assemble images after parallel execution you can use :meth:`~dataset.Batch._assemble` method (which invokes
+:meth:`~dataset.ImagesBatch._assemble_component`).
 
 .. note:: Note that if images have different shapes after an action then there are two ways to tackle it:
           1. Do nothing. Then images will be stored in `np.ndarray` with `dtype=object`.
           2. Pass `preserve_shape=True` to an action which changes the shape of an image. Then image
-            is cropped from the left upper corner (unless action has `origin` parameter, see more in :ref:`Actions`).
+             is cropped from the left upper corner (unless action has `origin` parameter, see more in :ref:`Actions`).
+
+Cropping to patches
+-------------------------
+
+If you have a very big image then you can compose little patches from it.
+See :meth:`~dataset.ImagesBatch._crop_to_patches_` and tutorial for more details.

@@ -467,7 +467,7 @@ class Batch(BaseBatch):
             else:
                 pos = self.get_pos(None, dst, ix)
                 src_attr = src[pos]
-            _args = tuple([src_attr, *args])
+            _args = tuple([src_attr.copy(), *args])
 
         if np.random.binomial(1, p):
             if use_self:
@@ -520,7 +520,7 @@ class Batch(BaseBatch):
                 src_attr = getattr(self, src)
             else:
                 src_attr = src
-            _args = tuple([src_attr, *args])
+            _args = tuple([src_attr.copy(), *args])
         indices = np.where(np.random.binomial(1, p, len(self)))[0]
         if len(indices):
             if use_self:
@@ -595,14 +595,16 @@ class Batch(BaseBatch):
             traceback.print_tb(all_errors[0].__traceback__)
             raise RuntimeError("Could not assemble the batch")
         if dst is None:
-            dst = self.components
+            dst = kwargs.get('components', self.components)
         if isinstance(dst, (list, tuple, np.ndarray)):
             all_results = list(zip(*all_results))
         else:
             dst = [dst]
             all_results = [all_results]
         for component, result in zip(dst, all_results):
-            self._assemble_component(result, component=component, **kwargs)
+            components_assembler = kwargs.get('components_assembler', "_assemble_component")
+            components_assembler = getattr(self, components_assembler)
+            components_assembler(result, component=component, **kwargs)
         return self
 
     @inbatch_parallel('indices', post='_assemble', target='f')
