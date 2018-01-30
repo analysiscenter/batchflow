@@ -104,6 +104,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
                     init_fn = init
                 else:
                     init_fn = lambda *a, **k: init
+
             if post is not None:
                 if isinstance(init, str):
                     try:
@@ -198,7 +199,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
             if len(kwargs) > 0:
                 mkwargs.update(_kwargs)
 
-            if _use_self and self:
+            if _use_self and self is not None:
                 margs = [self] + margs
 
             return margs, mkwargs
@@ -308,7 +309,10 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
     return inbatch_parallel_decorator
 
 
-parallel = functools.partial(inbatch_parallel, _use_self=False)  # pylint:disable=invalid-name
+
+def parallel(*args, _use_self=False, **kwargs):
+    """ Decorator for a parallel execution of a function """
+    return inbatch_parallel(*args, _use_self=_use_self, **kwargs)
 
 
 def njit(nogil=True):

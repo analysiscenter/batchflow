@@ -13,6 +13,22 @@ from .batch import Batch
 from .decorators import action, inbatch_parallel
 
 
+def get_scipy_transforms():
+    """ Returns ``dict`` {'function_name' : function} of functions from scipy.ndimage.
+
+    Function is included if it has 'input : ndarray' or 'input : array_like' in its docstring.
+    """
+
+    scipy_transformations = {}
+    hooks = ['input : ndarray', 'input : array_like']
+    for function_name in scipy.ndimage.__dict__['__all__']:
+        function = getattr(scipy.ndimage, function_name)
+        doc = getattr(function, '__doc__')
+        if doc is not None and (hooks[0] in doc or hooks[1] in doc):
+            scipy_transformations[function_name] = function
+    return scipy_transformations
+
+
 def transform_actions(prefix='', suffix='', wrapper=None):
     """ Transforms classmethods that have names like <prefix><name><suffix> to pipeline's actions executed in parallel.
 
@@ -73,8 +89,21 @@ def transform_actions(prefix='', suffix='', wrapper=None):
     return _decorator
 
 
-from functools import update_wrapper
 def add_methods(transformations=None, prefix='_', suffix='_'):
+    """ Bounds given functions to a decorated class
+
+    All bounded methods' names will be extended with ``prefix`` and ``suffix``.
+    For example, if ``transformations``={'method_name': method}, ``suffix``='_all' and ``prefix``='_'
+    then a decorated class will have '_method_name_all' method.
+
+    Parameters
+    ----------
+    transformations : dict
+        dict of the form {'method_name' : function_to_bound} -- functions to bound to a class
+    prefix : str
+    suffix : str
+    """
+
     def _decorator(cls):
         for func_name, func in transformations.items():
             def _method_decorator():
@@ -87,17 +116,7 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
             added_method = _method_decorator()
             setattr(cls, method_name, added_method)
         return cls
-
-    if transformations is None:
-        transformations = {}
-        hooks = ['input : ndarray', 'input : array_like']
-        for function_name in scipy.ndimage.__dict__['__all__']:
-            function = getattr(scipy.ndimage, function_name)
-            doc = getattr(function, '__doc__')
-            if doc is not None and (hooks[0] in doc or hooks[1] in doc):
-                transformations[function_name] = function
     return _decorator
-
 
 
 class BaseImagesBatch(Batch):
@@ -213,7 +232,8 @@ class BaseImagesBatch(Batch):
 
 @transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
 @transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
-@add_methods(transformations=None, prefix='_', suffix='_')
+@add_methods(transformations={**get_scipy_transforms(),
+                              'pad': np.pad}, prefix='_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
@@ -790,3 +810,25 @@ class ImagesBatch(BaseImagesBatch):
 
         dtype = image.dtype if preserve_type else np.float
         return self._threshold_(term + image.astype(np.float), low, high, dtype)
+
+
+    def _to_greyscale_all(self, images, indices, keepdims=False):
+        """ Set image's pixels to their mean among all channels
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+        keepdims : bool
+            Whether to preserve the number of channels
+
+        Returns
+        -------
+        self
+        """
+
+        return images.mean(axis=-1, keepdims=keepdims).astype(images.dtype)
