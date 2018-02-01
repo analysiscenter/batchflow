@@ -456,8 +456,6 @@ class Batch(BaseBatch):
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
-        if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least one of dst and src should be an attribute name, not an array")
 
         if src is None:
             _args = args
@@ -466,7 +464,7 @@ class Batch(BaseBatch):
                 pos = self.get_pos(None, src, ix)
                 src_attr = (getattr(self, src)[pos],)
             elif isinstance(src, list) and np.all([isinstance(component, str) for component in src]):
-                 src_attr = [component[self.get_pos(None, component, ix)] for component in src]
+                src_attr = [getattr(self, component)[self.get_pos(None, component, ix)] for component in src]
             else:
                 pos = self.get_pos(None, dst, ix)
                 src_attr = (src[pos],)
@@ -476,6 +474,8 @@ class Batch(BaseBatch):
             if use_self:
                 return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
+        if len(src_attr) == 1:
+            return src_attr[0]
         return src_attr
 
     @action
@@ -605,9 +605,7 @@ class Batch(BaseBatch):
             dst = [dst]
             all_results = [all_results]
         for component, result in zip(dst, all_results):
-            components_assembler = kwargs.get('components_assembler', "_assemble_component")
-            components_assembler = getattr(self, components_assembler)
-            components_assembler(result, component=component, **kwargs)
+            self._assemble_component(result, component=component, **kwargs)
         return self
 
     @inbatch_parallel('indices', post='_assemble', target='f')

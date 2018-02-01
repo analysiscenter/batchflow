@@ -4,9 +4,8 @@ from numbers import Number
 from functools import wraps
 
 import numpy as np
-import scipy.ndimage.interpolation as sp_actions
 import scipy.ndimage
-from scipy.misc import imsave
+from scipy.misc import imsave, imresize
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel
@@ -234,7 +233,8 @@ class BaseImagesBatch(Batch):
 @transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
 @transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
 @add_methods(transformations={**get_scipy_transforms(),
-                              'pad': np.pad}, prefix='_', suffix='_')
+                              'pad': np.pad,
+                              'resize': imresize}, prefix='_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
@@ -399,7 +399,7 @@ class ImagesBatch(BaseImagesBatch):
         if np.any(np.asarray(factor) <= 0):
             raise ValueError("factor must be greater than 0")
         rescaled_shape = np.ceil(np.array(self._get_image_shape(image)) * factor).astype(np.int16)
-        rescaled_image = self._resize_(image, shape=rescaled_shape)
+        rescaled_image = self._resize_(image, rescaled_shape)
         if preserve_shape:
             rescaled_image = self._preserve_shape(image, rescaled_image, origin)
         return rescaled_image
@@ -501,38 +501,6 @@ class ImagesBatch(BaseImagesBatch):
                                         np.zeros(original_image.shape, dtype=np.uint8),
                                         origin)
 
-    def _resize_(self, image, *args, shape=None, order=0, **kwargs):
-        """ Resize an image to the given shape
-
-        Calls sp_actions.zoom method with *args and **kwargs.
-        ``factor`` is computed from the given image and shape
-
-        Parameters
-        ----------
-        shape : sequence
-            Resulting shape in the following form: (number of rows, number of columns).
-        order : int
-            The order of the spline interpolation, default is 0. The order has to be in the range 0-5.
-        src : str
-            Component to get images from. Default is 'images'.
-        dst : str
-            Component to write images to. Default is 'images'.
-        p : float
-            Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
-        """
-
-        image_shape = self._get_image_shape(image)
-        factor = np.asarray(shape) / np.asarray(image_shape)
-        if len(image.shape) > 2:
-            factor = np.concatenate((factor,
-                                     [1.]*(len(image.shape)-len(image_shape))))
-        new_image = sp_actions.zoom(image, factor, order=order, *args, **kwargs)
-        return new_image
-
     def _flip_all(self, images=None, indices=None, mode='lr'):
         """ Flip images in the batch.
 
@@ -619,7 +587,7 @@ class ImagesBatch(BaseImagesBatch):
         image = image.copy()
         mask_size = np.asarray(self._get_image_shape(image))
         mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
-        if (size == (1, 1) or size == 1) and not callable(color):
+        if isinstance(size, (tuple, int)) and (size == (1, 1) or size == 1) and not callable(color):
             image[mask_salt] = color
         else:
             size_lambda = size if callable(size) else lambda: size
@@ -913,3 +881,65 @@ class ImagesBatch(BaseImagesBatch):
             _iterate_columns(image_shape[0]-patch_shape[0], image_shape[0])
 
         return np.stack(patches)
+
+    def _additive_noise_all(self, images, indices, noise, low=0, high=1.):
+        """ Add additive noise to images.
+
+        Parameters
+        ----------
+        noise : callable
+            Distribution. Must have ``size`` parameter.
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        images = images.copy()
+        noisy_images = images[indices]
+        images[indices] += self._threshold_(noise(size=noisy_images.shape),
+                                            low, high, dtype=images.dtype)
+        return images
+
+
+    def _multiplicative_noise_all(self, images, indices, noise, low=0, high=1.):
+        """ Add multiplicativa noise to images.
+
+        Parameters
+        ----------
+        noise : callable
+            Distribution. Must have ``size`` parameter.
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+        images = images.copy()
+        noisy_images = images[indices]
+        images[indices] *= self._threshold_(noise(size=noisy_images.shape),
+                                            low, high, dtype=images.dtype)
+        return images
