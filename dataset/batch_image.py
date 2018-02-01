@@ -909,7 +909,7 @@ class ImagesBatch(BaseImagesBatch):
 
         images = images.copy()
         noisy_images = images[indices]
-        images[indices] += self._threshold_(noise(size=noisy_images.shape),
+        images[indices] = self._threshold_(images[indices]+noise(size=noisy_images.shape),
                                             low, high, dtype=images.dtype)
         return images
 
@@ -940,6 +940,6 @@ class ImagesBatch(BaseImagesBatch):
         """
         images = images.copy()
         noisy_images = images[indices]
-        images[indices] *= self._threshold_(noise(size=noisy_images.shape),
+        images[indices] = self._threshold_(images[indices]*noise(size=noisy_images.shape),
                                             low, high, dtype=images.dtype)
         return images
