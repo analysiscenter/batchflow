@@ -431,12 +431,13 @@ class Batch(BaseBatch):
         func : callable
             a function to apply to each item from the source
 
-        src : str or array
+        src : str, sequence, list of str
             the source to get data from, can be:
 
             - None
             - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
+            - sequence - a numpy-array, list, etc
+            - list of str - get data from several components
 
         dst : str or array
             the destination to put the result in, can be:
@@ -463,11 +464,13 @@ class Batch(BaseBatch):
         else:
             if isinstance(src, str):
                 pos = self.get_pos(None, src, ix)
-                src_attr = getattr(self, src)[pos]
+                src_attr = (getattr(self, src)[pos],)
+            elif isinstance(src, list) and np.all([isinstance(component, str) for component in src]):
+                 src_attr = [component[self.get_pos(None, component, ix)] for component in src]
             else:
                 pos = self.get_pos(None, dst, ix)
-                src_attr = src[pos]
-            _args = tuple([src_attr, *args])
+                src_attr = (src[pos],)
+            _args = tuple([*src_attr, *args])
 
         if np.random.binomial(1, p):
             if use_self:
