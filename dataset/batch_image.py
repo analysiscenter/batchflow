@@ -782,7 +782,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        image = image.copy()
+        images = images.copy()
         dtype = images.dtype
         max_bin = 256 if np.issubdtype(dtype, np.integer) else 1.0001
         max_intencity = 255 if np.issubdtype(dtype, np.integer) else 1.
