@@ -65,7 +65,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
         Default is ''.
     filters : int
-        the number of filters in the ouput tensor
+        the number of filters in the output tensor
     kernel_size : int
         kernel size
     name : str
