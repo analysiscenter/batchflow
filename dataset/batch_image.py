@@ -553,6 +553,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
+        images = images.copy()
         if mode == 'lr':
             images[indices] = images[indices, :, ::-1]
         elif mode == 'ud':
@@ -578,6 +579,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
+        image = image.copy()
         if channels == 'all':
             channels = list(range(image.shape[-1]))
         max_intencity = 255 if np.issubdtype(image.dtype, np.integer) else 1.
@@ -614,6 +616,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
+        image = image.copy()
         mask_size = np.asarray(self._get_image_shape(image))
         mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
         if (size == (1, 1) or size == 1) and not callable(color):
@@ -655,6 +658,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
+        image = image.copy()
         if isinstance(low, Number):
             image[image < low] = low
         else:
@@ -778,6 +782,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
+        image = image.copy()
         dtype = images.dtype
         max_bin = 256 if np.issubdtype(dtype, np.integer) else 1.0001
         max_intencity = 255 if np.issubdtype(dtype, np.integer) else 1.
@@ -831,7 +836,7 @@ class ImagesBatch(BaseImagesBatch):
             if isinstance(origin, str):
                 origin = self._calc_origin(shape, origin, image_shape)
             return origin
-
+        image = image.copy()
         image_shape = self._get_image_shape(image)
         for origin, shape, color in zip(origins, shapes, colors):
             shape = _get_shape(shape)
