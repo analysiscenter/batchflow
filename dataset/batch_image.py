@@ -3,6 +3,11 @@ import os
 from numbers import Number
 from functools import wraps
 
+try:
+    from imageio import imread
+except e:
+    from scipy.ndimage import open as imread
+
 import numpy as np
 import scipy.ndimage
 from scipy.misc import imsave, imresize
@@ -122,6 +127,7 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
 class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels"
+    formats = set(['jpg', 'png', 'jpeg'])
 
     def _make_path(self, path, ix):
         """ Compose path.
@@ -140,7 +146,7 @@ class BaseImagesBatch(Batch):
 
         return self.index.get_fullpath(ix) if path is None else os.path.join(path, ix)
 
-    def _load_image(self, ix, src=None, dst="images"):
+    def _load_image(self, ix, src=None, fmt='jpg', dst="images"):
         """ Loads image.
 
         .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
@@ -151,6 +157,8 @@ class BaseImagesBatch(Batch):
             path to the folder with an image. If src is None then it is determined from the index.
         dst : str
             Component to write images to.
+        fmt : str
+            Format of the an image
 
         Raises
         ------
@@ -178,8 +186,8 @@ class BaseImagesBatch(Batch):
             components to download.
         """
 
-        if fmt == 'image':
-            return self._load_image(src, dst=components)
+        if fmt in self.formats:
+            return self._load_image(src, fmt=fmt, dst=components)
         return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
 
     def _dump_image(self, ix, src='images', dst=None):
@@ -226,7 +234,7 @@ class BaseImagesBatch(Batch):
         """
 
         if fmt == 'image':
-            return self._dump_image(components, dst)
+            return self._dump_image(components, dst, fmt=None,)
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
@@ -256,8 +264,8 @@ class ImagesBatch(BaseImagesBatch):
                 raise RuntimeError('Images have different shapes')
         return self.images.shape[1:]
 
-    @inbatch_parallel(init='indices', post='_assemble')
-    def _load_image(self, ix, src=None, dst="images"):
+    @inbatch_parallel(init='indices', post='_assemble', target='t')
+    def _load_image(self, ix, src=None, fmt="jpg", dst="images"):
         """ Loads image
 
         .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
@@ -268,16 +276,17 @@ class ImagesBatch(BaseImagesBatch):
             Path to the folder with an image. If src is None then it is determined from the index.
         dst : str
             Component to write images to.
+        fmt : str
+            Format of an image.
 
         Returns
         -------
         self
         """
-
-        return scipy.ndimage.open(self._make_path(src, ix))
+        return imread(self._make_path(src, ix+'.'+fmt))
 
     @inbatch_parallel(init='indices')
-    def _dump_image(self, ix, src='images', dst=None):
+    def _dump_image(self, ix, src='images', dst=None, fmt=None):
         """ Saves image to dst.
 
         .. note:: Please note that ``src`` must be ``str`` only, sequence is not allowed here.
@@ -294,7 +303,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        imsave(self._make_path(dst, ix), self.get(ix, src))
+        imsave(self._make_path(dst, ix+'.'+fmt), self.get(ix, src))
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
         """ Assemble one component after parallel execution.
