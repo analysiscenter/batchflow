@@ -21,8 +21,8 @@ class MyModel(TFModel):
 if __name__ == "__main__":
     BATCH_SIZE = 64
 
-    #mnist = MNIST()
-    mnist = CIFAR10()
+    mnist = MNIST()
+    #mnist = CIFAR10()
 
     train_template = (Pipeline(config=dict(model=MobileNet_v2))
                 .init_variable('model', C('model'))
