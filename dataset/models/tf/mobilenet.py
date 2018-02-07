@@ -145,7 +145,7 @@ class MobileNet_v2(TFModel):
         config = TFModel.default_config()
         config['common'].update(dict(activation=tf.nn.relu6))
         config['input_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
-        config['body'].update(dict(width_factor=1, layout=_V2_DEFAULT_BODY))
+        config['body'].update(dict(width_factor=1, layout=_V2_DEFAULT_BODY.copy()))
         config['head'].update(dict(layout='cnacnV', filters=[1280, 2], kernel_size=1))
         config['loss'] = 'ce'
         return config
