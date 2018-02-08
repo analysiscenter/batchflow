@@ -187,7 +187,7 @@ class BaseImagesBatch(Batch):
             components to download.
         """
 
-        if fmt.lower() in self.formats or fmt == 'image':
+        if fmt.lower() in BaseImagesBatch.formats or fmt == 'image':
             return self._load_image(src, fmt=fmt, dst=components)
         return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
 
@@ -287,7 +287,7 @@ class ImagesBatch(BaseImagesBatch):
 
         if ix.rfind('.') == -1:
             if fmt == "image":
-                for image_format in self.formats:
+                for image_format in BaseImagesBatch.formats:
                     try:
                         return imread(self._make_path(src, ix+'.'+image_format))
                     except OSError:
@@ -314,6 +314,13 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
+
+        if ix.rfind('.') == -1:
+            if fmt == "image":
+
+                raise RuntimeError("Unknown image format")
+            return imread(self._make_path(src, ix+'.'+fmt))
+        return imread(self._make_path(src, ix))
 
         imsave(self._make_path(dst, ix+'.'+fmt), self.get(ix, src))
 
