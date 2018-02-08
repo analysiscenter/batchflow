@@ -6,7 +6,7 @@ from functools import wraps
 try:
     from imageio import imread
 except e:
-    from scipy.ndimage import open as imread
+    from scipy.ndimage import imread
 
 import numpy as np
 import scipy.ndimage
