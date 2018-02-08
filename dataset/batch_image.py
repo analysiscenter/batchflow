@@ -131,7 +131,7 @@ class BaseImagesBatch(Batch):
     formats_lower = ['jpg', 'png', 'jpeg']
     formats = set(formats_lower + [x.upper() for x in formats_lower])
 
-    def _make_path(self, path, ix):
+    def _make_path(self, path, ix, fmt=None):
         """ Compose path.
 
         Parameters
@@ -139,14 +139,18 @@ class BaseImagesBatch(Batch):
         path : str, None
         ix : str
             element's index (filename)
+        fmt : str, None
+            image's format
 
         Returns
         -------
         path : str
             Joined path if path is not None else element's path specified in the batch's index.
         """
-
-        return self.index.get_fullpath(ix) if path is None else os.path.join(path, ix)
+        path = self.index.get_fullpath(ix) if path is None else os.path.join(path, ix)
+        if os.path.basename(path).rfind('.') == -1 and fmt is not None:
+            path += '.' + fmt
+        return path
 
     def _load_image(self, ix, src=None, fmt='image', dst="images"):
         """ Loads image.
@@ -285,15 +289,14 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-
         if ix.rfind('.') == -1:
             if fmt == "image":
                 for image_format in BaseImagesBatch.formats:
-                    imfile = self._make_path(src, ix+'.'+image_format)
+                    imfile = self._make_path(src, ix, image_format)
                     if os.path.isfile(imfile):
-                        return imread(self._make_path(src, imfile))
+                        return imread(imfile)
                 raise RuntimeError("Unknown image format")
-            return imread(self._make_path(src, ix+'.'+fmt))
+            return imread(self._make_path(src, ix, fmt))
         return imread(self._make_path(src, ix))
 
 
@@ -318,7 +321,7 @@ class ImagesBatch(BaseImagesBatch):
         if ix.rfind('.') == -1:
             if fmt == "image":
                 raise RuntimeError("Unknown image format")
-            return imsave(self._make_path(src, ix+'.'+fmt))
+            return imsave(self._make_path(src, ix, fmt))
         return imsave(self._make_path(src, ix))
 
 
