@@ -128,7 +128,8 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
 class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels"
-    formats = set(['jpg', 'png', 'jpeg'])
+    formats_lower = ['jpg', 'png', 'jpeg']
+    formats = set(formats_lower + [x.upper() for x in formats_lower])
 
     def _make_path(self, path, ix):
         """ Compose path.
@@ -288,10 +289,9 @@ class ImagesBatch(BaseImagesBatch):
         if ix.rfind('.') == -1:
             if fmt == "image":
                 for image_format in BaseImagesBatch.formats:
-                    try:
-                        return imread(self._make_path(src, ix+'.'+image_format))
-                    except OSError:
-                        pass
+                    imfile = self._make_path(src, ix+'.'+image_format)
+                    if os.path.isfile(imfile):
+                        return imread(self._make_path(src, imfile))
                 raise RuntimeError("Unknown image format")
             return imread(self._make_path(src, ix+'.'+fmt))
         return imread(self._make_path(src, ix))
@@ -317,12 +317,10 @@ class ImagesBatch(BaseImagesBatch):
 
         if ix.rfind('.') == -1:
             if fmt == "image":
-
                 raise RuntimeError("Unknown image format")
-            return imread(self._make_path(src, ix+'.'+fmt))
-        return imread(self._make_path(src, ix))
+            return imsave(self._make_path(src, ix+'.'+fmt))
+        return imsave(self._make_path(src, ix))
 
-        imsave(self._make_path(dst, ix+'.'+fmt), self.get(ix, src))
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
         """ Assemble one component after parallel execution.
