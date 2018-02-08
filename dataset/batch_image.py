@@ -5,10 +5,11 @@ from functools import wraps
 
 try:
     from imageio import imread
-except e:
+except ImportError:
     from scipy.ndimage import imread
 
 import numpy as np
+#pylint: disable=ungrouped-imports
 import scipy.ndimage
 from scipy.misc import imsave, imresize
 
@@ -146,7 +147,7 @@ class BaseImagesBatch(Batch):
 
         return self.index.get_fullpath(ix) if path is None else os.path.join(path, ix)
 
-    def _load_image(self, ix, src=None, fmt='jpg', dst="images"):
+    def _load_image(self, ix, src=None, fmt='image', dst="images"):
         """ Loads image.
 
         .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
@@ -166,11 +167,11 @@ class BaseImagesBatch(Batch):
             If this method is not defined in a child class
         """
 
-        _ = self, ix, src, dst
+        _ = self, ix, src, dst, fmt
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
-    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
+    def load(self, *args, src=None, fmt='image', components=None, **kwargs):
         """ Load data.
 
         .. note:: if `fmt='images'` than ``components`` must be a single component (str).
@@ -186,11 +187,11 @@ class BaseImagesBatch(Batch):
             components to download.
         """
 
-        if fmt in self.formats:
+        if fmt.lower() in self.formats or fmt == 'image':
             return self._load_image(src, fmt=fmt, dst=components)
         return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
 
-    def _dump_image(self, ix, src='images', dst=None):
+    def _dump_image(self, ix, src='images', dst=None, fmt=None):
         """ Saves image to dst.
 
         .. note:: Please note that ``src`` must be ``str`` only, sequence is not allowed here.
@@ -208,7 +209,7 @@ class BaseImagesBatch(Batch):
             If this method is not defined in a child class
         """
 
-        _ = self, ix, src, dst
+        _ = self, ix, src, dst, fmt
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
@@ -265,7 +266,7 @@ class ImagesBatch(BaseImagesBatch):
         return self.images.shape[1:]
 
     @inbatch_parallel(init='indices', post='_assemble', target='t')
-    def _load_image(self, ix, src=None, fmt="jpg", dst="images"):
+    def _load_image(self, ix, src=None, fmt="image", dst="images"):
         """ Loads image
 
         .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
@@ -283,7 +284,18 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-        return imread(self._make_path(src, ix+'.'+fmt))
+
+        if ix.rfind('.') == -1:
+            if fmt == "image":
+                for image_format in self.formats:
+                    try:
+                        return imread(self._make_path(src, ix+'.'+image_format))
+                    except OSError:
+                        pass
+                raise RuntimeError("Unknown image format")
+            return imread(self._make_path(src, ix+'.'+fmt))
+        return imread(self._make_path(src, ix))
+
 
     @inbatch_parallel(init='indices')
     def _dump_image(self, ix, src='images', dst=None, fmt=None):
