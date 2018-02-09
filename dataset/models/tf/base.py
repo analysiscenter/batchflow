@@ -263,7 +263,7 @@ class TFModel(BaseModel):
 
     def reset(self):
         """ Reset the trained model to allow a new training from scratch """
-        with self.session.graph:
+        with self.session.graph.as_default():
             self.session.run(tf.global_variables_initializer())
 
     def _make_inputs(self, names=None, config=None):
@@ -572,7 +572,7 @@ class TFModel(BaseModel):
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
-        with self.graph:
+        with self.graph.as_default():
             arr = np.asarray([np.prod(self.get_shape(v)) for v in tf.trainable_variables()])
         return np.sum(arr)
 
