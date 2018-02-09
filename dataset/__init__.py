@@ -14,7 +14,7 @@ from .pipeline import Pipeline
 from .named_expr import B, C, F, L, V, R, W, P
 from .jointdataset import JointDataset, FullDataset
 from .dsindex import DatasetIndex, FilesIndex
-from .decorators import action, inbatch_parallel, parallel, any_action_failed
+from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit
 from .exceptions import SkipBatchException
 
 
