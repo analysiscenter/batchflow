@@ -14,52 +14,37 @@ Augmentation
 ImagesBatch provides typical augmentation actions, for example:
 
 * :meth:`crop <dataset.ImagesBatch.crop>` -- crop rectangular area from an image
-..  image:: ../ImagesBatch_examples/crop.png
-
+    ..  image:: ../_static/ImagesBatch_examples/crop.png
 * :meth:`flip <dataset.ImagesBatch.flip>` -- flip an image (left to right or upside down)
-..  image:: ../ImagesBatch_examples/flip.png
-
+    ..  image:: ../_static/ImagesBatch_examples/flip.png
 * :meth:`scale <dataset.ImagesBatch.scale>` -- scale an image (stretch or tie)
-..  image:: ../ImagesBatch_examples/scale.png
-
+    ..  image:: ../_static/ImagesBatch_examples/scale.png
 * :meth:`put_on_background <dataset.ImagesBatch.put_on_background>` -- put an image on a given background
-..  image:: ../ImagesBatch_examples/put_on_background.png
-
+    ..  image:: ../_static/ImagesBatch_examples/put_on_background.png
 * :meth:`resize <dataset.ImagesBatch.resize>` -- resize an image a to the given shape
-..  image:: ../ImagesBatch_examples/resize.png
-
+    ..  image:: ../_static/ImagesBatch_examples/resize.png
 * :meth:`pad <dataset.ImagesBatch.pad>` -- add constant values to the border of an image (enlarging the last's shape)
-..  image:: ../ImagesBatch_examples/pad.png
-
+    ..  image:: ../_static/ImagesBatch_examples/pad.png
 * :meth:`invert <dataset.ImagesBatch.invert>` -- invert given channels in an image
-..  image:: ../ImagesBatch_examples/invert.png
-
+    ..  image:: ../_static/ImagesBatch_examples/invert.png
 * :meth:`salt <dataset.ImagesBatch.salt>` -- set pixels in random positions to given colour
-..  image:: ../ImagesBatch_examples/salt.png
-
+    ..  image:: ../_static/ImagesBatch_examples/salt.png
 * :meth:`threshold <dataset.ImagesBatch.threshold>` -- truncate pixels' values
-..  image:: ../ImagesBatch_examples/threshold.png
-
+    ..  image:: ../_static/ImagesBatch_examples/threshold.png
 * :meth:`multiply <dataset.ImagesBatch.multiply>` -- multiply an image by the given number
-..  image:: ../ImagesBatch_examples/multiply.png
-
+    ..  image:: ../_static/ImagesBatch_examples/multiply.png
 * :meth:`multiplicative_noise <dataset.ImagesBatch.multiplicative_noise>` -- add multiplicative noise to an image
-..  image:: ../ImagesBatch_examples/multiplicative_noise.png
-
+    ..  image:: ../_static/ImagesBatch_examples/multiplicative_noise.png
 * :meth:`add <dataset.ImagesBatch.add>` -- add given term to an image
-..  image:: ../ImagesBatch_examples/add.png
-
+    ..  image:: ../_static/ImagesBatch_examples/add.png
 * :meth:`additive_noise <dataset.ImagesBatch.additive_noise>` -- add additive noise an image
-..  image:: ../ImagesBatch_examples/additive_noise.png
-
+    ..  image:: ../_static/ImagesBatch_examples/additive_noise.png
 * :meth:`posterize <dataset.ImagesBatch.posterize>` -- posterize an image
-..  image:: ../ImagesBatch_examples/posterize.png
-
+    ..  image:: ../_static/ImagesBatch_examples/posterize.png
 * :meth:`to_greyscale <dataset.ImagesBatch.to_greyscale>` -- leave one ('grey') channel
-..  image:: ../ImagesBatch_examples/to_greyscale.png
-
+    ..  image:: ../_static/ImagesBatch_examples/to_greyscale.png
 * :meth:`fill_crop <dataset.ImagesBatch.fill_crop>` -- add colored rectangular areas to an image
-..  image:: ../ImagesBatch_examples/fill_crop.png
+    ..  image:: ../_static/ImagesBatch_examples/fill_crop.png
 
 Perhaps, any function from scipy.ndimage is accesible as an action. Just use it as a usual action (without specifying input parameter). At least `rotate`, `gaussian_filter` and `affine_transform` work as expected.
 
