@@ -3,19 +3,18 @@ import os
 from numbers import Number
 from functools import wraps
 
+import numpy as np
+from skimage.transform import resize
 try:
     from imageio import imread, imsave
 except ImportError:
     from scipy.ndimage import imread
     from scipy.misc import imsave
-
-import numpy as np
-#pylint: disable=ungrouped-imports
 import scipy.ndimage
-from skimage.transform import resize
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel
+from .dsindex import FilesIndex
 
 
 def get_scipy_transforms():
@@ -132,25 +131,26 @@ class BaseImagesBatch(Batch):
     formats_lower = ['jpg', 'png', 'jpeg']
     formats = set(formats_lower + [x.upper() for x in formats_lower])
 
-    def _make_path(self, path, ix, fmt=None):
+    def _make_path(self, ix, src=None):
         """ Compose path.
 
         Parameters
         ----------
-        path : str, None
         ix : str
             element's index (filename)
-        fmt : str, None
-            image's format
+        src : str
+            Path to folder with images. Used if `self.index` is not `FilesIndex`.
 
         Returns
         -------
         path : str
-            Joined path if path is not None else element's path specified in the batch's index.
+            Full path to an element.
         """
-        path = self.index.get_fullpath(ix) if path is None else os.path.join(path, ix)
-        if os.path.basename(path).rfind('.') == -1 and fmt is not None:
-            path += '.' + fmt
+
+        if isinstance(self.index, FilesIndex):
+            path = self.index.get_fullpath(ix)
+        else:
+            path = os.path.join(src, str(ix))
         return path
 
     def _load_image(self, ix, src=None, fmt=None, dst="images"):
@@ -193,7 +193,7 @@ class BaseImagesBatch(Batch):
             components to download.
         """
 
-        if fmt == 'image' or (isinstance(fmt, str) and fmt.lower() in BaseImagesBatch.formats):
+        if fmt == 'image':
             return self._load_image(src, fmt=fmt, dst=components)
         return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
 
@@ -219,7 +219,7 @@ class BaseImagesBatch(Batch):
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
-    def dump(self, *args, dst=None, fmt=None, components="images", **kwargs):
+    def dump(self, *args, dst=None, fmt=None, components="images", img_fmt=None, **kwargs):
         """ Dump data.
 
         .. note:: If `fmt='images'` than ``dst`` must be a single component (str).
@@ -234,6 +234,8 @@ class BaseImagesBatch(Batch):
             Format of the file to save.
         components : str, sequence
             Components to save.
+        img_fmt : str
+            Format to save images to.
 
         Returns
         -------
@@ -241,7 +243,7 @@ class BaseImagesBatch(Batch):
         """
 
         if fmt == 'image':
-            return self._dump_image(components, dst, fmt=None,)
+            return self._dump_image(components, dst, fmt=img_fmt)
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
@@ -271,7 +273,7 @@ class ImagesBatch(BaseImagesBatch):
                 raise RuntimeError('Images have different shapes')
         return self.images.shape[1:]
 
-    @inbatch_parallel(init='indices', post='_assemble', target='t')
+    @inbatch_parallel(init='indices', post='_assemble')
     def _load_image(self, ix, src=None, fmt=None, dst="images"):
         """ Loads image
 
@@ -290,16 +292,8 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-        if ix.rfind('.') == -1:
-            if fmt == "image":
-                for image_format in BaseImagesBatch.formats:
-                    imfile = self._make_path(src, ix, image_format)
-                    if os.path.isfile(imfile):
-                        return imread(imfile)
-                raise RuntimeError("Unknown image format")
-            return imread(self._make_path(src, ix, fmt))
-        return imread(self._make_path(src, ix))
 
+        return imread(self._make_path(ix, src))
 
     @inbatch_parallel(init='indices')
     def _dump_image(self, ix, src='images', dst=None, fmt=None):
@@ -312,18 +306,19 @@ class ImagesBatch(BaseImagesBatch):
         src : str
             Component to get images from.
         dst : str
-            Folder where to dump. If dst is None then it is determined from index.
+            Folder where to dump.
+        fmt : str
+            Format of saved image.
 
         Returns
         -------
         self
         """
 
-        if ix.rfind('.') == -1:
-            if fmt == "image":
-                raise RuntimeError("Unknown image format")
-            return imsave(self._make_path(src, ix, fmt))
-        return imsave(self._make_path(src, ix))
+        if dst is None:
+            raise RuntimeError('You must specify `dst`')
+        ix = str(ix) + '.' + fmt if fmt is not None else str(ix)
+        imsave(os.path.join(dst, ix), self.get(ix, src))
 
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
