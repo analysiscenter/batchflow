@@ -318,8 +318,9 @@ class ImagesBatch(BaseImagesBatch):
 
         if dst is None:
             raise RuntimeError('You must specify `dst`')
+        image = self.get(ix, src)
         ix = str(ix) + '.' + fmt if fmt is not None else str(ix)
-        imsave(os.path.join(dst, ix), self.get(ix, src))
+        imsave(os.path.join(dst, ix), image)
 
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
