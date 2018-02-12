@@ -935,7 +935,7 @@ class Pipeline:
                     self._prefetch_queue.task_done()
         return None
 
-    def reset_iter(self):
+    def reset_iter(self, exclude_dataset=False):
         """ Clear all iteration metadata in order to start iterating from scratch """
         def _clear_queue(queue):
             if queue is not None:
@@ -964,7 +964,7 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
 
-        if self.dataset is not None:
+        if not exclude_dataset and self.dataset is not None:
             self.dataset.reset_iter()
 
         self._init_variables_before_run()
@@ -1094,6 +1094,8 @@ class Pipeline:
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
         else:
+            self.reset_iter()
+
             if len(args) == 0 and len(kwargs) == 0:
                 args, kwargs = self._lazy_run
             for _ in self.gen_batch(*args, **kwargs):

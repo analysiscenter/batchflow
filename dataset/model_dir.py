@@ -81,10 +81,13 @@ class ModelDirectory:
         if model is None:
             raise KeyError("Model '%s' does not exist" % name)
         elif isinstance(model, NonInitializedModel):
-            config = self.eval_expr(model.config, batch=batch) or {}
-            model_class = self.eval_expr(model.model_class, batch=batch)
-            model = self.create_model(model_class, config)
-            self.models[name] = model
+            with self.lock:
+                model = self.get(name)
+                if isinstance(model, NonInitializedModel):
+                    config = self.eval_expr(model.config, batch=batch) or {}
+                    model_class = self.eval_expr(model.model_class, batch=batch)
+                    model = self.create_model(model_class, config)
+                    self.models[name] = model
         return model
 
     def create_model(self, model_class, config=None):

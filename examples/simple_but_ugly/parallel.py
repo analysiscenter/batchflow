@@ -84,6 +84,12 @@ class MyBatch(Batch):
         self.data += inc
         return self
 
+    @action
+    @inbatch_parallel(init="items")
+    @mjit
+    def act(self, data):
+        data[:] = np.log(data ** 2)
+
 
 if __name__ == "__main__":
     # number of items in the dataset
@@ -92,7 +98,7 @@ if __name__ == "__main__":
     # Fill-in dataset with sample data
     def gen_data():
         ix = np.arange(K)
-        data = np.arange(K * 3).reshape(K, -1)
+        data = np.arange(K * 3).reshape(K, -1).astype('float32')
         ds = Dataset(index=ix, batch_class=MyBatch)
         return ds, data
 
@@ -104,10 +110,11 @@ if __name__ == "__main__":
             .load(data)
             .print("Start batch")
             #.action_p(S('uniform', 10, 15))
-            .action_a("async", P(R('poisson', 5.5)))
-            .action_i(P(R([500, 600])))
-            .action_t(P(R('normal', 10, 2)), target='f')
+            #.action_a("async", P(R('poisson', 5.5)))
+            #.action_i(P(R([500, 600])))
+            #.action_t(P(R('normal', 10, 2)), target='f')
             #.action1(arg2=14)
-            .print("End batch"))
+            .act()
+            .print("End batch", F(lambda b: b.data[0])))
 
     res.run(4, shuffle=False, n_epochs=1)
