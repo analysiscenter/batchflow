@@ -4,14 +4,15 @@ from numbers import Number
 from functools import wraps
 
 try:
-    from imageio import imread
+    from imageio import imread, imsave
 except ImportError:
     from scipy.ndimage import imread
+    from scipy.misc import imsave
 
 import numpy as np
 #pylint: disable=ungrouped-imports
 import scipy.ndimage
-from scipy.misc import imsave, imresize
+from skimage.transform import resize
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel
@@ -152,7 +153,7 @@ class BaseImagesBatch(Batch):
             path += '.' + fmt
         return path
 
-    def _load_image(self, ix, src=None, fmt='image', dst="images"):
+    def _load_image(self, ix, src=None, fmt=None, dst="images"):
         """ Loads image.
 
         .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
@@ -176,7 +177,7 @@ class BaseImagesBatch(Batch):
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
-    def load(self, *args, src=None, fmt='image', components=None, **kwargs):
+    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
         """ Load data.
 
         .. note:: if `fmt='images'` than ``components`` must be a single component (str).
@@ -192,7 +193,7 @@ class BaseImagesBatch(Batch):
             components to download.
         """
 
-        if fmt.lower() in BaseImagesBatch.formats or fmt == 'image':
+        if fmt == 'image' or (isinstance(fmt, str) and fmt.lower() in BaseImagesBatch.formats):
             return self._load_image(src, fmt=fmt, dst=components)
         return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
 
@@ -248,7 +249,7 @@ class BaseImagesBatch(Batch):
 @transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
 @add_methods(transformations={**get_scipy_transforms(),
                               'pad': np.pad,
-                              'resize': imresize}, prefix='_', suffix='_')
+                              'resize': resize}, prefix='_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
@@ -271,7 +272,7 @@ class ImagesBatch(BaseImagesBatch):
         return self.images.shape[1:]
 
     @inbatch_parallel(init='indices', post='_assemble', target='t')
-    def _load_image(self, ix, src=None, fmt="image", dst="images"):
+    def _load_image(self, ix, src=None, fmt=None, dst="images"):
         """ Loads image
 
         .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
@@ -428,7 +429,7 @@ class ImagesBatch(BaseImagesBatch):
         if np.any(np.asarray(factor) <= 0):
             raise ValueError("factor must be greater than 0")
         rescaled_shape = np.ceil(np.array(self._get_image_shape(image)) * factor).astype(np.int16)
-        rescaled_image = self._resize_(image, rescaled_shape)
+        rescaled_image = self._resize_(image, rescaled_shape, preserve_range=True).astype(image.dtype)
         if preserve_shape:
             rescaled_image = self._preserve_shape(image, rescaled_image, origin)
         return rescaled_image
@@ -472,7 +473,7 @@ class ImagesBatch(BaseImagesBatch):
         column_slice = slice(origin[1], origin[1] + shape[1])
         return image[row_slice, column_slice].copy()
 
-    def _put_on_background_(self, image, background, origin):
+    def _put_on_background_(self, image, background, origin, mask=None):
         """ Put an image on a background at given origin
 
         Parameters
@@ -485,6 +486,8 @@ class ImagesBatch(BaseImagesBatch):
             - 'center' - crop an image such that centers of an image and the cropping box coincide.
             - 'random' - place the upper-left corner of the cropping box at a random position.
 
+        mask : float, np.ndarray
+            if float is fiven then
         Returns
         -------
         self
@@ -499,7 +502,16 @@ class ImagesBatch(BaseImagesBatch):
         slice_columns = slice(origin[1], origin[1]+image_shape[1])
 
         new_image = background.copy()
-        new_image[slice_rows, slice_columns] = image
+
+        if mask is None:
+
+            new_image[slice_rows, slice_columns] = image
+        elif isinstance(mask, Number):
+            image_slice = new_image[slice_rows, slice_columns]
+            mask_index = image > mask
+            image_slice[mask_index] = image[mask_index]
+            new_image[slice_rows, slice_columns] = image_slice
+
         return new_image
 
     def _preserve_shape(self, original_image, transformed_image, origin='center'):
@@ -530,8 +542,8 @@ class ImagesBatch(BaseImagesBatch):
                                         np.zeros(original_image.shape, dtype=np.uint8),
                                         origin)
 
-    def _flip_all(self, images=None, indices=None, mode='lr'):
-        """ Flip images in the batch.
+    def _flip_(self, image, mode='lr'):
+        """ Flips image.
 
         Parameters
         ----------
@@ -550,12 +562,12 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        images = images.copy()
+        image = image.copy()
         if mode == 'lr':
-            images[indices] = images[indices, :, ::-1]
+            image = image[:, ::-1]
         elif mode == 'ud':
-            images[indices] = images[indices, ::-1]
-        return images
+            image = image[::-1]
+        return image
 
     def _invert_(self, image, channels='all'):
         """ Invert givn channels.
