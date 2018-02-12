@@ -10,6 +10,7 @@ try:
 except ImportError:
     from scipy.ndimage import imread
     from scipy.misc import imsave
+
 import scipy.ndimage
 
 from .batch import Batch
@@ -318,7 +319,7 @@ class ImagesBatch(BaseImagesBatch):
         if dst is None:
             raise RuntimeError('You must specify `dst`')
         ix = str(ix) + '.' + fmt if fmt is not None else str(ix)
-        imsave(os.path.join(dst, ix))
+        imsave(os.path.join(dst, ix), self.get(ix, src))
 
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
