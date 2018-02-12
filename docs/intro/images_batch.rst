@@ -6,37 +6,71 @@ ImagesBatch class handles 2D images and their labels.
 
 Components
 ----------
-
 The class has two components: ``images`` and ``labels``.
 
 Augmentation
 ------------
 
-ImagesBatch provides typical augmentation actions:
+ImagesBatch provides typical augmentation actions, for example:
 
-* :meth:`crop <~dataset.ImagesBatch._crop_>` -- crop rectangular area from an image
-* :meth:`flip <~dataset.ImagesBatch._flip__all>` -- flip an image (left to right or upside down)
-* :meth:`scale <~dataset.ImagesBatch._scale_>` -- scale an image (stretch or tie)
-* :meth:`put_on_background <~dataset.ImagesBatch._put_on_background_>` -- put an image on a given background
-* :meth:`resize <~dataset.ImagesBatch._resize_>` -- resize an image a to given shape
-* :meth:`pad <~dataset.ImagesBatch._pad_>` -- add constant values to the border of an image (enlarging the last's shape)
-* :meth:`invert <~dataset.ImagesBatch._invert_>` -- invert given channels in an image
-* :meth:`salt <~dataset.ImagesBatch._salt_>` -- set pixels in random positions to given colour
-* :meth:`threshold <~dataset.ImagesBatch._threshold_>` -- truncate pixels' values
-* :meth:`multiply <~dataset.ImagesBatch._multiply_>` -- multiply an image by given number
-* :meth:`add <~dataset.ImagesBatch._add_>` -- add given term to an image
-* :meth:`posterize <~dataset.ImagesBatch._posterize_>` -- posterize an image
-* :meth:`to_greyscale <~dataset.ImagesBatch._to_greyscale_>` -- leave one ('grey') channel
+* :meth:`crop <dataset.ImagesBatch.crop>` -- crop rectangular area from an image
+..  image:: ../ImagesBatch_examples/crop.png
+
+* :meth:`flip <dataset.ImagesBatch.flip>` -- flip an image (left to right or upside down)
+..  image:: ../ImagesBatch_examples/flip.png
+
+* :meth:`scale <dataset.ImagesBatch.scale>` -- scale an image (stretch or tie)
+..  image:: ../ImagesBatch_examples/scale.png
+
+* :meth:`put_on_background <dataset.ImagesBatch.put_on_background>` -- put an image on a given background
+..  image:: ../ImagesBatch_examples/put_on_background.png
+
+* :meth:`resize <dataset.ImagesBatch.resize>` -- resize an image a to the given shape
+..  image:: ../ImagesBatch_examples/resize.png
+
+* :meth:`pad <dataset.ImagesBatch.pad>` -- add constant values to the border of an image (enlarging the last's shape)
+..  image:: ../ImagesBatch_examples/pad.png
+
+* :meth:`invert <dataset.ImagesBatch.invert>` -- invert given channels in an image
+..  image:: ../ImagesBatch_examples/invert.png
+
+* :meth:`salt <dataset.ImagesBatch.salt>` -- set pixels in random positions to given colour
+..  image:: ../ImagesBatch_examples/salt.png
+
+* :meth:`threshold <dataset.ImagesBatch.threshold>` -- truncate pixels' values
+..  image:: ../ImagesBatch_examples/threshold.png
+
+* :meth:`multiply <dataset.ImagesBatch.multiply>` -- multiply an image by the given number
+..  image:: ../ImagesBatch_examples/multiply.png
+
+* :meth:`multiplicative_noise <dataset.ImagesBatch.multiplicative_noise>` -- add multiplicative noise to an image
+..  image:: ../ImagesBatch_examples/multiplicative_noise.png
+
+* :meth:`add <dataset.ImagesBatch.add>` -- add given term to an image
+..  image:: ../ImagesBatch_examples/add.png
+
+* :meth:`additive_noise <dataset.ImagesBatch.additive_noise>` -- add additive noise an image
+..  image:: ../ImagesBatch_examples/additive_noise.png
+
+* :meth:`posterize <dataset.ImagesBatch.posterize>` -- posterize an image
+..  image:: ../ImagesBatch_examples/posterize.png
+
+* :meth:`to_greyscale <dataset.ImagesBatch.to_greyscale>` -- leave one ('grey') channel
+..  image:: ../ImagesBatch_examples/to_greyscale.png
+
+* :meth:`fill_crop <dataset.ImagesBatch.fill_crop>` -- add colored rectangular areas to an image
+..  image:: ../ImagesBatch_examples/fill_crop.png
 
 Perhaps, any function from scipy.ndimage is accesible as an action. Just use it as a usual action (without specifying input parameter). At least `rotate`, `gaussian_filter` and `affine_transform` work as expected.
 
-.. note:: All these methods can be executed for randomly sampled images from a batch. You just need to specify ``p`` while calling an action (probability of applying an action to an image).
+.. note:: All these methods can be executed for randomly sampled images from a batch. You just need to specify ``p`` parameter when calling an action (probability of applying an action to an image).
 
-.. note:: Use ``R()`` or ``P(R())`` `named expressions :ref:<named_expr>` to sample arguments for actions. In the first case argument will be sampled for all images in a batch. If ``P(R())`` is passed then argument will be sampled for each image.
+.. note:: Use ``R()`` or ``P(R())`` :doc:`named expressions <named_expr>` to sample an argument for actions. In the first case the argument will be sampled for all images in a batch. If ``P(R())`` is passed then the argument will be sampled for each image.
 
 Examples:
 
 All images in a batch are rotated by 10 degrees:
+
 .. code-block:: python
 
     ...
@@ -46,6 +80,7 @@ All images in a batch are rotated by 10 degrees:
         ...
 
 All images in a batch are rotated by the common angle sampled from the normal distribution
+
 .. code-block:: python
 
     ...
@@ -55,6 +90,7 @@ All images in a batch are rotated by the common angle sampled from the normal di
         ...
 
 Each image in a batch are rotated by its own sampled angle
+
 .. code-block:: python
 
     ...
@@ -65,6 +101,7 @@ Each image in a batch are rotated by its own sampled angle
 
 
 Rotate each image with probability 0.7 by its own sampled angle
+
 .. code-block:: python
 
     ...
@@ -73,23 +110,24 @@ Rotate each image with probability 0.7 by its own sampled angle
         .rotate(angle=P(R('normal', loc=0, scale=1)), p=0.7)
         ...
 
+See more in :ref:`notebook tutorial <../examples/tutorial/image_augmentation_examples.ipynb>`.
 
 Loading from files
 ------------------
 
-To load images, use action :meth:`~dataset.BaseImagesBatch.load` with ``fmt='image'``.
+To load images, use action :meth:`load <dataset.ImagesBatch.load>` with ``fmt='image'``.
 
 
 Saving
 ------
 
-To dump images, use action :meth:`~dataset.BaseImagesBatch.dump`
+To dump images, use action :meth:`dump <dataset.ImagesBatch.dump>`
 
 
 `transform_actions` decorator
 -----------------------------
 
-This decorator finds all defined methods whose names starts with user-defined `suffix` and `prefix` then
+This decorator finds all defined methods whose names starts with user-defined `suffix` and `prefix` and
 decorates them with ``wrapper`` which is an argument too.
 
 For example, there are two wrapper functions defined in :class:`~dataset.Batch`:
@@ -157,7 +195,7 @@ To use this action in a pipeline you must write:
 
 .. note:: All actions written in this way can be applied with given probability to every image. To achieve this, pass parameter ``p`` to an action, like ``flip(mode='lr', p=0.5)``
 
-.. note:: These actions are performed for every image each in its own thread. To change it (for example, execute in asynchronous mode), pass parameter `target` (``.flip(mode='lr', target='a')``). For more detail, see :doc:`<parallel>`.
+.. note:: These actions are performed for every image each in its own thread. To change it (for example, execute in asynchronous mode), pass parameter `target` (``.flip(mode='lr', target='a')``). For more detail, see :doc:`parallel <parallel>`.
 
 
 ``_method_name_all``
@@ -177,16 +215,19 @@ Example:
 
 .. code-block:: python
 
-    @transform_actions_all(prefix='_', suffix='_', wrapper='apply_transform_all')
-    def _flip_all(self, images=None, indices=[0], mode='lr'):
-        """ Flips images at given indices.
-        """
+    @transform_actions(prefix='_', suffix='_', wrapper='apply_transform_all')
+    class MyImagesBatch(ImagesBatch):
+        ...
+        def _flip_all(self, images=None, indices=[0], mode='lr'):
+            """ Flips images at given indices.
+            """
 
-        if mode == 'lr':
-            images[indices] = images[indices, :, ::-1]
-        elif mode == 'ud':
-            images[indices] = images[indices, ::-1]
-        return images
+            if mode == 'lr':
+                images[indices] = images[indices, :, ::-1]
+            elif mode == 'ud':
+                images[indices] = images[indices, ::-1]
+            return images
+        ...
 
 To use this action in a pipeline you must write:
 
@@ -203,23 +244,20 @@ To use this action in a pipeline you must write:
 
 .. note:: All actions written in this way can be applied with given probability to every image. To achieve this, pass parameter ``p`` to an action, like ``flip(mode='lr', p=0.5)``
 
-.. note:: These actions are performed each in one thread for all batch. Please note that you can't pass ``S`` named expression as an argument (because one transformation is applied to every choozen image).
+.. note:: These actions are performed once for all batch. Please note that you can't pass ``P(R())`` named expression as an argument.
 
 
 Assembling after parallel execution
 -----------------------------------
 
+ote that if images have different shapes after an action then there are two ways to tackle it:
 
-To assemble images after parallel execution you can use :meth:`~dataset.Batch._assemble` method (which invokes
-:meth:`~dataset.ImagesBatch._assemble_component`).
-
-.. note:: Note that if images have different shapes after an action then there are two ways to tackle it:
-          1. Do nothing. Then images will be stored in `np.ndarray` with `dtype=object`.
-          2. Pass `preserve_shape=True` to an action which changes the shape of an image. Then image
-             is cropped from the left upper corner (unless action has `origin` parameter, see more in :ref:`Actions`).
+  1. Do nothing. Then images will be stored in `np.ndarray` with `dtype=object`.
+  2. Pass `preserve_shape=True` to an action which changes the shape of an image. Then image
+     is cropped from the left upper corner (unless action has `origin` parameter, see more in :ref:`Actions`).
 
 Cropping to patches
 -------------------------
 
 If you have a very big image then you can compose little patches from it.
-See :meth:`~dataset.ImagesBatch._crop_to_patches_` and tutorial for more details.
+See :meth:`split_to_patches <dataset.ImagesBatch.split_to_patches>` and tutorial for more details.
