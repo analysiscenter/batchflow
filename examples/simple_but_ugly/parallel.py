@@ -107,6 +107,7 @@ if __name__ == "__main__":
     ds_data, data = gen_data()
 
     res = (ds_data.pipeline()
+            .init_variable('var', init_on_each_run=list)
             .load(data)
             .print("Start batch")
             #.action_p(S('uniform', 10, 15))
@@ -115,6 +116,14 @@ if __name__ == "__main__":
             #.action_t(P(R('normal', 10, 2)), target='f')
             #.action1(arg2=14)
             .act()
+            .update_variable('var', F(lambda b: b.data[0,0]), mode='a')
             .print("End batch", F(lambda b: b.data[0])))
 
     res.run(4, shuffle=False, n_epochs=1)
+    print('\n--------\n', res.get_variable('var'))
+
+    res.run(4, shuffle=False, n_epochs=1)
+    print('\n--------\n', res.get_variable('var'))
+
+    res.run(4, shuffle=False, n_epochs=1)
+    print('\n--------\n', res.get_variable('var'))

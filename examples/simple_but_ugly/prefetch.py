@@ -61,9 +61,9 @@ class MyArrayBatch(ArrayBatch):
         return r
 
     @action
-    @inbatch_parallel(init="action_n_init", target="nogil")
-    def action_n(self):
-        return numba_fn
+    @inbatch_parallel(init="action_n_init")
+    def action_n(self, ix):
+        return numba_fn(ix)
 
     @action
     @inbatch_parallel(init="parallel_init", post="parallel_post", target='async')
