@@ -23,9 +23,10 @@ class MyBatch(ArrayBatch):
         return "images", "labels", "masks", "targets"
 
     @action
-    def print(self, txt=None):
+    def print2(self, txt=None):
         if txt is not None:
             print(txt)
+        print(len(self))
         for i in self:
             print(i)
         print("--------------------")
@@ -72,9 +73,11 @@ if __name__ == "__main__":
 
     #res = ds_data.p.print().other().some()
     res = (ds_data.p
-            .load(data)
-            .print('before dump')
-            .dump('../data/data2', 'blosc')
+            .load(data[0], components=['images'])
+            .print2('after images')
+            .load(data[2:], components=['masks', 'targets'])
+            .print2('before dump')
+            #.dump('../data/data2', 'blosc')
     )
 
     res2 = (ds_data.p
@@ -89,5 +92,5 @@ if __name__ == "__main__":
     t = time()
     res.run(2, n_epochs=1, prefetch=0, target='t')
     print("======================")
-    res2.run(2, n_epochs=1, prefetch=0, target='t')
+    #res2.run(2, n_epochs=1, prefetch=0, target='t')
     print("End", time() - t)

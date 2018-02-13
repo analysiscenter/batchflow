@@ -342,31 +342,37 @@ class Batch(BaseBatch):
             _src = data
         else:
             _src = data if isinstance(data, tuple) or data is None else tuple([data])
-        _src = self.get_items(self.indices, _src)
+        _src = self.get_items(self.indices, _src, components)
 
         if components is None:
             self._data = _src
         else:
             components = [components] if isinstance(components, str) else components
             for i, comp in enumerate(components):
-                setattr(self, comp, _src[i])
+                if isinstance(_src, dict):
+                    comp_src = _src[comp]
+                else:
+                    comp_src = _src[i]
+                setattr(self, comp, comp_src)
 
-    def get_items(self, index, data=None):
+    def get_items(self, index, data=None, components=None):
         """ Return one or several data items from a data source """
         if data is None:
             _data = self.data
         else:
             _data = data
+        if components is None:
+            components = self.components
 
         if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(None, comp, index) for comp in self.components]   # pylint: disable=not-an-iterable
+            pos = [self.get_pos(None, comp, index) for comp in components]   # pylint: disable=not-an-iterable
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
-            comps = self.components if self.components is not None else range(len(_data))
+            comps = components if components is not None else range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
-            res = dict(zip(_data.keys(), (_data[comp][self.get_pos(data, comp, index)] for comp in _data)))
+            res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]
@@ -456,6 +462,8 @@ class Batch(BaseBatch):
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
+        if not isinstance(dst, str) and not isinstance(src, str):
+            raise TypeError("At least one of dst and src should be an attribute name, not an array")
 
         if src is None:
             _args = args
@@ -524,14 +532,8 @@ class Batch(BaseBatch):
             else:
                 src_attr = src
             _args = tuple([src_attr, *args])
-        indices = np.where(np.random.binomial(1, p, len(self)))[0]
-        if len(indices):
-            if use_self:
-                tr_res = func(self, indices=indices, *_args, **kwargs)
-            else:
-                tr_res = func(indices=indices, *_args, **kwargs)
-        else:
-            tr_res = src_attr
+
+        tr_res = func(*_args, **kwargs)
         if dst is None:
             pass
         elif isinstance(dst, str):
@@ -693,6 +695,7 @@ class Batch(BaseBatch):
             raise ValueError('Unknown format %s' % fmt)
 
         return self
+
 
     @action
     def load(self, *args, src=None, fmt=None, components=None, **kwargs):
