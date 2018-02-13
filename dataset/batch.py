@@ -342,7 +342,7 @@ class Batch(BaseBatch):
             _src = data
         else:
             _src = data if isinstance(data, tuple) or data is None else tuple([data])
-        _src = self.get_items(self.indices, _src, components)
+        _src = self.get_items(self.indices, _src)
 
         if components is None:
             self._data = _src
@@ -462,8 +462,6 @@ class Batch(BaseBatch):
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
-        if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least one of dst and src should be an attribute name, not an array")
 
         if src is None:
             _args = args
@@ -547,7 +545,6 @@ class Batch(BaseBatch):
         else:
             dst[:] = tr_res
         return self
-
 
     def _get_file_name(self, ix, src, ext):
         if src is None:
@@ -702,7 +699,6 @@ class Batch(BaseBatch):
             raise ValueError('Unknown format %s' % fmt)
 
         return self
-
 
     @action
     def load(self, *args, src=None, fmt=None, components=None, **kwargs):
