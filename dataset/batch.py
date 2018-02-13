@@ -532,8 +532,14 @@ class Batch(BaseBatch):
             else:
                 src_attr = src
             _args = tuple([src_attr, *args])
-
-        tr_res = func(*_args, **kwargs)
+        indices = np.where(np.random.binomial(1, p, len(self)))[0]
+        if len(indices):
+            if use_self:
+                tr_res = func(self, indices=indices, *_args, **kwargs)
+            else:
+                tr_res = func(indices=indices, *_args, **kwargs)
+        else:
+            tr_res = src_attr
         if dst is None:
             pass
         elif isinstance(dst, str):
@@ -541,6 +547,7 @@ class Batch(BaseBatch):
         else:
             dst[:] = tr_res
         return self
+
 
     def _get_file_name(self, ix, src, ext):
         if src is None:
