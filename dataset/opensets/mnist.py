@@ -13,14 +13,11 @@ from .. import parallel, any_action_failed
 
 class MNIST(ImagesOpenset):
     """ MNIST dataset
-
     Examples
     --------
     .. code-block:: python
-
         # download MNIST data, split into train/test and create dataset instances
         mnist = MNIST()
-
         # iterate over the dataset
         for batch in mnist.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
             # do something with a batch

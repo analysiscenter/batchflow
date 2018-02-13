@@ -1,0 +1,248 @@
+===============================
+Batch class for handling images
+===============================
+
+ImagesBatch class handles 2D images and their labels.
+
+Components
+----------
+The class has two components: ``images`` and ``labels``.
+
+Augmentation
+------------
+
+ImagesBatch provides typical augmentation actions, for example:
+
+* :meth:`crop <dataset.ImagesBatch.crop>` -- crop rectangular area from an image
+    ..  image:: ../_static/ImagesBatch_examples/crop.png
+* :meth:`flip <dataset.ImagesBatch.flip>` -- flip an image (left to right or upside down)
+    ..  image:: ../_static/ImagesBatch_examples/flip.png
+* :meth:`scale <dataset.ImagesBatch.scale>` -- scale an image (stretch or tie)
+    ..  image:: ../_static/ImagesBatch_examples/scale.png
+* :meth:`put_on_background <dataset.ImagesBatch.put_on_background>` -- put an image on a given background
+    ..  image:: ../_static/ImagesBatch_examples/put_on_background.png
+* :meth:`resize <dataset.ImagesBatch.resize>` -- resize an image a to the given shape
+    ..  image:: ../_static/ImagesBatch_examples/resize.png
+* :meth:`pad <dataset.ImagesBatch.pad>` -- add constant values to the border of an image (enlarging the last's shape)
+    ..  image:: ../_static/ImagesBatch_examples/pad.png
+* :meth:`invert <dataset.ImagesBatch.invert>` -- invert given channels in an image
+    ..  image:: ../_static/ImagesBatch_examples/invert.png
+* :meth:`salt <dataset.ImagesBatch.salt>` -- set pixels in random positions to given colour
+    ..  image:: ../_static/ImagesBatch_examples/salt.png
+* :meth:`threshold <dataset.ImagesBatch.threshold>` -- truncate pixels' values
+    ..  image:: ../_static/ImagesBatch_examples/threshold.png
+* :meth:`multiply <dataset.ImagesBatch.multiply>` -- multiply an image by the given number
+    ..  image:: ../_static/ImagesBatch_examples/multiply.png
+* :meth:`multiplicative_noise <dataset.ImagesBatch.multiplicative_noise>` -- add multiplicative noise to an image
+    ..  image:: ../_static/ImagesBatch_examples/multiplicative_noise.png
+* :meth:`add <dataset.ImagesBatch.add>` -- add given term to an image
+    ..  image:: ../_static/ImagesBatch_examples/add.png
+* :meth:`additive_noise <dataset.ImagesBatch.additive_noise>` -- add additive noise an image
+    ..  image:: ../_static/ImagesBatch_examples/additive_noise.png
+* :meth:`posterize <dataset.ImagesBatch.posterize>` -- posterize an image
+    ..  image:: ../_static/ImagesBatch_examples/posterize.png
+* :meth:`to_greyscale <dataset.ImagesBatch.to_greyscale>` -- leave one ('grey') channel
+    ..  image:: ../_static/ImagesBatch_examples/to_greyscale.png
+* :meth:`cutout <dataset.ImagesBatch.cutout>` -- add colored rectangular areas to an image
+    ..  image:: ../_static/ImagesBatch_examples/cutout.png
+
+Perhaps, any function from scipy.ndimage is accesible as an action. Just use it as a usual action (without specifying input parameter). At least `rotate`, `gaussian_filter` and `affine_transform` work as expected.
+
+.. note:: All these methods can be executed for randomly sampled images from a batch. You just need to specify ``p`` parameter when calling an action (probability of applying an action to an image).
+
+.. note:: Use ``R()`` or ``P(R())`` :doc:`named expressions <named_expr>` to sample an argument for actions. In the first case the argument will be sampled for all images in a batch. If ``P(R())`` is passed then the argument will be sampled for each image.
+
+Examples:
+
+All images in a batch are rotated by 10 degrees:
+
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .rotate(angle=10)
+        ...
+
+All images in a batch are rotated by the common angle sampled from the normal distribution
+
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .rotate(angle=R('normal', loc=0, scale=1))
+        ...
+
+Each image in a batch are rotated by its own sampled angle
+
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .rotate(angle=P(R('normal', loc=0, scale=1)))
+        ...
+
+
+Rotate each image with probability 0.7 by its own sampled angle
+
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .rotate(angle=P(R('normal', loc=0, scale=1)), p=0.7)
+        ...
+
+See more in :ref:`notebook tutorial <../examples/tutorial/image_augmentation_examples.ipynb>`.
+
+Loading from files
+------------------
+
+To load images, use action :meth:`load <dataset.ImagesBatch.load>` with ``fmt='image'``.
+
+
+Saving
+------
+
+To dump images, use action :meth:`dump <dataset.ImagesBatch.dump>`
+
+
+`transform_actions` decorator
+-----------------------------
+
+This decorator finds all defined methods whose names starts with user-defined `suffix` and `prefix` and
+decorates them with ``wrapper`` which is an argument too.
+
+For example, there are two wrapper functions defined in :class:`~dataset.Batch`:
+    1. :meth:`~dataset.Batch.apply_transform_all`
+    2. :meth:`~dataset.Batch.apply_transform`
+
+And, by default, all methods that start with '_' and end with '_' are wrapped with the first mentioned method and those ones that start with '_' and end with '_all' are wrapped by the second one.
+
+Defining custom actions
+-----------------------
+
+There are 3 ways to define an action:
+
+    1. By writting a classic ``action`` like in  :class:`~dataset.Batch`
+    2. By writing a method that takes ``image`` as the first argument and returns transformed one. Method's name must be surrounded by unary '_'.
+    3. By writing a method that takes nd.array of ``images`` as the first argument and ``indices`` as the second. This method transforms ``images[indices]`` and returns ``images``. Method's name must start with '_' and end with '_all'.
+
+.. note:: In the last two approaches, actual action's name doesn't include mentioned suffices and prefixes. For example, if you define method ``_method_name_`` then in a pipeline you should call ``method_name``. For more details, see below.
+
+.. note:: Last two methods' names must not be surrounded by double '_' (like `__init__`) otherwise they will be ignored.
+
+Let's take a closer look on the two last approaches:
+
+``_method_name_``
+~~~~~~~~~~~~~~~~~
+
+It must have the following signature:
+
+   ``_method_name_(image, ...)``
+
+This method is actually wrapped with :meth:`~dataset.Batch.apply_transform`. And (usually) executed in parallel for each image.
+
+
+.. note:: If you define these actions in a child class then you must decorate it with ``@transform_actions(prefix='_', suffix='_', wrapper='apply_transform')``
+
+Example:
+
+.. code-block:: python
+
+    @transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
+    class MyImagesBatch(ImagesBatch):
+        ...
+        def _flip_(image, mode):
+            """ Flips an image.
+            """
+
+            if mode == 'lr':
+                image = image[:, ::-1]
+            elif mode == 'ud':
+                image = image[::-1]
+            return image
+        ...
+
+To use this action in a pipeline you must write:
+
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .flip(mode='lr')
+        ...
+
+.. note:: Note that prefix '_' and suffix '_' are removed from the action's name.
+
+.. note:: All actions written in this way can be applied with given probability to every image. To achieve this, pass parameter ``p`` to an action, like ``flip(mode='lr', p=0.5)``
+
+.. note:: These actions are performed for every image each in its own thread. To change it (for example, execute in asynchronous mode), pass parameter `target` (``.flip(mode='lr', target='a')``). For more detail, see :doc:`parallel <parallel>`.
+
+
+``_method_name_all``
+~~~~~~~~~~~~~~~~~~~~
+
+
+It must have the following signature:
+
+   ``_method_name_all(images, indices, ...)``
+
+This method is actually wrapped with :meth:`~dataset.Batch.apply_transform_all`. And executed once with the whole batch passed. ``indices`` parameter declares images that must be transformed (it is needed, for example, if you want to perfom action only to the subset of the elemets. See below for more details)
+
+
+.. note:: If you define these actions in a child class then you must decorate it with ``@transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')``
+
+Example:
+
+.. code-block:: python
+
+    @transform_actions(prefix='_', suffix='_', wrapper='apply_transform_all')
+    class MyImagesBatch(ImagesBatch):
+        ...
+        def _flip_all(self, images=None, indices=[0], mode='lr'):
+            """ Flips images at given indices.
+            """
+
+            if mode == 'lr':
+                images[indices] = images[indices, :, ::-1]
+            elif mode == 'ud':
+                images[indices] = images[indices, ::-1]
+            return images
+        ...
+
+To use this action in a pipeline you must write:
+
+.. code-block:: python
+
+    ...
+    (Pipeline().
+        ...
+        .flip(mode='lr')
+        ...
+
+
+.. note:: Note that prefix '_' and suffix '_all' are removed from the action's name.
+
+.. note:: All actions written in this way can be applied with given probability to every image. To achieve this, pass parameter ``p`` to an action, like ``flip(mode='lr', p=0.5)``
+
+.. note:: These actions are performed once for all batch. Please note that you can't pass ``P(R())`` named expression as an argument.
+
+
+Assembling after parallel execution
+-----------------------------------
+
+ote that if images have different shapes after an action then there are two ways to tackle it:
+
+  1. Do nothing. Then images will be stored in `np.ndarray` with `dtype=object`.
+  2. Pass `preserve_shape=True` to an action which changes the shape of an image. Then image
+     is cropped from the left upper corner (unless action has `origin` parameter, see more in :ref:`Actions`).
+
+Cropping to patches
+-------------------------
+
+If you have a very big image then you can compose little patches from it.
+See :meth:`split_to_patches <dataset.ImagesBatch.split_to_patches>` and tutorial for more details.

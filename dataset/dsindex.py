@@ -375,9 +375,9 @@ class FilesIndex(DatasetIndex):
     def build_from_one_path(self, path, dirs=False, no_ext=False):
         """ Build index from a path/glob. """
         check_fn = os.path.isdir if dirs else os.path.isfile
-        pathlist = glob.iglob(path)
+        pathlist = glob.iglob(path, recursive=True)
         _full_index = np.asarray([self.build_key(fname, no_ext) for fname in pathlist if check_fn(fname)])
-        if _full_index.shape[0] > 0:
+        if len(_full_index):
             _index = _full_index[:, 0]
             _paths = _full_index[:, 1]
         else:
@@ -388,10 +388,12 @@ class FilesIndex(DatasetIndex):
     @staticmethod
     def build_key(fullpathname, no_ext=False):
         """ Create index item from full path name. """
+        key_name = os.path.basename(fullpathname)
         if no_ext:
-            key_name = '.'.join(os.path.basename(fullpathname).split('.')[:-1])
-        else:
-            key_name = os.path.basename(fullpathname)
+            dot_position = key_name.rfind('.')
+            dot_position = dot_position if dot_position > 0 else len(key_name)
+            key_name = key_name[:dot_position]
+
         return key_name, fullpathname
 
     def get_fullpath(self, key):
