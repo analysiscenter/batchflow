@@ -237,8 +237,10 @@ class TFModel(BaseModel):
         with self.graph.as_default(), _device_context():
             with tf.variable_scope(self.__class__.__name__):
                 with tf.variable_scope('globals'):
-                    self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
-                    self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
+                    if self.is_training is None:
+                        self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
+                    if self.global_step is None:
+                        self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
                 config = self.build_config()
                 self._build(config)
