@@ -1,7 +1,6 @@
 """ Contains basic Batch classes """
 
 import os
-import traceback
 import threading
 
 import dill
@@ -349,7 +348,11 @@ class Batch(BaseBatch):
         else:
             components = [components] if isinstance(components, str) else components
             for i, comp in enumerate(components):
-                setattr(self, comp, _src[i])
+                if isinstance(_src, dict):
+                    comp_src = _src[comp]
+                else:
+                    comp_src = _src[i]
+                setattr(self, comp, comp_src)
 
     def get_items(self, index, data=None):
         """ Return one or several data items from a data source """
@@ -357,16 +360,18 @@ class Batch(BaseBatch):
             _data = self.data
         else:
             _data = data
+        if components is None:
+            components = self.components
 
         if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(None, comp, index) for comp in self.components]   # pylint: disable=not-an-iterable
+            pos = [self.get_pos(None, comp, index) for comp in components]   # pylint: disable=not-an-iterable
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
-            comps = self.components if self.components is not None else range(len(_data))
+            comps = components if components is not None else range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
-            res = dict(zip(_data.keys(), (_data[comp][self.get_pos(data, comp, index)] for comp in _data)))
+            res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]
@@ -456,6 +461,8 @@ class Batch(BaseBatch):
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
+        if not isinstance(dst, str) and not isinstance(src, str):
+            raise TypeError("At least one of dst and src should be an attribute name, not an array")
 
         if src is None:
             _args = args
@@ -608,7 +615,7 @@ class Batch(BaseBatch):
             self._assemble_component(result, component=component, **kwargs)
         return self
 
-    @inbatch_parallel('indices', post='_assemble', target='f')
+    @inbatch_parallel('indices', post='_assemble_load', target='f')
     def _load_blosc(self, ix, src=None, components=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src, 'blosc')
@@ -693,6 +700,7 @@ class Batch(BaseBatch):
             raise ValueError('Unknown format %s' % fmt)
 
         return self
+
 
     @action
     def load(self, *args, src=None, fmt=None, components=None, **kwargs):

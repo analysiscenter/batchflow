@@ -294,6 +294,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method with a required parallel engine """
             if not _use_self:
+                # when use_self=False, the first arg is not self, but an ordinary arg
                 args = (self,) + args
                 self = None
             if 'target' in kwargs:
