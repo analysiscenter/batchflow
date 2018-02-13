@@ -641,7 +641,7 @@ class Batch(BaseBatch):
             data = dict(zip(components, item))
             f.write(blosc.compress(dill.dumps(data)))
 
-    def _load_table(self, src, fmt, components=None, *args, **kwargs):
+    def _load_table(self, src, fmt, components=None, call=None, *args, **kwargs):
         """ Load a data frame from table formats: csv, hdf5, feather """
         if fmt == 'csv':
             _data = pd.read_csv(src, *args, **kwargs)
@@ -657,9 +657,14 @@ class Batch(BaseBatch):
             # dask.DataFrame.loc supports advanced indexing only with lists
             _data = _data.loc[list(self.indices)].compute()
 
-        components = tuple(components or self.components)
-        for i, comp in enumerate(components):
-            setattr(self, comp, _data.iloc[:, i].values)
+        if call is not None:
+            _comp_dict = call(_data, src, fmt, components, *args, **kwargs)
+            for keys, values in _comp_dict.items():
+                setattr(self, keys, values)
+        else:
+            components = tuple(components or self.components)
+            for i, comp in enumerate(components):
+                setattr(self, comp, _data.iloc[:, i].values)
 
     @action(use_lock='__dump_table_lock')
     def _dump_table(self, dst, fmt='feather', components=None, *args, **kwargs):
@@ -701,7 +706,7 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
+    def load(self, *args, src=None, fmt=None, components=None, call=None, **kwargs):
         """ Load data from another array or a file.
 
         Parameters
@@ -726,7 +731,7 @@ class Batch(BaseBatch):
         elif fmt == 'blosc':
             self._load_blosc(src, components=components, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:
-            self._load_table(src, fmt, components, *args, **kwargs)
+            self._load_table(src, fmt, components, call, *args, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
         return self
