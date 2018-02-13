@@ -800,8 +800,8 @@ class ImagesBatch(BaseImagesBatch):
         images[indices] = colors[color_indices]
         return images
 
-    def _fill_crop_(self, image, origins, shapes, colors):
-        """ Fills given areas ('crops') with color
+    def _cutout_(self, image, origins, shapes, colors):
+        """ Fills given areas with color
 
         .. note:: It is assumed that ``origins``, ``shapes`` and ``colors`` have the same length.
 
