@@ -257,9 +257,16 @@ class TFModel(BaseModel):
                 else:
                     self.store_to_attr('train_step', self.train_step)
 
-            session_config = self.get('session', config, default={})
-            self.session = tf.Session(**session_config)
-            self.session.run(tf.global_variables_initializer())
+            if self.session is None:
+                self.create_session(config)
+                self.reset()
+
+
+    def create_session(self, config=None):
+        """ Create TF session """
+        config = config if config is not None else self.config
+        session_config = self.get('session', config, default={})
+        self.session = tf.Session(**session_config)
 
     def reset(self):
         """ Reset the trained model to allow a new training from scratch """
@@ -346,7 +353,7 @@ class TFModel(BaseModel):
             raise KeyError("Inputs should contain {} names".format(missing_names))
 
         placeholder_names = set(config.keys())
-        tensor_names = set(x.get('name') for x in config.values() if x.get('name'))
+        tensor_names = set(x.get('name') for x in config.values() if isinstance(x, dict) and x.get('name'))
         wrong_names = placeholder_names & tensor_names
         if len(wrong_names) > 0:
             raise ValueError('Inputs contain duplicate names:', wrong_names)
@@ -815,9 +822,9 @@ class TFModel(BaseModel):
         >>> tf_model.load('/path/to/models/resnet34')
         """
         _ = args, kwargs
-        self.session = tf.Session()
+        self.graph = tf.Graph()
 
-        with self.session.as_default():
+        with self.graph.as_default():
             if graph is None:
                 graph_files = glob.glob(os.path.join(path, '*.meta'))
                 graph_files = [os.path.splitext(os.path.basename(graph))[0] for graph in graph_files]
@@ -839,8 +846,8 @@ class TFModel(BaseModel):
             else:
                 checkpoint_path = os.path.join(path, checkpoint)
 
+            self.create_session()
             saver.restore(self.session, checkpoint_path)
-            self.graph = self.session.graph
 
         with open(os.path.join(path, 'attrs.json'), 'r') as json_file:
             self._attrs = json.load(json_file)
