@@ -155,6 +155,7 @@ class Pipeline:
             pass
         elif not isinstance(other, float) and other not in [0, 1]:
             raise TypeError("Probability should be float or 0 or 1")
+        else:
             other = float(other) if int(other) != 1 else None
         return self.from_pipeline(self, proba=other)
 
