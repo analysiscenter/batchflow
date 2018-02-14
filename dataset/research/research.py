@@ -12,10 +12,10 @@ from collections import OrderedDict
 import json
 import dill
 
-from ..dataset import Config
-from distributor import Tasks, Distributor
-from workers import PipelineWorker
-from grid import Grid
+from ..config import Config
+from .distributor import Tasks, Distributor
+from .workers import PipelineWorker
+from .grid import Grid
 
 class Research:
     """ Class Research for multiple experiments with pipelines. """

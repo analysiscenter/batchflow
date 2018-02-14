@@ -8,7 +8,7 @@ import operator
 
 import collections
 
-from ..dataset import Config
+from ..config import Config
 
 class KV:
     """ Class for value and alias. """

@@ -9,7 +9,7 @@ from copy import copy
 from collections import OrderedDict
 import pickle
 
-from ..dataset import Config
+from ..config import Config
 
 class SingleRunning:
     """ Class for training one model repeatedly. """

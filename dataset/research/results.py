@@ -8,7 +8,7 @@ import glob
 import numpy as np
 import dill
 
-from ..dataset import Config
+from ..config import Config
 
 class Stat:
     """ Get statistics from research results. """

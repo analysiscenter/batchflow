@@ -6,9 +6,9 @@
 
 import os
 
-from ..dataset import Config, Pipeline, inbatch_parallel
-from distributor import Worker
-from singlerun import SingleRunning
+from .. import Config, Pipeline, inbatch_parallel
+from .distributor import Worker
+from .singlerun import SingleRunning
 
 class PipelineWorker(Worker):
     """ Worker that run pipelines. """
