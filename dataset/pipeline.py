@@ -275,7 +275,7 @@ class Pipeline:
         """
         return self.variables.get(name, *args, create=create, pipeline=self, **kwargs)
 
-    def init_variable(self, name, default=None, init_on_each_run=False, lock=True, *args, **kwargs):
+    def init_variable(self, name, default=None, init_on_each_run=False, lock=True):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
 
@@ -289,8 +289,6 @@ class Pipeline:
             whether to initialize the variable before each run
         lock : bool
             whether to lock a variable before each update (default: True)
-        args, kwargs
-            parameters for init function
 
         Returns
         -------
@@ -305,7 +303,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        self.variables.create(name, default, init_on_each_run, lock, pipeline=self, *args, **kwargs)
+        self.variables.create(name, default, init_on_each_run, lock=lock, pipeline=self)
         return self
 
     def init_variables(self, variables):
@@ -578,7 +576,20 @@ class Pipeline:
         proba = self._eval_expr(action['proba'], batch=batch)
         return np.random.binomial(1, proba) == 1
 
-    def _exec(self, batch, new_loop=False):
+    def execute_for(self, batch, new_loop=False):
+        """ Run a pipeline for one batch
+
+        Parameters
+        ----------
+        batch
+            an input batch
+        new_loop : bool
+            whether to create a new :class:`async loop <asyncio.BaseEventLoop>`.
+
+        Returns
+        -------
+        a batch - an output from the last action in the pipeline
+        """
         if new_loop:
             asyncio.set_event_loop(asyncio.new_event_loop())
         batch.pipeline = self
@@ -902,7 +913,7 @@ class Pipeline:
             except StopIteration:
                 break
             else:
-                future = self._executor.submit(self._exec, batch, new_loop=True)
+                future = self._executor.submit(self.execute_for, batch, new_loop=True)
                 self._prefetch_queue.put(future, block=True)
         self._prefetch_queue.put(None, block=True)
 
@@ -930,7 +941,7 @@ class Pipeline:
                     self._prefetch_queue.task_done()
         return None
 
-    def reset_iter(self):
+    def reset_iter(self, exclude_dataset=False):
         """ Clear all iteration metadata in order to start iterating from scratch """
         def _clear_queue(queue):
             if queue is not None:
@@ -959,7 +970,7 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
 
-        if self.dataset is not None:
+        if not exclude_dataset and self.dataset is not None:
             self.dataset.reset_iter()
 
         self._init_variables_before_run()
@@ -1038,7 +1049,7 @@ class Pipeline:
         else:
             for batch in batch_generator:
                 try:
-                    batch_res = self._exec(batch)
+                    batch_res = self.execute_for(batch)
                 except SkipBatchException:
                     pass
                 else:
@@ -1049,7 +1060,7 @@ class Pipeline:
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all previous lazy actions """
         batch = self.dataset.create_batch(batch_index, *args, **kwargs)
-        batch_res = self._exec(batch)
+        batch_res = self.execute_for(batch)
         return batch_res
 
     def next_batch(self, *args, **kwargs):
@@ -1089,6 +1100,8 @@ class Pipeline:
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
         else:
+            self.reset_iter()
+
             if len(args) == 0 and len(kwargs) == 0:
                 args, kwargs = self._lazy_run
             for _ in self.gen_batch(*args, **kwargs):

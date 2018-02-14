@@ -23,7 +23,7 @@ def numba_fn(k, a1=0, a2=0, a3=0):
 
 def mpc_fn(i, arg2):
     print("   mpc func", i, arg2)
-    if i > '8':
+    if i > 8:
         y = 12 / np.log(1)
     else:
         y = i
@@ -47,14 +47,19 @@ class MyBatch(Batch):
 
     @action
     @inbatch_parallel(init="indices", post="parallel_post", target='mpc')
-    def action1(self, *args, **kwargs):
-        print("   action 1", args)
+    def action_p(self, *args, **kwargs):
+        print("   action mpc", args)
         return mpc_fn
+
+    @action
+    @inbatch_parallel(init="indices")
+    def action_t(self, ix, value, **kwargs):
+        print("   action threads", ix, value, kwargs)
 
     @action
     @inbatch_parallel(init="items")
     def action_i(self, item, *args, **kwargs):
-        print("   action items", type(item))
+        print("   action items", type(item), item)
         return self
 
     @action
@@ -64,20 +69,26 @@ class MyBatch(Batch):
 
     @action
     @inbatch_parallel(init="indices", post="parallel_post", target='async')
-    async def action2(self, i, *args):
-        print("   action 2", i, "started", args)
-        if i == '2':
-            print("   action 2", i, "failed")
+    async def action_a(self, ix, *args):
+        print("   action a", ix, "started", args)
+        if ix == '2':
+            print("   action 2", ix, "failed")
             x = 12 / 0
         else:
             await asyncio.sleep(1)
-        print("   action 2", i, "ended")
-        return i
+        print("   action 2", ix, "ended")
+        return ix
 
     @action
     def add(self, inc):
         self.data += inc
         return self
+
+    @action
+    @inbatch_parallel(init="items")
+    @mjit
+    def act(self, data):
+        data[:] = np.log(data ** 2)
 
 
 if __name__ == "__main__":
@@ -87,7 +98,7 @@ if __name__ == "__main__":
     # Fill-in dataset with sample data
     def gen_data():
         ix = np.arange(K)
-        data = np.arange(K * 3).reshape(K, -1)
+        data = np.arange(K * 3).reshape(K, -1).astype('float32')
         ds = Dataset(index=ix, batch_class=MyBatch)
         return ds, data
 
@@ -96,11 +107,23 @@ if __name__ == "__main__":
     ds_data, data = gen_data()
 
     res = (ds_data.pipeline()
+            .init_variable('var', init_on_each_run=list)
             .load(data)
             .print("Start batch")
-            .action2("async")
-            .action_i(712)
+            #.action_p(S('uniform', 10, 15))
+            #.action_a("async", P(R('poisson', 5.5)))
+            #.action_i(P(R([500, 600])))
+            #.action_t(P(R('normal', 10, 2)), target='f')
             #.action1(arg2=14)
-            .print("End batch"))
+            .act()
+            .update_variable('var', F(lambda b: b.data[0,0]), mode='a')
+            .print("End batch", F(lambda b: b.data[0])))
 
     res.run(4, shuffle=False, n_epochs=1)
+    print('\n--------\n', res.get_variable('var'))
+
+    res.run(4, shuffle=False, n_epochs=1)
+    print('\n--------\n', res.get_variable('var'))
+
+    res.run(4, shuffle=False, n_epochs=1)
+    print('\n--------\n', res.get_variable('var'))

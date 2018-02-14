@@ -6,12 +6,13 @@ import glob
 import re
 import json
 import threading
+import contextlib
 
 import numpy as np
 import tensorflow as tf
 
 from ..base import BaseModel
-from .layers import mip, conv_block, upsample, global_average_pooling
+from .layers import mip, conv_block, upsample
 from .losses import dice
 from .train import piecewise_constant
 
@@ -46,6 +47,11 @@ class TFModel(BaseModel):
     **Configuration**
 
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
+
+    device : str or callable
+        if str, a device name (e.g. '/device:GPU:0').
+        if callable, a function which takes an operation and returns a device name for it.
+        See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
 
     session : dict
         `Tensorflow session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
@@ -207,16 +213,6 @@ class TFModel(BaseModel):
 
         super().__init__(*args, **kwargs)
 
-
-    def __enter__(self):
-        """ Enter the model graph context """
-        self._graph_context = self.graph.as_default()
-        return self._graph_context.__enter__()
-
-    def __exit__(self, exception_type, exception_value, exception_traceback):
-        """ Exit the model graph context """
-        return self._graph_context.__exit__(exception_type, exception_value, exception_traceback)
-
     def build(self, *args, **kwargs):
         """ Build the model
 
@@ -229,11 +225,22 @@ class TFModel(BaseModel):
            <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_
         #. Create a tensorflow session
         """
-        with self.graph.as_default():
+
+        def _device_context():
+            if 'device' in self.config:
+                device = self.config.get('device')
+                context = self.graph.device(device)
+            else:
+                context = contextlib.ExitStack()
+            return context
+
+        with self.graph.as_default(), _device_context():
             with tf.variable_scope(self.__class__.__name__):
                 with tf.variable_scope('globals'):
-                    self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
-                    self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
+                    if self.is_training is None:
+                        self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
+                    if self.global_step is None:
+                        self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
                 config = self.build_config()
                 self._build(config)
@@ -252,8 +259,20 @@ class TFModel(BaseModel):
                 else:
                     self.store_to_attr('train_step', self.train_step)
 
-            session_config = self.get('session', config, default={})
-            self.session = tf.Session(**session_config)
+            if self.session is None:
+                self.create_session(config)
+                self.reset()
+
+
+    def create_session(self, config=None):
+        """ Create TF session """
+        config = config if config is not None else self.config
+        session_config = self.get('session', config, default={})
+        self.session = tf.Session(**session_config)
+
+    def reset(self):
+        """ Reset the trained model to allow a new training from scratch """
+        with self.session.graph.as_default():
             self.session.run(tf.global_variables_initializer())
 
     def _make_inputs(self, names=None, config=None):
@@ -336,7 +355,7 @@ class TFModel(BaseModel):
             raise KeyError("Inputs should contain {} names".format(missing_names))
 
         placeholder_names = set(config.keys())
-        tensor_names = set(x.get('name') for x in config.values() if x.get('name'))
+        tensor_names = set(x.get('name') for x in config.values() if isinstance(x, dict) and x.get('name'))
         wrong_names = placeholder_names & tensor_names
         if len(wrong_names) > 0:
             raise ValueError('Inputs contain duplicate names:', wrong_names)
@@ -562,7 +581,7 @@ class TFModel(BaseModel):
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
-        with self.graph:
+        with self.graph.as_default():
             arr = np.asarray([np.prod(self.get_shape(v)) for v in tf.trainable_variables()])
         return np.sum(arr)
 
@@ -805,9 +824,9 @@ class TFModel(BaseModel):
         >>> tf_model.load('/path/to/models/resnet34')
         """
         _ = args, kwargs
-        self.session = tf.Session()
+        self.graph = tf.Graph()
 
-        with self.session.as_default():
+        with self.graph.as_default():
             if graph is None:
                 graph_files = glob.glob(os.path.join(path, '*.meta'))
                 graph_files = [os.path.splitext(os.path.basename(graph))[0] for graph in graph_files]
@@ -829,8 +848,8 @@ class TFModel(BaseModel):
             else:
                 checkpoint_path = os.path.join(path, checkpoint)
 
+            self.create_session()
             saver.restore(self.session, checkpoint_path)
-            self.graph = self.session.graph
 
         with open(os.path.join(path, 'attrs.json'), 'r') as json_file:
             self._attrs = json.load(json_file)
@@ -1489,89 +1508,4 @@ class TFModel(BaseModel):
         x = upsample(x, factor=factor, layout=layout, name=name, **kwargs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
-        return x
-
-    @classmethod
-    def pyramid_pooling(cls, inputs, name='psp', **kwargs):
-        """ Pyramid Pooling module
-
-        Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        pool_size : tuple of int
-            feature region sizes - pooling kernel sizes (e.g. [1, 2, 3, 6])
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        pool_size = cls.pop('pool_size', kwargs)
-        pool_op = cls.pop('pool_op', kwargs, default='mean')
-        layout = cls.pop('layout', kwargs, default='cna')
-        kernel_size = cls.pop('kernel_size', kwargs, default=1)
-        filters = cls.num_channels(inputs, kwargs['data_format'])
-        filters = cls.pop('filters', kwargs, default=filters)
-        upsample_args = cls.pop('upsample', kwargs, default={})
-        upsample_args = {**kwargs, **upsample_args}
-
-        x, inputs = inputs, None
-        with tf.variable_scope(name):
-            layers = []
-            for level in pool_size:
-                if level == 1:
-                    pass
-                else:
-                    x = conv_block(x, 'p', pool_op=pool_op, pool_size=level, pool_strides=level,
-                                   name='pool', **kwargs)
-                x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv', **kwargs)
-                x = cls.upsample(x, factor=level, **upsample_args)
-                layers.append(x)
-            axis = cls.channels_axis(kwargs.get('data_format'))
-            x = tf.concat(layers, axis=axis)
-        return x
-
-    @classmethod
-    def aspp(cls, inputs, name='aspp', **kwargs):
-        """ Atrous Spatial Pyramid Pooling module
-
-        Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation
-        <https://arxiv.org/abs/1706.05587>`_"
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        rates : tuple of int
-            dilation rates for branches (default=[6, 12, 18])
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        rates = cls.pop('rates', kwargs, default=[6, 12, 18])
-        layout = cls.pop('layout', kwargs, default='cna')
-        kernel_size = cls.pop('kernel_size', kwargs, default=3)
-        filters = cls.num_channels(inputs, kwargs['data_format'])
-        filters = cls.pop('filters', kwargs, default=filters)
-
-        with tf.variable_scope(name):
-            layers = []
-            layers.append(conv_block(inputs, layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs))
-
-            for level in rates:
-                x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
-                               name='conv-%d' % level, **kwargs)
-                layers.append(x)
-
-            with tf.variable_scope('image_features'):
-                x = global_average_pooling(inputs, **kwargs)
-                x = cls.upsample((x, inputs), layout='b', **kwargs)
-            layers.append(x)
-
-            axis = cls.channels_axis(kwargs.get('data_format'))
-            x = tf.concat(layers, axis=axis, name='concat')
-            x = conv_block(x, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
         return x

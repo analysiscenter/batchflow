@@ -132,8 +132,8 @@ Citing Dataset
 ==============
 Please cite Dataset in your publications if it helps your research.
 
-.. image:: https://zenodo.org/badge/84835419.svg
-    :target: https://zenodo.org/badge/latestdoi/84835419
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.1041203.svg
+   :target: https://doi.org/10.5281/zenodo.1041203
 
 ::
 

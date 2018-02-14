@@ -22,7 +22,7 @@ class BaseCIFAR(ImagesOpenset):
         super().__init__(*args, train_test=True, **kwargs)
         self.cv_split()
 
-    def download(self):
+    def download(self, path=None):
         """ Load data from a web site and extract into numpy arrays """
 
         def _extract(archive_file, member):
@@ -33,9 +33,13 @@ class BaseCIFAR(ImagesOpenset):
             labels = np.concatenate([res[self.LABELS_KEY] for res in all_res])
             return images, labels
 
-        tmpdir = tempfile.gettempdir()
+        if path is None:
+            tmpdir = tempfile.gettempdir()
+        else:
+            tmpdir = path
         filename = os.path.basename(self.SOURCE_URL)
         localname = os.path.join(tmpdir, filename)
+        # print(tmpdir)
         if not os.path.isfile(localname):
             print("Downloading", filename, "...")
             urllib.request.urlretrieve(self.SOURCE_URL, localname)
@@ -56,7 +60,6 @@ class BaseCIFAR(ImagesOpenset):
 
         self._train_index = DatasetIndex(np.arange(len(train_data[0])))
         self._test_index = DatasetIndex(np.arange(len(test_data[0])))
-
         return train_data, test_data
 
 

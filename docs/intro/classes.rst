@@ -7,6 +7,7 @@ Classes and capabilities
    index
    dataset
    batch
+   images_batch
    pipeline
    named_expr
    parallel

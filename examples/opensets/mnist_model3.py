@@ -7,7 +7,7 @@ import tensorflow as tf
 
 sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
-from dataset.opensets import MNIST
+from dataset.opensets import MNIST, CIFAR10
 from dataset.models.tf import TFModel, VGG16, VGG19, VGG7, FCN32, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
                               Inception_v1, Inception_v3, Inception_v4, InceptionResNet_v2, \
                               SqueezeNet, MobileNet, MobileNet_v2, DenseNet121, \
@@ -22,6 +22,7 @@ if __name__ == "__main__":
     BATCH_SIZE = 64
 
     mnist = MNIST()
+    #mnist = CIFAR10()
 
     train_template = (Pipeline(config=dict(model=MobileNet_v2))
                 .init_variable('model', C('model'))
@@ -45,6 +46,7 @@ if __name__ == "__main__":
                                                 'labels': B('labels')},
                              save_to=V('current_loss'), use_lock=True)
                 .print(V('current_loss'), model=V('model'))
+                .print(B('labels'))
                 .update_variable('loss_history', V('current_loss'), mode='a'))
 
     train_pp = (train_template << mnist.train)
