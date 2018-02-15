@@ -4,7 +4,7 @@ import sys
 import numpy as np
 
 sys.path.append("../..")
-from dataset import Dataset, Batch, Pipeline, action, inbatch_parallel
+from dataset import Dataset, Batch, Pipeline, action, inbatch_parallel, V
 
 
 # Example of custome Batch class which defines some actions
@@ -62,12 +62,14 @@ BATCH_SIZE = 3
 # Load data and take some actions
 print("\nFull preprocessing")
 with Pipeline() as p:
-    pipe1 = p.action1().action2() @ .5 + p.action3() * 2 @ .5 + p.action3() * 3 @ .2
+    pipe1 = p.action1().action2() @ V('proba') + p.action3() * V('repeats') @ .5 + p.action3() * 3 @ .2
     #pipe1 = p.action1() @ .7 + p.action2() * 2 @ 0.5 * 3
     #pipe2 = p.action2() @ .3 * 3 * 2 + p.action3() * 4 @ .4
     pipe = pipe1
     #pipe = pipe1 * 2  + pipe2
     #pipe = p.action1() @ .3 * 2 + p.action2()
+
+    pipe = p.init_variable('proba', .5).init_variable('repeats', 2) + pipe
 
 fp_data = pipe << ds_data
 

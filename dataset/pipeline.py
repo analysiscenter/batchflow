@@ -151,18 +151,20 @@ class Pipeline:
     def __matmul__(self, other):
         if self.num_actions == 0:
             raise ValueError("Cannot add probability to an empty pipeline")
-        if not isinstance(other, float) and other not in [0, 1]:
+        if isinstance(other, NamedExpression):
+            pass
+        elif not isinstance(other, float) and other not in [0, 1]:
             raise TypeError("Probability should be float or 0 or 1")
-        other = float(other) if int(other) != 1 else None
+        else:
+            other = float(other) if int(other) != 1 else None
         return self.from_pipeline(self, proba=other)
 
     def __mul__(self, other):
-        if other < 0:
+        if isinstance(other, int) and other < 0:
             raise ValueError("Repeat count cannot be negative. Use as pipeline * positive_number")
         elif isinstance(other, float):
             raise ValueError("Repeat count cannot be float. Use as pipeline * integer")
-        elif isinstance(other, int):
-            new_p = self.from_pipeline(self, repeat=other)
+        new_p = self.from_pipeline(self, repeat=other)
         return new_p
 
     def __lshift__(self, other):
@@ -507,8 +509,9 @@ class Pipeline:
         return action_method, action_spec
 
     def _exec_one_action(self, batch, action, args, kwargs):
-        if self._needs_exec(action):
-            for _ in range(action['repeat'] or 1):
+        if self._needs_exec(batch, action):
+            repeat = self._eval_expr(action['repeat'], batch=batch) or 1
+            for _ in range(repeat):
                 batch.pipeline = self
                 action_method, _ = self._get_action_method(batch, action['name'])
                 batch = action_method(*args, **kwargs)
@@ -516,8 +519,9 @@ class Pipeline:
         return batch
 
     def _exec_nested_pipeline(self, batch, action):
-        if self._needs_exec(action):
-            for _ in range(action['repeat'] or 1):
+        if self._needs_exec(batch, action):
+            repeat = self._eval_expr(action['repeat'], batch=batch) or 1
+            for _ in range(repeat):
                 batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
         return batch
 
@@ -526,8 +530,10 @@ class Pipeline:
         action_list = action_list or self._action_list
         for action in action_list:
             _action = action.copy()
-            _action['args'] = self._eval_expr(action['args'], batch=batch)
-            _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
+            if 'args' in action:
+                _action['args'] = self._eval_expr(action['args'], batch=batch)
+            if 'kwargs' in action:
+                _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
 
             if _action.get('#dont_run', False):
                 pass
@@ -565,10 +571,11 @@ class Pipeline:
             batch.pipeline = self
         return batch
 
-    def _needs_exec(self, action):
+    def _needs_exec(self, batch, action):
         if action['proba'] is None:
             return True
-        return np.random.binomial(1, action['proba']) == 1
+        proba = self._eval_expr(action['proba'], batch=batch)
+        return np.random.binomial(1, proba) == 1
 
     def execute_for(self, batch, new_loop=False):
         """ Run a pipeline for one batch
