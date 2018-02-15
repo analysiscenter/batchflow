@@ -39,6 +39,7 @@ class MNIST(ImagesOpenset):
         return [[self.ALL_URLS[i], i % 2] for i in range(len(self.ALL_URLS))]
 
     def _gather_data(self, all_res, *args, **kwargs):
+        _ = args, kwargs
         if any_action_failed(all_res):
             raise IOError('Could not download files:', all_res)
         else:
