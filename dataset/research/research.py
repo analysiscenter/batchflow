@@ -60,7 +60,7 @@ class Research:
             variables = [variables]
         if name in self.pipelines:
             raise ValueError('Pipeline with name {} was alredy existed'.format(name))
-        
+
         self.pipelines[name] = {
             'ppl': pipeline,
             'cfg': config,
@@ -69,7 +69,7 @@ class Research:
             'preproc': preproc,
             'kwargs': kwargs
         }
-        
+
         return self
 
     def add_grid_config(self, grid_config):
@@ -137,7 +137,7 @@ class Research:
         self.name = self._does_exist(name)
 
         # dump information about research
-        self.save() 
+        self.save()
 
         self._create_tasks(n_reps, n_iters, model_per_preproc, self.name)
 

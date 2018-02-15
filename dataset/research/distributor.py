@@ -54,7 +54,7 @@ class Worker:
         ----------
         args, kwargs
             will be used in init, post and task
-        """ 
+        """
         if 'logfile' in kwargs:
             self.logfile = kwargs['logfile']
         if 'errorfile' in kwargs:
@@ -110,7 +110,10 @@ class Worker:
     def _run(self, queue):
         try:
             self.task = queue.get()
-            self.log_info('Task {} was started in subprocess [id:{}] by {}'.format(self.task[0], os.getpid(), self.name), filename=self.logfile)
+            self.log_info(
+                'Task {} was started in subprocess [id:{}] by {}'.format(self.task[0], os.getpid(), self.name),
+                filename=self.logfile
+            )
             self.init()
             self.run_task()
             self.post()
