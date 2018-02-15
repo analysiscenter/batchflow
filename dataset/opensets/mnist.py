@@ -38,7 +38,7 @@ class MNIST(ImagesOpenset):
         """ List of URLs and type of content (0 - images, 1 - labels) """
         return [[self.ALL_URLS[i], i % 2] for i in range(len(self.ALL_URLS))]
 
-    def _gather_data(self, all_res):
+    def _gather_data(self, all_res, *args, **kwargs):
         if any_action_failed(all_res):
             raise IOError('Could not download files:', all_res)
         else:
@@ -49,12 +49,13 @@ class MNIST(ImagesOpenset):
         return train_data, test_data
 
     @parallel(init='_get_from_urls', _use_self=True, post='_gather_data')
-    def download(self, url, content):    # pylint:disable=arguments-differ
+    def download(self, url, content, path=None):    # pylint:disable=arguments-differ
         """ Load data from the web site """
         print('Downloading', url)
-        tmpdir = tempfile.gettempdir()
+        if path is None:
+            path = tempfile.gettempdir()
         filename = os.path.basename(url)
-        localname = os.path.join(tmpdir, filename)
+        localname = os.path.join(path, filename)
         if not os.path.isfile(localname):
             urllib.request.urlretrieve(url, localname)
             print("Downloaded", filename)

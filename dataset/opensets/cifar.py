@@ -34,12 +34,10 @@ class BaseCIFAR(ImagesOpenset):
             return images, labels
 
         if path is None:
-            tmpdir = tempfile.gettempdir()
-        else:
-            tmpdir = path
+            path = tempfile.gettempdir()
         filename = os.path.basename(self.SOURCE_URL)
-        localname = os.path.join(tmpdir, filename)
-        # print(tmpdir)
+        localname = os.path.join(path, filename)
+
         if not os.path.isfile(localname):
             print("Downloading", filename, "...")
             urllib.request.urlretrieve(self.SOURCE_URL, localname)
