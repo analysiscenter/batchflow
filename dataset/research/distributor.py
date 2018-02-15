@@ -43,16 +43,25 @@ class Worker:
             self.name = "Worker " + str(worker_name)
         elif worker_name is None:
             self.name = 'Worker'
+        else:
+            self.name = worker_name
         self.logfile = logfile or 'research.log'
         self.errorfile = errorfile or 'errors.log'
 
-    def set_args_kwargs(self, *args, **kwargs):
+    def set_args_kwargs(self, args, kwargs):
         """
         Parameters
         ----------
         args, kwargs
             will be used in init, post and task
-        """
+        """ 
+        if 'logfile' in kwargs:
+            self.logfile = kwargs['logfile']
+        if 'errorfile' in kwargs:
+            self.errorfile = kwargs['errorfile']
+        self.logfile = self.logfile or 'research.log'
+        self.errorfile = self.errorfile or 'errors.log'
+
         self.args = args
         self.kwargs = kwargs
 
@@ -77,7 +86,7 @@ class Worker:
         queue : multiprocessing.Queue
             queue of tasks for worker
         """
-        self.log_info('Start ' + self.name, filename=self.logfile)
+        self.log_info('Start {} [id:{}]'.format(self.name, os.getpid()), filename=self.logfile)
 
         try:
             item = queue.get()
@@ -88,7 +97,7 @@ class Worker:
                 sub_queue = mp.JoinableQueue()
                 sub_queue.put(item)
                 try:
-                    self.log_info(self.name + ' creates process', filename=self.logfile)
+                    self.log_info(self.name + ' is creating process', filename=self.logfile)
                     worker = mp.Process(target=self._run, args=(sub_queue, ))
                     worker.start()
                     sub_queue.join()
@@ -101,7 +110,7 @@ class Worker:
     def _run(self, queue):
         try:
             self.task = queue.get()
-            self.log_info('Task {} was started by {}'.format(self.task[0], self.name), filename=self.logfile)
+            self.log_info('Task {} was started in subprocess [id:{}] by {}'.format(self.task[0], os.getpid(), self.name), filename=self.logfile)
             self.init()
             self.run_task()
             self.post()
@@ -156,13 +165,18 @@ class Distributor:
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.error(obj, exc_info=True)
 
-    def run(self, tasks, dirname=None, logfile=None, errorfile=None, *args, **kwargs):
-
+    def run(self, tasks, dirname, logfile=None, errorfile=None, *args, **kwargs):
         """ Run disributor and workers.
 
         Parameters
         ----------
         tasks : iterable
+
+        dirname : str
+
+        logfile : str (default: 'research.log')
+
+        errorfile : str (default: 'errors.log')
 
         args, kwargs
             will be used in worker
@@ -176,7 +190,7 @@ class Distributor:
         kwargs['logfile'] = self.logfile
         kwargs['errorfile'] = self.errorfile
 
-        self.log_info('Prepare workers', filename=self.logfile)
+        self.log_info('Distributor [id:{}] is preparing workers'.format(os.getpid()), filename=self.logfile)
 
         if isinstance(self.n_workers, int):
             workers = [self.worker_class(worker_name=i, *args, **kwargs) for i in range(self.n_workers)]
@@ -201,5 +215,6 @@ class Distributor:
                 except Exception as exception:
                     logging.error(exception, exc_info=True)
             queue.join()
-        self.log_info('All workers finished the work.', filename=self.logfile)
+        self.log_info('All workers have finished the work.', filename=self.logfile)
+        logging.shutdown()
     

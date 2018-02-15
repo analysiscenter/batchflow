@@ -14,7 +14,7 @@ import dill
 
 from ..config import Config
 from .distributor import Tasks, Distributor
-from .workers import PipelineWorker
+from .workers import PipelineWorker, SavingWorker
 from .grid import Grid
 
 class Research:
@@ -28,27 +28,27 @@ class Research:
         Parameters
         ----------
         pipeline : dataset.Pipeline
-            if preproc is None pipeline must have run action with lazy=True. All parameters that are
-            getted from grid should be defined as C('parameter_name'). Corresponding parameter in grid
-            must have name 'parameter_name'
+            if preproc is None, pipeline must have run action with lazy=True. All parameters that are
+            defined in grid should be defined as C('parameter_name'). Corresponding parameter in grid
+            must have the same 'parameter_name'
         variables : str or list of str
             names of pipeline variables to remember at each repetition. All of them must be defined in pipeline,
             not in preproc.
         preproc : dataset.Pipeline or None
-            if preproc is not None it must have run action with lazy=True. For resulting batch of the preproc
+            if preproc is not None it must have run action with lazy=True. For resulting batch
             pipeline.execute_for(batch) will be called.
         config : Config or dict (default None)
-            pipeline config which doesn't change between experiments
+            pipeline config with parameters that doesn't change between experiments.
         name : str (default None)
-            name of pipeline. If name is None pipeline will have name 'ppl_{index}'
-        execute_for : int, list or None
+            pipeline name. If name is None, pipeline will have name 'ppl_{index}'
+        execute_for : int, list of ints or None
             If -1, pipeline will be executed just at last iteration.
-            If other int, pipeline will be excuted for iterations with that step
-            If list, pipeline will be excuted for that iterations
-            If None, pipeline will executed on each iteration.
+            If positive int, pipeline will be excuted for iterations with that step
+            If list of ints, pipeline will be excuted for that iterations
+            If None, pipeline will executed at each iteration.
         kwargs :
-            parameters in pipeline config that depends on the name of the other config. For example,
-            if test pipeline imports model from the other pipeline with name 'train' in SingleRunning,
+            parameters in pipeline config that depends on the names of the other pipeline. For example,
+            if test pipeline imports model from the other pipeline with name 'train' in Researcn,
             corresponding parameter in import_model must be C('import_from') and add_pipeline
             must be called with parameter import_from='train'.
         """
@@ -60,8 +60,16 @@ class Research:
             variables = [variables]
         if name in self.pipelines:
             raise ValueError('Pipeline with name {} was alredy existed'.format(name))
-        self.pipelines[name] = {'ppl': pipeline, 'cfg': config, 'var': variables, 'execute_for': execute_for,
-                                'preproc': preproc, 'kwargs': kwargs}
+        
+        self.pipelines[name] = {
+            'ppl': pipeline,
+            'cfg': config,
+            'var': variables,
+            'execute_for': execute_for,
+            'preproc': preproc,
+            'kwargs': kwargs
+        }
+        
         return self
 
     def add_grid_config(self, grid_config):
@@ -69,7 +77,7 @@ class Research:
 
         Parameters
         ----------
-        grid_config : dict or Grid
+        grid_config : dict, Grid or Option
             if dict it should have items parameter_name: list of values.
         """
         self.grid_config = Grid(grid_config)
@@ -95,7 +103,7 @@ class Research:
         )
         self.tasks = Tasks(self.tasks)
 
-    def run(self, n_reps, n_iters, n_jobs=1, model_per_preproc=1, name=None):
+    def run(self, n_reps, n_iters, n_jobs=1, model_per_preproc=1, name=None, save_model=False):
         """ Run research.
 
         Parameters
@@ -104,16 +112,20 @@ class Research:
             number of repetitions with each combination of parameters
         n_iters: int
             number of iterations for each configurations of each pipeline.
-        n_jobs : int (default 1) or list
+        n_jobs : int (default 1) or list of Workers
             If int - number of workers to run pipelines or workers that will run them. By default,
-            PipelineWorker will be used. If list - instances of Worker class.
+            PipelineWorker will be used.
+            If list - instances of Worker class.
         model_per_preproc: int or list of dicts
             If int - number of pipelines with different configs that will use the same prepared batch
             from preproc. If model_per_preproc - list of dicts with additional configs to each pipeline.
-            For example, if there are 2 GPUs, we can define parameter devicse in model config as C('devise')
+            For example, if there are 2 GPUs, we can define parameter 'device' in model config as C('device')
             and define model_per_preproc as [{'device': 0}, {'device': 1}].
         name : str or None
             name folder to save research. By default is 'research'.
+        save_model : bool
+            save or not the model 'model' at the first repetition from 'train' pipeline.
+            If n_jobs is not int there is no difference between True and False.
 
         At each iteration all add pipelines will be runned with some config from grid.
         """
@@ -124,10 +136,16 @@ class Research:
 
         self.name = self._does_exist(name)
 
-        self.save()
+        # dump information about research
+        self.save() 
+
         self._create_tasks(n_reps, n_iters, model_per_preproc, self.name)
+
         if isinstance(n_jobs, int):
-            worker = PipelineWorker
+            if save_model:
+                worker = SavingWorker # worker that saves model at first repetition
+            else:
+                worker = PipelineWorker
         else:
             worker = None
         distr = Distributor(n_jobs, worker)
@@ -147,7 +165,7 @@ class Research:
         return dirname
 
     def save(self):
-        """ Save description of the research to name/description. """
+        """ Save description of the research to folder name/description. """
         with open(os.path.join(self.name, 'description'), 'wb') as file:
             dill.dump(self, file)
         with open(os.path.join(self.name, 'description_research.json'), 'w') as file:

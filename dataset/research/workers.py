@@ -52,6 +52,7 @@ class PipelineWorker(Worker):
     def post(self):
         """ Run after task execution. """
         _, task = self.task
+        self.log_info('Saving results...', filename=self.logfile)
         for item, config in zip(self.single_runnings, task['configs']):
             item.save_results(os.path.join(task['name'], 'results',
                                            config.alias(as_string=True), str(task['repetition'])))
