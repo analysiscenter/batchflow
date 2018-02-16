@@ -27,7 +27,11 @@ class PipelineWorker(Worker):
     def init(self):
         """ Run before task execution. """
         i, task = self.task
-        description = '\n'.join([str(config.alias()) for config in task['configs']])
+        if isinstance(task['model_per_preproc'], list):
+            description = '\n'.join([str({**config.alias(), **_config}) 
+                for config, _config in zip(task['configs'], task['model_per_preproc'])])
+        else:
+            description = '\n'.join([str(config.alias()) for config in task['configs']])
 
         self.log_info('Task {} has the following configs:\n{}'.format(i, description), filename=self.logfile)
 
