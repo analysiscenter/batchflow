@@ -42,14 +42,16 @@ class SingleRunning:
             must be called with parameter import_from='train'.
         """
         name = name or 'ppl_' + str(len(self.pipelines))
-        config = Config(config) or Config()
         variables = variables or []
         if not isinstance(variables, list):
             variables = [variables]
         if name in self.pipelines:
             raise ValueError('Pipeline with name {} was alredy existed'.format(name))
         import_config = {key: self.pipelines[value]['ppl'] for key, value in kwargs.items()}
+        
+        config = Config(config)
         import_config = Config(import_config)
+
         self.pipelines[name] = {
             'ppl': pipeline,
             'cfg': config + import_config,

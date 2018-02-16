@@ -5,10 +5,10 @@ class Config:
     def __init__(self, config=None, **kwargs):
         if config is None:
             self.config = dict()
-        elif isinstance(config, Config):
-            self.config = config.config
         elif isinstance(config, dict):
             self.config = self.parse(config)
+        else:
+            self.config = config.config
         self.update(**self.parse(kwargs))
 
     def pop(self, variables, config=None, **kwargs):
