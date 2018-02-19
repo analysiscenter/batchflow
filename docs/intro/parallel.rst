@@ -461,3 +461,48 @@ Here ``parallel_action`` will have only 3 parallel tasks being executed simultan
 However, implicitly specifying ``n_workers`` is rarely needed in practice and thus highly discouraged.
 
 **Attention!** You cannot use ``n_workers`` with ``target=async``.
+
+
+Writing numba-methods
+=====================
+
+When you need an extremely fast processing, `numba <http://numba.pydata.org/>`_ might come in handy.
+However, it works only with functions, but not with methods. It is not a big issue as you can write
+a method which calls a function. It is not convenient, though. And code becomes not so easy to follow.
+
+That is why you'll love `@mjit` decorator. It looks absolutely like `@jit <https://numba.pydata.org/numba-doc/latest/user/jit.html/>`_, but with methods.
+
+.. code-block:: python
+
+   class MyBatch(Batch):
+       ...
+       @action
+       @mjit
+       def fast_loop(self, data):
+           for i in range(data.shape[0]):
+              data[i] = -np.exp(-np.exp(data[i]))
+
+       @action
+       @inbatch_parallel('images')
+       @mjit
+       def fast_parallel_loop(self, image):
+           for i in range(image.shape[0]):
+               for j in range(image.shape[1]):
+                   image[i, j] = -np.exp(-np.exp(image[i, j]))
+
+       @action
+       @inbatch_parallel('images')
+       @mjit
+       def fast_parallel_action(self, image):
+           image[:] = -np.exp(-np.exp(image))
+
+`mjit` just takes a method body and compiles it with `numba.jit`. So the method should comply with all numba requirements.
+
+.. note:: `self` cannot be used within `@mjit` methods. It will always be None.
+          As a result, you have no access to any class attributes and methods.
+
+.. note:: By default, a method is compiled with `nopython=True` and `nogil=True`.
+          You can redefine these parameters when needed.
+
+`prange <https://numba.pydata.org/numba-doc/latest/user/parallel.html>`_ is also allowed within `@mjit` methods.
+`@inbatch_parallel` works as fast, though. So choose freely what is most convenient in each case.

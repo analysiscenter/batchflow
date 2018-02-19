@@ -1,6 +1,7 @@
 """ Contains basic Batch classes """
 
 import os
+import traceback
 import threading
 
 import dill
@@ -191,7 +192,7 @@ class Batch(BaseBatch):
             # load data the first time it's requested
             with self._preloaded_lock:
                 if self._data is None and self._preloaded is not None:
-                    self.load(self._preloaded)
+                    self.load(src=self._preloaded)
         res = self._data if self.components is None else self._data_named
         return res if res is not None else self._empty_data
 
@@ -340,8 +341,7 @@ class Batch(BaseBatch):
         if self.components is None:
             _src = data
         else:
-            _src = data if isinstance(data, tuple) else tuple([data])
-
+            _src = data if isinstance(data, tuple) or data is None else tuple([data])
         _src = self.get_items(self.indices, _src)
 
         if components is None:
@@ -349,24 +349,30 @@ class Batch(BaseBatch):
         else:
             components = [components] if isinstance(components, str) else components
             for i, comp in enumerate(components):
-                setattr(self, comp, _src[i])
+                if isinstance(_src, dict):
+                    comp_src = _src[comp]
+                else:
+                    comp_src = _src[i]
+                setattr(self, comp, comp_src)
 
-    def get_items(self, index, data=None):
+    def get_items(self, index, data=None, components=None):
         """ Return one or several data items from a data source """
         if data is None:
             _data = self.data
         else:
             _data = data
+        if components is None:
+            components = self.components
 
         if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(None, comp, index) for comp in self.components]   # pylint: disable=not-an-iterable
+            pos = [self.get_pos(None, comp, index) for comp in components]   # pylint: disable=not-an-iterable
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
-            comps = self.components if self.components is not None else range(len(_data))
+            comps = components if components is not None else range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
-            res = dict(zip(_data.keys(), (_data[comp][self.get_pos(data, comp, index)] for comp in _data)))
+            res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]
@@ -422,8 +428,8 @@ class Batch(BaseBatch):
         return self
 
     @action
-    @inbatch_parallel(init='indices')
-    def apply_transform(self, ix, func, *args, src=None, dst=None, **kwargs):
+    @inbatch_parallel(init='indices', post='_assemble')
+    def apply_transform(self, ix, func, *args, src=None, dst=None, p=1., use_self=False, **kwargs):
         """ Apply a function to each item in the batch
 
         Parameters
@@ -431,12 +437,13 @@ class Batch(BaseBatch):
         func : callable
             a function to apply to each item from the source
 
-        src : str or array
+        src : str, sequence, list of str
             the source to get data from, can be:
 
             - None
             - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
+            - sequence - a numpy-array, list, etc
+            - list of str - get data from several components
 
         dst : str or array
             the destination to put the result in, can be:
@@ -455,31 +462,30 @@ class Batch(BaseBatch):
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
-        if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least one of dst and src should be an attribute name, not an array")
 
         if src is None:
             _args = args
         else:
             if isinstance(src, str):
                 pos = self.get_pos(None, src, ix)
-                src_attr = getattr(self, src)[pos]
+                src_attr = (getattr(self, src)[pos],)
+            elif isinstance(src, list) and np.all([isinstance(component, str) for component in src]):
+                src_attr = [getattr(self, component)[self.get_pos(None, component, ix)] for component in src]
             else:
                 pos = self.get_pos(None, dst, ix)
-                src_attr = src[pos]
-            _args = tuple([src_attr, *args])
+                src_attr = (src[pos],)
+            _args = tuple([*src_attr, *args])
 
-        if isinstance(dst, str):
-            dst_attr = getattr(self, dst)
-            pos = self.get_pos(None, dst, ix)
-        else:
-            dst_attr = dst
-            pos = self.get_pos(None, src, ix)
-        if dst_attr is not None:
-            dst_attr[pos] = func(*_args, **kwargs)
+        if np.random.binomial(1, p):
+            if use_self:
+                return func(self, *_args, **kwargs)
+            return func(*_args, **kwargs)
+        if len(src_attr) == 1:
+            return src_attr[0]
+        return src_attr
 
     @action
-    def apply_transform_all(self, func, *args, src=None, dst=None, **kwargs):
+    def apply_transform_all(self, func, *args, src=None, dst=None, p=1., use_self=False, **kwargs):
         """ Apply a function the whole batch at once
 
         Parameters
@@ -499,6 +505,9 @@ class Batch(BaseBatch):
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
+
+        p : float
+            probability of applying transform to an element in the batch
 
         args, kwargs
             parameters passed to ``func``
@@ -521,8 +530,14 @@ class Batch(BaseBatch):
             else:
                 src_attr = src
             _args = tuple([src_attr, *args])
-
-        tr_res = func(*_args, **kwargs)
+        indices = np.where(np.random.binomial(1, p, len(self)))[0]
+        if len(indices):
+            if use_self:
+                tr_res = func(self, indices=indices, *_args, **kwargs)
+            else:
+                tr_res = func(indices=indices, *_args, **kwargs)
+        else:
+            tr_res = src_attr
         if dst is None:
             pass
         elif isinstance(dst, str):
@@ -545,11 +560,61 @@ class Batch(BaseBatch):
             file_name = os.path.join(os.path.abspath(src), str(ix) + '.' + ext)
         return file_name
 
-    def _assemble_load(self, all_res, *args, **kwargs):
-        _ = all_res, args, kwargs
+    def _assemble_component(self, result, *args, component, **kwargs):
+        """ Assemble one component after parallel execution.
+
+        Parameters
+        ----------
+        result : sequence, np.ndarray
+            Values to put into ``component``
+        component : str
+            Component to assemble.
+        """
+
+        _ = args, kwargs
+        try:
+            new_items = np.stack(result)
+        except ValueError as e:
+            message = str(e)
+            if "must have the same shape" in message:
+                new_items = np.array(result, dtype=object)
+            else:
+                raise e
+        setattr(self, component, new_items)
+
+    def _assemble(self, all_results, *args, dst=None, **kwargs):
+        """ Assembles the batch after a parallel action.
+
+        Parameters
+        ----------
+        all_results : sequence
+            Results after inbatch_parallel.
+        dst : str, sequence, np.ndarray
+            Components to assemble
+
+        Returns
+        -------
+        self
+        """
+
+        _ = args
+        if any_action_failed(all_results):
+            all_errors = self.get_errors(all_results)
+            print(all_errors)
+            traceback.print_tb(all_errors[0].__traceback__)
+            raise RuntimeError("Could not assemble the batch")
+        if dst is None:
+            dst = kwargs.get('components', self.components)
+        if isinstance(dst, (list, tuple, np.ndarray)):
+            all_results = list(zip(*all_results))
+        else:
+            dst = [dst]
+            all_results = [all_results]
+        for component, result in zip(dst, all_results):
+            self._assemble_component(result, component=component, **kwargs)
         return self
 
-    @inbatch_parallel('indices', post='_assemble_load', target='f')
+    @inbatch_parallel('indices', post='_assemble', target='f')
     def _load_blosc(self, ix, src=None, components=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src, 'blosc')
@@ -635,9 +700,8 @@ class Batch(BaseBatch):
 
         return self
 
-
     @action
-    def load(self, src=None, fmt=None, components=None, *args, **kwargs):
+    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
         """ Load data from another array or a file.
 
         Parameters
@@ -668,7 +732,7 @@ class Batch(BaseBatch):
         return self
 
     @action
-    def dump(self, dst=None, fmt=None, components=None, *args, **kwargs):
+    def dump(self, *args, dst=None, fmt=None, components=None, **kwargs):
         """ Save data to another array or a file.
 
         Parameters

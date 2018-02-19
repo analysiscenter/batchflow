@@ -26,11 +26,11 @@ class BaseModel:
     """
     def __init__(self, config=None, *args, **kwargs):
         self.config = Config(config) or Config()
-        if self.config.get('build', default=True):
-            self.build(*args, **kwargs)
         load = self.config.get('load', default=False)
         if load:
             self.load(**load)
+        if self.config.get('build', default=True):
+            self.build(*args, **kwargs)
 
     @property
     def default_name(self):

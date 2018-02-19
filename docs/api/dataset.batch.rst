@@ -11,6 +11,9 @@ Batch
 ImagesBatch
 -----------
 
+.. toctree::
+   :maxdepth: 2
+
 .. autoclass:: dataset.ImagesBatch
     :inherited-members:
     :members:
@@ -19,12 +22,3 @@ ImagesBatch
     :show-inheritance:
 
 
-ImagesPILBatch
---------------
-
-.. autoclass:: dataset.ImagesPILBatch
-    :inherited-members:
-    :members:
-    :undoc-members:
-    :exclude-members: get_pos
-    :show-inheritance:
