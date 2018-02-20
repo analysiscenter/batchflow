@@ -9,22 +9,21 @@ import tensorflow as tf
 sys.path.append("../..")
 from dataset import *
 from dataset.models.tf import TFModel
-from dataset.models.tf.layers import conv2d_block, flatten
+from dataset.models.tf.layers import conv_block, flatten
 
 
 class MyModel(TFModel):
     """An example of a tf model class """
-    def _build(self, inputs, *args, **kwargs):
+    def body(self, inputs, *args, **kwargs):
         #images_shape = self.get_from_config('images_shape', (12, 12, 1))
         #num_classes = self.get_from_config('num_classes', 3)
 
         #x = tf.placeholder("float", [None] + list(images_shape), name='x')
         #y = tf.placeholder("int32",[None], name='y')
         #y_oe = tf.one_hot(y, num_classes, name='targets')
-
-        c = conv2d_block(inputs['x'], 3, 3, conv=dict(kernel_initializer=tf.contrib.layers.xavier_initializer()), max_pooling=dict(strides=4))
+        c = conv_block(inputs, 'cna', 3, 3, conv=dict(kernel_initializer=tf.contrib.layers.xavier_initializer()), max_pooling=dict(strides=4))
         f = tf.reduce_mean(c, [1,2])
-        y_ = tf.identity(f, name='predictions')
+        #y_ = tf.identity(f, name='predictions')
 
         # Define a cost function
         #tf.losses.add_loss(tf.losses.softmax_cross_entropy(y_oe, y_))
@@ -33,6 +32,7 @@ class MyModel(TFModel):
         #print(c.shape)
 
         print("___________________ MyModel initialized")
+        return f
 
     def load(self, *args, **kwargs):
         super().load(*args, **kwargs)
@@ -42,8 +42,9 @@ class MyModel(TFModel):
 class MyBatch(Batch):
     components = 'images', 'labels'
 
-    @action(model='static_model')
-    def train_in_batch(self, model_spec):
+    @action
+    def train_in_batch(self, model_name):
+        model_spec = self.get_model_by_name(model_name)
         print("train in batch model", model_spec)
         return self
 
@@ -90,20 +91,23 @@ pp = (Pipeline(config=config)
         .init_variable('loss_history', init_on_each_run=list)
         .init_variable('loss_history2', init_on_each_run=list)
         .init_variable('loss_history3', init_on_each_run=list)
+        .load(src=(data, labels))
+        .print(B('labels'))
         .init_model("static", MyModel, "static_model",
                     dict(loss='ce',
                          inputs={'x': dict(shape=(12, 12, 1)),
-                                 'y': ('int32', 3, None, 'ohe', 'targets')}))
+                                 'y': ('int32', None, 3, None, 'ohe', 'targets')},
+                         input_block=dict(inputs='x')))
         .init_model("dynamic", MyModel, "dynamic_model",
                     dict(loss='ce',
                          inputs={'x': dict(shape=F(lambda b: b.images.shape[1:])),
                                  'y': dict(name='targets', dtype=F(lambda b: b.labels.dtype),
-                                           shape=V(V('var_name')), transform='ohe')}))
+                                           classes=V(V('var_name')), transform='ohe')},
+                         input_block=dict(inputs='x')))
 #        .import_model('imported_model', model)
         #.init_model("static", TFModel, "dynamic_model2", config=dict(build=False, load=True, path='./models/dynamic'))
-        .load((data, labels))
         #.train_model("static_model", fn=trans)
-        .train_in_batch()
+        .train_in_batch('static_model')
         .train_model("dynamic_model", fetches="loss", feed_dict={'x': B('images'), 'y': B('labels')},
                      save_to=V('loss_history'), mode='a')
         #.train_model("imported_model", fetches=["loss", "loss"], feed_dict={'x': B('images'), 'y': B('labels')},
@@ -128,6 +132,9 @@ res.save_model("dynamic_model", './models/dynamic')
 
 m = res.get_model_by_name('dynamic_model')
 m.load('./models/dynamic')
+
+print('----------------- m1 -----------------')
+m1 = MyModel(config=dict(load=dict(path='./models/dynamic'), build=False))
 
 print(res.get_variable("loss_history"))
 

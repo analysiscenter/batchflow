@@ -9,7 +9,7 @@ class Openset(Dataset):
     def __init__(self, index=None, batch_class=None, train_test=False, path=None):
         self.train_test = train_test
         self._train_index, self._test_index = None, None
-        self._data = self.download(path)
+        self._data = self.download(path=path)
         preloaded = self._data if not train_test else None
         super().__init__(index, batch_class, preloaded=preloaded)
 
