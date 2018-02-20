@@ -425,7 +425,7 @@ class ResNet152(ResNet):
         config = ResNet.default_config()
 
         filters = 64   # number of filters in the first block
-        config['body']['num_blocks'] = [3, 8, 63, 3]
+        config['body']['num_blocks'] = [3, 8, 36, 3]
         config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = True
         return config
