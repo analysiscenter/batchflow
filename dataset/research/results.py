@@ -8,6 +8,7 @@ import glob
 import numpy as np
 import dill
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 from ..config import Config
 
@@ -69,19 +70,33 @@ class Stat:
             results[name]['iterations'] = []
         return Config(results)
 
-    def _get_aliases(aliases):
+    def _get_aliases(self, aliases):
+        if isinstance(aliases, str):
+            aliases = [aliases]
         return aliases
 
-    def plot_density(self, aliases, pipeline, variable, iteration):
+    def plot_density(self, aliases, pipeline, variable, iteration,
+                     window=0, figsize=None, axes=None, xlim=None, ylim=None,
+                     *args, **kwargs):
         aliases = self._get_aliases(aliases)
         results = [self.load_stat(alias)[pipeline] for alias in aliases]
-        results = [result[np.where(result['iterations'] == iteration)] for result in results]
+
+        left = iteration - window
+        right = iteration + window + 1
         
-        fig = plt.figure()  # 
-        axes = [0.1, 0.4, 0.8, 0.5]
+        for i, result in enumerate(results):
+            results[i] = result[variable][:, np.where(np.isin(result['iterations'], np.arange(left, right)))].reshape(-1)
+
+        fig = plt.figure(figsize=figsize)
+        axes = axes or [0.1, 0.4, 0.8, 0.5]
         ax = fig.add_axes(axes)
-        for result, alias in zip(results, aliases)
-            sns.distplot(x, label=alias, ax=ax)
+        for result, alias in zip(results, aliases):
+            sns.distplot(result, label=alias, ax=ax, *args, **kwargs)
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        ax.legend(loc=9, bbox_to_anchor=(0.5, -0.1))
         plt.show()
 
 """
