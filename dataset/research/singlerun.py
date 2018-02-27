@@ -77,7 +77,7 @@ class SingleRunning:
         """
         self.config = Config(config)
 
-    def get_results(self):
+    def get_results(self, names):
         """ Get values of variables from pipelines.
         Returns
         -------
@@ -85,7 +85,13 @@ class SingleRunning:
 
         If some pipeline was added without variables it will not be included into results.
         """
-        return Results(self.pipelines)
+        if names is None:
+            pipelines = self.pipelines
+        else:
+            if isinstance(names, str):
+                names = [names]
+            pipelines = {key: self.pipelines[key] for key in names}
+        return Results(pipelines)
 
     def init(self):
         """
@@ -118,7 +124,12 @@ class SingleRunning:
         """
         return self.pipelines[name]['ppl'].next_batch()
 
-    def run(self, n_iters):
+    def run(self, name, reset=True):
+        self.pipelines[name]['ppl'].run()
+        if reset:
+            self.pipelines[name]['ppl'].reset_iter()
+
+    def run_all(self, n_iters):
         """ Run all pipelines. Pipelines will be executed simultaneously in the following sense:
         next_batch is applied successively to each pipeline at each iteration.
 
@@ -133,20 +144,21 @@ class SingleRunning:
                 pipeline['ppl'].next_batch()
         self.results = self.get_results()
 
-    def save_results(self, save_to):
+    def save_results(self, save_to, names=None):
         """ Pickle results to file.
 
         Parameters
         ----------
         save_to : str
         """
-        self.results = self.get_results()
+        self.results = self.get_results(names)
         foldername, _ = os.path.split(save_to)
         if len(foldername) != 0:
             if not os.path.exists(foldername):
                 os.makedirs(foldername)
         with open(save_to, 'wb') as file:
             pickle.dump(self.results, file)
+
 
     @classmethod
     def get_iterations(cls, execute_for, n_iters=None):

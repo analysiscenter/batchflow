@@ -59,7 +59,7 @@ class PipelineWorker(Worker):
         self.log_info('Saving results...', filename=self.logfile)
         for item, config in zip(self.single_runnings, task['configs']):
             item.save_results(os.path.join(task['name'], 'results',
-                                           config.alias(as_string=True), str(task['repetition'])))
+                                           config.alias(as_string=True), str(task['repetition'], 'final')))
 
     def run_task(self):
         """ Task execution. """
@@ -73,8 +73,20 @@ class PipelineWorker(Worker):
                             batch = pipeline['preproc'].next_batch()
                             self._parallel_run(self.single_runnings, batch, name)
                         else:
-                            for item in self.single_runnings:
-                                item.next_batch(name)
+                            for item, config in zip(self.single_runnings, task['configs']):
+                                if pipeline['run']:
+                                    self.log_info('Run pipeleine {}'.format(name), filename=self.logfile)
+                                    item.run(name)
+                                    filename = os.path.join(
+                                        task['name'], 
+                                        'results',
+                                        config.alias(as_string=True), 
+                                        str(task['repetition']),
+                                        str(j)
+                                    )
+                                    item.save_results(filename, names=name)
+                                else:
+                                    item.next_batch(name)
             except StopIteration:
                 self.log_info('Task {} was stopped after {} iterations'.format(i, j+1), filename=self.logfile)
                 break
