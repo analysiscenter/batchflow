@@ -1,6 +1,7 @@
 #pylint:disable=no-value-for-parameter
 #pylint:disable=attribute-defined-outside-init
 #pylint:disable=broad-except
+#pylint:disable=too-many-nested-blocks
 
 """ Workers for research. """
 
@@ -28,8 +29,8 @@ class PipelineWorker(Worker):
         """ Run before task execution. """
         i, task = self.task
         if isinstance(task['model_per_preproc'], list):
-            description = '\n'.join([str({**config.alias(), **_config}) 
-                for config, _config in zip(task['configs'], task['model_per_preproc'])])
+            description = '\n'.join([str({**config.alias(), **_config})
+                                     for config, _config in zip(task['configs'], task['model_per_preproc'])])
         else:
             description = '\n'.join([str(config.alias()) for config in task['configs']])
 
@@ -78,9 +79,9 @@ class PipelineWorker(Worker):
                                     self.log_info('Run pipeleine {}'.format(name), filename=self.logfile)
                                     item.run(name)
                                     filename = os.path.join(
-                                        task['name'], 
+                                        task['name'],
                                         'results',
-                                        config.alias(as_string=True), 
+                                        config.alias(as_string=True),
                                         str(task['repetition']),
                                         str(j)
                                     )

@@ -125,6 +125,7 @@ class SingleRunning:
         return self.pipelines[name]['ppl'].next_batch()
 
     def run(self, name, reset=True):
+        """ Run pipelines till the end. """
         self.pipelines[name]['ppl'].run()
         if reset:
             self.pipelines[name]['ppl'].reset_iter()
