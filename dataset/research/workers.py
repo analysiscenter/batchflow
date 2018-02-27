@@ -60,7 +60,7 @@ class PipelineWorker(Worker):
         self.log_info('Saving results...', filename=self.logfile)
         for item, config in zip(self.single_runnings, task['configs']):
             item.save_results(os.path.join(task['name'], 'results',
-                                           config.alias(as_string=True), str(task['repetition'], 'final')))
+                                           config.alias(as_string=True), str(task['repetition']), 'final'))
 
     def run_task(self):
         """ Task execution. """
@@ -83,7 +83,7 @@ class PipelineWorker(Worker):
                                         'results',
                                         config.alias(as_string=True),
                                         str(task['repetition']),
-                                        str(j)
+                                        name + '_' + str(j)
                                     )
                                     item.save_results(filename, names=name)
                                 else:

@@ -31,22 +31,35 @@ class Stat:
         with open(os.path.join(self.name, 'description'), 'rb') as file:
             self.research = dill.load(file)
 
-    def load_stat(self, alias, index=None):
+    def load_stat(self, alias, pipeline=None, iteration=None, reps=None, final=False):
         """ Load results of research. """
         results = self._empty_results()
 
-        if index is None:
+        if reps is None:
             mask = '*'
-        elif isinstance(index, int):
-            mask = str(index)
+        elif isinstance(reps, int):
+            mask = str(reps)
         else:
-            mask = '[' + ','.join([str(i) for i in index]) + ']'
-        path_mask = os.path.join(self.name, 'results', alias, mask)
+            mask = '[' + ','.join([str(i) for i in reps]) + ']'
+        if final:
+            path_mask = os.path.join(self.name, 'results', alias, mask, 'final')
+        else:
+            path_mask = os.path.join(self.name, 'results', alias, mask, pipeline + '_' + str(iteration))
+        
         for name in glob.iglob(path_mask):
             with open(name, 'rb') as file:
                 self._put_result(results, dill.load(file))
 
         return self._list_to_array(results)
+
+    def load_final_stat(self, alias, pipelines, reps=None):
+        if reps is None:
+            mask = '*'
+        elif isinstance(reps, int):
+            mask = str(reps)
+        else:
+            mask = '[' + ','.join([str(i) for i in reps]) + ']'
+        path_mask = os.path.join(self.name, 'results', alias, mask, 'final')
 
     def _put_result(self, results, new_result):
         for name in new_result:

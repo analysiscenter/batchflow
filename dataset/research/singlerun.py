@@ -126,9 +126,9 @@ class SingleRunning:
 
     def run(self, name, reset=True):
         """ Run pipelines till the end. """
-        self.pipelines[name]['ppl'].run()
         if reset:
             self.pipelines[name]['ppl'].reset_iter()
+        self.pipelines[name]['ppl'].run()
 
     def run_all(self, n_iters):
         """ Run all pipelines. Pipelines will be executed simultaneously in the following sense:
