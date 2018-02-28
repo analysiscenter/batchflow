@@ -45,6 +45,8 @@ ImagesBatch provides typical augmentation actions, for example:
     ..  image:: ../_static/ImagesBatch_examples/to_greyscale.png
 * :meth:`cutout <dataset.ImagesBatch.cutout>` -- add colored rectangular areas to an image
     ..  image:: ../_static/ImagesBatch_examples/cutout.png
+* :meth:`elastic_transform <dataset.ImagesBatch.elastic_transform>` -- add colored rectangular areas to an image
+    ..  image:: ../_static/ImagesBatch_examples/elastic.png
 
 Perhaps, any function from scipy.ndimage is accesible as an action. Just use it as a usual action (without specifying input parameter). At least `rotate`, `gaussian_filter` and `affine_transform` work as expected.
 
