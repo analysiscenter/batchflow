@@ -235,7 +235,7 @@ class BaseImagesBatch(Batch):
             Format of the file to save.
         components : str, sequence
             Components to save.
-        img_fmt : str
+        ext: str
             Format to save images to.
 
         Returns
@@ -246,7 +246,7 @@ class BaseImagesBatch(Batch):
 
 
         if fmt == 'image':
-            return self._dump_image(components, dst, fmt=kwargs.pop('img_fmt'))
+            return self._dump_image(components, dst, fmt=kwargs.pop('ext'))
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
