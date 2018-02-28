@@ -1021,9 +1021,9 @@ class ImagesBatch(BaseImagesBatch):
         column_shift = self._gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
         row_shift = self._gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
 
-        row, column, channel = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]), np.arange(image.shape[-1]))
+        row, column, channel = np.meshgrid(range(shape[0]), range(shape[1]), range(shape[2]))
 
-        indices = (column + row_shift, row + column_shift, channel)
+        indices = (column + column_shift, row + row_shift, channel)
 
         distored_image = self._map_coordinates_(image, indices, order=1, mode='reflect')
 
