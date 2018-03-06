@@ -478,10 +478,9 @@ class Batch(BaseBatch):
 
         if np.random.binomial(1, p):
             if use_self:
-                return func(self, *_args, **kwargs)
+                result = func(self, *_args, **kwargs)
+                return result if isinstance(result, tuple) else (result,)
             return func(*_args, **kwargs)
-        if len(src_attr) == 1:
-            return src_attr[0]
         return src_attr
 
     @action
@@ -605,11 +604,9 @@ class Batch(BaseBatch):
             raise RuntimeError("Could not assemble the batch")
         if dst is None:
             dst = kwargs.get('components', self.components)
-        if isinstance(dst, (list, tuple, np.ndarray)):
-            all_results = list(zip(*all_results))
-        else:
+        if not isinstance(dst, (list, tuple, np.ndarray)):
             dst = [dst]
-            all_results = [all_results]
+        all_results = list(zip(*all_results))
         for component, result in zip(dst, all_results):
             self._assemble_component(result, component=component, **kwargs)
         return self

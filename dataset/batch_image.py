@@ -220,7 +220,7 @@ class BaseImagesBatch(Batch):
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
-    def dump(self, *args, dst=None, fmt=None, components="images", img_fmt=None, **kwargs):
+    def dump(self, *args, dst=None, fmt=None, components="images", **kwargs):
         """ Dump data.
 
         .. note:: If `fmt='images'` than ``dst`` must be a single component (str).
@@ -235,7 +235,7 @@ class BaseImagesBatch(Batch):
             Format of the file to save.
         components : str, sequence
             Components to save.
-        img_fmt : str
+        ext: str
             Format to save images to.
 
         Returns
@@ -243,8 +243,10 @@ class BaseImagesBatch(Batch):
         self
         """
 
+
+
         if fmt == 'image':
-            return self._dump_image(components, dst, fmt=img_fmt)
+            return self._dump_image(components, dst, fmt=kwargs.pop('ext'))
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
@@ -294,7 +296,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return imread(self._make_path(ix, src))
+        return (imread(self._make_path(ix, src)),)
 
     @inbatch_parallel(init='indices')
     def _dump_image(self, ix, src='images', dst=None, fmt=None):
@@ -976,8 +978,53 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
+
         images = images.copy()
         noisy_images = images[indices]
         images[indices] = self._threshold_(images[indices]*noise(size=noisy_images.shape),
                                            low, high, dtype=images.dtype)
         return images
+
+    def _elastic_transform_(self, image, alpha, sigma, **kwargs):
+        """Elastic deformation of images as described in [Simard2003]_.
+        [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
+        Convolutional Neural Networks applied to Visual Document Analysis", in
+        Proc. of the International Conference on Document Analysis and
+        Recognition, 2003.
+
+        Code slightly differs with https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a
+
+        Parameters
+        ----------
+        alpha : number
+            maximum of vectors' norms.
+        sigma : number
+            Smooth factor.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        # full shape is needed
+        shape = image.shape
+
+        kwargs.setdefault('mode', 'constant')
+        kwargs.setdefault('cval', 0)
+
+        column_shift = self._gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
+        row_shift = self._gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
+
+        row, column, channel = np.meshgrid(range(shape[0]), range(shape[1]), range(shape[2]))
+
+        indices = (column + column_shift, row + row_shift, channel)
+
+        distored_image = self._map_coordinates_(image, indices, order=1, mode='reflect')
+
+        return distored_image.reshape(image.shape)
