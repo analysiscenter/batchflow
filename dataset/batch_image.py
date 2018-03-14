@@ -296,7 +296,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return imread(self._make_path(ix, src))
+        return (imread(self._make_path(ix, src)),)
 
     @inbatch_parallel(init='indices')
     def _dump_image(self, ix, src='images', dst=None, fmt=None):
