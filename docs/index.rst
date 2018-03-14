@@ -77,6 +77,16 @@ and call ``train_model``. Of course, you can also choose a loss function, an opt
                   .run(BATCH_SIZE, shuffle=True)
 
 
+Best practice magic
+===================
+To improve model quality and accelerate training import ``best_practice`` module::
+
+    from dataset import best_practice
+
+This will change some models defaults (for instance, batch norm momentum, ResNet block layouts, etc) we find more useful and
+consistently bringing better results (faster training and more accurate predictions).
+
+
 Installation
 ============
 
@@ -148,4 +158,3 @@ Please cite Dataset in your publications if it helps your research.
       doi          = {10.5281/zenodo.1041203},
       url          = {https://doi.org/10.5281/zenodo.1041203}
     }
-

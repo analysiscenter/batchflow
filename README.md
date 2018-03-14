@@ -73,6 +73,15 @@ my_workflow = my_dataset.pipeline()
 For more advanced cases and detailed API see [the documentation](https://analysiscenter.github.io/dataset/).
 
 
+## Best practice magic
+To improve model quality and accelerate training import `best_practice` module:
+```python
+from dataset import best_practice
+```
+This will change some models defaults (for instance, batch norm momentum, ResNet block layouts, etc) we find more useful and
+consistently bringing better results (faster training and more accurate predictions).
+
+
 ## Installation
 
 > `Dataset` module is in the beta stage. Your suggestions and improvements are very welcome.

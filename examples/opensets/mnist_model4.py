@@ -9,6 +9,7 @@ sys.path.append("../..")
 from dataset import Pipeline, B, C, F, V
 from dataset.opensets import MNIST
 from dataset.models.tf import FCN32, FCN16, FCN8, LinkNet, UNet, VNet, DenseNetFC56, RefineNet, GlobalConvolutionNetwork
+from dataset import best_practice
 
 
 def make_masks(batch, *args):
@@ -40,7 +41,7 @@ if __name__ == "__main__":
                 .init_variable('pred_label', init_on_each_run=list)
                 .init_model('dynamic', GlobalConvolutionNetwork, 'conv',
                             config={'loss': 'ce',
-                                    'optimizer': {'name':'Adam', 'use_locking': True},
+                                    'optimizer': {'use_locking': True},
                                     'inputs': dict(images={'shape': (None, None, 1)},
                                                    masks={'shape': (None, None), 'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     #'input_block/filters': 32,

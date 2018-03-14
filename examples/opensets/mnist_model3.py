@@ -12,11 +12,8 @@ from dataset.models.tf import TFModel, VGG16, VGG19, VGG7, FCN32, ResNet18, ResN
                               Inception_v1, Inception_v3, Inception_v4, InceptionResNet_v2, \
                               SqueezeNet, MobileNet, MobileNet_v2, DenseNet121, \
                               ResNetAttention56
+from dataset import best_practice
 
-class MyModel(TFModel):
-    def _build(self, config=None):
-        tf.losses.add_loss(1.)
-        pass
 
 if __name__ == "__main__":
     BATCH_SIZE = 64
@@ -24,11 +21,10 @@ if __name__ == "__main__":
     mnist = MNIST()
     #mnist = CIFAR10()
 
-    train_template = (Pipeline(config=dict(model=MobileNet_v2))
-                .init_variable('model', C('model'))
+    train_template = (Pipeline(config=dict(model=ResNet18))
                 .init_variable('loss_history', init_on_each_run=list)
                 .init_variable('current_loss', init_on_each_run=0)
-                .init_model('dynamic', V('model'), 'conv',
+                .init_model('dynamic', C('model'), 'conv',
                             config={'inputs': dict(images={'shape': B('image_shape')},
                                                    labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
                                     'input_block/inputs': 'images',
