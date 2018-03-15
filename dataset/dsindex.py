@@ -45,6 +45,8 @@ class DatasetIndex(Baseset):
 
         if isinstance(_index, DatasetIndex):
             _index = _index.indices
+        elif isinstance(_index, int):
+            _index = np.arange(_index)
         else:
             # index should allow for advance indexing (i.e. subsetting)
             _index = np.asarray(_index)
