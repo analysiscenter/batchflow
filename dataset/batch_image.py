@@ -802,27 +802,27 @@ class ImagesBatch(BaseImagesBatch):
         images[indices] = colors[color_indices]
         return images
 
-    def _cutout_(self, image, origins, shapes, colors):
+    def _cutout_(self, image, origin, shape, color):
         """ Fills given areas with color
 
         .. note:: It is assumed that ``origins``, ``shapes`` and ``colors`` have the same length.
 
         Parameters
         ----------
-        origins : sequence
-            Every element of this sequence is the upper-left corner of a filled box. Can be one of:
+        origin : sequence, str
+            Upper-left corner of a filled box. Can be one of:
             - sequence - corner's coordinates in the form of (row, column).
             - 'top_left' - crop an image such that upper-left corners of
                            an image and the filled box coincide.
             - 'center' - crop an image such that centers of
                          an image and the filled box coincide.
             - 'random' - place the upper-left corner of the filled box at a random position.
-        shapes : sequence
-            Every element of this sequence is the shape of a filled box. Can be one of:
+        shape : sequence, int
+            Shape of a filled box. Can be one of:
             - sequence - crop size in the form of (rows, columns)
             - int - shape has squared form
-        colors : sequence
-            Every element of this sequence is the colour of a filled box. Can be one of:
+        colors : sequence, number
+            Color of a filled box. Can be one of:
             - sequence - (r,g,b) form
             - number - grayscale
         src : str
@@ -844,14 +844,14 @@ class ImagesBatch(BaseImagesBatch):
             if isinstance(origin, str):
                 origin = self._calc_origin(shape, origin, image_shape)
             return origin
+
         image = image.copy()
         image_shape = self._get_image_shape(image)
-        for origin, shape, color in zip(origins, shapes, colors):
-            shape = _get_shape(shape)
-            origin = _get_origin(shape, origin)
-            right_bottom = (min(origin[0] + shape[0], image_shape[0]),
-                            min(origin[1] + shape[1], image_shape[1]))
-            image[origin[0]:right_bottom[0], origin[1]:right_bottom[1]] = color
+        shape = _get_shape(shape)
+        origin = _get_origin(shape, origin)
+        right_bottom = (min(origin[0] + shape[0], image_shape[0]),
+                        min(origin[1] + shape[1], image_shape[1]))
+        image[origin[0]:right_bottom[0], origin[1]:right_bottom[1]] = color
 
         return image
 
