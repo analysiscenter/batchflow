@@ -746,7 +746,7 @@ class ImagesBatch(BaseImagesBatch):
         dtype = image.dtype if preserve_type else np.float
         return self._threshold_(term + image.astype(np.float), low, high, dtype)
 
-    def _to_greyscale_all(self, images, indices, keepdims=True):
+    def _to_greyscale_(self, image, keepdims=True):
         """ Set image's pixels to their mean among all channels
 
         .. note:: Images' shape must provide last axis for channels
@@ -766,11 +766,11 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-        _ = indices
-        return images.mean(axis=-1, keepdims=keepdims).astype(images.dtype)
 
-    def _posterize_all(self, images, indices, colors_number=3):
-        """ Posterizes images.
+        return image.mean(axis=-1, keepdims=keepdims).astype(image.dtype)
+
+    def _posterize_(self, image, colors_number=3):
+        """ Posterizes image.
 
         More concretely, it quantizes pixels' values so that they have``colors_number`` colours.
 
@@ -790,17 +790,18 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        images = images.copy()
-        dtype = images.dtype
+        image = image.copy()
+
+        dtype = image.dtype
         max_bin = 256 if np.issubdtype(dtype, np.integer) else 1.0001
         max_intencity = 255 if np.issubdtype(dtype, np.integer) else 1.
 
         bins = np.linspace(0, max_bin, colors_number+1)
-        color_indices = np.digitize(images[indices], bins) - 1
+        color_indices = np.digitize(image, bins) - 1
         colors = np.linspace(0, max_intencity, colors_number)
 
-        images[indices] = colors[color_indices]
-        return images
+        image = colors[color_indices]
+        return image
 
     def _cutout_(self, image, origin, shape, color):
         """ Fills given areas with color
@@ -922,8 +923,8 @@ class ImagesBatch(BaseImagesBatch):
 
         return np.stack(patches)
 
-    def _additive_noise_all(self, images, indices, noise, low=0, high=1.):
-        """ Add additive noise to images.
+    def _additive_noise_(self, image, noise, low=0, high=1.):
+        """ Add additive noise to an image.
 
         Parameters
         ----------
@@ -947,15 +948,11 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        images = images.copy()
-        noisy_images = images[indices]
-        images[indices] = self._threshold_(images[indices]+noise(size=noisy_images.shape),
-                                           low, high, dtype=images.dtype)
-        return images
+        return self._threshold_(image+noise(size=image.shape), low, high, dtype=image.dtype)
 
 
-    def _multiplicative_noise_all(self, images, indices, noise, low=0, high=1.):
-        """ Add multiplicativa noise to images.
+    def _multiplicative_noise_(self, image, noise, low=0, high=1.):
+        """ Add multiplicativa noise to an image.
 
         Parameters
         ----------
@@ -979,11 +976,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        images = images.copy()
-        noisy_images = images[indices]
-        images[indices] = self._threshold_(images[indices]*noise(size=noisy_images.shape),
-                                           low, high, dtype=images.dtype)
-        return images
+        return self._threshold_(image*noise(size=image.shape), low, high, dtype=image.dtype)
 
     def _elastic_transform_(self, image, alpha, sigma, **kwargs):
         """Elastic deformation of images as described in [Simard2003]_.
