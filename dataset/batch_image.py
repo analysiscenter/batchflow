@@ -822,7 +822,7 @@ class ImagesBatch(BaseImagesBatch):
             Shape of a filled box. Can be one of:
             - sequence - crop size in the form of (rows, columns)
             - int - shape has squared form
-        colors : sequence, number
+        color : sequence, number
             Color of a filled box. Can be one of:
             - sequence - (r,g,b) form
             - number - grayscale
