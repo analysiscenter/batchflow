@@ -174,6 +174,9 @@ Batch generator
 
 .. note:: `BATCH_SIZE` is a size of the batch taken from the dataset. Actions might change the size of the batch and thus the batch you will get from the pipeline might have a different size.
 
+.. note:: Pipeline execution might take a long time so showing a progress bar might be helpful. Just add `bar=True` to gen_batch parameters.
+
+
 next_batch function
 ^^^^^^^^^^^^^^^^^^^
 
@@ -192,7 +195,7 @@ Run
       .some_action()
       .other_action()
       .yet_another_action()
-      .run(BATCH_SIZE, n_epochs=2, drop_last=True)
+      .run(BATCH_SIZE, n_epochs=2, drop_last=True, bar=True)
    )
 
 Lazy run

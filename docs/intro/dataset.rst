@@ -87,6 +87,9 @@ Parameters
 
 `drop_last` - whether to skip the last batch if it has fewer items (for instance, if a dataset contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the 4th batch with just 1 item. The last batch will be skipped if `drop_last=True`). See :meth:`API for more details <dataset.DatasetIndex.next_batch>`.
 
+`bar` - whether to show a tqdm bar.
+
+
 Custom batch class
 ------------------
 You can also define a new :doc:`batch class <batch>` with custom action methods to process your specific data.
