@@ -142,8 +142,8 @@ class Distributor:
 
         worker_class : Worker subclass or None
         """
-        if isinstance(n_workers, int) and worker_class is None:
-            raise ValueError('If worker_class is None, n_workers must be list of Worker instances.')
+        # if isinstance(n_workers, int) and worker_class is None:
+        #     raise ValueError('If worker_class is None, n_workers must be list of Worker instances.')
         self.n_workers = n_workers
         self.worker_class = worker_class
 
@@ -197,10 +197,13 @@ class Distributor:
 
         if isinstance(self.n_workers, int):
             workers = [self.worker_class(worker_name=i, *args, **kwargs) for i in range(self.n_workers)]
-        else:
+        elif issubclass(type(self.n_workers[0]), Worker):
             for worker in self.n_workers:
                 worker.set_args_kwargs(args, kwargs)
             workers = self.n_workers
+            self.n_workers = len(self.n_workers)
+        else:
+            workers = [self.worker_class(worker_name=i, config=config, *args, **kwargs) for i, config in enumerate(self.n_workers)]
             self.n_workers = len(self.n_workers)
         try:
             self.log_info('Create tasks queue', filename=self.logfile)

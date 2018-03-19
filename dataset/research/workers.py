@@ -28,9 +28,9 @@ class PipelineWorker(Worker):
     def init(self):
         """ Run before task execution. """
         i, task = self.task
-        if isinstance(task['model_per_preproc'], list):
+        if isinstance(task['n_groups'], list):
             description = '\n'.join([str({**config.alias(), **_config})
-                                     for config, _config in zip(task['configs'], task['model_per_preproc'])])
+                                     for config, _config in zip(task['configs'], task['n_groups'])])
         else:
             description = '\n'.join([str(config.alias()) for config in task['configs']])
 
@@ -46,11 +46,15 @@ class PipelineWorker(Worker):
 
                 single_running.add_pipeline(pipeline_copy, pipeline['var'], config=pipeline['cfg'],
                                             name=name, execute_for=pipeline['execute_for'], **pipeline['kwargs'])
-            if isinstance(task['model_per_preproc'], list):
-                model_per_preproc = task['model_per_preproc'][idx]
+            if isinstance(task['n_groups'], list):
+                n_groups = task['n_groups'][idx]
             else:
-                model_per_preproc = Config()
-            single_running.add_common_config(config.config()+model_per_preproc)
+                n_groups = Config()
+
+            worker_config = self.kwargs.get('config', Config())
+            self.log_info(worker_config, filename=self.logfile)
+
+            single_running.add_common_config(config.config()+n_groups+worker_config)
             single_running.init()
             self.single_runnings.append(single_running)
 
@@ -58,31 +62,33 @@ class PipelineWorker(Worker):
         """ Run after task execution. """
         _, task = self.task
         self.log_info('Saving results...', filename=self.logfile)
-        for item, config in zip(self.single_runnings, task['configs']):
+        for item, config, repetition in zip(self.single_runnings, task['configs'], task['repetition']):
             item.save_results(os.path.join(task['name'], 'results',
-                                           config.alias(as_string=True), str(task['repetition']), 'final'))
+                                           config.alias(as_string=True), str(repetition), 'final'))
 
     def run_task(self):
         """ Task execution. """
         i, task = self.task
 
         for j in range(task['n_iters']):
+            self.log_info('iteration {}'.format(j), filename=self.logfile)
             try:
                 for name, pipeline in task['pipelines'].items():
+                    self.log_info([sr._variable_len(name, 'loss') for sr in self.single_runnings], filename=self.logfile)
                     if j in pipeline['execute_for']:
                         if pipeline['preproc'] is not None:
                             batch = pipeline['preproc'].next_batch()
                             self._parallel_run(self.single_runnings, batch, name)
                         else:
-                            for item, config in zip(self.single_runnings, task['configs']):
+                            for item, config, repetition in zip(self.single_runnings, task['configs'], task['repetition']):
                                 if pipeline['run']:
-                                    self.log_info('Run pipeleine {}'.format(name), filename=self.logfile)
+                                    self.log_info('Run pipeline {}'.format(name), filename=self.logfile)
                                     item.run(name)
                                     filename = os.path.join(
                                         task['name'],
                                         'results',
                                         config.alias(as_string=True),
-                                        str(task['repetition']),
+                                        str(repetition),
                                         name + '_' + str(j)
                                     )
                                     item.save_results(filename, names=name)
@@ -99,8 +105,8 @@ class SavingWorker(PipelineWorker):
         """ Run after task execution. """
         super().post()
         _, task = self.task
-        if task['repetition'] == 0:
-            for item, config in zip(self.single_runnings, task['configs']):
+        for item, config, repetition in zip(self.single_runnings, task['configs'], task['repetition']):
+            if repetition == 0:
                 filename = os.path.join(task['name'],
                                         'results',
                                         config.alias(as_string=True),

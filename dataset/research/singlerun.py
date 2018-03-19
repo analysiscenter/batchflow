@@ -59,6 +59,12 @@ class SingleRunning:
             'execute_for': execute_for
         }
 
+    def _variable_len(self, name, variable):
+        try:
+            return len(self.pipelines[name]['ppl'].get_variable(variable))
+        except:
+            return None
+
     def get_pipeline(self, name):
         """
         Parameters

@@ -85,27 +85,39 @@ class Research:
         self.grid_config = Grid(grid_config)
         return self
 
-    def _create_tasks(self, n_reps, n_iters, model_per_preproc, name):
-        if isinstance(model_per_preproc, int):
-            n_models = model_per_preproc
-        elif model_per_preproc is None:
+    def _create_tasks(self, n_reps, n_iters, n_groups, name):
+        if isinstance(n_groups, int):
+            n_models = n_groups
+        elif n_groups is None:
             n_models = 1
         else:
-            n_models = len(model_per_preproc)
+            n_models = len(n_groups)
+
+        configs_with_repetitions = [(idx, configs) 
+            for idx in range(n_reps)
+            for configs in self.grid_config.gen_configs()
+        ]
+
+        configs_chunks = self._chunks(configs_with_repetitions, n_models)
+
         self.tasks = (
             {'pipelines': self.pipelines,
              'n_iters': n_iters,
-             'configs': configs,
-             'repetition': idx,
-             'model_per_preproc': model_per_preproc,
+             'configs': list(zip(*chunk))[1],
+             'repetition': list(zip(*chunk))[0],
+             'n_groups': n_groups,
              'name': name
             }
-            for configs in self.grid_config.gen_configs(n_models)
-            for idx in range(n_reps)
+            for chunk in configs_chunks
         )
         self.tasks = Tasks(self.tasks)
 
-    def run(self, n_reps, n_iters, n_jobs=1, model_per_preproc=1, name=None, save_model=False):
+    def _chunks(self, array, size):
+        """ Divide array into chunks of the fixed size. """
+        for i in range(0, len(array), size):
+            yield array[i:i + size]
+
+    def run(self, n_reps, n_iters, n_workers=1, n_groups=1, name=None, save_model=False):
         """ Run research.
 
         Parameters
@@ -114,43 +126,43 @@ class Research:
             number of repetitions with each combination of parameters
         n_iters: int
             number of iterations for each configurations of each pipeline.
-        n_jobs : int (default 1) or list of Workers
+        n_workers : int (default 1) or list of Workers
             If int - number of workers to run pipelines or workers that will run them. By default,
             PipelineWorker will be used.
             If list - instances of Worker class.
-        model_per_preproc: int or list of dicts
+        n_groups: int or list of dicts
             If int - number of pipelines with different configs that will use the same prepared batch
-            from preproc. If model_per_preproc - list of dicts with additional configs to each pipeline.
+            from preproc. If n_groups - list of dicts with additional configs to each pipeline.
             For example, if there are 2 GPUs, we can define parameter 'device' in model config as C('device')
-            and define model_per_preproc as [{'device': 0}, {'device': 1}].
+            and define n_groups as [{'device': 0}, {'device': 1}].
         name : str or None
             name folder to save research. By default is 'research'.
         save_model : bool
             save or not the model 'model' at the first repetition from 'train' pipeline.
-            If n_jobs is not int there is no difference between True and False.
+            If n_workers is not int there is no difference between True and False.
 
         At each iteration all add pipelines will be runned with some config from grid.
         """
         self.n_reps = n_reps
         self.n_iters = n_iters
-        self.n_jobs = n_jobs
-        self.model_per_preproc = model_per_preproc
+        self.n_workers = n_workers
+        self.n_groups = n_groups
 
         self.name = self._does_exist(name)
 
         # dump information about research
         self.save()
 
-        self._create_tasks(n_reps, n_iters, model_per_preproc, self.name)
+        self._create_tasks(n_reps, n_iters, n_groups, self.name)
 
-        if isinstance(n_jobs, int):
+        if isinstance(n_workers, int) or isinstance(n_workers[0], (dict, Config)):
             if save_model:
                 worker = SavingWorker # worker that saves model at first repetition
             else:
                 worker = PipelineWorker
         else:
             worker = None
-        distr = Distributor(n_jobs, worker)
+        distr = Distributor(n_workers, worker)
         distr.run(self.tasks, dirname=self.name)
         return self
 
