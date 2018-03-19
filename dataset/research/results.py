@@ -45,14 +45,15 @@ class Stat:
             path_mask = os.path.join(self.name, 'results', alias, mask, 'final')
         else:
             path_mask = os.path.join(self.name, 'results', alias, mask, pipeline + '_' + str(iteration))
-        
+
         for name in glob.iglob(path_mask):
             with open(name, 'rb') as file:
                 self._put_result(results, dill.load(file))
 
         return self._list_to_array(results)
 
-    def load_final_stat(self, alias, pipelines, reps=None):
+    def load_final_stat(self, alias, reps=None):
+        """ Get final stat. """
         if reps is None:
             mask = '*'
         elif isinstance(reps, int):
@@ -60,6 +61,7 @@ class Stat:
         else:
             mask = '[' + ','.join([str(i) for i in reps]) + ']'
         path_mask = os.path.join(self.name, 'results', alias, mask, 'final')
+        return path_mask
 
     def _put_result(self, results, new_result):
         for name in new_result:

@@ -71,16 +71,18 @@ class PipelineWorker(Worker):
         i, task = self.task
 
         for j in range(task['n_iters']):
-            self.log_info('iteration {}'.format(j), filename=self.logfile)
             try:
                 for name, pipeline in task['pipelines'].items():
-                    self.log_info([sr._variable_len(name, 'loss') for sr in self.single_runnings], filename=self.logfile)
                     if j in pipeline['execute_for']:
                         if pipeline['preproc'] is not None:
                             batch = pipeline['preproc'].next_batch()
                             self._parallel_run(self.single_runnings, batch, name)
                         else:
-                            for item, config, repetition in zip(self.single_runnings, task['configs'], task['repetition']):
+                            for item, config, repetition in zip(
+                                self.single_runnings,
+                                task['configs'],
+                                task['repetition']
+                            ):
                                 if pipeline['run']:
                                     self.log_info('Run pipeline {}'.format(name), filename=self.logfile)
                                     item.run(name)

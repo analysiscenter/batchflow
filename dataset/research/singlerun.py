@@ -60,9 +60,9 @@ class SingleRunning:
         }
 
     def _variable_len(self, name, variable):
-        try:
+        if name in self.pipelines:
             return len(self.pipelines[name]['ppl'].get_variable(variable))
-        except:
+        else:
             return None
 
     def get_pipeline(self, name):

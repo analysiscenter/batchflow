@@ -93,10 +93,9 @@ class Research:
         else:
             n_models = len(n_groups)
 
-        configs_with_repetitions = [(idx, configs) 
-            for idx in range(n_reps)
-            for configs in self.grid_config.gen_configs()
-        ]
+        configs_with_repetitions = [(idx, configs)
+                                    for idx in range(n_reps)
+                                    for configs in self.grid_config.gen_configs()]
 
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 

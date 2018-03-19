@@ -203,7 +203,10 @@ class Distributor:
             workers = self.n_workers
             self.n_workers = len(self.n_workers)
         else:
-            workers = [self.worker_class(worker_name=i, config=config, *args, **kwargs) for i, config in enumerate(self.n_workers)]
+            workers = [
+                self.worker_class(worker_name=i, config=config, *args, **kwargs)
+                for i, config in enumerate(self.n_workers)
+            ]
             self.n_workers = len(self.n_workers)
         try:
             self.log_info('Create tasks queue', filename=self.logfile)
