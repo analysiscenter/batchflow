@@ -249,6 +249,8 @@ class DatasetIndex(Baseset):
             batch_items = np.concatenate((rest_items, new_items))
 
         if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs: # and rest_items is not None:
+            if 'bar' in iter_params:
+                iter_params['bar'].close()
             if drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             else:
@@ -283,9 +285,12 @@ class DatasetIndex(Baseset):
             iter_params['bar'] = tqdm.tqdm(total=total)
         while True:
             if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
-                raise StopIteration()
+                return
             else:
-                batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
+                try:
+                    batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
+                except StopIteration:
+                    return
                 if 'bar' in iter_params:
                     iter_params['bar'].update(1)
                 yield batch
