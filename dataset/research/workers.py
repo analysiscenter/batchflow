@@ -79,9 +79,9 @@ class PipelineWorker(Worker):
                             self._parallel_run(self.single_runnings, batch, name)
                         else:
                             for item, config, repetition in zip(
-                                self.single_runnings,
-                                task['configs'],
-                                task['repetition']
+                                    self.single_runnings,
+                                    task['configs'],
+                                    task['repetition']
                             ):
                                 if pipeline['run']:
                                     self.log_info('Run pipeline {}'.format(name), filename=self.logfile)
