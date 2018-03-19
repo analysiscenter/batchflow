@@ -87,6 +87,7 @@ class PipelineWorker(Worker):
                                     )
                                     item.save_results(filename, names=name)
                                 else:
+                                    self.log_info('Task {}, pipeline {}: {}'.format(i, name, j), filename=self.logfile)
                                     item.next_batch(name)
             except StopIteration:
                 self.log_info('Task {} was stopped after {} iterations'.format(i, j+1), filename=self.logfile)
