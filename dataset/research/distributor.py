@@ -9,6 +9,7 @@
 import os
 import logging
 import multiprocess as mp
+from tqdm import tqdm
 
 class Tasks:
     """ Tasks to workers. """
@@ -78,7 +79,7 @@ class Worker:
         pass
 
 
-    def __call__(self, queue):
+    def __call__(self, queue, results):
         """ Run worker.
 
         Parameters
@@ -104,8 +105,10 @@ class Worker:
                 except Exception as exception:
                     self.log_error(exception, filename=self.errorfile)
                 queue.task_done()
+                results.put('done')
                 item = queue.get()
         queue.task_done()
+        results.put('done')
 
     def _run(self, queue):
         try:
@@ -155,6 +158,15 @@ class Distributor:
             queue.put(None)
         return queue
 
+    def _put_tasks(self, queue, tasks, size):
+        created_chunks = 0
+        for idx, task in enumerate(tasks):
+            if idx < (created_chunks + 1) * size:
+                queue.put((idx, task))
+            else:
+                created_chunks += 1
+                yield queue
+
     @classmethod
     def log_info(cls, message, filename):
         """ Write message into log. """
@@ -168,7 +180,7 @@ class Distributor:
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.error(obj, exc_info=True)
 
-    def run(self, tasks, dirname, logfile=None, errorfile=None, *args, **kwargs):
+    def run(self, tasks, dirname, n_tasks, logfile=None, errorfile=None, *args, **kwargs):
         """ Run disributor and workers.
 
         Parameters
@@ -211,6 +223,7 @@ class Distributor:
         try:
             self.log_info('Create tasks queue', filename=self.logfile)
             queue = self._tasks_to_queue(tasks)
+            results = mp.JoinableQueue()
         except Exception as exception:
             logging.error(exception, exc_info=True)
         else:
@@ -220,10 +233,12 @@ class Distributor:
                 worker.log_error = self.log_error
 
                 try:
-                    mp.Process(target=worker, args=(queue, )).start()
+                    mp.Process(target=worker, args=(queue, results)).start()
                 except Exception as exception:
                     logging.error(exception, exc_info=True)
-            queue.join()
+            for i in tqdm(range(n_tasks)):
+                results.get()
+            # queue.join()
         self.log_info('All workers have finished the work.', filename=self.logfile)
         logging.shutdown()
     

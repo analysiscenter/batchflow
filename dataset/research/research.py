@@ -9,6 +9,7 @@
 import os
 from copy import copy
 from collections import OrderedDict
+from math import ceil
 import json
 import dill
 
@@ -109,6 +110,7 @@ class Research:
             }
             for chunk in configs_chunks
         )
+        self.n_tasks = ceil(len(configs_with_repetitions) / n_models)
         self.tasks = Tasks(self.tasks)
 
     def _chunks(self, array, size):
@@ -162,7 +164,7 @@ class Research:
         else:
             worker = None
         distr = Distributor(n_workers, worker)
-        distr.run(self.tasks, dirname=self.name)
+        distr.run(self.tasks, dirname=self.name, n_tasks=self.n_tasks)
         return self
 
     def _does_exist(self, name):
