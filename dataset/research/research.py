@@ -142,7 +142,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps, n_iters, n_workers=1, n_groups=1, name=None, bar=False, save_model=False):
+    def run(self, n_reps, n_iters, n_workers=1, n_groups=1, name=None, progress_bar=False, save_model=False):
         """ Run research.
 
         Parameters
@@ -169,7 +169,7 @@ class Research:
             and define n_groups as [{'device': 0}, {'device': 1}].
         name : str or None
             name folder to save research. By default is 'research'.
-        bar : bool (default False)
+        progress_bar : bool (default False)
             add tqdm progress bar
         save_model : bool
             save or not the model with name 'model' at the first repetition from 'train' pipeline.
@@ -197,7 +197,7 @@ class Research:
         else:
             worker = None
         distr = Distributor(n_workers, worker)
-        distr.run(self.tasks, dirname=self.name, n_tasks=self.n_tasks)
+        distr.run(self.tasks, dirname=self.name, n_tasks=self.n_tasks, progress_bar=progress_bar)
         return self
 
     def _does_exist(self, name):

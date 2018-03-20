@@ -180,7 +180,7 @@ class Distributor:
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.error(obj, exc_info=True)
 
-    def run(self, tasks, dirname, n_tasks, logfile=None, errorfile=None, *args, **kwargs):
+    def run(self, tasks, dirname, n_tasks, logfile=None, errorfile=None, progress_bar=False, *args, **kwargs):
         """ Run disributor and workers.
 
         Parameters
@@ -193,6 +193,8 @@ class Distributor:
 
         errorfile : str (default: 'errors.log')
 
+        progress_bar : bool
+
         args, kwargs
             will be used in worker
         """
@@ -201,6 +203,8 @@ class Distributor:
 
         self.logfile = os.path.join(dirname, self.logfile)
         self.errorfile = os.path.join(dirname, self.errorfile)
+
+        tqdm = tqdm if progress_bar else lambda x: x
 
         kwargs['logfile'] = self.logfile
         kwargs['errorfile'] = self.errorfile
