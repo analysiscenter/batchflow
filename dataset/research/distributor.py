@@ -204,7 +204,7 @@ class Distributor:
         self.logfile = os.path.join(dirname, self.logfile)
         self.errorfile = os.path.join(dirname, self.errorfile)
 
-        tqdm = tqdm if progress_bar else lambda x: x
+        _tqdm = tqdm if progress_bar else lambda x: x
 
         kwargs['logfile'] = self.logfile
         kwargs['errorfile'] = self.errorfile
@@ -240,7 +240,7 @@ class Distributor:
                     mp.Process(target=worker, args=(queue, results)).start()
                 except Exception as exception:
                     logging.error(exception, exc_info=True)
-            for _ in tqdm(range(n_tasks)):
+            for _ in _tqdm(range(n_tasks)):
                 results.get()
             # queue.join()
         self.log_info('All workers have finished the work.', filename=self.logfile)
