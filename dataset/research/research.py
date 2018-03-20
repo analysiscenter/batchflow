@@ -30,14 +30,14 @@ class Research:
         Parameters
         ----------
         pipeline : dataset.Pipeline
-            if preproc is None, pipeline must have run action with lazy=True. All parameters that are
+            if preproc is None, pipeline must have run action with lazy=True and n_epochs=None. All parameters that are
             defined in grid should be defined as C('parameter_name'). Corresponding parameter in grid
-            must have the same 'parameter_name'
+            must have the same 'parameter_name'.
         variables : str or list of str
-            names of pipeline variables to remember at each repetition. All of them must be defined in pipeline,
+            names of pipeline variables to save after each repetition. All of them must be defined in pipeline,
             not in preproc.
         preproc : dataset.Pipeline or None
-            if preproc is not None it must have run action with lazy=True. For resulting batch
+            if preproc is not None it must have run action with lazy=True and n_epochs=None. For resulting batch
             pipeline.execute_for(batch) will be called.
         config : Config or dict (default None)
             pipeline config with parameters that doesn't change between experiments.
@@ -48,6 +48,8 @@ class Research:
             If positive int, pipeline will be excuted for iterations with that step
             If list of ints, pipeline will be excuted for that iterations
             If None, pipeline will executed at each iteration.
+        run : bool (default False)
+            if False then .next_batch() will be applied to pipeline, else .run().
         kwargs :
             parameters in pipeline config that depends on the names of the other pipeline. For example,
             if test pipeline imports model from the other pipeline with name 'train' in Researcn,
@@ -87,6 +89,20 @@ class Research:
         return self
 
     def _create_tasks(self, n_reps, n_iters, n_groups, name):
+        """ Create Tasks instance with tasks to run. Each task is one repetition for each config
+        from grid_config.
+
+        Parameters
+        ----------
+        n_reps : int
+
+        n_iters : int
+
+        n_groups : int
+
+        name : str
+            name of research.
+        """
         if isinstance(n_groups, int):
             n_models = n_groups
         elif n_groups is None:
@@ -114,7 +130,15 @@ class Research:
         self.tasks = Tasks(self.tasks)
 
     def _chunks(self, array, size):
-        """ Divide array into chunks of the fixed size. """
+        """ Divide array into chunks of the fixed size. 
+        
+        Parameters
+        ----------
+        array : list or np.ndarray
+
+        size : int
+            chunk size.
+        """
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
@@ -124,22 +148,29 @@ class Research:
         Parameters
         ----------
         n_reps : int
-            number of repetitions with each combination of parameters
+            number of repetitions with each combination of parameters from grid_config.
         n_iters: int
             number of iterations for each configurations of each pipeline.
-        n_workers : int (default 1) or list of Workers
+        n_workers : int (default 1), list of instances of Worker or list of dicts (Configs).
+            Workers (processes) to run tasks in parallel.
             If int - number of workers to run pipelines or workers that will run them. By default,
-            PipelineWorker will be used.
-            If list - instances of Worker class.
-        n_groups: int or list of dicts
+                PipelineWorker will be used.
+            If list of instances of Worker - workers to run tasks.
+            If list of dicts (Configs) - list of additional configs which will be appended to configs from tasks.
+                Each element corresponds to worker. 
+        n_groups: int or list of dicts (Configs)
+            Is using if preproc is not None. Number of different configs which will use the same batch from preproc pipeline.
+            Pipelines will be executed in different threads.
             If int - number of pipelines with different configs that will use the same prepared batch
-            from preproc. If n_groups - list of dicts with additional configs to each pipeline.
+                from preproc. 
+            If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
+            
             For example, if there are 2 GPUs, we can define parameter 'device' in model config as C('device')
             and define n_groups as [{'device': 0}, {'device': 1}].
         name : str or None
             name folder to save research. By default is 'research'.
         save_model : bool
-            save or not the model 'model' at the first repetition from 'train' pipeline.
+            save or not the model with name 'model' at the first repetition from 'train' pipeline. 
             If n_workers is not int there is no difference between True and False.
 
         At each iteration all add pipelines will be runned with some config from grid.
