@@ -14,6 +14,7 @@ Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 import numpy as np
 import tensorflow as tf
 
+from ... import is_best_practice
 from . import TFModel
 from .layers import conv_block
 
@@ -246,7 +247,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def simple_block(cls, inputs, layout='acn acn', filters=None, kernel_size=3, downsample=False, **kwargs):
+    def simple_block(cls, inputs, layout=None, filters=None, kernel_size=3, downsample=False, **kwargs):
         """ A simple residual block with two 3x3 convolutions
 
         Parameters
@@ -268,12 +269,14 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
+        if layout is None:
+            layout = 'cna cna' if is_best_practice() else 'acn acn'
         n = layout.count('c') + layout.count('C') - 1
         strides = ([2] + [1] * n) if downsample else 1
         return conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
 
     @classmethod
-    def bottleneck_block(cls, inputs, layout='acn acn acn', filters=None, kernel_size=None, bottleneck_factor=4,
+    def bottleneck_block(cls, inputs, layout=None, filters=None, kernel_size=None, bottleneck_factor=4,
                          downsample=False, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
@@ -297,6 +300,8 @@ class ResNet(TFModel):
         tf.Tensor
         """
         kernel_size = [1, 3, 1] if kernel_size is None else kernel_size
+        if layout is None:
+            layout = 'cna cna cna' if is_best_practice() else 'acn acn acn'
         n = layout.count('c') + layout.count('C') - 2
         if kwargs.get('strides') is None:
             strides = ([1, 2] + [1] * n) if downsample else 1
@@ -425,7 +430,7 @@ class ResNet152(ResNet):
         config = ResNet.default_config()
 
         filters = 64   # number of filters in the first block
-        config['body']['num_blocks'] = [3, 8, 63, 3]
+        config['body']['num_blocks'] = [3, 8, 36, 3]
         config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = True
         return config

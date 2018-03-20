@@ -11,6 +11,7 @@ import contextlib
 import numpy as np
 import tensorflow as tf
 
+from ... import is_best_practice
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
 from .losses import dice
@@ -1138,12 +1139,17 @@ class TFModel(BaseModel):
         """
         config = {}
         config['inputs'] = {}
-        config['common'] = {'batch_norm': {'momentum': .1}}
+        config['common'] = {}
         config['input_block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}
-        config['optimizer'] = 'Adam'
+        config['optimizer'] = {'name': 'Adam'}
+
+        if is_best_practice():
+            config['common'] = {'batch_norm': {'momentum': .1}}
+            config['optimizer'].update({'use_locking': True})
+
         return config
 
     @classmethod
