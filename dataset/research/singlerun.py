@@ -101,7 +101,7 @@ class SingleRunning:
         Add common config to all pipelines.
         """
         for _, pipeline in self.pipelines.items():
-            pipeline['ppl'].set_config(pipeline['import_config'])
+            pipeline['ppl'].config += self.config + pipeline['import_config']
 
     def run_on_batch(self, batch, name):
         """
