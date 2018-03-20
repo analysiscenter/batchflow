@@ -6,6 +6,11 @@ import concurrent.futures as cf
 import asyncio
 import functools
 import logging
+import inspect
+try:
+    from numba import jit
+except ImportError:
+    jit = None
 
 from .named_expr import P
 
@@ -104,6 +109,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
                     init_fn = init
                 else:
                     init_fn = lambda *a, **k: init
+
             if post is not None:
                 if isinstance(init, str):
                     try:
@@ -198,7 +204,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
             if len(kwargs) > 0:
                 mkwargs.update(_kwargs)
 
-            if _use_self and self:
+            if _use_self and self is not None:
                 margs = [self] + margs
 
             return margs, mkwargs
@@ -288,6 +294,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method with a required parallel engine """
             if not _use_self:
+                # when use_self=False, the first arg is not self, but an ordinary arg
                 args = (self,) + args
                 self = None
             if 'target' in kwargs:
@@ -308,7 +315,10 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
     return inbatch_parallel_decorator
 
 
-parallel = functools.partial(inbatch_parallel, _use_self=False)  # pylint:disable=invalid-name
+
+def parallel(*args, _use_self=False, **kwargs):
+    """ Decorator for a parallel execution of a function """
+    return inbatch_parallel(*args, _use_self=_use_self, **kwargs)
 
 
 def njit(nogil=True):
@@ -324,3 +334,32 @@ def njit(nogil=True):
             return method(*args, **kwargs)
         return wrapped_method
     return njit_fake_decorator
+
+
+def mjit(*args, nopython=True, nogil=True, **kwargs):
+    """ jit decorator for methods """
+    def _jit(method):
+        source = inspect.getsource(method).split('\n')
+        indent = len(source[0]) - len(source[0].lstrip())
+        source = [s[indent:] for s in source if len(s) >= indent and s[indent] != '@']
+        source = '\n'.join(source)
+        globs = method.__globals__.copy()
+        exec(source, globs)  # pylint: disable=exec-used
+        if jit is not None:
+            func = jit(*args, nopython=nopython, nogil=nogil, **kwargs)(globs[method.__name__])
+        else:
+            func = method
+            logging.warning('numba is not installed. This causes a severe performance degradation for method %s',
+                            method.__name__)
+
+        @functools.wraps(method)
+        def _wrapped_method(self, *args, **kwargs):
+            res = func(None, *args, **kwargs) or self
+            return res
+        return _wrapped_method
+
+    if len(args) == 1 and (callable(args[0])) and len(kwargs) == 0:
+        method = args[0]
+        args = tuple()
+        return _jit(method)
+    return _jit

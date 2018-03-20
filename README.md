@@ -1,3 +1,6 @@
+[![License](https://img.shields.io/github/license/analysiscenter/dataset.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Python](https://img.shields.io/badge/python-3.5,%203.6-blue.svg)](https://python.org)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-1.4-orange.svg)](https://tensorflow.org)
 [![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/dataset)
 
 # Dataset
@@ -68,6 +71,15 @@ my_workflow = my_dataset.pipeline()
 ```
 
 For more advanced cases and detailed API see [the documentation](https://analysiscenter.github.io/dataset/).
+
+
+## Best practice magic
+To improve model quality and accelerate training import `best_practice` module:
+```python
+from dataset import best_practice
+```
+This will change some models defaults (for instance, batch norm momentum, ResNet block layouts, etc) we find more useful and
+consistently bringing better results (faster training and more accurate predictions).
 
 
 ## Installation

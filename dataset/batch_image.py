@@ -1,525 +1,1023 @@
 """ Contains Batch classes for images """
+import os
+from numbers import Number
+from functools import wraps
 
-import os   # pylint: disable=unused-import
-import traceback
-
-try:
-    import blosc   # pylint: disable=unused-import
-except ImportError:
-    pass
 import numpy as np
+from skimage.transform import resize
 try:
-    import PIL.Image
+    from imageio import imread, imsave
 except ImportError:
-    pass
-try:
-    import scipy.ndimage
-except ImportError:
-    pass
-try:
-    from numba import njit
-except ImportError:
-    from .decorators import njit
+    from scipy.ndimage import imread
+    from scipy.misc import imsave
+
+import scipy.ndimage
 
 from .batch import Batch
-from .decorators import action, inbatch_parallel, any_action_failed
+from .decorators import action, inbatch_parallel
+from .dsindex import FilesIndex
 
 
-CROP_CENTER = -1
-CROP_00 = -2
+def get_scipy_transforms():
+    """ Returns ``dict`` {'function_name' : function} of functions from scipy.ndimage.
+
+    Function is included if it has 'input : ndarray' or 'input : array_like' in its docstring.
+    """
+
+    scipy_transformations = {}
+    hooks = ['input : ndarray', 'input : array_like']
+    for function_name in scipy.ndimage.__dict__['__all__']:
+        function = getattr(scipy.ndimage, function_name)
+        doc = getattr(function, '__doc__')
+        if doc is not None and (hooks[0] in doc or hooks[1] in doc):
+            scipy_transformations[function_name] = function
+    return scipy_transformations
 
 
-@njit(nogil=True)
-def random_crop_numba(images, shape):
-    """ Fill-in new_images with random crops from images """
-    new_images = np.zeros((images.shape[0],) + shape, dtype=images.dtype)
-    if images.shape[2] - shape[0] > 0:
-        origin_x = np.random.randint(0, images.shape[2] - shape[0], size=images.shape[0])
-    else:
-        origin_x = np.zeros(images.shape[0], dtype=np.array(images.shape).dtype)
-    if images.shape[1] - shape[1] > 0:
-        origin_y = np.random.randint(0, images.shape[1] - shape[1], size=images.shape[0])
-    else:
-        origin_y = np.zeros(images.shape[0], dtype=np.array(images.shape).dtype)
-    for i in range(images.shape[0]):
-        x = slice(origin_x[i], origin_x[i] + shape[0])
-        y = slice(origin_y[i], origin_y[i] + shape[1])
-        new_images[i, :, :] = images[i, y, x]
-    return new_images
+def transform_actions(prefix='', suffix='', wrapper=None):
+    """ Transforms classmethods that have names like <prefix><name><suffix> to pipeline's actions executed in parallel.
 
-@njit(nogil=True)
-def calc_origin(image_coord, shape_coord, crop):
-    """ Return origin for preserve_shape """
-    if crop == CROP_00:
-        origin = 0
-    elif crop == CROP_CENTER:
-        origin = np.abs(shape_coord - image_coord) // 2
-    return origin
+    First, it finds all *class methods* which names have the form <prefix><method_name><suffix>
+    (ignores those that start and end with '__').
 
-@njit(nogil=True)
-def calc_coords(image_coord, shape_coord, crop):
-    """ Return coords for preserve_shape """
-    if image_coord < shape_coord:
-        new_image_origin = calc_origin(image_coord, shape_coord, crop)
-        image_origin = 0
-        image_len = image_coord
-    else:
-        new_image_origin = 0
-        image_origin = calc_origin(image_coord, shape_coord, crop)
-        image_len = shape_coord
-    return image_origin, new_image_origin, image_len
+    Then, all found classmethods are decorated through ``wrapper`` and resulting
+    methods are added to the class with the names of the form <method_name>.
 
-@njit(nogil=True)
-def preserve_shape_numba(image_shape, shape, crop=CROP_CENTER):
-    """ Change the image shape by cropping and adding empty pixels to fit the given shape """
-    x, new_x, len_x = calc_coords(image_shape[0], shape[0], crop)
-    y, new_y, len_y = calc_coords(image_shape[1], shape[1], crop)
-    new_x = new_x, new_x + len_x
-    x = x, x + len_x
-    new_y = new_y, new_y + len_y
-    y = y, y + len_y
+    Parameters
+    ----------
+    prefix : str
+    suffix : str
+    wrapper : str
+        name of the wrapper inside ``Batch`` class
 
-    return new_x, new_y, x, y
+    Examples
+    --------
+    >>> from dataset import ImagesBatch
+    >>> @transform_actions(prefix='_', suffix='_')
+    ... class MyImagesBatch(ImagesBatch):
+    ...     @classmethod
+    ...     def _flip_(cls, image):
+    ...             return image[:,::-1]
 
+    Note that if you only want to redefine actions you still have to decorate your class.
+
+    >>> from dataset.opensets import CIFAR10
+    >>> dataset = CIFAR10(batch_class=MyImagesBatch, path='.')
+
+    Now dataset.pipeline has flip action that operates as described above.
+    If you want to apply an action with some probability, then specify ``p`` parameter:
+
+    >>> from dataset import Pipeline
+    >>> pipeline = (Pipeline()
+    ...                 ...preprocessing...
+    ...                 .flip(p=0.7)
+    ...                 ...postprocessing...
+
+    Now each image will be flipped with probability 0.7.
+    """
+    def _decorator(cls):
+        for method_name, method in cls.__dict__.copy().items():
+            if method_name.startswith(prefix) and method_name.endswith(suffix) and\
+               not method_name.startswith('__') and not method_name.endswith('__'):
+                def _wrapper():
+                    #pylint: disable=cell-var-from-loop
+                    wrapped_method = method
+                    @wraps(wrapped_method)
+                    def _func(self, *args, src='images', dst='images', **kwargs):
+                        return getattr(cls, wrapper)(self, wrapped_method, src=src, dst=dst,
+                                                     use_self=True, *args, **kwargs)
+                    return _func
+                name_slice = slice(len(prefix), -len(suffix))
+                wrapped_method_name = method_name[name_slice]
+                setattr(cls, wrapped_method_name, action(_wrapper()))
+        return cls
+    return _decorator
+
+
+def add_methods(transformations=None, prefix='_', suffix='_'):
+    """ Bounds given functions to a decorated class
+
+    All bounded methods' names will be extended with ``prefix`` and ``suffix``.
+    For example, if ``transformations``={'method_name': method}, ``suffix``='_all' and ``prefix``='_'
+    then a decorated class will have '_method_name_all' method.
+
+    Parameters
+    ----------
+    transformations : dict
+        dict of the form {'method_name' : function_to_bound} -- functions to bound to a class
+    prefix : str
+    suffix : str
+    """
+
+    def _decorator(cls):
+        for func_name, func in transformations.items():
+            def _method_decorator():
+                #pylint: disable=cell-var-from-loop
+                added_func = func
+                @wraps(added_func)
+                def _method(self, *args, **kwargs):
+                    _ = self
+                    return added_func(*args, **kwargs)
+                return _method
+            method_name = ''.join((prefix, func_name, suffix))
+            added_method = _method_decorator()
+            setattr(cls, method_name, added_method)
+        return cls
+    return _decorator
 
 
 class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels"
+    formats_lower = ['jpg', 'png', 'jpeg']
+    formats = set(formats_lower + [x.upper() for x in formats_lower])
+
+    def _make_path(self, ix, src=None):
+        """ Compose path.
+
+        Parameters
+        ----------
+        ix : str
+            element's index (filename)
+        src : str
+            Path to folder with images. Used if `self.index` is not `FilesIndex`.
+
+        Returns
+        -------
+        path : str
+            Full path to an element.
+        """
+
+        if isinstance(self.index, FilesIndex):
+            path = self.index.get_fullpath(ix)
+        else:
+            path = os.path.join(src, str(ix))
+        return path
+
+    def _load_image(self, ix, src=None, fmt=None, dst="images"):
+        """ Loads image.
+
+        .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
+
+        Parameters
+        ----------
+        src : str, None
+            path to the folder with an image. If src is None then it is determined from the index.
+        dst : str
+            Component to write images to.
+        fmt : str
+            Format of the an image
+
+        Raises
+        ------
+        NotImplementedError
+            If this method is not defined in a child class
+        """
+
+        _ = self, ix, src, dst, fmt
+        raise NotImplementedError("Must be implemented in a child class")
+
+    @action
+    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
+        """ Load data.
+
+        .. note:: if `fmt='images'` than ``components`` must be a single component (str).
+        .. note:: All parameters must be named only.
+
+        Parameters
+        ----------
+        src : str, None
+            Path to the folder with data. If src is None then path is determined from the index.
+        fmt : {'image', 'blosc', 'csv', 'hdf5', 'feather'}
+            Format of the file to download.
+        components : str, sequence
+            components to download.
+        """
+
+        if fmt == 'image':
+            return self._load_image(src, fmt=fmt, dst=components)
+        return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
+
+    def _dump_image(self, ix, src='images', dst=None, fmt=None):
+        """ Saves image to dst.
+
+        .. note:: Please note that ``src`` must be ``str`` only, sequence is not allowed here.
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from.
+        dst : str
+            Folder where to dump. If dst is None then it is determined from index.
+
+        Raises
+        ------
+        NotImplementedError
+            If this method is not defined in a child class
+        """
+
+        _ = self, ix, src, dst, fmt
+        raise NotImplementedError("Must be implemented in a child class")
+
+    @action
+    def dump(self, *args, dst=None, fmt=None, components="images", **kwargs):
+        """ Dump data.
+
+        .. note:: If `fmt='images'` than ``dst`` must be a single component (str).
+
+        .. note:: All parameters must be named only.
+
+        Parameters
+        ----------
+        dst : str, None
+            Path to the folder where to dump. If dst is None then path is determined from the index.
+        fmt : {'image', 'blosc', 'csv', 'hdf5', 'feather'}
+            Format of the file to save.
+        components : str, sequence
+            Components to save.
+        ext: str
+            Format to save images to.
+
+        Returns
+        -------
+        self
+        """
+
+
+
+        if fmt == 'image':
+            return self._dump_image(components, dst, fmt=kwargs.pop('ext'))
+        return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
+
+
+@transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
+@transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
+@add_methods(transformations={**get_scipy_transforms(),
+                              'pad': np.pad,
+                              'resize': resize}, prefix='_', suffix='_')
+class ImagesBatch(BaseImagesBatch):
+    """ Batch class for 2D images.
+
+    Images are stored as numpy arrays (N, H, W, C).
+    """
+
+    @classmethod
+    def _get_image_shape(cls, image):
+        return image.shape[:2]
 
     @property
     def image_shape(self):
-        """: tuple - shape of the images """
+        """: tuple - shape of the image"""
+        if isinstance(self.images.dtype, object):
+            _, shapes_count = np.unique([image.shape for image in self.images], return_counts=True, axis=0)
+            if len(shapes_count) == 1:
+                return self.images.shape[1:]
+            else:
+                raise RuntimeError('Images have different shapes')
         return self.images.shape[1:]
 
-    def assemble(self, all_res, *args, **kwargs):
-        """ Assemble the batch after a parallel action """
-        _ = all_res, args, kwargs
-        raise NotImplementedError("Use ImagesBatch")
+    @inbatch_parallel(init='indices', post='_assemble')
+    def _load_image(self, ix, src=None, fmt=None, dst="images"):
+        """ Loads image
 
-    def _assemble_load(self, all_res, *args, **kwargs):
-        """ Build the batch data after loading data from files """
-        _ = all_res, args, kwargs
-        return self
-
-    @action
-    def load(self, src, fmt=None, components=None, *args, **kwargs):
-        """ Load data """
-        return super().load(src, fmt, components, *args, **kwargs)
-
-    @action
-    def dump(self, dst, fmt=None, components=None, *args, **kwargs):
-        """ Save data to a file or a memory object """
-        return super().dump(dst, fmt, components=None, *args, **kwargs)
-
-    @action
-    def noop(self):
-        """ Do nothing """
-        return self
-
-    def get_image_size(self, image):
-        """ Return an image size (width, height) """
-        raise NotImplementedError("Should be implemented in child classes")
-
-    @action
-    def crop(self, components='images', origin=None, shape=None):
-        """ Crop all images in the batch
+        .. note:: Please note that ``dst`` must be ``str`` only, sequence is not allowed here.
 
         Parameters
         ----------
-        components : str
-            a component name or names which data should be cropped
+        src : str, None
+            Path to the folder with an image. If src is None then it is determined from the index.
+        dst : str
+            Component to write images to.
+        fmt : str
+            Format of an image.
 
-        origin : tuple
-            can be one of:
-
-            - tuple - a starting point in the form of (x, y)
-            - CROP_00 - to crop from left top edge (0,0)
-            - CROP_CENTER - to crop from center of each image
-
-        shape : tuple
-            a crop size in the form of (width, height)
+        Returns
+        -------
+        self
         """
-        if origin is not None or shape is not None:
-            origin = origin if origin is not None else (0, 0)
-            self._crop(components, origin, shape)
-        return self
 
-    @action
-    def random_crop(self, components='images', shape=None):
-        """ Crop all images to a given shape and a random origin
+        return (imread(self._make_path(ix, src)),)
+
+    @inbatch_parallel(init='indices')
+    def _dump_image(self, ix, src='images', dst=None, fmt=None):
+        """ Saves image to dst.
+
+        .. note:: Please note that ``src`` must be ``str`` only, sequence is not allowed here.
 
         Parameters
         ----------
-        components : str
-            a component name or names which data should be cropped
+        src : str
+            Component to get images from.
+        dst : str
+            Folder where to dump.
+        fmt : str
+            Format of saved image.
 
-        shape : tuple
-            a crop size in the form of (width, height)
-
-        Origin will be chosen at random to fit the required shape
+        Returns
+        -------
+        self
         """
-        if shape is None:
-            raise ValueError("shape cannot be None")
-        else:
-            self._random_crop(components, shape)
-        return self
 
-    @action
-    @inbatch_parallel(init='indices', post='assemble')
-    def resize(self, ix, components='images', shape=(64, 64)):
-        """ Resize all images in the batch to the given shape
+        if dst is None:
+            raise RuntimeError('You must specify `dst`')
+        image = self.get(ix, src)
+        ix = str(ix) + '.' + fmt if fmt is not None else str(ix)
+        imsave(os.path.join(dst, ix), image)
+
+
+    def _assemble_component(self, result, *args, component='images', **kwargs):
+        """ Assemble one component after parallel execution.
 
         Parameters
         ----------
-        components : str
-            a component name or names which data should be resized
-
-        shape : tuple
-            a crop size in the form of (width, height)
-        """
-        return self._resize_one(ix, components, shape)
-
-    @action
-    @inbatch_parallel(init='indices', post='assemble')
-    def random_scale(self, ix, components='images', p=1., factor=None, preserve_shape=True, crop=CROP_CENTER):
-        """ Scale the content of each image in the batch with a random scale factor
-
-        Parameters
-        -----------
-        components : str
-            a component name or names which data should be scaled
-
-        p : float
-            a probability to apply scale
-            (0. - don't scale, .5 - scale half of images, 1 - scale all images)
-
-        factor : tuple
-            min and max scale;
-            the scale factor for each image will be sampled from the uniform distribution
-        """
-        if factor is None:
-            factor = 0.9, 1.1
-        image = self.get(ix, components)
-        if np.random.binomial(1, p) > 0:
-            _factor = np.random.uniform(*factor)
-            image_size = self.get_image_size(image)
-            shape = np.round(np.array(image_size) * _factor).astype(np.int16)
-            new_image = self._resize_one(ix, components, shape)
-            if preserve_shape:
-                new_image = self._preserve_shape(new_image, image_size, crop)
-        else:
-            new_image = image
-        return new_image
-
-    def _preserve_shape(self, image, shape, crop=CROP_CENTER):
-        """ Change the image shape by cropping and adding empty pixels to fit the given shape """
-        raise NotImplementedError()
-
-    @action
-    @inbatch_parallel(init='indices', post='assemble')
-    def rotate(self, ix, components='images', angle=0, preserve_shape=True, **kwargs):
-        """ Rotate all images in the batch at the given angle
-
-        Parameters
-        -----------
-        components : str
-            a component name or names which data should be rotated
-
-        angle : float
-            the rotation angle in degrees.
+        result : sequence, array_like
+            Results after inbatch_parallel.
+        component : str
+            component to assemble
         preserve_shape : bool
-            whether to keep shape after rotating
-            (always True for images as arrays, can be False for PIL.Images)
+            If True then all images are cropped from the top left corner to have similar shapes.
+            Shape is chosen to be minimal among given images.
         """
-        return self._rotate_one(ix, components, angle, preserve_shape, **kwargs)
 
-    @action
-    @inbatch_parallel(init='indices', post='assemble')
-    def random_rotate(self, ix, components='images', p=1., angle=None, **kwargs):
-        """ Rotate each image in the batch at a random angle
-
-        Parameters
-        -----------
-        components : str
-            a component name or names which data should be rotated
-
-        p : float
-            a probability to apply rotate
-            (0. - don't rotate, .5 - rotate half of images, 1 - rotate all images)
-
-        angle : tuple
-            an angle range in the form of (min_angle, max_angle), in degrees
-        """
-        if np.random.binomial(1, p) > 0:
-            angle = angle or (-45., 45.)
-            _angle = np.random.uniform(*angle)
-            preserve_shape = kwargs.pop('preserve_shape', True)
-            return self._rotate_one(ix, components, _angle, preserve_shape=preserve_shape, **kwargs)
-        image = self.get(ix, components)
-        return image
-
-    @action
-    def flip(self, axis=None):
-        """ Flip images
-
-        Parameters
-        ----------
-        axis : {'h', 'v'}
-            'h' for horizontal (left/right) flip
-            'v' for vertical (up/down) flip
-        direction : {'l', 'r', 'u', 'd'}
-        """
-        if axis == 'h':
-            return self.fliplr()
-        elif axis == 'v':
-            return self.flipud()
-        else:
-            raise ValueError("Parameter axis can be 'h' or 'v' only")
-
-
-class ImagesBatch(BaseImagesBatch):
-    """ Batch class for 2D images
-
-    images are stored as numpy arrays (N, H, W) or (N, H, W, C)
-
-    """
-    def get_image_size(self, image):
-        """ Return image size (width, height) """
-        return image.shape[:2][::-1]
-
-    def assemble_component(self, all_res, components='images'):
-        """ Assemble one component """
         try:
-            new_images = np.stack(all_res)
+            new_images = np.stack(result)
         except ValueError as e:
             message = str(e)
             if "must have the same shape" in message:
-                min_shape = np.array([x.shape for x in all_res]).min(axis=0)
-                all_res = [arr[:min_shape[0], :min_shape[1]].copy() for arr in all_res]
-                new_images = np.stack(all_res)
-        setattr(self, components, new_images)
-
-    def assemble(self, all_res, *args, **kwargs):
-        """ Assemble the batch after a parallel action """
-        _ = args, kwargs
-        if any_action_failed(all_res):
-            all_errors = self.get_errors(all_res)
-            print(all_errors)
-            traceback.print_tb(all_errors[0].__traceback__)
-            raise RuntimeError("Could not assemble the batch")
-
-        components = kwargs.get('components', 'images')
-        if isinstance(components, (list, tuple)):
-            all_res = list(zip(*all_res))
-        else:
-            components = [components]
-            all_res = [all_res]
-        for component, res in zip(components, all_res):
-            self.assemble_component(res, component)
-        return self
-
-    @action
-    def convert_to_pil(self, components='images'):
-        """ Convert batch data to PIL.Image format """
-        if self.images is None:
-            new_images = None
-        else:
-            new_images = np.asarray(list(None for _ in self.indices))
-            self.apply_transform(PIL.Image.fromarray, dst=new_images, src=components)
-        new_data = (new_images, self.labels)
-        new_batch = ImagesPILBatch(np.arange(len(self)), preloaded=new_data)
-        return new_batch
-
-    def _resize_one(self, ix, components='images', shape=None):
-        """ Resize one image """
-        image = self.get(ix, components)
-        factor = 1. * np.asarray([*shape]) / np.asarray(image.shape[:2])
-        if len(image.shape) > 2:
-            factor = np.concatenate((factor, [1.] * len(image.shape[2:])))
-        new_image = scipy.ndimage.interpolation.zoom(image, factor, order=3)
-        return new_image
-
-    def _preserve_shape(self, image, shape, crop=CROP_CENTER):
-        """ Change the image shape by cropping and/or adding empty pixels to fit the given shape """
-        image_size = self.get_image_size(image)
-        new_x, new_y, x, y = preserve_shape_numba(image_size, shape, crop)
-        new_image_shape = shape[::-1] + image.shape[2:]
-        new_image = np.zeros(new_image_shape, dtype=image.dtype)
-        new_image[slice(*new_y), slice(*new_x)] = image[slice(*y), slice(*x)]
-        return new_image
-
-    def _rotate_one(self, ix, components='images', angle=0, preserve_shape=True, **kwargs):
-        """ Rotate one image """
-        image = self.get(ix, components)
-        kwargs['reshape'] = not preserve_shape
-        new_image = scipy.ndimage.interpolation.rotate(image, angle, **kwargs)
-        return new_image
-
-    @staticmethod
-    def _calc_origin(image, origin, shape):
-        if origin is None or origin == CROP_00:
-            origin = 0, 0
-        elif origin == CROP_CENTER:
-            origin_x = (image.shape[1] - shape[0]) // 2 if image.shape[1] > shape[0] else 0
-            origin_y = (image.shape[0] - shape[1]) // 2 if image.shape[0] > shape[1] else 0
-            origin = origin_x, origin_y
-        return origin
-
-    def _crop(self, components='images', origin=None, shape=None):
-        """ Crop all images in the batch """
-        if origin is not None or shape is not None:
-            images = self.get(None, components)
-
-            origin = self._calc_origin(images[0], origin, shape)
-            if shape is None:
-                shape = images.shape[2], images.shape[1]
-            if np.all(np.array(origin) + np.array(shape) > np.array(images.shape[1:3])):
-                shape = images.shape[2] - origin[0], images.shape[1] - origin[1]
-
-            x = slice(origin[0], origin[0] + shape[0])
-            y = slice(origin[1], origin[1] + shape[1])
-            new_images = images[:, y, x].copy()
-
-            setattr(self, components, new_images)
-
-    def _crop_image(self, image, origin, shape):
-        origin = self._calc_origin(image, origin, shape)
-        new_image = image[origin[1]:origin[1] + shape[1], origin[0]:origin[1] + shape[0]].copy()
-        return new_image
-
-    def _random_crop(self, components='images', shape=None):
-        if shape is not None:
-            images = self.get(None, components)
-            new_images = random_crop_numba(images, shape)
-            setattr(self, components, new_images)
-        return self
-
-    @action
-    def fliplr(self, components='images'):
-        """ Flip image horizontaly (left / right) """
-        images = self.get(None, components)
-        setattr(self, components, images[:, :, ::-1])
-        return self
-
-    @action
-    def flipud(self, components='images'):
-        """ Flip image verticaly (up / down) """
-        images = self.get(None, components)
-        setattr(self, components, images[:, ::-1])
-        return self
-
-
-class ImagesPILBatch(BaseImagesBatch):
-    """ Batch class for 2D images in PIL format """
-    def get_image_size(self, image):
-        """ Return image size (width, height) """
-        return image.size
-
-    def assemble(self, all_res, *args, **kwargs):
-        """ Assemble the batch after a parallel action """
-        _ = args, kwargs
-        if any_action_failed(all_res):
-            all_errors = self.get_errors(all_res)
-            print(all_errors)
-            traceback.print_tb(all_errors[0].__traceback__)
-            raise RuntimeError("Could not assemble the batch")
-
-        components = kwargs.get('components', 'images')
-        if isinstance(components, (list, tuple)):
-            all_res = list(zip(*all_res))
-        else:
-            components = [components]
-            all_res = [all_res]
-        for component, res in zip(components, all_res):
-            new_data = np.array(res, dtype='object')
-            setattr(self, component, new_data)
-        return self
-
-    @action
-    def convert_to_array(self, dtype=np.uint8):
-        """ Convert images from PIL.Image format to an array """
-        if self.images is not None:
-            new_images = list(None for _ in self.indices)
-            self.apply_transform(self._convert_to_array_one, dst=new_images, src='images', dtype=dtype)
-            new_images = np.stack(new_images)
-        else:
-            new_images = None
-        new_data = new_images, self.labels
-        new_batch = ImagesBatch(np.arange(len(self)), preloaded=new_data)
-        return new_batch
-
-    def _convert_to_array_one(self, image, dtype=np.uint8):
-        if image is not None:
-            arr = np.fromstring(image.tobytes(), dtype=dtype)
-            if image.palette is None:
-                new_shape = (image.height, image.width)
+                preserve_shape = kwargs.get('preserve_shape', False)
+                if preserve_shape:
+                    min_shape = np.array([self._get_image_shape(x) for x in result]).min(axis=0)
+                    result = [arr[:min_shape[0], :min_shape[1]].copy() for arr in result]
+                    new_images = np.stack(result)
+                else:
+                    new_images = np.array(result, dtype=object)
             else:
-                new_shape = (image.height, image.width, -1)
-            new_image = arr.reshape(*new_shape)
+                raise e
+        setattr(self, component, new_images)
+
+    def _calc_origin(self, image_shape, origin, background_shape):
+        """ Calculate coordinate of the input image with respect to the background.
+
+        Parameters
+        ----------
+        image_shape : sequence
+            shape of the input image.
+        origin : array_like, sequence, {'center', 'top_left', 'random'}
+            Position of the input image with respect to the background.
+            - 'center' - place the center of the input image on the center of the background and crop
+                         the input image accordingly.
+            - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
+                           and crop the input image accordingly.
+            - 'random' - place the upper-left corner of the input image on the randomly sampled position
+                         in the background. Position is sampled uniformly such that there is no need for cropping.
+            - other - place the upper-left corner of the input image on the given position in the background.
+        background_shape : sequence
+            shape of the background image.
+
+        Returns
+        -------
+        sequence : calculated origin in the form (row, column)
+        """
+
+        if isinstance(origin, str):
+            if origin == 'top_left':
+                origin = 0, 0
+            elif origin == 'center':
+                origin = np.maximum(0, np.asarray(background_shape) - image_shape) // 2
+            elif origin == 'random':
+                origin = (np.random.randint(background_shape[0]-image_shape[0]+1),
+                          np.random.randint(background_shape[1]-image_shape[1]+1))
+        return np.asarray(origin, dtype=np.int)
+
+    def _scale_(self, image, factor, preserve_shape=False, origin='center'):
+        """ Scale the content of each image in the batch.
+
+        Resulting shape is obtained as original_shape * factor.
+
+        Parameters
+        -----------
+        factor : float, sequence
+            resulting shape is obtained as original_shape * factor
+            - float - scale all axes with the given factor
+            - sequence (factor_1, factort_2, ...) - scale each axis with the given factor separately
+
+        preserve_shape : bool
+            whether to preserve the shape of the image after scaling
+
+        origin : {'center', 'top_left', 'random'}, sequence
+            Relevant only if `preserve_shape` is True.
+            Position of the scaled image with respect to the original one's shape.
+            - 'center' - place the center of the rescaled image on the center of the original one and crop
+                         the rescaled image accordingly
+            - 'top_left' - place the upper-left corner of the rescaled image on the upper-left of the original one
+                           and crop the rescaled image accordingly
+            - 'random' - place the upper-left corner of the rescaled image on the randomly sampled position
+                         in the original one. Position is sampled uniformly such that there is no need for cropping.
+            - sequence - place the upper-left corner of the rescaled image on the given position in the original one.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+        Returns
+        -------
+        self
+        """
+
+        if np.any(np.asarray(factor) <= 0):
+            raise ValueError("factor must be greater than 0")
+        rescaled_shape = np.ceil(np.array(self._get_image_shape(image)) * factor).astype(np.int16)
+        rescaled_image = self._resize_(image, rescaled_shape, preserve_range=True).astype(image.dtype)
+        if preserve_shape:
+            rescaled_image = self._preserve_shape(image, rescaled_image, origin)
+        return rescaled_image
+
+    def _crop_(self, image, origin, shape):
+        """ Crop an image.
+
+        Extract image data from the window of the size given by `shape` and placed at `origin`.
+
+        Parameters
+        ----------
+        image : np.ndarray
+        origin : sequence, str
+            Upper-left corner of the cropping box. Can be one of:
+            - sequence - corner's coordinates in the form of (row, column)
+            - 'top_left' - crop an image such that upper-left corners of
+                           an image and the cropping box coincide
+            - 'center' - crop an image such that centers of
+                         an image and the cropping box coincide
+            - 'random' - place the upper-left corner of the cropping box at a random position
+        shape : sequence
+            - sequence - crop size in the form of (rows, columns)
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        image_shape = self._get_image_shape(image)
+        origin = self._calc_origin(shape, origin, image_shape)
+        if np.all(origin + shape > image_shape):
+            shape = image_shape - origin
+
+        row_slice = slice(origin[0], origin[0] + shape[0])
+        column_slice = slice(origin[1], origin[1] + shape[1])
+        return image[row_slice, column_slice].copy()
+
+    def _put_on_background_(self, image, background, origin, mask=None):
+        """ Put an image on a background at given origin
+
+        Parameters
+        ----------
+        background : np.ndarray
+        origin : sequence, str
+            Upper-left corner of the cropping box. Can be one of:
+            - sequence - corner's coordinates in the form of (row, column).
+            - 'top_left' - crop an image such that upper-left corners of an image and the cropping box coincide.
+            - 'center' - crop an image such that centers of an image and the cropping box coincide.
+            - 'random' - place the upper-left corner of the cropping box at a random position.
+
+        mask : float, np.ndarray
+            if float is fiven then
+        Returns
+        -------
+        self
+        """
+
+        image_shape = self._get_image_shape(image)
+        background_shape = self._get_image_shape(background)
+        origin = self._calc_origin(image_shape, origin, background_shape)
+        image = self._crop_(image, 'top_left', np.asarray(background_shape) - origin).copy()
+
+        slice_rows = slice(origin[0], origin[0]+image_shape[0])
+        slice_columns = slice(origin[1], origin[1]+image_shape[1])
+
+        new_image = background.copy()
+
+        if mask is None:
+
+            new_image[slice_rows, slice_columns] = image
+        elif isinstance(mask, Number):
+            image_slice = new_image[slice_rows, slice_columns]
+            mask_index = image > mask
+            image_slice[mask_index] = image[mask_index]
+            new_image[slice_rows, slice_columns] = image_slice
+
+        return new_image
+
+    def _preserve_shape(self, original_image, transformed_image, origin='center'):
+        """ Change the transformed image's shape by cropping and adding empty pixels to fit the shape of original image.
+
+        Parameters
+        ----------
+        original_image : np.ndarray
+        transformed_image : np.ndarray
+        origin : {'center', 'top_left', 'random'}, sequence
+            Position of the transformed image with respect to the original one's shape.
+            - 'center' - place the center of the transformed image on the center of the original one and crop
+                         the transformed image accordingly.
+            - 'top_left' - place the upper-left corner of the transformed image on the upper-left of the original one
+                           and crop the transformed image accordingly.
+            - 'random' - place the upper-left corner of the transformed image on the randomly sampled position
+                         in the original one. Position is sampled uniformly such that there is no need for cropping.
+            - sequence - place the upper-left corner of the transformed image on the given position in the original one.
+
+        Returns
+        -------
+        np.ndarray : image after described actions
+        """
+
+        return self._put_on_background_(self._crop_(transformed_image,
+                                                    'top_left' if origin != 'center' else 'center',
+                                                    self._get_image_shape(original_image)),
+                                        np.zeros(original_image.shape, dtype=np.uint8),
+                                        origin)
+
+    def _flip_(self, image, mode='lr'):
+        """ Flips image.
+
+        Parameters
+        ----------
+        mode : {'lr', 'ud'}
+            - 'lr' - apply the left/right flip
+            - 'ud' - apply the upside/down flip
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        image = image.copy()
+        if mode == 'lr':
+            image = image[:, ::-1]
+        elif mode == 'ud':
+            image = image[::-1]
+        return image
+
+    def _invert_(self, image, channels='all'):
+        """ Invert givn channels.
+
+        Parameters
+        ----------
+        channels : int, sequence
+            Indices of the channels to invert.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        image = image.copy()
+        if channels == 'all':
+            channels = list(range(image.shape[-1]))
+        max_intencity = 255 if np.issubdtype(image.dtype, np.integer) else 1.
+        image[..., channels] = max_intencity - image[..., channels]
+        return image
+
+    def _salt_(self, image, p_noise=.015, color=255, size=(1, 1)):
+        """ Set random pixel on image to givan value.
+
+        Every pixel will be set to ``color`` value with probability ``p_noise``.
+
+        Parameters
+        ----------
+        p_noise : float
+            Probability of salting a pixel.
+        color : float, int, sequence, callable
+            Color's value.
+            - int, float, sequence -- value of color
+            - callable -- color is sampled for every chosen pixel (rules are the same as for int, float and sequence)
+        size : int, sequence of int, callable
+            Size of salt
+            - int -- square salt with side ``size``
+            - sequence -- recangular salt in the form (row, columns)
+            - callable -- size is sampled for every chosen pixel (rules are the same as for int and sequence)
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        image = image.copy()
+        mask_size = np.asarray(self._get_image_shape(image))
+        mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
+        if isinstance(size, (tuple, int)) and (size == (1, 1) or size == 1) and not callable(color):
+            image[mask_salt] = color
         else:
-            new_image = None
-        return new_image
+            size_lambda = size if callable(size) else lambda: size
+            color_lambda = color if callable(color) else lambda: color
+            mask_salt = np.where(mask_salt)
+            for i in range(len(mask_salt[0])):
+                current_size = size_lambda()
+                current_size = (current_size, current_size) if isinstance(current_size, Number) else current_size
+                left_top = np.asarray((mask_salt[0][i], mask_salt[1][i]))
+                right_bottom = np.minimum(left_top + current_size, self._get_image_shape(image))
+                image[left_top[0]:right_bottom[0], left_top[1]:right_bottom[1]] = color_lambda()
+        return image
 
-    def _resize_one(self, ix, components='images', shape=None, **kwargs):
-        """ Resize one image """
-        _ = kwargs
-        image = self.get(ix, components)
-        new_image = image.resize(shape, PIL.Image.ANTIALIAS)
-        return new_image
+    def _threshold_(self, image, low=0., high=1., dtype=np.uint8):
+        """ Truncate image's pixels.
 
-    def _preserve_shape(self, image, shape, crop=CROP_CENTER):
-        new_x, new_y, x, y = preserve_shape_numba(image.size, shape, crop)
-        new_image = PIL.Image.new(image.mode, shape)
-        box = x[0], y[0], x[1], y[1]
-        new_image.paste(image.crop(box), (new_x[0], new_y[0]))
-        return new_image
+        Parameters
+        ----------
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately
+        dtype : np.dtype
+            dtype of truncated images.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
 
-    def _rotate_one(self, ix, components='images', angle=0, preserve_shape=True, **kwargs):
-        """ Rotate one image """
-        image = self.get(ix, components)
-        kwargs['expand'] = not preserve_shape
-        new_image = image.rotate(angle, **kwargs)
-        return new_image
+        Returns
+        -------
+        self
+        """
 
-    def _crop_image(self, image, origin, shape):
-        """ Crop one image """
-        if origin is None or origin == CROP_00:
-            origin = 0, 0
-        elif origin == CROP_CENTER:
-            origin = (image.width - shape[0]) // 2, (image.height - shape[1]) // 2
-        origin_x, origin_y = origin
-        shape = shape if shape is not None else (image.width - origin_x, image.height - origin_y)
-        box = origin_x, origin_y, origin_x + shape[0], origin_y + shape[1]
-        new_image = image.crop(box)
-        return new_image
+        image = image.copy()
+        if isinstance(low, Number):
+            image[image < low] = low
+        else:
+            if len(low) != image.shape[-1]:
+                raise RuntimeError("``len(low)`` must coincide with the number of channels")
+            for channel, low_channel in enumerate(low):
+                pixels_to_truncate = image[..., channel] < low_channel
+                image[..., channel][pixels_to_truncate] = low_channel
+        if isinstance(high, Number):
+            image[image > high] = high
+        else:
+            if len(high) != image.shape[-1]:
+                raise RuntimeError("``len(high)`` must coincide with the number of channels")
 
-    @inbatch_parallel('indices', post='assemble')
-    def _crop(self, ix, components='images', origin=None, shape=None):
-        """ Crop all images """
-        image = self.get(ix, components)
-        new_image = self._crop_image(image, origin, shape)
-        return new_image
+            for channel, high_channel in enumerate(high):
+                pixels_to_truncate = image[..., channel] > high_channel
+                image[..., channel][pixels_to_truncate] = high_channel
+        return image.astype(dtype)
 
-    @inbatch_parallel('indices', post='assemble')
-    def _random_crop(self, ix, components='images', shape=None):
-        """ Crop all images with a given shape and a random origin """
-        image = self.get(ix, components)
-        origin_x = np.random.randint(0, image.width - shape[0])
-        origin_y = np.random.randint(0, image.height - shape[1])
-        new_image = self._crop_image(image, (origin_x, origin_y), shape)
-        return new_image
+    def _multiply_(self, image, multiplier=1., low=0., high=1., preserve_type=True):
+        """ Multiply each pixel by the given multiplier.
+
+        Parameters
+        ----------
+        multiplier : float, sequence
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        preserve_type : bool
+            Whether to preserve ``dtype`` of transformed images.
+            If ``False`` is given then the resulting type will be ``np.float``.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        dtype = image.dtype if preserve_type else np.float
+        return self._threshold_(multiplier * image.astype(np.float), low, high, dtype)
+
+    def _add_(self, image, term=0., low=0., high=1., preserve_type=True):
+        """ Add term to each pixel.
+
+        Parameters
+        ----------
+        term : float, sequence
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        preserve_type : bool
+            Whether to preserve ``dtype`` of transformed images.
+            If ``False`` is given then the resulting type will be ``np.float``.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        dtype = image.dtype if preserve_type else np.float
+        return self._threshold_(term + image.astype(np.float), low, high, dtype)
+
+    def _to_greyscale_(self, image, keepdims=True):
+        """ Set image's pixels to their mean among all channels
+
+        .. note:: Images' shape must provide last axis for channels
+
+        Parameters
+        ----------
+        keepdims : bool
+            Whether to preserve the number of channels
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        return image.mean(axis=-1, keepdims=keepdims).astype(image.dtype)
+
+    def _posterize_(self, image, colors_number=3):
+        """ Posterizes image.
+
+        More concretely, it quantizes pixels' values so that they have``colors_number`` colours.
+
+        Parameters
+        ----------
+        colors : int
+            Number of colours.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        image = image.copy()
+
+        dtype = image.dtype
+        max_bin = 256 if np.issubdtype(dtype, np.integer) else 1.0001
+        max_intencity = 255 if np.issubdtype(dtype, np.integer) else 1.
+
+        bins = np.linspace(0, max_bin, colors_number+1)
+        color_indices = np.digitize(image, bins) - 1
+        colors = np.linspace(0, max_intencity, colors_number)
+
+        image = colors[color_indices]
+        return image
+
+    def _cutout_(self, image, origin, shape, color):
+        """ Fills given areas with color
+
+        .. note:: It is assumed that ``origins``, ``shapes`` and ``colors`` have the same length.
+
+        Parameters
+        ----------
+        origin : sequence, str
+            Upper-left corner of a filled box. Can be one of:
+            - sequence - corner's coordinates in the form of (row, column).
+            - 'top_left' - crop an image such that upper-left corners of
+                           an image and the filled box coincide.
+            - 'center' - crop an image such that centers of
+                         an image and the filled box coincide.
+            - 'random' - place the upper-left corner of the filled box at a random position.
+        shape : sequence, int
+            Shape of a filled box. Can be one of:
+            - sequence - crop size in the form of (rows, columns)
+            - int - shape has squared form
+        color : sequence, number
+            Color of a filled box. Can be one of:
+            - sequence - (r,g,b) form
+            - number - grayscale
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        def _get_shape(shape):
+            return (shape, shape) if isinstance(shape, Number) else shape
+
+        def _get_origin(shape, origin):
+            if isinstance(origin, str):
+                origin = self._calc_origin(shape, origin, image_shape)
+            return origin
+
+        image = image.copy()
+        image_shape = self._get_image_shape(image)
+        shape = _get_shape(shape)
+        origin = _get_origin(shape, origin)
+        right_bottom = (min(origin[0] + shape[0], image_shape[0]),
+                        min(origin[1] + shape[1], image_shape[1]))
+        image[origin[0]:right_bottom[0], origin[1]:right_bottom[1]] = color
+
+        return image
+
+    def _assemble_patches(self, patches, *args, dst, **kwargs):
+        """ Assembles patches after parallel execution.
+
+        Parameters
+        ----------
+        patches : sequence
+            Patches to gather. pathces.shape must be like (batch.size, patches_i, patch_height, patch_width, n_channels)
+        dst : str
+            Component to put patches in.
+        """
+
+        _ = args, kwargs
+        new_items = np.concatenate(patches)
+        setattr(self, dst, new_items)
 
     @action
-    @inbatch_parallel('indices', post='assemble')
-    def fliplr(self, ix, components='images'):
-        """ Flip image horizontaly (left / right) """
-        image = self.get(ix, components)
-        return image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+    @inbatch_parallel(init='indices', post='_assemble_patches')
+    def split_to_patches(self, ix, patch_shape, stride=1, droplast=False, src='images', dst=None):
+        """ Splits image to patches.
 
-    @action
-    @inbatch_parallel('indices', post='assemble')
-    def flipud(self, ix, components='images'):
-        """ Flip image verticaly (up / down) """
-        image = self.get(ix, components)
-        return image.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+        Small images with the same shape (``patch_shape``) are cropped from the original one with stride ``stride``.
+
+        Parameters
+        ----------
+        patch_shape : int, sequence
+            Patch's shape in the from (rows, columns). If int is given then patches have square shape.
+        stride : int, square
+            Step of the moving window from which patches are cropped. If int is given then the window has square shape.
+        droplast : bool
+            Whether to drop patches whose window covers area out of the image.
+            If False is passed then these patches are cropped from the edge of an image. See more in tutorials.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        _ = dst
+        image = self.get(ix, src)
+        image_shape = self._get_image_shape(image)
+        stride = (stride, stride) if isinstance(stride, Number) else stride
+        patch_shape = (patch_shape, patch_shape) if isinstance(patch_shape, Number) else patch_shape
+        patches = []
+
+        def _iterate_columns(row_from, row_to):
+            column = 0
+            while column < image_shape[1]-patch_shape[1]+1:
+                patches.append(image[row_from:row_to, column:column+patch_shape[1]])
+                column += stride[1]
+            if not droplast and column + patch_shape[1] != image_shape[1]:
+                patches.append(image[row_from:row_to, image_shape[1]-patch_shape[1]:image_shape[1]])
+
+        row = 0
+        while row < image_shape[0]-patch_shape[0]+1:
+            _iterate_columns(row, row+patch_shape[0])
+            row += stride[0]
+        if not droplast and row + patch_shape[0] != image_shape[0]:
+            _iterate_columns(image_shape[0]-patch_shape[0], image_shape[0])
+
+        return np.stack(patches)
+
+    def _additive_noise_(self, image, noise, low=0, high=1.):
+        """ Add additive noise to an image.
+
+        Parameters
+        ----------
+        noise : callable
+            Distribution. Must have ``size`` parameter.
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        return self._threshold_(image+noise(size=image.shape), low, high, dtype=image.dtype)
+
+
+    def _multiplicative_noise_(self, image, noise, low=0, high=1.):
+        """ Add multiplicativa noise to an image.
+
+        Parameters
+        ----------
+        noise : callable
+            Distribution. Must have ``size`` parameter.
+        low : int, float, sequence
+            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        high : int, float, sequence
+            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
+            with the number of channels in an image and each channel is thresholded separately.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        return self._threshold_(image*noise(size=image.shape), low, high, dtype=image.dtype)
+
+    def _elastic_transform_(self, image, alpha, sigma, **kwargs):
+        """Elastic deformation of images as described in [Simard2003]_.
+        [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
+        Convolutional Neural Networks applied to Visual Document Analysis", in
+        Proc. of the International Conference on Document Analysis and
+        Recognition, 2003.
+
+        Code slightly differs with https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a
+
+        Parameters
+        ----------
+        alpha : number
+            maximum of vectors' norms.
+        sigma : number
+            Smooth factor.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        Returns
+        -------
+        self
+        """
+
+        # full shape is needed
+        shape = image.shape
+
+        kwargs.setdefault('mode', 'constant')
+        kwargs.setdefault('cval', 0)
+
+        column_shift = self._gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
+        row_shift = self._gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
+
+        row, column, channel = np.meshgrid(range(shape[0]), range(shape[1]), range(shape[2]))
+
+        indices = (column + column_shift, row + row_shift, channel)
+
+        distored_image = self._map_coordinates_(image, indices, order=1, mode='reflect')
+
+        return distored_image.reshape(image.shape)
