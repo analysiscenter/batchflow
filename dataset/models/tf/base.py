@@ -572,8 +572,7 @@ class TFModel(BaseModel):
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
-        with self.graph:
-            arr = np.asarray([np.prod(self.get_shape(v)) for v in tf.trainable_variables()])
+        arr = np.asarray([np.prod(v.get_shape().as_list()) for v in self.graph.get_collection('trainable_variables')])
         return np.sum(arr)
 
     def get_tensor_config(self, tensor, **kwargs):
