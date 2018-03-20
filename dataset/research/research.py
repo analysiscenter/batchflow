@@ -23,24 +23,24 @@ class Research:
     def __init__(self):
         self.pipelines = OrderedDict()
 
-    def add_pipeline(self, pipeline, variables, preproc=None, config=None, name=None,
+    def add_pipeline(self, root_pipeline, branch_pipeline=None, variables=None, config=None, name=None,
                      execute_for=None, run=False, **kwargs):
         """ Add new pipeline to research.
 
         Parameters
         ----------
-        pipeline : dataset.Pipeline
-            if preproc is None, pipeline must have run action with lazy=True and n_epochs=None. All parameters that are
-            defined in grid should be defined as C('parameter_name'). Corresponding parameter in grid
-            must have the same 'parameter_name'.
-        variables : str or list of str
+        root_pipeline : dataset.Pipeline
+            root_pipeline must have run action with lazy=True and n_epochs=None. If branch_pipeline=None then
+            may contain parameters that can be defined by grid.
+        branch_pipeline : dataset.Pipeline or None
+            if not None, for resulting batch from root_pipeline branch_pipeline.execute_for(batch) will be called.
+            May contain parameters that can be defined by grid.
+        variables : str, list of str or None
             names of pipeline variables to save after each repetition. All of them must be defined in pipeline,
             not in preproc.
         preproc : dataset.Pipeline or None
             if preproc is not None it must have run action with lazy=True and n_epochs=None. For resulting batch
             pipeline.execute_for(batch) will be called. Notice that pipeline must not change batch from preproc.
-        config : Config or dict (default None)
-            pipeline config with parameters that doesn't change between experiments.
         name : str (default None)
             pipeline name. If name is None, pipeline will have name 'ppl_{index}'
         execute_for : int, list of ints or None
@@ -55,6 +55,11 @@ class Research:
             if test pipeline imports model from the other pipeline with name 'train' in Researcn,
             corresponding parameter in import_model must be C('import_from') and add_pipeline
             must be called with parameter import_from='train'.
+
+        **How to define changing parameters*
+
+        All parameters in root_pipeline or branch_pipeline that are defined in grid should be defined as C('parameter_name').
+        Corresponding parameter in grid must have the same 'parameter_name'.
         """
         name = name or 'ppl_' + str(len(self.pipelines))
         config = config or Config()
@@ -65,9 +70,15 @@ class Research:
         if name in self.pipelines:
             raise ValueError('Pipeline with name {} was alredy existed'.format(name))
 
+        if branch_pipeline is None:
+            pipeline = root_pipeline
+            preproc = None
+        else:
+            pipeline = branch_pipeline
+            preproc = root_pipeline
+
         self.pipelines[name] = {
             'ppl': pipeline,
-            'cfg': config,
             'var': variables,
             'execute_for': execute_for,
             'preproc': preproc,
@@ -234,7 +245,6 @@ class Research:
         for name, pipeline in self.pipelines.items():
             _pipelines[name] = copy(pipeline)
             del _pipelines[name]['ppl']
-            _pipelines[name]['cfg'] = _pipelines[name]['cfg'].flatten()
         description['pipelines'] = _pipelines
         return description
 

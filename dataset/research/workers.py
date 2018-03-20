@@ -44,7 +44,7 @@ class PipelineWorker(Worker):
 
                 pipeline['execute_for'] = SingleRunning.get_iterations(pipeline['execute_for'], task['n_iters'])
 
-                single_running.add_pipeline(pipeline_copy, pipeline['var'], config=pipeline['cfg'],
+                single_running.add_pipeline(pipeline_copy, pipeline['var'],
                                             name=name, execute_for=pipeline['execute_for'], **pipeline['kwargs'])
             if isinstance(task['n_groups'], list):
                 n_groups = task['n_groups'][idx]

@@ -18,7 +18,7 @@ class SingleRunning:
         self.config = Config()
         self.results = None
 
-    def add_pipeline(self, pipeline, variables=None, config=None, name=None, execute_for=None, **kwargs):
+    def add_pipeline(self, pipeline, variables=None, name=None, execute_for=None, **kwargs):
         """ Add new pipeline to research.
         Parameters
         ----------
@@ -26,8 +26,6 @@ class SingleRunning:
             if preproc is None pipeline must have run action with lazy=True.
         variables : str or list of str or None
             names of pipeline variables to remember at each repetition.
-        config : Config or dict (default None)
-            pipeline config
         name : str (default None)
             name of pipeline. If name is None pipeline will have name 'ppl_{index}'
         execute_for : int, list or None
@@ -49,12 +47,11 @@ class SingleRunning:
             raise ValueError('Pipeline with name {} was alredy existed'.format(name))
         import_config = {key: self.pipelines[value]['ppl'] for key, value in kwargs.items()}
 
-        config = Config(config)
         import_config = Config(import_config)
 
         self.pipelines[name] = {
             'ppl': pipeline,
-            'cfg': config + import_config,
+            'import_config': import_config,
             'var': variables,
             'execute_for': execute_for
         }
@@ -104,7 +101,7 @@ class SingleRunning:
         Add common config to all pipelines.
         """
         for _, pipeline in self.pipelines.items():
-            pipeline['ppl'].set_config(pipeline['cfg'] + self.config)
+            pipeline['ppl'].set_config(pipeline['import_config'])
 
     def run_on_batch(self, batch, name):
         """
