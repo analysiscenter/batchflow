@@ -58,8 +58,8 @@ class Research:
 
         **How to define changing parameters*
 
-        All parameters in root_pipeline or branch_pipeline that are defined in grid should be defined as C('parameter_name').
-        Corresponding parameter in grid must have the same 'parameter_name'.
+        All parameters in root_pipeline or branch_pipeline that are defined in grid should be defined
+        as C('parameter_name'). Corresponding parameter in grid must have the same 'parameter_name'.
         """
         name = name or 'ppl_' + str(len(self.pipelines))
         config = config or Config()
@@ -99,7 +99,7 @@ class Research:
         self.grid_config = Grid(grid_config)
         return self
 
-    def _create_tasks(self, n_reps, n_iters, n_groups, name):
+    def _create_tasks(self, n_reps, n_iters, n_branches, name):
         """ Create Tasks instance with tasks to run. Each task is one repetition for each config
         from grid_config.
 
@@ -109,17 +109,17 @@ class Research:
 
         n_iters : int
 
-        n_groups : int
+        n_branches : int
 
         name : str
             name of research.
         """
-        if isinstance(n_groups, int):
-            n_models = n_groups
-        elif n_groups is None:
+        if isinstance(n_branches, int):
+            n_models = n_branches
+        elif n_branches is None:
             n_models = 1
         else:
-            n_models = len(n_groups)
+            n_models = len(n_branches)
 
         configs_with_repetitions = [(idx, configs)
                                     for idx in range(n_reps)
@@ -132,7 +132,7 @@ class Research:
              'n_iters': n_iters,
              'configs': list(zip(*chunk))[1],
              'repetition': list(zip(*chunk))[0],
-             'n_groups': n_groups,
+             'n_branches': n_branches,
              'name': name
             }
             for chunk in configs_chunks
@@ -153,7 +153,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps, n_iters, n_workers=1, n_groups=1, name=None, progress_bar=False, save_model=False):
+    def run(self, n_reps, n_iters, n_workers=1, n_branches=1, name=None, progress_bar=False, save_model=False):
         """ Run research.
 
         Parameters
@@ -169,7 +169,7 @@ class Research:
             If list of instances of Worker - workers to run tasks.
             If list of dicts (Configs) - list of additional configs which will be appended to configs from tasks.
                 Each element corresponds to worker.
-        n_groups: int or list of dicts (Configs)
+        n_branches: int or list of dicts (Configs)
             Is using if preproc is not None. Number of different configs which will use the same batch
             from preproc pipeline. Pipelines will be executed in different threads.
             If int - number of pipelines with different configs that will use the same prepared batch
@@ -177,7 +177,7 @@ class Research:
             If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
 
             For example, if there are 2 GPUs, we can define parameter 'device' in model config as C('device')
-            and define n_groups as [{'device': 0}, {'device': 1}].
+            and define n_branches as [{'device': 0}, {'device': 1}].
         name : str or None
             name folder to save research. By default is 'research'.
         progress_bar : bool (default False)
@@ -191,14 +191,14 @@ class Research:
         self.n_reps = n_reps
         self.n_iters = n_iters
         self.n_workers = n_workers
-        self.n_groups = n_groups
+        self.n_branches = n_branches
 
         self.name = self._does_exist(name)
 
         # dump information about research
         self.save()
 
-        self._create_tasks(n_reps, n_iters, n_groups, self.name)
+        self._create_tasks(n_reps, n_iters, n_branches, self.name)
 
         if isinstance(n_workers, int) or isinstance(n_workers[0], (dict, Config)):
             if save_model:

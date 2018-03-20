@@ -28,9 +28,9 @@ class PipelineWorker(Worker):
     def init(self):
         """ Run before task execution. """
         i, task = self.task
-        if isinstance(task['n_groups'], list):
+        if isinstance(task['n_branches'], list):
             description = '\n'.join([str({**config.alias(), **_config})
-                                     for config, _config in zip(task['configs'], task['n_groups'])])
+                                     for config, _config in zip(task['configs'], task['n_branches'])])
         else:
             description = '\n'.join([str(config.alias()) for config in task['configs']])
 
@@ -46,15 +46,15 @@ class PipelineWorker(Worker):
 
                 single_running.add_pipeline(pipeline_copy, pipeline['var'],
                                             name=name, execute_for=pipeline['execute_for'], **pipeline['kwargs'])
-            if isinstance(task['n_groups'], list):
-                n_groups = task['n_groups'][idx]
+            if isinstance(task['n_branches'], list):
+                n_branches = task['n_branches'][idx]
             else:
-                n_groups = Config()
+                n_branches = Config()
 
             worker_config = self.kwargs.get('config', Config())
             self.log_info(worker_config, filename=self.logfile)
 
-            single_running.add_common_config(config.config()+n_groups+worker_config)
+            single_running.add_common_config(config.config()+n_branches+worker_config)
             single_running.init()
             self.single_runnings.append(single_running)
 
