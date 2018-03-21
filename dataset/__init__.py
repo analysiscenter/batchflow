@@ -19,3 +19,14 @@ from .exceptions import SkipBatchException
 
 
 __version__ = '0.3.0'
+
+m = sys.modules[__name__]
+m.BEST_PRACTICE = {}
+
+def enable_best_practice(option='enable'):
+    """ Sets a best practice option """
+    m.BEST_PRACTICE.update({option: True})
+
+def is_best_practice(option='enable'):
+    """ Check if a best practice option is enabled """
+    return m.BEST_PRACTICE.get(option, False)

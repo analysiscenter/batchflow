@@ -30,12 +30,10 @@ setup(
     install_requires=[
         'numpy>=1.10',
         'dill>=0.2.7',
+        'tqdm>=4.19.7',
+        'scipy>=0.19.1',
+        'scikit-image>=0.13.1',
     ],
-    extras_require={
-        'tensorflow': ['tensorflow>=1.13'],
-        'tensorflow-gpu': ['tensorflow-gpu>=1.13'],
-        'keras': ['keras>=2.0.0']
-    },
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',

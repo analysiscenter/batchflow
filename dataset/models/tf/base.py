@@ -11,6 +11,7 @@ import contextlib
 import numpy as np
 import tensorflow as tf
 
+from ... import is_best_practice
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
 from .losses import dice
@@ -581,8 +582,7 @@ class TFModel(BaseModel):
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
-        with self.graph.as_default():
-            arr = np.asarray([np.prod(self.get_shape(v)) for v in tf.trainable_variables()])
+        arr = np.asarray([np.prod(v.get_shape().as_list()) for v in self.graph.get_collection('trainable_variables')])
         return np.sum(arr)
 
     def get_tensor_config(self, tensor, **kwargs):
@@ -1138,12 +1138,17 @@ class TFModel(BaseModel):
         """
         config = {}
         config['inputs'] = {}
-        config['common'] = {'batch_norm': {'momentum': .1}}
+        config['common'] = {}
         config['input_block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}
-        config['optimizer'] = 'Adam'
+        config['optimizer'] = {'name': 'Adam'}
+
+        if is_best_practice():
+            config['common'] = {'batch_norm': {'momentum': .1}}
+            config['optimizer'].update({'use_locking': True})
+
         return config
 
     @classmethod

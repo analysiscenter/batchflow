@@ -157,9 +157,9 @@ class Baseset:
         if hasattr(self.index, 'reset_iter'):
             self.index.reset_iter()
 
-    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, bar=False, *args, **kwargs):
         """ Generate batches """
-        for ix_batch in self.index.gen_batch(batch_size, shuffle, n_epochs, drop_last):
+        for ix_batch in self.index.gen_batch(batch_size, shuffle, n_epochs, drop_last, bar):
             batch = self.create_batch(ix_batch, *args, **kwargs)
             yield batch
 
