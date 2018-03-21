@@ -13,7 +13,7 @@ from math import ceil
 import json
 import dill
 
-from ..config import Config
+from .. import Config
 from .distributor import Tasks, Distributor
 from .workers import PipelineWorker, SavingWorker
 from .grid import Grid
