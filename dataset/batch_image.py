@@ -148,7 +148,9 @@ class BaseImagesBatch(Batch):
             Full path to an element.
         """
 
-        if isinstance(self.index, FilesIndex):
+        if isinstance(src, FilesIndex):
+            path = src.get_fullpath(ix)
+        elif isinstance(self.index, FilesIndex):
             path = self.index.get_fullpath(ix)
         else:
             path = os.path.join(src, str(ix))
