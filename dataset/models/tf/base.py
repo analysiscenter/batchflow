@@ -14,7 +14,7 @@ import tensorflow as tf
 from ... import is_best_practice
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
-from .losses import dice
+from .losses import dice, dice2
 from .train import piecewise_constant
 
 
@@ -29,7 +29,8 @@ LOSSES = {
     'hinge': tf.losses.hinge_loss,
     'huber': tf.losses.huber_loss,
     'logloss': tf.losses.log_loss,
-    'dice': dice
+    'dice': dice,
+    'dice2': dice2,
 }
 
 DECAYS = {
@@ -516,18 +517,20 @@ class TFModel(BaseModel):
 
         add_loss = False
         if loss is None:
-            if len(tf.losses.get_losses()) == 0:
-                raise ValueError("Loss is not defined in the model %s" % self)
-        elif isinstance(loss, str) and hasattr(tf.losses, loss):
-            loss = getattr(tf.losses, loss)
+            pass
         elif isinstance(loss, str):
             loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
+        elif isinstance(loss, str) and hasattr(tf.losses, loss):
+            loss = getattr(tf.losses, loss)
         elif callable(loss):
             add_loss = True
         else:
             raise ValueError("Unknown loss", loss)
 
-        if loss is not None:
+        if loss is None:
+            if len(tf.losses.get_losses()) == 0:
+                raise ValueError("Loss is not defined in the model %s" % self)
+        else:
             try:
                 predictions = getattr(self, 'predictions')
             except AttributeError:
@@ -582,8 +585,7 @@ class TFModel(BaseModel):
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
-        with self.graph.as_default():
-            arr = np.asarray([np.prod(self.get_shape(v)) for v in tf.trainable_variables()])
+        arr = np.asarray([np.prod(v.get_shape().as_list()) for v in self.graph.get_collection('trainable_variables')])
         return np.sum(arr)
 
     def get_tensor_config(self, tensor, **kwargs):

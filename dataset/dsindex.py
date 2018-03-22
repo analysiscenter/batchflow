@@ -1,9 +1,11 @@
 """ DatasetIndex """
 
 import os
+import math
 import glob
 from collections import Iterable
 import numpy as np
+import tqdm
 
 from . import Baseset
 
@@ -45,6 +47,8 @@ class DatasetIndex(Baseset):
 
         if isinstance(_index, DatasetIndex):
             _index = _index.indices
+        elif isinstance(_index, int):
+            _index = np.arange(_index)
         else:
             # index should allow for advance indexing (i.e. subsetting)
             _index = np.asarray(_index)
@@ -215,6 +219,8 @@ class DatasetIndex(Baseset):
             iter_params = self._iter_params
 
         if iter_params['_stop_iter']:
+            if 'bar' in iter_params:
+                iter_params['bar'].close()
             raise StopIteration("Dataset is over. No more batches left.")
 
         if iter_params['_order'] is None:
@@ -243,6 +249,8 @@ class DatasetIndex(Baseset):
             batch_items = np.concatenate((rest_items, new_items))
 
         if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs: # and rest_items is not None:
+            if 'bar' in iter_params:
+                iter_params['bar'].close()
             if drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             else:
@@ -253,7 +261,7 @@ class DatasetIndex(Baseset):
             return self.create_batch(batch_items, pos=True)
 
 
-    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False):
+    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, bar=False):
         """ Generate batches
 
         Yields
@@ -269,11 +277,22 @@ class DatasetIndex(Baseset):
                 # do whatever you want
         """
         iter_params = self.get_default_iter_params()
+        if bar:
+            if drop_last:
+                total = len(self) // batch_size * n_epochs
+            else:
+                total = math.ceil(len(self) * n_epochs / batch_size)
+            iter_params['bar'] = tqdm.tqdm(total=total)
         while True:
             if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
-                raise StopIteration()
+                return
             else:
-                batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
+                try:
+                    batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
+                except StopIteration:
+                    return
+                if 'bar' in iter_params:
+                    iter_params['bar'].update(1)
                 yield batch
 
 
