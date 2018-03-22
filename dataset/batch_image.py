@@ -258,23 +258,33 @@ class BaseImagesBatch(Batch):
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
-    Images are stored as numpy arrays (N, H, W, C).
+    Images are stored as numpy arrays of PIL.Image.
+
+    PIL.Image has the following system of coordinates:
+                      X
+      0 -------------- >
+      |
+      |
+      |  images's pixels
+      |
+      |
+    Y v
+
     """
 
     @classmethod
     def _get_image_shape(cls, image):
-        return image.shape[:2]
+        # return image.shape[:2]
+        return image.size
 
     @property
     def image_shape(self):
         """: tuple - shape of the image"""
-        if isinstance(self.images.dtype, object):
-            _, shapes_count = np.unique([image.shape for image in self.images], return_counts=True, axis=0)
-            if len(shapes_count) == 1:
-                return self.images.shape[1:]
-            else:
-                raise RuntimeError('Images have different shapes')
-        return self.images.shape[1:]
+        _, shapes_count = np.unique([image.size for image in self.images], return_counts=True, axis=0)
+        if len(shapes_count) == 1:
+            return self._get_image_shape(self.images[0])
+        else:
+            raise RuntimeError('Images have different shapes')
 
     @inbatch_parallel(init='indices', post='_assemble')
     def _load_image(self, ix, src=None, fmt=None, dst="images"):
@@ -296,7 +306,8 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return (imread(self._make_path(ix, src)),)
+        # return (imread(self._make_path(ix, src)),)
+        return PIL.Image.open(self._make_path(ix, src))
 
     @inbatch_parallel(init='indices')
     def _dump_image(self, ix, src='images', dst=None, fmt=None):
@@ -322,7 +333,9 @@ class ImagesBatch(BaseImagesBatch):
             raise RuntimeError('You must specify `dst`')
         image = self.get(ix, src)
         ix = str(ix) + '.' + fmt if fmt is not None else str(ix)
-        imsave(os.path.join(dst, ix), image)
+        # imsave(os.path.join(dst, ix), image)
+        image.save(os.path.join(dst, ix))
+
 
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
@@ -339,21 +352,22 @@ class ImagesBatch(BaseImagesBatch):
             Shape is chosen to be minimal among given images.
         """
 
-        try:
-            new_images = np.stack(result)
-        except ValueError as e:
-            message = str(e)
-            if "must have the same shape" in message:
-                preserve_shape = kwargs.get('preserve_shape', False)
-                if preserve_shape:
-                    min_shape = np.array([self._get_image_shape(x) for x in result]).min(axis=0)
-                    result = [arr[:min_shape[0], :min_shape[1]].copy() for arr in result]
-                    new_images = np.stack(result)
-                else:
-                    new_images = np.array(result, dtype=object)
-            else:
-                raise e
-        setattr(self, component, new_images)
+        # try:
+        #     new_images = np.stack(result)
+        # except ValueError as e:
+        #     message = str(e)
+        #     if "must have the same shape" in message:
+        #         preserve_shape = kwargs.get('preserve_shape', False)
+        #         if preserve_shape:
+        #             min_shape = np.array([self._get_image_shape(x) for x in result]).min(axis=0)
+        #             result = [arr[:min_shape[0], :min_shape[1]].copy() for arr in result]
+        #             new_images = np.stack(result)
+        #         else:
+        #             new_images = np.array(result, dtype=object)
+        #     else:
+        #         raise e
+        # setattr(self, component, new_images)
+        setattr(self, component, np.asarray(result))
 
     def _calc_origin(self, image_shape, origin, background_shape):
         """ Calculate coordinate of the input image with respect to the background.
@@ -376,7 +390,7 @@ class ImagesBatch(BaseImagesBatch):
 
         Returns
         -------
-        sequence : calculated origin in the form (row, column)
+        sequence : calculated origin in the form (column, row)
         """
 
         if isinstance(origin, str):
@@ -463,14 +477,14 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        image_shape = self._get_image_shape(image)
-        origin = self._calc_origin(shape, origin, image_shape)
-        if np.all(origin + shape > image_shape):
-            shape = image_shape - origin
-
-        row_slice = slice(origin[0], origin[0] + shape[0])
-        column_slice = slice(origin[1], origin[1] + shape[1])
-        return image[row_slice, column_slice].copy()
+        # image_shape = self._get_image_shape(image)
+        # origin = self._calc_origin(shape, origin, image_shape)
+        # if np.all(origin + shape > image_shape):
+        #     shape = image_shape - origin
+        #
+        # row_slice = slice(origin[0], origin[0] + shape[0])
+        # column_slice = slice(origin[1], origin[1] + shape[1])
+        # return image[row_slice, column_slice].copy()
 
     def _put_on_background_(self, image, background, origin, mask=None):
         """ Put an image on a background at given origin
