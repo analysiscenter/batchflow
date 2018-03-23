@@ -9,6 +9,7 @@ Example of usage
 Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class we train model for 1000 iterations and repeat it 10 times. Firtsly, import classes from `dataset` to create pipelines:
 
 .. code-block:: python
+
     from dataset import B, C, V, F, Config
     from dataset.opensets import MNIST
     from dataset.models.tf import VGG7
@@ -16,6 +17,7 @@ Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different l
 Define model config. All parameters that we want to vary we define as ``C('parameter_name')``: 
 
 .. code-block:: python
+
     model_config = {
         'inputs/images': {
             'shape': (28, 28, 1),
@@ -36,7 +38,9 @@ Define model config. All parameters that we want to vary we define as ``C('param
     }
 
 Define dataset and train pipeline:
+
 .. code-block:: python
+
     mnist = MNIST()
 
     feed_dict = {'images': B('images'),
@@ -53,20 +57,27 @@ Action parameters that we want to vary we also define as ``C('parameter_name')``
 ``run`` action must be defined with ``lazy=True``.
 
 Create instance of `Research` class and add train pipeline:
+
 .. code-block:: python
+
     research = Research()
     research.add_pipeline(vgg7_train, variables='loss', name='train')
+
 We define parameter ``variables`` as ``'loss'`` to save pipeline variable with that name after training with each parameter configuration.
 Parameter ``variables`` defines pipeline name inside ``research``.
 
 All parameter combinations we define through the dict where key is a parameter name and value is list of possible parameter values.
 Create grid of parameters and add to ``research``: 
+
 .. code-block:: python
+
     grid_config = {'model_class': [VGG7, VGG16], 'layout': ['cna', 'can']}
     research.add_grid_config(grid_config)
 
 In order to control test accuracy we create test pipeline and add it to ``research``:
+
 .. code-block:: python
+
     vgg7_test = (mnist.test.p
              .init_variable('accuracy', init_on_each_run=list)
              .import_model('model', C('import_model_from'))
@@ -80,7 +91,9 @@ Note that we use ``C('import_model_from')`` in ``import_model`` action and add t
 All ``kwargs`` in ``add_pipeline`` are used to define parameters that depends on other pipeline.
 
 Method ``run`` starts computations:
+
 .. code-block:: python
+
     research.run(n_reps=10, n_iters=1000, name='my_research'))
 
 All result will be saved into ``my_research`` folder.
