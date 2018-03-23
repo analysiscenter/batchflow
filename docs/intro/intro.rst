@@ -124,3 +124,19 @@ These are include optimization algorithms, layer layouts, batch norm momentum an
 After training thousands of models we find out that some values of those parameters work better than others.
 That is why we gathered them into :doc:`best practice <best_practice>` module.
 Though it does not fit all the situations and sometimes can even lead to average results, most of the time it works well.
+
+Research
+========
+To perform multiple experiments with different parameters you can use `Research` class:
+
+.. code-block:: python
+
+    from dataset.research import Research
+    ...
+    research = (Research()
+                .add_pipeline(train_pipeline, variables='loss', name='train')
+                .add_pipeline(test_pipeline, variables='accuracy', name='test', import_model_from='train')
+                .add_grid_config('model_class': [VGG7, VGG16], 'layout': ['cna', 'can'])
+                .run(n_reps=10, n_iters=1000))
+
+See more indo about :doc:`Research <research>`.

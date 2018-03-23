@@ -4,7 +4,7 @@ Research
 
 Research class is intended to multiple running of the same pipelines with different parameters and accumulating of statistics. It can be parameters of models or augmentation parameters.
 
-Example of usage
+Basic usage
 ----------------
 Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class we train model for 1000 iterations and repeat it 10 times. Firtsly, import classes from `dataset` to create pipelines:
 
@@ -12,7 +12,7 @@ Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different l
 
     from dataset import B, C, V, F, Config
     from dataset.opensets import MNIST
-    from dataset.models.tf import VGG7
+    from dataset.models.tf import VGG7, VGG16
 
 Define model config. All parameters that we want to vary we define as ``C('parameter_name')``: 
 
@@ -101,4 +101,4 @@ All result will be saved into ``my_research`` folder.
 API
 ---
 
-See :doc:`Batch API <../api/dataset.batch>`.
+See :doc:`Batch API <../api/dataset.research>`.
