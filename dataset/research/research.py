@@ -23,14 +23,14 @@ class Research:
     def __init__(self):
         self.pipelines = OrderedDict()
 
-    def add_pipeline(self, root_pipeline, branch_pipeline=None, variables=None, config=None, name=None,
+    def add_pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
                      execute_for=None, run=False, **kwargs):
         """ Add new pipeline to research.
 
         Parameters
         ----------
         root_pipeline : dataset.Pipeline
-            root_pipeline must have run action with lazy=True and n_epochs=None. If branch_pipeline=None then
+            root_pipeline must have run action with lazy=True. If branch_pipeline is None then root_pipeline
             may contain parameters that can be defined by grid.
         branch_pipeline : dataset.Pipeline or None
             if not None, for resulting batch from root_pipeline branch_pipeline.execute_for(batch) will be called.
@@ -38,9 +38,6 @@ class Research:
         variables : str, list of str or None
             names of pipeline variables to save after each repetition. All of them must be defined in pipeline,
             not in preproc.
-        preproc : dataset.Pipeline or None
-            if preproc is not None it must have run action with lazy=True and n_epochs=None. For resulting batch
-            pipeline.execute_for(batch) will be called. Notice that pipeline must not change batch from preproc.
         name : str (default None)
             pipeline name. If name is None, pipeline will have name 'ppl_{index}'
         execute_for : int, list of ints or None
@@ -49,7 +46,7 @@ class Research:
             If list of ints, pipeline will be excuted for that iterations
             If None, pipeline will executed at each iteration.
         run : bool (default False)
-            if False then .next_batch() will be applied to pipeline, else .run().
+            if False then .next_batch() will be applied to pipeline, else .run() and then reset_iter().
         kwargs :
             parameters in pipeline config that depends on the names of the other pipeline. For example,
             if test pipeline imports model from the other pipeline with name 'train' in Researcn,
@@ -62,7 +59,6 @@ class Research:
         as C('parameter_name'). Corresponding parameter in grid must have the same 'parameter_name'.
         """
         name = name or 'ppl_' + str(len(self.pipelines))
-        config = config or Config()
         variables = variables or []
 
         if not isinstance(variables, list):
@@ -95,6 +91,8 @@ class Research:
         ----------
         grid_config : dict, Grid or Option
             if dict it should have items parameter_name: list of values.
+
+        Configs from that grid will be generated and then substitute into pipelines.
         """
         self.grid_config = Grid(grid_config)
         return self
@@ -162,13 +160,13 @@ class Research:
             number of repetitions with each combination of parameters from grid_config.
         n_iters: int
             number of iterations for each configurations of each pipeline.
-        n_workers : int (default 1), list of instances of Worker or list of dicts (Configs).
+        n_workers : int, list of instances of Worker or list of dicts (Configs) (default 1).
             Workers (processes) to run tasks in parallel.
-            If int - number of workers to run pipelines or workers that will run them. By default,
-                PipelineWorker will be used.
+            If int - number of workers to run pipelines or workers that will run them. If save_model is False,
+                PipelineWorker will be used, else SavingWorker.
             If list of instances of Worker - workers to run tasks.
             If list of dicts (Configs) - list of additional configs which will be appended to configs from tasks.
-                Each element corresponds to worker.
+                Each element corresponds to worker. Default Worker will be chosed as in case when n_workers is int.
         n_branches: int or list of dicts (Configs)
             Is using if preproc is not None. Number of different configs which will use the same batch
             from preproc pipeline. Pipelines will be executed in different threads.
