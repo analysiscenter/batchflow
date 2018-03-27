@@ -8,3 +8,4 @@ API
    dataset.core
    dataset.opensets
    dataset.models
+   dataset.research

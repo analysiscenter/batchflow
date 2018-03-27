@@ -43,6 +43,7 @@ class PipelineWorker(Worker):
                 pipeline_copy = pipeline['ppl'] + Pipeline()
 
                 pipeline['execute_for'] = SingleRunning.get_iterations(pipeline['execute_for'], task['n_iters'])
+                pipeline['dump_for'] = SingleRunning.get_iterations(pipeline['dump_for'], task['n_iters'])
 
                 single_running.add_pipeline(pipeline_copy, pipeline['var'],
                                             name=name, execute_for=pipeline['execute_for'], **pipeline['kwargs'])
@@ -96,6 +97,8 @@ class PipelineWorker(Worker):
                                     item.save_results(filename, names=name)
                                 else:
                                     item.next_batch(name)
+                        if j in pipeline['dump_for']:
+                            self.post()
             except StopIteration:
                 self.log_info('Task {} was stopped after {} iterations'.format(i, j+1), filename=self.logfile)
                 break

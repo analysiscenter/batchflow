@@ -2,11 +2,13 @@
 Research
 ===========
 
-Research class is intended to multiple running of the same pipelines with different parameters and accumulating of statistics. It can be parameters of models or augmentation parameters.
+Research class is intended to multiple running of the same pipelines with different parameters in order to get some metrics value.
 
 Basic usage
-----------------
-Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class we train model for 1000 iterations and repeat it 10 times. Firtsly, import classes from `dataset` to create pipelines:
+-----------
+Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class we train model for 1000 iterations and repeat that process 10 times. 
+
+Firtsly, import classes from `dataset` to create pipelines:
 
 .. code-block:: python
 
@@ -37,6 +39,8 @@ Define model config. All parameters that we want to vary we define as ``C('param
         'model_config/body/block/layout': C('layout')
     }
 
+Strictly saying, the whole ``model_config`` with different ``'model_config/body/block/layout'`` is a pipeline parameter but due to a substitution rule of named expressions you can define named expression inside of `dict` or `Config` that is used as action parameter (See :doc:`Named expressions <../intro/named_expr>`).
+
 Define dataset and train pipeline:
 
 .. code-block:: python
@@ -53,7 +57,7 @@ Define dataset and train pipeline:
                   .run(batch_size=32, shuffle=True, n_epochs=None, lazy=True)
                  )
 
-Action parameters that we want to vary we also define as ``C('parameter_name')``. Note that to specify parameters of batch generating
+Action parameters that we want to vary we define as ``C('model_class')``. Note that to specify parameters of batch generating
 ``run`` action must be defined with ``lazy=True``.
 
 Create instance of `Research` class and add train pipeline:
@@ -88,7 +92,7 @@ In order to control test accuracy we create test pipeline and add it to ``resear
     research.add_pipeline(vgg7_test, variables='accuracy', name='test', import_model_from='train')
 
 Note that we use ``C('import_model_from')`` in ``import_model`` action and add test pipeline with parameter ``import_model_from='train'``.
-All ``kwargs`` in ``add_pipeline`` are used to define parameters that depends on other pipeline.
+All ``kwargs`` in ``add_pipeline`` are used to define parameters that depends on other pipeline in the same way.
 
 Method ``run`` starts computations:
 
@@ -98,7 +102,17 @@ Method ``run`` starts computations:
 
 All result will be saved into ``my_research`` folder.
 
+Parallel runnings
+-----------------
+
+Method ``run`` of ``Research`` has some additional parameters to allow run pipelines with different configs in parallel.
+The first one is ``n_workers``. If you want to run pipelines in two different processes, run the following command:
+
+.. code-block:: python
+
+    research.run(n_reps=10, n_iters=1000, n_workers=2, name='my_research'))
+
 API
 ---
 
-See :doc:`Batch API <../api/dataset.research>`.
+See :doc:`Research API <../api/dataset.research>`.

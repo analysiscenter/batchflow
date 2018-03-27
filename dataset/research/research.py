@@ -24,7 +24,7 @@ class Research:
         self.pipelines = OrderedDict()
 
     def add_pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
-                     execute_for=None, run=False, **kwargs):
+                     execute_for=None, dump_for=None, run=False, **kwargs):
         """ Add new pipeline to research.
 
         Parameters
@@ -77,6 +77,7 @@ class Research:
             'ppl': pipeline,
             'var': variables,
             'execute_for': execute_for,
+            'dump_for': dump_for,
             'preproc': preproc,
             'kwargs': kwargs,
             'run': run
