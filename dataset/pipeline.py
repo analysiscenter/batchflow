@@ -3,6 +3,7 @@ import traceback
 import concurrent.futures as cf
 import asyncio
 import logging
+import warnings
 import queue as q
 import numpy as np
 
@@ -1007,8 +1008,8 @@ class Pipeline:
                 yield batch
 
 
-    def gen_batch(self, batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, on_iter=None,
-                  *args, **kwargs):
+    def gen_batch(self, batch_size, *args, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, on_iter=None,
+                  **kwargs):
         """ Generate batches """
         target = kwargs.pop('target', 'threads')
 
@@ -1102,9 +1103,10 @@ class Pipeline:
             self._lazy_run = args, kwargs
         else:
             self.reset_iter()
-
             if len(args) == 0 and len(kwargs) == 0:
                 args, kwargs = self._lazy_run
+            if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
+                warnings.warn('Pipeline will never stop as n_epochs=None')
             for _ in self.gen_batch(*args, **kwargs):
                 pass
         return self

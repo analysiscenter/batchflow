@@ -638,7 +638,7 @@ class Batch(BaseBatch):
             data = dict(zip(components, item))
             f.write(blosc.compress(dill.dumps(data)))
 
-    def _load_table(self, src, fmt, components=None, *args, **kwargs):
+    def _load_table(self, src, fmt, components=None, post=None, *args, **kwargs):
         """ Load a data frame from table formats: csv, hdf5, feather """
         if fmt == 'csv':
             _data = pd.read_csv(src, *args, **kwargs)
@@ -654,9 +654,18 @@ class Batch(BaseBatch):
             # dask.DataFrame.loc supports advanced indexing only with lists
             _data = _data.loc[list(self.indices)].compute()
 
-        components = tuple(components or self.components)
-        for i, comp in enumerate(components):
-            setattr(self, comp, _data.iloc[:, i].values)
+        if callable(post):
+            _data = post(_data, src=src, fmt=fmt, components=components, **kwargs)
+        else:
+            components = tuple(components or self.components)
+            _new_data = dict()
+            for i, comp in enumerate(components):
+                _new_data[comp] = _data.iloc[:, i].values
+            _data = _new_data
+
+        for comp, values in _data.items():
+            setattr(self, comp, values)
+
 
     @action(use_lock='__dump_table_lock')
     def _dump_table(self, dst, fmt='feather', components=None, *args, **kwargs):
@@ -712,18 +721,17 @@ class Batch(BaseBatch):
         components : None or str or tuple of str
             components to load
 
-        *args :
-            other parameters are passed to format-specific loaders
         **kwargs :
-            other parameters are passed to format-specific loaders
+            other parameters to pass to format-specific loaders
         """
+        _ = args
         components = [components] if isinstance(components, str) else components
         if fmt is None:
             self.put_into_data(src, components)
         elif fmt == 'blosc':
-            self._load_blosc(src, components=components, **kwargs)
+            self._load_blosc(src=src, components=components, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:
-            self._load_table(src, fmt, components, *args, **kwargs)
+            self._load_table(src=src, fmt=fmt, components=components, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
         return self
