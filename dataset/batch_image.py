@@ -8,10 +8,6 @@ from skimage.transform import resize
 import scipy.ndimage
 
 import PIL
-from PIL import ImageOps, ImageChops, ImageFilter, ImageEnhance
-
-
-import PIL
 import PIL.ImageOps
 import PIL.ImageChops
 import PIL.ImageFilter
@@ -511,19 +507,6 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-
-        origin = self._calc_origin(shape, origin, image.size)
-        right_bottom = origin + shape
-
-        if crop_boundaries:
-            out_of_boundaries = origin < 0
-            origin[out_of_boundaries] = 0
-
-            image_shape = np.asarray(image.size)
-            out_of_boundaries = right_bottom > image_shape
-            right_bottom[out_of_boundaries] = image_shape[out_of_boundaries]
-
-        return image.crop((*origin, *right_bottom))
 
         origin = self._calc_origin(shape, origin, image.size)
         right_bottom = origin + shape
