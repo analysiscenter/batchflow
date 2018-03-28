@@ -5,18 +5,6 @@ from functools import wraps
 
 import numpy as np
 from skimage.transform import resize
-<<<<<<< HEAD
-=======
-try:
-    from imageio import imread, imsave
-except ImportError:
-    from scipy.ndimage import imread
-    from scipy.misc import imsave
-
-
-import PIL
-from PIL import ImageOps, ImageChops, ImageFilter, ImageEnhance
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 import scipy.ndimage
 
 import PIL
@@ -295,18 +283,10 @@ class ImagesBatch(BaseImagesBatch):
 
     @classmethod
     def _get_image_shape(cls, image):
-<<<<<<< HEAD
 
         if isinstance(image, PIL.Image.Image):
             return image.size
         return image.shape[:2]
-=======
-        # return image.shape[:2]
-        if isinstance(image, PIL.Image.Image):
-            return image.size
-        else:
-            return image.shape[:2]
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
     @property
     def image_shape(self):
@@ -315,15 +295,8 @@ class ImagesBatch(BaseImagesBatch):
         if len(shapes_count) == 1:
             if isinstance(self.images[0], PIL.Image.Image):
                 return (*self.images[0].size, len(self.images[0].getbands()))
-<<<<<<< HEAD
             return self.images[0].shape
         raise RuntimeError('Images have different shapes')
-=======
-            else:
-                return self.images[0].shape
-        else:
-            raise RuntimeError('Images have different shapes')
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
     @inbatch_parallel(init='indices', post='_assemble')
     def _load_image(self, ix, src=None, fmt=None, dst="images"):
@@ -394,11 +367,7 @@ class ImagesBatch(BaseImagesBatch):
         else:
             try:
                 setattr(self, component, np.stack(result))
-<<<<<<< HEAD
             except ValueError:
-=======
-            except:
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
                 setattr(self, component, np.asarray(result, dtype=object))
 
     def _to_array_(self, image):
@@ -417,11 +386,7 @@ class ImagesBatch(BaseImagesBatch):
 
         return np.array(image)
 
-<<<<<<< HEAD
     def _to_pil_(self, image):
-=======
-    def _to_PIL_(self, image):
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
         """converts images in Batch to PIL format
 
         Parameters
@@ -511,11 +476,7 @@ class ImagesBatch(BaseImagesBatch):
 
         original_shape = self._get_image_shape(image)
         rescaled_shape = list(np.int32(np.ceil(np.asarray(original_shape)*factor)))
-<<<<<<< HEAD
         rescaled_image = image.resize(rescaled_shape, resample=resample)
-=======
-        rescaled_image = image.resize(rescaled_shape, resample=0)
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
         if preserve_shape:
             rescaled_image = self._preserve_shape(original_shape, rescaled_image, origin)
         return rescaled_image
@@ -551,7 +512,6 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-<<<<<<< HEAD
         origin = self._calc_origin(shape, origin, image.size)
         right_bottom = origin + shape
 
@@ -564,16 +524,6 @@ class ImagesBatch(BaseImagesBatch):
             right_bottom[out_of_boundaries] = image_shape[out_of_boundaries]
 
         return image.crop((*origin, *right_bottom))
-=======
-        # out_of_boundaries = origin + shape > image_shape
-
-        # if np.any(origin + shape > image_shape):
-        #     shape = image_shape - origin
-
-        # row_slice = slice(origin[0], origin[0] + shape[0])
-        # column_slice = slice(origin[1], origin[1] + shape[1])
-        # return image[row_slice, column_slice].copy()
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
         origin = self._calc_origin(shape, origin, image.size)
         right_bottom = origin + shape
@@ -613,11 +563,7 @@ class ImagesBatch(BaseImagesBatch):
         else:
             background = background.copy()
 
-<<<<<<< HEAD
         if not isinstance(mask, PIL.Image.Image):
-=======
-        if not isinstance(mask, PIL.Image.Image) :
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
             mask = PIL.Image.fromarray(mask) if mask is not None else None
 
         origin = list(self._calc_origin(self._get_image_shape(image), origin,
@@ -649,11 +595,7 @@ class ImagesBatch(BaseImagesBatch):
         np.ndarray : image after described actions
         """
 
-<<<<<<< HEAD
         crop_origin = 'top_left' if origin != 'center' else 'center'
-=======
-        crop_origin =  'top_left' if origin != 'center' else 'center'
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
         return self._put_on_background_(self._crop_(transformed_image, crop_origin, original_shape, True),
                                         np.zeros((*original_shape, 3), dtype=np.uint8),
                                         origin)
@@ -710,13 +652,7 @@ class ImagesBatch(BaseImagesBatch):
 
         return image.resize(*args, **kwargs)
 
-<<<<<<< HEAD
     def _shift_(self, image, offset, mode='const'):
-=======
-
-
-    def _shift_(self, image, offset, mode='const', *args, **kwargs):
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
         """ Shifts an image.
 
         Parameters
@@ -735,11 +671,7 @@ class ImagesBatch(BaseImagesBatch):
         if mode == 'const':
             return image.transform(size=image.size,
                                    method=PIL.Image.AFFINE,
-<<<<<<< HEAD
                                    data=(1, 0, -offset[0], 0, 1, -offset[1]))
-=======
-                                   data=(1,0,-offset[0],0,1,-offset[1]))
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
         elif mode == 'wrap':
             return PIL.ImageChops.offset(image, *offset)
         else:
@@ -813,12 +745,7 @@ class ImagesBatch(BaseImagesBatch):
 
         if mode == 'lr':
             return PIL.ImageOps.mirror(image)
-<<<<<<< HEAD
         return PIL.ImageOps.flip(image)
-=======
-        elif mode == 'ud':
-            return PIL.ImageOps.flip(image)
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
     def _invert_(self, image, channels='all'):
         """ Invert givn channels.
@@ -838,16 +765,7 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-<<<<<<< HEAD
 
-=======
-        # image = image.copy()
-        # if channels == 'all':
-        #     channels = list(range(image.shape[-1]))
-        # max_intencity = 255 if np.issubdtype(image.dtype, np.integer) else 1.
-        # image[..., channels] = max_intencity - image[..., channels]
-        # return image
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
         if channels == 'all':
             image = PIL.ImageChops.invert(image)
         else:
@@ -937,29 +855,9 @@ class ImagesBatch(BaseImagesBatch):
         high = PIL.Image.new('RGB', image.size, high)
         low = PIL.Image.new('RGB', image.size, low)
         return PIL.ImageChops.lighter(PIL.ImageChops.darker(image, high), low)
-<<<<<<< HEAD
 
     def _multiply_lightness_(self, image, multiplier):
         """ Modify lightness of an image using multiplier (which operates on the lightness in HSL format)
-=======
-
-
-    def _multiply_lightness_(self, image, multiplier):
-        """ Modify lightness of an image using multiplier (which operates on the lightness in HSL format)
-
-        Parameters
-        ----------
-        multiplier : Number
-        src : str
-            Component to get images from. Default is 'images'.
-        dst : str
-            Component to write images to. Default is 'images'.
-        p : float
-            Probability of applying the transform. Default is 1.
-
-        """
-        return ImageEnhance.Brightness(im).enhance(multiplier)
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
         Parameters
         ----------
@@ -997,7 +895,6 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-<<<<<<< HEAD
         multiplier = np.float32(multiplier)
         if isinstance(image, PIL.Image.Image):
             return PIL.Image.fromarray(np.clip(multiplier*np.asarray(image), 0, 255).astype(np.uint8))
@@ -1010,15 +907,6 @@ class ImagesBatch(BaseImagesBatch):
             return image.astype(dtype)
 
     def _add_(self, image, term=1., clip=False, preserve_type=False):
-=======
-        dtype = image.dtype if preserve_type else np.float
-        if clip:
-            return _threshold_(multiplier * image.astype(np.int32), low, high, dtype)
-        else:
-            return (multiplier * image.astype(np.int32)).astype(dtype)
-
-    def _add_(self, image, term=0., low=0., high=1., preserve_type=True):
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
         """ Add term to each pixel.
 
         Parameters
@@ -1041,7 +929,6 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-<<<<<<< HEAD
         term = np.float32(term)
         if isinstance(image, PIL.Image.Image):
             return PIL.Image.fromarray(np.clip(term+np.asarray(image), 0, 255).astype(np.uint8))
@@ -1052,10 +939,6 @@ class ImagesBatch(BaseImagesBatch):
             else:
                 image = term + image
             return image.astype(dtype)
-=======
-        dtype = image.dtype if preserve_type else np.float
-        return self._clip_(term + image.astype(np.float), low, high, dtype)
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
     def _pil_convert_(self, image, mode="L"):
         """ Convert image. Actually calls image.convert(mode)
@@ -1076,12 +959,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-<<<<<<< HEAD
         return image.convert(mode)
-=======
-        # return image.mean(axis=-1, keepdims=keepdims).astype(image.dtype)
-        return image.convert("L")
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
     def _posterize_(self, image, bits=4):
         """ Posterizes image.
@@ -1104,21 +982,6 @@ class ImagesBatch(BaseImagesBatch):
         """
 
         return PIL.ImageOps.posterize(image, bits)
-<<<<<<< HEAD
-=======
-        # image = image.copy()
-        #
-        # dtype = image.dtype
-        # max_bin = 256 if np.issubdtype(dtype, np.integer) else 1.0001
-        # max_intencity = 255 if np.issubdtype(dtype, np.integer) else 1.
-        #
-        # bins = np.linspace(0, max_bin, colors_number+1)
-        # color_indices = np.digitize(image, bins) - 1
-        # colors = np.linspace(0, max_intencity, colors_number)
-        #
-        # image = colors[color_indices]
-        # return image
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
     def _cutout_(self, image, origin, shape, color):
         """ Fills given areas with color
@@ -1160,23 +1023,6 @@ class ImagesBatch(BaseImagesBatch):
         origin = self._calc_origin(shape, origin, self._get_image_shape(image))
         image.paste(PIL.Image.new('RGB', shape, color), tuple(origin))
         return image
-        # def _get_shape(shape):
-        #     return (shape, shape) if isinstance(shape, Number) else shape
-        #
-        # def _get_origin(shape, origin):
-        #     if isinstance(origin, str):
-        #         origin = self._calc_origin(shape, origin, image_shape)
-        #     return origin
-        #
-        # image = image.copy()
-        # image_shape = self._get_image_shape(image)
-        # shape = _get_shape(shape)
-        # origin = _get_origin(shape, origin)
-        # right_bottom = (min(origin[0] + shape[0], image_shape[0]),
-        #                 min(origin[1] + shape[1], image_shape[1]))
-        # image[origin[0]:right_bottom[0], origin[1]:right_bottom[1]] = color
-        #
-        # return image
 
     def _assemble_patches(self, patches, *args, dst, **kwargs):
         """ Assembles patches after parallel execution.
@@ -1271,12 +1117,8 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-<<<<<<< HEAD
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._add_(image, noise, clip, preserve_type)
-=======
-        return self._clip_(image+noise(size=image.shape), low, high, dtype=image.dtype)
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
     def _multiplicative_noise_(self, image, noise, clip=False, preserve_type=False):
         """ Add multiplicativa noise to an image.
@@ -1301,14 +1143,9 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-<<<<<<< HEAD
 
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._multiply_(image, noise, clip, preserve_type)
-=======
-        image = np.asarray(image)
-        return self._clip_(image*noise(size=image.shape), low, high, dtype=image.dtype)
->>>>>>> d381fb0787395076ecb8a3bd6984f52a16793fae
 
     def _elastic_transform_(self, image, alpha, sigma, **kwargs):
         """Elastic deformation of images as described in [Simard2003]_.
