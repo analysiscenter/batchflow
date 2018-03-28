@@ -2,7 +2,8 @@
 import sys
 
 sys.path.append('../..')
-from dataset.dataset import action, Batch
+
+from dataset import action, Batch
 
 class MyBatch(Batch):
     """ Class for load data into regression models

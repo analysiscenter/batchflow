@@ -4,8 +4,8 @@ import sys
 
 import numpy as np
 
-sys.path.append('..')
-from dataset.dataset import action, inbatch_parallel, ImagesBatch
+sys.path.append('../..')
+from dataset import action, inbatch_parallel, ImagesBatch
 
 class MnistBatch(ImagesBatch):
     """ Mnist batch and models
@@ -20,7 +20,7 @@ class MnistBatch(ImagesBatch):
     components = 'images', 'labels'
 
     @action
-    @inbatch_parallel(init='images', post='assemble', target='threads')
+    @inbatch_parallel(init='images', post='_assemble', target='threads')
     def shift_flattened_pic(self, image, max_margin=8):
         """ Apply random shift to a flattened pic
 
@@ -41,4 +41,5 @@ class MnistBatch(ImagesBatch):
         left_lower = np.random.randint(2 * max_margin, size=2)
         slicing = (slice(left_lower[0], left_lower[0] + 28),
                    slice(left_lower[1], left_lower[1] + 28))
-        return padded[slicing]
+        
+        return (padded[slicing],)

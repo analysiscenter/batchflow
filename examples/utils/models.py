@@ -1,7 +1,7 @@
 """File contains classes with main regression alghoritms"""
 import tensorflow as tf
 
-from dataset.dataset.models.tf import TFModel
+from dataset.models.tf import TFModel
 
 class Regressions(TFModel):
     """ Class with logistic regression model """
