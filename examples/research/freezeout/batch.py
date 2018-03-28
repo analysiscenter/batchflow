@@ -1,12 +1,9 @@
 """ File with class batch with resnet network """
-import sys
-
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.layers import xavier_initializer_conv2d as xavier
 
-sys.path.append('..')
-from dataset.dataset import action, model, Batch # pylint: disable=no-name-in-module
+from dataset import action, model, Batch # pylint: disable=no-name-in-module
 
 def conv_block(input_tensor, kernel, filters, name, strides=(2, 2)):
     """ Function to create block of ResNet network which include

@@ -2,14 +2,11 @@
 Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 <https://arxiv.org/abs/1611.05431>`_"
 """
-import sys
-
 import numpy as np
 import tensorflow as tf
 
-sys.path.append('..')
-from dataset.dataset.models.tf import ResNet50
-from dataset.dataset.models.tf.layers import conv_block
+from dataset.models.tf import ResNet50
+from dataset.models.tf.layers import conv_block
 
 class StochasticResNet(ResNet50):
     """ Depended on ResNet50 class with stochastic depth

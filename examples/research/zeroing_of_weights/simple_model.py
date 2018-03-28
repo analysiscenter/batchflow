@@ -1,9 +1,5 @@
 """ File with simple model example of convolution network """
-import sys
-
-sys.path.append('../..')
-
-from dataset.dataset.models.tf import TFModel
+from dataset.models.tf import TFModel
 
 class ConvModel(TFModel):
     """ Class to build conv model """
