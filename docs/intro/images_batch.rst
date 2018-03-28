@@ -2,11 +2,16 @@
 Batch class for handling images
 ===============================
 
-ImagesBatch class handles 2D images and their labels.
+ImagesBatch class handles 2D images and their labels. Images are stored as PIL.Image (usually) or np.ndarray.
 
 Components
 ----------
 The class has two components: ``images`` and ``labels``.
+
+Conversion between formats
+--------------------------
+Almost all actions in the batch work with `PIL` images. If dataset contains `np.ndarray` images, just call :meth:`to_pil <dataset.ImagesBatch.to_pil>` method to convert them inside batch.
+To convert images to `np.ndarray` use :meth:`to_array <dataset.ImagesBatch.to_array>` (this must be done, for example, before passing images to a tensorflow model).
 
 Augmentation
 ------------
@@ -29,7 +34,7 @@ ImagesBatch provides typical augmentation actions, for example:
     ..  image:: ../_static/ImagesBatch_examples/invert.png
 * :meth:`salt <dataset.ImagesBatch.salt>` -- set pixels in random positions to given colour
     ..  image:: ../_static/ImagesBatch_examples/salt.png
-* :meth:`threshold <dataset.ImagesBatch.threshold>` -- truncate pixels' values
+* :meth:`clip <dataset.ImagesBatch.threshold>` -- truncate pixels' values
     ..  image:: ../_static/ImagesBatch_examples/threshold.png
 * :meth:`multiply <dataset.ImagesBatch.multiply>` -- multiply an image by the given number
     ..  image:: ../_static/ImagesBatch_examples/multiply.png
@@ -41,15 +46,15 @@ ImagesBatch provides typical augmentation actions, for example:
     ..  image:: ../_static/ImagesBatch_examples/additive_noise.png
 * :meth:`posterize <dataset.ImagesBatch.posterize>` -- posterize an image
     ..  image:: ../_static/ImagesBatch_examples/posterize.png
-* :meth:`to_greyscale <dataset.ImagesBatch.to_greyscale>` -- leave one ('grey') channel
+* :meth:`convert <dataset.ImagesBatch.to_greyscale>` -- convert image's bands to other type
     ..  image:: ../_static/ImagesBatch_examples/to_greyscale.png
 * :meth:`cutout <dataset.ImagesBatch.cutout>` -- add colored rectangular areas to an image
     ..  image:: ../_static/ImagesBatch_examples/cutout.png
 * :meth:`elastic_transform <dataset.ImagesBatch.elastic_transform>` -- add colored rectangular areas to an image
     ..  image:: ../_static/ImagesBatch_examples/elastic.png
 
-Perhaps, any function from scipy.ndimage is accesible as an action. Just use it as a usual action (without specifying input parameter). At least `rotate`, `gaussian_filter` and `affine_transform` work as expected.
 
+Perhaps, any function from scipy.ndimage is accesible as sp_<method_name>. Just use it as a usual action (without specifying input parameter). Note that they only works with scipy.ndarray and usually much slower than respective PIL methods.
 .. note:: All these methods can be executed for randomly sampled images from a batch. You just need to specify ``p`` parameter when calling an action (probability of applying an action to an image).
 
 .. note:: Use ``R()`` or ``P(R())`` :doc:`named expressions <named_expr>` to sample an argument for actions. In the first case the argument will be sampled for all images in a batch. If ``P(R())`` is passed then the argument will be sampled for each image.
@@ -162,10 +167,8 @@ Example:
             """
 
             if mode == 'lr':
-                image = image[:, ::-1]
-            elif mode == 'ud':
-                image = image[::-1]
-            return image
+                return PIL.ImageOps.mirror(image)
+            return PIL.ImageOps.flip(image)
         ...
 
 To use this action in a pipeline you must write:
@@ -193,7 +196,7 @@ It must have the following signature:
 
    ``_method_name_all(images, indices, ...)``
 
-This method is actually wrapped with :meth:`~dataset.Batch.apply_transform_all`. And executed once with the whole batch passed. ``indices`` parameter declares images that must be transformed (it is needed, for example, if you want to perfom action only to the subset of the elemets. See below for more details)
+This method is actually wrapped with :meth:`~dataset.Batch.apply_transform_all`. And executed once with the whole batch passed. ``indices`` parameter declares images that must be transformed (it is needed, for example, if you want to perform action only to the subset of the elements. See below for more details)
 
 
 .. note:: If you define these actions in a child class then you must decorate it with ``@transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')``
@@ -209,10 +212,11 @@ Example:
             """ Flips images at given indices.
             """
 
-            if mode == 'lr':
-                images[indices] = images[indices, :, ::-1]
-            elif mode == 'ud':
-                images[indices] = images[indices, ::-1]
+            for ind in indices:
+              if mode == 'lr':
+                  images[ind] = PIL.ImageOps.mirror(images[ind])
+              images[ind] = PIL.ImageOps.flip(images[ind])
+
             return images
         ...
 
@@ -237,7 +241,7 @@ To use this action in a pipeline you must write:
 Assembling after parallel execution
 -----------------------------------
 
-ote that if images have different shapes after an action then there are two ways to tackle it:
+Note that if images have different shapes after an action then there are two ways to tackle it:
 
   1. Do nothing. Then images will be stored in `np.ndarray` with `dtype=object`.
   2. Pass `preserve_shape=True` to an action which changes the shape of an image. Then image

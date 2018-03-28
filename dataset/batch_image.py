@@ -8,6 +8,10 @@ from skimage.transform import resize
 import scipy.ndimage
 
 import PIL
+from PIL import ImageOps, ImageChops, ImageFilter, ImageEnhance
+
+
+import PIL
 import PIL.ImageOps
 import PIL.ImageChops
 import PIL.ImageFilter
@@ -279,6 +283,7 @@ class ImagesBatch(BaseImagesBatch):
 
     @classmethod
     def _get_image_shape(cls, image):
+
         if isinstance(image, PIL.Image.Image):
             return image.size
         return image.shape[:2]
@@ -633,8 +638,6 @@ class ImagesBatch(BaseImagesBatch):
         """
 
         return image.resize(*args, **kwargs)
-
-
 
     def _shift_(self, image, offset, mode='const'):
         """ Shifts an image.
@@ -1103,7 +1106,6 @@ class ImagesBatch(BaseImagesBatch):
 
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._add_(image, noise, clip, preserve_type)
-
 
     def _multiplicative_noise_(self, image, noise, clip=False, preserve_type=False):
         """ Add multiplicativa noise to an image.
