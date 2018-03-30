@@ -53,7 +53,7 @@ Define dataset and train pipeline:
     vgg7_train = (mnist.train.p
                   .init_variable('loss', init_on_each_run=list)
                   .init_model('dynamic', C('model_class'), 'model', model_config)
-                  .train_model('model', feed_dict=feed_dict, fetches='loss', save_to=V('loss'), mode='a')
+                  .train_model('model', feed_dict=feed_dict, fetches='loss', save_to=V('loss'), mode='w')
                   .run(batch_size=32, shuffle=True, n_epochs=None, lazy=True)
                  )
 
@@ -67,8 +67,7 @@ Create instance of `Research` class and add train pipeline:
     research = Research()
     research.add_pipeline(vgg7_train, variables='loss', name='train')
 
-We define parameter ``variables`` as ``'loss'`` to save pipeline variable with that name after training with each parameter configuration.
-Parameter ``variables`` defines pipeline name inside ``research``.
+Parameter ``name`` defines pipeline name inside ``research``. At each iteration that pipeline will be executed with ``.next_batch()`` and all ``variables`` from pipeline will be saved so that variables must be added with ``mode='w'``.
 
 All parameter combinations we define through the dict where key is a parameter name and value is list of possible parameter values.
 Create grid of parameters and add to ``research``: 
@@ -86,10 +85,28 @@ In order to control test accuracy we create test pipeline and add it to ``resear
              .init_variable('accuracy', init_on_each_run=list)
              .import_model('model', C('import_model_from'))
              .predict_model('model', feed_dict=feed_dict, fetches='output_accuracy', save_to=V('accuracy'), mode='a')
-             .run(batch_size=100, shuffle=True, n_epochs=None, lazy=True)
+             .run(batch_size=100, shuffle=True, n_epochs=1, lazy=True)
             )
 
-    research.add_pipeline(vgg7_test, variables='accuracy', name='test', import_model_from='train')
+    research.add_pipeline(vgg7_test, variables='accuracy', name='test', run=True, exec_for=100, import_model_from='train')
+
+That pipeline will be executed with ``.run()`` at each 100 iterations because of parameters ``run=True``  and ``exec_for=100``. Pipeline variable ``accuracy`` will be saved after each execution. In order to add mean value of accuracy on test dataset you can define function
+
+.. code-block:: python
+
+    def accuracy(pipeline):
+        import numpy as np
+        acc = pipeline.get_variable('accuracy')
+        return {'mean_accuracy': np.mean(acc)}
+
+and then add test pipeline as
+
+.. code-block:: python
+
+    research.add_pipeline(vgg7_test, variables='accuracy', name='test', run=True, exec_for=100, post_run=accuracy, import_model_from='train')
+
+``post_run`` function must get pipeline as parameter and return dict. That function will be executed for pipeline after each run and result will be saved.
+
 
 Note that we use ``C('import_model_from')`` in ``import_model`` action and add test pipeline with parameter ``import_model_from='train'``.
 All ``kwargs`` in ``add_pipeline`` are used to define parameters that depends on other pipeline in the same way.
@@ -98,9 +115,9 @@ Method ``run`` starts computations:
 
 .. code-block:: python
 
-    research.run(n_reps=10, n_iters=1000, name='my_research'))
+    research.run(n_reps=10, n_iters=1000, name='my_research', progress_bar=True))
 
-All result will be saved into ``my_research`` folder.
+All results will be saved as ``my_research/{config_alias}/{number_of_repetition}/{pipeline_name}_final`` as dict where keys are variable names and values are lists of corresponding values. 
 
 Parallel runnings
 -----------------
@@ -111,6 +128,45 @@ The first one is ``n_workers``. If you want to run pipelines in two different pr
 .. code-block:: python
 
     research.run(n_reps=10, n_iters=1000, n_workers=2, name='my_research'))
+
+Moreover, you can specify workers and define as ``n_workers`` as list of dicts or Configs. Each worker will add corresponding element of list to pipeline config:
+
+.. code-block:: python
+
+    n_workers = [Config(model_config=dict(session=dict(config=tf.ConfigProto(gpu_options=tf.GPUOptions(visible_device_list=str(i)))))) for i in range(2)]
+    research.run(n_reps=10, n_iters=1000, n_workers=n_workers, name='my_research'))
+
+In that case two workers will run pipelines in different processes on different GPU.
+
+Another way of parrallel running
+--------------------------------
+
+If you have a heavy preprocessing you can use one prepared batch for few pipelines with different configs. In that case you must define ``root_pipeline`` that contains common actions without variable parameters:
+
+.. code-block:: python
+    train_root = mnist.train.p.run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True) 
+
+and ``branch_pipeline`` that will use prepared batch from ``root_pipeline`` and can contain variable parameters:
+
+.. code-block:: python
+    train_branch = (Pipeline()
+            .init_variable('loss', init_on_each_run=list)
+            .init_variable('accuracy', init_on_each_run=list)
+            .init_model('dynamic', ResNet18, 'conv', config=model_config)
+            .train_model('conv', 
+                         fetches=['loss', 'output_accuracy'], 
+                         feed_dict={'images': B('images'), 'labels': B('labels')},
+                         save_to=[V('loss'), V('accuracy')], mode='w')
+
+    research.add_pipeline(train_root, train_branch, variables=['loss', 'accuracy'], name='train')
+)
+
+In order to specify number of branches define ``n_branches`` parameter:
+    
+.. code-block:: python
+    mr.run(n_reps=1, n_iters=1000, n_branches=2, name='branches', progress_bar=True)
+
+As ``n_workers`` parameter you can define ``n_branches`` as list of dicts or Configs that will be appended to corresponding branches.
 
 API
 ---
