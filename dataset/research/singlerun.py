@@ -16,9 +16,9 @@ class SingleRunning:
     def __init__(self):
         self.pipelines = OrderedDict()
         self.config = Config()
-        self.results = None
+        self.results = dict()
 
-    def add_pipeline(self, pipeline, variables=None, name=None, execute_for=None, **kwargs):
+    def add_pipeline(self, pipeline, variables=None, name=None, post_run=None, **kwargs):
         """ Add new pipeline to research.
         Parameters
         ----------
@@ -53,8 +53,11 @@ class SingleRunning:
             'ppl': pipeline,
             'import_config': import_config,
             'var': variables,
-            'execute_for': execute_for
+            'post_run': post_run
         }
+
+        self.results[name] = {var: [] for var in variables}
+        self.results[name]['iterations'] = []
 
     def _variable_len(self, name, variable):
         if name in self.pipelines:
@@ -79,22 +82,6 @@ class SingleRunning:
         config : Config or dict
         """
         self.config = Config(config)
-
-    def get_results(self, names):
-        """ Get values of variables from pipelines.
-        Returns
-        -------
-        Results
-
-        If some pipeline was added without variables it will not be included into results.
-        """
-        if names is None:
-            pipelines = self.pipelines
-        else:
-            if isinstance(names, str):
-                names = [names]
-            pipelines = {key: self.pipelines[key] for key in names}
-        return Results(pipelines)
 
     def init(self):
         """
@@ -125,13 +112,28 @@ class SingleRunning:
         name : str
             pipeline name
         """
-        return self.pipelines[name]['ppl'].next_batch()
+        self.pipelines[name]['ppl'].next_batch()
 
     def run(self, name, reset=True):
         """ Run pipelines till the end. """
         if reset:
             self.pipelines[name]['ppl'].reset_iter()
         self.pipelines[name]['ppl'].run()
+
+    def put_result(self, iteration, name):
+        """ Put pipeline variable into results. """
+        for var in self.pipelines[name]['var']:
+            self.results[name][var].append(self.pipelines[name]['ppl'].get_variable(var))
+        self.results[name]['iterations'].append(iteration)
+
+    def dump_result(self, name, path):
+        """ Dump results. """
+        foldername, _ = os.path.split(path)
+        if len(foldername) != 0:
+            if not os.path.exists(foldername):
+                os.makedirs(foldername)
+        with open(path, 'wb') as file:
+            pickle.dump(self.results[name], file)
 
     def run_all(self, n_iters):
         """ Run all pipelines. Pipelines will be executed simultaneously in the following sense:
@@ -148,49 +150,11 @@ class SingleRunning:
                 pipeline['ppl'].next_batch()
         self.results = self.get_results()
 
-    def save_results(self, save_to, names=None):
-        """ Pickle results to file.
-
-        Parameters
-        ----------
-        save_to : str
-        """
-        self.results = self.get_results(names)
-        foldername, _ = os.path.split(save_to)
-        if len(foldername) != 0:
-            if not os.path.exists(foldername):
-                os.makedirs(foldername)
-        with open(save_to, 'wb') as file:
-            pickle.dump(self.results, file)
-
-
-    @classmethod
-    def get_iterations(cls, execute_for, n_iters=None):
-        """ Get indices of iterations from execute_for. """
-        if n_iters is not None:
-            if isinstance(execute_for, int):
-                if execute_for == -1:
-                    execute_for = [n_iters - 1]
-                else:
-                    execute_for = list(range(0, n_iters, execute_for))
-            elif execute_for is None:
-                execute_for = list(range(n_iters))
-        return execute_for
-
-
-class Results(Config):
-    """ Results of single experiment. """
-    def __init__(self, pipelines, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._add_results(pipelines)
-
-    def _add_results(self, pipelines):
-        for name, pipeline in pipelines.items():
-            if len(pipeline['var']) != 0:
-                variables = {
-                    variable: copy(pipeline['ppl'].get_variable(variable)) for variable in pipeline['var']
-                }
-                self[name] = {
-                    'iterations': pipeline['execute_for'],
-                    **variables
-                }
+    def post_run(self, name):
+        """ Run function after run. """
+        res = self.pipelines[name]['post_run'](self.pipelines[name]['ppl'])
+        for key, value in res.items():
+            if key in self.results[name]:
+                self.results[name][key].append(value)
+            else:
+                self.results[name][key] = [value]

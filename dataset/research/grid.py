@@ -188,7 +188,7 @@ class Grid:
         elif isinstance(other, Grid):
             return Grid(self.grid + other.grid)
         elif isinstance(other, Option):
-            return self + Grid([[other]])
+            return self + Grid(other)
 
     def __repr__(self):
         return 'Grid(' + str(self.alias()) + ')'
