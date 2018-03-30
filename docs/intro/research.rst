@@ -2,13 +2,13 @@
 Research
 ===========
 
-Research class is intended to multiple running of the same pipelines with different parameters in order to get some metrics value.
+Research class is intended for multiple running of the same pipelines with different parameters in order to get some metrics value.
 
 Basic usage
 -----------
-Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class we train model for 1000 iterations and repeat that process 10 times. 
+Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class, we train model for 1000 iterations and repeat that process 10 times. 
 
-Firtsly, import classes from `dataset` to create pipelines:
+Firstly, import classes from `dataset` to create pipelines:
 
 .. code-block:: python
 
@@ -60,17 +60,17 @@ Define dataset and train pipeline:
 Action parameters that we want to vary we define as ``C('model_class')``. Note that to specify parameters of batch generating
 ``run`` action must be defined with ``lazy=True``.
 
-Create instance of `Research` class and add train pipeline:
+Create an instance of `Research` class and add train pipeline:
 
 .. code-block:: python
 
     research = Research()
     research.add_pipeline(vgg7_train, variables='loss', name='train')
 
-Parameter ``name`` defines pipeline name inside ``research``. At each iteration that pipeline will be executed with ``.next_batch()`` and all ``variables`` from pipeline will be saved so that variables must be added with ``mode='w'``.
+Parameter ``name`` defines pipeline name inside ``research``. At each iteration that pipeline will be executed with ``.next_batch()`` and all ``variables`` from the pipeline will be saved so that variables must be added with ``mode='w'``.
 
-All parameter combinations we define through the dict where key is a parameter name and value is list of possible parameter values.
-Create grid of parameters and add to ``research``: 
+All parameter combinations we define through the dict where a key is a parameter name and value is a list of possible parameter values.
+Create a grid of parameters and add to ``research``: 
 
 .. code-block:: python
 
@@ -90,7 +90,7 @@ In order to control test accuracy we create test pipeline and add it to ``resear
 
     research.add_pipeline(vgg7_test, variables='accuracy', name='test', run=True, exec_for=100, import_model_from='train')
 
-That pipeline will be executed with ``.run()`` at each 100 iterations because of parameters ``run=True``  and ``exec_for=100``. Pipeline variable ``accuracy`` will be saved after each execution. In order to add mean value of accuracy on test dataset you can define function
+That pipeline will be executed with ``.run()`` at each 100 iterations because of parameters ``run=True``  and ``exec_for=100``. Pipeline variable ``accuracy`` will be saved after each execution. In order to add a mean value of accuracy on test dataset, you can define a function
 
 .. code-block:: python
 
@@ -105,11 +105,11 @@ and then add test pipeline as
 
     research.add_pipeline(vgg7_test, variables='accuracy', name='test', run=True, exec_for=100, post_run=accuracy, import_model_from='train')
 
-``post_run`` function must get pipeline as parameter and return dict. That function will be executed for pipeline after each run and result will be saved.
+``post_run`` function must get pipeline as a parameter and return dict. That function will be executed for pipeline after each run and result will be saved.
 
 
 Note that we use ``C('import_model_from')`` in ``import_model`` action and add test pipeline with parameter ``import_model_from='train'``.
-All ``kwargs`` in ``add_pipeline`` are used to define parameters that depends on other pipeline in the same way.
+All ``kwargs`` in ``add_pipeline`` are used to define parameters that depend on another pipeline in the same way.
 
 Method ``run`` starts computations:
 
@@ -129,19 +129,19 @@ The first one is ``n_workers``. If you want to run pipelines in two different pr
 
     research.run(n_reps=10, n_iters=1000, n_workers=2, name='my_research'))
 
-Moreover, you can specify workers and define as ``n_workers`` as list of dicts or Configs. Each worker will add corresponding element of list to pipeline config:
+Moreover, you can specify workers and define as ``n_workers`` as a list of dicts or Configs. Each worker will add the corresponding element of the list to pipeline config:
 
 .. code-block:: python
 
     n_workers = [Config(model_config=dict(session=dict(config=tf.ConfigProto(gpu_options=tf.GPUOptions(visible_device_list=str(i)))))) for i in range(2)]
     research.run(n_reps=10, n_iters=1000, n_workers=n_workers, name='my_research'))
 
-In that case two workers will run pipelines in different processes on different GPU.
+In that case, two workers will run pipelines in different processes on different GPU.
 
-Another way of parrallel running
+Another way of parallel running
 --------------------------------
 
-If you have a heavy preprocessing you can use one prepared batch for few pipelines with different configs. In that case you must define ``root_pipeline`` that contains common actions without variable parameters:
+If you have a heavy preprocessing you can use one prepared batch for few pipelines with different configs. In that case, you must define ``root_pipeline`` that contains common actions without variable parameters:
 
 .. code-block:: python
 
@@ -169,7 +169,7 @@ In order to specify number of branches define ``n_branches`` parameter:
 
     mr.run(n_reps=1, n_iters=1000, n_branches=2, name='branches', progress_bar=True)
 
-As ``n_workers`` parameter you can define ``n_branches`` as list of dicts or Configs that will be appended to corresponding branches.
+As ``n_workers`` parameter you can define ``n_branches`` as a list of dicts or Configs that will be appended to corresponding branches.
 
 API
 ---
