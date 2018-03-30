@@ -125,9 +125,9 @@ class PipelineWorker(Worker):
                     if j in pipeline['dump_for']:
                         self.log_info('Iteration {}: dump results for {}...'.format(j, name), filename=self.logfile)
                         for item, config, repetition in zip(
-                            self.single_runnings,
-                            task['configs'],
-                            task['repetition']
+                                self.single_runnings,
+                                task['configs'],
+                                task['repetition']
                             ):
                             path = os.path.join(
                                 task['name'],
