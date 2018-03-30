@@ -144,11 +144,13 @@ Another way of parrallel running
 If you have a heavy preprocessing you can use one prepared batch for few pipelines with different configs. In that case you must define ``root_pipeline`` that contains common actions without variable parameters:
 
 .. code-block:: python
+
     train_root = mnist.train.p.run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True) 
 
 and ``branch_pipeline`` that will use prepared batch from ``root_pipeline`` and can contain variable parameters:
 
 .. code-block:: python
+
     train_branch = (Pipeline()
             .init_variable('loss', init_on_each_run=list)
             .init_variable('accuracy', init_on_each_run=list)
@@ -164,6 +166,7 @@ and ``branch_pipeline`` that will use prepared batch from ``root_pipeline`` and 
 In order to specify number of branches define ``n_branches`` parameter:
     
 .. code-block:: python
+
     mr.run(n_reps=1, n_iters=1000, n_branches=2, name='branches', progress_bar=True)
 
 As ``n_workers`` parameter you can define ``n_branches`` as list of dicts or Configs that will be appended to corresponding branches.
