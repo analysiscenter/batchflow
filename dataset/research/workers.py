@@ -23,9 +23,9 @@ class PipelineWorker(Worker):
             self.log_error(exception, filename=self.errorfile)
 
     def _parallel_init(self, single_runnings, batch, iteration, name):
-        _ = batch, name
+        _ = batch, name, iteration
         return single_runnings
-    
+
     def get_iterations(self, execute_for, n_iters=None):
         """ Get indices of iterations from execute_for. """
         if n_iters is not None:
@@ -75,26 +75,26 @@ class PipelineWorker(Worker):
 
     def post(self):
         """ Run after task execution. """
-        _, task = self.task
         self.log_info('Saving final results...', filename=self.logfile)
         self.dump_all()
 
     def dump_all(self):
-        i, task = self.task
-        for name, pipeline in task['pipelines'].items():
+        """ Dump final results. """
+        _, task = self.task
+        for name, _ in task['pipelines'].items():
             for item, config, repetition in zip(
-                            self.single_runnings,
-                            task['configs'],
-                            task['repetition']
-                    ):
-                    path = os.path.join(
-                        task['name'],
-                        'results',
-                        config.alias(as_string=True),
-                        str(repetition),
-                        name + '_final'
-                    )
-                    item.dump_result(name, path)
+                    self.single_runnings,
+                    task['configs'],
+                    task['repetition']
+                ):
+                path = os.path.join(
+                    task['name'],
+                    'results',
+                    config.alias(as_string=True),
+                    str(repetition),
+                    name + '_final'
+                )
+                item.dump_result(name, path)
 
     def run_task(self):
         """ Task execution. """
@@ -125,9 +125,9 @@ class PipelineWorker(Worker):
                     if j in pipeline['dump_for']:
                         self.log_info('Iteration {}: dump results for {}...'.format(j, name), filename=self.logfile)
                         for item, config, repetition in zip(
-                                    self.single_runnings,
-                                    task['configs'],
-                                    task['repetition']
+                            self.single_runnings,
+                            task['configs'],
+                            task['repetition']
                             ):
                             path = os.path.join(
                                 task['name'],
