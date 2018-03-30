@@ -115,9 +115,9 @@ Method ``run`` starts computations:
 
 .. code-block:: python
 
-    research.run(n_reps=10, n_iters=1000, name='my_research', progress_bar=True))
+    research.run(n_reps=10, n_iters=1000, name='my_research', progress_bar=True)
 
-All results will be saved as ``my_research/{config_alias}/{number_of_repetition}/{pipeline_name}_final`` as dict where keys are variable names and values are lists of corresponding values. 
+All results will be saved as ``my_research/{config_alias}/{index_of_repetition}/{pipeline_name}_final`` as dict where keys are variable names and values are lists of corresponding values. 
 
 Parallel runnings
 -----------------
@@ -161,7 +161,7 @@ and ``branch_pipeline`` that will use prepared batch from ``root_pipeline`` and 
                          save_to=[V('loss'), V('accuracy')], mode='w')
 
     research.add_pipeline(train_root, train_branch, variables=['loss', 'accuracy'], name='train')
-)
+
 
 In order to specify number of branches define ``n_branches`` parameter:
     
