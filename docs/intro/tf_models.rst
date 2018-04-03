@@ -142,6 +142,8 @@ For instance, this config will create placeholders with the names ``images`` and
 Later, names ``images`` and ``labels`` will be used to feed data into the model when training or predicting.
 Besides, one-hot encoding will be applied to ``labels`` and the encoded tensor will be named ``targets``.
 
+For more information on the configuration of the inputs, see :meth:`~dataset.models.tf.TFModel._make_inputs`.
+
 Models based on :class:`.TFModel` expect that one of the inputs has a name ``targets`` (before or after transformations),
 while model output turns into a tensor named ``predictions``. These tensors are used to define a model loss function.
 
