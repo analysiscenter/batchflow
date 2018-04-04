@@ -1081,7 +1081,7 @@ class TFModel(BaseModel):
         elif oper == 'accuracy':
             self._add_output_accuracy(inputs, name, attr_prefix, **kwargs)
         elif callable(oper):
-            self._add_output_callable(inputs, oper, attr_prefix, **kwargs)
+            self._add_output_callable(inputs, oper, None, attr_prefix, **kwargs)
 
     def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
@@ -1115,10 +1115,10 @@ class TFModel(BaseModel):
         accuracy = tf.reduce_mean(x, axis=channels_axis, name=name)
         self.store_to_attr(attr_prefix + name, accuracy)
 
-    def _add_output_callable(self, inputs, oper, attr_prefix, **kwargs):
+    def _add_output_callable(self, inputs, oper, name, attr_prefix, **kwargs):
         _ = kwargs
         x = oper(inputs)
-        name = oper.__name__
+        name = name or oper.__name__
         self.store_to_attr(attr_prefix + name, x)
         return x
 
