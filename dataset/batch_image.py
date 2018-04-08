@@ -1004,7 +1004,7 @@ class ImagesBatch(BaseImagesBatch):
         image = image.copy()
         shape = (shape, shape) if isinstance(shape, Number) else shape
         origin = self._calc_origin(shape, origin, self._get_image_shape(image))
-        image.paste(PIL.Image.new('RGB', shape, color), tuple(origin))
+        image.paste(PIL.Image.new('RGB', tuple(shape), tuple(color)), tuple(origin))
         return image
 
     def _assemble_patches(self, patches, *args, dst, **kwargs):
