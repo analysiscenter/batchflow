@@ -5,7 +5,6 @@ from copy import copy
 import numpy as np
 import tensorflow as tf
 import scipy.stats as ss
-from numba import njit
 
 # if empirical probability of truncation region is less than
 # this number, truncation throws a ValueError
@@ -53,7 +52,7 @@ def arithmetize(cls):
     rops = ['__radd__', '__rmul__', '__rtruediv__', '__rsub__', '__rpow__', '__rfloordiv__', '__rmod__']
 
     for op, rop in zip(ops, rops):
-        def transform(self, other, fake=op):
+        def transform(self, other, fake=op): # pylint: disable=invalid-name
             """ Arithmetic operation on couple of Samplers.
 
             Implemented via corresponding operation in ndarrays.
@@ -245,15 +244,15 @@ class Sampler():
         result.sample = lambda size: transform(self.sample(size))
         return result
 
-    def truncate(self, h=None, l=None, expr=None, prob=0.5):
-        """ Truncate a sampler. Resulting sampler poduces points satisfying ``l <= pts <= h``.
-        If ``expr`` is suplied, the condition is ``l <= expr(pts) <= h``.
+    def truncate(self, high=None, low=None, expr=None, prob=0.5):
+        """ Truncate a sampler. Resulting sampler poduces points satisfying ``low <= pts <= high``.
+        If ``expr`` is suplied, the condition is ``low <= expr(pts) <= high``.
 
         Parameters
         ----------
-        h : ndarray, list, float
+        high : ndarray, list, float
             upper truncation-bound.
-        l : ndarray, list, float
+        low : ndarray, list, float
             lower truncation-bound.
         expr : callable, optional.
             Some vectorized function. Accepts points of sampler, returns either bool or float.
@@ -268,10 +267,10 @@ class Sampler():
             new Sampler-instance, truncated version of self.
         """
         # clean up truncation params
-        if h is not None:
-            h = np.array(h).reshape(1, -1)
-        if l is not None:
-            l = np.array(l).reshape(1, -1)
+        if high is not None:
+            high = np.array(high).reshape(1, -1)
+        if low is not None:
+            low = np.array(low).reshape(1, -1)
 
         def truncated(size):
             """ Truncated sampling method.
@@ -289,19 +288,19 @@ class Sampler():
                 # sample points and compute condition-vector
                 sample = self.sample(size=batch_size)
                 cond = np.ones(shape=batch_size).astype(np.bool)
-                if l is not None:
+                if low is not None:
                     if expr is not None:
-                        cond &= np.greater_equal(expr(sample).reshape(batch_size, -1), l).all(axis=1)
+                        cond &= np.greater_equal(expr(sample).reshape(batch_size, -1), low).all(axis=1)
                     else:
-                        cond &= np.greater_equal(sample, l).all(axis=1)
+                        cond &= np.greater_equal(sample, low).all(axis=1)
 
-                if h is not None:
+                if high is not None:
                     if expr is not None:
-                        cond &= np.less_equal(expr(sample).reshape(batch_size, -1), h).all(axis=1)
+                        cond &= np.less_equal(expr(sample).reshape(batch_size, -1), high).all(axis=1)
                     else:
-                        cond &= np.less_equal(sample, h).all(axis=1)
+                        cond &= np.less_equal(sample, high).all(axis=1)
 
-                if h is None and l is None:
+                if high is None and low is None:
                     cond &= expr(sample).all(axis=1)
 
                 # check that truncation-prob is not to small
