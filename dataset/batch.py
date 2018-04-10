@@ -606,7 +606,7 @@ class Batch(BaseBatch):
         if not isinstance(dst, (list, tuple, np.ndarray)):
             dst = [dst]
 
-        if len(dst) == 1 and not isinstance(all_results[0], tuple):
+        if len(dst) == 1:
             all_results = [all_results]
         else:
             all_results = list(zip(*all_results))
