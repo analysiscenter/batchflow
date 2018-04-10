@@ -51,8 +51,8 @@ def arithmetize(cls):
     ops = ['__add__', '__mul__', '__truediv__', '__sub__', '__pow__', '__floordiv__', '__mod__']
     rops = ['__radd__', '__rmul__', '__rtruediv__', '__rsub__', '__rpow__', '__rfloordiv__', '__rmod__']
 
-    for op, rop in zip(ops, rops):
-        def transform(self, other, fake=op): # pylint: disable=invalid-name
+    for oper, rop in zip(ops, rops):
+        def transform(self, other, fake=oper):
             """ Arithmetic operation on couple of Samplers.
 
             Implemented via corresponding operation in ndarrays.
@@ -628,6 +628,6 @@ def sample_histodd(histo, size, state=None):
     h_all = cart_prod(*(range_dim[1:] for range_dim in histo[1]))
 
     # uniformly generate samples from selected boxes
-    l, h = l_all[bin_nums], h_all[bin_nums]
+    low, high = l_all[bin_nums], h_all[bin_nums]
     sampler = np.random.uniform if state is None else state.uniform
-    return sampler(low=l, high=h)
+    return sampler(low=low, high=high)
