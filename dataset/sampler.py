@@ -94,7 +94,7 @@ def arithmetize(cls):
             result.sample = lambda size: getattr(self.sample(size), fake)(other)
             return result
 
-        setattr(cls, op, transform)
+        setattr(cls, oper, transform)
         setattr(cls, rop, rtransform)
 
     return cls
