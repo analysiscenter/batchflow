@@ -478,8 +478,7 @@ class Batch(BaseBatch):
 
         if np.random.binomial(1, p):
             if use_self:
-                result = func(self, *_args, **kwargs)
-                return result if isinstance(result, tuple) else (result,)
+                return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
         return src_attr
 

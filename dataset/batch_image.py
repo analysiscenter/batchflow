@@ -582,9 +582,9 @@ class ImagesBatch(BaseImagesBatch):
             background = np.zeros(original_shape, dtype=np.uint8)
         else:
             background = np.zeros((*original_shape, n_channels), dtype=np.uint8)
-            
+
         crop_origin = 'top_left' if origin != 'center' else 'center'
-        
+
         return self._put_on_background_(self._crop_(transformed_image, crop_origin, original_shape, True),
                                         background,
                                         origin)
