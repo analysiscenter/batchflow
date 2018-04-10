@@ -606,7 +606,12 @@ class Batch(BaseBatch):
             dst = kwargs.get('components', self.components)
         if not isinstance(dst, (list, tuple, np.ndarray)):
             dst = [dst]
-        all_results = list(zip(*all_results))
+
+        if len(dst) == 1 and not isinstance(all_results[0], tuple):
+            all_results = [all_results]
+        else:
+            all_results = list(zip(*all_results))
+
         for component, result in zip(dst, all_results):
             self._assemble_component(result, component=component, **kwargs)
         return self
