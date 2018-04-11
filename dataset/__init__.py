@@ -16,7 +16,8 @@ from .jointdataset import JointDataset, FullDataset
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit
 from .exceptions import SkipBatchException
-
+from .sampler import Sampler, ConstantSampler as CS
+from .sampler import NumpySampler as NS, TfSampler as TFS, HistoSampler as HS, ScipySampler as SS
 
 __version__ = '0.3.0'
 
