@@ -279,7 +279,6 @@ class ImagesBatch(BaseImagesBatch):
 
     @classmethod
     def _get_image_shape(cls, image):
-
         if isinstance(image, PIL.Image.Image):
             return image.size
         return image.shape[:2]
@@ -578,9 +577,16 @@ class ImagesBatch(BaseImagesBatch):
         np.ndarray : image after described actions
         """
 
+        n_channels = len(transformed_image.getbands())
+        if n_channels == 1:
+            background = np.zeros(original_shape, dtype=np.uint8)
+        else:
+            background = np.zeros((*original_shape, n_channels), dtype=np.uint8)
+
         crop_origin = 'top_left' if origin != 'center' else 'center'
+
         return self._put_on_background_(self._crop_(transformed_image, crop_origin, original_shape, True),
-                                        np.zeros((*original_shape, 3), dtype=np.uint8),
+                                        background,
                                         origin)
 
     def _filter_(self, image, mode, *args, **kwargs):
@@ -1004,7 +1010,7 @@ class ImagesBatch(BaseImagesBatch):
         image = image.copy()
         shape = (shape, shape) if isinstance(shape, Number) else shape
         origin = self._calc_origin(shape, origin, self._get_image_shape(image))
-        image.paste(PIL.Image.new('RGB', shape, color), tuple(origin))
+        image.paste(PIL.Image.new('RGB', tuple(shape), tuple(color)), tuple(origin))
         return image
 
     def _assemble_patches(self, patches, *args, dst, **kwargs):
