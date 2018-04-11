@@ -102,7 +102,7 @@ Rotate each image with probability 0.7 by its own sampled angle
         .rotate(angle=P(R('normal', loc=0, scale=1)), p=0.7)
         ...
 
-See more in :ref:`notebook tutorial <../examples/tutorial/image_augmentation_examples.ipynb>`.
+See more details in `the augmentation tutorial <https://github.com/analysiscenter/dataset/blob/master/examples/tutorials/06_image_augmentation.ipynb>`_.
 
 Loading from files
 ------------------
@@ -245,7 +245,7 @@ Note that if images have different shapes after an action then there are two way
 
   1. Do nothing. Then images will be stored in `np.ndarray` with `dtype=object`.
   2. Pass `preserve_shape=True` to an action which changes the shape of an image. Then image
-     is cropped from the left upper corner (unless action has `origin` parameter, see more in :ref:`Actions`).
+     is cropped from the left upper corner (unless action has `origin` parameter).
 
 Cropping to patches
 -------------------------
