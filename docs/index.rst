@@ -79,7 +79,7 @@ and call ``train_model``. Of course, you can also choose a loss function, an opt
 
 Best practice magic
 ===================
-To improve model quality and accelerate training import ``best_practice`` module::
+To improve model quality and accelerate training import :doc:`best_practice <intro/best_practice>` module::
 
     from dataset import best_practice
 

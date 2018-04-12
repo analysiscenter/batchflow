@@ -47,6 +47,8 @@ V - pipeline variable
 
 At each iteration ``V('model_name')`` will be replaced with the current value of ``pipeline.get_variable('model_name')``.
 
+Thus, you can even change the model trained (or any other pipeline parameter) during pipeline execution.
+
 
 C - config option
 =================
@@ -69,7 +71,9 @@ F - callable
 ============
 A function which takes a batch and, possibly, other arguments.
 
-It can be a lambda function::
+The first parameter specifies a callable while all others are parameters to pass to that callable.
+
+The callable can be a lambda function::
 
     pipeline
         .init_model('dynamic', MyModel, 'my_model', config={
@@ -81,7 +85,7 @@ or a batch class method::
     pipeline
         .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict, task='segmentation'))
 
-or a function::
+or an arbitrary function::
 
     def get_boxes(batch, shape):
         x_coords = slice(0, shape[0])
@@ -95,12 +99,16 @@ or a function::
 
 or any other Python callable.
 
-
 .. note:: Most of the time the first parameter passed to ``F``-function contains the current batch.
    However, there are a few exceptions.
 
 As static models are initialized before a pipeline is run (i.e. before any batch is created),
-all ``F``-functions specified in static ``init_model`` get ``pipeline`` as the first parameter.
+all ``F``-functions specified in static ``init_model`` get ``pipeline`` as the first parameter::
+
+    pipeline
+        .init_model('static', MyModel, 'my_model', config={
+            'inputs': {'images': {'shape': F(lambda pipeline: pipeline.some_attr)}}
+        })
 
 In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
 as the second parameter. So you can adapt the function to specific models.
@@ -114,6 +122,8 @@ A function which takes arbitrary arguments.::
         ...
         .init_variable('logfile', L(open, 'file.log', 'w'))
         ...
+
+So no batch, pipeline or model will be passed to that function implicitly.
 
 
 R - random value

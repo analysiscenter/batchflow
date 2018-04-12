@@ -64,7 +64,7 @@ class TFModel(BaseModel):
         - dict {'name': name, \**args}
 
         where name might be one of:
-            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`)
             - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
               (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
             - callable
