@@ -26,10 +26,10 @@ class BaseModel:
 
     """
     def __init__(self, config=None, *args, **kwargs):
-        self.config = Config(config) or Config()
-        build = self.config.get('build')
-        load = self.config.get('load', default=False)
-        if not isinstance(build, bool) and build is not None:
+        self.config = Config(config)
+        load = self.config.get('load')
+        build = self.config.get('build', default=load is None)
+        if not isinstance(build, bool) and build in [1, 'first']:
             self.build(*args, **kwargs)
             build = False
         if load:

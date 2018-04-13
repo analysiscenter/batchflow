@@ -35,7 +35,7 @@ class Config:
 
         Parameters
         ----------
-        variables : str or list of strs
+        variables : str or list of str
             names of variables. '/' is used to get value from nested dict.
         config : dict, Config or None
             if None variables will be getted from self.config.
@@ -45,9 +45,10 @@ class Config:
         single value or a tuple
         """
         if isinstance(config, Config):
-            return config.get(variables, None, default)
+            val = config.get(variables, default=default)
         else:
-            return self._get(variables, config, default=default, pop=False)
+            val = self._get(variables, config, default=default, pop=False)
+        return val
 
     def _get(self, variables, config=None, **kwargs):
         if config is None:
