@@ -379,9 +379,12 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return np.array(image)
+        image = np.array(image)
+        if len(image.shape) == 2:
+            image = image[..., None]
+        return image
 
-    def _to_pil_(self, image):
+    def _to_pil_(self, image, mode=None):
         """converts images in Batch to PIL format
 
         Parameters
@@ -394,8 +397,27 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
+        if isinstance(image, PIL.Image.Image):
+            return image
 
-        return PIL.Image.fromarray(image) if not isinstance(image, PIL.Image.Image) else image
+        if mode is None:
+            if len(image.shape) == 2:
+                mode = 'L'
+            elif len(image.shape) == 3:
+                if image.shape[-1] == 3:
+                    mode = 'RGB'
+                elif image.shape[-1] == 1:
+                    mode = 'L'
+                    image = image[:, :, 0]
+                elif image.shape[-1] == 2:
+                    mode = 'LA'
+                elif image.shape[-1] == 4:
+                    mode = 'RGBA'
+            else:
+                raise ValueError('Unknown image type as image has', image.shape[-1], 'channels')
+        elif mode == 'L' and len(image.shape) == 3:
+            image = image[..., 0]
+        return PIL.Image.fromarray(image, mode)
 
     def _calc_origin(self, image_shape, origin, background_shape):
         """ Calculate coordinate of the input image with respect to the background.
@@ -859,6 +881,7 @@ class ImagesBatch(BaseImagesBatch):
             Probability of applying the transform. Default is 1.
 
         """
+
         return PIL.ImageEnhance.Brightness(image).enhance(multiplier)
 
     def _multiply_(self, image, multiplier=1., clip=False, preserve_type=False):
@@ -1166,6 +1189,9 @@ class ImagesBatch(BaseImagesBatch):
         image = np.array(image)
         # full shape is needed
         shape = image.shape
+        if len(shape) == 2:
+            image = image[..., None]
+            shape = image.shape
 
         kwargs.setdefault('mode', 'constant')
         kwargs.setdefault('cval', 0)
@@ -1179,4 +1205,6 @@ class ImagesBatch(BaseImagesBatch):
 
         distored_image = self._sp_map_coordinates_(image, indices, order=1, mode='reflect')
 
+        if shape[-1] == 1:
+            return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape))[...,0])
         return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape)))
