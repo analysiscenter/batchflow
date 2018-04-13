@@ -6,7 +6,7 @@ Getting started
 ===============
 A model might be used for training or inference. In both cases you need to specify a model config and a pipeline.
 
-A minimal config includes ``inputs`` and ``input_block`` sections::
+A typical minimal config includes ``inputs`` and ``input_block`` sections::
 
     model_config = {
         'inputs': dict(images={'shape': (128, 128, 3)},
@@ -24,6 +24,26 @@ A minimal training pipeline consists of :meth:`~.Pipeline.init_model` and :meth:
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
 
 To create an inference pipeline replace ``train_model`` with :meth:`~.Pipeline.predict_model`.
+
+A pipeline can also :meth:`~.TFModel.load` a pretrained model which was previously :ref:`saved <saving_a_model>` to a disk::
+
+    model_config = {
+        'build': 'first',
+        'load': dict(path='/path/to/model'),
+    }
+
+    pipeline = my_dataset.p
+        .init_model('dynamic', MyModel, 'my_model', model_config)
+        .predict_model('my_model', fetches='predictions',
+                       feed_dict={'images': B('images')})
+        .run(BATCH_SIZE)
+
+Note that you can indicate through 'build' option whether a model graph needs to be created or updated by calling :meth:`~TFModel.build`.
+Most often than not 'build' should be `False` (which is a default value), but sometimes it might be convenient to create the graph
+before loading or change the graph after loading.
+
+Specify `build='first'` to create the graph and load a pretrained model afterwards.
+While `build=True` means that the model will be loaded first and after that `model.build()` will be executed thus allowing to change the graph.
 
 
 Model structure
@@ -67,7 +87,8 @@ Not surprisingly, many networks comprise different types of blocks, for example:
 - DenseNet have dense and transition blocks
 - SqueezeNet alternates fire blocks with max-pooling.
 
-When creating a custom model you can have as many block types as you need, though aim to make them universal and reusable elsewhere. For instance, :class:`~.LinkNet`, :class:`~.GlobalConvolutionNetwork`, and :class:`~.ResNetAttention` use :class:`~.ResNet` blocks.
+When creating a custom model you can have as many block types as you need, though aim to make them universal and reusable elsewhere.
+For instance, :class:`~.LinkNet`, :class:`~.GlobalConvolutionNetwork`, and :class:`~.ResNetAttention` use :class:`~.ResNet` blocks.
 
 
 head
@@ -200,16 +221,18 @@ To control model training procedure you might also need auxiliary operations to 
 
 ``predictions`` and ``ops`` options take an operation name. And available operations are:
     - None - do nothing
+    - callable - apply a given function to an output tensor
     - 'proba' - softmax
     - 'sigmoid' - sigmoid
     - 'labels' - argmax
-    - 'accuracy' - the share of correctly predicted labels
+    - 'accuracy' - the share of correctly predicted labels.
 
 
 Loss, learning rate decay, optimizer
 ------------------------------------
 
 These parameters might be defined in one of three formats:
+
 - name
 - tuple (name, args)
 - dict {'name': name, ...other args}

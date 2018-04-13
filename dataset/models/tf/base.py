@@ -64,7 +64,7 @@ class TFModel(BaseModel):
         - dict {'name': name, \**args}
 
         where name might be one of:
-            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`)
             - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
               (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
             - callable
@@ -806,7 +806,7 @@ class TFModel(BaseModel):
                 json.dump(self._attrs, f)
 
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
-        """ Load a tensorflow model from files
+        """ Load a TensorFlow model from files
 
         Parameters
         ----------
@@ -819,9 +819,9 @@ class TFModel(BaseModel):
 
         Examples
         --------
-        >>> tf_model = ResNet34(load=True)
+        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
 
-        >>> tf_model.load('/path/to/models/resnet34')
+        >>> tf_model.load(path='/path/to/models/resnet34')
         """
         _ = args, kwargs
         self.graph = tf.Graph()

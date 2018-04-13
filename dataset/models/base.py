@@ -17,8 +17,9 @@ class BaseModel:
 
     **Configuration**:
 
-    * build : bool
+    * build : bool or 1 or 'first'
         whether to build a model by calling `self.build()`. Default is True.
+        If build == 1 or 'first', then build is called before load, otherwise afterwards.
     * load : dict
         parameters for model loading. If present, a model will be loaded
         by calling `self.load(**config['load'])`.
@@ -26,10 +27,14 @@ class BaseModel:
     """
     def __init__(self, config=None, *args, **kwargs):
         self.config = Config(config) or Config()
+        build = self.config.get('build')
         load = self.config.get('load', default=False)
+        if not isinstance(build, bool) and build is not None:
+            self.build(*args, **kwargs)
+            build = False
         if load:
             self.load(**load)
-        if self.config.get('build', default=True):
+        if build:
             self.build(*args, **kwargs)
 
     @property

@@ -166,6 +166,7 @@ Predicting with a model
 
 Read a model specfication to find out what it needs for predicting and what its output is.
 
+.. _saving_a_model:
 
 Saving a model
 ==============

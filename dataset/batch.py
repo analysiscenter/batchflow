@@ -499,8 +499,7 @@ class Batch(BaseBatch):
 
         if np.random.binomial(1, p):
             if use_self:
-                result = func(self, *_args, **kwargs)
-                return result if isinstance(result, tuple) else (result,)
+                return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
         return src_attr
 
@@ -627,7 +626,12 @@ class Batch(BaseBatch):
             dst = kwargs.get('components', self.components)
         if not isinstance(dst, (list, tuple, np.ndarray)):
             dst = [dst]
-        all_results = list(zip(*all_results))
+
+        if len(dst) == 1:
+            all_results = [all_results]
+        else:
+            all_results = list(zip(*all_results))
+
         for component, result in zip(dst, all_results):
             self._assemble_component(result, component=component, **kwargs)
         return self
