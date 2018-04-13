@@ -76,7 +76,8 @@ class PipelineWorker(Worker):
 
     def post(self):
         """ Run after task execution. """
-        self.log_info('Saving final results...', filename=self.logfile)
+        i, _ = self.task
+        self.log_info('Task {}: saving final results...'.format(i), filename=self.logfile)
         self.dump_all()
 
     def dump_all(self):
@@ -115,7 +116,7 @@ class PipelineWorker(Worker):
                                     task['repetition']
                             ):
                                 if pipeline['run']:
-                                    self.log_info('Task {}: run pipeline {}'.format(i, name), filename=self.logfile)
+                                    self.log_info('Task {}, iteration {}: run pipeline {}'.format(i, j, name), filename=self.logfile)
                                     item.run(name)
                                     item.put_result(j, name)
                                     item.post_run(name)
@@ -124,7 +125,8 @@ class PipelineWorker(Worker):
                                     item.put_result(j, name)
 
                     if j in pipeline['dump_for']:
-                        self.log_info('Task {}, iteration {}: dump results for {}...'.format(i, j, name), filename=self.logfile)
+                        self.log_info('Task {}, iteration {}: dump results for {}...'
+                                      .format(i, j, name), filename=self.logfile)
                         for item, config, repetition in zip(
                                 self.single_runnings,
                                 task['configs'],
