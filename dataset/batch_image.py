@@ -85,7 +85,7 @@ def transform_actions(prefix='', suffix='', wrapper=None):
                     @wraps(wrapped_method)
                     def _func(self, *args, src='images', dst='images', target='for', **kwargs):
                         return getattr(cls, wrapper)(self, wrapped_method, src=src, dst=dst,
-                                                     use_self=True, target='for', *args, **kwargs)
+                                                     use_self=True, target=target, *args, **kwargs)
                     return _func
                 name_slice = slice(len(prefix), -len(suffix))
                 wrapped_method_name = method_name[name_slice]
@@ -1206,5 +1206,5 @@ class ImagesBatch(BaseImagesBatch):
         distored_image = self._sp_map_coordinates_(image, indices, order=1, mode='reflect')
 
         if shape[-1] == 1:
-            return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape))[...,0])
+            return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape))[..., 0])
         return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape)))

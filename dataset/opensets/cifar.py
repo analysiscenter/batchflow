@@ -6,6 +6,7 @@ import urllib.request
 import pickle
 import tarfile
 import numpy as np
+import PIL
 
 from .. import DatasetIndex
 from .base import ImagesOpenset

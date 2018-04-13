@@ -5,6 +5,7 @@ import tempfile
 import urllib.request
 import gzip
 import numpy as np
+import PIL
 
 from . import ImagesOpenset
 from .. import DatasetIndex
