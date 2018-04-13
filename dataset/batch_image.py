@@ -1033,6 +1033,7 @@ class ImagesBatch(BaseImagesBatch):
         image = image.copy()
         shape = (shape, shape) if isinstance(shape, Number) else shape
         origin = self._calc_origin(shape, origin, self._get_image_shape(image))
+        color = (color, color, color) if isinstance(color, Number) else color
         image.paste(PIL.Image.new('RGB', tuple(shape), tuple(color)), tuple(origin))
         return image
 
