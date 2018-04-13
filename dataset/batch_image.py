@@ -5,13 +5,13 @@ from functools import wraps
 
 import numpy as np
 from skimage.transform import resize
-try:
-    from imageio import imread, imsave
-except ImportError:
-    from scipy.ndimage import imread
-    from scipy.misc import imsave
-
 import scipy.ndimage
+
+import PIL
+import PIL.ImageOps
+import PIL.ImageChops
+import PIL.ImageFilter
+import PIL.ImageEnhance
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel
@@ -119,7 +119,7 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
                     _ = self
                     return added_func(*args, **kwargs)
                 return _method
-            method_name = ''.join((prefix, func_name, suffix))
+            method_name = ''.join((prefix, 'sp_', func_name, suffix))
             added_method = _method_decorator()
             setattr(cls, method_name, added_method)
         return cls
@@ -148,7 +148,9 @@ class BaseImagesBatch(Batch):
             Full path to an element.
         """
 
-        if isinstance(self.index, FilesIndex):
+        if isinstance(src, FilesIndex):
+            path = src.get_fullpath(ix)
+        elif isinstance(self.index, FilesIndex):
             path = self.index.get_fullpath(ix)
         else:
             path = os.path.join(src, str(ix))
@@ -161,7 +163,7 @@ class BaseImagesBatch(Batch):
 
         Parameters
         ----------
-        src : str, None
+        src : str, dataset.FilesIndex, None
             path to the folder with an image. If src is None then it is determined from the index.
         dst : str
             Component to write images to.
@@ -197,6 +199,7 @@ class BaseImagesBatch(Batch):
         if fmt == 'image':
             return self._load_image(src, fmt=fmt, dst=components)
         return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
+
 
     def _dump_image(self, ix, src='images', dst=None, fmt=None):
         """ Saves image to dst.
@@ -243,38 +246,53 @@ class BaseImagesBatch(Batch):
         self
         """
 
-
-
         if fmt == 'image':
             return self._dump_image(components, dst, fmt=kwargs.pop('ext'))
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
+
+
 @transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
 @transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
 @add_methods(transformations={**get_scipy_transforms(),
-                              'pad': np.pad,
-                              'resize': resize}, prefix='_', suffix='_')
+                              'sp_pad': np.pad,
+                              'sp_resize': resize}, prefix='_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
-    Images are stored as numpy arrays (N, H, W, C).
+    Images are stored as numpy arrays of PIL.Image.
+
+    PIL.Image has the following system of coordinates:
+                       X
+      0 -------------- >
+      |
+      |
+      |  images's pixels
+      |
+      |
+    Y v
+
+    Pixel's position is defined as (x, y)
+
     """
 
     @classmethod
     def _get_image_shape(cls, image):
+
+        if isinstance(image, PIL.Image.Image):
+            return image.size
         return image.shape[:2]
 
     @property
     def image_shape(self):
         """: tuple - shape of the image"""
-        if isinstance(self.images.dtype, object):
-            _, shapes_count = np.unique([image.shape for image in self.images], return_counts=True, axis=0)
-            if len(shapes_count) == 1:
-                return self.images.shape[1:]
-            else:
-                raise RuntimeError('Images have different shapes')
-        return self.images.shape[1:]
+        _, shapes_count = np.unique([image.size for image in self.images], return_counts=True, axis=0)
+        if len(shapes_count) == 1:
+            if isinstance(self.images[0], PIL.Image.Image):
+                return (*self.images[0].size, len(self.images[0].getbands()))
+            return self.images[0].shape
+        raise RuntimeError('Images have different shapes')
 
     @inbatch_parallel(init='indices', post='_assemble')
     def _load_image(self, ix, src=None, fmt=None, dst="images"):
@@ -284,7 +302,7 @@ class ImagesBatch(BaseImagesBatch):
 
         Parameters
         ----------
-        src : str, None
+        src : str, dataset.FilesIndex, None
             Path to the folder with an image. If src is None then it is determined from the index.
         dst : str
             Component to write images to.
@@ -296,7 +314,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return (imread(self._make_path(ix, src)),)
+        return PIL.Image.open(self._make_path(ix, src))
 
     @inbatch_parallel(init='indices')
     def _dump_image(self, ix, src='images', dst=None, fmt=None):
@@ -322,7 +340,8 @@ class ImagesBatch(BaseImagesBatch):
             raise RuntimeError('You must specify `dst`')
         image = self.get(ix, src)
         ix = str(ix) + '.' + fmt if fmt is not None else str(ix)
-        imsave(os.path.join(dst, ix), image)
+        image.save(os.path.join(dst, ix))
+
 
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
@@ -339,21 +358,45 @@ class ImagesBatch(BaseImagesBatch):
             Shape is chosen to be minimal among given images.
         """
 
-        try:
-            new_images = np.stack(result)
-        except ValueError as e:
-            message = str(e)
-            if "must have the same shape" in message:
-                preserve_shape = kwargs.get('preserve_shape', False)
-                if preserve_shape:
-                    min_shape = np.array([self._get_image_shape(x) for x in result]).min(axis=0)
-                    result = [arr[:min_shape[0], :min_shape[1]].copy() for arr in result]
-                    new_images = np.stack(result)
-                else:
-                    new_images = np.array(result, dtype=object)
-            else:
-                raise e
-        setattr(self, component, new_images)
+        if isinstance(result[0], PIL.Image.Image):
+            setattr(self, component, np.asarray(result, dtype=object))
+        else:
+            try:
+                setattr(self, component, np.stack(result))
+            except ValueError:
+                setattr(self, component, np.asarray(result, dtype=object))
+
+    def _to_array_(self, image):
+        """converts images in Batch to np.ndarray format
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        Returns
+        -------
+        self
+        """
+
+        return np.array(image)
+
+    def _to_pil_(self, image):
+        """converts images in Batch to PIL format
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        Returns
+        -------
+        self
+        """
+
+        return PIL.Image.fromarray(image) if not isinstance(image, PIL.Image.Image) else image
 
     def _calc_origin(self, image_shape, origin, background_shape):
         """ Calculate coordinate of the input image with respect to the background.
@@ -376,7 +419,7 @@ class ImagesBatch(BaseImagesBatch):
 
         Returns
         -------
-        sequence : calculated origin in the form (row, column)
+        sequence : calculated origin in the form (column, row)
         """
 
         if isinstance(origin, str):
@@ -389,7 +432,7 @@ class ImagesBatch(BaseImagesBatch):
                           np.random.randint(background_shape[1]-image_shape[1]+1))
         return np.asarray(origin, dtype=np.int)
 
-    def _scale_(self, image, factor, preserve_shape=False, origin='center'):
+    def _scale_(self, image, factor, preserve_shape=False, origin='center', resample=0):
         """ Scale the content of each image in the batch.
 
         Resulting shape is obtained as original_shape * factor.
@@ -414,6 +457,8 @@ class ImagesBatch(BaseImagesBatch):
             - 'random' - place the upper-left corner of the rescaled image on the randomly sampled position
                          in the original one. Position is sampled uniformly such that there is no need for cropping.
             - sequence - place the upper-left corner of the rescaled image on the given position in the original one.
+        resample: int
+            Parameter passed to PIL.Image.resize. Interpolation order
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -425,22 +470,20 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        if np.any(np.asarray(factor) <= 0):
-            raise ValueError("factor must be greater than 0")
-        rescaled_shape = np.ceil(np.array(self._get_image_shape(image)) * factor).astype(np.int16)
-        rescaled_image = self._resize_(image, rescaled_shape, preserve_range=True).astype(image.dtype)
+        original_shape = self._get_image_shape(image)
+        rescaled_shape = list(np.int32(np.ceil(np.asarray(original_shape)*factor)))
+        rescaled_image = image.resize(rescaled_shape, resample=resample)
         if preserve_shape:
-            rescaled_image = self._preserve_shape(image, rescaled_image, origin)
+            rescaled_image = self._preserve_shape(original_shape, rescaled_image, origin)
         return rescaled_image
 
-    def _crop_(self, image, origin, shape):
+    def _crop_(self, image, origin, shape, crop_boundaries=False):
         """ Crop an image.
 
         Extract image data from the window of the size given by `shape` and placed at `origin`.
 
         Parameters
         ----------
-        image : np.ndarray
         origin : sequence, str
             Upper-left corner of the cropping box. Can be one of:
             - sequence - corner's coordinates in the form of (row, column)
@@ -451,6 +494,8 @@ class ImagesBatch(BaseImagesBatch):
             - 'random' - place the upper-left corner of the cropping box at a random position
         shape : sequence
             - sequence - crop size in the form of (rows, columns)
+        crop_boundaries : bool
+            If `True` then crop is got only from image's area. Shape of the crop might diverge with the passed one
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -463,21 +508,25 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        image_shape = self._get_image_shape(image)
-        origin = self._calc_origin(shape, origin, image_shape)
-        if np.all(origin + shape > image_shape):
-            shape = image_shape - origin
+        origin = self._calc_origin(shape, origin, image.size)
+        right_bottom = origin + shape
 
-        row_slice = slice(origin[0], origin[0] + shape[0])
-        column_slice = slice(origin[1], origin[1] + shape[1])
-        return image[row_slice, column_slice].copy()
+        if crop_boundaries:
+            out_of_boundaries = origin < 0
+            origin[out_of_boundaries] = 0
+
+            image_shape = np.asarray(image.size)
+            out_of_boundaries = right_bottom > image_shape
+            right_bottom[out_of_boundaries] = image_shape[out_of_boundaries]
+
+        return image.crop((*origin, *right_bottom))
 
     def _put_on_background_(self, image, background, origin, mask=None):
         """ Put an image on a background at given origin
 
         Parameters
         ----------
-        background : np.ndarray
+        background : PIL.Image, np.ndarray of np.uint8
         origin : sequence, str
             Upper-left corner of the cropping box. Can be one of:
             - sequence - corner's coordinates in the form of (row, column).
@@ -485,40 +534,34 @@ class ImagesBatch(BaseImagesBatch):
             - 'center' - crop an image such that centers of an image and the cropping box coincide.
             - 'random' - place the upper-left corner of the cropping box at a random position.
 
-        mask : float, np.ndarray
-            if float is fiven then
+        mask : None, PIL.Image, np.ndarray of np.uint8
+            mask passed to PIL.Image.paste
         Returns
         -------
         self
         """
 
-        image_shape = self._get_image_shape(image)
-        background_shape = self._get_image_shape(background)
-        origin = self._calc_origin(image_shape, origin, background_shape)
-        image = self._crop_(image, 'top_left', np.asarray(background_shape) - origin).copy()
+        if not isinstance(background, PIL.Image.Image):
+            background = PIL.Image.fromarray(background)
+        else:
+            background = background.copy()
 
-        slice_rows = slice(origin[0], origin[0]+image_shape[0])
-        slice_columns = slice(origin[1], origin[1]+image_shape[1])
+        if not isinstance(mask, PIL.Image.Image):
+            mask = PIL.Image.fromarray(mask) if mask is not None else None
 
-        new_image = background.copy()
+        origin = list(self._calc_origin(self._get_image_shape(image), origin,
+                                        self._get_image_shape(background)))
 
-        if mask is None:
+        background.paste(image, origin, mask)
 
-            new_image[slice_rows, slice_columns] = image
-        elif isinstance(mask, Number):
-            image_slice = new_image[slice_rows, slice_columns]
-            mask_index = image > mask
-            image_slice[mask_index] = image[mask_index]
-            new_image[slice_rows, slice_columns] = image_slice
+        return background
 
-        return new_image
-
-    def _preserve_shape(self, original_image, transformed_image, origin='center'):
+    def _preserve_shape(self, original_shape, transformed_image, origin='center'):
         """ Change the transformed image's shape by cropping and adding empty pixels to fit the shape of original image.
 
         Parameters
         ----------
-        original_image : np.ndarray
+        original_shape : sequence
         transformed_image : np.ndarray
         origin : {'center', 'top_left', 'random'}, sequence
             Position of the transformed image with respect to the original one's shape.
@@ -535,11 +578,133 @@ class ImagesBatch(BaseImagesBatch):
         np.ndarray : image after described actions
         """
 
-        return self._put_on_background_(self._crop_(transformed_image,
-                                                    'top_left' if origin != 'center' else 'center',
-                                                    self._get_image_shape(original_image)),
-                                        np.zeros(original_image.shape, dtype=np.uint8),
+        crop_origin = 'top_left' if origin != 'center' else 'center'
+        return self._put_on_background_(self._crop_(transformed_image, crop_origin, original_shape, True),
+                                        np.zeros((*original_shape, 3), dtype=np.uint8),
                                         origin)
+
+    def _filter_(self, image, mode, *args, **kwargs):
+        """ Filters an image. Calls image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))
+
+        For more details see http://pillow.readthedocs.io/en/stable/reference/ImageFilter.html
+
+        Parameters
+        ----------
+        mode : str
+            Name of the filter.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+        """
+        return image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))
+
+    def _transform_(self, image, *args, **kwargs):
+        """ Calls image.transform(*args, **kwargs)
+
+        For more information see http://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.transform
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+        """
+        size = kwargs.pop('size', self._get_image_shape(image))
+        return image.transform(*args, size=size, **kwargs)
+
+    def _resize_(self, image, *args, **kwargs):
+        """ Calls image.resize(*args, **kwargs)
+
+        For more details see https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+        """
+
+        return image.resize(*args, **kwargs)
+
+    def _shift_(self, image, offset, mode='const'):
+        """ Shifts an image.
+
+        Parameters
+        ----------
+        offset : (Number, Number)
+        mode : {'const', 'wrap'}
+            How to fill borders
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+        """
+
+        if mode == 'const':
+            return image.transform(size=image.size,
+                                   method=PIL.Image.AFFINE,
+                                   data=(1, 0, -offset[0], 0, 1, -offset[1]))
+        elif mode == 'wrap':
+            return PIL.ImageChops.offset(image, *offset)
+        else:
+            raise ValueError("`mode` must be one of ['const', 'wrap']")
+
+
+    def _pad_(self, image, *args, **kwargs):
+        """ Calls PIL.ImageOps.expand.
+
+        For more details see http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand
+
+        Parameters:
+        ----------
+        offset : (Number, Number)
+        mode : {'const', 'wrap'}
+            How to fill borders
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+        """
+
+        return PIL.ImageOps.expand(image, *args, **kwargs)
+
+    def _rotate_(self, image, *args, **kwargs):
+        """ Rotates an image.
+
+            kwargs are passed to PIL.Image.rotate
+
+        Parameters
+        ----------
+        angle: Number
+            In degrees counter clockwise.
+        resample: int
+            Interpolation order
+        expand: bool
+            Whether to expand the output to hold the whole image. Default is False.
+        center: (Number, Number)
+            Center of rotation. Default is the center of the image.
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+        """
+
+        return image.rotate(*args, **kwargs)
 
     def _flip_(self, image, mode='lr'):
         """ Flips image.
@@ -561,12 +726,9 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        image = image.copy()
         if mode == 'lr':
-            image = image[:, ::-1]
-        elif mode == 'ud':
-            image = image[::-1]
-        return image
+            return PIL.ImageOps.mirror(image)
+        return PIL.ImageOps.flip(image)
 
     def _invert_(self, image, channels='all'):
         """ Invert givn channels.
@@ -587,11 +749,14 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        image = image.copy()
         if channels == 'all':
-            channels = list(range(image.shape[-1]))
-        max_intencity = 255 if np.issubdtype(image.dtype, np.integer) else 1.
-        image[..., channels] = max_intencity - image[..., channels]
+            image = PIL.ImageChops.invert(image)
+        else:
+            bands = list(image.split())
+            channels = (channels,) if isinstance(channels, Number) else channels
+            for channel in channels:
+                bands[channel] = PIL.ImageChops.invert(bands[channel])
+            image = PIL.Image.merge('RGB', bands)
         return image
 
     def _salt_(self, image, p_noise=.015, color=255, size=(1, 1)):
@@ -624,9 +789,9 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        image = image.copy()
         mask_size = np.asarray(self._get_image_shape(image))
         mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
+        image = np.array(image)
         if isinstance(size, (tuple, int)) and (size == (1, 1) or size == 1) and not callable(color):
             image[mask_salt] = color
         else:
@@ -639,9 +804,10 @@ class ImagesBatch(BaseImagesBatch):
                 left_top = np.asarray((mask_salt[0][i], mask_salt[1][i]))
                 right_bottom = np.minimum(left_top + current_size, self._get_image_shape(image))
                 image[left_top[0]:right_bottom[0], left_top[1]:right_bottom[1]] = color_lambda()
-        return image
 
-    def _threshold_(self, image, low=0., high=1., dtype=np.uint8):
+        return PIL.Image.fromarray(image)
+
+    def _clip_(self, image, low=0, high=255):
         """ Truncate image's pixels.
 
         Parameters
@@ -652,8 +818,6 @@ class ImagesBatch(BaseImagesBatch):
         high : int, float, sequence
             Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
             with the number of channels in an image and each channel is thresholded separately
-        dtype : np.dtype
-            dtype of truncated images.
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -666,38 +830,39 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        image = image.copy()
         if isinstance(low, Number):
-            image[image < low] = low
-        else:
-            if len(low) != image.shape[-1]:
-                raise RuntimeError("``len(low)`` must coincide with the number of channels")
-            for channel, low_channel in enumerate(low):
-                pixels_to_truncate = image[..., channel] < low_channel
-                image[..., channel][pixels_to_truncate] = low_channel
+            low = tuple([low]*3)
         if isinstance(high, Number):
-            image[image > high] = high
-        else:
-            if len(high) != image.shape[-1]:
-                raise RuntimeError("``len(high)`` must coincide with the number of channels")
+            high = tuple([high]*3)
 
-            for channel, high_channel in enumerate(high):
-                pixels_to_truncate = image[..., channel] > high_channel
-                image[..., channel][pixels_to_truncate] = high_channel
-        return image.astype(dtype)
+        high = PIL.Image.new('RGB', image.size, high)
+        low = PIL.Image.new('RGB', image.size, low)
+        return PIL.ImageChops.lighter(PIL.ImageChops.darker(image, high), low)
 
-    def _multiply_(self, image, multiplier=1., low=0., high=1., preserve_type=True):
+    def _multiply_lightness_(self, image, multiplier):
+        """ Modify lightness of an image using multiplier (which operates on the lightness in HSL format)
+
+        Parameters
+        ----------
+        multiplier : Number
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        p : float
+            Probability of applying the transform. Default is 1.
+
+        """
+        return PIL.ImageEnhance.Brightness(image).enhance(multiplier)
+
+    def _multiply_(self, image, multiplier=1., clip=False, preserve_type=False):
         """ Multiply each pixel by the given multiplier.
 
         Parameters
         ----------
         multiplier : float, sequence
-        low : int, float, sequence
-            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
-            with the number of channels in an image and each channel is thresholded separately.
-        high : int, float, sequence
-            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
-            with the number of channels in an image and each channel is thresholded separately.
+        clip : bool
+            whether to force image's pixels to be in [0, 255] or [0, 1.]
         preserve_type : bool
             Whether to preserve ``dtype`` of transformed images.
             If ``False`` is given then the resulting type will be ``np.float``.
@@ -713,21 +878,25 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        dtype = image.dtype if preserve_type else np.float
-        return self._threshold_(multiplier * image.astype(np.float), low, high, dtype)
+        multiplier = np.float32(multiplier)
+        if isinstance(image, PIL.Image.Image):
+            return PIL.Image.fromarray(np.clip(multiplier*np.asarray(image), 0, 255).astype(np.uint8))
+        else:
+            dtype = image.dtype if preserve_type else np.float
+            if clip:
+                image = np.clip(multiplier*image, 0, 255 if dtype == np.uint8 else 1.)
+            else:
+                image = multiplier * image
+            return image.astype(dtype)
 
-    def _add_(self, image, term=0., low=0., high=1., preserve_type=True):
+    def _add_(self, image, term=1., clip=False, preserve_type=False):
         """ Add term to each pixel.
 
         Parameters
         ----------
         term : float, sequence
-        low : int, float, sequence
-            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
-            with the number of channels in an image and each channel is thresholded separately.
-        high : int, float, sequence
-            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
-            with the number of channels in an image and each channel is thresholded separately.
+        clip : bool
+            whether to force image's pixels to be in [0, 255] or [0, 1.]
         preserve_type : bool
             Whether to preserve ``dtype`` of transformed images.
             If ``False`` is given then the resulting type will be ``np.float``.
@@ -743,18 +912,24 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        dtype = image.dtype if preserve_type else np.float
-        return self._threshold_(term + image.astype(np.float), low, high, dtype)
+        term = np.float32(term)
+        if isinstance(image, PIL.Image.Image):
+            return PIL.Image.fromarray(np.clip(term+np.asarray(image), 0, 255).astype(np.uint8))
+        else:
+            dtype = image.dtype if preserve_type else np.float
+            if clip:
+                image = np.clip(term+image, 0, 255 if dtype == np.uint8 else 1.)
+            else:
+                image = term + image
+            return image.astype(dtype)
 
-    def _to_greyscale_(self, image, keepdims=True):
-        """ Set image's pixels to their mean among all channels
-
-        .. note:: Images' shape must provide last axis for channels
+    def _pil_convert_(self, image, mode="L"):
+        """ Convert image. Actually calls image.convert(mode)
 
         Parameters
         ----------
-        keepdims : bool
-            Whether to preserve the number of channels
+        mode : str
+            Pass 'L' to convert to grayscale
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -767,17 +942,16 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return image.mean(axis=-1, keepdims=keepdims).astype(image.dtype)
+        return image.convert(mode)
 
-    def _posterize_(self, image, colors_number=3):
+    def _posterize_(self, image, bits=4):
         """ Posterizes image.
 
-        More concretely, it quantizes pixels' values so that they have``colors_number`` colours.
-
+        More concretely, it quantizes pixels' values so that they have``2^bits`` colors
         Parameters
         ----------
-        colors : int
-            Number of colours.
+        bits : int
+            Number of bits used to store a color's component.
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -790,18 +964,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        image = image.copy()
-
-        dtype = image.dtype
-        max_bin = 256 if np.issubdtype(dtype, np.integer) else 1.0001
-        max_intencity = 255 if np.issubdtype(dtype, np.integer) else 1.
-
-        bins = np.linspace(0, max_bin, colors_number+1)
-        color_indices = np.digitize(image, bins) - 1
-        colors = np.linspace(0, max_intencity, colors_number)
-
-        image = colors[color_indices]
-        return image
+        return PIL.ImageOps.posterize(image, bits)
 
     def _cutout_(self, image, origin, shape, color):
         """ Fills given areas with color
@@ -838,22 +1001,10 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        def _get_shape(shape):
-            return (shape, shape) if isinstance(shape, Number) else shape
-
-        def _get_origin(shape, origin):
-            if isinstance(origin, str):
-                origin = self._calc_origin(shape, origin, image_shape)
-            return origin
-
         image = image.copy()
-        image_shape = self._get_image_shape(image)
-        shape = _get_shape(shape)
-        origin = _get_origin(shape, origin)
-        right_bottom = (min(origin[0] + shape[0], image_shape[0]),
-                        min(origin[1] + shape[1], image_shape[1]))
-        image[origin[0]:right_bottom[0], origin[1]:right_bottom[1]] = color
-
+        shape = (shape, shape) if isinstance(shape, Number) else shape
+        origin = self._calc_origin(shape, origin, self._get_image_shape(image))
+        image.paste(PIL.Image.new('RGB', shape, color), tuple(origin))
         return image
 
     def _assemble_patches(self, patches, *args, dst, **kwargs):
@@ -902,6 +1053,7 @@ class ImagesBatch(BaseImagesBatch):
         _ = dst
         image = self.get(ix, src)
         image_shape = self._get_image_shape(image)
+        image = np.array(image)
         stride = (stride, stride) if isinstance(stride, Number) else stride
         patch_shape = (patch_shape, patch_shape) if isinstance(patch_shape, Number) else patch_shape
         patches = []
@@ -909,10 +1061,11 @@ class ImagesBatch(BaseImagesBatch):
         def _iterate_columns(row_from, row_to):
             column = 0
             while column < image_shape[1]-patch_shape[1]+1:
-                patches.append(image[row_from:row_to, column:column+patch_shape[1]])
+                patches.append(PIL.Image.fromarray(image[row_from:row_to, column:column+patch_shape[1]]))
                 column += stride[1]
             if not droplast and column + patch_shape[1] != image_shape[1]:
-                patches.append(image[row_from:row_to, image_shape[1]-patch_shape[1]:image_shape[1]])
+                patches.append(PIL.Image.fromarray(image[row_from:row_to,
+                                                         image_shape[1]-patch_shape[1]:image_shape[1]]))
 
         row = 0
         while row < image_shape[0]-patch_shape[0]+1:
@@ -921,21 +1074,20 @@ class ImagesBatch(BaseImagesBatch):
         if not droplast and row + patch_shape[0] != image_shape[0]:
             _iterate_columns(image_shape[0]-patch_shape[0], image_shape[0])
 
-        return np.stack(patches)
+        return np.array(patches, dtype=object)
 
-    def _additive_noise_(self, image, noise, low=0, high=1.):
+    def _additive_noise_(self, image, noise, clip=False, preserve_type=False):
         """ Add additive noise to an image.
 
         Parameters
         ----------
         noise : callable
             Distribution. Must have ``size`` parameter.
-        low : int, float, sequence
-            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
-            with the number of channels in an image and each channel is thresholded separately.
-        high : int, float, sequence
-            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
-            with the number of channels in an image and each channel is thresholded separately.
+        clip : bool
+            whether to force image's pixels to be in [0, 255] or [0, 1.]
+        preserve_type : bool
+            Whether to preserve ``dtype`` of transformed images.
+            If ``False`` is given then the resulting type will be ``np.float``.
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -948,22 +1100,21 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return self._threshold_(image+noise(size=image.shape), low, high, dtype=image.dtype)
+        noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
+        return self._add_(image, noise, clip, preserve_type)
 
-
-    def _multiplicative_noise_(self, image, noise, low=0, high=1.):
+    def _multiplicative_noise_(self, image, noise, clip=False, preserve_type=False):
         """ Add multiplicativa noise to an image.
 
         Parameters
         ----------
         noise : callable
             Distribution. Must have ``size`` parameter.
-        low : int, float, sequence
-            Actual pixel's value is equal max(value, low). If sequence is given, then its length must coincide
-            with the number of channels in an image and each channel is thresholded separately.
-        high : int, float, sequence
-            Actual pixel's value is equal min(value, high). If sequence is given, then its length must coincide
-            with the number of channels in an image and each channel is thresholded separately.
+        clip : bool
+            whether to force image's pixels to be in [0, 255] or [0, 1.]
+        preserve_type : bool
+            Whether to preserve ``dtype`` of transformed images.
+            If ``False`` is given then the resulting type will be ``np.float``.
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -976,7 +1127,8 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        return self._threshold_(image*noise(size=image.shape), low, high, dtype=image.dtype)
+        noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
+        return self._multiply_(image, noise, clip, preserve_type)
 
     def _elastic_transform_(self, image, alpha, sigma, **kwargs):
         """Elastic deformation of images as described in [Simard2003]_.
@@ -1005,19 +1157,20 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
+        image = np.array(image)
         # full shape is needed
         shape = image.shape
 
         kwargs.setdefault('mode', 'constant')
         kwargs.setdefault('cval', 0)
 
-        column_shift = self._gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
-        row_shift = self._gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
+        column_shift = self._sp_gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
+        row_shift = self._sp_gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
 
         row, column, channel = np.meshgrid(range(shape[0]), range(shape[1]), range(shape[2]))
 
         indices = (column + column_shift, row + row_shift, channel)
 
-        distored_image = self._map_coordinates_(image, indices, order=1, mode='reflect')
+        distored_image = self._sp_map_coordinates_(image, indices, order=1, mode='reflect')
 
-        return distored_image.reshape(image.shape)
+        return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape)))

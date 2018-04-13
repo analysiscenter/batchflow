@@ -14,7 +14,6 @@ import tensorflow as tf
 from ... import is_best_practice
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
-from .losses import dice
 from .train import piecewise_constant
 
 
@@ -29,7 +28,6 @@ LOSSES = {
     'hinge': tf.losses.hinge_loss,
     'huber': tf.losses.huber_loss,
     'logloss': tf.losses.log_loss,
-    'dice': dice
 }
 
 DECAYS = {
@@ -516,18 +514,20 @@ class TFModel(BaseModel):
 
         add_loss = False
         if loss is None:
-            if len(tf.losses.get_losses()) == 0:
-                raise ValueError("Loss is not defined in the model %s" % self)
-        elif isinstance(loss, str) and hasattr(tf.losses, loss):
-            loss = getattr(tf.losses, loss)
+            pass
         elif isinstance(loss, str):
             loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
+        elif isinstance(loss, str) and hasattr(tf.losses, loss):
+            loss = getattr(tf.losses, loss)
         elif callable(loss):
             add_loss = True
         else:
             raise ValueError("Unknown loss", loss)
 
-        if loss is not None:
+        if loss is None:
+            if len(tf.losses.get_losses()) == 0:
+                raise ValueError("Loss is not defined in the model %s" % self)
+        else:
             try:
                 predictions = getattr(self, 'predictions')
             except AttributeError:
@@ -1017,12 +1017,13 @@ class TFModel(BaseModel):
         inputs : tf.Tensor or a sequence of tf.Tensors
             input tensors
 
-        ops : a sequence of str
+        ops : a sequence of str or callable
             operation names::
             - 'sigmoid' - add ``sigmoid(inputs)``
             - 'proba' - add ``softmax(inputs)``
             - 'labels' - add ``argmax(inputs)``
             - 'accuracy' - add ``mean(predicted_labels == true_labels)``
+            - callable - add an arbitrary operation
 
         prefix : a sequence of str
             a prefix for each input if there are multiple inputs
@@ -1079,6 +1080,8 @@ class TFModel(BaseModel):
             self._add_output_labels(inputs, name, attr_prefix, **kwargs)
         elif oper == 'accuracy':
             self._add_output_accuracy(inputs, name, attr_prefix, **kwargs)
+        elif callable(oper):
+            self._add_output_callable(inputs, oper, None, attr_prefix, **kwargs)
 
     def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
@@ -1111,6 +1114,13 @@ class TFModel(BaseModel):
         x = tf.cast(tf.equal(true_labels, x), 'float')
         accuracy = tf.reduce_mean(x, axis=channels_axis, name=name)
         self.store_to_attr(attr_prefix + name, accuracy)
+
+    def _add_output_callable(self, inputs, oper, name, attr_prefix, **kwargs):
+        _ = kwargs
+        x = oper(inputs)
+        name = name or oper.__name__
+        self.store_to_attr(attr_prefix + name, x)
+        return x
 
 
     @classmethod
@@ -1463,8 +1473,9 @@ class TFModel(BaseModel):
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
             in_filters = cls.num_channels(inputs, data_format)
-            x = conv_block(inputs, 'Vfafa', units=[in_filters//ratio, in_filters], name='se',
-                           **{**kwargs, 'activation': [tf.nn.relu, tf.nn.sigmoid]})
+            x = conv_block(inputs,
+                           **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
+                              'name': 'se', 'activation': [tf.nn.relu, tf.nn.sigmoid]})
 
             shape = [-1] + [1] * (cls.spatial_dim(inputs) + 1)
             axis = cls.channels_axis(data_format)
