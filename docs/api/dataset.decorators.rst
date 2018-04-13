@@ -14,6 +14,12 @@ inbatch_parallel
 ================
 .. autofunction:: dataset.inbatch_parallel
 
+
 any_action_failed
 =================
 .. autofunction:: dataset.any_action_failed
+
+
+mjit
+====
+.. autofunction:: dataset.mjit

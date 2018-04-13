@@ -34,7 +34,7 @@ ImagesBatch provides typical augmentation actions, for example:
     ..  image:: ../_static/ImagesBatch_examples/invert.png
 * :meth:`salt <dataset.ImagesBatch.salt>` -- set pixels in random positions to given colour
     ..  image:: ../_static/ImagesBatch_examples/salt.png
-* :meth:`clip <dataset.ImagesBatch.threshold>` -- truncate pixels' values
+* :meth:`clip <dataset.ImagesBatch.clip>` -- truncate pixels' values
     ..  image:: ../_static/ImagesBatch_examples/threshold.png
 * :meth:`multiply <dataset.ImagesBatch.multiply>` -- multiply an image by the given number
     ..  image:: ../_static/ImagesBatch_examples/multiply.png
@@ -46,8 +46,6 @@ ImagesBatch provides typical augmentation actions, for example:
     ..  image:: ../_static/ImagesBatch_examples/additive_noise.png
 * :meth:`posterize <dataset.ImagesBatch.posterize>` -- posterize an image
     ..  image:: ../_static/ImagesBatch_examples/posterize.png
-* :meth:`convert <dataset.ImagesBatch.to_greyscale>` -- convert image's bands to other type
-    ..  image:: ../_static/ImagesBatch_examples/to_greyscale.png
 * :meth:`cutout <dataset.ImagesBatch.cutout>` -- add colored rectangular areas to an image
     ..  image:: ../_static/ImagesBatch_examples/cutout.png
 * :meth:`elastic_transform <dataset.ImagesBatch.elastic_transform>` -- add colored rectangular areas to an image
