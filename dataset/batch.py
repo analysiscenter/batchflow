@@ -648,7 +648,11 @@ class Batch(BaseBatch):
     def _load_table(self, src, fmt, components=None, post=None, *args, **kwargs):
         """ Load a data frame from table formats: csv, hdf5, feather """
         if fmt == 'csv':
-            _data = pd.read_csv(src, *args, **kwargs)
+            if 'index_col' in kwargs:
+                index_col = kwargs.pop('index_col')
+                _data = pd.read_csv(src, *args, **kwargs).set_index(index_col)
+            else:
+                _data = pd.read_csv(src, *args, **kwargs)
         elif fmt == 'feather':
             _data = feather.read_dataframe(src, *args, **kwargs)  # pylint: disable=redefined-variable-type
         elif fmt == 'hdf5':
