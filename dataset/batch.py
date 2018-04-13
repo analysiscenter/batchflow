@@ -501,6 +501,9 @@ class Batch(BaseBatch):
             if use_self:
                 return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
+
+        if len(src_attr) == 1:
+            return src_attr[0]
         return src_attr
 
     @action
