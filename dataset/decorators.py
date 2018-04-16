@@ -248,16 +248,29 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
+        @asyncio.coroutine
+        def wait_for_all(futures, loop):
+            """ Wait for all futures to complete """
+            return asyncio.gather(*futures, loop=loop, return_exceptions=True)
+
         def wrap_with_async(self, args, kwargs):
             """ Run a method in parallel with async / await """
             try:
                 loop = asyncio.get_event_loop()
             except RuntimeError:
                 # this is a new thread where there is no loop
-                loop = kwargs.get('loop', None)
-                asyncio.set_event_loop(loop)
+                loop = asyncio.new_event_loop()
             else:
+                # allow to specify a loop as an action parameter
                 loop = kwargs.get('loop', loop)
+
+            thread = None
+            if loop.is_running():
+                # it runs within IPython or Tornado or something similar
+                # so create another thread and put a loop there
+                thread = cf.ThreadPoolExecutor(1)
+                loop = asyncio.new_event_loop()
+                thread.submit(asyncio.set_event_loop, loop).result()
 
             init_fn, post_fn = _check_functions(self)
 
@@ -266,9 +279,13 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
             full_kwargs = {**dec_kwargs, **kwargs}
             for iteration, arg in enumerate(_call_init_fn(init_fn, args, full_kwargs)):
                 margs, mkwargs = _make_args(self, iteration, arg, args, kwargs, params)
-                futures.append(asyncio.ensure_future(method(*margs, **mkwargs)))
+                futures.append(asyncio.ensure_future(method(*margs, **mkwargs), loop=loop))
 
-            loop.run_until_complete(asyncio.gather(*futures, loop=loop, return_exceptions=True))
+            if thread is not None:
+                thread.submit(loop.run_until_complete, wait_for_all(futures, loop)).result()
+            else:
+                loop.run_until_complete(wait_for_all(futures, loop))
+            loop.close()
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
