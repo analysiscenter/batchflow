@@ -68,7 +68,7 @@ class PipelineWorker(Worker):
                 n_branches = Config()
 
             worker_config = self.kwargs.get('config', Config())
-            
+
             single_running.add_common_config(config.config()+n_branches+worker_config)
             self.log_info('Additional config:\n{}'.format(n_branches+worker_config), filename=self.logfile)
             single_running.init()
@@ -116,7 +116,10 @@ class PipelineWorker(Worker):
                                     task['repetition']
                             ):
                                 if pipeline['run']:
-                                    self.log_info('Task {}, iteration {}: run pipeline {}'.format(i, j, name), filename=self.logfile)
+                                    self.log_info(
+                                        'Task {}, iteration {}: run pipeline {}'
+                                        .format(i, j, name), filename=self.logfile
+                                    )
                                     item.run(name)
                                     item.put_result(j, name)
                                     item.post_run(name)
