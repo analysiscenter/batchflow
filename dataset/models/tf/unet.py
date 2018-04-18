@@ -36,8 +36,11 @@ class UNet(TFModel):
         config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
-        config['loss'] = 'ce'
 
+        config['loss'] = 'ce'
+        config['common'] = dict(bias_initializer=None)
+        #The article does not specify the initial learning rate. 1e-4 was chosen for intuitive reasons.
+        config['optimizer'] = dict(name='Momentum', learning_rate=1e-4, momentum=.99)
         return config
 
     def build_config(self, names=None):

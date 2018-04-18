@@ -39,7 +39,7 @@ class VGG(TFModel):
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
 
-    body/arch : list of tuple of int
+    body/arch : list of tuple of intD
         Each list item contains parameters for one network block as a tuple of 4 ints:
 
         - number of convolution layers with 3x3 kernel
@@ -56,8 +56,12 @@ class VGG(TFModel):
             config['head'].update(dict(layout='Vdf', dropout_rate=.8, units=2))
         else:
             config['head']['units'] = [4096, 4096, 2]
-            config['head']['layout'] = 'fafaf'
+            config['head']['layout'] = 'dfadfaf'
         config['loss'] = 'ce'
+
+        config['common'] = dict(bias_initializer=None)
+        config['decay'] = ('const', dict(boundaries=[92500, 185000, 277500], values=[.01, .001, .0001, .00001]))
+        config['optimizer'] = dict(name='Momentum', momentum=.9)
         return config
 
     def build_config(self, names=None):
@@ -66,6 +70,7 @@ class VGG(TFModel):
             config['head']['units'][-1] = self.num_classes('targets')
         else:
             config['head']['units'] = self.num_classes('targets')
+
         return config
 
     @classmethod
