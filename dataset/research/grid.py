@@ -183,12 +183,15 @@ class Grid:
     def __add__(self, other):
         if self.grid is None:
             return other
+        elif isinstance(other, Option):
+            return self + Grid(other)
         elif other.grid is None:
             return self
         elif isinstance(other, Grid):
-            return Grid(self.grid + other.grid)
-        elif isinstance(other, Option):
-            return self + Grid(other)
+            if other.grid is None:
+                return self
+            else:
+                return Grid(self.grid + other.grid)
 
     def __repr__(self):
         return 'Grid(' + str(self.alias()) + ')'
