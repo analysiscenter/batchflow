@@ -62,7 +62,7 @@ class GlobalConvolutionNetwork(TFModel):
     def body(cls, inputs, name='body', **kwargs):
         """ GCN body
 
-        Parameters ячс митью-
+        Parameters
         ----------
         inputs : tf.Tensor
             input tensor
@@ -84,7 +84,6 @@ class GlobalConvolutionNetwork(TFModel):
             for i, tensor in enumerate(encoder_outputs[-2::-1]):
                 with tf.variable_scope('decoder-%d' % i):
                     x = cls.decoder_block(x, tensor, **upsample, **kwargs)
-                    print(tensor.shape, x.shape, len(encoder_outputs))
                     if i < len(encoder_outputs) - 2:
                         x = tf.add(x, tensor)
                     x = cls.boundary_refinement(x, name='BR', **br_block, **kwargs)

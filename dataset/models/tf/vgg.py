@@ -39,7 +39,7 @@ class VGG(TFModel):
     inputs : dict
         dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
 
-    body/arch : list of tuple of intD
+    body/arch : list of tuple of int
         Each list item contains parameters for one network block as a tuple of 4 ints:
 
         - number of convolution layers with 3x3 kernel
