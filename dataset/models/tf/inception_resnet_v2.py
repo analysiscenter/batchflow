@@ -3,7 +3,6 @@
 """
 import tensorflow as tf
 
-from ... import is_best_practice
 from .inception_base import Inception
 from .layers import conv_block
 

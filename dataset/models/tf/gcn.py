@@ -46,8 +46,10 @@ class GlobalConvolutionNetwork(TFModel):
         config['body']['br'] = dict(layout='cn', bottleneck=False, downsample=False)
         config['body']['upsample'] = dict(layout='tna', factor=2, kernel_size=4)
         config['head']['upsample'] = dict(layout='tna', factor=2, kernel_size=4)
-        config['loss'] = 'ce'
+        config['body']['res_block'] = False
 
+        config['loss'] = 'ce'
+        config['optimizer'] = dict(name='Momentum', learning_rate=.0005, momentum=.99)
         return config
 
     def build_config(self, names=None):
@@ -60,7 +62,7 @@ class GlobalConvolutionNetwork(TFModel):
     def body(cls, inputs, name='body', **kwargs):
         """ GCN body
 
-        Parameters
+        Parameters ячс митью-
         ----------
         inputs : tf.Tensor
             input tensor
@@ -82,6 +84,7 @@ class GlobalConvolutionNetwork(TFModel):
             for i, tensor in enumerate(encoder_outputs[-2::-1]):
                 with tf.variable_scope('decoder-%d' % i):
                     x = cls.decoder_block(x, tensor, **upsample, **kwargs)
+                    print(tensor.shape, x.shape, len(encoder_outputs))
                     if i < len(encoder_outputs) - 2:
                         x = tf.add(x, tensor)
                     x = cls.boundary_refinement(x, name='BR', **br_block, **kwargs)
@@ -106,14 +109,17 @@ class GlobalConvolutionNetwork(TFModel):
         """
         encoder = cls.fill_params('body/encoder', **kwargs.pop('encoder', {}))
         base_class = cls.pop('base_class', encoder)
-        block, br_block = cls.pop(['block', 'br'], kwargs)
+        block, br_block, res_block = cls.pop(['block', 'br', 'res_block'], kwargs)
 
         with tf.variable_scope(name):
             base_tensors = base_class.make_encoder(inputs, name='base', **{**kwargs, **encoder})
             encoder_tensors = []
             for i, tensor in enumerate(base_tensors):
                 with tf.variable_scope('encoder-%d' % i):
-                    x = cls.block(tensor, name='GCN', **block, **kwargs)
+                    if res_block:
+                        x = cls.res_block(tensor, name='GCN', **block, **kwargs)
+                    else:
+                        x = cls.block(tensor, name='GCN', **block, **kwargs)
                     x = cls.boundary_refinement(x, name='BR', **br_block, **kwargs)
                 encoder_tensors.append(x)
         return encoder_tensors
@@ -137,14 +143,41 @@ class GlobalConvolutionNetwork(TFModel):
         -------
         tf.Tensor
         """
+        print('in the block')
         kwargs = cls.fill_params('body/block', **kwargs)
         kernel_size = cls.pop('kernel_size', kwargs)
-
         i = inputs
         with tf.variable_scope(name):
             kernel_size = [(1, kernel_size), (kernel_size, 1)]
             x = conv_block(i, kernel_size=kernel_size, name='left', **kwargs)
             y = conv_block(i, kernel_size=kernel_size[::-1], name='right', **kwargs)
+            x = x + y
+        return x
+
+    @classmethod
+    def res_block(cls, inputs, name, **kwargs):
+        """ The ResNn GCN block, shown in Figure 5, using skipconnection for the correct operation of the network.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        kernel_size : int
+            convolution kernel size
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        print('the res block')
+        with tf.variable_scope('res_' + name):
+            x = cls.block(inputs, name, **kwargs)
+            x = conv_block(x, name='norm', **{**kwargs, 'layout':'cn', 'kernel_size':1})
+            y = conv_block(inputs, name='skip', **{**kwargs, 'layout':'cn', 'kernel_size':1})
             x = x + y
         return x
 
