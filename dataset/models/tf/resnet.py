@@ -73,7 +73,7 @@ class ResNet(TFModel):
         config['head'].update(dict(layout='Vdf', dropout_rate=.4, units=2))
 
         config['loss'] = 'ce'
-        config['common'] = dict(bias_initializer=None)
+        config['common'] = dict(conv=dict(use_bias=False))
         # The learning rate starts from 0.1 (no warming up), and is divided by 10 at 30 and 60 epochs
         # with batch size = 256 on ImageNet.
         init_lr = 1e-3 if is_best_practice() else .1

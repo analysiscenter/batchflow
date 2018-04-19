@@ -38,7 +38,7 @@ class UNet(TFModel):
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
 
         config['loss'] = 'ce'
-        config['common'] = dict(bias_initializer=None)
+        config['common'] = dict(conv=dict(use_bias=False))
         #The article does not specify the initial learning rate. 1e-4 was chosen for intuitive reasons.
         config['optimizer'] = dict(name='Momentum', learning_rate=1e-4, momentum=.99)
         return config

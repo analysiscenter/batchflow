@@ -44,7 +44,7 @@ class DenseNetFC(TFModel):
         config['head'].update(dict(layout='c', kernel_size=1))
 
         config['loss'] = 'ce'
-        config['common'] = dict(bias_initializer=None)
+        config['common'] = dict(conv=dict(use_bias=False))
         # decay_steps are equal to one epochs on CamVid dataset.
         config['decay'] = ('exp', dict(learning_rate=1e-3, decay_steps=1000, decay_rate=0.995))
         config['optimizer'] = dict(name='RMSProp')

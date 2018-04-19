@@ -59,7 +59,7 @@ class VGG(TFModel):
             config['head']['layout'] = 'dfadfaf'
         config['loss'] = 'ce'
 
-        config['common'] = dict(bias_initializer=None)
+        config['common'] = dict(conv=dict(use_bias=False))
         config['decay'] = ('const', dict(boundaries=[92500, 185000, 277500], values=[.01, .001, .0001, .00001]))
         config['optimizer'] = dict(name='Momentum', momentum=.9)
         return config
