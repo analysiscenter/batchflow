@@ -35,8 +35,8 @@ class SqueezeNet(TFModel):
         config['body']['layout'] = 'fffmffffmf'
         #config['body']['layout'] = 'ffbfmbffbffmbf'
 
-        num_blocks = len(config['body']['layout'])
-        layers_filters = 16 * 2 ** np.arange(num_blocks//2)
+        num_blocks = config['body']['layout'].count('f')
+        layers_filters = 32 * 2 ** np.arange(num_blocks//2 + num_blocks%2)
         layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
         config['body']['filters'] = layers_filters
 
@@ -48,7 +48,6 @@ class SqueezeNet(TFModel):
     def build_config(self, names=None):
         config = super().build_config(names)
         config['head']['filters'] = self.num_classes('targets')
-
         return config
 
     @classmethod
