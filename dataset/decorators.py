@@ -285,7 +285,6 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
                 thread.submit(loop.run_until_complete, wait_for_all(futures, loop)).result()
             else:
                 loop.run_until_complete(wait_for_all(futures, loop))
-            loop.close()
 
             return _call_post_fn(self, post_fn, futures, args, full_kwargs)
 
