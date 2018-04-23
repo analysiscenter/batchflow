@@ -69,12 +69,21 @@ class TFModel(BaseModel):
               (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
             - callable
 
+        If loss is callable, then it should add the result to a loss collection.
+        Otherwise, ``add_loss`` should be set to True. An optional collection might also be specified through
+        ``loss_collection`` parameter.
+
+        .. note:: Losses from non-default collections won't be detected automatically,
+                  so you should process them within your code.
+
         Examples:
 
         - ``{'loss': 'mse'}``
         - ``{'loss': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}``
         - ``{'loss': tf.losses.huber_loss, 'reduction': tf.losses.Reduction.MEAN}``
-        - ``{'loss': external_loss_fn}``
+        - ``{'loss': external_loss_fn_with_add_loss_inside}``
+        - ``{'loss': external_loss_fn_without_add_loss, 'add_loss': True}``
+        - ``{'loss': external_loss_fn_to_collection, 'add_loss': True, 'loss_collection': tf.GraphKeys.LOSSES}``
 
     decay - a learning rate decay algorithm might be defined in one of three formats:
         - name
