@@ -194,5 +194,8 @@ Upsampling
 
 Pyramid Pooling
 ===============
-.. autofunction:: dataset.models.tf.layers.pyramid
+.. autofunction:: dataset.models.tf.layers.pyramid_pooling
+    :noindex:
+
+.. autofunction:: dataset.models.tf.layers.aspp
     :noindex:
