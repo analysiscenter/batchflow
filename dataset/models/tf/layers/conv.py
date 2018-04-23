@@ -103,8 +103,6 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
 
     Parameters
     ----------
-    dim : int {1, 2, 3}
-        number of dimensions
     inputs : tf.Tensor
         input tensor
     filters : int
