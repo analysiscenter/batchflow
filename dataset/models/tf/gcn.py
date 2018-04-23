@@ -142,7 +142,6 @@ class GlobalConvolutionNetwork(TFModel):
         -------
         tf.Tensor
         """
-        print('in the block')
         kwargs = cls.fill_params('body/block', **kwargs)
         kernel_size = cls.pop('kernel_size', kwargs)
         i = inputs
@@ -155,7 +154,8 @@ class GlobalConvolutionNetwork(TFModel):
 
     @classmethod
     def res_block(cls, inputs, name, **kwargs):
-        """ The ResNn GCN block, shown in Figure 5, using skipconnection for the correct operation of the network.
+        """ The ResNn GCN block, shown in Figure 5, using a 1x1 conv layer in skipconnection
+        for the correct operation of the network.
 
         Parameters
         ----------
@@ -172,7 +172,6 @@ class GlobalConvolutionNetwork(TFModel):
         -------
         tf.Tensor
         """
-        print('the res block')
         with tf.variable_scope('res_' + name):
             x = cls.block(inputs, name, **kwargs)
             x = conv_block(x, name='norm', **{**kwargs, 'layout':'cn', 'kernel_size':1})
