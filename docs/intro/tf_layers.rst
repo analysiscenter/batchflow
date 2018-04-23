@@ -190,3 +190,9 @@ Upsampling
 
 .. autofunction:: dataset.models.tf.layers.depth_to_space
     :noindex:
+
+
+Pyramid Pooling
+===============
+.. autofunction:: dataset.models.tf.layers.pyramid
+    :noindex:
