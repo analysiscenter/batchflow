@@ -38,6 +38,9 @@ class InceptionResNet_v2(Inception):
         config['head'].update(dict(layout='Vdf', dropout_rate=.8))
         config['loss'] = 'ce'
 
+        # learning rate will decrease every two epochs.
+        config['decay'] = ('exp', dict(learning_rate=.045, decay_steps=62500, decay_rate=.94))
+        config['optimizer'] = dict(name='RMSProp', epsilon=1)
         return config
 
     def build_config(self, names=None):
@@ -263,7 +266,7 @@ class InceptionResNet_v2(Inception):
             x = tf.nn.relu(inputs)
 
             branch_1 = conv_block(x, 'p', pool_strides=2, name='max-pool', **kwargs)
-            branch_2 = conv_block(x, layout, filters[0], 3, name='conv_2', padding='valid', **kwargs)
+            branch_2 = conv_block(x, layout, filters[0], 3, strides=2, name='conv_2', **kwargs)
             branch_3 = conv_block(x, layout*3, [filters[1], filters[2], filters[3]], [1, 3, 3],
                                   strides=[1, 1, 2], name='conv_3', **kwargs)
 

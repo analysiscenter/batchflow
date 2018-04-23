@@ -41,8 +41,10 @@ class SqueezeNet(TFModel):
         config['body']['filters'] = layers_filters
 
         config['head'].update(dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5))
-        config['loss'] = 'ce'
 
+        config['loss'] = 'ce'
+        config['decay'] = dict('poly', dict(learning_rate=.04, decay_steps=170000))
+        config['optimizer'] = dict(name='Momentum', momentum=.99)
         return config
 
     def build_config(self, names=None):
