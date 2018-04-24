@@ -19,6 +19,7 @@ from .train import piecewise_constant
 
 LOSSES = {
     'mse': tf.losses.mean_squared_error,
+    'bce': tf.losses.sigmoid_cross_entropy,
     'ce': tf.losses.softmax_cross_entropy,
     'crossentropy': tf.losses.softmax_cross_entropy,
     'absolutedifference': tf.losses.absolute_difference,
@@ -1306,7 +1307,7 @@ class TFModel(BaseModel):
         number of channels : int
         """
         config = self.get_tensor_config(tensor, **kwargs)
-        shape = config.get('shape')
+        shape = (None,) + config.get('shape')
         channels_axis = self.channels_axis(tensor, **kwargs)
         return shape[channels_axis] if shape else None
 
@@ -1323,7 +1324,7 @@ class TFModel(BaseModel):
         shape : tuple of ints
         """
         shape = tensor.get_shape().as_list()
-        axis = TFModel.channels_axis(data_format)
+        axis = cls.channels_axis(data_format)
         return shape[axis]
 
     def get_shape(self, tensor, **kwargs):
