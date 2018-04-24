@@ -39,8 +39,10 @@ class VNet(TFModel):
         config['body']['kernel_size'] = 5
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='c', kernel_size=1))
-        config['loss'] = 'ce'
 
+        config['loss'] = 'ce'
+        config['decay'] = ('invtime', dict(learning_rate=1e-4, decay_steps=25000, decay_rate=10))
+        config['optimizer'] = dict(name='Momentum', momentum=.99)
         return config
 
     def build_config(self, names=None):

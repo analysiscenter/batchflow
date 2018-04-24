@@ -1,5 +1,9 @@
 """ Chaurasia A., Culurciello E. "`LinkNet: Exploiting Encoder Representations for Efficient Semantic Segmentation
 <https://arxiv.org/abs/1707.03718>`_"
+
+NOTE: The fourth section of the article describes the method of weighing imbalance datasets,
+      it does not exist in this implementation.
+
 """
 import tensorflow as tf
 import numpy as np
@@ -43,8 +47,9 @@ class LinkNet(TFModel):
         config['head']['filters'] = filters // 2
         config['head']['upsample1'] = dict(layout='tna cna', factor=2, kernel_size=3, strides=[2, 1])
         config['head']['upsample2'] = dict(layout='t', factor=2)
-        config['loss'] = 'ce'
 
+        config['loss'] = 'ce'
+        config['optimizer'] = dict(name='RMSProp', learning_rate=5e-4)
         return config
 
     def build_config(self, names=None):
@@ -84,7 +89,6 @@ class LinkNet(TFModel):
                 x = tf.add(x, encoder_outputs[-2-i])
             x = cls.decoder_block(x, filters[0], 'decoder-'+str(i+1), **kwargs)
             x = cls.crop(x, inputs, data_format=kwargs.get('data_format'))
-
         return x
 
     @classmethod

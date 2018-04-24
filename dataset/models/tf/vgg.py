@@ -56,8 +56,12 @@ class VGG(TFModel):
             config['head'].update(dict(layout='Vdf', dropout_rate=.8, units=2))
         else:
             config['head']['units'] = [4096, 4096, 2]
-            config['head']['layout'] = 'fafaf'
+            config['head']['layout'] = 'dfadfaf'
         config['loss'] = 'ce'
+
+        config['common'] = dict(conv=dict(use_bias=False))
+        config['decay'] = ('const', dict(boundaries=[92500, 185000, 277500], values=[.01, .001, .0001, .00001]))
+        config['optimizer'] = dict(name='Momentum', momentum=.9)
         return config
 
     def build_config(self, names=None):
@@ -66,6 +70,7 @@ class VGG(TFModel):
             config['head']['units'][-1] = self.num_classes('targets')
         else:
             config['head']['units'] = self.num_classes('targets')
+
         return config
 
     @classmethod
