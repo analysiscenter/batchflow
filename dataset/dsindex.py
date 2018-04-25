@@ -18,7 +18,7 @@ class DatasetIndex(Baseset):
     --------
     >>> index = DatasetIndex(all_item_ids)
 
-    >>> index.cv_split([0.8, 0.2])
+    >>> index.split([0.8, 0.2])
 
     >>> item_pos = index.get_pos(item_id)
     """
@@ -87,7 +87,7 @@ class DatasetIndex(Baseset):
         """ Return a new index object based on the subset of indices given. """
         return type(self)(index)
 
-    def cv_split(self, shares=0.8, shuffle=False):
+    def split(self, shares=0.8, shuffle=False):
         """ Split index into train, test and validation subsets.
 
         Shuffles index if necessary.
@@ -105,18 +105,18 @@ class DatasetIndex(Baseset):
 
         split into train / test in 80/20 ratio
 
-        >>> index.cv_split()
+        >>> index.split()
 
         split into train / test / validation in 60/30/10 ratio
 
-        >>> index.cv_split([0.6, 0.3])
+        >>> index.split([0.6, 0.3])
 
         split into train / test / validation in 50/30/20 ratio
 
-        >>> index.cv_split([0.5, 0.3, 0.2])
+        >>> index.split([0.5, 0.3, 0.2])
 
         """
-        train_share, test_share, valid_share = self.calc_cv_split(shares)
+        train_share, test_share, valid_share = self.calc_split(shares)
 
         # TODO: make a view not copy if not shuffled
         if shuffle:
@@ -342,7 +342,7 @@ class FilesIndex(DatasetIndex):
 
     Split into train / test / validation in 80/15/5 ratio
 
-    >>> fi.cv_split([0.8, 0.15])
+    >>> fi.split([0.8, 0.15])
 
     Get a position of a customer in the index
 
