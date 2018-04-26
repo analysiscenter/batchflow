@@ -85,9 +85,9 @@ class ResNet(TFModel):
         config = super().build_config(names)
 
         if config.get('body/filters') is None:
-            num_blocks = config['body']['num_blocks']
-            filters = config['input_block']['filters']
-            config['body']['filters'] = 2 ** np.arange(len(num_blocks)) * filters
+            num_blocks = config['body/num_blocks']
+            filters = config['input_block/filters']
+            config['body/filters'] = 2 ** np.arange(len(num_blocks)) * filters * config['body/block/width_factor']
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
         if config.get('head/filters') is None:
