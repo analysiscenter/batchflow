@@ -52,7 +52,8 @@ class DenseNetFC(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['filters'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod
@@ -199,4 +200,3 @@ class DenseNetFC103(DenseNetFC):
         config['body']['num_layers'] = [4, 5, 7, 10, 12, 15]
         config['body']['block']['growth_rate'] = 16
         return config
-

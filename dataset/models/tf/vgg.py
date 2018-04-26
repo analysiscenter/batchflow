@@ -55,8 +55,8 @@ class VGG(TFModel):
         if is_best_practice():
             config['head'].update(dict(layout='Vdf', dropout_rate=.8, units=2))
         else:
+            config['head']['layout'] = 'dfa dfa f'
             config['head']['units'] = [4096, 4096, 2]
-            config['head']['layout'] = 'dfadfaf'
         config['loss'] = 'ce'
 
         config['common'] = dict(conv=dict(use_bias=False))

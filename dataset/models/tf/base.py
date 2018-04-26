@@ -11,7 +11,7 @@ import contextlib
 import numpy as np
 import tensorflow as tf
 
-from ... import is_best_practice
+from ... import is_best_practice, Config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
 from .train import piecewise_constant
@@ -1210,7 +1210,7 @@ class TFModel(BaseModel):
                 return config
         """
 
-        config = self.default_config()
+        config = Config(self.default_config())
 
         for k in self.config:
             self.put(k, self.config[k], config)

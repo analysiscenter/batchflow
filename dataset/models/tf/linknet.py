@@ -54,7 +54,8 @@ class LinkNet(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['num_classes'] = self.num_classes('targets')
+        if config.get('head/num_classes') is None:
+            config['head/num_classes'] = self.num_classes('targets')
         config['head']['targets'] = self.targets
         return config
 
