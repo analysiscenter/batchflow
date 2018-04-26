@@ -395,8 +395,6 @@ class ResNet18(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-
-        filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [2, 2, 2, 2]
         config['body']['block']['bottleneck'] = False
         return config
