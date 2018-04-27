@@ -264,6 +264,47 @@ class DatasetIndex(Baseset):
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, bar=False):
         """ Generate batches
 
+        Parameters
+        ----------
+        batch_size : int
+            desired number of items in the batch (the actual batch could contain fewer items)
+
+        shuffle : bool, int, class:`numpy.random.RandomState` or callable
+            specifies the order of items, could be:
+
+            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
+                if `True`, items are shuffled randomly before each epoch.
+
+            - int - a seed number for a random shuffle.
+
+            - :class:`numpy.random.RandomState` instance.
+
+            - callable - a function which takes an array of item indices in the initial order
+                (as they appear in the index) and returns the order of items.
+
+        n_epochs : int
+            the number of epochs required.
+
+        drop_last : bool
+            if `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
+            If `False`, than the last batch in each epoch could contain repeating indices (which might be a problem)
+            and the very last batch could contain fewer than `batch_size` items.
+
+            For instance, `next_batch(3, shuffle=False, n_epochs=2, drop_last=False)` for a dataset with 4 items returns
+            indices [0,1,2], [3,0,1], [2,3].
+            While `next_batch(3, shuffle=False, n_epochs=2, drop_last=True)` returns indices [0,1,2], [0,1,2].
+
+            Take into account that `next_batch(3, shuffle=True, n_epochs=2, drop_last=False)` could return batches
+            [3,0,1], [2,0,2], [1,3]. Here the second batch contains two items with the same index "2".
+            This might become a problem if some action uses `batch.get_pos()` or `batch.index.get_pos()` methods so that
+            one of the identical items will be missed.
+            However, there is nothing to worry about if you don't iterate over batch items explicitly
+            (i.e. `for item in batch`) or implicitly (through `batch[ix]`).
+
+        bar : bool or 'n'
+            whether to show a `tqdm` progress bar.
+            If 'n', than uses `tqdm_notebook`.
+
         Yields
         ------
         an instance of the same class with a subset of indices
@@ -284,7 +325,10 @@ class DatasetIndex(Baseset):
                 total = len(self) // batch_size * n_epochs
             else:
                 total = math.ceil(len(self) * n_epochs / batch_size)
-            iter_params['bar'] = tqdm.tqdm(total=total)
+            if bar == 'j':
+                iter_params['bar'] = tqdm.tqdm_notebook(total=total)
+            else:
+                iter_params['bar'] = tqdm.tqdm(total=total)
         while True:
             if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
                 return
