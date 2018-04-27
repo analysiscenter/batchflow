@@ -42,7 +42,7 @@ class Baseset:
         """bool : True if dataset has been split into train / test / validation subsets """
         return self.train is not None or self.test is not None or self.validation is not None
 
-    def calc_cv_split(self, shares=0.8):
+    def calc_split(self, shares=0.8):
         """ Calculate split into train, test and validation subsets
 
         Parameters
@@ -65,15 +65,15 @@ class Baseset:
         --------
         Split into train / test in 80/20 ratio
 
-        >>> some_set.calc_cv_split()
+        >>> some_set.calc_split()
 
         Split into train / test / validation in 60/30/10 ratio
 
-        >>> some_set.calc_cv_split([0.6, 0.3])
+        >>> some_set.calc_split([0.6, 0.3])
 
         Split into train / test / validation in 50/30/20 ratio
 
-        >>> some_set.calc_cv_split([0.5, 0.3, 0.2])
+        >>> some_set.calc_split([0.5, 0.3, 0.2])
         """
         _shares = [shares] if isinstance(shares, (int, float)) else shares
         _shares = _shares if len(_shares) > 1 else _shares + [.0]
@@ -105,7 +105,7 @@ class Baseset:
         raise NotImplementedError("create_subset should be defined in child classes")
 
 
-    def cv_split(self, shares=0.8, shuffle=False):
+    def split(self, shares=0.8, shuffle=False):
         """ Split the dataset into train, test and validation sub-datasets.
         Subsets are available as `.train`, `.test` and `.validation` respectively.
 
@@ -128,17 +128,17 @@ class Baseset:
         --------
         Split into train / test in 80/20 ratio
 
-        >>> dataset.cv_split()
+        >>> dataset.split()
 
         Split into train / test / validation in 60/30/10 ratio
 
-        >>> dataset.cv_split([0.6, 0.3])
+        >>> dataset.split([0.6, 0.3])
 
         Split into train / test / validation in 50/30/20 ratio
 
-        >>> dataset.cv_split([0.5, 0.3, 0.2])
+        >>> dataset.split([0.5, 0.3, 0.2])
         """
-        self.index.cv_split(shares, shuffle)
+        self.index.split(shares, shuffle)
 
         if self.index.train is not None:
             self.train = self.create_subset(self.index.train)
