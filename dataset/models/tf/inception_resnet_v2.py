@@ -45,7 +45,10 @@ class InceptionResNet_v2(Inception):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['units'] = self.num_classes('targets')
+        if config.get('head/units') is None:
+            config['head/units'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod

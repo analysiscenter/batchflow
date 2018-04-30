@@ -34,7 +34,7 @@ class MNIST(ImagesOpenset):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, train_test=True, **kwargs)
-        self.cv_split()
+        self.split()
 
     @property
     def _get_from_urls(self):
