@@ -325,7 +325,8 @@ class DatasetIndex(Baseset):
                 total = len(self) // batch_size * n_epochs
             else:
                 total = math.ceil(len(self) * n_epochs / batch_size)
-            if bar == 'j':
+
+            if bar == 'n':
                 iter_params['bar'] = tqdm.tqdm_notebook(total=total)
             else:
                 iter_params['bar'] = tqdm.tqdm(total=total)
