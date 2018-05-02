@@ -276,7 +276,7 @@ class TFModel(BaseModel):
     def create_session(self, config=None):
         """ Create TF session """
         config = config if config is not None else self.config
-        session_config = self.get('session', config, default={})
+        session_config = config.get('session', default={})
         self.session = tf.Session(**session_config)
 
     def reset(self):
@@ -1175,7 +1175,7 @@ class TFModel(BaseModel):
             config['common'] = {'batch_norm': {'momentum': .1}}
             config['optimizer'].update({'use_locking': True})
 
-        return config
+        return Config(config)
 
     @classmethod
     def fill_params(cls, _name, **kwargs):
