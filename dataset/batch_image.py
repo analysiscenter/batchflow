@@ -399,6 +399,9 @@ class ImagesBatch(BaseImagesBatch):
         """
         if isinstance(image, PIL.Image.Image):
             return image
+        
+        if not np.issubdtype(image.dtype, np.integer):
+            image = np.uint8(255*image)
 
         if mode is None:
             if len(image.shape) == 2:
@@ -908,6 +911,7 @@ class ImagesBatch(BaseImagesBatch):
         """
 
         multiplier = np.float32(multiplier)
+        
         if isinstance(image, PIL.Image.Image):
             return PIL.Image.fromarray(np.clip(multiplier*np.asarray(image), 0, 255).astype(np.uint8))
         else:
@@ -1130,7 +1134,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
+        noise = noise(size=(*image.size[::-1], len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._add_(image, noise, clip, preserve_type)
 
     def _multiplicative_noise_(self, image, noise, clip=False, preserve_type=False):
@@ -1157,7 +1161,7 @@ class ImagesBatch(BaseImagesBatch):
         self
         """
 
-        noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
+        noise = noise(size=(*image.size[::-1], len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._multiply_(image, noise, clip, preserve_type)
 
     def _elastic_transform_(self, image, alpha, sigma, **kwargs):
@@ -1186,13 +1190,12 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-
         image = np.array(image)
         # full shape is needed
         shape = image.shape
         if len(shape) == 2:
             image = image[..., None]
-            shape = image.shape
+            shape = (*image.shape, 1)
 
         kwargs.setdefault('mode', 'constant')
         kwargs.setdefault('cval', 0)
@@ -1200,12 +1203,11 @@ class ImagesBatch(BaseImagesBatch):
         column_shift = self._sp_gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
         row_shift = self._sp_gaussian_filter_(np.random.uniform(-1, 1, size=shape), sigma, **kwargs) * alpha
 
-        row, column, channel = np.meshgrid(range(shape[0]), range(shape[1]), range(shape[2]))
-
+        column, row, channel = np.meshgrid(range(shape[0]), range(shape[1]), range(shape[2]), indexing='ij')
         indices = (column + column_shift, row + row_shift, channel)
 
         distored_image = self._sp_map_coordinates_(image, indices, order=1, mode='reflect')
 
         if shape[-1] == 1:
-            return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape))[..., 0])
+            return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape))[...,0])
         return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape)))
