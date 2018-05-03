@@ -11,20 +11,14 @@ import logging
 import multiprocess as mp
 from tqdm import tqdm
 
-class Tasks:
-    """ Tasks to workers. """
-    def __init__(self, tasks):
-        self.tasks = tasks
-
-    def __iter__(self):
-        return self.tasks
+from .task import Job
 
 class Worker:
     """ Worker that creates subprocess to execute task.
     Worker get queue of tasks, pop one task and execute it in subprocess. That subprocess
     call init, run_task and post class methods.
     """
-    def __init__(self, worker_name=None, logfile=None, errorfile=None, *args, **kwargs):
+    def __init__(self, worker_name=None, logfile=None, errorfile=None, config=None, *args, **kwargs):
         """
         Parameters
         ----------
@@ -37,7 +31,8 @@ class Worker:
         args, kwargs
             will be used in init, post and task
         """
-        self.task = None
+        self.job = None
+        self.worker_config = config or dict()
         self.args = args
         self.kwargs = kwargs
         if isinstance(worker_name, int):
@@ -90,16 +85,16 @@ class Worker:
         self.log_info('Start {} [id:{}]'.format(self.name, os.getpid()), filename=self.logfile)
 
         try:
-            item = queue.get()
+            job = queue.get()
         except Exception as exception:
             self.log_error(exception, filename=self.errorfile)
         else:
-            while item is not None:
+            while job is not None:
                 sub_queue = mp.JoinableQueue()
-                sub_queue.put(item)
+                sub_queue.put(job)
                 try:
                     self.log_info(self.name + ' is creating process', filename=self.logfile)
-                    worker = mp.Process(target=self._run, args=(sub_queue, ))
+                    worker = mp.Process(target=self._run_job, args=(sub_queue, ))
                     worker.start()
                     sub_queue.join()
                 except Exception as exception:
@@ -110,19 +105,19 @@ class Worker:
         queue.task_done()
         results.put('done')
 
-    def _run(self, queue):
+    def _run_job(self, queue):
         try:
-            self.task = queue.get()
+            self.job = queue.get()
             self.log_info(
-                'Task {} was started in subprocess [id:{}] by {}'.format(self.task[0], os.getpid(), self.name),
+                'Task {} was started in subprocess [id:{}] by {}'.format(self.job[0], os.getpid(), self.name),
                 filename=self.logfile
             )
             self.init()
-            self.run_task()
+            self.run_job()
             self.post()
         except Exception as exception:
             self.log_error(exception, filename=self.errorfile)
-        self.log_info('Task {} was finished by {}'.format(self.task[0], self.name), filename=self.logfile)
+        self.log_info('Task {} was finished by {}'.format(self.job[0], self.name), filename=self.logfile)
         queue.task_done()
 
     @classmethod
@@ -153,19 +148,10 @@ class Distributor:
     def _tasks_to_queue(self, tasks):
         queue = mp.JoinableQueue()
         for idx, task in enumerate(tasks):
-            queue.put((idx, task))
+            queue.put((idx, Job(task)))
         for _ in range(self.n_workers):
             queue.put(None)
         return queue
-
-    def _put_tasks(self, queue, tasks, size):
-        created_chunks = 0
-        for idx, task in enumerate(tasks):
-            if idx < (created_chunks + 1) * size:
-                queue.put((idx, task))
-            else:
-                created_chunks += 1
-                yield queue
 
     @classmethod
     def log_info(cls, message, filename):

@@ -9,88 +9,34 @@ import os
 
 from .. import Config, Pipeline, inbatch_parallel
 from .distributor import Worker
-from .singlerun import SingleRunning
 
 class PipelineWorker(Worker):
     """ Worker that run pipelines. """
-    @inbatch_parallel(init='_parallel_init')
-    def _parallel_run(self, item, single_runnings, batch, iteration, name):
-        _ = single_runnings
-        try:
-            item.run_on_batch(batch, name)
-            item.put_result(iteration, name)
-        except Exception as exception:
-            self.log_error(exception, filename=self.errorfile)
-
-    def _parallel_init(self, single_runnings, batch, iteration, name):
-        _ = batch, name, iteration
-        return single_runnings
-
-    def get_iterations(self, execute_for, n_iters=None):
-        """ Get indices of iterations from execute_for. """
-        if n_iters is not None:
-            if isinstance(execute_for, int):
-                if execute_for == -1:
-                    execute_for = [n_iters - 1]
-                else:
-                    execute_for = list(range(-1, n_iters, execute_for))
-            elif execute_for is None:
-                execute_for = list(range(n_iters))
-        return execute_for
 
     def init(self):
         """ Run before task execution. """
-        i, task = self.task
-        if isinstance(task['n_branches'], list):
-            description = '\n'.join([str({**config.alias(), **_config})
-                                     for config, _config in zip(task['configs'], task['n_branches'])])
-        else:
-            description = '\n'.join([str(config.alias()) for config in task['configs']])
-
+        i, job = self.job
+        description = job.get_description()
         self.log_info('Task {} has the following configs:\n{}'.format(i, description), filename=self.logfile)
-
-        self.single_runnings = []
-        for idx, config in enumerate(task['configs']):
-            single_running = SingleRunning()
-            for name, pipeline in task['pipelines'].items():
-                pipeline_copy = pipeline['ppl'] + Pipeline()
-
-                pipeline['execute_for'] = self.get_iterations(pipeline['execute_for'], task['n_iters'])
-                if pipeline['dump_for'] is not None:
-                    pipeline['dump_for'] = self.get_iterations(pipeline['dump_for'], task['n_iters'])
-                else:
-                    pipeline['dump_for'] = []
-                single_running.add_pipeline(pipeline_copy, pipeline['var'],
-                                            name=name, post_run=pipeline['post_run'], **pipeline['kwargs'])
-            if isinstance(task['n_branches'], list):
-                n_branches = task['n_branches'][idx]
-            else:
-                n_branches = Config()
-
-            worker_config = self.kwargs.get('config', Config())
-
-            single_running.add_common_config(config.config()+n_branches+worker_config)
-            self.log_info('Additional config:\n{}'.format(n_branches+worker_config), filename=self.logfile)
-            single_running.init()
-            self.single_runnings.append(single_running)
+        job.init(self.worker_config)
 
     def post(self):
         """ Run after task execution. """
-        i, _ = self.task
+        i, _ = self.job
         self.log_info('Task {}: saving final results...'.format(i), filename=self.logfile)
         self.dump_all()
 
     def dump_all(self):
         """ Dump final results. """
-        _, task = self.task
-        for name, _ in task['pipelines'].items():
+        _, job = self.job
+        for name, _ in job.config['pipelines'].items():
             for item, config, repetition in zip(
-                    self.single_runnings,
-                    task['configs'],
-                    task['repetition']
+                    self.experiments,
+                    job.config['configs'],
+                    job.config['repetition']
                 ):
                 path = os.path.join(
-                    task['name'],
+                    job.config['name'],
                     'results',
                     config.alias(as_string=True),
                     str(repetition),
@@ -98,45 +44,44 @@ class PipelineWorker(Worker):
                 )
                 item.dump_result(name, path)
 
-    def run_task(self):
+    def run_job(self):
         """ Task execution. """
-        i, task = self.task
+        i, job = self.job
 
-        for j in range(task['n_iters']):
+        for j in range(job.config['n_iters']):
             try:
-                for name, pipeline in task['pipelines'].items():
+                for name, pipeline in job.config['pipelines'].items():
                     if j in pipeline['execute_for']:
                         if pipeline['preproc'] is not None:
-                            batch = pipeline['preproc'].next_batch()
-                            self._parallel_run(self.single_runnings, batch, j, name)
+                            job.parallel_execute_for(name)
                         else:
-                            for item, config, repetition in zip(
-                                    self.single_runnings,
-                                    task['configs'],
-                                    task['repetition']
+                            for experiment, config, repetition in zip(
+                                    job.experiments,
+                                    job.config['configs'],
+                                    job.config['repetition']
                             ):
                                 if pipeline['run']:
                                     self.log_info(
                                         'Task {}, iteration {}: run pipeline {}'
                                         .format(i, j, name), filename=self.logfile
                                     )
-                                    item.run(name)
-                                    item.put_result(j, name)
-                                    item.post_run(name)
+                                    experiment.run(name)
+                                    experiment.put_result(j, name)
+                                    experiment.post_run(name)
                                 else:
-                                    item.next_batch(name)
-                                    item.put_result(j, name)
+                                    experiment.next_batch(name)
+                                    experiment.put_result(j, name)
 
                     if j in pipeline['dump_for']:
                         self.log_info('Task {}, iteration {}: dump results for {}...'
                                       .format(i, j, name), filename=self.logfile)
                         for item, config, repetition in zip(
-                                self.single_runnings,
+                                job.experiments,
                                 task['configs'],
                                 task['repetition']
                             ):
                             path = os.path.join(
-                                task['name'],
+                                job['name'],
                                 'results',
                                 config.alias(as_string=True),
                                 str(repetition),
@@ -146,17 +91,3 @@ class PipelineWorker(Worker):
             except StopIteration:
                 self.log_info('Task {} was stopped after {} iterations'.format(i, j+1), filename=self.logfile)
                 break
-
-class SavingWorker(PipelineWorker):
-    """ Worker that run pipelines and save first model. """
-    def post(self):
-        """ Run after task execution. """
-        super().post()
-        _, task = self.task
-        for item, config, repetition in zip(self.single_runnings, task['configs'], task['repetition']):
-            if repetition == 0:
-                filename = os.path.join(task['name'],
-                                        'results',
-                                        config.alias(as_string=True),
-                                        str(task['repetition']) + '_model')
-                item.get_pipeline('train')['ppl'].get_model_by_name('model').save(filename)

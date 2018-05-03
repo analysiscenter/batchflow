@@ -14,8 +14,8 @@ import json
 import dill
 
 from .. import Config
-from .distributor import Tasks, Distributor
-from .workers import PipelineWorker, SavingWorker
+from .distributor import Distributor
+from .workers import PipelineWorker
 from .grid import Grid
 
 class Research:
@@ -128,17 +128,17 @@ class Research:
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
         self.tasks = (
-            {'pipelines': self.pipelines,
-             'n_iters': n_iters,
-             'configs': list(zip(*chunk))[1],
-             'repetition': list(zip(*chunk))[0],
-             'n_branches': n_branches,
-             'name': name
-            }
-            for chunk in configs_chunks
+                {'pipelines': self.pipelines,
+                 'n_iters': n_iters,
+                 'configs': list(zip(*chunk))[1],
+                 'repetition': list(zip(*chunk))[0],
+                 'n_branches': n_branches,
+                 'name': name
+                }
+                for chunk in configs_chunks
         )
+
         self.n_tasks = ceil(len(configs_with_repetitions) / n_models)
-        self.tasks = Tasks(self.tasks)
 
     def _chunks(self, array, size):
         """ Divide array into chunks of the fixed size.
@@ -201,10 +201,7 @@ class Research:
         self._create_tasks(n_reps, n_iters, n_branches, self.name)
 
         if isinstance(n_workers, int) or isinstance(n_workers[0], (dict, Config)):
-            if save_model:
-                worker = SavingWorker # worker that saves model at first repetition
-            else:
-                worker = PipelineWorker
+            worker = PipelineWorker
         else:
             worker = None
         distr = Distributor(n_workers, worker)
