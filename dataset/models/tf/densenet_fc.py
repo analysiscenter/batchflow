@@ -33,23 +33,27 @@ class DenseNetFC(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
-        config['input_block'].update(dict(layout='c', filters=48, kernel_size=3, strides=1,
-                                          pool_size=3, pool_strides=2))
+        config['input_block'].update(dict(layout='c', filters=48, kernel_size=3, strides=1))
 
         config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=12, bottleneck=False)
-        config['body']['upsample'] = dict(layout='nat', factor=2, kernel_size=3)
+        config['body']['upsample'] = dict(layout='t', factor=2, kernel_size=3)
         config['body']['transition_down'] = dict(layout='nacdp', kernel_size=1, strides=1,
                                                  pool_size=2, pool_strides=2, dropout_rate=.2,
                                                  reduction_factor=1)
 
         config['head'].update(dict(layout='c', kernel_size=1))
-        config['loss'] = 'ce'
 
+        config['loss'] = 'ce'
+        config['common'] = dict(conv=dict(use_bias=False))
+        # decay_steps are equal to one epochs on CamVid dataset.
+        config['decay'] = ('exp', dict(learning_rate=1e-3, decay_steps=1000, decay_rate=0.995))
+        config['optimizer'] = dict(name='RMSProp')
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['filters'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod
@@ -196,4 +200,3 @@ class DenseNetFC103(DenseNetFC):
         config['body']['num_layers'] = [4, 5, 7, 10, 12, 15]
         config['body']['block']['growth_rate'] = 16
         return config
-

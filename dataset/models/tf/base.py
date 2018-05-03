@@ -11,7 +11,7 @@ import contextlib
 import numpy as np
 import tensorflow as tf
 
-from ... import is_best_practice
+from ... import is_best_practice, Config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
 from .train import piecewise_constant
@@ -19,6 +19,7 @@ from .train import piecewise_constant
 
 LOSSES = {
     'mse': tf.losses.mean_squared_error,
+    'bce': tf.losses.sigmoid_cross_entropy,
     'ce': tf.losses.softmax_cross_entropy,
     'crossentropy': tf.losses.softmax_cross_entropy,
     'absolutedifference': tf.losses.absolute_difference,
@@ -69,12 +70,21 @@ class TFModel(BaseModel):
               (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
             - callable
 
+        If loss is callable, then it should add the result to a loss collection.
+        Otherwise, ``add_loss`` should be set to True. An optional collection might also be specified through
+        ``loss_collection`` parameter.
+
+        .. note:: Losses from non-default collections won't be detected automatically,
+                  so you should process them within your code.
+
         Examples:
 
         - ``{'loss': 'mse'}``
         - ``{'loss': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}``
         - ``{'loss': tf.losses.huber_loss, 'reduction': tf.losses.Reduction.MEAN}``
-        - ``{'loss': external_loss_fn}``
+        - ``{'loss': external_loss_fn_with_add_loss_inside}``
+        - ``{'loss': external_loss_fn_without_add_loss, 'add_loss': True}``
+        - ``{'loss': external_loss_fn_to_collection, 'add_loss': True, 'loss_collection': tf.GraphKeys.LOSSES}``
 
     decay - a learning rate decay algorithm might be defined in one of three formats:
         - name
@@ -266,7 +276,7 @@ class TFModel(BaseModel):
     def create_session(self, config=None):
         """ Create TF session """
         config = config if config is not None else self.config
-        session_config = self.get('session', config, default={})
+        session_config = config.get('session', default={})
         self.session = tf.Session(**session_config)
 
     def reset(self):
@@ -520,7 +530,7 @@ class TFModel(BaseModel):
         elif isinstance(loss, str) and hasattr(tf.losses, loss):
             loss = getattr(tf.losses, loss)
         elif callable(loss):
-            add_loss = True
+            pass
         else:
             raise ValueError("Unknown loss", loss)
 
@@ -537,9 +547,15 @@ class TFModel(BaseModel):
             except AttributeError:
                 raise KeyError("Model %s does not have 'targets' tensor" % type(self).__name__)
             else:
+                add_loss = args.pop('add_loss', False)
+                if add_loss:
+                    loss_collection = args.pop('loss_collection', None)
                 tensor_loss = loss(targets, predictions, **args)
                 if add_loss:
-                    tf.losses.add_loss(tensor_loss)
+                    if loss_collection:
+                        tf.losses.add_loss(tensor_loss, loss_collection)
+                    else:
+                        tf.losses.add_loss(tensor_loss)
 
     def _make_decay(self, config):
         decay_name, decay_args = self._unpack_fn_from_config('decay', config)
@@ -1159,7 +1175,7 @@ class TFModel(BaseModel):
             config['common'] = {'batch_norm': {'momentum': .1}}
             config['optimizer'].update({'use_locking': True})
 
-        return config
+        return Config(config)
 
     @classmethod
     def fill_params(cls, _name, **kwargs):
@@ -1194,7 +1210,7 @@ class TFModel(BaseModel):
                 return config
         """
 
-        config = self.default_config()
+        config = Config(self.default_config())
 
         for k in self.config:
             self.put(k, self.config[k], config)
@@ -1291,7 +1307,7 @@ class TFModel(BaseModel):
         number of channels : int
         """
         config = self.get_tensor_config(tensor, **kwargs)
-        shape = config.get('shape')
+        shape = (None,) + config.get('shape')
         channels_axis = self.channels_axis(tensor, **kwargs)
         return shape[channels_axis] if shape else None
 
@@ -1308,7 +1324,7 @@ class TFModel(BaseModel):
         shape : tuple of ints
         """
         shape = tensor.get_shape().as_list()
-        axis = TFModel.channels_axis(data_format)
+        axis = cls.channels_axis(data_format)
         return shape[axis]
 
     def get_shape(self, tensor, **kwargs):

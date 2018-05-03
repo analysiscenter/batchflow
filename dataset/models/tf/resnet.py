@@ -70,14 +70,29 @@ class ResNet(TFModel):
                                        resnext=False, resnext_factor=32,
                                        se_block=False, se_factor=16)
 
-        config['head'].update(dict(layout='Vdf', dropout_rate=.4, units=2))
-        config['loss'] = 'ce'
+        config['head'].update(dict(layout='Vdf', dropout_rate=.4))
 
+        config['loss'] = 'ce'
+        config['common'] = dict(conv=dict(use_bias=False))
+        # The learning rate starts from 0.1 (no warming up), and is divided by 10 at 30 and 60 epochs
+        # with batch size = 256 on ImageNet.
+        init_lr = 1e-3 if is_best_practice() else .1
+        config['decay'] = ('const', dict(boundaries=[117188, 234375], values=[init_lr, init_lr/10, init_lr/100]))
+        config['optimizer'] = dict(name='Momentum', momentum=.9)
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['units'] = self.num_classes('targets')
+
+        if config.get('body/filters') is None:
+            num_blocks = config['body/num_blocks']
+            filters = config['input_block/filters']
+            config['body/filters'] = 2 ** np.arange(len(num_blocks)) * filters * config['body/block/width_factor']
+        if config.get('head/units') is None:
+            config['head/units'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
+
         return config
 
     @classmethod
@@ -270,7 +285,7 @@ class ResNet(TFModel):
         tf.Tensor
         """
         if layout is None:
-            layout = 'cna cna' if is_best_practice() else 'acn acn'
+            layout = 'cna cna' if is_best_practice() else 'nac nac'
         n = layout.count('c') + layout.count('C') - 1
         strides = ([2] + [1] * n) if downsample else 1
         return conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
@@ -301,7 +316,7 @@ class ResNet(TFModel):
         """
         kernel_size = [1, 3, 1] if kernel_size is None else kernel_size
         if layout is None:
-            layout = 'cna cna cna' if is_best_practice() else 'acn acn acn'
+            layout = 'cna cna cna' if is_best_practice() else 'nac nac nac'
         n = layout.count('c') + layout.count('C') - 2
         if kwargs.get('strides') is None:
             strides = ([1, 2] + [1] * n) if downsample else 1
@@ -380,10 +395,7 @@ class ResNet18(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-
-        filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [2, 2, 2, 2]
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = False
         return config
 
@@ -393,10 +405,7 @@ class ResNet34(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-
         config['body']['num_blocks'] = [3, 4, 6, 3]
-        filters = 64   # number of filters in the first block
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = False
         return config
 
@@ -415,10 +424,7 @@ class ResNet101(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-
-        filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [3, 4, 23, 3]
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = True
         return config
 
@@ -428,9 +434,6 @@ class ResNet152(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-
-        filters = 64   # number of filters in the first block
         config['body']['num_blocks'] = [3, 8, 36, 3]
-        config['body']['filters'] = 2 ** np.arange(len(config['body']['num_blocks'])) * filters
         config['body']['block']['bottleneck'] = True
         return config

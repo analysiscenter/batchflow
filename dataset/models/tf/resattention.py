@@ -1,3 +1,4 @@
+
 """ Wang F. at all. "`Residual Attention Network for Image Classification
 <https://arxiv.org/abs/1704.06904>`_"
 """
@@ -49,13 +50,19 @@ class ResNetAttention(TFModel):
         config['head']['layout'] = 'Vf'
 
         config['loss'] = 'ce'
-
+        config['common'] = dict(conv=dict(use_bias=False))
+        init_lr = 1e-4
+        config['decay'] = ('const', dict(boundaries=[200000, 400000, 500000],
+                                         values=[init_lr, init_lr/10, init_lr/100, init_lr/1000]))
+        config['optimizer'] = dict(name='Momentum', momentum=.9)
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['units'] = self.num_classes('targets')
-        config['head']['filters'] = self.num_classes('targets')
+        if config.get('head/units') is None:
+            config['head/units'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod

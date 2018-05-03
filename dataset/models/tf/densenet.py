@@ -4,6 +4,7 @@ Huang G. et al. "`Densely Connected Convolutional Networks
 """
 import tensorflow as tf
 
+from ... import is_best_practice
 from . import TFModel
 from .layers import conv_block
 
@@ -48,13 +49,22 @@ class DenseNet(TFModel):
                                                   pool_size=2, pool_strides=2,
                                                   reduction_factor=1)
         config['head'].update(dict(layout='Vf'))
+
         config['loss'] = 'ce'
+        config['common'] = dict(conv=dict(use_bias=False))
+        # boundaries - the number of iterations on the 150th and 225th epochs respectively on CIFAR with batch size = 64
+        init_lr = 1e-2 if is_best_practice() else 1e-1
+        config['decay'] = ('const', dict(boundaries=[117300, 175950], values=[init_lr, init_lr/10, init_lr/100]))
+        config['optimizer'] = dict(name='Momentum', momentum=.9)
+
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['units'] = self.num_classes('targets')
-        config['head']['filters'] = self.num_classes('targets')
+        if config.get('head/units') is None:
+            config['head/units'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod

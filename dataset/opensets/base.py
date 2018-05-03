@@ -25,13 +25,13 @@ class Openset(Dataset):
         _ = path
         return None
 
-    def cv_split(self, shares=0.8, shuffle=False):
+    def split(self, shares=0.8, shuffle=False):
         if self.train_test:
             train_data, test_data = self._data  # pylint:disable=unpacking-non-sequence
             self.train = Dataset(self._train_index, self.batch_class, preloaded=train_data)
             self.test = Dataset(self._test_index, self.batch_class, preloaded=test_data)
         else:
-            super().cv_split(shares, shuffle)
+            super().split(shares, shuffle)
 
 
 class ImagesOpenset(Openset):

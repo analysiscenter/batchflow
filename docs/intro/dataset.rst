@@ -33,7 +33,7 @@ A dataset can be easily split into train, test and validation subsets.
 
 .. code-block:: python
 
-    client_dataset.cv_split([.8, .1, .1])
+    client_dataset.split([.8, .1, .1])
 
 All parts are also datasets, which can be addressed as `dataset.train`, `dataset.test` and `dataset.validation`.
 

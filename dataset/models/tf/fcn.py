@@ -18,7 +18,10 @@ class FCN(TFModel):
         config['body']['filters'] = 100
         config['body']['upsample'] = dict(layout='t', kernel_size=4)
         config['head']['upsample'] = dict(layout='t')
+
         config['loss'] = 'ce'
+        config['optimizer'] = dict(name='Momentum', learning_rate=1e-4, momentum=.9)
+
         return config
 
     def build_config(self, names=None):
