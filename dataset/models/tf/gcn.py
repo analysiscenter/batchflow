@@ -117,9 +117,9 @@ class GlobalConvolutionNetwork(TFModel):
             for i, tensor in enumerate(base_tensors):
                 with tf.variable_scope('encoder-%d' % i):
                     if res_block:
-                        x = cls.res_block(tensor, name='GCN', **block, **kwargs)
+                        x = cls.res_block(tensor, name='resGCN', **block, **kwargs)
                     else:
-                        x = cls.block(tensor, name='res_GCN', **block, **kwargs)
+                        x = cls.block(tensor, name='GCN', **block, **kwargs)
                     x = cls.boundary_refinement(x, name='BR', **br_block, **kwargs)
                 encoder_tensors.append(x)
         return encoder_tensors
@@ -155,8 +155,8 @@ class GlobalConvolutionNetwork(TFModel):
 
     @classmethod
     def res_block(cls, inputs, name, **kwargs):
-        """ The ResNet GCN block, shown in Figure 5, using a 1x1 conv layer in skipconnection
-        for the correct operation of the network.
+        """ The ResNet GCN block, shown in Figure 5, with a 1x1 conv layer in skip connection
+        to correct shapes of the tensors involved.
 
         Parameters
         ----------
