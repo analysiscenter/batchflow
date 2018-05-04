@@ -32,6 +32,9 @@ class DenseNet(TFModel):
             bottleneck : bool
                 whether to use 1x1 convolutions in each layer (default=True)
 
+            skip : bool
+                whether to concatenate inputs to the output tensor
+
     transition_layer : dict
         parameters for transition layers, including :func:`~.layers.conv_block` parameters, as well as
 
@@ -44,7 +47,7 @@ class DenseNet(TFModel):
         config = TFModel.default_config()
         config['input_block'].update(dict(layout='cnap', filters=16, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
-        config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=32, bottleneck=True)
+        config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=32, bottleneck=True, skip=True)
         config['body']['transition_layer'] = dict(layout='nacv', kernel_size=1, strides=1,
                                                   pool_size=2, pool_strides=2,
                                                   reduction_factor=1)
@@ -114,21 +117,26 @@ class DenseNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body/block', **kwargs)
-        layout, growth_rate, bottleneck = \
-            cls.pop(['layout', 'growth_rate', 'bottleneck'], kwargs)
+        layout, growth_rate, bottleneck, skip = \
+            cls.pop(['layout', 'growth_rate', 'bottleneck', 'skip'], kwargs)
 
         with tf.variable_scope(name):
             axis = cls.channels_axis(kwargs['data_format'])
-            p = inputs
             x = inputs
+            all_layers = []
             for i in range(num_layers):
+                if len(all_layers) > 0:
+                    x = tf.concat([inputs] + all_layers, axis=axis, name='concat-%d' % i)
                 if bottleneck:
                     x = conv_block(x, filters=growth_rate * 4, kernel_size=1, layout=layout,
                                    name='bottleneck-%d' % i, **kwargs)
                 x = conv_block(x, filters=growth_rate, kernel_size=3, layout=layout,
                                name='conv-%d' % i, **kwargs)
-                x = tf.concat([p, x], axis=axis, name='concat-%d' % i)
-                p = x
+                all_layers.append(x)
+
+            if skip:
+                all_layers = [inputs] + all_layers
+            x = tf.concat(all_layers, axis=axis, name='concat-%d' % num_layers)
         return x
 
     @classmethod
