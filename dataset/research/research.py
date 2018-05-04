@@ -11,8 +11,8 @@ from copy import copy
 from collections import OrderedDict
 from math import ceil
 import json
-import dill
 import warnings
+import dill
 
 from .. import Config
 from .distributor import Distributor
@@ -26,7 +26,7 @@ class Research:
         self.functions = OrderedDict()
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
-                     execute_for=None, dump_for=None, run=False, **kwargs):
+                 execute_for=None, dump_for=None, run=False, **kwargs):
         """ Add new pipeline to research.
 
         Parameters
@@ -151,7 +151,7 @@ class Research:
 
         branches : int or list of Configs
             if int, branches is a number of branches for one root
-            if list then each element is additional Configs for pipelines 
+            if list then each element is additional Configs for pipelines
         name : str
             name of research.
         """
@@ -169,15 +169,15 @@ class Research:
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
         self.jobs = (
-                {'pipelines': self.pipelines,
-                 'functions': self.functions,
-                 'n_iters': n_iters,
-                 'configs': list(zip(*chunk))[1],
-                 'repetition': list(zip(*chunk))[0],
-                 'branches': branches,
-                 'name': name
-                }
-                for chunk in configs_chunks
+            {'pipelines': self.pipelines,
+             'functions': self.functions,
+             'n_iters': n_iters,
+             'configs': list(zip(*chunk))[1],
+             'repetition': list(zip(*chunk))[0],
+             'branches': branches,
+             'name': name
+            }
+            for chunk in configs_chunks
         )
 
         self.n_jobs = ceil(len(configs_with_repetitions) / n_models)

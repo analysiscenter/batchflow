@@ -5,9 +5,6 @@
 
 """ Workers for research. """
 
-import os
-
-from .. import Config, Pipeline, inbatch_parallel
 from .distributor import Worker
 
 class PipelineWorker(Worker):
@@ -24,7 +21,7 @@ class PipelineWorker(Worker):
         """ Run after task execution. """
         i, job = self.job
         self.log_info('Task {}: saving final results...'.format(i), filename=self.logfile)
-        job._dump_all()
+        job.dump_all()
 
     def run_job(self):
         """ Task execution. """
@@ -46,13 +43,13 @@ class PipelineWorker(Worker):
                                     experiment.run(name)
                                 else:
                                     experiment.next_batch(name)
-                        job._put_pipeline_result(j, name)
+                        job.put_pipeline_result(j, name)
 
                     if j in pipeline['dump_for']:
                         self.log_info('Task {}, iteration {}: dump results for {}...'
                                       .format(i, j, name), filename=self.logfile)
                         for item in job.experiments:
-                            item._dump_pipeline_result(name, '.'+name)
+                            item.dump_pipeline_result(name, '.'+name)
 
                 for name, function in job.config['functions'].items():
                     if j in function['execute_for']:
@@ -64,7 +61,7 @@ class PipelineWorker(Worker):
                         self.log_info('Task {}, iteration {}: dump results for function {}...'
                                       .format(i, j, name), filename=self.logfile)
                         for item in job.experiments:
-                            item._dump_function_result(name, '.'+name)
+                            item.dump_function_result(name, '.'+name)
             except StopIteration:
                 self.log_info('Task {} was stopped after {} iterations'.format(i, j+1), filename=self.logfile)
                 break

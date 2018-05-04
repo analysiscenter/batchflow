@@ -1212,8 +1212,7 @@ class TFModel(BaseModel):
 
         config = Config(self.default_config())
 
-        for k in self.config:
-            self.put(k, self.config[k], config)
+        config = config + self.config
 
         if config.get('inputs'):
             with tf.variable_scope('inputs'):
@@ -1221,16 +1220,13 @@ class TFModel(BaseModel):
             inputs = self.get('input_block/inputs', config)
 
             if isinstance(inputs, str):
-                config['common']['data_format'] = self.data_format(inputs)
-                config['input_block']['inputs'] = self.inputs[inputs]
+                config['common/data_format'] = self.data_format(inputs)
+                config['input_block/inputs'] = self.inputs[inputs]
             elif isinstance(inputs, list):
-                config['input_block']['inputs'] = [self.inputs[name] for name in inputs]
+                config['input_block/inputs'] = [self.inputs[name] for name in inputs]
             else:
                 raise ValueError('input_block/inputs should be specified with a name or a list of names.')
 
-        config['body'] = {**config['body'], **self.get('body', self.config, {})}
-        config['head'] = {**config['head'], **self.get('head', self.config, {})}
-        config['output'] = {**config['output'], **self.get('output', self.config, {})}
         return config
 
 

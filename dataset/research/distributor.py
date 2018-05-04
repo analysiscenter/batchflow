@@ -11,7 +11,7 @@ import logging
 import multiprocess as mp
 from tqdm import tqdm
 
-from .task import Job
+from .job import Job
 
 class Distributor:
     """ Distributor of jobs between workers. """
