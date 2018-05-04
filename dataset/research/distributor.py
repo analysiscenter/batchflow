@@ -99,9 +99,9 @@ class Distributor:
             logging.error(exception, exc_info=True)
         else:
             if len(workers) > 1:
-                msg = 'Run {} workers'
+                msg = 'Run {} workers.'
             else:
-                'Run {} worker.'
+                msg = 'Run {} worker.'
             self.log_info(msg.format(len(workers)), filename=self.logfile)
             for worker in workers:
                 worker.log_info = self.log_info
