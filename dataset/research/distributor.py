@@ -13,10 +13,110 @@ from tqdm import tqdm
 
 from .task import Job
 
+class Distributor:
+    """ Distributor of jobs between workers. """
+    def __init__(self, n_workers, worker_class=None):
+        """
+        Parameters
+        ----------
+        n_workers : int or list of Worker instances
+
+        worker_class : Worker subclass or None
+        """
+        self.n_workers = n_workers
+        self.worker_class = worker_class
+
+    def _jobs_to_queue(self, jobs):
+        queue = mp.JoinableQueue()
+        for idx, job in enumerate(jobs):
+            queue.put((idx, Job(job)))
+        for _ in range(self.n_workers):
+            queue.put(None)
+        return queue
+
+    @classmethod
+    def log_info(cls, message, filename):
+        """ Write message into log. """
+
+        logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
+        logging.info(message)
+
+    @classmethod
+    def log_error(cls, obj, filename):
+        """ Write error message into log. """
+        logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
+        logging.error(obj, exc_info=True)
+
+    def run(self, jobs, dirname, n_jobs, logfile=None, errorfile=None, progress_bar=False, *args, **kwargs):
+        """ Run disributor and workers.
+
+        Parameters
+        ----------
+        jobs : iterable
+
+        dirname : str
+
+        logfile : str (default: 'research.log')
+
+        errorfile : str (default: 'errors.log')
+
+        progress_bar : bool
+
+        args, kwargs
+            will be used in worker
+        """
+        self.logfile = logfile or 'research.log'
+        self.errorfile = errorfile or 'errors.log'
+
+        self.logfile = os.path.join(dirname, self.logfile)
+        self.errorfile = os.path.join(dirname, self.errorfile)
+
+        _tqdm = tqdm if progress_bar else lambda x: x
+
+        kwargs['logfile'] = self.logfile
+        kwargs['errorfile'] = self.errorfile
+
+        self.log_info('Distributor [id:{}] is preparing workers'.format(os.getpid()), filename=self.logfile)
+
+        if isinstance(self.n_workers, int):
+            workers = [self.worker_class(worker_name=i, *args, **kwargs) for i in range(self.n_workers)]
+        elif issubclass(type(self.n_workers[0]), Worker):
+            for worker in self.n_workers:
+                worker.set_args_kwargs(args, kwargs)
+            workers = self.n_workers
+            self.n_workers = len(self.n_workers)
+        else:
+            workers = [
+                self.worker_class(worker_name=i, config=config, *args, **kwargs)
+                for i, config in enumerate(self.n_workers)
+            ]
+            self.n_workers = len(self.n_workers)
+        try:
+            self.log_info('Create tasks queue', filename=self.logfile)
+            queue = self._jobs_to_queue(jobs)
+            results = mp.JoinableQueue()
+        except Exception as exception:
+            logging.error(exception, exc_info=True)
+        else:
+            self.log_info('Run {} workers'.format(len(workers)), filename=self.logfile)
+            for worker in workers:
+                worker.log_info = self.log_info
+                worker.log_error = self.log_error
+
+                try:
+                    mp.Process(target=worker, args=(queue, results)).start()
+                except Exception as exception:
+                    logging.error(exception, exc_info=True)
+            for _ in _tqdm(range(n_jobs)):
+                results.get()
+            # queue.join()
+        self.log_info('All workers have finished the work.', filename=self.logfile)
+        logging.shutdown()
+
 class Worker:
-    """ Worker that creates subprocess to execute task.
-    Worker get queue of tasks, pop one task and execute it in subprocess. That subprocess
-    call init, run_task and post class methods.
+    """ Worker that creates subprocess to execute job.
+    Worker get queue of jobs, pop one job and execute it in subprocess. That subprocess
+    call init, run_job and post class methods.
     """
     def __init__(self, worker_name=None, logfile=None, errorfile=None, config=None, *args, **kwargs):
         """
@@ -28,6 +128,8 @@ class Worker:
 
         errorfile : str (default: 'errors.log')
 
+        config : dict or str
+            additional config for pipelines in worker
         args, kwargs
             will be used in init, post and task
         """
@@ -80,7 +182,9 @@ class Worker:
         Parameters
         ----------
         queue : multiprocessing.Queue
-            queue of tasks for worker
+            queue of jobs for worker
+        results : multiprocessing.Queue
+            queue for feedback
         """
         self.log_info('Start {} [id:{}]'.format(self.name, os.getpid()), filename=self.logfile)
 
@@ -93,7 +197,7 @@ class Worker:
                 sub_queue = mp.JoinableQueue()
                 sub_queue.put(job)
                 try:
-                    self.log_info(self.name + ' is creating process', filename=self.logfile)
+                    self.log_info(self.name + ' is creating process for job ' + str(job[0]), filename=self.logfile)
                     worker = mp.Process(target=self._run_job, args=(sub_queue, ))
                     worker.start()
                     sub_queue.join()
@@ -101,7 +205,7 @@ class Worker:
                     self.log_error(exception, filename=self.errorfile)
                 queue.task_done()
                 results.put('done')
-                item = queue.get()
+                job = queue.get()
         queue.task_done()
         results.put('done')
 
@@ -129,106 +233,3 @@ class Worker:
     def log_error(cls, *args, **kwargs):
         """ Write error message into log. """
         pass
-
-class Distributor:
-    """ Distributor of tasks between workers. """
-    def __init__(self, n_workers, worker_class=None):
-        """
-        Parameters
-        ----------
-        n_workers : int or list of Worker instances
-
-        worker_class : Worker subclass or None
-        """
-        # if isinstance(n_workers, int) and worker_class is None:
-        #     raise ValueError('If worker_class is None, n_workers must be list of Worker instances.')
-        self.n_workers = n_workers
-        self.worker_class = worker_class
-
-    def _tasks_to_queue(self, tasks):
-        queue = mp.JoinableQueue()
-        for idx, task in enumerate(tasks):
-            queue.put((idx, Job(task)))
-        for _ in range(self.n_workers):
-            queue.put(None)
-        return queue
-
-    @classmethod
-    def log_info(cls, message, filename):
-        """ Write message into log. """
-
-        logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
-        logging.info(message)
-
-    @classmethod
-    def log_error(cls, obj, filename):
-        """ Write error message into log. """
-        logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
-        logging.error(obj, exc_info=True)
-
-    def run(self, tasks, dirname, n_tasks, logfile=None, errorfile=None, progress_bar=False, *args, **kwargs):
-        """ Run disributor and workers.
-
-        Parameters
-        ----------
-        tasks : iterable
-
-        dirname : str
-
-        logfile : str (default: 'research.log')
-
-        errorfile : str (default: 'errors.log')
-
-        progress_bar : bool
-
-        args, kwargs
-            will be used in worker
-        """
-        self.logfile = logfile or 'research.log'
-        self.errorfile = errorfile or 'errors.log'
-
-        self.logfile = os.path.join(dirname, self.logfile)
-        self.errorfile = os.path.join(dirname, self.errorfile)
-
-        _tqdm = tqdm if progress_bar else lambda x: x
-
-        kwargs['logfile'] = self.logfile
-        kwargs['errorfile'] = self.errorfile
-
-        self.log_info('Distributor [id:{}] is preparing workers'.format(os.getpid()), filename=self.logfile)
-
-        if isinstance(self.n_workers, int):
-            workers = [self.worker_class(worker_name=i, *args, **kwargs) for i in range(self.n_workers)]
-        elif issubclass(type(self.n_workers[0]), Worker):
-            for worker in self.n_workers:
-                worker.set_args_kwargs(args, kwargs)
-            workers = self.n_workers
-            self.n_workers = len(self.n_workers)
-        else:
-            workers = [
-                self.worker_class(worker_name=i, config=config, *args, **kwargs)
-                for i, config in enumerate(self.n_workers)
-            ]
-            self.n_workers = len(self.n_workers)
-        try:
-            self.log_info('Create tasks queue', filename=self.logfile)
-            queue = self._tasks_to_queue(tasks)
-            results = mp.JoinableQueue()
-        except Exception as exception:
-            logging.error(exception, exc_info=True)
-        else:
-            self.log_info('Run {} workers'.format(len(workers)), filename=self.logfile)
-            for worker in workers:
-                worker.log_info = self.log_info
-                worker.log_error = self.log_error
-
-                try:
-                    mp.Process(target=worker, args=(queue, results)).start()
-                except Exception as exception:
-                    logging.error(exception, exc_info=True)
-            for _ in _tqdm(range(n_tasks)):
-                results.get()
-            # queue.join()
-        self.log_info('All workers have finished the work.', filename=self.logfile)
-        logging.shutdown()
-    

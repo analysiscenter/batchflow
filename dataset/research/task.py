@@ -1,53 +1,92 @@
 """ Class for one task. """
 
+import os
 from collections import OrderedDict
+import dill
+from copy import copy
 
-from .. import Config, inbatch_parallel
+from .. import Pipeline, Config, inbatch_parallel
 
 class Job:
+    """ Contains one job. """
     def __init__(self, config):
+        """
+        Parameters
+        ----------
+        config : dict or Config
+            config of experiment
+        """
         self.experiments = []
         self.config = config
 
     def init(self, worker_config):
+        """ Create experiments. """
         for idx, config in enumerate(self.config['configs']):
 
-            experiment = Experiment({**self.config, 'worker_config': worker_config})
+            experiment_config = copy(self.config)
+            experiment_config['configs'] = experiment_config['configs'][idx]
+            experiment_config['repetition'] = experiment_config['repetition'][idx]
+            experiment_config['idx'] = idx
+
+            experiment = Experiment({**experiment_config, 'worker_config': worker_config})
 
             for name, pipeline in self.config['pipelines'].items():
                 experiment.add_pipeline(pipeline, config, name)
 
+            for name, function in self.config['functions'].items():
+                experiment.add_function(function, name)
+
             self.experiments.append(experiment)
 
     def parallel_execute_for(self, name):
-        batch = self.config['pipelines'][name]['preproc'].next_batch()
+        """ Parallel execution of pipeline 'name'. """
+        batch = self.config['pipelines'][name]['root'].next_batch()
         self._parallel_run(batch, name)
 
 
     @inbatch_parallel(init='_parallel_init')
     def _parallel_run(self, item, batch, name):
-        try:
-            item.execute_for(batch, name)
-        except Exception as exception:
-            self.log_error(exception, filename=self.errorfile)
+        item.execute_for(batch, name)
 
     def _parallel_init(self, batch, name):
         _ = batch, name
         return self.experiments
 
     def get_description(self):
-        if isinstance(self.config['n_branches'], list):
+        """ Get description of job. """
+        if isinstance(self.config['branches'], list):
             description = '\n'.join([str({**config.alias(), **_config})
-                                     for config, _config in zip(self.config['configs'], self.config['n_branches'])])
+                                     for config, _config in zip(self.config['configs'], self.config['branches'])])
         else:
             description = '\n'.join([str(config.alias()) for config in self.config['configs']])
         return description
+
+    def _put_pipeline_result(self, iteration, name):
+        for experiment in self.experiments:
+            experiment._put_pipeline_result(iteration, name)
+
+    def _dump_all(self):
+        for name, pipeline in self.config['pipelines'].items():
+                for item in self.experiments:
+                    item._remove_file(os.path.join(item.get_path(), '.'+name))
+                    item._dump_pipeline_result(name, name)
+        for name, function in self.config['functions'].items():
+            if len(function['returns']) > 0:
+                for item in self.experiments:
+                    item._remove_file(os.path.join(item.get_path(), '.'+name))
+                    item._dump_function_result(name, name)
+
 
 class Experiment:
     def __init__(self, config):
         self.config = config
         self.pipelines = OrderedDict()
-        self.results = dict()
+        self.functions = OrderedDict()
+        self.pipeline_results = dict()
+        self.function_results = dict()
+        self.config['path'] = self.get_path()
+        if not os.path.exists(self.config['path']):
+            os.makedirs(self.config['path'])
 
     def add_pipeline(self, pipeline, config, name):
         """ Add new pipeline to research.
@@ -86,14 +125,43 @@ class Experiment:
         else:
             pipeline['dump_for'] = []
 
-        pipeline['ppl'].set_config(pipeline_config)
 
-        self.pipelines[name] = pipeline
+        self.pipelines[name] = copy(pipeline)
+        self.pipelines[name]['ppl'] = self.pipelines[name]['ppl'] + Pipeline()
+        self.pipelines[name]['ppl'].set_config(pipeline_config)
 
-        self.results[name] = {var: [] for var in pipeline['var']}
-        self.results[name]['iterations'] = []
+        self.pipeline_results[name] = {var: [] for var in pipeline['var']}
+        self.pipeline_results[name]['iterations'] = []      
+
+    def add_function(self, function, name):
+        function['execute_for'] = self.get_iterations(function['execute_for'], self.config['n_iters'])
+        if function['dump_for'] is not None:
+            function['dump_for'] = self.get_iterations(function['dump_for'], self.config['n_iters'])
+        else:
+            function['dump_for'] = []
+
+        function['returns'] = function['returns'] or []
+        if not isinstance(function['returns'], list):
+            function['returns'] = [function['returns']]
+
+        self.functions[name] = copy(function)
+        self.functions[name]['kwargs'] = {key: self.get_pipeline(value)['ppl'] for key, value in function['kwargs'].items()}
+        if len(function['returns']) > 0:
+            self.function_results[name] = {var: [] for var in function['returns']}
+            self.function_results[name]['iterations'] = []
+
+    def call_function(self, iteration, name):
+        """ Call function 'name'. """
+        res = self.functions[name]['function'](self, iteration, **self.functions[name]['kwargs'])
+        if not isinstance(res, list):
+            res = [res]
+        if len(self.functions[name]['returns']) > 0:
+            for var, value in zip(self.functions[name]['returns'], res):
+                self.function_results[name][var].append(value)
+            self.function_results[name]['iterations'].append(iteration)
 
     def execute_for(self, batch, name):
+        """ Execute pipeline 'name' for batch. """
         self.pipelines[name]['ppl'].execute_for(batch)
 
     def next_batch(self, name):
@@ -161,17 +229,48 @@ class Experiment:
         """
         self.pipelines[name]['ppl'].execute_for(batch)
 
-    def put_result(self, iteration, name):
-        """ Put pipeline variable into results. """
-        for var in self.pipelines[name]['var']:
-            self.results[name][var].append(self.pipelines[name]['ppl'].get_variable(var))
-        self.results[name]['iterations'].append(iteration)
+    def _put_pipeline_result(self, iteration, name):
+        if len(self.pipelines[name]['var']) > 0:
+            for var in self.pipelines[name]['var']:
+                self.pipeline_results[name][var].append(self.pipelines[name]['ppl'].get_variable(var))
+            self.pipeline_results[name]['iterations'].append(iteration)
 
-    def dump_result(self, name, path):
-        """ Dump results. """
-        foldername, _ = os.path.split(path)
-        if len(foldername) != 0:
-            if not os.path.exists(foldername):
-                os.makedirs(foldername)
-        with open(path, 'wb') as file:
-            pickle.dump(self.results[name], file)
+    def get_path(self):
+        """ Get path to folder where results will be saved. """
+        return os.path.join(
+            self.config['name'],
+            'results',
+            self.config['configs'].alias(as_string=True),
+            str(self.config['repetition'])
+        )
+
+    def _dump_pipeline_result(self, name, filename):
+        if len(self.pipelines[name]['var']) > 0:
+            foldername = self.config['path']
+            path = os.path.join(foldername, filename)
+            with open(path, 'wb') as file:
+                dill.dump(self.pipeline_results[name], file)
+
+    def _dump_function_result(self, name, filename):
+        if len(self.functions[name]['returns']) > 0:
+            foldername = self.config['path']
+            path = os.path.join(foldername, filename)
+            with open(path, 'wb') as file:
+                dill.dump(self.function_results[name], file)
+
+    def _remove_file(self, filename):
+        if os.path.exists(filename):
+            os.remove(filename)
+
+# class ExecutionUnit:
+#     """ Pipeline or function. """
+#     def __init__(self, obj):
+#         """
+#         Parameters
+#         ----------
+#         obj : 
+#         """
+#         if isinstance(obj, Pipeline):
+#             self.obj = obj
+
+#     def 

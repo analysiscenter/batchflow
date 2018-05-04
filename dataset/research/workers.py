@@ -22,27 +22,9 @@ class PipelineWorker(Worker):
 
     def post(self):
         """ Run after task execution. """
-        i, _ = self.job
+        i, job = self.job
         self.log_info('Task {}: saving final results...'.format(i), filename=self.logfile)
-        self.dump_all()
-
-    def dump_all(self):
-        """ Dump final results. """
-        _, job = self.job
-        for name, _ in job.config['pipelines'].items():
-            for item, config, repetition in zip(
-                    self.experiments,
-                    job.config['configs'],
-                    job.config['repetition']
-                ):
-                path = os.path.join(
-                    job.config['name'],
-                    'results',
-                    config.alias(as_string=True),
-                    str(repetition),
-                    name + '_final'
-                )
-                item.dump_result(name, path)
+        job._dump_all()
 
     def run_job(self):
         """ Task execution. """
@@ -52,42 +34,37 @@ class PipelineWorker(Worker):
             try:
                 for name, pipeline in job.config['pipelines'].items():
                     if j in pipeline['execute_for']:
-                        if pipeline['preproc'] is not None:
+                        if pipeline['root'] is not None:
                             job.parallel_execute_for(name)
                         else:
-                            for experiment, config, repetition in zip(
-                                    job.experiments,
-                                    job.config['configs'],
-                                    job.config['repetition']
-                            ):
+                            for experiment in job.experiments:
                                 if pipeline['run']:
                                     self.log_info(
                                         'Task {}, iteration {}: run pipeline {}'
                                         .format(i, j, name), filename=self.logfile
                                     )
                                     experiment.run(name)
-                                    experiment.put_result(j, name)
-                                    experiment.post_run(name)
                                 else:
                                     experiment.next_batch(name)
-                                    experiment.put_result(j, name)
+                        job._put_pipeline_result(j, name)
 
                     if j in pipeline['dump_for']:
                         self.log_info('Task {}, iteration {}: dump results for {}...'
                                       .format(i, j, name), filename=self.logfile)
-                        for item, config, repetition in zip(
-                                job.experiments,
-                                task['configs'],
-                                task['repetition']
-                            ):
-                            path = os.path.join(
-                                job['name'],
-                                'results',
-                                config.alias(as_string=True),
-                                str(repetition),
-                                name + '_dump'
-                            )
-                            item.dump_result(name, path)
+                        for item in job.experiments:
+                            item._dump_pipeline_result(name, '.'+name)
+
+                for name, function in job.config['functions'].items():
+                    if j in function['execute_for']:
+                        self.log_info('Task {}, iteration {}: call function {}...'
+                                      .format(i, j, name), filename=self.logfile)
+                        for item in job.experiments:
+                            item.call_function(j, name)
+                    if j in function['dump_for']:
+                        self.log_info('Task {}, iteration {}: dump results for function {}...'
+                                      .format(i, j, name), filename=self.logfile)
+                        for item in job.experiments:
+                            item._dump_function_result(name, '.'+name)
             except StopIteration:
                 self.log_info('Task {} was stopped after {} iterations'.format(i, j+1), filename=self.logfile)
                 break
