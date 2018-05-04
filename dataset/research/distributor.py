@@ -4,7 +4,7 @@
 #pylint:disable=attribute-defined-outside-init
 #pylint:disable=import-error
 
-""" Classes for multiprocess task running. """
+""" Classes for multiprocess job running. """
 
 import os
 import logging
@@ -92,13 +92,17 @@ class Distributor:
             ]
             self.n_workers = len(self.n_workers)
         try:
-            self.log_info('Create tasks queue', filename=self.logfile)
+            self.log_info('Create queue of jobs', filename=self.logfile)
             queue = self._jobs_to_queue(jobs)
             results = mp.JoinableQueue()
         except Exception as exception:
             logging.error(exception, exc_info=True)
         else:
-            self.log_info('Run {} workers'.format(len(workers)), filename=self.logfile)
+            if len(workers) > 1:
+                msg = 'Run {} workers'
+            else:
+                'Run {} worker.'
+            self.log_info(msg.format(len(workers)), filename=self.logfile)
             for worker in workers:
                 worker.log_info = self.log_info
                 worker.log_error = self.log_error
@@ -131,7 +135,7 @@ class Worker:
         config : dict or str
             additional config for pipelines in worker
         args, kwargs
-            will be used in init, post and task
+            will be used in init, post and run_job
         """
         self.job = None
         self.worker_config = config or dict()
@@ -151,7 +155,7 @@ class Worker:
         Parameters
         ----------
         args, kwargs
-            will be used in init, post and task
+            will be used in init, post and run_job
         """
         if 'logfile' in kwargs:
             self.logfile = kwargs['logfile']
@@ -164,14 +168,14 @@ class Worker:
         self.kwargs = kwargs
 
     def init(self):
-        """ Run before task. """
+        """ Run before run_job. """
         pass
 
     def post(self):
-        """ Run after task. """
+        """ Run after run_job. """
         pass
 
-    def run_task(self):
+    def run_job(self):
         """ Main part of the worker. """
         pass
 
@@ -213,7 +217,7 @@ class Worker:
         try:
             self.job = queue.get()
             self.log_info(
-                'Task {} was started in subprocess [id:{}] by {}'.format(self.job[0], os.getpid(), self.name),
+                'Job {} was started in subprocess [id:{}] by {}'.format(self.job[0], os.getpid(), self.name),
                 filename=self.logfile
             )
             self.init()
@@ -221,7 +225,7 @@ class Worker:
             self.post()
         except Exception as exception:
             self.log_error(exception, filename=self.errorfile)
-        self.log_info('Task {} was finished by {}'.format(self.job[0], self.name), filename=self.logfile)
+        self.log_info('Job {} was finished by {}'.format(self.job[0], self.name), filename=self.logfile)
         queue.task_done()
 
     @classmethod

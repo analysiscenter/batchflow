@@ -131,7 +131,7 @@ class Experiment:
 
         self.functions[name] = copy(function)
         self.functions[name]['kwargs'] = {
-            key: self.get_pipeline(value)['ppl'] 
+            key: self.get_pipeline(value)['ppl']
             for key, value in function['kwargs'].items()
         }
         if len(function['returns']) > 0:
