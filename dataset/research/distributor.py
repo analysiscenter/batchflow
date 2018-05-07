@@ -109,7 +109,6 @@ class Distributor:
                     logging.error(exception, exc_info=True)
             for _ in _tqdm(range(n_jobs)):
                 results.get()
-            # queue.join()
         self.log_info('All workers have finished the work.', filename=self.logfile)
         logging.shutdown()
 
@@ -197,7 +196,7 @@ class Worker:
                 sub_queue = mp.JoinableQueue()
                 sub_queue.put(job)
                 try:
-                    self.log_info(self.name + ' is creating process for job ' + str(job[0]), filename=self.logfile)
+                    self.log_info(self.name + ' is creating process for Job ' + str(job[0]), filename=self.logfile)
                     worker = mp.Process(target=self._run_job, args=(sub_queue, ))
                     worker.start()
                     sub_queue.join()
@@ -207,7 +206,6 @@ class Worker:
                 results.put('done')
                 job = queue.get()
         queue.task_done()
-        results.put('done')
 
     def _run_job(self, queue):
         try:
