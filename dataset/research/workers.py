@@ -5,6 +5,8 @@
 
 """ Workers for research. """
 
+import os
+
 from .distributor import Worker
 
 class PipelineWorker(Worker):
@@ -63,5 +65,6 @@ class PipelineWorker(Worker):
                         for item in job.experiments:
                             item.dump_function_result(name, '.'+name)
             except StopIteration:
-                self.log_info('Job {} [{}] was stopped after {} iterations'.format(i, os.getpid(), j+1), filename=self.logfile)
+                self.log_info('Job {} [{}] was stopped after {} iterations'.format(i, os.getpid(), j+1),
+                    filename=self.logfile)
                 break

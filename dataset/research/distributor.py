@@ -221,7 +221,8 @@ class Worker:
             self.post()
         except Exception as exception:
             self.log_error(exception, filename=self.errorfile)
-        self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.name), filename=self.logfile)
+        self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.name),
+            filename=self.logfile)
         queue.task_done()
 
     @classmethod
