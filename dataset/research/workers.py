@@ -66,5 +66,5 @@ class PipelineWorker(Worker):
                             item.dump_function_result(name, '.'+name)
             except StopIteration:
                 self.log_info('Job {} [{}] was stopped after {} iterations'.format(i, os.getpid(), j+1),
-                    filename=self.logfile)
+                              filename=self.logfile)
                 break

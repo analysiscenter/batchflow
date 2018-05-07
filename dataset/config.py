@@ -3,7 +3,7 @@
 class Config:
     """ Class for configs that can be represented as nested dicts with easy indexing by slashes """
     def __init__(self, config=None, **kwargs):
-        """ Create Config 
+        """ Create Config
 
         Parameters
         ----------
@@ -11,10 +11,10 @@ class Config:
             an object to initialize Config
             if dict, all keys and values slashes will be parsed into nested structure of dicts
             and the resulting dictionary will be saved into self.config
-            if an instance on Config, config.config will be saved to self.config (not a copy!) 
+            if an instance on Config, config.config will be saved to self.config (not a copy!)
             if None, empty dictionary will be created
-        kwargs : 
-            parameters from kwargs also will be parsed and saved into self.config 
+        kwargs :
+            parameters from kwargs also will be parsed and saved into self.config
         """
         if config is None:
             self.config = dict()
@@ -96,16 +96,16 @@ class Config:
                     _config = None
                     break
             if isinstance(_config, dict):
-                    if pop:
-                        if has_default:
-                            val = _config.pop(var_name, default)
-                        else:
-                            val = _config.pop(var_name)
+                if pop:
+                    if has_default:
+                        val = _config.pop(var_name, default)
                     else:
-                        if has_default:
-                            val = _config.get(var_name, default)
-                        else:
-                            val = _config[var_name]
+                        val = _config.pop(var_name)
+                else:
+                    if has_default:
+                        val = _config.get(var_name, default)
+                    else:
+                        val = _config[var_name]
             else:
                 if has_default:
                     val = default
@@ -232,7 +232,7 @@ class Config:
         return len(self.config)
 
     def items(self, flatten=False):
-        """ Returns config items 
+        """ Returns config items
 
         Parameters
         ----------
@@ -277,7 +277,7 @@ class Config:
         -------
             dict_values
         """
-        
+
         if flatten:
             return self.flatten().values()
         else:
