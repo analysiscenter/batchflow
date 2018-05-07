@@ -1,5 +1,8 @@
 """ Classes for multiprocess job running. """
 
+#pylint:disable=broad-except
+#pylint:disable=attribute-defined-outside-init
+
 import os
 import logging
 import multiprocess as mp
