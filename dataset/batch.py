@@ -599,7 +599,8 @@ class Batch(BaseBatch):
         except ValueError as e:
             message = str(e)
             if "must have the same shape" in message:
-                new_items = np.array(result, dtype=object)
+                new_items = np.empty(len(result), dtype=object)
+                new_items[:] = result
             else:
                 raise e
         setattr(self, component, new_items)

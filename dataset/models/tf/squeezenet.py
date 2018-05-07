@@ -35,20 +35,24 @@ class SqueezeNet(TFModel):
         config['body']['layout'] = 'fffmffffmf'
         #config['body']['layout'] = 'ffbfmbffbffmbf'
 
-        num_blocks = len(config['body']['layout'])
-        layers_filters = 16 * 2 ** np.arange(num_blocks//2)
+        num_blocks = config['body']['layout'].count('f')
+        layers_filters = 32 * 2 ** np.arange(num_blocks//2 + num_blocks%2)
         layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
         config['body']['filters'] = layers_filters
 
         config['head'].update(dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5))
-        config['loss'] = 'ce'
 
+        config['loss'] = 'ce'
+        config['decay'] = dict('poly', dict(learning_rate=.04, decay_steps=170000))
+        config['optimizer'] = dict(name='Momentum', momentum=.99)
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['filters'] = self.num_classes('targets')
-
+        if config.get('head/units') is None:
+            config['head/units'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod

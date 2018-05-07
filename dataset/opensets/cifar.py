@@ -21,7 +21,7 @@ class BaseCIFAR(ImagesOpenset):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, train_test=True, **kwargs)
-        self.cv_split()
+        self.split()
 
     def download(self, path=None):
         """ Load data from a web site and extract into numpy arrays """

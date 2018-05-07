@@ -33,23 +33,27 @@ class DenseNetFC(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
-        config['input_block'].update(dict(layout='c', filters=48, kernel_size=3, strides=1,
-                                          pool_size=3, pool_strides=2))
+        config['input_block'].update(dict(layout='c', filters=48, kernel_size=3, strides=1))
 
         config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=12, bottleneck=False)
-        config['body']['upsample'] = dict(layout='nat', factor=2, kernel_size=3)
+        config['body']['transition_up'] = dict(layout='t', factor=2, kernel_size=3)
         config['body']['transition_down'] = dict(layout='nacdp', kernel_size=1, strides=1,
                                                  pool_size=2, pool_strides=2, dropout_rate=.2,
                                                  reduction_factor=1)
 
         config['head'].update(dict(layout='c', kernel_size=1))
-        config['loss'] = 'ce'
 
+        config['loss'] = 'ce'
+        config['common'] = dict(conv=dict(use_bias=False))
+        # decay_steps are equal to one epochs on CamVid dataset.
+        config['decay'] = ('exp', dict(learning_rate=1e-3, decay_steps=1000, decay_rate=0.995))
+        config['optimizer'] = dict(name='RMSProp')
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['filters'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod
@@ -69,7 +73,7 @@ class DenseNetFC(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         num_layers, block = cls.pop(['num_layers', 'block'], kwargs)
-        trans_up, trans_down = cls.pop(['upsample', 'transition_down'], kwargs)
+        trans_up, trans_down = cls.pop(['transition_up', 'transition_down'], kwargs)
         block = {**kwargs, **block}
         trans_up = {**kwargs, **trans_up}
         trans_down = {**kwargs, **trans_down}
@@ -78,58 +82,18 @@ class DenseNetFC(TFModel):
             x, inputs = inputs, None
             encoder_outputs = []
             for i, n_layers in enumerate(num_layers[:-1]):
-                x = cls.encoder_block(x, num_layers=n_layers, name='encoder-'+str(i), **block)
+                x = DenseNet.block(x, num_layers=n_layers, name='encoder-%d' % i, **block)
                 encoder_outputs.append(x)
                 x = cls.transition_down(x, name='transition_down-%d' % i, **trans_down)
+            x = DenseNet.block(x, num_layers=num_layers[-1], name='encoder-%d' % num_layers[-1], **block)
 
             axis = cls.channels_axis(kwargs.get('data_format'))
-            for i, n_layers in enumerate(num_layers[::-1][:-1]):
-                x = cls.decoder_block(x, num_layers=n_layers, name='decoder-'+str(i), **block)
-                x = cls.transition_up(x, name='transition_up-%d' % i, **trans_up)
+            for i, n_layers in enumerate(num_layers[-2::-1]):
+                x = cls.transition_up(x, filters=num_layers[-i-1] * block['growth_rate'],
+                                      name='transition_up-%d' % i, **trans_up)
+                x = DenseNet.block(x, num_layers=n_layers, name='decoder-%d' % i, **block)
                 x = cls.crop(x, encoder_outputs[-i-1], data_format=kwargs.get('data_format'))
                 x = tf.concat((x, encoder_outputs[-i-1]), axis=axis)
-            x = cls.decoder_block(x, num_layers=num_layers[0], name='decoder-'+str(i+1), **block)
-        return x
-
-    @classmethod
-    def encoder_block(cls, inputs, name, **kwargs):
-        """ DenseNet block + shortcut
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        name : str
-            scope name
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        kwargs = cls.fill_params('body/block', **kwargs)
-        with tf.variable_scope(name):
-            x = DenseNet.block(inputs, name='dense-block', **kwargs)
-            axis = cls.channels_axis(kwargs.get('data_format'))
-            x = tf.concat((inputs, x), axis=axis)
-        return x
-
-    @classmethod
-    def decoder_block(cls, inputs, name, **kwargs):
-        """ DenseNet block
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        name : str
-            scope name
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        kwargs = cls.fill_params('body/block', **kwargs)
-        x = DenseNet.block(inputs, name=name, **kwargs)
         return x
 
     @classmethod
@@ -165,9 +129,9 @@ class DenseNetFC(TFModel):
         -------
         tf.Tensor
         """
-        kwargs = cls.fill_params('body/upsample', **kwargs)
-        num_filters = cls.num_channels(inputs, kwargs.get('data_format'))
-        return cls.upsample(inputs, filters=num_filters, name=name, **kwargs)
+        kwargs = cls.fill_params('body/transition_up', **kwargs)
+        filters = kwargs.pop('filters', cls.num_channels(inputs, kwargs.get('data_format')))
+        return cls.upsample(inputs, filters=filters, name=name, **kwargs)
 
 
 class DenseNetFC56(DenseNetFC):
@@ -196,4 +160,3 @@ class DenseNetFC103(DenseNetFC):
         config['body']['num_layers'] = [4, 5, 7, 10, 12, 15]
         config['body']['block']['growth_rate'] = 16
         return config
-

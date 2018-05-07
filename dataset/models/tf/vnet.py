@@ -39,13 +39,16 @@ class VNet(TFModel):
         config['body']['kernel_size'] = 5
         config['body']['upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='c', kernel_size=1))
-        config['loss'] = 'ce'
 
+        config['loss'] = 'ce'
+        config['decay'] = ('invtime', dict(learning_rate=1e-4, decay_steps=25000, decay_rate=10))
+        config['optimizer'] = dict(name='Momentum', momentum=.99)
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['num_classes'] = self.num_classes('targets')
+        if config.get('head/num_classes') is None:
+            config['head/num_classes'] = self.num_classes('targets')
         return config
 
     @classmethod
