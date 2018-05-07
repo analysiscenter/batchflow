@@ -146,10 +146,15 @@ class Config:
             prefix = []
             var_name = variable
 
-        for p in prefix:
+        for i, p in enumerate(prefix):
             if p not in config:
                 config[p] = dict()
-            config = config[p]
+            if isinstance(config[p], dict):
+                config = config[p]
+            else:
+                prefix = '/'.join(prefix[:i+1])
+                var_name = '/'.join(prefix[i+1:])
+                break
         if var_name in config and isinstance(config[var_name], dict) and isinstance(value, Config):
             config[var_name] = Config(config[var_name])
             config[var_name].update(value)
@@ -277,7 +282,6 @@ class Config:
         -------
             dict_values
         """
-
         if flatten:
             return self.flatten().values()
         else:
@@ -294,17 +298,12 @@ class Config:
             parameters from kwargs also will be included into the resulting config
         """
         other = dict() if other is None else other
-        if isinstance(other, Config):
-            new_config = self + other
-            self.config = new_config.config
-        elif isinstance(other, dict):
-            new_config = self + Config(other)
-            self.config = new_config.config
-        else:
-            for key, value in other:
+        if isinstance(other, (dict, Config)):
+            for key, value in other.items():
                 self.put(key, value)
-        for key, value in kwargs.items():
-            self.put(key, value)
+        else:
+            for key, value in kwargs.items():
+                self.put(key, value)
 
     def __iter__(self):
         return iter(self.config)
