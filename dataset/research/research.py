@@ -233,6 +233,8 @@ class Research:
 
         self.name = self._folder_exists(name)
 
+        print("Research {} is starting...".format(self.name))
+
         self.save()
 
         self._create_jobs(n_reps, n_iters, branches, self.name)
