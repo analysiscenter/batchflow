@@ -1210,7 +1210,7 @@ class TFModel(BaseModel):
                 return config
         """
 
-        config = Config(self.default_config())
+        config = self.default_config()
 
         config = config + self.config
 
