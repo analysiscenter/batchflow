@@ -1,9 +1,3 @@
-#pylint:disable=too-few-public-methods
-#pylint:disable=broad-except
-#pylint:disable=too-many-function-args
-#pylint:disable=attribute-defined-outside-init
-#pylint:disable=import-error
-
 """ Classes for multiprocess job running. """
 
 import os
@@ -37,7 +31,6 @@ class Distributor:
     @classmethod
     def log_info(cls, message, filename):
         """ Write message into log. """
-
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.info(message)
 
