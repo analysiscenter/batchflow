@@ -172,7 +172,7 @@ class Config:
             config = config.config
         new_config = dict()
         for key, value in config.items():
-            if isinstance(value, dict):
+            if isinstance(value, dict) and len(value) > 0:
                 value = self.flatten(value)
                 for _key, _value in value.items():
                     new_config[key+'/'+_key] = _value
