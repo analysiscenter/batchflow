@@ -10,14 +10,19 @@ from . import TFModel
 
 class UNet(TFModel):
     """ UNet
+
     **Configuration**
+
     inputs : dict
         dict with 'images' and 'masks' (see :meth:`._make_inputs`)
+
     body : dict
         num_blocks : int
             number of downsampling/upsampling blocks (default=4)
+
         filters : list of int
             number of filters in each block (default=[128, 256, 512, 1024])
+
     head : dict
         num_classes : int
             number of semantic classes
@@ -51,6 +56,7 @@ class UNet(TFModel):
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
         """ Base layers
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -59,6 +65,7 @@ class UNet(TFModel):
             number of filters in downsampling blocks
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
@@ -81,6 +88,7 @@ class UNet(TFModel):
     @classmethod
     def encoder_block(cls, inputs, filters, name, **kwargs):
         """ 2x2 max pooling with stride 2 and two 3x3 convolutions
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -89,6 +97,7 @@ class UNet(TFModel):
             number of output filters
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
@@ -99,6 +108,7 @@ class UNet(TFModel):
     @classmethod
     def decoder_block(cls, inputs, filters, name, **kwargs):
         """ 3x3 convolution and 2x2 transposed convolution
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -107,6 +117,7 @@ class UNet(TFModel):
             number of output filters
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
@@ -127,6 +138,7 @@ class UNet(TFModel):
     @classmethod
     def head(cls, inputs, num_classes, name='head', **kwargs):
         """ Conv block followed by 1x1 convolution
+
         Parameters
         ----------
         inputs : tf.Tensor
@@ -135,6 +147,7 @@ class UNet(TFModel):
             number of classes (and number of filters in the last 1x1 convolution)
         name : str
             scope name
+
         Returns
         -------
         tf.Tensor
