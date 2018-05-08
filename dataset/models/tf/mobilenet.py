@@ -49,11 +49,11 @@ class MobileNet(TFModel):
         config['head'].update(dict(layout='Vf'))
 
         config['loss'] = 'ce'
-        # learning rate will decrease every two epochs. Defaunt decay_steps is designed
-        # for imagenet with a batch size of 96.
-        init_lr = 1e-2 if is_best_practice() else .45
+        # learning rate will decrease every two epochs. Default decay_steps is designed
+        # for ImageNet with a batch size of 96.
+        init_lr = 1e-2 if is_best_practice('optimizer') else .45
         config['decay'] = ('exp', dict(learning_rate=init_lr, decay_steps=20833, decay_rate=.94))
-        config['optimizer'] = dict(name='RMSProp')
+        config['optimizer'] = 'RMSProp'
         return config
 
     def build_config(self, names=None):

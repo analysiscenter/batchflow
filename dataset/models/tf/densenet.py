@@ -45,20 +45,22 @@ class DenseNet(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
+        config['common/conv/use_bias'] = False
         config['input_block'].update(dict(layout='cnap', filters=16, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
-        config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=32, bottleneck=True, skip=True)
-        config['body']['transition_layer'] = dict(layout='nacv', kernel_size=1, strides=1,
-                                                  pool_size=2, pool_strides=2,
-                                                  reduction_factor=1)
-        config['head'].update(dict(layout='Vf'))
+        config['body/block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=32, bottleneck=True, skip=True)
+        config['body/transition_layer'] = dict(layout='nacv', kernel_size=1, strides=1,
+                                               pool_size=2, pool_strides=2, reduction_factor=1)
+        config['head'] = dict(layout='Vf')
 
         config['loss'] = 'ce'
-        config['common'] = dict(conv=dict(use_bias=False))
-        # boundaries - the number of iterations on the 150th and 225th epochs respectively on CIFAR with batch size = 64
-        init_lr = 1e-2 if is_best_practice() else 1e-1
-        config['decay'] = ('const', dict(boundaries=[117300, 175950], values=[init_lr, init_lr/10, init_lr/100]))
-        config['optimizer'] = dict(name='Momentum', momentum=.9)
+        if is_best_practice('optimizer'):
+            config['optimizer'].update(name='Adam')
+        else:
+            lr = 1e-1
+            # boundaries - the number of iterations on the 150th and 225th epochs on CIFAR with batch size=64
+            config['decay'] = ('const', dict(boundaries=[117300, 175950], values=[lr, lr/10, lr/100]))
+            config['optimizer'] = ('Momentum', dict(momentum=.9))
 
         return config
 
