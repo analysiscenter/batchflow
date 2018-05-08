@@ -4,6 +4,7 @@
 import tensorflow as tf
 import numpy as np
 
+from ... import is_best_practice
 from .layers import conv_block
 from . import TFModel
 
@@ -30,17 +31,20 @@ class UNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
+        config['common'] = dict(conv=dict(use_bias=False))
         filters = 64   # number of filters in the first block
         config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
-        config['body']['num_blocks'] = 4
-        config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
-        config['body']['upsample'] = dict(layout='tna', factor=2)
+        config['body/num_blocks'] = 4
+        config['body/filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
+        config['body/upsample'] = dict(layout='tna', factor=2)
         config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
 
         config['loss'] = 'ce'
-        config['common'] = dict(conv=dict(use_bias=False))
-        # The article does not specify the initial learning rate. 1e-4 was chosen for intuitive reasons.
-        config['optimizer'] = dict(name='Momentum', learning_rate=1e-4, momentum=.99)
+        if is_best_practice('optimizer'):
+            config['optimizer'] = 'Adam'
+        else:
+            # The article does not specify the initial learning rate. 1e-4 was chosen arbitrarily.
+            config['optimizer'] = ('Momentum', dict(learning_rate=1e-4, momentum=.99))
         return config
 
     def build_config(self, names=None):

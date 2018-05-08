@@ -50,27 +50,25 @@ class VGG(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['input_block']['inputs'] = 'images'
-        config['body']['block'] = dict(layout='cna')
+        config['common/conv/use_bias'] = False
+        config['body/block'] = dict(layout='cna')
         if is_best_practice():
-            config['head'].update(dict(layout='Vdf', dropout_rate=.8, units=2))
+            config['head'] = dict(layout='Vdf', dropout_rate=.8, units=2)
         else:
-            config['head']['layout'] = 'dfa dfa f'
-            config['head']['units'] = [4096, 4096, 2]
-        config['loss'] = 'ce'
+            config['head/layout'] = 'dfa dfa f'
+            config['head/units'] = [4096, 4096, 2]
 
-        config['common'] = dict(conv=dict(use_bias=False))
-        config['decay'] = ('const', dict(boundaries=[92500, 185000, 277500], values=[.01, .001, .0001, .00001]))
-        config['optimizer'] = dict(name='Momentum', momentum=.9)
+        config['loss'] = 'ce'
+        config['decay'] = ('const', dict(boundaries=[92500, 185000, 277500], values=[1e-2, 1e-3, 1e-4, 1e-5]))
+        config['optimizer'] = ('Momentum', dict(momentum=.9))
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        if isinstance(config['head']['units'], list):
-            config['head']['units'][-1] = self.num_classes('targets')
+        if isinstance(config['head/units'], list):
+            config['head/units'][-1] = self.num_classes('targets')
         else:
-            config['head']['units'] = self.num_classes('targets')
-
+            config['head/units'] = self.num_classes('targets')
         return config
 
     @classmethod

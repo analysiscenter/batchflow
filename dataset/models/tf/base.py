@@ -1169,11 +1169,11 @@ class TFModel(BaseModel):
         config['body'] = {}
         config['head'] = {}
         config['output'] = {}
-        config['optimizer'] = {'name': 'Adam'}
+        config['optimizer'] = ('Adam', dict())
 
         if is_best_practice():
             config['common'] = {'batch_norm': {'momentum': .1}}
-            config['optimizer'].update({'use_locking': True})
+            config['optimizer'][1].update({'use_locking': True})
 
         return Config(config)
 
