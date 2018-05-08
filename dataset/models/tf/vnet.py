@@ -4,6 +4,7 @@
 import tensorflow as tf
 import numpy as np
 
+from ... import is_best_practice
 from .layers import conv_block
 from . import TFModel
 from .resnet import ResNet
@@ -33,16 +34,19 @@ class VNet(TFModel):
         config = TFModel.default_config()
 
         filters = 16   # number of filters in the first block
-        config['body']['layout'] = ['cna', 'cna'*2] + ['cna'*3] * 3
+        config['body/layout'] = ['cna', 'cna'*2] + ['cna'*3] * 3
         num_blocks = len(config['body']['layout'])
-        config['body']['filters'] = 2 ** np.arange(num_blocks) * filters
-        config['body']['kernel_size'] = 5
-        config['body']['upsample'] = dict(layout='tna', factor=2)
-        config['head'].update(dict(layout='c', kernel_size=1))
+        config['body/filters'] = 2 ** np.arange(num_blocks) * filters
+        config['body/kernel_size'] = 5
+        config['body/upsample'] = dict(layout='tna', factor=2)
+        config['head'] = dict(layout='c', kernel_size=1)
 
         config['loss'] = 'ce'
-        config['decay'] = ('invtime', dict(learning_rate=1e-4, decay_steps=25000, decay_rate=10))
-        config['optimizer'] = dict(name='Momentum', momentum=.99)
+        if is_best_practice('optimizer'):
+            config['optimizer'] = 'Adam'
+        else:
+            config['decay'] = ('invtime', dict(learning_rate=1e-4, decay_steps=25000, decay_rate=10))
+            config['optimizer'] = ('Momentum', dict(momentum=.99))
         return config
 
     def build_config(self, names=None):

@@ -4,6 +4,7 @@ Fully Convolutional DenseNets for Semantic Segmentation
 """
 import tensorflow as tf
 
+from ... import is_best_practice
 from . import TFModel
 from .densenet import DenseNet
 
@@ -33,6 +34,7 @@ class DenseNetFC(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
+        config['common/conv/use_bias'] = False
         config['input_block'].update(dict(layout='c', filters=48, kernel_size=3, strides=1))
 
         config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=12, bottleneck=False)
@@ -44,10 +46,12 @@ class DenseNetFC(TFModel):
         config['head'].update(dict(layout='c', kernel_size=1))
 
         config['loss'] = 'ce'
-        config['common'] = dict(conv=dict(use_bias=False))
-        # decay_steps are equal to one epochs on CamVid dataset.
-        config['decay'] = ('exp', dict(learning_rate=1e-3, decay_steps=1000, decay_rate=0.995))
-        config['optimizer'] = dict(name='RMSProp')
+        if is_best_practice('optimizer'):
+            config['optimizer'].update(name='Adam')
+        else:
+            # decay_steps are equal to one epochs on CamVid dataset.
+            config['decay'] = ('exp', dict(learning_rate=1e-3, decay_steps=1000, decay_rate=0.995))
+            config['optimizer'] = 'RMSProp'
         return config
 
     def build_config(self, names=None):

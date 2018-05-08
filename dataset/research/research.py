@@ -26,7 +26,7 @@ class Research:
         self.functions = OrderedDict()
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
-                 execute_for=None, dump_for=None, run=False, **kwargs):
+                 execute_for=1, dump_for=-1, run=False, **kwargs):
         """ Add new pipeline to research.
 
         Parameters
@@ -49,7 +49,7 @@ class Research:
             If None, pipeline will executed at each iteration.
         dump_for : int, list of ints or None
             iteration when results will be dumped. Similar to execute_for
-            If None, pipeline results will not be dumped.
+            If None, pipeline results will be dumped at last iteration.
         run : bool (default False)
             if False then .next_batch() will be applied to pipeline, else .run() and then reset_iter().
         kwargs :
@@ -77,6 +77,8 @@ class Research:
         else:
             pipeline = branch_pipeline
             root = root_pipeline
+
+        dump_for = None if dump_for == -1 else dump_for
 
         self.pipelines[name] = {
             'ppl': pipeline,
@@ -232,6 +234,8 @@ class Research:
         self.branches = branches
 
         self.name = self._folder_exists(name)
+
+        print("Research {} is starting...".format(self.name))
 
         self.save()
 

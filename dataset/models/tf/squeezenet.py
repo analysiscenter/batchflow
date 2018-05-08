@@ -32,19 +32,19 @@ class SqueezeNet(TFModel):
 
         config['input_block'].update(dict(layout='cnap', filters=96, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
-        config['body']['layout'] = 'fffmffffmf'
-        #config['body']['layout'] = 'ffbfmbffbffmbf'
+        config['body/layout'] = 'fffmffffmf'
+        #config['body/layout'] = 'ffbfmbffbffmbf'
 
-        num_blocks = config['body']['layout'].count('f')
+        num_blocks = config['body/layout'].count('f')
         layers_filters = 32 * 2 ** np.arange(num_blocks//2 + num_blocks%2)
         layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
-        config['body']['filters'] = layers_filters
+        config['body/filters'] = layers_filters
 
-        config['head'].update(dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5))
+        config['head'] = dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5)
 
         config['loss'] = 'ce'
-        config['decay'] = dict('poly', dict(learning_rate=.04, decay_steps=170000))
-        config['optimizer'] = dict(name='Momentum', momentum=.99)
+        config['decay'] = ('poly', dict(learning_rate=.04, decay_steps=170000))
+        config['optimizer'] = ('Momentum', dict(momentum=.99))
         return config
 
     def build_config(self, names=None):

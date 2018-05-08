@@ -5,7 +5,6 @@
 from itertools import product
 from functools import reduce # Valid in Python 2.6+, required in Python 3
 import operator
-
 import collections
 
 from ..config import Config

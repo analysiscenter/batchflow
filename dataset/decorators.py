@@ -87,13 +87,15 @@ def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """
     return any(isinstance(res, Exception) for res in results)
 
-def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kwargs):
+def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kwargs):
     """ Decorator for parallel methods in :class:`~dataset.Batch` classes"""
     if target not in ['nogil', 'threads', 'mpc', 'async', 'for', 't', 'm', 'a', 'f']:
         raise ValueError("target should be one of 'threads', 'mpc', 'async', 'for'")
 
     def inbatch_parallel_decorator(method):
         """ Return a decorator which run a method in parallel """
+        use_self = '.' in method.__qualname__ if _use_self is None else _use_self
+
         def _check_functions(self):
             """ Check dcorator's `init` and `post` parameters """
             if init is None:
@@ -204,7 +206,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
             if len(kwargs) > 0:
                 mkwargs.update(_kwargs)
 
-            if _use_self and self is not None:
+            if use_self:
                 margs = [self] + margs
 
             return margs, mkwargs
@@ -309,9 +311,10 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
         @functools.wraps(method)
         def wrapped_method(self, *args, **kwargs):
             """ Wrap a method with a required parallel engine """
-            if not _use_self:
-                # when use_self=False, the first arg is not self, but an ordinary arg
+            if not use_self:
+                # the first arg is not self, but an ordinary arg
                 args = (self,) + args
+                # still pass self to preserve the signature
                 self = None
             if 'target' in kwargs:
                 _target = kwargs.pop('target')
@@ -332,9 +335,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=True, **dec_kw
 
 
 
-def parallel(*args, _use_self=False, **kwargs):
+def parallel(*args, use_self=None, **kwargs):
     """ Decorator for a parallel execution of a function """
-    return inbatch_parallel(*args, _use_self=_use_self, **kwargs)
+    return inbatch_parallel(*args, _use_self=use_self, **kwargs)
 
 
 def njit(nogil=True):

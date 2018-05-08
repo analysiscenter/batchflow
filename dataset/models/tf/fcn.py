@@ -13,23 +13,23 @@ class FCN(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['common']['dropout_rate'] = .5
-        config['input_block']['base_network'] = VGG16
-        config['body']['filters'] = 100
-        config['body']['upsample'] = dict(layout='t', kernel_size=4)
-        config['head']['upsample'] = dict(layout='t')
+        config['common/dropout_rate'] = .5
+        config['input_block/base_network'] = VGG16
+        config['body/filters'] = 100
+        config['body/upsample'] = dict(layout='t', kernel_size=4)
+        config['head/upsample'] = dict(layout='t')
 
         config['loss'] = 'ce'
-        config['optimizer'] = dict(name='Momentum', learning_rate=1e-4, momentum=.9)
+        config['optimizer'] = ('Momentum', dict(learning_rate=1e-4, momentum=.9))
 
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
 
-        config['body']['num_classes'] = self.num_classes('targets')
-        config['head']['num_classes'] = self.num_classes('targets')
-        config['head']['targets'] = self.targets
+        config['body/num_classes'] = self.num_classes('targets')
+        config['head/num_classes'] = self.num_classes('targets')
+        config['head/targets'] = self.targets
 
         return config
 

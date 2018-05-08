@@ -4,6 +4,7 @@ Improve Semantic Segmentation by Global Convolutional Network
 """
 import tensorflow as tf
 
+from ... import is_best_practice
 from .layers import conv_block
 from . import TFModel
 from .resnet import ResNet, ResNet101
@@ -41,15 +42,19 @@ class GlobalConvolutionNetwork(TFModel):
         config = TFModel.default_config()
 
         config['input_block'].update(dict(layout='cna', filters=64, kernel_size=7, strides=2))
-        config['body']['encoder'] = dict(base_class=ResNet101, filters=[256, 512, 1024, 2048])
-        config['body']['block'] = dict(layout='cn cn', filters=21, kernel_size=11)
-        config['body']['br'] = dict(layout='cn', bottleneck=False, downsample=False)
-        config['body']['upsample'] = dict(layout='tna', factor=2, kernel_size=4)
-        config['head']['upsample'] = dict(layout='tna', factor=2, kernel_size=4)
-        config['body']['res_block'] = False
+        config['body/encoder'] = dict(base_class=ResNet101, filters=[256, 512, 1024, 2048])
+        config['body/block'] = dict(layout='cn cn', filters=21, kernel_size=11)
+        config['body/res_block'] = False
+        config['body/br'] = dict(layout='ca c', kernel_size=3, bottleneck=False, downsample=False)
+        config['body/upsample'] = dict(layout='tna', factor=2, kernel_size=4)
+
+        config['head/upsample'] = dict(layout='tna', factor=2, kernel_size=4)
 
         config['loss'] = 'ce'
-        config['optimizer'] = dict(name='Momentum', learning_rate=.0005, momentum=.99)
+        if is_best_practice('optimizer'):
+            config['optimizer'].update(name='Adam')
+        else:
+            config['optimizer'] = ('Momentum', dict(learning_rate=5e-4, momentum=.99))
         return config
 
     def build_config(self, names=None):
@@ -117,6 +122,7 @@ class GlobalConvolutionNetwork(TFModel):
             for i, tensor in enumerate(base_tensors):
                 with tf.variable_scope('encoder-%d' % i):
                     if res_block:
+                        kwargs['layout'] = 'cna'
                         x = cls.res_block(tensor, name='resGCN', **block, **kwargs)
                     else:
                         x = cls.block(tensor, name='GCN', **block, **kwargs)
@@ -247,6 +253,6 @@ class GlobalConvolutionNetwork(TFModel):
         upsample = cls.pop('upsample', kwargs)
 
         with tf.variable_scope(name):
-            x = cls.decoder_block(inputs, targets, filters=num_classes, name='upsample', **upsample, **kwargs)
+            x = cls.decoder_block(inputs, targets, filters=num_classes, name='upsample', **{**kwargs, **upsample})
             x = cls.boundary_refinement(x, name='BR', **kwargs)
         return x

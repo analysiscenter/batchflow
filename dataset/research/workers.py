@@ -5,6 +5,8 @@
 
 """ Workers for research. """
 
+import os
+
 from .distributor import Worker
 
 class PipelineWorker(Worker):
@@ -37,8 +39,8 @@ class PipelineWorker(Worker):
                             for experiment in job.experiments:
                                 if pipeline['run']:
                                     self.log_info(
-                                        'Job {}, iteration {}: run pipeline {}'
-                                        .format(i, j, name), filename=self.logfile
+                                        'Job {} [{}], iteration {}: run pipeline {}'
+                                        .format(i, os.getpid(), j+1, name), filename=self.logfile
                                     )
                                     experiment.run(name)
                                 else:
@@ -46,22 +48,23 @@ class PipelineWorker(Worker):
                         job.put_pipeline_result(j, name)
 
                     if j in pipeline['dump_for']:
-                        self.log_info('Job {}, iteration {}: dump results for {}...'
-                                      .format(i, j, name), filename=self.logfile)
+                        self.log_info('Job {} [{}], iteration {}: dump results for {}...'
+                                      .format(i, os.getpid(), j+1, name), filename=self.logfile)
                         for item in job.experiments:
                             item.dump_pipeline_result(name, '.'+name)
 
                 for name, function in job.config['functions'].items():
                     if j in function['execute_for']:
-                        self.log_info('Job {}, iteration {}: call function {}...'
-                                      .format(i, j, name), filename=self.logfile)
+                        self.log_info('Job {} [{}], iteration {}: call function {}...'
+                                      .format(i, os.getpid(), j+1, name), filename=self.logfile)
                         for item in job.experiments:
                             item.call_function(j, name)
                     if j in function['dump_for']:
-                        self.log_info('Job {}, iteration {}: dump results for function {}...'
-                                      .format(i, j, name), filename=self.logfile)
+                        self.log_info('Job {} [{}], iteration {}: dump results for function {}...'
+                                      .format(i, os.getpid(), j+1, name), filename=self.logfile)
                         for item in job.experiments:
                             item.dump_function_result(name, '.'+name)
             except StopIteration:
-                self.log_info('Job {} was stopped after {} iterations'.format(i, j+1), filename=self.logfile)
+                self.log_info('Job {} [{}] was stopped after {} iterations'.format(i, os.getpid(), j+1),
+                              filename=self.logfile)
                 break

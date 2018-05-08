@@ -40,20 +40,21 @@ class LinkNet(TFModel):
 
         config['input_block'].update(dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
                                           pool_size=3, pool_strides=2))
-        config['body']['num_blocks'] = 4
-        config['body']['filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters
-        config['body']['upsample'] = dict(layout='tna', factor=2, kernel_size=3)
+        config['body/num_blocks'] = 4
+        config['body/upsample'] = dict(layout='tna', factor=2, kernel_size=3)
 
-        config['head']['filters'] = filters // 2
-        config['head']['upsample1'] = dict(layout='tna cna', factor=2, kernel_size=3, strides=[2, 1])
-        config['head']['upsample2'] = dict(layout='t', factor=2)
+        config['head/filters'] = filters // 2
+        config['head/upsample1'] = dict(layout='tna cna', factor=2, kernel_size=3, strides=[2, 1])
+        config['head/upsample2'] = dict(layout='t', factor=2)
 
         config['loss'] = 'ce'
-        config['optimizer'] = dict(name='RMSProp', learning_rate=5e-4)
+        config['optimizer'] = ('RMSProp', dict(learning_rate=5e-4))
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
+        if config.get('body/filters') is None:
+            config['body/filters'] = 2 ** np.arange(config['body/num_blocks']) * config['input_block/filters']
         if config.get('head/num_classes') is None:
             config['head/num_classes'] = self.num_classes('targets')
         config['head']['targets'] = self.targets

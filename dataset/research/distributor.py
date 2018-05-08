@@ -1,10 +1,7 @@
-#pylint:disable=too-few-public-methods
-#pylint:disable=broad-except
-#pylint:disable=too-many-function-args
-#pylint:disable=attribute-defined-outside-init
-#pylint:disable=import-error
-
 """ Classes for multiprocess job running. """
+
+#pylint:disable=broad-except
+#pylint:disable=attribute-defined-outside-init
 
 import os
 import logging
@@ -37,7 +34,6 @@ class Distributor:
     @classmethod
     def log_info(cls, message, filename):
         """ Write message into log. """
-
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.info(message)
 
@@ -113,7 +109,6 @@ class Distributor:
                     logging.error(exception, exc_info=True)
             for _ in _tqdm(range(n_jobs)):
                 results.get()
-            # queue.join()
         self.log_info('All workers have finished the work.', filename=self.logfile)
         logging.shutdown()
 
@@ -201,7 +196,7 @@ class Worker:
                 sub_queue = mp.JoinableQueue()
                 sub_queue.put(job)
                 try:
-                    self.log_info(self.name + ' is creating process for job ' + str(job[0]), filename=self.logfile)
+                    self.log_info(self.name + ' is creating process for Job ' + str(job[0]), filename=self.logfile)
                     worker = mp.Process(target=self._run_job, args=(sub_queue, ))
                     worker.start()
                     sub_queue.join()
@@ -211,7 +206,6 @@ class Worker:
                 results.put('done')
                 job = queue.get()
         queue.task_done()
-        results.put('done')
 
     def _run_job(self, queue):
         try:
@@ -225,7 +219,8 @@ class Worker:
             self.post()
         except Exception as exception:
             self.log_error(exception, filename=self.errorfile)
-        self.log_info('Job {} was finished by {}'.format(self.job[0], self.name), filename=self.logfile)
+        self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.name),
+                      filename=self.logfile)
         queue.task_done()
 
     @classmethod
