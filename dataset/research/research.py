@@ -220,7 +220,7 @@ class Research:
 
         self.jobs, self.n_jobs = self._create_jobs(n_reps, n_iters, branches, self.name)
 
-        if isinstance(workers, int) or isinstance(n_workers[0], (dict, Config)):
+        if isinstance(workers, int) or isinstance(workers[0], (dict, Config)):
             worker_class = PipelineWorker
         else:
             worker_class = None
