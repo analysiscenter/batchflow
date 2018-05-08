@@ -284,7 +284,7 @@ class ExecutableUnit:
         self.pipeline = None
         self.result = None
         self.to_run = None
-        self.root = None
+        self.root_pipeline = None
         self.on_root = None
         self.args = []
         self.kwargs = dict()
