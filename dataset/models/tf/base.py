@@ -356,7 +356,7 @@ class TFModel(BaseModel):
                 an input tensor after transformations
         """
         # pylint:disable=too-many-statements
-        config = self.get('inputs', config)
+        config = config.get('inputs')
 
         names = names or []
         missing_names = set(names) - set(config.keys())
@@ -496,7 +496,7 @@ class TFModel(BaseModel):
         return tensor
 
     def _unpack_fn_from_config(self, param, config=None):
-        par = self.get(param, config)
+        par = config.get(param)
 
         if par is None:
             return None, {}
@@ -1181,7 +1181,7 @@ class TFModel(BaseModel):
     def fill_params(cls, _name, **kwargs):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
-        _config = cls.get(_name, config)
+        _config = config.get(_name)
         config = {**config['common'], **_config, **kwargs}
         return config
 
