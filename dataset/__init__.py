@@ -31,10 +31,10 @@ def _setup_best_practice_options(options, flag):
             options = [options]
         for i in options:
             if flag is None:
-                if i in BEST_PRACTICE:
-                    del BEST_PRACTICE[i]
+                if i in m.BEST_PRACTICE:
+                    del m.BEST_PRACTICE[i]
             else:
-                BEST_PRACTICE.update({i: flag})
+                m.BEST_PRACTICE.update({i: flag})
 
 def setup_best_practice(enable=None, disable=None, clear=None):
     """ Enables and disables best practice options """
@@ -44,5 +44,5 @@ def setup_best_practice(enable=None, disable=None, clear=None):
 
 def is_best_practice(option='all'):
     """ Check if a best practice option is enabled """
-    value = BEST_PRACTICE.get(option)
-    return value if value is not None else BEST_PRACTICE.get('all', False)
+    value = m.BEST_PRACTICE.get(option)
+    return value if value is not None else m.BEST_PRACTICE.get('all', False)
