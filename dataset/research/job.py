@@ -70,12 +70,10 @@ class Job:
         """ Dump all results. """
         for name in self.config['pipelines']:
             for item in self.experiments:
-                item.remove_file(os.path.join(item.get_path(), '.'+name))
                 item.dump_pipeline_result(name, name)
         for name, function in self.config['functions'].items():
             if len(function['returns']) > 0:
                 for item in self.experiments:
-                    item.remove_file(os.path.join(item.get_path(), '.'+name))
                     item.dump_function_result(name, name)
 
 
@@ -248,8 +246,3 @@ class Experiment:
             path = os.path.join(foldername, filename)
             with open(path, 'wb') as file:
                 dill.dump(self.function_results[name], file)
-
-    def remove_file(self, filename):
-        """ Remove file 'filename'. """
-        if os.path.exists(filename):
-            os.remove(filename)

@@ -51,7 +51,7 @@ class PipelineWorker(Worker):
                         self.log_info('Job {} [{}], iteration {}: dump results for {}...'
                                       .format(i, os.getpid(), j+1, name), filename=self.logfile)
                         for item in job.experiments:
-                            item.dump_pipeline_result(name, '.'+name)
+                            item.dump_pipeline_result(name, name)
 
                 for name, function in job.config['functions'].items():
                     if j in function['execute_for']:
@@ -63,7 +63,7 @@ class PipelineWorker(Worker):
                         self.log_info('Job {} [{}], iteration {}: dump results for function {}...'
                                       .format(i, os.getpid(), j+1, name), filename=self.logfile)
                         for item in job.experiments:
-                            item.dump_function_result(name, '.'+name)
+                            item.dump_function_result(name, name)
             except StopIteration:
                 self.log_info('Job {} [{}] was stopped after {} iterations'.format(i, os.getpid(), j+1),
                               filename=self.logfile)
