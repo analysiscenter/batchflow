@@ -7,7 +7,7 @@
 """ Class Research and auxiliary classes for multiple experiments. """
 
 import os
-from copy import copy
+from copy import copy, deepcopy
 from collections import OrderedDict
 from math import ceil
 import json

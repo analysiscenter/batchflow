@@ -47,12 +47,12 @@ class PipelineWorker(Worker):
                                     )
                             base_unit(j, job.experiments, *base_unit.args, **base_unit.kwargs)
                         else:
-                            for experiment in job.experiments:
-                                if base_unit.function is not None:
+                            if base_unit.function is not None:
                                     self.log_info(
                                         'Job {} [{}], iteration {}: execute function {}'
                                         .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
                                     )
+                            for experiment in job.experiments:
                                 experiment[unit_name](j, experiment, *experiment[unit_name].args, **experiment[unit_name].kwargs)
 
                     if j in base_unit.dump_for:
