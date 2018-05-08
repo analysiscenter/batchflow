@@ -15,55 +15,52 @@ class PipelineWorker(Worker):
     def init(self):
         """ Run before job execution. """
         i, job = self.job
+        job.init(self.worker_config)
+
         description = job.get_description()
         self.log_info('Job {} has the following configs:\n{}'.format(i, description), filename=self.logfile)
-        job.init(self.worker_config)
 
     def post(self):
         """ Run after job execution. """
-        i, job = self.job
+        i, _ = self.job
         self.log_info('Job {}: saving final results...'.format(i), filename=self.logfile)
-        job.dump_all()
 
     def run_job(self):
         """ Job execution. """
         i, job = self.job
 
-        for j in range(job.config['n_iters']):
+        for j in range(job.n_iters):
             try:
-                for name, pipeline in job.config['pipelines'].items():
-                    if j in pipeline['execute_for']:
-                        if pipeline['root'] is not None:
-                            job.parallel_execute_for(name)
+                for unit_name, base_unit in job.executable_units.items():
+                    if j in base_unit.execute_for:
+                        if base_unit.root is not None:
+                            job.parallel_execute_for(unit_name)
+                        elif base_unit.on_root:
+                            self.log_info(
+                                        'Job {} [{}], iteration {}: execute function {} on root'
+                                        .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
+                                    )
+                            base_unit(j, job.experiments, *base_unit.args, **base_unit.kwargs)
                         else:
                             for experiment in job.experiments:
-                                if pipeline['run']:
+                                if base_unit.to_run:
                                     self.log_info(
                                         'Job {} [{}], iteration {}: run pipeline {}'
-                                        .format(i, os.getpid(), j+1, name), filename=self.logfile
+                                        .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
                                     )
-                                    experiment.run(name)
-                                else:
-                                    experiment.next_batch(name)
-                        job.put_pipeline_result(j, name)
+                                elif base_unit.function is not None:
+                                    self.log_info(
+                                        'Job {} [{}], iteration {}: execute function {}'
+                                        .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
+                                    )
+                                experiment[unit_name](j, experiment, *experiment[unit_name].args, **experiment[unit_name].kwargs)
 
-                    if j in pipeline['dump_for']:
+                    if j in base_unit.dump_for:
                         self.log_info('Job {} [{}], iteration {}: dump results for {}...'
-                                      .format(i, os.getpid(), j+1, name), filename=self.logfile)
-                        for item in job.experiments:
-                            item.dump_pipeline_result(name, name)
+                                      .format(i, os.getpid(), j+1, unit_name), filename=self.logfile)
+                        for experiment in job.experiments:
+                            experiment[unit_name].dump_result(unit_name)
 
-                for name, function in job.config['functions'].items():
-                    if j in function['execute_for']:
-                        self.log_info('Job {} [{}], iteration {}: call function {}...'
-                                      .format(i, os.getpid(), j+1, name), filename=self.logfile)
-                        for item in job.experiments:
-                            item.call_function(j, name)
-                    if j in function['dump_for']:
-                        self.log_info('Job {} [{}], iteration {}: dump results for function {}...'
-                                      .format(i, os.getpid(), j+1, name), filename=self.logfile)
-                        for item in job.experiments:
-                            item.dump_function_result(name, name)
             except StopIteration:
                 self.log_info('Job {} [{}] was stopped after {} iterations'.format(i, os.getpid(), j+1),
                               filename=self.logfile)

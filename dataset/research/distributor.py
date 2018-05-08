@@ -26,7 +26,7 @@ class Distributor:
     def _jobs_to_queue(self, jobs):
         queue = mp.JoinableQueue()
         for idx, job in enumerate(jobs):
-            queue.put((idx, Job(job)))
+            queue.put((idx, job))
         for _ in range(self.n_workers):
             queue.put(None)
         return queue
