@@ -22,8 +22,7 @@ class PipelineWorker(Worker):
 
     def post(self):
         """ Run after job execution. """
-        i, _ = self.job
-        self.log_info('Job {}: saving final results...'.format(i), filename=self.logfile)
+        pass
 
     def run_job(self):
         """ Job execution. """
@@ -35,28 +34,28 @@ class PipelineWorker(Worker):
                     if j in base_unit.exec_for:
                         if base_unit.to_run:
                             self.log_info(
-                                'Job {} [{}], iteration {}: run pipeline {}'
+                                'J {} [{}], I {}: run {}'
                                 .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
                             )
                         if base_unit.root_pipeline is not None:
                             job.parallel_execute_for(j, unit_name, run=base_unit.to_run)
                         elif base_unit.on_root:
                             self.log_info(
-                                        'Job {} [{}], iteration {}: execute function {} on root'
+                                        'J {} [{}], I {}: execute {} on root'
                                         .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
                                     )
                             base_unit(j, job.experiments, *base_unit.args, **base_unit.kwargs)
                         else:
                             if base_unit.function is not None:
                                     self.log_info(
-                                        'Job {} [{}], iteration {}: execute function {}'
+                                        'J {} [{}], I {}: execute {}'
                                         .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
                                     )
                             for experiment in job.experiments:
                                 experiment[unit_name](j, experiment, *experiment[unit_name].args, **experiment[unit_name].kwargs)
 
                     if j in base_unit.dump_for:
-                        self.log_info('Job {} [{}], iteration {}: dump results for {}...'
+                        self.log_info('J {} [{}], I {}: dump {}'
                                       .format(i, os.getpid(), j+1, unit_name), filename=self.logfile)
                         for experiment in job.experiments:
                             experiment[unit_name].dump_result(unit_name)
