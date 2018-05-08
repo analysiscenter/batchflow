@@ -4,6 +4,7 @@
 import tensorflow as tf
 import numpy as np
 
+from ... import is_best_practice
 from .layers import conv_block
 from . import TFModel
 from .resnet import ResNet

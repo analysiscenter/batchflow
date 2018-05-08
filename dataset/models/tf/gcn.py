@@ -4,6 +4,7 @@ Improve Semantic Segmentation by Global Convolutional Network
 """
 import tensorflow as tf
 
+from ... import is_best_practice
 from .layers import conv_block
 from . import TFModel
 from .resnet import ResNet, ResNet101

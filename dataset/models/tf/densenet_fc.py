@@ -4,6 +4,7 @@ Fully Convolutional DenseNets for Semantic Segmentation
 """
 import tensorflow as tf
 
+from ... import is_best_practice
 from . import TFModel
 from .densenet import DenseNet
 

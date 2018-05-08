@@ -66,10 +66,10 @@ class ResNet(TFModel):
                                           pool_size=3, pool_strides=2))
 
         config['body/block'] = dict(post_activation=None, downsample=False,
-                                       bottleneck=False, bottleneck_factor=4,
-                                       width_factor=1,
-                                       resnext=False, resnext_factor=32,
-                                       se_block=False, se_factor=16)
+                                    bottleneck=False, bottleneck_factor=4,
+                                    width_factor=1,
+                                    resnext=False, resnext_factor=32,
+                                    se_block=False, se_factor=16)
 
         config['head'] = dict(layout='Vdf', dropout_rate=.4)
 
