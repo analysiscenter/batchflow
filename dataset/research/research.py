@@ -14,7 +14,7 @@ import json
 import warnings
 import dill
 
-from .. import Config
+from .. import Config, Pipeline
 from .distributor import Distributor
 from .workers import PipelineWorker
 from .grid import Grid
@@ -22,8 +22,7 @@ from .grid import Grid
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
     def __init__(self):
-        self.pipelines = OrderedDict()
-        self.functions = OrderedDict()
+        self.executable_units = OrderedDict()
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
                  execute_for=1, dump_for=-1, run=False, **kwargs):
@@ -64,32 +63,12 @@ class Research:
         as C('parameter_name'). Corresponding parameter in grid must have the same 'parameter_name'.
         """
         name = name or 'ppl_' + str(len(self.pipelines))
-        variables = variables or []
 
-        if not isinstance(variables, list):
-            variables = [variables]
-        if name in self.pipelines:
-            raise ValueError('Pipeline with name {} was alredy existed'.format(name))
+        if name in self.executable_units:
+            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
-        if branch_pipeline is None:
-            pipeline = root_pipeline
-            root = None
-        else:
-            pipeline = branch_pipeline
-            root = root_pipeline
-
-        dump_for = None if dump_for == -1 else dump_for
-
-        self.pipelines[name] = {
-            'ppl': pipeline,
-            'root': root,
-            'var': variables,
-            'execute_for': execute_for,
-            'dump_for': dump_for,
-            'run': run,
-            'kwargs': kwargs,
-        }
-
+        self.executable_units[name] = ExecutableUnit().pipeline(root_pipeline, name, branch_pipeline, variables,
+                                                                execute_for, dump_for, run)
         return self
 
     def function(self, function, name, execute_for=None, dump_for=None, returns=None, *args, **kwargs):
@@ -118,14 +97,13 @@ class Research:
             names for function results.
         """
         name = name or 'func_' + str(len(self.functions))
-        self.functions[name] = {
-            'function': function,
-            'execute_for': execute_for,
-            'dump_for': dump_for,
-            'returns': returns,
-            'args': args,
-            'kwargs': kwargs
-        }
+
+        if name in self.executable_units:
+            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
+
+        self.executable_units[name] = ExecutableUnit().function(function, name, execute_for, dump_for,
+                                                                returns, *args, **kwargs)
+
         return self
 
     def grid(self, grid_config):
@@ -170,19 +148,14 @@ class Research:
 
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
-        self.jobs = (
-            {'pipelines': self.pipelines,
-             'functions': self.functions,
-             'n_iters': n_iters,
-             'configs': list(zip(*chunk))[1],
-             'repetition': list(zip(*chunk))[0],
-             'branches': branches,
-             'name': name
-            }
+        jobs = (Job(self.executable_units, n_iters, 
+                    list(zip(*chunk))[0], list(zip(*chunk))[1], branches, name)
             for chunk in configs_chunks
         )
 
-        self.n_jobs = ceil(len(configs_with_repetitions) / n_models)
+        n_jobs = ceil(len(configs_with_repetitions) / n_models)
+
+        return jobs, n_jobs
 
     def _chunks(self, array, size):
         """ Divide array into chunks of the fixed size.
@@ -197,7 +170,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps, n_iters, n_workers=1, branches=1, name=None, progress_bar=False):
+    def run(self, n_reps, n_iters, workers=1, branches=1, name=None, progress_bar=False):
         """ Run research.
 
         Parameters
@@ -230,8 +203,9 @@ class Research:
         """
         self.n_reps = n_reps
         self.n_iters = n_iters
-        self.n_workers = n_workers
+        self.workers = workers
         self.branches = branches
+        self.progress_bar = progress_bar
 
         self.name = self._folder_exists(name)
 
@@ -239,13 +213,13 @@ class Research:
 
         self.save()
 
-        self._create_jobs(n_reps, n_iters, branches, self.name)
+        self.jobs, self.n_jobs = self._create_jobs(n_reps, n_iters, branches, self.name)
 
-        if isinstance(n_workers, int) or isinstance(n_workers[0], (dict, Config)):
-            worker = PipelineWorker
+        if isinstance(workers, int) or isinstance(n_workers[0], (dict, Config)):
+            worker_class = PipelineWorker
         else:
-            worker = None
-        distr = Distributor(n_workers, worker)
+            worker_class = None
+        distr = Distributor(workers, worker_class)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs, progress_bar=progress_bar)
         return self
 
@@ -297,3 +271,136 @@ class Research:
         """ Load description of the research from name/description. """
         with open(os.path.join(name, 'description', 'research.dill'), 'rb') as file:
             return dill.load(file)
+
+class ExecutableUnit:
+    """ Function or pipeline. """
+    def __init__(self):
+        self.function = None
+        self.pipeline = None
+        self.results = None
+
+    def function(self, function, name, execute_for=None, dump_for=None, returns=None, on_root=None, *args, **kwargs):
+        """ Add function as a Executable Unit. """
+        if not isinstance(returns, list):
+            returns = [returns]
+
+        self.name = name
+        self.function = function
+        self.execute_for = execute_for
+        self.dump_for = dump_for
+        self.variables = returns
+        self.args = args
+        self.kwargs = kwargs
+        self.on_root = on_root
+
+        self._init_results()
+
+    def pipeline(self, root_pipeline, name, branch_pipeline=None, variables=None,
+                 execute_for=1, dump_for=-1, run=False, **kwargs):
+        """ Add pipeline as a Executable Unit """
+        variables = variables or []
+
+        if not isinstance(variables, list):
+            variables = [variables]
+
+        if branch_pipeline is None:
+            pipeline = root_pipeline
+            root = None
+        else:
+            pipeline = branch_pipeline
+            root = root_pipeline
+
+        dump_for = None if dump_for == -1 else dump_for
+
+        self.name = name
+        self.pipeline = pipeline
+        self.root_pipeline = root
+        self.variables = variables
+        self.execute_for = execute_for
+        self.dump_for = dump_for
+        self.run = run
+        self.kwargs = kwargs
+
+        self.config = None
+
+        self.additional_config = None
+
+        self._init_results()
+
+    def create_pipeline_copy(self):
+        if self.pipeline:
+            self.pipeline = pipeline + Pipeline()
+        else:
+            raise TypeError("ExecutableUnit should be pipeline, not a function")
+
+    def _init_results(self):
+        self.results = {var: [] for var in self.variables}
+        self.results['iteration'] = []
+
+    def set_config(self, config, worker_config, branch_config):
+        """ Set new config for pipeline """
+        self.config = config
+        self.additional_config = Config(worker_config) + Config(branch_config)
+
+        if self.pipeline is not None:
+            self.pipeline.set_config(config.config() + self.additional_config)
+        else:
+            raise TypeError("ExecutableUnit should be pipeline, not a function")
+
+    def next_batch(self):
+        if self.pipeline is not None:
+            return self.pipeline.next_batch()
+        else:
+            raise TypeError("ExecutableUnit should be pipeline, not a function")
+
+    def run(self):
+        if self.pipeline is not None:
+            self.pipeline.run()
+            self.pipeline.reset_iter()
+        else:
+            raise TypeError("ExecutableUnit should be pipeline, not a function")
+
+    def next_batch_root(self):
+        if self.root_pipeline is not None:
+            return self.root_pipeline.next_batch()
+        else:
+            raise TypeError("ExecutableUnit should have root pipeline")
+
+    def execute_for(self, batch):
+        if self.pipeline is not None:
+            return self.pipeline.execute_for(batch)
+        else:
+            raise TypeError("ExecutableUnit should be pipeline, not a function")
+
+    def _call_pipeline(self, iteration, batch=None):
+        if self.run:
+            self.run()
+        else:
+            if batch:
+                return self.execute_for(batch)
+            else:
+                return self.next_batch()
+        self.put_result(iteration)
+
+    def _call_function(self, iteration, *args, **kwargs):
+        result = self.function(*args, **kwargs)
+        self.put_result(iteration, result)
+        return result
+
+    def __call__(self, iteration, *args, **kwargs):
+        if self.pipeline is not None:
+            self._call_pipeline(iteration, *args, **kwargs)
+        else:
+            self._call_function(iteration, *args, **kwargs)
+
+    def put_result(self, iteration, result=None):
+        if self.pipeline is not None:
+            for variable in self.variables:
+                self.result[variable].append(self.pipeline.get_variable(variable))
+        else:
+            for variable, value in zip(self.variables, result):
+                self.result[variable].append(value)
+        self.result['iteration'].append(iteration)
+
+
+

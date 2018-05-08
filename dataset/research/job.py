@@ -9,7 +9,7 @@ from .. import Pipeline, Config, inbatch_parallel
 
 class Job:
     """ Contains one job. """
-    def __init__(self, config):
+    def __init__(self, executable_units, n_iters, repetition, configs, branches, name):
         """
         Parameters
         ----------
@@ -17,11 +17,17 @@ class Job:
             config of experiment
         """
         self.experiments = []
-        self.config = config
+        # self.config = config
+
+        self.executable_units = executable_units
+        self.n_iters = n_iters
+        self.configs = configs
+        self.repetition = repetition
+        self.branches = branches
 
     def init(self, worker_config):
         """ Create experiments. """
-        for idx, config in enumerate(self.config['configs']):
+        for idx, config in enumerate(self.configs):
 
             experiment_config = copy(self.config)
 
