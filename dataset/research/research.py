@@ -385,9 +385,11 @@ class ExecutableUnit:
         else:
             raise TypeError("ExecutableUnit should have root pipeline")
 
-    def execute_for(self, batch):
+    def execute_for(self, batch, iteration):
         if self.pipeline is not None:
-            return self.pipeline.execute_for(batch)
+            batch = self.pipeline.execute_for(batch)
+            self.put_result(iteration)
+            return batch
         else:
             raise TypeError("ExecutableUnit should be pipeline, not a function")
 
