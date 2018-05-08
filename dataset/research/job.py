@@ -76,10 +76,19 @@ class Job:
                                      for config in self.configs])
         return description
 
-    def parallel_execute_for(self, iteration, name):
+    def parallel_execute_for(self, iteration, name, run=False):
         """ Parallel execution of pipeline 'name'. """
-        batch = self.executable_units[name].next_batch_root()
-        self._parallel_run(batch, iteration, name)
+        if run:
+            while True:
+                try:
+                    batch = self.executable_units[name].next_batch_root()
+                    self._parallel_run(batch, iteration, name)
+                except Exception:
+                    break
+        else:
+            batch = self.executable_units[name].next_batch_root()
+            self._parallel_run(batch, iteration, name)
+        self.put_all_results(iteration, name)
 
     @inbatch_parallel(init='_parallel_init')
     def _parallel_run(self, item, batch, iteration, name):
@@ -89,9 +98,8 @@ class Job:
     def _parallel_init(self, batch, iteration, name):
         _ = batch, name
         return [experiment[name] for experiment in self.experiments]
-    
 
-    def put_results(self, iteration, name, result=None):
+    def put_all_results(self, iteration, name, result=None):
         """ Add values of pipeline variables to results. """
         for experiment in self.experiments:
-            unit[name].put_results(iteration, result) 
+            experiment[name].put_result(iteration, result) 

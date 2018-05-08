@@ -33,8 +33,13 @@ class PipelineWorker(Worker):
             try:
                 for unit_name, base_unit in job.executable_units.items():
                     if j in base_unit.exec_for:
+                        if base_unit.to_run:
+                            self.log_info(
+                                'Job {} [{}], iteration {}: run pipeline {}'
+                                .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
+                            )
                         if base_unit.root_pipeline is not None:
-                            job.parallel_execute_for(j, unit_name)
+                            job.parallel_execute_for(j, unit_name, run=base_unit.to_run)
                         elif base_unit.on_root:
                             self.log_info(
                                         'Job {} [{}], iteration {}: execute function {} on root'
@@ -43,12 +48,7 @@ class PipelineWorker(Worker):
                             base_unit(j, job.experiments, *base_unit.args, **base_unit.kwargs)
                         else:
                             for experiment in job.experiments:
-                                if base_unit.to_run:
-                                    self.log_info(
-                                        'Job {} [{}], iteration {}: run pipeline {}'
-                                        .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
-                                    )
-                                elif base_unit.function is not None:
+                                if base_unit.function is not None:
                                     self.log_info(
                                         'Job {} [{}], iteration {}: execute function {}'
                                         .format(i, os.getpid(), j+1, unit_name), filename=self.logfile

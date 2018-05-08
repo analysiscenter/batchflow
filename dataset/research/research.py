@@ -352,6 +352,8 @@ class ExecutableUnit:
             # new_unit.config = self.config
             # new_unit.additional_config = self.additional_config
             new_unit.pipeline += Pipeline()
+        new_unit.result = deepcopy(new_unit.result)
+        new_unit.variables = copy(new_unit.variables)
         return new_unit
 
     def _init_result(self):
@@ -388,7 +390,7 @@ class ExecutableUnit:
     def execute_for(self, batch, iteration):
         if self.pipeline is not None:
             batch = self.pipeline.execute_for(batch)
-            self.put_result(iteration)
+            # self.put_result(iteration)
             return batch
         else:
             raise TypeError("ExecutableUnit should be pipeline, not a function")
