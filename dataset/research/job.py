@@ -29,7 +29,7 @@ class Job:
                 branch_config = Config()
 
             experiment_config = copy(self.config)
-            experiment_config['configs'] = experiment_config['configs'][idx] + branch_config
+            experiment_config['configs'] = {**experiment_config['configs'][idx], **branch_config}
             experiment_config['repetition'] = experiment_config['repetition'][idx]
             experiment_config['idx'] = idx
 
