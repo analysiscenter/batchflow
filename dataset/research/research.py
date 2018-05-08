@@ -340,7 +340,7 @@ class ExecutableUnit:
 
     def get_copy(self):
         new_unit = copy(self)
-        if self.pipeline:
+        if self.pipeline is not None:
             # new_unit.name = self.name
             # new_unit.pipeline = self.pipeline
             # new_unit.root_pipeline = self.root
