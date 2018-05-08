@@ -31,7 +31,7 @@ class Job:
         self.worker_config = worker_config
 
         for unit in self.executable_units.values():
-            unit.execute_for = self.get_iterations(unit.execute_for, self.n_iters)
+            unit.exec_for = self.get_iterations(unit.exec_for, self.n_iters)
             unit.dump_for = self.get_iterations(unit.dump_for, self.n_iters)
 
         for index, config in enumerate(self.configs):

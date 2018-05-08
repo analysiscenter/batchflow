@@ -32,7 +32,7 @@ class PipelineWorker(Worker):
         for j in range(job.n_iters):
             try:
                 for unit_name, base_unit in job.executable_units.items():
-                    if j in base_unit.execute_for:
+                    if j in base_unit.exec_for:
                         if base_unit.root_pipeline is not None:
                             job.parallel_execute_for(unit_name)
                         elif base_unit.on_root:

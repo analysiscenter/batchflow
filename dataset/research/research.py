@@ -299,7 +299,7 @@ class ExecutableUnit:
 
         self.name = name
         self.function = function
-        self.execute_for = execute_for
+        self.exec_for = execute_for
         self.dump_for = dump_for
         self.variables = returns
         self.args = args
@@ -327,7 +327,7 @@ class ExecutableUnit:
         self.pipeline = pipeline
         self.root_pipeline = root
         self.variables = variables
-        self.execute_for = execute_for
+        self.exec_for = execute_for
         self.dump_for = dump_for
         self.to_run = run
         self.kwargs = kwargs
