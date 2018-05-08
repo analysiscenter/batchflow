@@ -34,7 +34,7 @@ class PipelineWorker(Worker):
                 for unit_name, base_unit in job.executable_units.items():
                     if j in base_unit.exec_for:
                         if base_unit.root_pipeline is not None:
-                            job.parallel_execute_for(unit_name)
+                            job.parallel_execute_for(j, unit_name)
                         elif base_unit.on_root:
                             self.log_info(
                                         'Job {} [{}], iteration {}: execute function {} on root'
