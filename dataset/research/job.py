@@ -26,11 +26,11 @@ class Job:
             experiment_config = copy(self.config)
 
             if isinstance(experiment_config['branches'], list):
-                branch_config = experiment_config['branches'][idx].config()
+                branch_config = experiment_config['branches'][idx]
             else:
                 branch_config = Config()
 
-            experiment_config['configs'] = {**experiment_config['configs'][idx], **branch_config}
+            experiment_config['configs'] = {**experiment_config['configs'][idx].config(), **branch_config}
             experiment_config['repetition'] = experiment_config['repetition'][idx]
             experiment_config['idx'] = idx
 
