@@ -48,11 +48,11 @@ class MNIST(ImagesOpenset):
         else:
             train_data = all_res[0], all_res[1]
             test_data = all_res[2], all_res[3]
-            self._train_index = DatasetIndex(np.arange(len(train_data[0])))
-            self._test_index = DatasetIndex(np.arange(len(test_data[0])))
+            self._train_index = DatasetIndex(len(train_data[0]))
+            self._test_index = DatasetIndex(len(test_data[0]))
         return train_data, test_data
 
-    @parallel(init='_get_from_urls', _use_self=True, post='_gather_data')
+    @parallel(init='_get_from_urls', post='_gather_data')
     def download(self, url, content, path=None):    # pylint:disable=arguments-differ
         """ Load data from the web site """
         print('Downloading', url)
