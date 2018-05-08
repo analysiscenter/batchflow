@@ -110,7 +110,7 @@ class Experiment:
         import_config = {key: self.pipelines[value]['ppl'] for key, value in pipeline['kwargs'].items()}
 
         pipeline_config = Config(config.config() + self.config['worker_config']
-            + self.config['branch_config'] + import_config)
+                                 + self.config['branch_config'] + import_config)
 
         pipeline['execute_for'] = self.get_iterations(pipeline['execute_for'], self.config['n_iters'])
         if pipeline['dump_for'] is not None:
