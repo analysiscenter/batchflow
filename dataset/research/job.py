@@ -30,11 +30,11 @@ class Job:
             else:
                 branch_config = Config()
 
-            experiment_config['configs'] = {**experiment_config['configs'][idx].config(), **branch_config}
+            experiment_config['configs'] = experiment_config['configs'][idx] #{**experiment_config['configs'][idx].config(), **branch_config}
             experiment_config['repetition'] = experiment_config['repetition'][idx]
             experiment_config['idx'] = idx
 
-            experiment = Experiment({**experiment_config, 'worker_config': worker_config})
+            experiment = Experiment({**experiment_config, 'worker_config': worker_config, 'branch_config': branch_config})
 
             for name, pipeline in self.config['pipelines'].items():
                 experiment.add_pipeline(pipeline, config, name)
@@ -105,7 +105,7 @@ class Experiment:
             raise ValueError('Pipeline with name {} was alredy existed'.format(name))
         import_config = {key: self.pipelines[value]['ppl'] for key, value in pipeline['kwargs'].items()}
 
-        pipeline_config = Config(config.config() + self.config['worker_config'] + import_config)
+        pipeline_config = Config(config.config() + self.config['worker_config'] + self.config['branch_config'] + import_config)
 
         pipeline['execute_for'] = self.get_iterations(pipeline['execute_for'], self.config['n_iters'])
         if pipeline['dump_for'] is not None:
