@@ -123,6 +123,7 @@ class Distributor:
                 except Exception as exception:
                     logging.error(exception, exc_info=True)
             self.answers = [0 for _ in range(n_jobs)]
+            print("Distributor has {} jobs with {} iterations. Totally: {}".format(n_jobs, n_iters, n_jobs*n_iters))
             if progress_bar:
                 with tqdm(total=n_jobs*n_iters) as progress:
                     while True:
