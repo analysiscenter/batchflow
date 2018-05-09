@@ -58,7 +58,7 @@ class Distributor:
             end = start + length
         return self.gpu[start:end]
 
-    def run(self, jobs, dirname, n_jobs, logfile=None, errorfile=None, progress_bar=False, *args, **kwargs):
+    def run(self, jobs, dirname, n_jobs, n_iters, logfile=None, errorfile=None, progress_bar=False, *args, **kwargs):
         """ Run disributor and workers.
 
         Parameters
@@ -105,8 +105,8 @@ class Distributor:
             ]
         try:
             self.log_info('Create queue of jobs', filename=self.logfile)
-            queue = self._jobs_to_queue(jobs)
-            results = mp.JoinableQueue()
+            self.queue = self._jobs_to_queue(jobs)
+            self.results = mp.JoinableQueue()
         except Exception as exception:
             logging.error(exception, exc_info=True)
         else:
@@ -119,13 +119,29 @@ class Distributor:
                 worker.log_info = self.log_info
                 worker.log_error = self.log_error
                 try:
-                    mp.Process(target=worker, args=(queue, results)).start()
+                    mp.Process(target=worker, args=(self.queue, self.results)).start()
                 except Exception as exception:
                     logging.error(exception, exc_info=True)
-            for _ in _tqdm(range(n_jobs)):
-                results.get()
+            self.answers = [0 for _ in range(n_jobs)]
+            with tqdm(total=n_jobs*n_iters) as progress:
+                while True:
+                    update = self._get_answer(n_jobs, n_iters)
+                    progress.update(update)
+                    if sum(self.answers) == n_jobs * n_iters:
+                        break
         self.log_info('All workers have finished the work.', filename=self.logfile)
         logging.shutdown()
+
+    def _get_answer(self, n_jobs, n_iters):
+        _, job, state = self.results.get()
+        if isinstance(state, int):
+            state += 1
+            update = state - self.answers[job]
+            self.answers[job] = state
+        else:
+            update = n_iters - self.answers[job]
+            self.answers[job] = n_iters
+        return update
 
 class Worker:
     """ Worker that creates subprocess to execute job.
@@ -240,6 +256,7 @@ class Worker:
                                 if silence / 60 > self.timeout:
                                     break
                             else:
+                                results.put((self.name, job[0], answer))
                                 silence = 0
                         if finished:
                             break
@@ -249,7 +266,7 @@ class Worker:
                 except Exception as exception:
                     self.log_error(exception, filename=self.errorfile)
                 queue.task_done()
-                results.put('done')
+                results.put((self.name, job[0], 'done'))
                 job = queue.get()
         queue.task_done()
 

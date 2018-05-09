@@ -235,7 +235,7 @@ class Research:
         self.jobs, self.n_jobs = self._create_jobs(n_reps, n_iters, branches, self.name)
 
         distr = Distributor(workers, self.gpu, self.worker_class, self.timeout)
-        distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs, progress_bar=progress_bar)
+        distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs, n_iters=self.n_iters, progress_bar=progress_bar)
         return self
 
     def _get_gpu_list(self, gpu):
