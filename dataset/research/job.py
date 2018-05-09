@@ -94,11 +94,11 @@ class Job:
     @inbatch_parallel(init='_parallel_init')
     def _parallel_run(self, item, iteration, name, batch):
         _ = name
-        item[1].execute_for(batch, iteration)
+        item.execute_for(batch, iteration)
 
     def _parallel_init(self, iteration, name, *args):
         _ = iteration, args
-        return [(i, experiment[name]) for i, experiment in enumerate(self.experiments)]
+        return [experiment[name] for experiment in self.experiments]
 
     @inbatch_parallel(init='_parallel_init')
     def parallel_call(self, item, iteration, name):
