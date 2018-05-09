@@ -82,12 +82,12 @@ class Job:
             while True:
                 try:
                     batch = self.executable_units[name].next_batch_root()
-                    self._parallel_run(batch, iteration, name)
+                    self._parallel_run(iteration, name, batch)
                 except Exception:
                     break
         else:
             batch = self.executable_units[name].next_batch_root()
-            self._parallel_run(batch, iteration, name)
+            self._parallel_run(iteration, name, batch)
         self.put_all_results(iteration, name)
 
 
