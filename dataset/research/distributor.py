@@ -123,12 +123,15 @@ class Distributor:
                 except Exception as exception:
                     logging.error(exception, exc_info=True)
             self.answers = [0 for _ in range(n_jobs)]
-            with tqdm(total=n_jobs*n_iters) as progress:
-                while True:
-                    update = self._get_answer(n_jobs, n_iters)
-                    progress.update(update)
-                    if sum(self.answers) == n_jobs * n_iters:
-                        break
+            if progress_bar:
+                with tqdm(total=n_jobs*n_iters) as progress:
+                    while True:
+                        update = self._get_answer(n_jobs, n_iters)
+                        progress.update(update)
+                        if sum(self.answers) == n_jobs * n_iters:
+                            break
+            else:
+                self.queue.join()
         self.log_info('All workers have finished the work', filename=self.logfile)
         logging.shutdown()
 
