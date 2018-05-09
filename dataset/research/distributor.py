@@ -12,22 +12,23 @@ from .job import Job
 
 class Distributor:
     """ Distributor of jobs between workers. """
-    def __init__(self, n_workers, worker_class=None):
+    def __init__(self, workers, gpu, worker_class=None):
         """
         Parameters
         ----------
-        n_workers : int or list of Worker instances
+        workers : int or list of Worker instances
 
         worker_class : Worker subclass or None
         """
-        self.n_workers = n_workers
+        self.workers = workers
         self.worker_class = worker_class
+        self.gpu = gpu
 
     def _jobs_to_queue(self, jobs):
         queue = mp.JoinableQueue()
         for idx, job in enumerate(jobs):
             queue.put((idx, job))
-        for _ in range(self.n_workers):
+        for _ in range(self.workers):
             queue.put(None)
         return queue
 
@@ -42,6 +43,15 @@ class Distributor:
         """ Write error message into log. """
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.error(obj, exc_info=True)
+
+    def _get_worker_gpu(self, n_workers, index):
+        if len(self.gpu) == 1:
+            return [0]
+        else:
+            length = len(self.gpu) // n_workers
+            start = index * length
+            end = start + length
+        return self.gpu[start:end]
 
     def run(self, jobs, dirname, n_jobs, logfile=None, errorfile=None, progress_bar=False, *args, **kwargs):
         """ Run disributor and workers.
@@ -74,19 +84,18 @@ class Distributor:
 
         self.log_info('Distributor [id:{}] is preparing workers'.format(os.getpid()), filename=self.logfile)
 
-        if isinstance(self.n_workers, int):
-            workers = [self.worker_class(worker_name=i, *args, **kwargs) for i in range(self.n_workers)]
-        elif issubclass(type(self.n_workers[0]), Worker):
-            for worker in self.n_workers:
-                worker.set_args_kwargs(args, kwargs)
-            workers = self.n_workers
-            self.n_workers = len(self.n_workers)
+        if isinstance(self.workers, int):
+            workers = [self.worker_class(
+                gpu=self._get_worker_gpu(self.workers, i),
+                worker_name=i,
+                *args, **kwargs
+                ) 
+                for i in range(self.workers)]
         else:
             workers = [
-                self.worker_class(worker_name=i, config=config, *args, **kwargs)
-                for i, config in enumerate(self.n_workers)
+                self.worker_class(gpu=self._get_worker_gpu(len(self.workers), i), worker_name=i, config=config, *args, **kwargs)
+                for i, config in enumerate(self.workers)
             ]
-            self.n_workers = len(self.n_workers)
         try:
             self.log_info('Create queue of jobs', filename=self.logfile)
             queue = self._jobs_to_queue(jobs)
@@ -95,14 +104,13 @@ class Distributor:
             logging.error(exception, exc_info=True)
         else:
             if len(workers) > 1:
-                msg = 'Run {} workers.'
+                msg = 'Run {} workers'
             else:
-                msg = 'Run {} worker.'
+                msg = 'Run {} worker'
             self.log_info(msg.format(len(workers)), filename=self.logfile)
             for worker in workers:
                 worker.log_info = self.log_info
                 worker.log_error = self.log_error
-
                 try:
                     mp.Process(target=worker, args=(queue, results)).start()
                 except Exception as exception:
@@ -117,7 +125,7 @@ class Worker:
     Worker get queue of jobs, pop one job and execute it in subprocess. That subprocess
     call init, run_job and post class methods.
     """
-    def __init__(self, worker_name=None, logfile=None, errorfile=None, config=None, *args, **kwargs):
+    def __init__(self, gpu, worker_name=None, logfile=None, errorfile=None, config=None, *args, **kwargs):
         """
         Parameters
         ----------
@@ -136,6 +144,8 @@ class Worker:
         self.worker_config = config or dict()
         self.args = args
         self.kwargs = kwargs
+        self.gpu = gpu
+
         if isinstance(worker_name, int):
             self.name = "Worker " + str(worker_name)
         elif worker_name is None:
@@ -185,7 +195,10 @@ class Worker:
         results : multiprocessing.Queue
             queue for feedback
         """
-        self.log_info('Start {} [id:{}]'.format(self.name, os.getpid()), filename=self.logfile)
+        self.log_info('Start {} [id:{}] (gpu: {})'.format(self.name, os.getpid(), self.gpu), filename=self.logfile)
+
+        if len(self.gpu) > 0:
+            os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(gpu) for gpu in self.gpu])
 
         try:
             job = queue.get()

@@ -26,7 +26,7 @@ class Job:
         self.branches = branches
         self.name = name
 
-    def init(self, worker_config):
+    def init(self, worker_config, gpu_configs):
         """ Create experiments. """
         self.worker_config = worker_config
 
@@ -46,7 +46,7 @@ class Job:
                     import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
                 else:
                     import_config = dict()
-                unit.set_config(config, branch_config, worker_config, import_config)
+                unit.set_config(config, {**branch_config, **gpu_configs[index]}, worker_config, import_config)
                 unit.repetition = self.repetition[index]
                 unit.index = index
                 unit.create_folder(self.name)

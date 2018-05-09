@@ -175,7 +175,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps, n_iters, workers=1, branches=1, name=None, progress_bar=False):
+    def run(self, n_reps, n_iters, workers=1, branches=1, name=None, progress_bar=False, gpu=None, worker_class=None):
         """ Run research.
 
         Parameters
@@ -211,6 +211,19 @@ class Research:
         self.workers = workers
         self.branches = branches
         self.progress_bar = progress_bar
+        self.gpu = self._get_gpu_list(gpu)
+        self.worker_class = worker_class or PipelineWorker
+
+        n_workers = workers if isinstance(workers, int) else len(workers)
+        n_branches = branches if isinstance(branches, int) else len(branches)
+
+        if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
+            raise ValueError("Number of gpus must be 1 or be divisible \
+                             by the number of workers but {} was given".format(len(self.gpu)))
+
+        if len(self.gpu) > 1 and len(self.gpu) // n_workers > 1 and (len(self.gpu) // n_workers) % n_branches != 0:
+            raise ValueError("Number of gpus / n_workers must be 1 \
+                             or be divisible by the number of branches but {} was given".format(len(self.gpu)))
 
         self.name = self._folder_exists(name)
 
@@ -220,13 +233,17 @@ class Research:
 
         self.jobs, self.n_jobs = self._create_jobs(n_reps, n_iters, branches, self.name)
 
-        if isinstance(workers, int) or isinstance(workers[0], (dict, Config)):
-            worker_class = PipelineWorker
-        else:
-            worker_class = None
-        distr = Distributor(workers, worker_class)
+        distr = Distributor(workers, self.gpu, self.worker_class)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs, progress_bar=progress_bar)
         return self
+
+    def _get_gpu_list(self, gpu):
+        if gpu is None:
+            return []
+        elif isinstance(gpu, str):
+            return [int(item) for item in gpu.split(',')]
+        else:
+            return gpu
 
     def _folder_exists(self, name):
         name = name or 'research'

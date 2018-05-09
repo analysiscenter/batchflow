@@ -15,7 +15,14 @@ class PipelineWorker(Worker):
     def init(self):
         """ Run before job execution. """
         i, job = self.job
-        job.init(self.worker_config)
+        n_branches = len(job.configs)
+
+        if len(self.gpu) <= 1:
+            self.gpu_configs = [dict(device='/device:GPU:0') for i in range(n_branches)]
+        else:
+            self.gpu_configs = [dict(device='/device:GPU:{}'.format(i)) for i in range(n_branches)]
+
+        job.init(self.worker_config, self.gpu_configs)
 
         description = job.get_description()
         self.log_info('Job {} has the following configs:\n{}'.format(i, description), filename=self.logfile)
