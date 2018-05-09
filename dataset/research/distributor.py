@@ -129,7 +129,7 @@ class Distributor:
                     progress.update(update)
                     if sum(self.answers) == n_jobs * n_iters:
                         break
-        self.log_info('All workers have finished the work.', filename=self.logfile)
+        self.log_info('All workers have finished the work', filename=self.logfile)
         logging.shutdown()
 
     def _get_answer(self, n_jobs, n_iters):
