@@ -58,8 +58,9 @@ class PipelineWorker(Worker):
                                         'J {} [{}], I {}: execute {}'
                                         .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
                                     )
-                            for experiment in job.experiments:
-                                experiment[unit_name](j, experiment, *experiment[unit_name].args, **experiment[unit_name].kwargs)
+                            #for experiment in job.experiments:
+                            #    experiment[unit_name](j, experiment, *experiment[unit_name].args, **experiment[unit_name].kwargs)
+                            job.parallel_call(j, unit_name)
 
                     if j in base_unit.dump_for:
                         self.log_info('J {} [{}], I {}: dump {}'

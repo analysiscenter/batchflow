@@ -90,14 +90,19 @@ class Job:
             self._parallel_run(batch, iteration, name)
         self.put_all_results(iteration, name)
 
-    @inbatch_parallel(init='_parallel_init')
-    def _parallel_run(self, item, batch, iteration, name):
-        _ = name
-        item.execute_for(batch, iteration)
 
-    def _parallel_init(self, batch, iteration, name):
-        _ = batch, name
-        return [experiment[name] for experiment in self.experiments]
+    @inbatch_parallel(init='_parallel_init')
+    def _parallel_run(self, item, iteration, name, batch):
+        _ = name
+        item[1].execute_for(batch, iteration)
+
+    def _parallel_init(self, iteration, name, *args):
+        _ = iteration, args
+        return [i, experiment[name] for i, experiment in enumerate(self.experiments)]
+
+    @inbatch_parallel(init='_parallel_init')
+    def parallel_call(self, item, iteration, name):
+        item[name](iteration, item, *item[name].args, **item[name].kwargs)
 
     def put_all_results(self, iteration, name, result=None):
         """ Add values of pipeline variables to results. """
