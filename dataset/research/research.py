@@ -175,7 +175,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps, n_iters, workers=1, branches=1, name=None, progress_bar=False, gpu=None, worker_class=None):
+    def run(self, n_reps, n_iters, workers=1, branches=1, name=None, progress_bar=False, gpu=None, worker_class=None, timeout=5):
         """ Run research.
 
         Parameters
@@ -213,6 +213,7 @@ class Research:
         self.progress_bar = progress_bar
         self.gpu = self._get_gpu_list(gpu)
         self.worker_class = worker_class or PipelineWorker
+        self.timeout = timeout
 
         n_workers = workers if isinstance(workers, int) else len(workers)
         n_branches = branches if isinstance(branches, int) else len(branches)
@@ -233,7 +234,7 @@ class Research:
 
         self.jobs, self.n_jobs = self._create_jobs(n_reps, n_iters, branches, self.name)
 
-        distr = Distributor(workers, self.gpu, self.worker_class)
+        distr = Distributor(workers, self.gpu, self.worker_class, self.timeout)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs, progress_bar=progress_bar)
         return self
 

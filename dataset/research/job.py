@@ -26,6 +26,7 @@ class Job:
         self.branches = branches
         self.name = name
 
+
     def init(self, worker_config, gpu_configs):
         """ Create experiments. """
         self.worker_config = worker_config

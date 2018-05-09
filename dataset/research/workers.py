@@ -65,7 +65,7 @@ class PipelineWorker(Worker):
                                       .format(i, os.getpid(), j+1, unit_name), filename=self.logfile)
                         for experiment in job.experiments:
                             experiment[unit_name].dump_result(unit_name)
-
+                self.feedback_queue.put("iteration {}".format(j))
             except StopIteration:
                 self.log_info('Job {} [{}] was stopped after {} iterations'.format(i, os.getpid(), j+1),
                               filename=self.logfile)

@@ -6,13 +6,17 @@
 import os
 import logging
 import multiprocess as mp
+from queue import Empty
 from tqdm import tqdm
+import psutil
 
 from .job import Job
 
+TRAILS = 3
+
 class Distributor:
     """ Distributor of jobs between workers. """
-    def __init__(self, workers, gpu, worker_class=None):
+    def __init__(self, workers, gpu, worker_class=None, timeout=5):
         """
         Parameters
         ----------
@@ -23,6 +27,7 @@ class Distributor:
         self.workers = workers
         self.worker_class = worker_class
         self.gpu = gpu
+        self.timeout = timeout
 
     def _jobs_to_queue(self, jobs):
         queue = mp.JoinableQueue()
@@ -88,12 +93,14 @@ class Distributor:
             workers = [self.worker_class(
                 gpu=self._get_worker_gpu(self.workers, i),
                 worker_name=i,
+                timeout=self.timeout,
                 *args, **kwargs
                 ) 
                 for i in range(self.workers)]
         else:
             workers = [
-                self.worker_class(gpu=self._get_worker_gpu(len(self.workers), i), worker_name=i, config=config, *args, **kwargs)
+                self.worker_class(gpu=self._get_worker_gpu(len(self.workers), i), worker_name=i, 
+                                  config=config, timeout=self.timeout, *args, **kwargs)
                 for i, config in enumerate(self.workers)
             ]
         try:
@@ -125,7 +132,7 @@ class Worker:
     Worker get queue of jobs, pop one job and execute it in subprocess. That subprocess
     call init, run_job and post class methods.
     """
-    def __init__(self, gpu, worker_name=None, logfile=None, errorfile=None, config=None, *args, **kwargs):
+    def __init__(self, gpu, worker_name=None, logfile=None, errorfile=None, config=None, timeout=5, *args, **kwargs):
         """
         Parameters
         ----------
@@ -145,6 +152,7 @@ class Worker:
         self.args = args
         self.kwargs = kwargs
         self.gpu = gpu
+        self.timeout = timeout
 
         if isinstance(worker_name, int):
             self.name = "Worker " + str(worker_name)
@@ -206,13 +214,38 @@ class Worker:
             self.log_error(exception, filename=self.errorfile)
         else:
             while job is not None:
-                sub_queue = mp.JoinableQueue()
-                sub_queue.put(job)
                 try:
+                    finished = False
                     self.log_info(self.name + ' is creating process for Job ' + str(job[0]), filename=self.logfile)
-                    worker = mp.Process(target=self._run_job, args=(sub_queue, ))
-                    worker.start()
-                    sub_queue.join()
+                    for trail in range(TRAILS):
+                        sub_queue = mp.JoinableQueue()
+                        sub_queue.put(job)
+                        feedback_queue = mp.JoinableQueue()
+
+                        worker = mp.Process(target=self._run_job, args=(sub_queue, feedback_queue))
+                        worker.start()
+                        #sub_queue.join()
+                        pid = feedback_queue.get()
+                        silence = 0
+                        while True:
+                            try:
+                                answer = feedback_queue.get(timeout=1)
+                            except Empty:
+                                answer = None
+                                silence += 1
+                            if answer == 'done':
+                                finished = True
+                                break
+                            elif answer is None:
+                                if silence / 60 > self.timeout:
+                                    break
+                            else:
+                                silence = 0
+                        if finished:
+                            break
+                        p = psutil.Process(pid)
+                        p.terminate()
+                        self.log_info('Job {} [{}] failed in {}'.format(job[0], pid, self.name) , filename=self.logfile)
                 except Exception as exception:
                     self.log_error(exception, filename=self.errorfile)
                 queue.task_done()
@@ -220,8 +253,10 @@ class Worker:
                 job = queue.get()
         queue.task_done()
 
-    def _run_job(self, queue):
+    def _run_job(self, queue, feedback_queue):
         try:
+            self.feedback_queue = feedback_queue
+            feedback_queue.put(os.getpid())
             self.job = queue.get()
             self.log_info(
                 'Job {} was started in subprocess [id:{}] by {}'.format(self.job[0], os.getpid(), self.name),
@@ -234,7 +269,8 @@ class Worker:
             self.log_error(exception, filename=self.errorfile)
         self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.name),
                       filename=self.logfile)
-        queue.task_done()
+        feedback_queue.put('done')
+        # queue.task_done()
 
     @classmethod
     def log_info(cls, *args, **kwargs):
