@@ -111,7 +111,7 @@ class Research:
             args and kwargs for the function
 
         **How to use experiment**
-        Experiment is an OrderedDict for all pipelines and functions that ware added to Research
+        Experiment is an OrderedDict for all pipelines and functions that were added to Research
         and are running in current Job. Key is a name of ExecutableUnit, value is ExecutableUnit.
 
         Each pipeline and function added to Research is saved as an ExecutableUnit. Each ExecutableUnit
@@ -513,4 +513,3 @@ class ExecutableUnit:
         self.path = os.path.join(name, 'results', self.config.alias(as_string=True), str(self.repetition))
         if not os.path.exists(self.path):
             os.makedirs(self.path)
-
