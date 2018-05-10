@@ -3,6 +3,7 @@
 #pylint:disable=broad-except
 #pylint:disable=attribute-defined-outside-init
 #pylint:disable=too-many-nested-blocks
+#pylint:disable=import-error
 
 import os
 import logging
@@ -135,7 +136,7 @@ class Distributor:
         logging.shutdown()
 
     def _get_position(self, n_iters):
-        worker, job, state = self.results.get()
+        _, job, state = self.results.get()
         # print("{} Job {}: {}".format(worker, job, state))
         if isinstance(state, int):
             self.answers[job] = state+1

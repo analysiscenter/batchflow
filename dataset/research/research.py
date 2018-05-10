@@ -28,7 +28,8 @@ class Research:
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
                  execute_for=1, dump_for=-1, run=False, **kwargs):
-        """ Add new pipeline to research.
+        """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
+        will prepare batch that can be used by different branches with different configs.
 
         Parameters
         ----------
@@ -39,32 +40,33 @@ class Research:
             if not None, for resulting batch from root_pipeline branch_pipeline.execute_for(batch) will be called.
             May contain parameters that can be defined by grid.
         variables : str, list of str or None
-            names of pipeline variables to save after each repetition. All of them must be defined in root_pipeline
-            if branch_pipeline is None or in branch_pipeline if branch_pipeline is not None.
+            names of pipeline variables to save after each iteration into results. All of them must be defined in root_pipeline
+            if branch_pipeline is None or be defined  in branch_pipeline if branch_pipeline is not None.
+            if None, pipeline will be executed without any dumping
         name : str (default None)
             pipeline name inside research. If name is None, pipeline will have name 'ppl_{index}'
-        execute_for : int, list of ints or None
+        execute_for : int, list of ints
             If -1, pipeline will be executed just at last iteration.
             If positive int, pipeline will be excuted for iterations with that step
             If list of ints, pipeline will be excuted for that iterations
             If None, pipeline will executed at each iteration.
-        dump_for : int, list of ints or None
-            iteration when results will be dumped. Similar to execute_for
+        dump_for : int, list of ints
+            iteration when results will be dumped and cleared. Similar to execute_for
             If None, pipeline results will be dumped at last iteration.
         run : bool (default False)
             if False then .next_batch() will be applied to pipeline, else .run() and then reset_iter().
         kwargs :
             parameters in pipeline config that depends on the names of the other pipeline. For example,
-            if test pipeline imports model from the other pipeline with name 'train' in Researcn,
+            if test pipeline imports model from the other pipeline with name 'train' in Research,
             corresponding parameter in import_model must be C('import_from') and add_pipeline
             must be called with parameter import_from='train'.
 
-        **How to define changing parameters*
+        **How to define changing parameters**
 
         All parameters in root_pipeline or branch_pipeline that are defined in grid should be defined
         as C('parameter_name'). Corresponding parameter in grid must have the same 'parameter_name'.
         """
-        name = name or 'ppl_' + str(len(self.pipelines))
+        name = name or 'unit_' + str(len(self.executable_units))
 
         if name in self.executable_units:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
@@ -75,7 +77,7 @@ class Research:
         self.executable_units[name] = unit
         return self
 
-    def function(self, function, name, execute_for=1, dump_for=-1, returns=None, on_root=False, *args, **kwargs):
+    def function(self, function, returns=None, name=None, execute_for=1, dump_for=-1, on_root=False, *args, **kwargs):
         """ Add function to research.
 
         Parameters
@@ -87,20 +89,54 @@ class Research:
                 iteration : int
                     iteration when function is called
                 **args, **kwargs
+        returns : str, list of str or None
+            names for function returns to save into results
+            if None, function will be executed without any dumping
         name : str (default None)
             function name inside research. If name is None, pipeline will have name 'func_{index}'
-        execute_for : int, list of ints or None
+        execute_for : int, list of ints
             If -1, function will be called just at last iteration.
             If positive int, function will be called for iterations with that step
             If list of ints, function will be called for that iterations
-            If None, function will called at each iteration.
-        dump_for : int, list of ints or None
+            If None, function will called at each iteration
+        dump_for : int, list of ints
             iteration when results will be dumped. Similar to execute_for
-            If None, function results will not be dumped.
-        returns : str, list of str or None
-            names for function results.
+            If None, function results will not be dumped
+        on_root : bool
+            if False, function will be called with parameters (iteration, experiment, *args, **kwargs),
+            else with  (iteration, experiments, *args, **kwargs) where experiments is a list of instances
+            of Experiment corresponding to all branches
+        args, kwargs : 
+            args and kwargs for the function
+
+        **How to use experiment**
+        Experiment is an OrderedDict for all pipelines and functions that ware added to Research
+        and are running in current Job. Key is a name of ExecutableUnit, value is ExecutableUnit.
+
+        Each pipeline and function added to Research is saved as an ExecutableUnit. Each ExecutableUnit
+        has the following attributes:
+
+            function : callable
+                is None if ExecutableUnit is a pipeline
+            pipeline : Pipeline
+                is None if ExecutableUnit is a function
+            root_pipeline : Pipeline
+                is None if ExecutableUnit is a function or pipeline is not divided into root and branch
+            result : dict
+                current results of the ExecutableUnit. Keys are names of variables (for pipeline) or returns (for function)
+                values are lists of variable values
+            path : str
+                path to the folder where results will be dumped
+            exec_for : int, list of ints or None
+            dump_for : int, list of ints or None
+            to_run : bool
+            variables : list
+                variables (for pipeline) or returns (for function)
+            on_root : bool
+            args : list
+            kwargs : dict()                
         """
-        name = name or 'func_' + str(len(self.functions))
+        name = name or 'unit_' + str(len(self.executable_units))
 
         if name in self.executable_units:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
@@ -183,17 +219,16 @@ class Research:
         Parameters
         ----------
         n_reps : int
-            number of repetitions with each combination of parameters from grid_config.
+            number of repetitions with each combination of parameters from grid_config
         n_iters: int
-            number of iterations for each configurations of each pipeline.
-        n_workers : int, list of instances of Worker or list of dicts (Configs) (default 1).
+            number of iterations for each configurations
+        workers : int or list of dicts (Configs) (default 1)
             Workers (processes) to run tasks in parallel.
             If int - number of workers to run pipelines or workers that will run them, PipelineWorker will be used.
-            If list of instances of Worker - workers to run tasks.
             If list of dicts (Configs) - list of additional configs which will be appended to configs from tasks.
-                Each element corresponds to worker. Default Worker will be chosed as in case when n_workers is int.
+            Each element corresponds to one worker.
         branches: int or list of dicts (Configs)
-            Number of different configs which will use the same batch
+            Number of different branches with different configs with the same root. Each branch will use the same batch
             from root_pipeline. Pipelines will be executed in different threads.
             If int - number of pipelines with different configs that will use the same prepared batch
                 from root_pipeline.
@@ -205,8 +240,23 @@ class Research:
             name folder to save research. By default is 'research'.
         progress_bar : bool (default False)
             add tqdm progress bar
+        gpu : str, list or None
+            all gpu devices available for the research. Must be of length 1 or be divisible
+            by the number of workers. If is divisible by the number of workers then
+            length / n_workers must be 1 or be divisible by the number of branches. If you want to use different
+            devices in branches, use expression C('device'). For example, for TFModel add device=C('device')
+            to model config.
+            if None, default gpu configuration will be used
+        timeout : int
+            time in minutes
+            each job will be killed if it doesn't answer more then that time
+        trails : int
+            trials to execute job
 
         At each iteration all add pipelines will be runned with some config from grid.
+
+        ** How it works **
+        At each iteration all pipelines and functions will be executed in the order in which were added.
         """
         if not self.loaded:
             self.n_reps = n_reps
@@ -241,7 +291,8 @@ class Research:
         self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.branches, self.name)
 
         distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
-        distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs, n_iters=self.n_iters, progress_bar=self.progress_bar)
+        distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
+                  n_iters=self.n_iters, progress_bar=self.progress_bar)
         return self
 
     def _get_gpu_list(self, gpu):
@@ -288,10 +339,6 @@ class Research:
     def _json(self):
         description = copy(self.__dict__)
         description['grid_config'] = self.grid_config.value()
-        # for name, pipeline in self.pipelines.items():
-        #     _pipelines[name] = copy(pipeline)
-        #     del _pipelines[name]['ppl']
-        # description['pipelines'] = _pipelines
         return description
 
     @classmethod
@@ -308,7 +355,10 @@ class ExecutableUnit:
         self.function = None
         self.pipeline = None
         self.result = None
+        self.exec_for = None
+        self.dump_for = None
         self.to_run = None
+        self.variables = []
         self.root_pipeline = None
         self.on_root = None
         self.args = []
@@ -364,18 +414,9 @@ class ExecutableUnit:
         self._clear_result()
 
     def get_copy(self):
+        """ Create copy of unit """
         new_unit = copy(self)
         if self.pipeline is not None:
-            # new_unit.name = self.name
-            # new_unit.pipeline = self.pipeline
-            # new_unit.root_pipeline = self.root
-            # new_unit.variables = self.variables
-            # new_unit.execute_for = self.execute_for
-            # new_unit.dump_for = self.dump_for
-            # new_unit.run = self.run
-            # new_unit.kwargs = self.kwargs
-            # new_unit.config = self.config
-            # new_unit.additional_config = self.additional_config
             new_unit.pipeline += Pipeline()
         new_unit.result = deepcopy(new_unit.result)
         new_unit.variables = copy(new_unit.variables)
@@ -394,12 +435,14 @@ class ExecutableUnit:
             self.pipeline.set_config(config.config() + self.additional_config)
 
     def next_batch(self):
+        """ Next batch from pipeline """
         if self.pipeline is not None:
             return self.pipeline.next_batch()
         else:
             raise TypeError("ExecutableUnit should be pipeline, not a function")
 
     def run(self):
+        """ Run pipeline """
         if self.pipeline is not None:
             self.pipeline.reset_iter()
             self.pipeline.run()
@@ -407,12 +450,14 @@ class ExecutableUnit:
             raise TypeError("ExecutableUnit should be pipeline, not a function")
 
     def next_batch_root(self):
+        """ Next batch from root pipeline """
         if self.root_pipeline is not None:
             return self.root_pipeline.next_batch()
         else:
             raise TypeError("ExecutableUnit should have root pipeline")
 
     def execute_for(self, batch, iteration):
+        """ Execute pipeline for batch from root """
         _ = iteration
         if self.pipeline is not None:
             batch = self.pipeline.execute_for(batch)
@@ -441,6 +486,7 @@ class ExecutableUnit:
             self._call_function(iteration, *args, **kwargs)
 
     def put_result(self, iteration, result=None):
+        """ Put result from pipeline to self.results """
         if len(self.variables) > 0:
             if self.pipeline is not None:
                 for variable in self.variables:
@@ -453,7 +499,7 @@ class ExecutableUnit:
             self.result['iteration'].append(iteration)
 
     def dump_result(self, iteration, filename):
-        """ Dump pipeline results. """
+        """ Dump pipeline results """
         if len(self.variables) > 0:
             path = os.path.join(self.path, filename + '_' + str(iteration))
             with open(path, 'wb') as file:
@@ -461,6 +507,7 @@ class ExecutableUnit:
         self._clear_result()
 
     def create_folder(self, name):
+        """ Create folder if it doesn't exist """
         self.path = os.path.join(name, 'results', self.config.alias(as_string=True), str(self.repetition))
         if not os.path.exists(self.path):
             os.makedirs(self.path)
