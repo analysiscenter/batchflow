@@ -78,7 +78,7 @@ class Job:
         return description
 
     def parallel_execute_for(self, iteration, name, run=False):
-        """ Parallel execution of pipeline 'name'. """
+        """ Parallel execution of pipeline 'name' """
         if run:
             while True:
                 try:
@@ -103,6 +103,7 @@ class Job:
 
     @inbatch_parallel(init='_parallel_init_call')
     def parallel_call(self, item, iteration, name):
+        """ Parallel call of the unit 'name' """
         item[name](iteration, item, *item[name].args, **item[name].kwargs)
 
     def _parallel_init_call(self, iteration, name):

@@ -40,7 +40,8 @@ class Research:
             if not None, for resulting batch from root_pipeline branch_pipeline.execute_for(batch) will be called.
             May contain parameters that can be defined by grid.
         variables : str, list of str or None
-            names of pipeline variables to save after each iteration into results. All of them must be defined in root_pipeline
+            names of pipeline variables to save after each iteration into results. All of them must be
+            defined in root_pipeline
             if branch_pipeline is None or be defined  in branch_pipeline if branch_pipeline is not None.
             if None, pipeline will be executed without any dumping
         name : str (default None)
@@ -106,7 +107,7 @@ class Research:
             if False, function will be called with parameters (iteration, experiment, *args, **kwargs),
             else with  (iteration, experiments, *args, **kwargs) where experiments is a list of instances
             of Experiment corresponding to all branches
-        args, kwargs : 
+        args, kwargs :
             args and kwargs for the function
 
         **How to use experiment**
@@ -123,8 +124,8 @@ class Research:
             root_pipeline : Pipeline
                 is None if ExecutableUnit is a function or pipeline is not divided into root and branch
             result : dict
-                current results of the ExecutableUnit. Keys are names of variables (for pipeline) or returns (for function)
-                values are lists of variable values
+                current results of the ExecutableUnit. Keys are names of variables (for pipeline)
+                or returns (for function) values are lists of variable values
             path : str
                 path to the folder where results will be dumped
             exec_for : int, list of ints or None
@@ -134,8 +135,9 @@ class Research:
                 variables (for pipeline) or returns (for function)
             on_root : bool
             args : list
-            kwargs : dict()                
+            kwargs : dict()
         """
+
         name = name or 'unit_' + str(len(self.executable_units))
 
         if name in self.executable_units:
