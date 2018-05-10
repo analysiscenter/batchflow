@@ -48,23 +48,23 @@ class PipelineWorker(Worker):
                             job.parallel_execute_for(j, unit_name, run=base_unit.to_run)
                         elif base_unit.on_root:
                             self.log_info(
-                                        'J {} [{}], I {}: execute {} on root'
-                                        .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
-                                    )
+                                'J {} [{}], I {}: execute {} on root'
+                                .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
+                            )
                             base_unit(j, job.experiments, *base_unit.args, **base_unit.kwargs)
                         else:
                             if base_unit.function is not None:
-                                    self.log_info(
-                                        'J {} [{}], I {}: execute {}'
-                                        .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
-                                    )
+                                self.log_info(
+                                    'J {} [{}], I {}: execute {}'
+                                    .format(i, os.getpid(), j+1, unit_name), filename=self.logfile
+                                )
                             job.parallel_call(j, unit_name)
 
                     if j in base_unit.dump_for:
                         self.log_info('J {} [{}], I {}: dump {}'
                                       .format(i, os.getpid(), j+1, unit_name), filename=self.logfile)
                         for experiment in job.experiments:
-                            experiment[unit_name].dump_result(unit_name)
+                            experiment[unit_name].dump_result(j+1, unit_name)
                 self.feedback_queue.put(j)
             except StopIteration:
                 self.log_info('Job {} [{}] was stopped after {} iterations'.format(i, os.getpid(), j+1),

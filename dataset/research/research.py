@@ -24,6 +24,7 @@ class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
     def __init__(self):
         self.executable_units = OrderedDict()
+        self.loaded = False
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
                  execute_for=1, dump_for=-1, run=False, **kwargs):
@@ -153,10 +154,10 @@ class Research:
 
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
-        jobs = (Job(self.executable_units, n_iters, 
+        jobs = (Job(self.executable_units, n_iters,
                     list(zip(*chunk))[0], list(zip(*chunk))[1], branches, name)
-            for chunk in configs_chunks
-        )
+                for chunk in configs_chunks
+               )
 
         n_jobs = ceil(len(configs_with_repetitions) / n_models)
 
@@ -170,12 +171,13 @@ class Research:
         array : list or np.ndarray
 
         size : int
-            chunk size.
+            chunk size
         """
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps, n_iters, workers=1, branches=1, name=None, progress_bar=False, gpu=None, worker_class=None, timeout=5):
+    def run(self, n_reps=1, n_iters=100, workers=1, branches=1, name=None,
+            progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
         """ Run research.
 
         Parameters
@@ -206,17 +208,21 @@ class Research:
 
         At each iteration all add pipelines will be runned with some config from grid.
         """
-        self.n_reps = n_reps
-        self.n_iters = n_iters
-        self.workers = workers
-        self.branches = branches
-        self.progress_bar = progress_bar
-        self.gpu = self._get_gpu_list(gpu)
-        self.worker_class = worker_class or PipelineWorker
-        self.timeout = timeout
+        if not self.loaded:
+            self.n_reps = n_reps
+            self.n_iters = n_iters
+            self.workers = workers
+            self.branches = branches
+            self.progress_bar = progress_bar
+            self.gpu = self._get_gpu_list(gpu)
+            self.worker_class = worker_class or PipelineWorker
+            self.timeout = timeout
+            self.trails = trails
+            self.initial_name = name
+            self.name = name
 
-        n_workers = workers if isinstance(workers, int) else len(workers)
-        n_branches = branches if isinstance(branches, int) else len(branches)
+        n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
+        n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
 
         if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
             raise ValueError("Number of gpus must be 1 or be divisible \
@@ -226,16 +232,16 @@ class Research:
             raise ValueError("Number of gpus / n_workers must be 1 \
                              or be divisible by the number of branches but {} was given".format(len(self.gpu)))
 
-        self.name = self._folder_exists(name)
+        self.name = self._folder_exists(self.initial_name)
 
         print("Research {} is starting...".format(self.name))
 
         self.save()
 
-        self.jobs, self.n_jobs = self._create_jobs(n_reps, n_iters, branches, self.name)
+        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.branches, self.name)
 
-        distr = Distributor(workers, self.gpu, self.worker_class, self.timeout)
-        distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs, n_iters=self.n_iters, progress_bar=progress_bar)
+        distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
+        distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs, n_iters=self.n_iters, progress_bar=self.progress_bar)
         return self
 
     def _get_gpu_list(self, gpu):
@@ -282,7 +288,6 @@ class Research:
     def _json(self):
         description = copy(self.__dict__)
         description['grid_config'] = self.grid_config.value()
-        _pipelines = dict()
         # for name, pipeline in self.pipelines.items():
         #     _pipelines[name] = copy(pipeline)
         #     del _pipelines[name]['ppl']
@@ -293,7 +298,9 @@ class Research:
     def load(cls, name):
         """ Load description of the research from name/description. """
         with open(os.path.join(name, 'description', 'research.dill'), 'rb') as file:
-            return dill.load(file)
+            res = dill.load(file)
+            res.loaded = True
+            return res
 
 class ExecutableUnit:
     """ Function or pipeline. """
@@ -310,7 +317,7 @@ class ExecutableUnit:
 
     def add_function(self, function, name, execute_for=1, dump_for=-1, returns=None, on_root=False, *args, **kwargs):
         """ Add function as a Executable Unit. """
-        returns = returns or []        
+        returns = returns or []
 
         if not isinstance(returns, list):
             returns = [returns]
@@ -324,10 +331,10 @@ class ExecutableUnit:
         self.kwargs = kwargs
         self.on_root = on_root
 
-        self._init_result()
+        self._clear_result()
 
     def add_pipeline(self, root_pipeline, name, branch_pipeline=None, variables=None,
-                 execute_for=1, dump_for=-1, run=False, **kwargs):
+                     execute_for=1, dump_for=-1, run=False, **kwargs):
         """ Add pipeline as a Executable Unit """
         variables = variables or []
 
@@ -354,7 +361,7 @@ class ExecutableUnit:
 
         self.additional_config = None
 
-        self._init_result()
+        self._clear_result()
 
     def get_copy(self):
         new_unit = copy(self)
@@ -374,7 +381,7 @@ class ExecutableUnit:
         new_unit.variables = copy(new_unit.variables)
         return new_unit
 
-    def _init_result(self):
+    def _clear_result(self):
         self.result = {var: [] for var in self.variables}
         self.result['iteration'] = []
 
@@ -406,14 +413,15 @@ class ExecutableUnit:
             raise TypeError("ExecutableUnit should have root pipeline")
 
     def execute_for(self, batch, iteration):
+        _ = iteration
         if self.pipeline is not None:
             batch = self.pipeline.execute_for(batch)
-            # self.put_result(iteration)
             return batch
         else:
             raise TypeError("ExecutableUnit should be pipeline, not a function")
 
     def _call_pipeline(self, iteration, *args, **kwargs):
+        _ = args, kwargs
         if self.to_run:
             result = self.run()
         else:
@@ -444,12 +452,13 @@ class ExecutableUnit:
                     self.result[variable].append(value)
             self.result['iteration'].append(iteration)
 
-    def dump_result(self, filename):
+    def dump_result(self, iteration, filename):
         """ Dump pipeline results. """
         if len(self.variables) > 0:
-            path = os.path.join(self.path, filename)
+            path = os.path.join(self.path, filename + '_' + str(iteration))
             with open(path, 'wb') as file:
                 dill.dump(self.result, file)
+        self._clear_result()
 
     def create_folder(self, name):
         self.path = os.path.join(name, 'results', self.config.alias(as_string=True), str(self.repetition))

@@ -2,21 +2,18 @@
 
 #pylint:disable=broad-except
 #pylint:disable=attribute-defined-outside-init
+#pylint:disable=too-many-nested-blocks
 
 import os
 import logging
-import multiprocess as mp
 from queue import Empty
+import multiprocess as mp
 from tqdm import tqdm
 import psutil
 
-from .job import Job
-
-TRAILS = 3
-
 class Distributor:
     """ Distributor of jobs between workers. """
-    def __init__(self, workers, gpu, worker_class=None, timeout=5):
+    def __init__(self, workers, gpu, worker_class=None, timeout=5, trails=3):
         """
         Parameters
         ----------
@@ -28,6 +25,7 @@ class Distributor:
         self.worker_class = worker_class
         self.gpu = gpu
         self.timeout = timeout
+        self.trails = trails
 
     def _jobs_to_queue(self, jobs):
         queue = mp.JoinableQueue()
@@ -82,8 +80,6 @@ class Distributor:
         self.logfile = os.path.join(dirname, self.logfile)
         self.errorfile = os.path.join(dirname, self.errorfile)
 
-        _tqdm = tqdm if progress_bar else lambda x: x
-
         kwargs['logfile'] = self.logfile
         kwargs['errorfile'] = self.errorfile
 
@@ -94,13 +90,14 @@ class Distributor:
                 gpu=self._get_worker_gpu(self.workers, i),
                 worker_name=i,
                 timeout=self.timeout,
+                trails=self.trails,
                 *args, **kwargs
-                ) 
-                for i in range(self.workers)]
+                )
+                       for i in range(self.workers)]
         else:
             workers = [
-                self.worker_class(gpu=self._get_worker_gpu(len(self.workers), i), worker_name=i, 
-                                  config=config, timeout=self.timeout, *args, **kwargs)
+                self.worker_class(gpu=self._get_worker_gpu(len(self.workers), i), worker_name=i,
+                                  config=config, timeout=self.timeout, trails=self.trails, *args, **kwargs)
                 for i, config in enumerate(self.workers)
             ]
         try:
@@ -127,8 +124,9 @@ class Distributor:
             if progress_bar:
                 with tqdm(total=n_jobs*n_iters) as progress:
                     while True:
-                        update = self._get_answer(n_jobs, n_iters)
-                        progress.update(update)
+                        position = self._get_position(n_iters)
+                        progress.n = position
+                        progress.refresh()
                         if sum(self.answers) == n_jobs * n_iters:
                             break
             else:
@@ -136,23 +134,22 @@ class Distributor:
         self.log_info('All workers have finished the work', filename=self.logfile)
         logging.shutdown()
 
-    def _get_answer(self, n_jobs, n_iters):
-        _, job, state = self.results.get()
+    def _get_position(self, n_iters):
+        worker, job, state = self.results.get()
+        # print("{} Job {}: {}".format(worker, job, state))
         if isinstance(state, int):
-            state += 1
-            update = state - self.answers[job]
-            self.answers[job] = state
+            self.answers[job] = state+1
         else:
-            update = n_iters - self.answers[job]
             self.answers[job] = n_iters
-        return update
+        return sum(self.answers)
 
 class Worker:
     """ Worker that creates subprocess to execute job.
     Worker get queue of jobs, pop one job and execute it in subprocess. That subprocess
     call init, run_job and post class methods.
     """
-    def __init__(self, gpu, worker_name=None, logfile=None, errorfile=None, config=None, timeout=5, *args, **kwargs):
+    def __init__(self, gpu, worker_name=None, logfile=None, errorfile=None,
+                 config=None, timeout=5, trails=2, *args, **kwargs):
         """
         Parameters
         ----------
@@ -173,6 +170,7 @@ class Worker:
         self.kwargs = kwargs
         self.gpu = gpu
         self.timeout = timeout
+        self.trails = trails
 
         if isinstance(worker_name, int):
             self.name = "Worker " + str(worker_name)
@@ -237,7 +235,7 @@ class Worker:
                 try:
                     finished = False
                     self.log_info(self.name + ' is creating process for Job ' + str(job[0]), filename=self.logfile)
-                    for trail in range(TRAILS):
+                    for _ in range(self.trails):
                         sub_queue = mp.JoinableQueue()
                         sub_queue.put(job)
                         feedback_queue = mp.JoinableQueue()
@@ -266,7 +264,7 @@ class Worker:
                             break
                         p = psutil.Process(pid)
                         p.terminate()
-                        self.log_info('Job {} [{}] failed in {}'.format(job[0], pid, self.name) , filename=self.logfile)
+                        self.log_info('Job {} [{}] failed in {}'.format(job[0], pid, self.name), filename=self.logfile)
                 except Exception as exception:
                     self.log_error(exception, filename=self.errorfile)
                 queue.task_done()

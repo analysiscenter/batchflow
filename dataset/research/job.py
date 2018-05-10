@@ -1,11 +1,11 @@
+#pylint:disable=broad-except
+#pylint:disable=attribute-defined-outside-init
+
 """ Classes Job and Experiment. """
 
-import os
 from collections import OrderedDict
-from copy import copy
-import dill
 
-from .. import Pipeline, Config, inbatch_parallel
+from .. import inbatch_parallel
 
 class Job:
     """ Contains one job. """
@@ -106,9 +106,10 @@ class Job:
         item[name](iteration, item, *item[name].args, **item[name].kwargs)
 
     def _parallel_init_call(self, iteration, name):
+        _ = iteration, name
         return [[experiment] for experiment in self.experiments]
 
     def put_all_results(self, iteration, name, result=None):
         """ Add values of pipeline variables to results. """
         for experiment in self.experiments:
-            experiment[name].put_result(iteration, result) 
+            experiment[name].put_result(iteration, result)
