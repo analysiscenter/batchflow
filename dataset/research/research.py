@@ -454,7 +454,11 @@ class ExecutableUnit:
     def next_batch_root(self):
         """ Next batch from root pipeline """
         if self.root_pipeline is not None:
-            return self.root_pipeline.next_batch()
+            try:
+                batch = self.root_pipeline.next_batch()
+                return batch
+            except Exception as e:
+                return e
         else:
             raise TypeError("ExecutableUnit should have root pipeline")
 
@@ -513,3 +517,14 @@ class ExecutableUnit:
         self.path = os.path.join(name, 'results', self.config.alias(as_string=True), str(self.repetition))
         if not os.path.exists(self.path):
             os.makedirs(self.path)
+
+    def action_iteration(self, iteration, n_iters=None, action='execute'):
+        """ Returns does Unit should be executed at that iteration """
+        rule = self.exec_for if action == 'execute' else self.dump_for
+        list_rule = isinstance(rule, list) and iteration in rule
+        step_rule = rule > 0 and (iteration+1) % rule == 0
+        if n_iters is None:
+            return list_rule or step_rule
+        else:
+            final_rule = rule == -1 and iteration+1 == n_iters
+            return list_rule or step_rule or final_rule

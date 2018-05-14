@@ -14,7 +14,7 @@ import psutil
 
 class Distributor:
     """ Distributor of jobs between workers. """
-    def __init__(self, workers, gpu, worker_class=None, timeout=5, trails=3):
+    def __init__(self, workers, gpu, worker_class=None, timeout=5, trials=3):
         """
         Parameters
         ----------
@@ -26,7 +26,7 @@ class Distributor:
         self.worker_class = worker_class
         self.gpu = gpu
         self.timeout = timeout
-        self.trails = trails
+        self.trials = trials
 
     def _jobs_to_queue(self, jobs):
         queue = mp.JoinableQueue()
@@ -91,14 +91,14 @@ class Distributor:
                 gpu=self._get_worker_gpu(self.workers, i),
                 worker_name=i,
                 timeout=self.timeout,
-                trails=self.trails,
+                trials=self.trials,
                 *args, **kwargs
                 )
                        for i in range(self.workers)]
         else:
             workers = [
                 self.worker_class(gpu=self._get_worker_gpu(len(self.workers), i), worker_name=i,
-                                  config=config, timeout=self.timeout, trails=self.trails, *args, **kwargs)
+                                  config=config, timeout=self.timeout, trials=self.trials, *args, **kwargs)
                 for i, config in enumerate(self.workers)
             ]
         try:
@@ -120,28 +120,47 @@ class Distributor:
                     mp.Process(target=worker, args=(self.queue, self.results)).start()
                 except Exception as exception:
                     logging.error(exception, exc_info=True)
+
             self.answers = [0 for _ in range(n_jobs)]
-            print("Distributor has {} jobs with {} iterations. Totally: {}".format(n_jobs, n_iters, n_jobs*n_iters))
+            self.finished_jobs = []
+
             if progress_bar:
-                with tqdm(total=n_jobs*n_iters) as progress:
+                if n_iters is not None:
+                    print("Distributor has {} jobs with {} iterations. Totally: {}".format(n_jobs, n_iters, n_jobs*n_iters))
+                    with tqdm(total=n_jobs*n_iters) as progress:
+                        while True:
+                            position = self._get_position()
+                            progress.n = position
+                            progress.refresh()
+                            #if sum(self.answers) == n_jobs * n_iters:
+                            if len(self.finished_jobs) == n_jobs:
+                                break
+                else:
                     while True:
-                        position = self._get_position(n_iters)
-                        progress.n = position
-                        progress.refresh()
-                        if sum(self.answers) == n_jobs * n_iters:
-                            break
+                        self._get_position(False)
+                        if len(self.finished_jobs) == n_jobs:
+                                break
             else:
                 self.queue.join()
         self.log_info('All workers have finished the work', filename=self.logfile)
         logging.shutdown()
 
-    def _get_position(self, n_iters):
-        _, job, state = self.results.get()
-        # print("{} Job {}: {}".format(worker, job, state))
-        if isinstance(state, int):
-            self.answers[job] = state+1
+
+
+    def _get_position(self, fixed_iterations=True):
+        answer = self.results.get()
+        # print(answer)
+        if answer.done:
+            self.finished_jobs.append(answer.job)
+        if fixed_iterations:
+            # print("{} Job {}: {}".format(worker, job, state))
+            if answer.done:
+                self.answers[answer.job] = answer.n_iters
+            else:
+                self.answers[answer.job] = answer.iteration+1
+            return sum(self.answers)
         else:
-            self.answers[job] = n_iters
+            self.answers[answer.job] += 1
         return sum(self.answers)
 
 class Worker:
@@ -150,7 +169,7 @@ class Worker:
     call init, run_job and post class methods.
     """
     def __init__(self, gpu, worker_name=None, logfile=None, errorfile=None,
-                 config=None, timeout=5, trails=2, *args, **kwargs):
+                 config=None, timeout=5, trials=2, *args, **kwargs):
         """
         Parameters
         ----------
@@ -171,7 +190,7 @@ class Worker:
         self.kwargs = kwargs
         self.gpu = gpu
         self.timeout = timeout
-        self.trails = trails
+        self.trials = trials
 
         if isinstance(worker_name, int):
             self.name = "Worker " + str(worker_name)
@@ -222,7 +241,8 @@ class Worker:
         results : multiprocessing.Queue
             queue for feedback
         """
-        self.log_info('Start {} [id:{}] (gpu: {})'.format(self.name, os.getpid(), self.gpu), filename=self.logfile)
+        _gpu = 'default' if len(self.gpu) == 0 else self.gpu
+        self.log_info('Start {} [id:{}] (gpu: {})'.format(self.name, os.getpid(), _gpu), filename=self.logfile)
 
         if len(self.gpu) > 0:
             os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(gpu) for gpu in self.gpu])
@@ -236,48 +256,72 @@ class Worker:
                 try:
                     finished = False
                     self.log_info(self.name + ' is creating process for Job ' + str(job[0]), filename=self.logfile)
-                    for _ in range(self.trails):
+                    for trial in range(self.trials):
                         sub_queue = mp.JoinableQueue()
                         sub_queue.put(job)
                         feedback_queue = mp.JoinableQueue()
 
-                        worker = mp.Process(target=self._run_job, args=(sub_queue, feedback_queue))
+                        worker = mp.Process(target=self._run_job, args=(sub_queue, feedback_queue, self.name, trial))
                         worker.start()
-                        #sub_queue.join()
                         pid = feedback_queue.get()
                         silence = 0
+                        
+                        default_signal = Signal(self.name, job[0], 0, job[1].n_iters, trial, False, None)
+
                         while True:
                             try:
-                                answer = feedback_queue.get(timeout=1)
+                                signal = feedback_queue.get(timeout=1)
                             except Empty:
-                                answer = None
+                                signal = None
                                 silence += 1
-                            if answer == 'done':
-                                finished = True
+                            if signal is None and silence / 60 > self.timeout:
+                                p = psutil.Process(pid)
+                                p.terminate()
+                                message = 'Job {} [{}] failed in {}'.format(job[0], pid, self.name)
+                                self.log_info(message, filename=self.logfile)
+                                default_signal.exception = TimeoutError(message)
+                                results.put(default_signal)
                                 break
-                            elif answer is None:
-                                if silence / 60 > self.timeout:
-                                    break
-                            else:
-                                results.put((self.name, job[0], answer))
+                            elif signal is not None and signal.done:
+                                #print("Worker get:", signal)
+                                finished = True
+                                default_signal = signal
+                                break
+                            elif signal is not None:
+                                #print("Worker get:", signal)
+                                default_signal = signal
+                                results.put(default_signal)
                                 silence = 0
                         if finished:
                             break
-                        p = psutil.Process(pid)
-                        p.terminate()
-                        self.log_info('Job {} [{}] failed in {}'.format(job[0], pid, self.name), filename=self.logfile)
                 except Exception as exception:
                     self.log_error(exception, filename=self.errorfile)
+                    default_signal.exception = exception
+                    #print("Worker put:", default_signal)
+                    results.put(default_signal)
+                if default_signal.done:
+                    #print("Worker put:", default_signal)
+                    results.put(default_signal)
+                else:
+                    default_signal.exception = RuntimeError('Job {} [{}] failed {} times in {}'.format(job[0], pid, self.trials, self.name))
+                    #print("Worker put:", default_signal)
+                    results.put(default_signal)
                 queue.task_done()
-                results.put((self.name, job[0], 'done'))
                 job = queue.get()
-        queue.task_done()
+            queue.task_done()
 
-    def _run_job(self, queue, feedback_queue):
+
+    def _run_job(self, queue, feedback_queue, worker, trial):
+        exception = None
         try:
             self.feedback_queue = feedback_queue
+            self.worker = worker
+            self.trial = trial
+            self.total_iterations = 0
+            
             feedback_queue.put(os.getpid())
             self.job = queue.get()
+
             self.log_info(
                 'Job {} was started in subprocess [id:{}] by {}'.format(self.job[0], os.getpid(), self.name),
                 filename=self.logfile
@@ -285,19 +329,37 @@ class Worker:
             self.init()
             self.run_job()
             self.post()
-        except Exception as exception:
+        except Exception as e:
+            exception = e
             self.log_error(exception, filename=self.errorfile)
         self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.name),
                       filename=self.logfile)
-        feedback_queue.put('done')
+        signal = Signal(self.worker, self.job[0], self.total_iterations, self.job[1].n_iters,
+                        self.trial, True, [exception]*len(self.job[1].experiments))
+        self.feedback_queue.put(signal)
+        # feedback_queue.put('done')
         # queue.task_done()
 
     @classmethod
     def log_info(cls, *args, **kwargs):
-        """ Write message into log. """
+        """ Write message into log """
         pass
 
     @classmethod
     def log_error(cls, *args, **kwargs):
-        """ Write error message into log. """
+        """ Write error message into log """
         pass
+
+class Signal:
+    """ Class for feedback from jobs and workers """
+    def __init__(self, worker, job, iteration, n_iters, trial, done, exception):
+        self.worker = worker
+        self.job = job
+        self.iteration = iteration
+        self.n_iters = n_iters
+        self.trial = trial
+        self.done = done
+        self.exception = exception
+
+    def __repr__(self):
+        return str(self.__dict__)

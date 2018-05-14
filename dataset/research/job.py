@@ -26,14 +26,16 @@ class Job:
         self.branches = branches
         self.name = name
 
+        self.exceptions = []
+        self.stoped = []
 
     def init(self, worker_config, gpu_configs):
         """ Create experiments. """
         self.worker_config = worker_config
 
-        for unit in self.executable_units.values():
-            unit.exec_for = self.get_iterations(unit.exec_for, self.n_iters)
-            unit.dump_for = self.get_iterations(unit.dump_for, self.n_iters)
+        # for unit in self.executable_units.values():
+        #     unit.exec_for = self.get_iterations(unit.exec_for, self.n_iters)
+        #     unit.dump_for = self.get_iterations(unit.dump_for, self.n_iters)
 
         for index, config in enumerate(self.configs):
             if isinstance(self.branches, list):
@@ -54,6 +56,8 @@ class Job:
                 units[name] = unit
 
             self.experiments.append(units)
+            self.exceptions.append(None)
+            self.stoped.append(False)
 
     def get_iterations(self, execute_for, n_iters=None):
         """ Get indices of iterations from execute_for. """
@@ -83,34 +87,70 @@ class Job:
             while True:
                 try:
                     batch = self.executable_units[name].next_batch_root()
-                    self._parallel_run(iteration, name, batch)
-                except Exception:
+                    exceptions = self._parallel_run(iteration, name, batch)
+                except StopIteration:
                     break
         else:
             batch = self.executable_units[name].next_batch_root()
-            self._parallel_run(iteration, name, batch)
+            exceptions = self._parallel_run(iteration, name, batch)
         self.put_all_results(iteration, name)
+        return exceptions
 
+    def _update_exceptions(self, exceptions):
+        for i, exception in enumerate(exceptions):
+            if exception is not None:
+                self.exceptions[i] = exception
 
-    @inbatch_parallel(init='_parallel_init_run')
-    def _parallel_run(self, item, iteration, name, batch):
+    @inbatch_parallel(init='_parallel_init_run', post='_parallel_post')
+    def _parallel_run(self, item, execute, iteration, name, batch):
         _ = name
-        item.execute_for(batch, iteration)
+        if isinstance(batch, Exception):
+            raise batch
+        if execute:
+            item.execute_for(batch, iteration)
 
     def _parallel_init_run(self, iteration, name, batch):
         _ = iteration, batch
-        return [experiment[name] for experiment in self.experiments]
+        to_run = self._experiments_to_run(iteration, name)
+        return [(experiment[name], execute) for experiment, execute in zip(self.experiments, to_run)]
 
-    @inbatch_parallel(init='_parallel_init_call')
-    def parallel_call(self, item, iteration, name):
+    def _parallel_post(self, results, *args, **kwargs):
+        _ = args, kwargs
+        self._update_exceptions(results)
+        return results
+
+    @inbatch_parallel(init='_parallel_init_call', post='_parallel_post')
+    def parallel_call(self, item, execute, iteration, name):
         """ Parallel call of the unit 'name' """
-        item[name](iteration, item, *item[name].args, **item[name].kwargs)
+        if execute:
+            item[name](iteration, item, *item[name].args, **item[name].kwargs)
 
     def _parallel_init_call(self, iteration, name):
         _ = iteration, name
-        return [[experiment] for experiment in self.experiments]
+        return [[experiment, execute] for experiment, execute in zip(self.experiments, to_run)]
+
 
     def put_all_results(self, iteration, name, result=None):
-        """ Add values of pipeline variables to results. """
-        for experiment in self.experiments:
-            experiment[name].put_result(iteration, result)
+        """ Add values of pipeline variables to results """
+        to_run = self._experiments_to_run(iteration, name)
+        for experiment, execute in zip(self.experiments, to_run):
+            if execute:
+                experiment[name].put_result(iteration, result)
+
+    def _experiments_to_run(self, iteration, name, n_iters=None):
+        """ Experiments that should be executed """
+        res = []
+        for idx, experiment in enumerate(self.experiments):
+            if experiment[name].action_iteration(iteration, n_iters) and self.exceptions[idx] is None:
+                res.append(True)
+            elif isinstance(self.exceptions[idx], StopIteration) and experiment[name].exec_for == -1:
+                res.append(True)
+            else:
+                res.append(False)
+        return res
+
+    def all_stoped(self):
+        res = True
+        for exception in self.exceptions:
+            res = isinstance(exception, StopIteration)
+        return res
