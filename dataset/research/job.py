@@ -27,7 +27,7 @@ class Job:
         self.name = name
 
         self.exceptions = []
-        self.stoped = []
+        self.stopped = []
 
     def init(self, worker_config, gpu_configs):
         """ Create experiments. """
@@ -57,7 +57,7 @@ class Job:
 
             self.experiments.append(units)
             self.exceptions.append(None)
-            self.stoped.append(False)
+            self.stopped.append(False)
 
     def get_iterations(self, execute_for, n_iters=None):
         """ Get indices of iterations from execute_for. """
@@ -96,7 +96,7 @@ class Job:
         self.put_all_results(iteration, name)
         return exceptions
 
-    def _update_exceptions(self, exceptions):
+    def update_exceptions(self, exceptions):
         for i, exception in enumerate(exceptions):
             if exception is not None:
                 self.exceptions[i] = exception
@@ -104,19 +104,16 @@ class Job:
     @inbatch_parallel(init='_parallel_init_run', post='_parallel_post')
     def _parallel_run(self, item, execute, iteration, name, batch):
         _ = name
-        if isinstance(batch, Exception):
-            raise batch
         if execute:
             item.execute_for(batch, iteration)
 
     def _parallel_init_run(self, iteration, name, batch):
         _ = iteration, batch
         to_run = self._experiments_to_run(iteration, name)
-        return [(experiment[name], execute) for experiment, execute in zip(self.experiments, to_run)]
+        return [[experiment[name], execute] for experiment, execute in zip(self.experiments, to_run)]
 
     def _parallel_post(self, results, *args, **kwargs):
         _ = args, kwargs
-        self._update_exceptions(results)
         return results
 
     @inbatch_parallel(init='_parallel_init_call', post='_parallel_post')
@@ -127,6 +124,7 @@ class Job:
 
     def _parallel_init_call(self, iteration, name):
         _ = iteration, name
+        to_run = self._experiments_to_run(iteration, name)
         return [[experiment, execute] for experiment, execute in zip(self.experiments, to_run)]
 
 
@@ -137,20 +135,23 @@ class Job:
             if execute:
                 experiment[name].put_result(iteration, result)
 
-    def _experiments_to_run(self, iteration, name, n_iters=None):
+    def _experiments_to_run(self, iteration, name):
         """ Experiments that should be executed """
         res = []
         for idx, experiment in enumerate(self.experiments):
-            if experiment[name].action_iteration(iteration, n_iters) and self.exceptions[idx] is None:
+            if experiment[name].action_iteration(iteration, self.n_iters) and self.exceptions[idx] is None:
                 res.append(True)
-            elif isinstance(self.exceptions[idx], StopIteration) and experiment[name].exec_for == -1:
+            elif (self.stopped[idx]) and experiment[name].exec_for == -1:
                 res.append(True)
             else:
                 res.append(False)
         return res
 
-    def all_stoped(self):
+    def all_stopped(self):
         res = True
         for exception in self.exceptions:
             res = isinstance(exception, StopIteration)
         return res
+
+    def alive_experiments(self):
+        return len([item for item in self.exceptions if item is None])

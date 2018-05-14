@@ -454,11 +454,8 @@ class ExecutableUnit:
     def next_batch_root(self):
         """ Next batch from root pipeline """
         if self.root_pipeline is not None:
-            try:
-                batch = self.root_pipeline.next_batch()
-                return batch
-            except Exception as e:
-                return e
+            batch = self.root_pipeline.next_batch()
+            return batch
         else:
             raise TypeError("ExecutableUnit should have root pipeline")
 
@@ -522,9 +519,9 @@ class ExecutableUnit:
         """ Returns does Unit should be executed at that iteration """
         rule = self.exec_for if action == 'execute' else self.dump_for
         list_rule = isinstance(rule, list) and iteration in rule
-        step_rule = rule > 0 and (iteration+1) % rule == 0
+        step_rule = isinstance(rule, int) and rule > 0 and (iteration+1) % rule == 0
         if n_iters is None:
             return list_rule or step_rule
         else:
-            final_rule = rule == -1 and iteration+1 == n_iters
+            final_rule = isinstance(rule, int) and rule == -1 and iteration+1 == n_iters
             return list_rule or step_rule or final_rule

@@ -149,7 +149,6 @@ class Distributor:
 
     def _get_position(self, fixed_iterations=True):
         answer = self.results.get()
-        # print(answer)
         if answer.done:
             self.finished_jobs.append(answer.job)
         if fixed_iterations:

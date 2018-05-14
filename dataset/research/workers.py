@@ -41,42 +41,45 @@ class PipelineWorker(Worker):
         #         )
         return n_executed == 0
 
-    def alive_experiments(self):
-        return len([item for item in job.exceptions if item is None])
-
     def run_job(self):
         """ Job execution. """
         idx_job, job = self.job
 
         iteration = 0
+        self.finished_iterations = iteration
 
-        while (job.n_iters is None or iteration < job.n_iters) and self.alive_experiments() > 0:
-            self.finished_iterations = iteration
-            job.stoped = [False for i in len(job.experiments)]
+        while (job.n_iters is None or iteration < job.n_iters) and job.alive_experiments() > 0:
+            job.stopped = [False for _ in range(len(job.experiments))]
             for unit_name, base_unit in job.executable_units.items():
                 if base_unit.root_pipeline is not None:
                     exceptions = job.parallel_execute_for(iteration, unit_name, run=base_unit.to_run)
-                elif base_unit.on_root and base_unit.action_iteration(iteration, n_iters) or base_unit.dump_for == -1 and job.all_stoped():
+                elif base_unit.on_root and (base_unit.action_iteration(iteration, n_iters) or base_unit.exec_for == -1 and job.all_stopped()):
                     exceptions = [None] * len(job.executable_units)
                     try:
-                        base_unit(j, job.experiments, *base_unit.args, **base_unit.kwargs)
+                        base_unit(iteration, job.experiments, *base_unit.args, **base_unit.kwargs)
                     except Exception as e:
                         exceptions = [e] * len(job.experiments)
+                        raise e
                 else:
-                    exceptions = job.parallel_call(j, unit_name)
-                if base_unit.action_iteration(iteration, action='dump') or base_unit.dump_for == -1:
-                    for experiment, exception in zip(job.experiments, job.exceptions):
-                        if (exception is not None and base_unit.dump_for == -1) or (exception is None):
-                            experiment[unit_name].dump_result(j+1, unit_name)                            
-                for i, exception in enumerate(job.exceptions):
-                    job.stoped[i] = job.stoped[i] or isinstance(exception, StopIteration)
-            signal = Signal(self.worker, i, j, job.n_iters, self.trial, False, exceptions)
+                    exceptions = job.parallel_call(iteration, unit_name)
+                for i, exception in enumerate(exceptions):
+                    if isinstance(exception, StopIteration):
+                        job.stopped[i] = True
+                if base_unit.action_iteration(iteration, job.n_iters, action='dump'):
+                    for i, experiment in enumerate(job.experiments):
+                        exception = exceptions[i]
+                        if exception is None:
+                            experiment[unit_name].dump_result(iteration+1, unit_name)
+                            self.log_info('J {} [{}] I {}: dump {} [{}]'
+                                 .format(idx_job, os.getpid(), iteration+1, unit_name, i), filename=self.logfile)
+                if base_unit.dump_for == -1:
+                    for i, experiment in enumerate(job.experiments):
+                        if job.stopped[i]:
+                            experiment[unit_name].dump_result(iteration+1, unit_name)
+                            self.log_info('J {} [{}] I {}: dump {} [{}]'
+                                 .format(idx_job, os.getpid(), iteration+1, unit_name, i), filename=self.logfile)
+                job.update_exceptions(exceptions)             
+            signal = Signal(self.worker, idx_job, iteration, job.n_iters, self.trial, False, job.exceptions)
             self.feedback_queue.put(signal)
-            j += 1
-        j -= 1
-        for unit_name, base_unit in job.executable_units.items():
-            self.log_info('J {} [{}], final dump {}'
-                    .format(i, os.getpid(), unit_name), filename=self.logfile)
-            if not self._to_exec(j, base_unit.dump_for):
-                for experiment in job.experiments:
-                        experiment[unit_name].dump_result(j+1, unit_name)
+            iteration += 1
+            self.finished_iterations = iteration
