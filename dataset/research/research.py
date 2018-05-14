@@ -214,7 +214,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps=1, n_iters=100, workers=1, branches=1, name=None,
+    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
         """ Run research.
 
@@ -222,8 +222,8 @@ class Research:
         ----------
         n_reps : int
             number of repetitions with each combination of parameters from grid_config
-        n_iters: int
-            number of iterations for each configurations
+        n_iters: int or None
+            number of iterations for each configurations. If None, wait StopIteration exception.
         workers : int or list of dicts (Configs) (default 1)
             Workers (processes) to run tasks in parallel.
             If int - number of workers to run pipelines or workers that will run them, PipelineWorker will be used.

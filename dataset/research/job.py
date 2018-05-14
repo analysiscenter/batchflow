@@ -57,7 +57,11 @@ class Job:
 
             self.experiments.append(units)
             self.exceptions.append(None)
-            self.stopped.append(False)
+        self.clear_stopped()
+
+    def clear_stopped(self):
+        """ Clear list of stopped experiments for the current iteration """
+        self.stopped = [False for _ in range(len(self.experiments))]
 
     def get_iterations(self, execute_for, n_iters=None):
         """ Get indices of iterations from execute_for. """
@@ -91,8 +95,12 @@ class Job:
                 except StopIteration:
                     break
         else:
-            batch = self.executable_units[name].next_batch_root()
-            exceptions = self._parallel_run(iteration, name, batch)
+            try:
+                batch = self.executable_units[name].next_batch_root()
+            except StopIteration as e:
+                exceptions = [e] * len(self.experiments)
+            else:
+                exceptions = self._parallel_run(iteration, name, batch)
         self.put_all_results(iteration, name)
         return exceptions
 
