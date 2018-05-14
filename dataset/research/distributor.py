@@ -138,8 +138,11 @@ class Distributor:
                             if len(self.finished_jobs) == n_jobs:
                                 break
                 else:
+                    job_status = [{'i': i, 'done': False, 'iteration': 0} for i in range(n_jobs)]
                     while True:
-                        self._get_position(False)
+                        answer = self.results.get()
+                        job_status[answer.job].update(done=answer.done, iteration=answer.iteration)
+                        print(job_status)
                         if len(self.finished_jobs) == n_jobs:
                             break
             else:
@@ -283,12 +286,10 @@ class Worker:
                                 results.put(default_signal)
                                 break
                             elif signal is not None and signal.done:
-                                #print("Worker get:", signal)
                                 finished = True
                                 default_signal = signal
                                 break
                             elif signal is not None:
-                                #print("Worker get:", signal)
                                 default_signal = signal
                                 results.put(default_signal)
                                 silence = 0
@@ -318,7 +319,6 @@ class Worker:
             self.feedback_queue = feedback_queue
             self.worker = worker
             self.trial = trial
-            self.total_iterations = 0
 
             feedback_queue.put(os.getpid())
             self.job = queue.get()
@@ -335,7 +335,7 @@ class Worker:
             self.log_error(exception, filename=self.errorfile)
         self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.name),
                       filename=self.logfile)
-        signal = Signal(self.worker, self.job[0], self.total_iterations, self.job[1].n_iters,
+        signal = Signal(self.worker, self.job[0], self.finished_iterations, self.job[1].n_iters,
                         self.trial, True, [exception]*len(self.job[1].experiments))
         self.feedback_queue.put(signal)
         # feedback_queue.put('done')
