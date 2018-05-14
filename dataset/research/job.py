@@ -105,6 +105,7 @@ class Job:
         return exceptions
 
     def update_exceptions(self, exceptions):
+        """ Update exceptions with new from current iteration """
         for i, exception in enumerate(exceptions):
             if exception is not None:
                 self.exceptions[i] = exception
@@ -156,10 +157,12 @@ class Job:
         return res
 
     def all_stopped(self):
+        """ Does all experiments finished """
         res = True
         for exception in self.exceptions:
             res = isinstance(exception, StopIteration)
         return res
 
     def alive_experiments(self):
+        """ Get number of alive experiments """
         return len([item for item in self.exceptions if item is None])

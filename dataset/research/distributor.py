@@ -4,6 +4,7 @@
 #pylint:disable=attribute-defined-outside-init
 #pylint:disable=too-many-nested-blocks
 #pylint:disable=import-error
+#pylint:disable=too-many-statements
 
 import os
 import logging
@@ -126,7 +127,8 @@ class Distributor:
 
             if progress_bar:
                 if n_iters is not None:
-                    print("Distributor has {} jobs with {} iterations. Totally: {}".format(n_jobs, n_iters, n_jobs*n_iters))
+                    print("Distributor has {} jobs with {} iterations. Totally: {}"
+                          .format(n_jobs, n_iters, n_jobs*n_iters))
                     with tqdm(total=n_jobs*n_iters) as progress:
                         while True:
                             position = self._get_position()
@@ -139,7 +141,7 @@ class Distributor:
                     while True:
                         self._get_position(False)
                         if len(self.finished_jobs) == n_jobs:
-                                break
+                            break
             else:
                 self.queue.join()
         self.log_info('All workers have finished the work', filename=self.logfile)
@@ -264,7 +266,6 @@ class Worker:
                         worker.start()
                         pid = feedback_queue.get()
                         silence = 0
-                        
                         default_signal = Signal(self.name, job[0], 0, job[1].n_iters, trial, False, None)
 
                         while True:
@@ -302,7 +303,8 @@ class Worker:
                     #print("Worker put:", default_signal)
                     results.put(default_signal)
                 else:
-                    default_signal.exception = RuntimeError('Job {} [{}] failed {} times in {}'.format(job[0], pid, self.trials, self.name))
+                    default_signal.exception = RuntimeError('Job {} [{}] failed {} times in {}'
+                                                            .format(job[0], pid, self.trials, self.name))
                     #print("Worker put:", default_signal)
                     results.put(default_signal)
                 queue.task_done()
@@ -317,7 +319,7 @@ class Worker:
             self.worker = worker
             self.trial = trial
             self.total_iterations = 0
-            
+
             feedback_queue.put(os.getpid())
             self.job = queue.get()
 

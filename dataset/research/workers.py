@@ -63,14 +63,14 @@ class PipelineWorker(Worker):
                         if exceptions[i] is None:
                             experiment[unit_name].dump_result(iteration+1, unit_name)
                             self.log_info('J {} [{}] I {}: dump {} [{}]'
-                                 .format(idx_job, os.getpid(), iteration+1, unit_name, i), filename=self.logfile)
+                                          .format(idx_job, os.getpid(), iteration+1, unit_name, i), filename=self.logfile)
                 if base_unit.dump_for == -1:
                     for i, experiment in enumerate(job.experiments):
                         if job.stopped[i]:
                             experiment[unit_name].dump_result(iteration+1, unit_name)
                             self.log_info('J {} [{}] I {}: dump {} [{}]'
-                                 .format(idx_job, os.getpid(), iteration+1, unit_name, i), filename=self.logfile)
-                job.update_exceptions(exceptions)             
+                                          .format(idx_job, os.getpid(), iteration+1, unit_name, i), filename=self.logfile)
+                job.update_exceptions(exceptions)
             signal = Signal(self.worker, idx_job, iteration, job.n_iters, self.trial, False, job.exceptions)
             self.feedback_queue.put(signal)
             iteration += 1
