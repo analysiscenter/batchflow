@@ -214,7 +214,8 @@ By default if unit has varaibles or returns then results will be dumped at last 
 .. code-block:: python
 
     research = (Research()
-        .pipeline(root_pipeline=train_root, branch_pipeline=train_template, variables='loss', name='train', dump='%200')
+        .pipeline(root_pipeline=train_root, branch_pipeline=train_template,
+                  variables='loss', name='train', dump='%200')
         .pipeline(test_ppl,
                   variables='accuracy', name='test', run=True, execute='%100', import_from='train', logging=True)
         .grid(grid)
