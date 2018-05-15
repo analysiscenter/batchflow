@@ -77,9 +77,8 @@ class PipelineWorker(Worker):
                 for i, exception in enumerate(exceptions):
                     if exception is not None:
                         message = ("J {} [{}] I {}: '{}' [{}]: exception {}"
-                                   .format(idx_job, os.getpid(), iteration+1, unit_name, i, exception))
+                                   .format(idx_job, os.getpid(), iteration+1, unit_name, i, repr(exception)))
                         self.log_info(message, filename=self.logfile)
-                    if isinstance(exception, StopIteration):
                         job.stopped[i] = True
 
                 # dump results
