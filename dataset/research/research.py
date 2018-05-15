@@ -27,7 +27,7 @@ class Research:
         self.loaded = False
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
-                 execute_for=1, dump_for=-1, run=False, **kwargs):
+                 exec_iter='%1', dump_iter=-1, run=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
 
@@ -46,12 +46,12 @@ class Research:
             if None, pipeline will be executed without any dumping
         name : str (default None)
             pipeline name inside research. If name is None, pipeline will have name 'ppl_{index}'
-        execute_for : int, list of ints
+        exec_iter : int, list of ints
             If -1, pipeline will be executed just at last iteration.
             If positive int, pipeline will be excuted for iterations with that step
             If list of ints, pipeline will be excuted for that iterations
             If None, pipeline will executed at each iteration.
-        dump_for : int, list of ints
+        dump_iter : int, list of ints
             iteration when results will be dumped and cleared. Similar to execute_for
             If None, pipeline results will be dumped at last iteration.
         run : bool (default False)
@@ -74,11 +74,11 @@ class Research:
 
         unit = ExecutableUnit()
         unit.add_pipeline(root_pipeline, name, branch_pipeline, variables,
-                          execute_for, dump_for, run, **kwargs)
+                          exec_iter, dump_iter, run, **kwargs)
         self.executable_units[name] = unit
         return self
 
-    def function(self, function, returns=None, name=None, execute_for=1, dump_for=-1, on_root=False, *args, **kwargs):
+    def function(self, function, returns=None, name=None, exec_iter='%1', dump_iter=-1, on_root=False, *args, **kwargs):
         """ Add function to research.
 
         Parameters
@@ -95,12 +95,12 @@ class Research:
             if None, function will be executed without any dumping
         name : str (default None)
             function name inside research. If name is None, pipeline will have name 'func_{index}'
-        execute_for : int, list of ints
+        exec_iter : int, list of ints
             If -1, function will be called just at last iteration.
             If positive int, function will be called for iterations with that step
             If list of ints, function will be called for that iterations
             If None, function will called at each iteration
-        dump_for : int, list of ints
+        dump_iter : int, list of ints
             iteration when results will be dumped. Similar to execute_for
             If None, function results will not be dumped
         on_root : bool
@@ -128,8 +128,8 @@ class Research:
                 or returns (for function) values are lists of variable values
             path : str
                 path to the folder where results will be dumped
-            exec_for : int, list of ints or None
-            dump_for : int, list of ints or None
+            exec_iter : int, list of ints or None
+            dump_iter : int, list of ints or None
             to_run : bool
             variables : list
                 variables (for pipeline) or returns (for function)
@@ -144,7 +144,7 @@ class Research:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
         unit = ExecutableUnit()
-        unit.add_function(function, name, execute_for, dump_for,
+        unit.add_function(function, name, exec_iter, dump_iter,
                           returns, on_root, *args, **kwargs)
         self.executable_units[name] = unit
 
@@ -357,8 +357,8 @@ class ExecutableUnit:
         self.function = None
         self.pipeline = None
         self.result = None
-        self.exec_for = None
-        self.dump_for = None
+        self.exec_iter = None
+        self.dump_iter = None
         self.to_run = None
         self.variables = []
         self.root_pipeline = None
@@ -367,7 +367,7 @@ class ExecutableUnit:
         self.kwargs = dict()
         self.path = None
 
-    def add_function(self, function, name, execute_for=1, dump_for=-1, returns=None, on_root=False, *args, **kwargs):
+    def add_function(self, function, name, exec_iter='%1', dump_iter=-1, returns=None, on_root=False, *args, **kwargs):
         """ Add function as a Executable Unit. """
         returns = returns or []
 
@@ -376,17 +376,18 @@ class ExecutableUnit:
 
         self.name = name
         self.function = function
-        self.exec_for = execute_for
-        self.dump_for = dump_for
+        self.exec_iter = exec_iter
+        self.dump_iter = dump_iter
         self.variables = returns
         self.args = args
         self.kwargs = kwargs
         self.on_root = on_root
 
         self._clear_result()
+        self._process_iterations()
 
     def add_pipeline(self, root_pipeline, name, branch_pipeline=None, variables=None,
-                     execute_for=1, dump_for=-1, run=False, **kwargs):
+                     exec_iter='%1', dump_iter=-1, run=False, **kwargs):
         """ Add pipeline as a Executable Unit """
         variables = variables or []
 
@@ -404,8 +405,8 @@ class ExecutableUnit:
         self.pipeline = pipeline
         self.root_pipeline = root
         self.variables = variables
-        self.exec_for = execute_for
-        self.dump_for = dump_for
+        self.exec_iter = exec_iter
+        self.dump_iter = dump_iter
         self.to_run = run
         self.kwargs = kwargs
 
@@ -414,6 +415,13 @@ class ExecutableUnit:
         self.additional_config = None
 
         self._clear_result()
+        self._process_iterations()
+
+    def _process_iterations(self):
+        if not isinstance(self.exec_iter, list):
+            self.exec_iter = [self.exec_iter]
+        if not isinstance(self.dump_iter, list):
+            self.dump_iter = [self.dump_iter]
 
     def get_copy(self):
         """ Create copy of unit """
@@ -448,6 +456,13 @@ class ExecutableUnit:
         if self.pipeline is not None:
             self.pipeline.reset_iter()
             self.pipeline.run()
+        else:
+            raise TypeError("ExecutableUnit should be pipeline, not a function")
+
+    def reset_iter(self):
+        """ Reset pipeline iterator """
+        if self.pipeline is not None:
+            self.pipeline.reset_iter()
         else:
             raise TypeError("ExecutableUnit should be pipeline, not a function")
 
@@ -517,11 +532,17 @@ class ExecutableUnit:
 
     def action_iteration(self, iteration, n_iters=None, action='execute'):
         """ Returns does Unit should be executed at that iteration """
-        rule = self.exec_for if action == 'execute' else self.dump_for
-        list_rule = isinstance(rule, list) and iteration in rule
-        step_rule = isinstance(rule, int) and rule > 0 and (iteration+1) % rule == 0
+        rule = self.exec_iter if action == 'execute' else self.dump_iter
+        list_rule = [item for item in rule if isinstance(item, int)]
+        step_rule = [int(item[1:]) for item in rule if isinstance(item, str)]
+
+        #list_rule = isinstance(rule, list) and iteration in rule
+        #step_rule = isinstance(rule, int) and rule > 0 and (iteration+1) % rule == 0
+        in_list = iteration in list_rule
+        in_step = sum([(iteration+1) % item == 0 for item in step_rule])
+
         if n_iters is None:
-            return list_rule or step_rule
+            return in_list or in_step
         else:
-            final_rule = isinstance(rule, int) and rule == -1 and iteration+1 == n_iters
-            return list_rule or step_rule or final_rule
+            in_final = -1 in list_rule and iteration+1 == n_iters
+            return in_list or in_step or in_final

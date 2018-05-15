@@ -34,8 +34,8 @@ class Job:
         self.worker_config = worker_config
 
         # for unit in self.executable_units.values():
-        #     unit.exec_for = self.get_iterations(unit.exec_for, self.n_iters)
-        #     unit.dump_for = self.get_iterations(unit.dump_for, self.n_iters)
+        #     unit.exec_iter = self.get_iterations(unit.exec_iter, self.n_iters)
+        #     unit.dump_iter = self.get_iterations(unit.dump_iter, self.n_iters)
 
         for index, config in enumerate(self.configs):
             if isinstance(self.branches, list):
@@ -63,18 +63,6 @@ class Job:
         """ Clear list of stopped experiments for the current iteration """
         self.stopped = [False for _ in range(len(self.experiments))]
 
-    def get_iterations(self, execute_for, n_iters=None):
-        """ Get indices of iterations from execute_for. """
-        if n_iters is not None:
-            if isinstance(execute_for, int):
-                if execute_for == -1:
-                    execute_for = [n_iters - 1]
-                else:
-                    execute_for = list(range(-1, n_iters, execute_for))
-            elif execute_for is None:
-                execute_for = list(range(n_iters))
-        return execute_for
-
     def get_description(self):
         """ Get description of job. """
         if isinstance(self.branches, list):
@@ -90,6 +78,7 @@ class Job:
         if run:
             while True:
                 try:
+                    self.executable_units[name].reset_iter()
                     batch = self.executable_units[name].next_batch_root()
                     exceptions = self._parallel_run(iteration, name, batch)
                 except StopIteration:
@@ -150,7 +139,7 @@ class Job:
         for idx, experiment in enumerate(self.experiments):
             if experiment[name].action_iteration(iteration, self.n_iters) and self.exceptions[idx] is None:
                 res.append(True)
-            elif (self.stopped[idx]) and experiment[name].exec_for == -1:
+            elif (self.stopped[idx]) and -1 in experiment[name].exec_iter:
                 res.append(True)
             else:
                 res.append(False)

@@ -134,17 +134,17 @@ class Distributor:
                             position = self._get_position()
                             progress.n = position
                             progress.refresh()
-                            #if sum(self.answers) == n_jobs * n_iters:
                             if len(self.finished_jobs) == n_jobs:
                                 break
                 else:
                     job_status = [{'i': i, 'done': False, 'iteration': 0} for i in range(n_jobs)]
                     while True:
                         answer = self.results.get()
+                        print(answer)
                         job_status[answer.job].update(done=answer.done, iteration=answer.iteration)
                         if answer.done:
                             self.finished_jobs.append(answer.job)
-                        print(job_status)
+                        # print(job_status)
                         if len(self.finished_jobs) == n_jobs:
                             break
             else:
@@ -341,7 +341,7 @@ class Worker:
                         self.trial, True, [exception]*len(self.job[1].experiments))
         self.feedback_queue.put(signal)
         # feedback_queue.put('done')
-        # queue.task_done()
+        queue.task_done()
 
     @classmethod
     def log_info(cls, *args, **kwargs):

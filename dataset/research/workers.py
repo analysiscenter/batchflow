@@ -33,7 +33,7 @@ class PipelineWorker(Worker):
 
     def _execute_on_root(self, base_unit, iteration):
         _, job = self.job
-        return base_unit.action_iteration(iteration, job.n_iters) or base_unit.exec_for == -1 and job.all_stopped()
+        return base_unit.action_iteration(iteration, job.n_iters) or (-1 in base_unit.exec_iter) and job.all_stopped()
 
     def run_job(self):
         """ Job execution. """
@@ -48,7 +48,7 @@ class PipelineWorker(Worker):
                 if base_unit.root_pipeline is not None:
                     exceptions = job.parallel_execute_for(iteration, unit_name, run=base_unit.to_run)
                 elif base_unit.on_root and self._execute_on_root(base_unit, iteration):
-                    exceptions = [None] * len(job.executable_units)
+                    exceptions = [None] * len(job.experiments)
                     try:
                         base_unit(iteration, job.experiments, *base_unit.args, **base_unit.kwargs)
                     except Exception as e:
@@ -65,7 +65,7 @@ class PipelineWorker(Worker):
                             self.log_info('J {} [{}] I {}: dump {} [{}]'
                                           .format(idx_job, os.getpid(), iteration+1, unit_name, i),
                                           filename=self.logfile)
-                if base_unit.dump_for == -1:
+                if (-1 in base_unit.dump_iter):
                     for i, experiment in enumerate(job.experiments):
                         if job.stopped[i]:
                             experiment[unit_name].dump_result(iteration+1, unit_name)
