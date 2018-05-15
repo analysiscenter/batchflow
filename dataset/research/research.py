@@ -80,7 +80,8 @@ class Research:
         self.executable_units[name] = unit
         return self
 
-    def function(self, function, returns=None, name=None, execute='%1', dump=-1, on_root=False, logging=False, *args, **kwargs):
+    def function(self, function, returns=None, name=None, execute='%1', dump=-1,
+                 on_root=False, logging=False, *args, **kwargs):
         """ Add function to research.
 
         Parameters
@@ -374,7 +375,8 @@ class ExecutableUnit:
         self.kwargs = dict()
         self.path = None
 
-    def add_function(self, function, name, execute='%1', dump=-1, returns=None, on_root=False, logging=False, *args, **kwargs):
+    def add_function(self, function, name, execute='%1', dump=-1, returns=None,
+                     on_root=False, logging=False, *args, **kwargs):
         """ Add function as a Executable Unit. """
         returns = returns or []
 
@@ -392,7 +394,7 @@ class ExecutableUnit:
         self.logging = logging
 
         self.action = {
-            'type': 'function', 
+            'type': 'function',
             'name': name,
             'on_root': on_root
         }

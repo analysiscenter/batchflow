@@ -49,32 +49,35 @@ class PipelineWorker(Worker):
                                                                      # be exuted for that iteration and dict else
                 # execute units
                 messages = []
-                exceptions = [None] * len(job.experiments) 
+                exceptions = [None] * len(job.experiments)
                 if base_unit.root_pipeline is not None:
                     if sum([item is not None for item in exec_actions]) > 0:
-                        for i in range(len(exec_actions)):
-                            if exec_actions[i] is not None:
-                                messages.append("J {} [{}] I {}: execute '{}' [{}]".format(idx_job, os.getpid(), iteration+1, unit_name, i))
+                        for i, action in enumerate(exec_actions):
+                            if action is not None:
+                                messages.append("J {} [{}] I {}: execute '{}' [{}]"
+                                                .format(idx_job, os.getpid(), iteration+1, unit_name, i))
                         exceptions = job.parallel_execute_for(iteration, unit_name, exec_actions)
                 elif base_unit.on_root and self._execute_on_root(base_unit, iteration):
                     try:
-                        for i in range(len(exec_actions)):
-                            if exec_actions[i] is not None:
-                                messages.append("J {} [{}] I {}: on root '{}' [{}]".format(idx_job, os.getpid(), iteration+1, unit_name, i))
+                        for i, action in enumerate(exec_actions):
+                            if action is not None:
+                                messages.append("J {} [{}] I {}: on root '{}' [{}]"
+                                                .format(idx_job, os.getpid(), iteration+1, unit_name, i))
                         base_unit(iteration, job.experiments, *base_unit.args, **base_unit.kwargs)
-                        message = 'J {} [{}] I {}: on_root {} [{}]'.format(idx_job, os.getpid(), iteration+1, unit_name, i)
                     except Exception as e:
                         exceptions = [e] * len(job.experiments)
                 else:
-                    for i in range(len(exec_actions)):
-                        if exec_actions[i] is not None:
-                            messages.append("J {} [{}] I {}: execute '{}' [{}]".format(idx_job, os.getpid(), iteration+1, unit_name, i))
+                    for i, action in enumerate(exec_actions):
+                        if action is not None:
+                            messages.append("J {} [{}] I {}: execute '{}' [{}]"
+                                            .format(idx_job, os.getpid(), iteration+1, unit_name, i))
                     exceptions = job.parallel_call(iteration, unit_name, exec_actions)
 
                 # select units that raise StopIteration on that iterartion
                 for i, exception in enumerate(exceptions):
                     if exception is not None:
-                        message = "J {} [{}] I {}: '{}' [{}]: exception {}".format(idx_job, os.getpid(), iteration+1, unit_name, i, exception)
+                        message = "J {} [{}] I {}: '{}' [{}]: exception {}"
+                                  .format(idx_job, os.getpid(), iteration+1, unit_name, i, exception)
                         self.log_info(message, filename=self.logfile)
                     if isinstance(exception, StopIteration):
                         job.stopped[i] = True
@@ -83,14 +86,16 @@ class PipelineWorker(Worker):
                 dump_actions = job.get_actions(iteration, unit_name, action='dump')
                 for i, experiment in enumerate(job.experiments):
                     if dump_actions[i] is not None:
-                        messages.append("J {} [{}] I {}: dump '{}' [{}]".format(idx_job, os.getpid(), iteration+1, unit_name, i))
+                        messages.append("J {} [{}] I {}: dump '{}' [{}]"
+                                        .format(idx_job, os.getpid(), iteration+1, unit_name, i))
                         experiment[unit_name].dump_result(iteration+1, unit_name)
 
                 if base_unit.logging:
                     for message in messages:
                         self.log_info(message, filename=self.logfile)
                 job.update_exceptions(exceptions)
-                signal = Signal(self.worker, idx_job, iteration, job.n_iters, self.trial, False, job.exceptions, exec_actions, dump_actions)
+                signal = Signal(self.worker, idx_job, iteration, job.n_iters, self.trial,
+                                False, job.exceptions, exec_actions, dump_actions)
                 self.feedback_queue.put(signal)
             iteration += 1
             self.finished_iterations = iteration

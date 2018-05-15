@@ -112,6 +112,7 @@ class Job:
     @inbatch_parallel(init='_parallel_init_call', post='_parallel_post')
     def parallel_call(self, item, execute, iteration, name, actions):
         """ Parallel call of the unit 'name' """
+        _ = actions
         if execute is not None:
             item[name](iteration, item, *item[name].args, **item[name].kwargs)
 
