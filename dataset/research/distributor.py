@@ -158,7 +158,6 @@ class Distributor:
         if answer.done:
             self.finished_jobs.append(answer.job)
         if fixed_iterations:
-            # print("{} Job {}: {}".format(worker, job, state))
             if answer.done:
                 self.answers[answer.job] = answer.n_iters
             else:
@@ -299,15 +298,12 @@ class Worker:
                 except Exception as exception:
                     self.log_error(exception, filename=self.errorfile)
                     default_signal.exception = exception
-                    #print("Worker put:", default_signal)
                     results.put(default_signal)
                 if default_signal.done:
-                    #print("Worker put:", default_signal)
                     results.put(default_signal)
                 else:
                     default_signal.exception = RuntimeError('Job {} [{}] failed {} times in {}'
                                                             .format(job[0], pid, self.trials, self.name))
-                    #print("Worker put:", default_signal)
                     results.put(default_signal)
                 queue.task_done()
                 job = queue.get()
@@ -339,7 +335,6 @@ class Worker:
         signal = Signal(self.worker, self.job[0], self.finished_iterations, self.job[1].n_iters,
                         self.trial, True, [exception]*len(self.job[1].experiments))
         self.feedback_queue.put(signal)
-        # feedback_queue.put('done')
         queue.task_done()
 
     @classmethod
