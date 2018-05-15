@@ -73,7 +73,7 @@ class PipelineWorker(Worker):
                                             .format(idx_job, os.getpid(), iteration+1, unit_name, i))
                     exceptions = job.parallel_call(iteration, unit_name, exec_actions)
 
-                # select units that raise StopIteration on that iterartion
+                # select units that raise exceptions on that iterartion
                 for i, exception in enumerate(exceptions):
                     if exception is not None:
                         message = ("J {} [{}] I {}: '{}' [{}]: exception {}"
