@@ -20,23 +20,14 @@ Define model config. All parameters that we want to vary we define as ``C('param
 
 .. code-block:: python
 
-    model_config = {
-        'inputs/images': {
-            'shape': (28, 28, 1),
-            'type': 'float32',
-            'name': 'reshaped_images'
-        },
-        'inputs/labels': {
-            'classes': 10,
-            'type': 'int32',
-            'transform': 'ohe',
-            'name': 'targets'
-        },
+    model_config={
+        'session/config': tf.ConfigProto(allow_soft_placement=True),
+        'inputs': dict(images={'shape': (28, 28, 1)},
+                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
         'input_block/inputs': 'images',
-        'output/ops': ['accuracy'],
-        'loss': 'ce',
-        'optimizer': 'Adam',
-        'model_config/body/block/layout': C('layout')
+        'body/block/layout': C('layout'),
+        'output/ops': 'accuracy',
+        'device': C('device') # it's technical parameter for TFModel
     }
 
 Strictly saying, the whole ``model_config`` with different ``'model_config/body/block/layout'`` is a pipeline parameter but due to a substitution rule of named expressions you can define named expression inside of `dict` or `Config` that is used as action parameter (See :doc:`Named expressions <../intro/named_expr>`).
@@ -50,12 +41,12 @@ Define dataset and train pipeline:
     feed_dict = {'images': B('images'),
                  'labels': B('labels')}
 
-    vgg7_train = (mnist.train.p
-                  .init_variable('loss', init_on_each_run=list)
-                  .init_model('dynamic', C('model_class'), 'model', model_config)
-                  .train_model('model', feed_dict=feed_dict, fetches='loss', save_to=V('loss'), mode='w')
-                  .run(batch_size=32, shuffle=True, n_epochs=None, lazy=True)
-                 )
+    train_ppl = (mnist.train.p
+                 .init_variable('loss', init_on_each_run=list)
+                 .init_model('dynamic', C('model_class'), 'model', model_config)
+                 .train_model('model', feed_dict=feed_dict, fetches='loss', save_to=V('loss'), mode='w')
+                 .run(batch_size=32, shuffle=True, n_epochs=None, lazy=True)
+                )
 
 Action parameters that we want to vary we define as ``C('model_class')``. Note that to specify parameters of batch generating
 ``run`` action must be defined with ``lazy=True``.
@@ -65,7 +56,7 @@ Create an instance of `Research` class and add train pipeline:
 .. code-block:: python
 
     research = Research()
-    research.add_pipeline(vgg7_train, variables='loss', name='train')
+    research.pipeline(train_ppl, variables='loss', name='train')
 
 Parameter ``name`` defines pipeline name inside ``research``. At each iteration that pipeline will be executed with ``.next_batch()`` and all ``variables`` from the pipeline will be saved so that variables must be added with ``mode='w'``.
 
@@ -75,37 +66,74 @@ Create a grid of parameters and add to ``research``:
 .. code-block:: python
 
     grid_config = {'model_class': [VGG7, VGG16], 'layout': ['cna', 'can']}
-    research.add_grid_config(grid_config)
+    research.grid(grid_config)
+
+You can get all variants of config:
+
+.. code-block:: python
+    >> configs = list(grid.gen_configs())
+
+    [ConfigAlias({'layout': 'cna', 'model': 'VGG7'}),
+     ConfigAlias({'layout': 'cna', 'model': 'VGG16'}),
+     ConfigAlias({'layout': 'can', 'model': 'VGG7'}),
+     ConfigAlias({'layout': 'can', 'model': 'VGG16'})]
+
+Each element is a ConfigAlias. It's a Config dict of parameter values and dict with aliases for parameter values.
 
 In order to control test accuracy we create test pipeline and add it to ``research``:
 
 .. code-block:: python
 
-    vgg7_test = (mnist.test.p
+    test_ppl = (mnist.test.p
              .init_variable('accuracy', init_on_each_run=list)
              .import_model('model', C('import_model_from'))
              .predict_model('model', feed_dict=feed_dict, fetches='output_accuracy', save_to=V('accuracy'), mode='a')
              .run(batch_size=100, shuffle=True, n_epochs=1, lazy=True)
             )
 
-    research.add_pipeline(vgg7_test, variables='accuracy', name='test', run=True, exec_for=100, import_model_from='train')
+    research.pipeline(test_ppl, variables='accuracy', name='test', run=True, execute='%100', import_model_from='train')
 
-That pipeline will be executed with ``.run()`` at each 100 iterations because of parameters ``run=True``  and ``exec_for=100``. Pipeline variable ``accuracy`` will be saved after each execution. In order to add a mean value of accuracy on test dataset, you can define a function
+That pipeline will be executed with ``.run()`` each 100 iterations because of parameters ``run=True``  and ``execute=100``. Pipeline variable ``accuracy`` will be saved after each execution. In order to add a mean value of accuracy on test dataset, you can define a function
 
 .. code-block:: python
 
-    def accuracy(pipeline):
+    def get_accuracy(iteration, experiment, pipeline):
         import numpy as np
+        pipeline = experiment[pipeline].pipeline
         acc = pipeline.get_variable('accuracy')
-        return {'mean_accuracy': np.mean(acc)}
+        return np.mean(acc)
 
-and then add test pipeline as
+and then add it into research:
 
 .. code-block:: python
 
-    research.add_pipeline(vgg7_test, variables='accuracy', name='test', run=True, exec_for=100, post_run=accuracy, import_model_from='train')
+    research.function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
 
-``post_run`` function must get pipeline as a parameter and return dict. That function will be executed for pipeline after each run and result will be saved.
+That function will get iterartion, experiment and kwargs (in that case it's pipeline='test'").
+
+Experiment is an OrderedDict for all pipelines and functions that were added to Research and are running in current job. Key is a name of ExecutableUnit (class for function and pipeline), value is ExecutableUnit. Each pipeline and function added to Research is saved as an ExecutableUnit. Each ExecutableUnit has the following attributes:
+
+.. code-block:: python
+
+    function : callable
+        is None if ExecutableUnit is a pipeline
+    pipeline : Pipeline
+        is None if ExecutableUnit is a function
+    root_pipeline : Pipeline
+        is None if ExecutableUnit is a function or pipeline is not divided into root and branch
+    result : dict
+        current results of the ExecutableUnit. Keys are names of variables (for pipeline)
+        or returns (for function) values are lists of variable values
+    path : str
+        path to the folder where results will be dumped
+    exec_for : int, list of ints or None
+    dump_for : int, list of ints or None
+    to_run : bool
+    variables : list
+        variables (for pipeline) or returns (for function)
+    on_root : bool
+    args : list
+    kwargs : dict()
 
 
 Note that we use ``C('import_model_from')`` in ``import_model`` action and add test pipeline with parameter ``import_model_from='train'``.
@@ -117,60 +145,77 @@ Method ``run`` starts computations:
 
     research.run(n_reps=10, n_iters=1000, name='my_research', progress_bar=True)
 
-All results will be saved as ``my_research/{config_alias}/{index_of_repetition}/{pipeline_name}_final`` as dict where keys are variable names and values are lists of corresponding values. 
+All results will be saved as ``{research_name}/results/{config_alias}/{repetition_index}/{unitname}_{iteration}`` as pickled dict (by dill) where keys are variable names and values are lists of corresponding values. 
 
 Parallel runnings
 -----------------
 
-Method ``run`` of ``Research`` has some additional parameters to allow run pipelines with different configs in parallel.
-The first one is ``n_workers``. If you want to run pipelines in two different processes, run the following command:
+If you have a lot of gpus (say, 4) you can do research much more faster, just define ``workers=4`` and ``gpu = [0, 1, 2, 3]`` as a list of available devices. In that case you can run 4 jobs in parallel!
 
 .. code-block:: python
 
-    research.run(n_reps=10, n_iters=1000, n_workers=2, name='my_research'))
+    research.run(n_reps=10, n_iters=1000, workers=4, gpu=[0,1,2,3], name='my_research', progress_bar=True)
 
-Moreover, you can specify workers and define as ``n_workers`` as a list of dicts or Configs. Each worker will add the corresponding element of the list to pipeline config:
-
-.. code-block:: python
-
-    n_workers = [Config(model_config=dict(session=dict(config=tf.ConfigProto(gpu_options=tf.GPUOptions(visible_device_list=str(i)))))) for i in range(2)]
-    research.run(n_reps=10, n_iters=1000, n_workers=n_workers, name='my_research'))
-
-In that case, two workers will run pipelines in different processes on different GPU.
+In that case, two workers will execute tasks in different processes on different GPU.
 
 Another way of parallel running
 --------------------------------
 
-If you have a heavy preprocessing you can use one prepared batch for few pipelines with different configs. In that case, you must define ``root_pipeline`` that contains common actions without variable parameters:
+If you have heavy loading you can do it just one time for few pipelines with models. In that case devide pipelines into root and branch:
 
 .. code-block:: python
 
-    train_root = mnist.train.p.run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True) 
-
-and ``branch_pipeline`` that will use prepared batch from ``root_pipeline`` and can contain variable parameters:
-
-.. code-block:: python
+    mnist = MNIST()
+    train_root = mnist.train.p.run(BATCH_SIZE, shuffle=True, n_epochs=None, lazy=True)
 
     train_branch = (Pipeline()
-            .init_variable('loss', init_on_each_run=list)
-            .init_variable('accuracy', init_on_each_run=list)
-            .init_model('dynamic', ResNet18, 'conv', config=model_config)
-            .train_model('conv', 
-                         fetches=['loss', 'output_accuracy'], 
-                         feed_dict={'images': B('images'), 'labels': B('labels')},
-                         save_to=[V('loss'), V('accuracy')], mode='w')
+                .init_variable('loss', init_on_each_run=list)
+                .init_variable('accuracy', init_on_each_run=list)
+                .init_model('dynamic', C('model'), 'conv', config=model_config)
+                .to_array()
+                .train_model('conv', 
+                             fetches=['loss', 'output_accuracy'], 
+                             feed_dict={'images': B('images'), 'labels': B('labels')},
+                             save_to=[V('loss'), V('accuracy')], mode='w')
+    )
 
-    research.add_pipeline(train_root, train_branch, variables=['loss', 'accuracy'], name='train')
 
+Then define research in the following way:
 
-In order to specify number of branches define ``n_branches`` parameter:
-    
 .. code-block:: python
 
-    mr.run(n_reps=1, n_iters=1000, n_branches=2, name='branches', progress_bar=True)
+    research = (Research()
+        .pipeline(root_pipeline=train_root, branch_pipeline=train_branch, variables='loss', name='train')
+        .pipeline(test_ppl, variables='accuracy', name='test', run=True, execute='%100', import_model_from='train')
+        .grid(grid)
+        .function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
+    )
 
-As ``n_workers`` parameter you can define ``n_branches`` as a list of dicts or Configs that will be appended to corresponding branches.
+And now you can define the number of branches in each worker:
 
+.. code-block:: python
+    
+    research.run(n_reps=2, n_iters=1000, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', progress_bar=True)
+
+
+Dumping of results and logging
+--------------------------------
+
+By default if unit has varaibles or returns then results will be dumped at last iteration. But there is unit parameter dump that allows to save result not only in the end. It defines as execute parameter. For example, dump train results each 200 iterations. Besides, each research has log file. In order to add information about unit execution and dumping into log, define ``logging=True``.
+
+.. code-block:: python
+
+    research = (Research()
+        .pipeline(root_pipeline=train_root, branch_pipeline=train_template, variables='loss', name='train', dump='%200')
+        .pipeline(test_ppl,
+                  variables='accuracy', name='test', run=True, execute='%100', import_from='train', logging=True)
+        .grid(grid)
+        .function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
+    )
+
+    research.run(n_reps=2, n_iters=1000, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', progress_bar=True)
+
+First worker will execute two branches on gpu 0 and 1 and the second on the 2 and 3.
 API
 ---
 
