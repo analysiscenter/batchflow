@@ -27,7 +27,7 @@ class Research:
         self.loaded = False
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
-                 execute='%1', dump=-1, run=False, **kwargs):
+                 execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
 
@@ -61,6 +61,8 @@ class Research:
             if test pipeline imports model from the other pipeline with name 'train' in Research,
             corresponding parameter in import_model must be C('import_from') and add_pipeline
             must be called with parameter import_from='train'.
+        logging : bool
+            include execution information to log file
 
         **How to define changing parameters**
 
@@ -74,11 +76,11 @@ class Research:
 
         unit = ExecutableUnit()
         unit.add_pipeline(root_pipeline, name, branch_pipeline, variables,
-                          execute, dump, run, **kwargs)
+                          execute, dump, run, logging, **kwargs)
         self.executable_units[name] = unit
         return self
 
-    def function(self, function, returns=None, name=None, execute='%1', dump=-1, on_root=False, *args, **kwargs):
+    def function(self, function, returns=None, name=None, execute='%1', dump=-1, on_root=False, logging=False, *args, **kwargs):
         """ Add function to research.
 
         Parameters
@@ -92,7 +94,7 @@ class Research:
                 **args, **kwargs
         returns : str, list of str or None
             names for function returns to save into results
-            if None, function will be executed without any dumping
+            if None, function will be executed without any saving results and dumping
         name : str (default None)
             function name inside research. If name is None, pipeline will have name 'func_{index}'
         execute : int, str or list of int or str
@@ -107,6 +109,8 @@ class Research:
             if False, function will be called with parameters (iteration, experiment, *args, **kwargs),
             else with  (iteration, experiments, *args, **kwargs) where experiments is a list of instances
             of Experiment corresponding to all branches
+        logging : bool
+            include execution information to log file
         args, kwargs :
             args and kwargs for the function
 
@@ -143,9 +147,12 @@ class Research:
         if name in self.executable_units:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
+        if on_root and returns is not None:
+            raise ValueError("If function on root, then it mustn't have returns")
+
         unit = ExecutableUnit()
         unit.add_function(function, name, execute, dump,
-                          returns, on_root, *args, **kwargs)
+                          returns, on_root, logging, *args, **kwargs)
         self.executable_units[name] = unit
 
         return self
@@ -367,7 +374,7 @@ class ExecutableUnit:
         self.kwargs = dict()
         self.path = None
 
-    def add_function(self, function, name, execute='%1', dump=-1, returns=None, on_root=False, *args, **kwargs):
+    def add_function(self, function, name, execute='%1', dump=-1, returns=None, on_root=False, logging=False, *args, **kwargs):
         """ Add function as a Executable Unit. """
         returns = returns or []
 
@@ -382,12 +389,19 @@ class ExecutableUnit:
         self.args = args
         self.kwargs = kwargs
         self.on_root = on_root
+        self.logging = logging
+
+        self.action = {
+            'type': 'function', 
+            'name': name,
+            'on_root': on_root
+        }
 
         self._clear_result()
         self._process_iterations()
 
     def add_pipeline(self, root_pipeline, name, branch_pipeline=None, variables=None,
-                     execute='%1', dump=-1, run=False, **kwargs):
+                     execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add pipeline as a Executable Unit """
         variables = variables or []
 
@@ -409,6 +423,14 @@ class ExecutableUnit:
         self.dump = dump
         self.to_run = run
         self.kwargs = kwargs
+        self.logging = logging
+
+        self.action = {
+            'type': 'pipeline',
+            'name': name,
+            'root': root is not None,
+            'run': run
+        }
 
         self.config = None
 
@@ -536,8 +558,6 @@ class ExecutableUnit:
         list_rule = [item for item in rule if isinstance(item, int)]
         step_rule = [int(item[1:]) for item in rule if isinstance(item, str)]
 
-        #list_rule = isinstance(rule, list) and iteration in rule
-        #step_rule = isinstance(rule, int) and rule > 0 and (iteration+1) % rule == 0
         in_list = iteration in list_rule
         in_step = sum([(iteration+1) % item == 0 for item in step_rule])
 

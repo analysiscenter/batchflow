@@ -125,6 +125,7 @@ class Distributor:
             self.answers = [0 for _ in range(n_jobs)]
             self.finished_jobs = []
 
+
             if progress_bar:
                 if n_iters is not None:
                     print("Distributor has {} jobs with {} iterations. Totally: {}"
@@ -137,15 +138,18 @@ class Distributor:
                             if len(self.finished_jobs) == n_jobs:
                                 break
                 else:
-                    job_status = [{'i': i, 'done': False, 'iteration': 0} for i in range(n_jobs)]
-                    while True:
-                        answer = self.results.get()
-                        job_status[answer.job].update(done=answer.done, iteration=answer.iteration)
-                        if answer.done:
-                            self.finished_jobs.append(answer.job)
-                        print(job_status)
-                        if len(self.finished_jobs) == n_jobs:
-                            break
+                    print("Distributor has {} jobs"
+                          .format(n_jobs))
+                    with tqdm(total=n_jobs) as progress:
+                        while True:
+                            answer = self.results.get()
+                            if answer.done:
+                                self.finished_jobs.append(answer.job)
+                            position = len(self.finished_jobs)
+                            progress.n = position
+                            progress.refresh()
+                            if len(self.finished_jobs) == n_jobs:
+                                break
             else:
                 self.queue.join()
         self.log_info('All workers have finished the work', filename=self.logfile)
@@ -349,7 +353,7 @@ class Worker:
 
 class Signal:
     """ Class for feedback from jobs and workers """
-    def __init__(self, worker, job, iteration, n_iters, trial, done, exception):
+    def __init__(self, worker, job, iteration, n_iters, trial, done, exception, exec_actions=None, dump_actions=None):
         self.worker = worker
         self.job = job
         self.iteration = iteration
@@ -357,6 +361,8 @@ class Signal:
         self.trial = trial
         self.done = done
         self.exception = exception
+        self.exec_actions = exec_actions
+        self.dump_actions = dump_actions
 
     def __repr__(self):
         return str(self.__dict__)
