@@ -43,9 +43,13 @@ Define dataset and train pipeline:
 
     train_ppl = (mnist.train.p
                  .init_variable('loss', init_on_each_run=list)
-                 .init_model('dynamic', C('model_class'), 'model', model_config)
-                 .train_model('model', feed_dict=feed_dict, fetches='loss', save_to=V('loss'), mode='w')
-                 .run(batch_size=32, shuffle=True, n_epochs=None, lazy=True)
+                 .init_variable('accuracy', init_on_each_run=list)
+                 .init_model('dynamic', C('model'), 'conv', config=model_config)
+                 .to_array()
+                 .train_model('conv', 
+                              fetches=['loss', 'output_accuracy'], 
+                              feed_dict={'images': B('images'), 'labels': B('labels')},
+                              save_to=[V('loss'), V('accuracy')], mode='w')
                 )
 
 Action parameters that we want to vary we define as ``C('model_class')``. Note that to specify parameters of batch generating
@@ -70,7 +74,7 @@ Create a grid of parameters and add to ``research``:
 
 You can get all variants of config by ``list(grid.gen_configs())``:
 
-.. code-block:: python
+::
 
     [ConfigAlias({'layout': 'cna', 'model': 'VGG7'}),
      ConfigAlias({'layout': 'cna', 'model': 'VGG16'}),
@@ -84,15 +88,18 @@ In order to control test accuracy we create test pipeline and add it to ``resear
 .. code-block:: python
 
     test_ppl = (mnist.test.p
-             .init_variable('accuracy', init_on_each_run=list)
-             .import_model('model', C('import_model_from'))
-             .predict_model('model', feed_dict=feed_dict, fetches='output_accuracy', save_to=V('accuracy'), mode='a')
-             .run(batch_size=100, shuffle=True, n_epochs=1, lazy=True)
-            )
+                .init_variable('accuracy', init_on_each_run=list)
+                .import_model('conv', C('import_from'))
+                .to_array()
+                .predict_model('conv', 
+                               fetches=['output_accuracy'], 
+                               feed_dict={'images': B('images'), 'labels': B('labels')},
+                               save_to=[V('accuracy')], mode='a')
+                )
 
-    research.pipeline(test_ppl, variables='accuracy', name='test', run=True, execute='%100', import_model_from='train')
+    research.pipeline(test_ppl, variables='accuracy', name='test', run=True, execute='%100', import_model='train')
 
-That pipeline will be executed with ``.run()`` each 100 iterations because of parameters ``run=True``  and ``execute=100``. Pipeline variable ``accuracy`` will be saved after each execution. In order to add a mean value of accuracy on test dataset, you can define a function
+That pipeline will be executed with ``.run()`` each 100 iterations because of parameters ``run=True``  and ``execute='%100'``. Pipeline variable ``accuracy`` will be saved after each execution. In order to add a mean value of accuracy on the whole test dataset, you can define a function
 
 .. code-block:: python
 
@@ -108,11 +115,11 @@ and then add it into research:
 
     research.function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
 
-That function will get iterartion, experiment and kwargs (in that case it's pipeline='test'").
+That function will get iteration, experiment, args and kwargs (in that case it's ``pipeline='test'"``).
 
 Experiment is an OrderedDict for all pipelines and functions that were added to Research and are running in current job. Key is a name of ExecutableUnit (class for function and pipeline), value is ExecutableUnit. Each pipeline and function added to Research is saved as an ExecutableUnit. Each ExecutableUnit has the following attributes:
 
-.. code-block:: python
+::
 
     function : callable
         is None if ExecutableUnit is a pipeline
@@ -135,8 +142,8 @@ Experiment is an OrderedDict for all pipelines and functions that were added to 
     kwargs : dict()
 
 
-Note that we use ``C('import_model_from')`` in ``import_model`` action and add test pipeline with parameter ``import_model_from='train'``.
-All ``kwargs`` in ``add_pipeline`` are used to define parameters that depend on another pipeline in the same way.
+Note that we use ``C('import_model')`` in ``import_model`` action and add test pipeline with parameter ``import_model='train'``.
+All ``kwargs`` in ``pipeline`` are used to define parameters that depend on another pipeline in the same way.
 
 Method ``run`` starts computations:
 
@@ -185,7 +192,7 @@ Then define research in the following way:
 
     research = (Research()
         .pipeline(root_pipeline=train_root, branch_pipeline=train_branch, variables='loss', name='train')
-        .pipeline(test_ppl, variables='accuracy', name='test', run=True, execute='%100', import_model_from='train')
+        .pipeline(test_ppl, variables='accuracy', name='test', run=True, execute='%100', import_model='train')
         .grid(grid)
         .function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
     )
@@ -215,6 +222,7 @@ By default if unit has varaibles or returns then results will be dumped at last 
     research.run(n_reps=2, n_iters=1000, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', progress_bar=True)
 
 First worker will execute two branches on gpu 0 and 1 and the second on the 2 and 3.
+
 API
 ---
 
