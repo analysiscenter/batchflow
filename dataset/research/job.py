@@ -34,8 +34,8 @@ class Job:
         self.worker_config = worker_config
 
         # for unit in self.executable_units.values():
-        #     unit.exec_iter = self.get_iterations(unit.exec_iter, self.n_iters)
-        #     unit.dump_iter = self.get_iterations(unit.dump_iter, self.n_iters)
+        #     unit.exec = self.get_iterations(unit.exec, self.n_iters)
+        #     unit.dump = self.get_iterations(unit.dump, self.n_iters)
 
         for index, config in enumerate(self.configs):
             if isinstance(self.branches, list):
@@ -76,9 +76,9 @@ class Job:
     def parallel_execute_for(self, iteration, name, run=False):
         """ Parallel execution of pipeline 'name' """
         if run:
+            self.executable_units[name].reset_root_iter()
             while True:
                 try:
-                    self.executable_units[name].reset_iter()
                     batch = self.executable_units[name].next_batch_root()
                     exceptions = self._parallel_run(iteration, name, batch)
                 except StopIteration:
@@ -139,7 +139,7 @@ class Job:
         for idx, experiment in enumerate(self.experiments):
             if experiment[name].action_iteration(iteration, self.n_iters) and self.exceptions[idx] is None:
                 res.append(True)
-            elif (self.stopped[idx]) and -1 in experiment[name].exec_iter:
+            elif (self.stopped[idx]) and -1 in experiment[name].execute:
                 res.append(True)
             else:
                 res.append(False)

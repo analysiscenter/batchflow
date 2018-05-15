@@ -33,7 +33,7 @@ class PipelineWorker(Worker):
 
     def _execute_on_root(self, base_unit, iteration):
         _, job = self.job
-        return base_unit.action_iteration(iteration, job.n_iters) or (-1 in base_unit.exec_iter) and job.all_stopped()
+        return base_unit.action_iteration(iteration, job.n_iters) or (-1 in base_unit.execute) and job.all_stopped()
 
     def run_job(self):
         """ Job execution. """
@@ -65,7 +65,7 @@ class PipelineWorker(Worker):
                             self.log_info('J {} [{}] I {}: dump {} [{}]'
                                           .format(idx_job, os.getpid(), iteration+1, unit_name, i),
                                           filename=self.logfile)
-                if (-1 in base_unit.dump_iter):
+                if (-1 in base_unit.dump):
                     for i, experiment in enumerate(job.experiments):
                         if job.stopped[i]:
                             experiment[unit_name].dump_result(iteration+1, unit_name)
