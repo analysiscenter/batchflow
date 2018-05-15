@@ -50,6 +50,7 @@ Define dataset and train pipeline:
                               fetches=['loss', 'output_accuracy'], 
                               feed_dict={'images': B('images'), 'labels': B('labels')},
                               save_to=[V('loss'), V('accuracy')], mode='w')
+                 .run(64, shuffle=True, n_epochs=None, lazy=True)
                 )
 
 Action parameters that we want to vary we define as ``C('model_class')``. Note that to specify parameters of batch generating
@@ -95,6 +96,7 @@ In order to control test accuracy we create test pipeline and add it to ``resear
                                fetches=['output_accuracy'], 
                                feed_dict={'images': B('images'), 'labels': B('labels')},
                                save_to=[V('accuracy')], mode='a')
+                .run(64, shuffle=True, n_epochs=1, lazy=True)
                 )
 
     research.pipeline(test_ppl, variables='accuracy', name='test', run=True, execute='%100', import_model='train')
@@ -172,7 +174,7 @@ If you have heavy loading you can do it just one time for few pipelines with mod
 .. code-block:: python
 
     mnist = MNIST()
-    train_root = mnist.train.p.run(BATCH_SIZE, shuffle=True, n_epochs=None, lazy=True)
+    train_root = mnist.train.p.run(64, shuffle=True, n_epochs=None, lazy=True)
 
     train_branch = (Pipeline()
                 .init_variable('loss', init_on_each_run=list)
