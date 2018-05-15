@@ -6,7 +6,7 @@ Research class is intended for multiple running of the same pipelines with diffe
 
 Basic usage
 -----------
-Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class, we train model for 1000 iterations and repeat that process 10 times. 
+Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class, we train model for 1000 iterations and repeat that process 10 times and save accuracy and loss on train and accuracy on test.
 
 Firstly, import classes from `dataset` to create pipelines:
 
@@ -68,10 +68,9 @@ Create a grid of parameters and add to ``research``:
     grid_config = {'model_class': [VGG7, VGG16], 'layout': ['cna', 'can']}
     research.grid(grid_config)
 
-You can get all variants of config:
+You can get all variants of config by ``list(grid.gen_configs())``:
 
 .. code-block:: python
-    >> configs = list(grid.gen_configs())
 
     [ConfigAlias({'layout': 'cna', 'model': 'VGG7'}),
      ConfigAlias({'layout': 'cna', 'model': 'VGG16'}),
