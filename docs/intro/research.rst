@@ -223,6 +223,31 @@ By default if unit has varaibles or returns then results will be dumped at last 
 
 First worker will execute two branches on gpu 0 and 1 and the second on the 2 and 3.
 
+Functions on root
+--------------------------------
+
+All functions and pipelines if branches > 0 executed in parallel threads so sometime it can be a problem. In order to allow run function in main thread there exists parameter on_root. Function that will be added with on_root=True will get iteration, experiments and kwargs. experiments is a list of experiments that was defined above (OrderedDict of ExecutableUnits). Simple example of usage:
+
+.. code-block:: python
+
+    def on_root(iteration, experiments):
+        print("On root", iteration)
+
+    research = (Research()
+        .function(on_root, on_root=True, execute=10, logging=True)
+        .pipeline(root_pipeline=train_root, branch_pipeline=train_template, variables='loss', name='train')
+        .pipeline(root_pipeline=test_root, branch_pipeline=test_template,
+                  variables='accuracy', name='test', run=True, execute='%100', import_from='train', logging=True)
+        .grid(grid)
+        .function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
+    )
+
+That function will be executed just one time on 10 iteration and will be executed one time for all branches in task.
+
+.. code-block:: python
+
+    research.run(n_reps=1, n_iters=100, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', progress_bar=True)
+
 API
 ---
 
