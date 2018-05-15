@@ -65,7 +65,7 @@ class PipelineWorker(Worker):
                             self.log_info('J {} [{}] I {}: dump {} [{}]'
                                           .format(idx_job, os.getpid(), iteration+1, unit_name, i),
                                           filename=self.logfile)
-                if (-1 in base_unit.dump):
+                if -1 in base_unit.dump:
                     for i, experiment in enumerate(job.experiments):
                         if job.stopped[i]:
                             experiment[unit_name].dump_result(iteration+1, unit_name)

@@ -140,11 +140,10 @@ class Distributor:
                     job_status = [{'i': i, 'done': False, 'iteration': 0} for i in range(n_jobs)]
                     while True:
                         answer = self.results.get()
-                        print(answer)
                         job_status[answer.job].update(done=answer.done, iteration=answer.iteration)
                         if answer.done:
                             self.finished_jobs.append(answer.job)
-                        # print(job_status)
+                        print(job_status)
                         if len(self.finished_jobs) == n_jobs:
                             break
             else:

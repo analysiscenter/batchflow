@@ -47,7 +47,8 @@ class Research:
         name : str (default None)
             pipeline name inside research. If name is None, pipeline will have name 'ppl_{index}'
         execute : int, str or list of int or str
-            If -1, pipeline will be executed just at last iteration (if iteration + 1 == n_iters or StopIteration was raised)
+            If -1, pipeline will be executed just at last iteration (if iteration + 1 == n_iters
+            or StopIteration was raised)
             If positive int, pipeline will be excuted for that iteration
             If str, must be '%{step}' where step is int
             If list, must be list of int or str descibed above
@@ -95,7 +96,8 @@ class Research:
         name : str (default None)
             function name inside research. If name is None, pipeline will have name 'func_{index}'
         execute : int, str or list of int or str
-            If -1, function will be executed just at last iteration (if iteration + 1 == n_iters or StopIteration was raised)
+            If -1, function will be executed just at last iteration (if iteration + 1 == n_iters
+            or StopIteration was raised)
             If positive int, function will be excuted for that iteration
             If str, must be '%{step}' where step is int
             If list, must be list of int or str descibed above
