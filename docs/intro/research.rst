@@ -250,6 +250,29 @@ That function will be executed just one time on 10 iteration and will be execute
 
     research.run(n_reps=1, n_iters=100, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', progress_bar=True)
 
+Logfile:
+
+::
+    ...
+    INFO     [2018-05-15 14:19:07,803] J 0 [26082] I 100: dump 'unit_0' [0]
+    INFO     [2018-05-15 14:19:07,803] J 0 [26082] I 100: dump 'unit_0' [1]
+    INFO     [2018-05-15 14:19:08,761] J 1 [26130] I 11: on root 'unit_0' [0]
+    INFO     [2018-05-15 14:19:08,761] J 1 [26130] I 11: on root 'unit_0' [1]
+    INFO     [2018-05-15 14:19:12,050] J 0 [26082] I 100: execute 'test' [0]
+    INFO     [2018-05-15 14:19:12,051] J 0 [26082] I 100: execute 'test' [1]
+    INFO     [2018-05-15 14:19:12,051] J 0 [26082] I 100: dump 'test' [0]
+    INFO     [2018-05-15 14:19:12,051] J 0 [26082] I 100: dump 'test' [1]
+    INFO     [2018-05-15 14:19:12,056] Job 0 [26082] was finished by Worker 0
+    INFO     [2018-05-15 14:19:14,149] J 1 [26130] I 100: dump 'unit_0' [0]
+    INFO     [2018-05-15 14:19:14,149] J 1 [26130] I 100: dump 'unit_0' [1]
+    INFO     [2018-05-15 14:19:18,819] J 1 [26130] I 100: execute 'test' [0]
+    INFO     [2018-05-15 14:19:18,819] J 1 [26130] I 100: execute 'test' [1]
+    INFO     [2018-05-15 14:19:18,820] J 1 [26130] I 100: dump 'test' [0]
+    INFO     [2018-05-15 14:19:18,820] J 1 [26130] I 100: dump 'test' [1]
+    INFO     [2018-05-15 14:19:18,825] Job 1 [26130] was finished by Worker 1
+    INFO     [2018-05-15 14:19:18,837] All workers have finished the work
+    ...
+
 API
 ---
 
