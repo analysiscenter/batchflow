@@ -254,7 +254,23 @@ Logfile:
 
 ::
 
-    ...
+    INFO     [2018-05-15 14:18:32,496] Distributor [id:5176] is preparing workers
+    INFO     [2018-05-15 14:18:32,497] Create queue of jobs
+    INFO     [2018-05-15 14:18:32,511] Run 2 workers
+    INFO     [2018-05-15 14:18:32,608] Start Worker 0 [id:26021] (gpu: [0, 1])
+    INFO     [2018-05-15 14:18:32,709] Start Worker 1 [id:26022] (gpu: [2, 3])
+    INFO     [2018-05-15 14:18:41,722] Worker 0 is creating process for Job 0
+    INFO     [2018-05-15 14:18:49,254] Worker 1 is creating process for Job 1
+    INFO     [2018-05-15 14:18:53,101] Job 0 was started in subprocess [id:26082] by Worker 0
+    INFO     [2018-05-15 14:18:53,118] Job 0 has the following configs:
+    {'layout': 'cna', 'model': 'VGG7'}
+    {'layout': 'cna', 'model': 'VGG16'}
+    INFO     [2018-05-15 14:18:59,267] Job 1 was started in subprocess [id:26130] by Worker 1
+    INFO     [2018-05-15 14:18:59,281] Job 1 has the following configs:
+    {'layout': 'can', 'model': 'VGG7'}
+    {'layout': 'can', 'model': 'VGG16'}
+    INFO     [2018-05-15 14:19:02,415] J 0 [26082] I 11: on root 'unit_0' [0]
+    INFO     [2018-05-15 14:19:02,415] J 0 [26082] I 11: on root 'unit_0' [1]
     INFO     [2018-05-15 14:19:07,803] J 0 [26082] I 100: dump 'unit_0' [0]
     INFO     [2018-05-15 14:19:07,803] J 0 [26082] I 100: dump 'unit_0' [1]
     INFO     [2018-05-15 14:19:08,761] J 1 [26130] I 11: on root 'unit_0' [0]
@@ -272,7 +288,7 @@ Logfile:
     INFO     [2018-05-15 14:19:18,820] J 1 [26130] I 100: dump 'test' [1]
     INFO     [2018-05-15 14:19:18,825] Job 1 [26130] was finished by Worker 1
     INFO     [2018-05-15 14:19:18,837] All workers have finished the work
-    ...
+
 
 API
 ---
