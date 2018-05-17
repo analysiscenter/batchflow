@@ -1,6 +1,3 @@
-#pylint:disable=broad-except
-#pylint:disable=too-few-public-methods
-
 """ Class for research results. """
 
 import os

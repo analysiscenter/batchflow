@@ -1,6 +1,3 @@
-#pylint:disable=broad-except
-#pylint:disable=attribute-defined-outside-init
-
 """ Classes Job and Experiment. """
 
 from collections import OrderedDict

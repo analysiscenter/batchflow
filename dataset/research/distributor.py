@@ -1,11 +1,5 @@
 """ Classes for multiprocess job running. """
 
-#pylint:disable=broad-except
-#pylint:disable=attribute-defined-outside-init
-#pylint:disable=too-many-nested-blocks
-#pylint:disable=import-error
-#pylint:disable=too-many-statements
-
 import os
 import logging
 from queue import Empty

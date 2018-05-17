@@ -1,5 +1,3 @@
-#pylint:disable=too-few-public-methods
-
 """ Options and configs. """
 
 from itertools import product

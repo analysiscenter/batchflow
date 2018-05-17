@@ -1,8 +1,3 @@
-#pylint:disable=no-value-for-parameter
-#pylint:disable=attribute-defined-outside-init
-#pylint:disable=broad-except
-#pylint:disable=too-many-nested-blocks
-
 """ Workers for research. """
 
 import os

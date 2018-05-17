@@ -1,9 +1,3 @@
-#pylint:disable=too-many-instance-attributes
-#pylint:disable=too-few-public-methods
-#pylint:disable=attribute-defined-outside-init
-#pylint:disable=bare-except
-#pylint:disable=no-value-for-parameter
-
 """ Class Research and auxiliary classes for multiple experiments. """
 
 import os
