@@ -17,6 +17,7 @@ build:
     - pip3 install multiprocess
     - pip3 install psutil
     - pylint3 -rn --rcfile pylintrc dataset
+    - pytest -v --junitxml=shippable/testresults/pytests.xml
 
 integrations:
   hub:
