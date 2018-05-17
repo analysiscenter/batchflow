@@ -15,3 +15,4 @@ Classes and capabilities
    models
    tf_models
    tf_layers
+   research

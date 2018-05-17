@@ -39,9 +39,30 @@ class Batch(BaseBatch):
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
         super().__init__(index, *args, **kwargs)
-        self._preloaded = preloaded
         self._preloaded_lock = threading.Lock()
-        self.pipeline = None
+        self._preloaded = preloaded
+        self._local = None
+        self._pipeline = None
+
+    @property
+    def pipeline(self):
+        """: Pipeline - a pipeline the batch is being used in """
+        if self._local is not None and hasattr(self._local, 'pipeline'):
+            return self._local.pipeline
+        else:
+            return self._pipeline
+
+    @pipeline.setter
+    def pipeline(self, val):
+        """ Store pipeline in a thread-local storage """
+        if val is None:
+            self._local = None
+        else:
+            if self._local is None:
+                self._local = threading.local()
+            self._local.pipeline = val
+        self._pipeline = val
+
 
     def deepcopy(self):
         """ Return a deep copy of the batch.

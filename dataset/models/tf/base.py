@@ -356,7 +356,7 @@ class TFModel(BaseModel):
                 an input tensor after transformations
         """
         # pylint:disable=too-many-statements
-        config = self.get('inputs', config)
+        config = config.get('inputs')
 
         names = names or []
         missing_names = set(names) - set(config.keys())
@@ -496,7 +496,7 @@ class TFModel(BaseModel):
         return tensor
 
     def _unpack_fn_from_config(self, param, config=None):
-        par = self.get(param, config)
+        par = config.get(param)
 
         if par is None:
             return None, {}
@@ -1181,7 +1181,7 @@ class TFModel(BaseModel):
     def fill_params(cls, _name, **kwargs):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
-        _config = cls.get(_name, config)
+        _config = config.get(_name)
         config = {**config['common'], **_config, **kwargs}
         return config
 
@@ -1212,13 +1212,7 @@ class TFModel(BaseModel):
 
         config = self.default_config()
 
-        print('config', config)
-        print('---')
-        print('self  ', self.config)
-        for k in self.config:
-            self.put(k, self.config[k], config)
-        print('---')
-        print('conf  ', config)
+        config = config + self.config
 
         if config.get('inputs'):
             with tf.variable_scope('inputs'):
@@ -1226,16 +1220,13 @@ class TFModel(BaseModel):
             inputs = self.get('input_block/inputs', config)
 
             if isinstance(inputs, str):
-                config['common']['data_format'] = self.data_format(inputs)
-                config['input_block']['inputs'] = self.inputs[inputs]
+                config['common/data_format'] = self.data_format(inputs)
+                config['input_block/inputs'] = self.inputs[inputs]
             elif isinstance(inputs, list):
-                config['input_block']['inputs'] = [self.inputs[name] for name in inputs]
+                config['input_block/inputs'] = [self.inputs[name] for name in inputs]
             else:
                 raise ValueError('input_block/inputs should be specified with a name or a list of names.')
 
-        config['body'] = {**config['body'], **self.get('body', self.config, {})}
-        config['head'] = {**config['head'], **self.get('head', self.config, {})}
-        config['output'] = {**config['output'], **self.get('output', self.config, {})}
         return config
 
 

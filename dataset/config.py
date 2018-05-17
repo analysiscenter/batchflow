@@ -1,25 +1,39 @@
 """ Config class"""
 
 class Config:
-    """ Class for configs that can be represented as nested dicts with easy indexing by slashes. """
+    """ Class for configs that can be represented as nested dicts with easy indexing by slashes """
     def __init__(self, config=None, **kwargs):
+        """ Create Config
+
+        Parameters
+        ----------
+        config : dict, Config or None
+            an object to initialize Config
+            if dict, all keys and values slashes will be parsed into nested structure of dicts
+            and the resulting dictionary will be saved into self.config
+            if an instance on Config, config.config will be saved to self.config (not a copy!)
+            if None, empty dictionary will be created
+        kwargs :
+            parameters from kwargs also will be parsed and saved into self.config
+        """
         if config is None:
             self.config = dict()
-        elif isinstance(config, Config):
-            self.config = config.config
         elif isinstance(config, dict):
             self.config = self.parse(config)
-        self.update(**kwargs)
+        else:
+            self.config = config.config
+        for key, value in kwargs.items():
+            self.put(key, value)
 
     def pop(self, variables, config=None, **kwargs):
-        """ Return variables and remove them from config.
+        """ Returns variables and remove them from config
 
         Parameters
         ----------
         variables : str or list of strs
-            names of variables. '/' is used to get value from nested dict.
+            names of variables. '/' is used to get value from nested dict
         config : dict, Config or None
-            if None variables will be getted from self.config.
+            if None, variables will be getted from self.config else from config
 
         Returns
         -------
@@ -31,14 +45,16 @@ class Config:
             return self._get(variables, config, pop=True, **kwargs)
 
     def get(self, variables, config=None, default=None):
-        """ Return variables from config.
+        """ Returns variables from config
 
         Parameters
         ----------
-        variables : str or list of str
+        variables : str or list of str or tuple of str
             names of variables. '/' is used to get value from nested dict.
         config : dict, Config or None
-            if None variables will be getted from self.config.
+            if None variables will be getted from self.config else from config
+        default : masc
+            default value if variable doesn't exist in config
 
         Returns
         -------
@@ -79,7 +95,7 @@ class Config:
                 else:
                     _config = None
                     break
-            if _config:
+            if isinstance(_config, dict):
                 if pop:
                     if has_default:
                         val = _config.pop(var_name, default)
@@ -105,20 +121,22 @@ class Config:
         return ret_vars
 
     def put(self, variable, value, config=None):
-        """ Put a new variable into config.
+        """ Put a new variable into config
 
         Parameters
         ----------
         variable : str
-            variable to add. '/' is used to put value into nested dict.
+            variable to add. '/' is used to put value into nested dict
         value : masc
         config : dict, Config or None
-            if None value will be putted into self.config.
+            if None value will be putted into self.config else from config
         """
         if config is None:
             config = self.config
         elif isinstance(config, Config):
             config = config.config
+        if isinstance(value, dict):
+            value = Config(value)
         variable = variable.strip('/')
         if '/' in variable:
             var = variable.split('/')
@@ -128,17 +146,28 @@ class Config:
             prefix = []
             var_name = variable
 
-        for p in prefix:
+        for i, p in enumerate(prefix):
             if p not in config:
                 config[p] = dict()
-            config = config[p]
-        if var_name in config and isinstance(config[var_name], dict) and isinstance(value, dict):
+            if isinstance(config[p], dict):
+                config = config[p]
+            else:
+                prefix = '/'.join(prefix[:i+1])
+                var_name = '/'.join(prefix[i+1:])
+                break
+        if var_name in config and isinstance(config[var_name], dict) and isinstance(value, Config):
+            config[var_name] = Config(config[var_name])
             config[var_name].update(value)
+            config[var_name] = config[var_name].config
         else:
-            config[var_name] = value
+            if isinstance(value, Config):
+                config[var_name] = value.config
+            else:
+                config[var_name] = value
 
     def parse(self, config):
-        """ Parse flatten config with slashes.
+        """ Parses flatten config with slashes
+
         Parameters
         ----------
         config : dict or Config
@@ -157,11 +186,13 @@ class Config:
         return new_config
 
     def flatten(self, config=None):
-        """ Transform nested dict into flatten dict.
+        """ Transforms nested dict into flatten dict
+
         Parameters
         ----------
         config : dict, Config or None
-            if None self.config will be parsed else config.
+            if None self.config will be parsed else config
+
         Returns
         -------
         new_config : dict
@@ -172,7 +203,9 @@ class Config:
             config = config.config
         new_config = dict()
         for key, value in config.items():
-            if isinstance(value, dict):
+            if isinstance(value, Config):
+                value = value.config
+            if isinstance(value, dict) and len(value) > 0:
                 value = self.flatten(value)
                 for _key, _value in value.items():
                     new_config[key+'/'+_key] = _value
@@ -204,37 +237,73 @@ class Config:
         return len(self.config)
 
     def items(self, flatten=False):
-        """ Return config items. """
+        """ Returns config items
+
+        Parameters
+        ----------
+        flatten : bool
+            if False, keys and values will be getted from first level of nested dict, else from the last
+
+        Returns
+        -------
+            dict_items
+        """
         if flatten:
             return self.flatten().items()
         else:
             return self.config.items()
 
     def keys(self, flatten=False):
-        """ Return config keys. """
+        """ Returns config keys
+
+        Parameters
+        ----------
+        flatten : bool
+            if False, keys will be getted from first level of nested dict, else from the last
+
+        Returns
+        -------
+            dict_keys
+        """
         if flatten:
             return self.flatten().keys()
         else:
             return self.config.keys()
 
     def values(self, flatten=False):
-        """ Return config values. """
+        """ Return config values
+
+        Parameters
+        ----------
+        flatten : bool
+            if False, values will be getted from first level of nested dict, else from the last
+
+        Returns
+        -------
+            dict_values
+        """
         if flatten:
             return self.flatten().values()
         else:
             return self.config.values()
 
     def update(self, other=None, **kwargs):
-        """ Update config with values from other. """
+        """ Update config with values from other
+
+        Parameters
+        ----------
+        other : dict or Config
+
+        kwargs :
+            parameters from kwargs also will be included into the resulting config
+        """
         other = dict() if other is None else other
-        if hasattr(other, 'keys'):
-            for key in other:
-                self[key] = other[key]
+        if isinstance(other, (dict, Config)):
+            for key, value in other.items():
+                self.put(key, value)
         else:
-            for key, value in other:
-                self[key] = value
-        for key, value in kwargs.items():
-            self[key] = value
+            for key, value in kwargs.items():
+                self.put(key, value)
 
     def __iter__(self):
         return iter(self.config)

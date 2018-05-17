@@ -14,6 +14,8 @@ build:
   pre_ci:
     docker pull $DOCKER_ACC/$DOCKER_REPO:$TAG
   ci:
+    - pip3 install multiprocess
+    - pip3 install psutil
     - pylint3 -rn --rcfile pylintrc dataset
 
 integrations:
