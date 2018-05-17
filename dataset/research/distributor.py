@@ -100,7 +100,7 @@ class Distributor:
             self.log_info('Create queue of jobs', filename=self.logfile)
             self.queue = self._jobs_to_queue(jobs)
             self.results = mp.JoinableQueue()
-        except Exception as exception:
+        except Exception as exception: #pylint:disable=broad-except
             logging.error(exception, exc_info=True)
         else:
             if len(workers) > 1:
@@ -113,7 +113,7 @@ class Distributor:
                 worker.log_error = self.log_error
                 try:
                     mp.Process(target=worker, args=(self.queue, self.results)).start()
-                except Exception as exception:
+                except Exception as exception: #pylint:disable=broad-except
                     logging.error(exception, exc_info=True)
 
             self.answers = [0 for _ in range(n_jobs)]
@@ -193,6 +193,16 @@ class Worker:
         self.gpu = gpu
         self.timeout = timeout
         self.trials = trials
+        self.gpu_configs = None
+        self.finished_iterations = None
+        self.queue = None
+        self.feedback_queue = None
+        self.trial = 3
+        self.worker = None
+        self.results = None
+        self.logfile = None
+        self.errorfile = None
+        self.answers = None
 
         if isinstance(worker_name, int):
             self.name = "Worker " + str(worker_name)
@@ -251,7 +261,7 @@ class Worker:
 
         try:
             job = queue.get()
-        except Exception as exception:
+        except Exception as exception: #pylint:disable=broad-except
             self.log_error(exception, filename=self.errorfile)
         else:
             while job is not None:
@@ -293,7 +303,7 @@ class Worker:
                                 silence = 0
                         if finished:
                             break
-                except Exception as exception:
+                except Exception as exception: #pylint:disable=broad-except
                     self.log_error(exception, filename=self.errorfile)
                     default_signal.exception = exception
                     results.put(default_signal)
@@ -325,7 +335,7 @@ class Worker:
             self.init()
             self.run_job()
             self.post()
-        except Exception as e:
+        except Exception as e: #pylint:disable=broad-except
             exception = e
             self.log_error(exception, filename=self.errorfile)
         self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.name),

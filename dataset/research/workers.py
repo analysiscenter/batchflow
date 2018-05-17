@@ -37,7 +37,7 @@ class PipelineWorker(Worker):
         iteration = 0
         self.finished_iterations = iteration
 
-        while (job.n_iters is None or iteration < job.n_iters) and job.alive_experiments() > 0:
+        while (job.n_iters is None or iteration < job.n_iters) and job.alive_experiments() > 0: #pylint:disable=too-many-nested-blocks
             job.clear_stopped()
             for unit_name, base_unit in job.executable_units.items():
                 exec_actions = job.get_actions(iteration, unit_name) # for each experiment is None if experiment mustn't
@@ -59,7 +59,7 @@ class PipelineWorker(Worker):
                                 messages.append("J {} [{}] I {}: on root '{}' [{}]"
                                                 .format(idx_job, os.getpid(), iteration+1, unit_name, i))
                         base_unit(iteration, job.experiments, *base_unit.args, **base_unit.kwargs)
-                    except Exception as e:
+                    except Exception as e: #pylint:disable=broad-except
                         exceptions = [e] * len(job.experiments)
                 else:
                     for i, action in enumerate(exec_actions):

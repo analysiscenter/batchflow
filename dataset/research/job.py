@@ -21,6 +21,7 @@ class Job:
         self.repetition = repetition
         self.branches = branches
         self.name = name
+        self.worker_config = {}
 
         self.exceptions = []
         self.stopped = []

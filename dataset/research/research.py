@@ -19,6 +19,25 @@ class Research:
     def __init__(self):
         self.executable_units = OrderedDict()
         self.loaded = False
+        self.branches = 1
+        self.trails = 3
+        self.workers = 1
+        self.progress_bar = False
+        self.initial_name = 'research'
+        self.n_reps = 1
+        self.name = 'research'
+        self.worker_class = PipelineWorker
+        self.gpu = None
+        self.n_jobs = None
+        self.jobs = None
+        self.grid_config = None
+        self.n_iters = None
+        self.timeout = 5
+        self.config = None
+        self.action = None
+        self.logging = None
+        self.additional_config = None
+        self.name = None
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
                  execute='%1', dump=-1, run=False, logging=False, **kwargs):
