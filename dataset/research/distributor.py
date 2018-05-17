@@ -23,9 +23,11 @@ class Distributor:
         self.timeout = timeout
         self.trials = trials
         self.logfile = None
+        self.errorfile = None
         self.results = None
         self.finished_jobs = None
         self.answers = None
+        self.queue = None
 
     def _jobs_to_queue(self, jobs):
         queue = mp.JoinableQueue()

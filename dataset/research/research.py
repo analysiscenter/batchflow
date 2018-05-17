@@ -33,11 +33,6 @@ class Research:
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
-        self.config = None
-        self.action = None
-        self.logging = None
-        self.additional_config = None
-        self.name = None
 
     def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
                  execute='%1', dump=-1, run=False, logging=False, **kwargs):
@@ -377,6 +372,7 @@ class ExecutableUnit:
     def __init__(self):
         self.function = None
         self.pipeline = None
+        self.name = None
         self.result = None
         self.execute = None
         self.dump = None
@@ -387,6 +383,10 @@ class ExecutableUnit:
         self.args = []
         self.kwargs = dict()
         self.path = None
+        self.config = None
+        self.logging = None
+        self.additional_config = None
+        self.action = None
 
     def add_function(self, function, name, execute='%1', dump=-1, returns=None,
                      on_root=False, logging=False, *args, **kwargs):
