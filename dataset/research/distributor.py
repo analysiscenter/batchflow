@@ -22,6 +22,10 @@ class Distributor:
         self.gpu = gpu
         self.timeout = timeout
         self.trials = trials
+        self.logfile = None
+        self.results = None
+        self.finished_jobs = None
+        self.answers = None
 
     def _jobs_to_queue(self, jobs):
         queue = mp.JoinableQueue()
@@ -199,10 +203,6 @@ class Worker:
         self.feedback_queue = None
         self.trial = 3
         self.worker = None
-        self.results = None
-        self.logfile = None
-        self.errorfile = None
-        self.answers = None
 
         if isinstance(worker_name, int):
             self.name = "Worker " + str(worker_name)

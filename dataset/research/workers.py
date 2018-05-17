@@ -37,7 +37,7 @@ class PipelineWorker(Worker):
         iteration = 0
         self.finished_iterations = iteration
 
-        while (job.n_iters is None or iteration < job.n_iters) and job.alive_experiments() > 0: #pylint:disable=too-many-nested-blocks
+        while (job.n_iters is None or iteration < job.n_iters) and job.alive_experiments() > 0:
             job.clear_stopped()
             for unit_name, base_unit in job.executable_units.items():
                 exec_actions = job.get_actions(iteration, unit_name) # for each experiment is None if experiment mustn't
