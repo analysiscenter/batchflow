@@ -240,8 +240,8 @@ class Research:
             all gpu devices available for the research. Must be of length 1 or be divisible
             by the number of workers. If is divisible by the number of workers then
             `length / n_workers` must be 1 or be divisible by the number of branches. If you want to use different
-            devices in branches, use expression `C('device')`. For example, for :class:`~.TFModel` add `device=C('device')`
-            to model config.
+            devices in branches, use expression `C('device')`.
+            For example, for :class:`~.TFModel` add `device=C('device')` to model config.
             if None, default gpu configuration will be used
         timeout : int
             each job will be killed if it doesn't answer more then that time in minutes
@@ -250,7 +250,7 @@ class Research:
 
 
         **How does it work**
-        
+
         At each iteration all pipelines and functions will be executed in the order in which were added.
         """
         if not self.loaded:
