@@ -51,7 +51,7 @@ class Distributor:
 
     def _get_worker_gpu(self, n_workers, index):
         if len(self.gpu) == 1:
-            return [0]
+            return [self.gpu[0]]
         else:
             length = len(self.gpu) // n_workers
             start = index * length
