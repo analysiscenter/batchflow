@@ -345,7 +345,7 @@ class Research:
             return res
 
 class ExecutableUnit:
-    """ Function or pipeline.
+    """ Function or pipeline
 
     **Attributes**
 

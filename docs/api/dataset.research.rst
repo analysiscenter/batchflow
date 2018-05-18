@@ -4,36 +4,31 @@ dataset.research
 
 
 Research
------
+--------
 
 .. autoclass:: dataset.research.Research
     :members:
     :undoc-members:
-    :show-inheritance:
+    :member-order: bysource
 
 ExecutableUnit
------
+--------------
 
 .. autoclass:: dataset.research.research.ExecutableUnit
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 Grid
---------
+----
 
 .. autoclass:: dataset.research.Grid
     :members:
     :undoc-members:
-    :show-inheritance:
 
 Option
---------
+------
 
 .. autoclass:: dataset.research.Option
     :members:
     :undoc-members:
-    :show-inheritance:
 
 KV
 -------
@@ -41,12 +36,10 @@ KV
 .. autoclass:: dataset.research.KV
     :members:
     :undoc-members:
-    :show-inheritance:
 
 ConfigAlias
---------
+-----------
 
 .. autoclass:: dataset.research.ConfigAlias
     :members:
     :undoc-members:
-    :show-inheritance:

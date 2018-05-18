@@ -45,7 +45,6 @@ class Option:
     ----------
     parameter : KV or obj
 
-
     values : list of KV or lis of obj
     """
     def __init__(self, parameter, values):
