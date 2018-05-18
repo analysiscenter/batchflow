@@ -8,15 +8,16 @@ import collections
 from ..config import Config
 
 class KV:
-    """ Class for value and alias. """
+    """ Class for value and alias
+    
+    Parameters
+    ----------
+    value : obj
+
+    alias : obj
+        if None alias will be equal to value.
+    """
     def __init__(self, value, alias=None):
-        """
-        Parameters
-        ----------
-        value : obj
-        alias : obj
-            if None alias will be equal to value.
-        """
         if isinstance(value, KV):
             self.value = value.value
             self.alias = value.alias
@@ -37,28 +38,31 @@ class KV:
             return str(value)
 
 class Option:
-    """ Class for single-parameter option. """
+    """ Class for single-parameter option. There is an algebra of options (see :class:`~.Grid` operations)
+    Result is a `Grid`.
+
+    Parameters
+    ----------
+    parameter : KV or obj
+        
+
+    values : list of KV or lis of obj
+    """
     def __init__(self, parameter, values):
-        """
-        Parameters
-        ----------
-        parameter : KV or obj
-        values : list of KV or obj
-        """
         self.parameter = KV(parameter)
         self.values = [KV(value) for value in values]
 
     def alias(self):
-        """ Returns alias of the Option. """
+        """ Returns alias of the Option """
         return {self.parameter.alias: [value.alias for value in self.values]}
 
     def option(self):
-        """ Returns config. """
+        """ Returns config """
         return {self.parameter.value: [value.value for value in self.values]}
 
     @classmethod
     def product(cls, *args):
-        """ Element-wise product of options. """
+        """ Element-wise product of options """
         lens = [len(item.values) for item in args]
         if len(set(lens)) != 1:
             raise ValueError('Options must be of the same length.')
@@ -78,7 +82,7 @@ class Option:
         return Grid(self) + Grid(other)
 
     def gen_configs(self, n_items=None):
-        """ Returns Configs created from the option. """
+        """ Returns Configs created from the option """
         grid = Grid(self)
         return grid.gen_configs(n_items)
 
@@ -110,12 +114,12 @@ class ConfigAlias:
         return 'ConfigAlias(' + str(self.alias()) + ')'
 
 class Grid:
-    """ Class for grid of parameters. """
+    """ Class for grid of parameters """
     def __init__(self, grid=None, **kwargs):
         """
         Parameters
         ----------
-        grid: Option, Grid or list of lists of Options
+        grid : Option, Grid or list of lists of Options
         """
         if isinstance(grid, Option):
             self.grid = [[grid]]
@@ -199,12 +203,18 @@ class Grid:
     def __eq__(self, other):
         return self.grid() == other.grid()
 
-    def gen_configs(self, n_items=None):
-        """ Generate Configs from grid. """
+    def gen_configs(self, n_items=1):
+        """ Generate Configs from grid
+
+        Parameters
+        ----------
+        n_items : int
+            how much configs return on each iteration
+        """
         for item in self.grid:
             keys = [option.parameter for option in item]
             values = [option.values for option in item]
-            if n_items is None:
+            if n_items == 1:
                 for parameters in product(*values):
                     yield ConfigAlias(list(zip(keys, parameters)))
             else:
