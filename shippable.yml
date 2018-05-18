@@ -15,6 +15,8 @@ build:
     docker pull $DOCKER_ACC/$DOCKER_REPO:$TAG
   ci:
     - >
+      pip3 install multiprocess &&
+      pip3 install psutil &&
       pip3 install sphinx &&
       git checkout --orphan gh-pages &&
       rm -rf * &&
