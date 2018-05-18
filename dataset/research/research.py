@@ -371,7 +371,7 @@ class ExecutableUnit:
         is None if `ExecutableUnit` is a pipeline
     pipeline : Pipeline
         is None if `ExecutableUnit` is a function
-    root : Pipeline
+    root_pipeline : Pipeline
         is None if `ExecutableUnit` is a function or pipeline is not divided into root and branch
     result : dict
         current results of the `ExecutableUnit`. Keys are names of variables (for pipeline)
