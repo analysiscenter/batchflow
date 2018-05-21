@@ -119,7 +119,7 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
                     _ = self
                     return added_func(*args, **kwargs)
                 return _method
-            method_name = ''.join((prefix, 'sp_', func_name, suffix))
+            method_name = ''.join((prefix, func_name, suffix))
             added_method = _method_decorator()
             setattr(cls, method_name, added_method)
         return cls
@@ -256,8 +256,8 @@ class BaseImagesBatch(Batch):
 @transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
 @transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
 @add_methods(transformations={**get_scipy_transforms(),
-                              'sp_pad': np.pad,
-                              'sp_resize': resize}, prefix='_', suffix='_')
+                              'pad': np.pad,
+                              'resize': resize}, prefix='_sp_', suffix='_')
 class ImagesBatch(BaseImagesBatch):
     """ Batch class for 2D images.
 
@@ -428,6 +428,7 @@ class ImagesBatch(BaseImagesBatch):
             shape of the input image.
         origin : array_like, sequence, {'center', 'top_left', 'random'}
             Position of the input image with respect to the background.
+
             - 'center' - place the center of the input image on the center of the background and crop
                          the input image accordingly.
             - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
@@ -462,6 +463,7 @@ class ImagesBatch(BaseImagesBatch):
         -----------
         factor : float, sequence
             resulting shape is obtained as original_shape * factor
+
             - float - scale all axes with the given factor
             - sequence (factor_1, factort_2, ...) - scale each axis with the given factor separately
 
@@ -471,6 +473,7 @@ class ImagesBatch(BaseImagesBatch):
         origin : {'center', 'top_left', 'random'}, sequence
             Relevant only if `preserve_shape` is True.
             Position of the scaled image with respect to the original one's shape.
+
             - 'center' - place the center of the rescaled image on the center of the original one and crop
                          the rescaled image accordingly
             - 'top_left' - place the upper-left corner of the rescaled image on the upper-left of the original one
@@ -507,13 +510,15 @@ class ImagesBatch(BaseImagesBatch):
         ----------
         origin : sequence, str
             Upper-left corner of the cropping box. Can be one of:
+
             - sequence - corner's coordinates in the form of (row, column)
             - 'top_left' - crop an image such that upper-left corners of
                            an image and the cropping box coincide
             - 'center' - crop an image such that centers of
-                         an image and the cropping box coincide
+                         the image and the cropping box coincide
             - 'random' - place the upper-left corner of the cropping box at a random position
         shape : sequence
+
             - sequence - crop size in the form of (rows, columns)
         crop_boundaries : bool
             If `True` then crop is got only from image's area. Shape of the crop might diverge with the passed one
@@ -550,6 +555,7 @@ class ImagesBatch(BaseImagesBatch):
         background : PIL.Image, np.ndarray of np.uint8
         origin : sequence, str
             Upper-left corner of the cropping box. Can be one of:
+
             - sequence - corner's coordinates in the form of (row, column).
             - 'top_left' - crop an image such that upper-left corners of an image and the cropping box coincide.
             - 'center' - crop an image such that centers of an image and the cropping box coincide.
@@ -586,6 +592,7 @@ class ImagesBatch(BaseImagesBatch):
         transformed_image : np.ndarray
         origin : {'center', 'top_left', 'random'}, sequence
             Position of the transformed image with respect to the original one's shape.
+
             - 'center' - place the center of the transformed image on the center of the original one and crop
                          the transformed image accordingly.
             - 'top_left' - place the upper-left corner of the transformed image on the upper-left of the original one
@@ -694,11 +701,12 @@ class ImagesBatch(BaseImagesBatch):
 
         For more details see http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand
 
-        Parameters:
+        Parameters
         ----------
-        offset : (Number, Number)
+        offset : sequence
+            Size of the borders in pixels. The order is (left, top, right, bottom).
         mode : {'const', 'wrap'}
-            How to fill borders
+            Filling mode
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -740,6 +748,7 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         mode : {'lr', 'ud'}
+
             - 'lr' - apply the left/right flip
             - 'ud' - apply the upside/down flip
         src : str
@@ -798,10 +807,12 @@ class ImagesBatch(BaseImagesBatch):
             Probability of salting a pixel.
         color : float, int, sequence, callable
             Color's value.
+
             - int, float, sequence -- value of color
             - callable -- color is sampled for every chosen pixel (rules are the same as for int, float and sequence)
         size : int, sequence of int, callable
             Size of salt
+
             - int -- square salt with side ``size``
             - sequence -- recangular salt in the form (row, columns)
             - callable -- size is sampled for every chosen pixel (rules are the same as for int and sequence)
@@ -977,6 +988,7 @@ class ImagesBatch(BaseImagesBatch):
         """ Posterizes image.
 
         More concretely, it quantizes pixels' values so that they have``2^bits`` colors
+
         Parameters
         ----------
         bits : int
@@ -1004,6 +1016,7 @@ class ImagesBatch(BaseImagesBatch):
         ----------
         origin : sequence, str
             Upper-left corner of a filled box. Can be one of:
+
             - sequence - corner's coordinates in the form of (row, column).
             - 'top_left' - crop an image such that upper-left corners of
                            an image and the filled box coincide.
@@ -1012,10 +1025,12 @@ class ImagesBatch(BaseImagesBatch):
             - 'random' - place the upper-left corner of the filled box at a random position.
         shape : sequence, int
             Shape of a filled box. Can be one of:
+
             - sequence - crop size in the form of (rows, columns)
             - int - shape has squared form
         color : sequence, number
             Color of a filled box. Can be one of:
+
             - sequence - (r,g,b) form
             - number - grayscale
         src : str
