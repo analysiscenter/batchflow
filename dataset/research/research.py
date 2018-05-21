@@ -34,38 +34,44 @@ class Research:
         self.n_iters = None
         self.timeout = 5
 
-    def pipeline(self, root_pipeline, branch_pipeline=None, variables=None, name=None,
+    def pipeline(self, root, branch=None, variables=None, name=None,
                  execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
 
         Parameters
         ----------
-        root_pipeline : dataset.Pipeline
-            root_pipeline must have run action with `lazy=True`. If `branch_pipeline` is None then `root_pipeline`
+        root : dataset.Pipeline
+            'root' must have run action with `lazy=True`. If `branch` is None then `root`
             may contain parameters that can be defined by grid.
-        branch_pipeline : dataset.Pipeline or None
-            if not None, for resulting batch from `root_pipeline` `branch_pipeline.execute_for(batch)` will be called.
+        branch : dataset.Pipeline or None
+            if not None, for resulting batch from `root` `branch.execute_for(batch)` will be called.
             May contain parameters that can be defined by grid.
         variables : str, list of str or None
             names of pipeline variables to save after each iteration into results. All of them must be
-            defined in `root_pipeline`
-            if `branch_pipeline` is None or be defined in `branch_pipeline` if `branch_pipeline` is not None.
-            if None, pipeline will be executed without any dumping
+            defined in `root`
+
+            If `branch` is None or be defined in `branch` if `branch` is not None.
+            If None, pipeline will be executed without any dumping
         name : str
             pipeline name inside research. If name is None, pipeline will have name `ppl_{index}`
         execute : int, str or list of int or str
-            If -1, pipeline will be executed just at last iteration (if iteration + 1 == n_iters
-            or StopIteration was raised)
+            If -1, pipeline will be executed just at last iteration (if `iteration + 1 == n_iters`
+            or `StopIteration` was raised)
+
             If positive int, pipeline will be excuted for that iteration
+
             If str, must be `'%{step}'` where step is int
+
             If list, must be list of int or str descibed above
         dump : int, str or list of int or str
             iteration when results will be dumped and cleared. Similar to execute
         run : bool
             if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset_iter()`.
         kwargs :
-            parameters in pipeline config that depends on the names of the other pipeline. For example,
+            parameters in pipeline config that depends on the names of the other pipeline.
+
+            For example,
             if test pipeline imports model from the other pipeline with name `'train'` in Research,
             corresponding parameter in import_model must be `C('import_from')` and add_pipeline
             must be called with parameter `import_from='train'`.
@@ -75,7 +81,7 @@ class Research:
 
         **How to define changing parameters**
 
-        All parameters in `root_pipeline` or `branch_pipeline` that are defined in grid should be defined
+        All parameters in `root` or `branch` that are defined in grid should be defined
         as `C('parameter_name')`. Corresponding parameter in grid must have the same `'parameter_name'`.
         """
         name = name or 'unit_' + str(len(self.executable_units))
@@ -84,7 +90,7 @@ class Research:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
         unit = ExecutableUnit()
-        unit.add_pipeline(root_pipeline, name, branch_pipeline, variables,
+        unit.add_pipeline(root, name, branch, variables,
                           execute, dump, run, logging, **kwargs)
         self.executable_units[name] = unit
         return self
@@ -109,9 +115,12 @@ class Research:
             function name inside research. If name is None, pipeline will have name `func_{index}`
         execute : int, str or list of int or str
             If -1, function will be executed just at last iteration (if `iteration + 1 == n_iters`
-            or StopIteration was raised)
+            or `StopIteration` was raised)
+
             If positive int, function will be excuted for that iteration
+
             If str, must be `'%{step}'` where step is int
+
             If list, must be list of int or str descibed above
         dump : int, str or list of int or str
             iteration when results will be dumped and cleared. Similar to execute
@@ -222,25 +231,34 @@ class Research:
             number of repetitions with each combination of parameters from `grid_config`
         n_iters: int or None
             number of iterations for each configurations. If None, wait StopIteration exception.
-        workers : int or list of dicts (Configs) (default 1)
-            If int - number of workers to run pipelines or workers that will run them, PipelineWorker will be used.
+        workers : int or list of dicts (Configs)
+            If int - number of workers to run pipelines or workers that will run them, `PipelineWorker` will be used.
+
             If list of dicts (Configs) - list of additional configs which will be appended to configs from tasks.
+
             Each element corresponds to one worker.
         branches: int or list of dicts (Configs)
             Number of different branches with different configs with the same root. Each branch will use the same batch
-            from `root_pipeline`. Pipelines will be executed in different threads.
+            from `root`. Pipelines will be executed in different threads.
+
             If int - number of pipelines with different configs that will use the same prepared batch
-                from `root_pipeline`.
+            from `root`.
+
             If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
         name : str or None
             name folder to save research. By default is 'research'.
-        progress_bar : bool (default False)
+        progress_bar : bool
             add tqdm progress bar
         gpu : str, list or None
-            all gpu devices available for the research. Must be of length 1 or be divisible
-            by the number of workers. If is divisible by the number of workers then
+            all gpu devices available for the research.
+
+            Must be of length 1 or be divisible
+            by the number of workers.
+
+            If is divisible by the number of workers then
             `length / n_workers` must be 1 or be divisible by the number of branches. If you want to use different
             devices in branches, use expression `C('device')`.
+
             For example, for :class:`~.TFModel` add `device=C('device')` to model config.
             if None, default gpu configuration will be used
         timeout : int

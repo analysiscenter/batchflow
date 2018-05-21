@@ -193,7 +193,7 @@ Then define research in the following way:
 .. code-block:: python
 
     research = (Research()
-        .pipeline(root_pipeline=train_root, branch_pipeline=train_branch, variables='loss', name='train')
+        .pipeline(root=train_root, branch=train_branch, variables='loss', name='train')
         .pipeline(test_ppl, variables='accuracy', name='test', run=True, execute='%100', import_model='train')
         .grid(grid)
         .function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
@@ -214,7 +214,7 @@ By default if unit has varaibles or returns then results will be dumped at last 
 .. code-block:: python
 
     research = (Research()
-        .pipeline(root_pipeline=train_root, branch_pipeline=train_template,
+        .pipeline(root=train_root, branch=train_template,
                   variables='loss', name='train', dump='%200')
         .pipeline(test_ppl,
                   variables='accuracy', name='test', run=True, execute='%100', import_from='train', logging=True)
@@ -238,8 +238,8 @@ All functions and pipelines if branches > 0 executed in parallel threads so some
 
     research = (Research()
         .function(on_root, on_root=True, execute=10, logging=True)
-        .pipeline(root_pipeline=train_root, branch_pipeline=train_template, variables='loss', name='train')
-        .pipeline(root_pipeline=test_root, branch_pipeline=test_template,
+        .pipeline(root=train_root, branch=train_template, variables='loss', name='train')
+        .pipeline(root=test_root, branch=test_template,
                   variables='accuracy', name='test', run=True, execute='%100', import_from='train', logging=True)
         .grid(grid)
         .function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')

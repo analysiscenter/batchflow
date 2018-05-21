@@ -31,7 +31,7 @@ Option
     :undoc-members:
 
 KV
--------
+--
 
 .. autoclass:: dataset.research.KV
     :members:
