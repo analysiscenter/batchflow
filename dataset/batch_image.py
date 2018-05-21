@@ -1054,7 +1054,7 @@ class ImagesBatch(BaseImagesBatch):
 
     @action
     @inbatch_parallel(init='indices', post='_assemble_patches')
-    def split_to_patches(self, ix, patch_shape, stride=1, droplast=False, src='images', dst=None):
+    def split_to_patches(self, ix, patch_shape, stride=1, drop_last=False, src='images', dst=None):
         """ Splits image to patches.
 
         Small images with the same shape (``patch_shape``) are cropped from the original one with stride ``stride``.
@@ -1065,7 +1065,7 @@ class ImagesBatch(BaseImagesBatch):
             Patch's shape in the from (rows, columns). If int is given then patches have square shape.
         stride : int, square
             Step of the moving window from which patches are cropped. If int is given then the window has square shape.
-        droplast : bool
+        drop_last : bool
             Whether to drop patches whose window covers area out of the image.
             If False is passed then these patches are cropped from the edge of an image. See more in tutorials.
         src : str
@@ -1093,7 +1093,7 @@ class ImagesBatch(BaseImagesBatch):
             while column < image_shape[1]-patch_shape[1]+1:
                 patches.append(PIL.Image.fromarray(image[row_from:row_to, column:column+patch_shape[1]]))
                 column += stride[1]
-            if not droplast and column + patch_shape[1] != image_shape[1]:
+            if not drop_last and column + patch_shape[1] != image_shape[1]:
                 patches.append(PIL.Image.fromarray(image[row_from:row_to,
                                                          image_shape[1]-patch_shape[1]:image_shape[1]]))
 
@@ -1101,7 +1101,7 @@ class ImagesBatch(BaseImagesBatch):
         while row < image_shape[0]-patch_shape[0]+1:
             _iterate_columns(row, row+patch_shape[0])
             row += stride[0]
-        if not droplast and row + patch_shape[0] != image_shape[0]:
+        if not drop_last and row + patch_shape[0] != image_shape[0]:
             _iterate_columns(image_shape[0]-patch_shape[0], image_shape[0])
 
         return np.array(patches, dtype=object)
