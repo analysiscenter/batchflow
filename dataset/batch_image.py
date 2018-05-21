@@ -128,7 +128,7 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
 
 class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
-    components = "images", "labels"
+    components = "images", "labels", "masks"
     formats_lower = ['jpg', 'png', 'jpeg']
     formats = set(formats_lower + [x.upper() for x in formats_lower])
 
