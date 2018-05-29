@@ -390,8 +390,12 @@ class Batch(BaseBatch):
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
             comps = components if components is not None else range(len(_data))
-            res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
-                        for comp, data_item in zip(comps, _data))
+            try:
+                res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
+                            for comp, data_item in zip(comps, _data))
+            except TypeError:
+                res = tuple(list(data_item[i] for i in self.get_pos(data, comp, index)) if data_item is not None else None
+                            for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
             res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
         else:
@@ -499,7 +503,8 @@ class Batch(BaseBatch):
 
         if np.random.binomial(1, p):
             if use_self:
-                return func(self, *_args, **kwargs)
+                result = func(self, *_args, **kwargs)
+                return result # if isinstance(result, tuple) else (result,)
             return func(*_args, **kwargs)
 
         if len(src_attr) == 1:
@@ -657,6 +662,9 @@ class Batch(BaseBatch):
     def _dump_blosc(self, ix, dst, components=None):
         """ Save blosc packed data to file """
         file_name = self._get_file_name(ix, dst, 'blosc')
+        if not os.path.exists(dst):
+            os.makedirs(dst)
+
         with open(file_name, 'w+b') as f:
             if self.components is None:
                 components = (None,)

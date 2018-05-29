@@ -17,6 +17,8 @@ from .batch import Batch
 from .decorators import action, inbatch_parallel
 from .dsindex import FilesIndex
 
+from scipy.misc import imsave
+
 
 def get_scipy_transforms():
     """ Returns ``dict`` {'function_name' : function} of functions from scipy.ndimage.
@@ -26,10 +28,12 @@ def get_scipy_transforms():
 
     scipy_transformations = {}
     hooks = ['input : ndarray', 'input : array_like']
+    good_funcs_name_stub = ['rotate', 'spline_filter']
     for function_name in scipy.ndimage.__dict__['__all__']:
         function = getattr(scipy.ndimage, function_name)
         doc = getattr(function, '__doc__')
-        if doc is not None and (hooks[0] in doc or hooks[1] in doc):
+        if doc is not None and (hooks[0] in doc or hooks[1] in doc)\
+                or function_name in good_funcs_name_stub:
             scipy_transformations[function_name] = function
     return scipy_transformations
 
@@ -286,12 +290,16 @@ class ImagesBatch(BaseImagesBatch):
     @property
     def image_shape(self):
         """: tuple - shape of the image"""
-        _, shapes_count = np.unique([image.size for image in self.images], return_counts=True, axis=0)
-        if len(shapes_count) == 1:
-            if isinstance(self.images[0], PIL.Image.Image):
-                return (*self.images[0].size, len(self.images[0].getbands()))
-            return self.images[0].shape
-        raise RuntimeError('Images have different shapes')
+        if hasattr(self.images, "size"):
+            _, shapes_count = np.unique([image.size for image in self.images], return_counts=True, axis=0)
+            if len(shapes_count) == 1:
+                if isinstance(self.images[0], PIL.Image.Image):
+                    return (*self.images[0].size, len(self.images[0].getbands()))
+                return self.images[0].shape
+            raise RuntimeError('Images have different shapes')
+        elif hasattr(self.images, "shape"):
+            self.images.shape[1:]
+        return self.images[0].shape
 
     @inbatch_parallel(init='indices', post='_assemble')
     def _load_image(self, ix, src=None, fmt=None, dst="images"):
@@ -339,9 +347,10 @@ class ImagesBatch(BaseImagesBatch):
             raise RuntimeError('You must specify `dst`')
         image = self.get(ix, src)
         ix = str(ix) + '.' + fmt if fmt is not None else str(ix)
-        image.save(os.path.join(dst, ix))
-
-
+        if hasattr(image, 'save'):
+            image.save(os.path.join(dst, ix))
+        else:
+            imsave(os.path.join(dst, ix), np.squeeze(image))
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
         """ Assemble one component after parallel execution.
