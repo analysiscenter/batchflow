@@ -1,15 +1,17 @@
 """ Contains basic Batch classes """
 
 import os
-import traceback
 import threading
+import traceback
 
 import dill
+
 try:
     import blosc
 except ImportError:
     pass
 import numpy as np
+
 try:
     import pandas as pd
 except ImportError:
@@ -36,7 +38,7 @@ class Batch(BaseBatch):
     components = None
 
     def __init__(self, index, preloaded=None, *args, **kwargs):
-        if  self.components is not None and not isinstance(self.components, tuple):
+        if self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
         super().__init__(index, *args, **kwargs)
         self._preloaded_lock = threading.Lock()
@@ -62,7 +64,6 @@ class Batch(BaseBatch):
                 self._local = threading.local()
             self._local.pipeline = val
         self._pipeline = val
-
 
     def deepcopy(self):
         """ Return a deep copy of the batch.
@@ -97,7 +98,6 @@ class Batch(BaseBatch):
         """ Create batch from another batch """
         return cls(batch.index, preloaded=batch._data)  # pylint: disable=protected-access
 
-
     @classmethod
     def merge(cls, batches, batch_size=None):
         """ Merge several batches to form a new batch of a given size
@@ -114,6 +114,7 @@ class Batch(BaseBatch):
         -------
         batch, rest : tuple of two batches
         """
+
         def _make_index(data):
             return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
 
@@ -271,7 +272,7 @@ class Batch(BaseBatch):
 
     @property
     def _empty_data(self):
-        return None if self.components is None else self._item_class()   # pylint: disable=not-callable
+        return None if self.components is None else self._item_class()  # pylint: disable=not-callable
 
     def get_pos(self, data, component, index):
         """ Return a position in data for a given index
@@ -334,7 +335,7 @@ class Batch(BaseBatch):
         return pos
 
     def __getattr__(self, name):
-        if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
+        if self.components is not None and name in self.components:  # pylint: disable=unsupported-membership-test
             attr = getattr(self.data, name)
             return attr
         else:
@@ -346,8 +347,8 @@ class Batch(BaseBatch):
                 super().__setattr__(name, value)
                 if self._item_class is None:
                     self.make_item_class()
-                self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
-            elif name in self.components:    # pylint: disable=unsupported-membership-test
+                self._data_named = self._item_class(data=self._data)  # pylint: disable=not-callable
+            elif name in self.components:  # pylint: disable=unsupported-membership-test
                 if self._data_named is None:
                     _ = self.data
                 setattr(self._data_named, name, value)
@@ -386,16 +387,17 @@ class Batch(BaseBatch):
             components = self.components
 
         if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(None, comp, index) for comp in components]   # pylint: disable=not-an-iterable
-            res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
+            pos = [self.get_pos(None, comp, index) for comp in components]  # pylint: disable=not-an-iterable
+            res = self._item_class(data=_data, pos=pos)  # pylint: disable=not-callable
         elif isinstance(_data, tuple):
             comps = components if components is not None else range(len(_data))
             try:
                 res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                             for comp, data_item in zip(comps, _data))
             except TypeError:
-                res = tuple(list(data_item[i] for i in self.get_pos(data, comp, index)) if data_item is not None else None
-                            for comp, data_item in zip(comps, _data))
+                res = tuple(
+                    list(data_item[i] for i in self.get_pos(data, comp, index)) if data_item is not None else None
+                    for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
             res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
         else:
@@ -504,7 +506,7 @@ class Batch(BaseBatch):
         if np.random.binomial(1, p):
             if use_self:
                 result = func(self, *_args, **kwargs)
-                return result # if isinstance(result, tuple) else (result,)
+                return result  # if isinstance(result, tuple) else (result,)
             return func(*_args, **kwargs)
 
         if len(src_attr) == 1:
@@ -686,7 +688,7 @@ class Batch(BaseBatch):
         elif fmt == 'feather':
             _data = feather.read_dataframe(src, *args, **kwargs)  # pylint: disable=redefined-variable-type
         elif fmt == 'hdf5':
-            _data = pd.read_hdf(src, *args, **kwargs)         # pylint: disable=redefined-variable-type
+            _data = pd.read_hdf(src, *args, **kwargs)  # pylint: disable=redefined-variable-type
 
         # Put into this batch only part of it (defined by index)
         if isinstance(_data, pd.DataFrame):
@@ -706,7 +708,6 @@ class Batch(BaseBatch):
 
         for comp, values in _data.items():
             setattr(self, comp, values)
-
 
     @action(use_lock='__dump_table_lock')
     def _dump_table(self, dst, fmt='feather', components=None, *args, **kwargs):
@@ -739,9 +740,9 @@ class Batch(BaseBatch):
         if fmt == 'feather':
             feather.write_dataframe(_data, filename, *args, **kwargs)
         elif fmt == 'hdf5':
-            _data.to_hdf(filename, *args, **kwargs)   # pylint:disable=no-member
+            _data.to_hdf(filename, *args, **kwargs)  # pylint:disable=no-member
         elif fmt == 'csv':
-            _data.to_csv(filename, *args, **kwargs)   # pylint:disable=no-member
+            _data.to_csv(filename, *args, **kwargs)  # pylint:disable=no-member
         else:
             raise ValueError('Unknown format %s' % fmt)
 
@@ -823,6 +824,7 @@ class ArrayBatch(Batch):
     Batch data is a numpy array.
     If components are defined, then each component data is a numpy array
     """
+
     def _assemble_load(self, all_res, *args, **kwargs):
         _ = args
         if any_action_failed(all_res):
@@ -840,6 +842,7 @@ class ArrayBatch(Batch):
 
 class DataFrameBatch(Batch):
     """ Base Batch class for datasets stored in pandas DataFrames """
+
     def _assemble_load(self, all_res, *args, **kwargs):
         """ Build the batch data after loading data from files """
         _ = all_res, args, kwargs

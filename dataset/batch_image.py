@@ -1,23 +1,21 @@
 """ Contains Batch classes for images """
 import os
-from numbers import Number
 from functools import wraps
-
-import numpy as np
-from skimage.transform import resize
-import scipy.ndimage
+from numbers import Number
 
 import PIL
-import PIL.ImageOps
 import PIL.ImageChops
-import PIL.ImageFilter
 import PIL.ImageEnhance
+import PIL.ImageFilter
+import PIL.ImageOps
+import numpy as np
+import scipy.ndimage
+from scipy.misc import imsave
+from skimage.transform import resize
 
 from .batch import Batch
 from .decorators import action, inbatch_parallel
 from .dsindex import FilesIndex
-
-from scipy.misc import imsave
 
 
 def get_scipy_transforms():
@@ -298,7 +296,7 @@ class ImagesBatch(BaseImagesBatch):
                 return self.images[0].shape
             raise RuntimeError('Images have different shapes')
         elif hasattr(self.images, "shape"):
-            self.images.shape[1:]
+            return self.images.shape[1:]
         return self.images[0].shape
 
     @inbatch_parallel(init='indices', post='_assemble')
