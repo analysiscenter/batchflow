@@ -262,6 +262,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             except RuntimeError:
                 # this is a new thread where there is no loop
                 loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
             else:
                 # allow to specify a loop as an action parameter
                 loop = kwargs.get('loop', loop)
