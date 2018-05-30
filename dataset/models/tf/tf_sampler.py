@@ -42,7 +42,7 @@ class TfSampler(Sampler):
             _ = kwargs.pop('dim', None)
             self.sampler = getattr(tf.distributions, self.name)(**kwargs)
 
-    def sample(self, size):
+    def sample(self, size):                 # pylint: disable=method-hidden
         """ Sampling method of ``TfSampler``.
 
         Generates random samples from distribution ``self.name``.
