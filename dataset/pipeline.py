@@ -184,7 +184,6 @@ class Pipeline:
 
     def __getattr__(self, name):
         """ Check if an unknown attr is an action from some batch class """
-        temp = dir(self.dataset.batch_class)
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
             raise AttributeError()
