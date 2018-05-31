@@ -90,6 +90,7 @@ class ResNet(TFModel):
     @classmethod
     def default_layout(cls, bottleneck, **kwargs):
         """ Define conv block layout """
+        _ = kwargs
         reps = 3 if bottleneck else 2
         return 'cna' * reps if is_best_practice() else 'nac' * reps
 

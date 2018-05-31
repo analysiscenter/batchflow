@@ -3,12 +3,7 @@ Dongyoon Han et al. "`Deep Pyramidal Residual Networks
 <https://arxiv.org/abs/1610.02915>`_"
 
 """
-import numpy as np
-import tensorflow as tf
-
-from ... import is_best_practice
-from . import TFModel, ResNet
-from .layers import conv_block
+from . import ResNet
 
 
 class PyramidNet(ResNet):
