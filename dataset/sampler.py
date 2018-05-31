@@ -3,7 +3,6 @@
 
 from copy import copy
 import numpy as np
-import tensorflow as tf
 import scipy.stats as ss
 
 # if empirical probability of truncation region is less than
@@ -27,12 +26,12 @@ ALIASES = {
     'chi2': {'np': 'chisquare', 'ss': 'chi2'}
 }
 
-def _get_method_by_alias(alias, module):
+def _get_method_by_alias(alias, module, tf_distributions=None):
     """ Fetch fullname of a randomizer from ``scipy.stats``, ``tensorflow`` or
     ``numpy`` by its alias or fullname.
     """
     rnd_submodules = {'np': np.random,
-                      'tf': tf.distributions,
+                      'tf': tf_distributions,
                       'ss': ss}
     # fetch fullname
     fullname = ALIASES.get(alias, {module: alias for module in ['np', 'tf', 'ss']}).get(module, None)
@@ -275,6 +274,9 @@ class Sampler():
         def truncated(size):
             """ Truncated sampling method.
             """
+            if size == 0:
+                return self.sample(size=0)
+
             # set batch-size
             expectation = size / prob
             sigma = np.sqrt(size * (1 - prob) / (prob**2))
@@ -452,65 +454,6 @@ class ScipySampler(Sampler):
         sample = sampler(size=size, random_state=self.state)
         if len(sample.shape) == 1:
             sample = sample.reshape(-1, 1)
-        return sample
-
-class TfSampler(Sampler):
-    """ Sampler based on a distribution from tf.distributions.
-
-    Parameters
-    ----------
-    name : str
-        name of a distribution (class from tf.distributions), or its alias.
-    **kwargs
-        additional keyword-args for distribution specification.
-        E.g., `loc` for name='Normal'
-
-    Attributes
-    ----------
-    name : str
-        name of a distribution (class from tf.distributions).
-    _params : dict
-        dict of args for distribution specification.
-    graph : tf.Graph
-        graph in which sampling nodes are placed.
-    sampler : tf.distributions
-        instance of distributions' class.
-    sess : tf.Session
-        session used for running sample-tensor.
-    """
-    def __init__(self, name, **kwargs):
-        super().__init__(name, **kwargs)
-        name = _get_method_by_alias(name, 'tf')
-        self.name = name
-        self._params = copy(kwargs)
-        self.graph = tf.Graph()
-        with self.graph.as_default():
-            config = tf.ConfigProto(device_count={'GPU':0})
-            self.sess = tf.Session(config=config)
-            self.sampler = getattr(tf.distributions, self.name)(**kwargs)
-
-    def sample(self, size):
-        """ Sampling method of ``TfSampler``.
-
-        Generates random samples from distribution ``self.name``.
-
-        Parameters
-        ----------
-        size : int
-            the size of sample to be generated.
-
-        Returns
-        -------
-        np.ndarray
-            array of shape (size, Sampler's dimension).
-        """
-        with self.graph.as_default():
-            _sample = self.sampler.sample(size)
-
-        sample = self.sess.run(_sample)
-
-        if len(sample.shape) == 1:                                          # pylint: disable=no-member
-            sample = sample.reshape(-1, 1)                                  # pylint: disable=no-member
         return sample
 
 class HistoSampler(Sampler):
