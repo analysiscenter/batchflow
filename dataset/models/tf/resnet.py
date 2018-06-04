@@ -22,6 +22,12 @@ from .layers import conv_block
 class ResNet(TFModel):
     """ The base ResNet model
 
+    Notes
+    -----
+    This class is intended to define custom ResNets.
+    For more convenience use predefined :class:`.ResNet18`, :class:`.ResNet34`,
+    and others described down below.
+
     **Configuration**
 
     inputs : dict
@@ -95,7 +101,6 @@ class ResNet(TFModel):
         return 'cna' * reps if is_best_practice() else 'nac' * reps
 
     def build_config(self, names=None):
-        """ Define a model architecture configuration """
         config = super().build_config(names)
 
         if config.get('body/filters') is None:

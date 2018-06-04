@@ -9,6 +9,12 @@ from . import ResNet
 class PyramidNet(ResNet):
     """ The base PyramidNet model
 
+    Notes
+    -----
+    This class is intended to define custom PyramidNets.
+    For more convenience use predefined :class:`.PyramidNet18`, :class:`.PyramidNet34`,
+    and others described down below.
+
     **Configuration**
 
     inputs : dict
@@ -43,7 +49,6 @@ class PyramidNet(ResNet):
 
     @classmethod
     def default_layout(cls, bottleneck, **kwargs):
-        """ Define conv block layout """
         return 'nc nac nac n' if bottleneck else 'nc nac n'
 
     def build_config(self, names=None):
@@ -63,4 +68,52 @@ class PyramidNet(ResNet):
         if config.get('head/filters') is None:
             config['head/filters'] = self.num_classes('targets')
 
+        return config
+
+class PyramidNet18(PyramidNet):
+    """ 18-layer PyramidNet architecture """
+    @classmethod
+    def default_config(cls):
+        config = PyramidNet.default_config()
+        config['body/num_blocks'] = [2, 2, 2, 2]
+        config['body/block/bottleneck'] = False
+        return config
+
+
+class PyramidNet34(PyramidNet):
+    """ 34-layer PyramidNet architecture """
+    @classmethod
+    def default_config(cls):
+        config = PyramidNet.default_config()
+        config['body/num_blocks'] = [3, 4, 6, 3]
+        config['body/block/bottleneck'] = False
+        return config
+
+
+class PyramidNet50(PyramidNet):
+    """ 50-layer PyramidNet architecture with bottleneck blocks """
+    @classmethod
+    def default_config(cls):
+        config = PyramidNet.default_config()
+        config['body/block/bottleneck'] = True
+        return config
+
+
+class PyramidNet101(PyramidNet):
+    """ 101-layer PyramidNet architecture with bottleneck blocks """
+    @classmethod
+    def default_config(cls):
+        config = PyramidNet.default_config()
+        config['body/num_blocks'] = [3, 4, 23, 3]
+        config['body/block/bottleneck'] = True
+        return config
+
+
+class PyramidNet152(PyramidNet):
+    """ 152-layer PyramidNet architecture with bottleneck blocks """
+    @classmethod
+    def default_config(cls):
+        config = PyramidNet.default_config()
+        config['body/num_blocks'] = [3, 8, 36, 3]
+        config['body/block/bottleneck'] = True
         return config
