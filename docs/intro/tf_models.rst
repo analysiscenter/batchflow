@@ -185,7 +185,7 @@ As the default input block contains a :func:`~.layers.conv_block`, all its param
 
 So the configured input block gets `images` tensor and applies a convolution with 7x7 kernel and stride 2.
 
-For :doc:`predefined models <tf_models_zoo>` input block has the default configuration in accordance with the original article. So you almost never need to redefine it.
+For :doc:`predefined models <models_zoo_tf>` input block has the default configuration in accordance with the original article. So you almost never need to redefine it.
 
 However, ``input_block/inputs`` should always be specified.
 
@@ -412,4 +412,4 @@ Ready to use models
 .. toctree::
    :maxdepth: 2
 
-   tf_models_zoo
+   ../api/dataset.models.tf

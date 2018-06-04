@@ -1149,7 +1149,7 @@ class TFModel(BaseModel):
         Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
         specific to the model, but independent of anything else (like image shapes, number of classes, etc).
 
-        These defaults can be changed in `.build_config` or when calling `Pipeline.init_model`.
+        These defaults can be changed in :meth:`~.TFModel.build_config` or when calling :meth:`.Pipeline.init_model`.
 
         Usually, it looks like::
 

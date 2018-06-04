@@ -112,7 +112,7 @@ Mostly, pipelines are needed to train machine learning models or predict using t
 
 See :doc:`Working with models <models>` to understand what a model is and how to use it within pipelines.
 
-There is a bunch of :doc:`predefined models <tf_models_zoo>` which you can use out of the box.
+There is a bunch of :doc:`predefined models <models_zoo>` which you can use out of the box.
 
 
 Best practices
@@ -124,6 +124,7 @@ These are include optimization algorithms, layer layouts, batch norm momentum an
 After training thousands of models we find out that some values of those parameters work better than others.
 That is why we gathered them into :doc:`best practice <best_practice>` module.
 Though it does not fit all the situations and sometimes can even lead to average results, most of the time it works well.
+
 
 Research
 ========
