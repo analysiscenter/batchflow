@@ -6,6 +6,7 @@ from .block import _conv_block as conv_block
 from .conv import conv1d_transpose_nn
 from .core import xip
 
+
 def _calc_size(inputs, factor, data_format):
     shape = inputs.get_shape().as_list()
     channels = shape[-1] if data_format == 'channels_last' else shape[1]
@@ -73,6 +74,7 @@ def _depth_to_space(inputs, block_size, name='d2s'):
         conv_layer = tf.nn.conv2d_transpose
     elif dim == 3:
         conv_layer = tf.nn.conv3d_transpose
+
     with tf.variable_scope(name):
         shape = inputs.get_shape().as_list()[1:]
         channels = shape[-1]
@@ -80,15 +82,15 @@ def _depth_to_space(inputs, block_size, name='d2s'):
             raise ValueError('channels of the inputs must be divisible by block_size ** {}'.format(dim))
         output_shape = tf.concat([(tf.shape(inputs)[0],), tf.shape(inputs)[1:-1]*block_size,
                                   (tf.shape(inputs)[-1], )], axis=-1)
-        slices = [np.arange(0, channels // (block_size ** dim))+i
+        slices = [np.arange(0, channels // (block_size ** dim)) + i
                   for i in range(0, channels, channels // (block_size ** dim))]
         tensors = []
         for i in range(block_size ** dim):
             zero_filter = np.zeros(block_size ** dim)
             selective_filter = np.zeros(block_size ** dim)
             selective_filter[i] = 1
-            zero_filter = zero_filter.reshape([block_size]*dim)
-            selective_filter = selective_filter.reshape([block_size]*dim)
+            zero_filter = zero_filter.reshape([block_size] * dim)
+            selective_filter = selective_filter.reshape([block_size] * dim)
             fltr = []
             for j in range(channels):
                 _filter = [zero_filter] * channels
@@ -285,7 +287,7 @@ def _calc_size_after_resize(inputs, size, axis):
     return size, static_size
 
 
-def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last', **kwargs):
+def resize_bilinear(inputs, factor=2, shape=None, name='resize', data_format='channels_last', **kwargs):
     """ Resize input tensor with bilinear method
 
     Parameters
@@ -293,7 +295,9 @@ def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last'
     inputs : tf.Tensor
         a tensor to resize
     factor : float
-        upsampling factor
+        upsampling factor (not used if shape is specified)
+    shape : tuple of int
+        a shape to upsample to
     name : str
         scope name
     data_format : {'channels_last', 'channels_first'}
@@ -303,7 +307,9 @@ def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last'
     -------
     tf.Tensor
     """
-    size, _ = _calc_size(inputs, factor, data_format)
+    if shape is None:
+        shape, _ = _calc_size(inputs, factor, data_format)
+
     with tf.variable_scope(name):
         x = inputs
         if data_format == 'channels_first':
@@ -312,17 +318,17 @@ def resize_bilinear(inputs, factor=2, name='resize', data_format='channels_last'
             x = tf.transpose(x, perm)
         dim = inputs.shape.ndims - 2
         if dim == 1:
-            x = resize_bilinear_1d(x, size=size, name='resize_1d', **kwargs)
+            x = resize_bilinear_1d(x, size=shape, name='resize_1d', **kwargs)
         elif dim == 2:
-            x = tf.image.resize_bilinear(x, size=size, name='resize_2d', **kwargs)
+            x = tf.image.resize_bilinear(x, size=shape, name='resize_2d', **kwargs)
         elif dim == 3:
-            x = resize_bilinear_3d(x, size=size, name='resize_3d', **kwargs)
+            x = resize_bilinear_3d(x, size=shape, name='resize_3d', **kwargs)
         if data_format == 'channels_first':
             x = tf.transpose(x, perm_reverse)
     return x
 
 
-def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs):
+def resize_nn(inputs, factor=2, shape=None, name=None, data_format='channels_last', **kwargs):
     """ Resize input tensor with nearest neighbors method
 
     Parameters
@@ -330,7 +336,9 @@ def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs
     inputs : tf.Tensor
         a tensor to resize
     factor : int
-        upsampling factor
+        upsampling factor (not used if shape is specified)
+    shape : tuple of int
+        a shape to upsample to
     name : str
         scope name
     data_format : {'channels_last', 'channels_first'}
@@ -343,5 +351,6 @@ def resize_nn(inputs, factor=2, name=None, data_format='channels_last', **kwargs
     dim = inputs.shape.ndims
     if dim != 4:
         raise ValueError("inputs must be Tensor of rank 4 but {} was given".format(dim))
-    size, _ = _calc_size(inputs, factor, data_format)
-    return tf.image.resize_nearest_neighbor(inputs, size=size, name=name, **kwargs)
+    if shape is None:
+        shape, _ = _calc_size(inputs, factor, data_format)
+    return tf.image.resize_nearest_neighbor(inputs, size=shape, name=name, **kwargs)

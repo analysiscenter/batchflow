@@ -175,7 +175,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     return tensor
 
 
-def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
+def upsample(inputs, factor=None, shape=None, layout='b', name='upsample', **kwargs):
     """ Upsample inputs with a given factor
 
     Parameters
@@ -184,6 +184,8 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
         a tensor to resize
     factor : int
         an upsamping scale
+    shape : tuple of int
+        a shape to upsample to (used by bilinear and NN resize)
     layout : str
         resizing technique, a sequence of:
 
@@ -205,7 +207,7 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
     --------
     A simple bilinear upsampling::
 
-        x = upsample(inputs, factor=2, layout='b')
+        x = upsample(inputs, shape=(256, 256), layout='b')
 
     Upsampling with non-linear normalized transposed convolution::
 
@@ -224,6 +226,6 @@ def upsample(inputs, factor, layout='b', name='upsample', **kwargs):
         if 'strides' not in kwargs:
             kwargs['strides'] = factor
 
-    x = conv_block(inputs, layout, name=name, factor=factor, **kwargs)
+    x = conv_block(inputs, layout, name=name, factor=factor, shape=shape, **kwargs)
 
     return x
