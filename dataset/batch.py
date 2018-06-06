@@ -248,12 +248,13 @@ class Batch(BaseBatch):
             components = tuple(components)
 
         data = self._data
-        if self.components is None:
+        if self.components is None or data is None:
             self.components = components
             data = tuple()
         else:
             self.components = self.components + components
-            data = data + tuple(init)
+            data = data + (init,)
+
         self.make_item_class(local=True)
         self._data = data
 
@@ -568,19 +569,35 @@ class Batch(BaseBatch):
             dst[:] = tr_res
         return self
 
-    def _get_file_name(self, ix, src, ext):
-        if src is None:
-            if isinstance(self.index, FilesIndex):
-                src = self.index.get_fullpath(ix)
+    def _get_file_name(self, ix, src, write=False):
+        if isinstance(self.index, FilesIndex):
+            if isinstance(src, str):
+                if write and not self.index.dirs:
+                    file_name = self.index.get_fullpath(ix).replace('\\','/').split('/')[-1]
+                    file_name = os.path.join(os.path.abspath(src), file_name)
+                    return file_name
+
                 if self.index.dirs:
-                    file_name = os.path.join(src, 'data.' + ext)
+                    fullpath = self.index.get_fullpath(ix)
+                    file_name = os.path.join(fullpath, src)
                 else:
-                    file_name = src + '.' + ext
+                    raise ValueError("File index must be built on directories to locate files with src")
+
+            elif isinstance(src, FilesIndex): # test and check whether it is also possible to load with src.index.dirs=False             
+                try:
+                    file_name = src.get_fullpath(ix)
+                except KeyError:
+                    print("File {} is not indexed in received index".format(ix))
+
+            elif src is None:
+                file_name = self.index.get_fullpath(ix)
+
             else:
-                raise ValueError("File locations must be specified to dump/load data")
+                raise ValueError("Src must be either str, FilesIndex or None")
+
+            return file_name
         else:
-            file_name = os.path.join(os.path.abspath(src), str(ix) + '.' + ext)
-        return file_name
+            raise ValueError("File locations must be specified to dump/load data")
 
     def _assemble_component(self, result, *args, component, **kwargs):
         """ Assemble one component after parallel execution.
@@ -643,20 +660,20 @@ class Batch(BaseBatch):
     @inbatch_parallel('indices', post='_assemble', target='f')
     def _load_blosc(self, ix, src=None, components=None):
         """ Load data from a blosc packed file """
-        file_name = self._get_file_name(ix, src, 'blosc')
+        file_name = self._get_file_name(ix, src)
         with open(file_name, 'rb') as f:
             data = dill.loads(blosc.decompress(f.read()))
-            if self.components is None:
-                components = (data.keys()[0],)
-            else:
-                components = tuple(components or self.components)
-            item = tuple(data[i] for i in components)
+            components = tuple(components or self.components)
+            try:
+                item = tuple(data[i] for i in components)
+            except Exception as e:
+                raise KeyError('Cannot find components in corresponfig file', e)
         return item
 
     @inbatch_parallel('indices', target='f')
     def _dump_blosc(self, ix, dst, components=None):
         """ Save blosc packed data to file """
-        file_name = self._get_file_name(ix, dst, 'blosc')
+        file_name = self._get_file_name(ix, dst, write=True)
         with open(file_name, 'w+b') as f:
             if self.components is None:
                 components = (None,)
@@ -759,6 +776,9 @@ class Batch(BaseBatch):
         """
         _ = args
         components = [components] if isinstance(components, str) else components
+        if components is not None:
+            self.add_components(components)
+
         if fmt is None:
             self.put_into_data(src, components)
         elif fmt == 'blosc':
