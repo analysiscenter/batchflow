@@ -91,8 +91,6 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
 
-        self.reset_iter()
-
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """

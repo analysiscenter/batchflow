@@ -192,7 +192,7 @@ class F(NamedExpression):
         F(MyBatch.rotate, angle=30)
         F(prepare_data, 115, item=10)
     """
-    def __init__(self, name=None, _pass=True, *args, **kwargs):
+    def __init__(self, name=None, *args, _pass=True, **kwargs):
         super().__init__(name)
         self.args = args
         self.kwargs = kwargs
