@@ -585,7 +585,7 @@ class Batch(BaseBatch):
         if isinstance(self.index, FilesIndex):
             if isinstance(src, str):
                 if write and not self.index.dirs:
-                    file_name = self.index.get_fullpath(ix).replace('\\','/').split('/')[-1]
+                    file_name = self.index.get_fullpath(ix).replace('\\', '/').split('/')[-1]
                     if not os.path.exists(src):
                         os.makedirs(src)
                     file_name = os.path.join(os.path.abspath(src), file_name)
