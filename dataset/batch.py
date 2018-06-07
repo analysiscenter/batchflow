@@ -600,7 +600,7 @@ class Batch(BaseBatch):
             elif isinstance(src, FilesIndex):
                 try:
                     file_name = src.get_fullpath(ix)
-                except Exception as e:
+                except KeyError:
                     raise ValueError("File {} is not indexed in the received index".format(ix))
 
             elif src is None:
