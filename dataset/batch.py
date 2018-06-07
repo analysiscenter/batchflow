@@ -569,39 +569,65 @@ class Batch(BaseBatch):
             dst[:] = tr_res
         return self
 
-    def _get_file_name(self, ix, src, write=False):
-        """ Get file name corresponding to current index.
+    def _get_file_name(self, ix, src):
+        """ Get full path file name corresponding to the current index.
 
         Parameters
         ----------
-        src : str or FilesIndex
-            if str, can be name of a file with extension in the indexed path (i.e self.index.dirs must be True)
+        src : str, FilesIndex or None
+            if None, full path to the indexed item will be returned.
             if FilesIndex it must contain the same indices values as in the self.index.
+            if str, behavior depends on wheter self.index.dirs is True. If self.index.dirs is True
+            then src will be appended to the end of the full paths from self.index. Else if
+            self.index.dirs is False then src is considered as a directory name and the basenames
+            from self.index will be appended to the end of src.
 
-        write : bool
-            write = True is designed to be called from dump. Then src must be str and stand for a name of a folder
-            where data will be dumped in files named the same names as in current index.
+        Examples
+        --------
+        Let folder "/some/path/*.dcm" contain files "001.png", "002.png", etc. Then if self.index
+        was built as
+
+        >>> index = FilesIndex(path="/some/path/*.png", no_ext=True)
+
+        Then _get_file_name(ix, src="augmented_images/") will return filenames:
+        "augmented_images/001.png", "augmented_images/002.png", etc.
+
+
+        Let folder "/some/path/*" contain folders "001", "002", etc. Then if self.index
+        was built as
+
+        >>> index = FilesIndex(path="/some/path/*", dirs=True)
+
+        Then _get_file_name(ix, src="masks.png") will return filenames:
+        "/some/path/001/masks.png", "/some/path/002/masks.png", etc.
+
+
+        If you have two directories "images/*.png", "labels/*png" with identical filenames,
+        you can build two instances of FilesIndex and use the first one to biuld your Dataset
+
+        >>> index_images = FilesIndex(path="/images/*.png", no_ext=True)
+        >>> index_labels = FilesIndex(path="/labels/*.png", no_ext=True)
+        >>> dset = Dataset(index=index_images, batch_class=Batch)
+
+        Then build dataset using the first one
+        _get_file_name(ix, src=index_labels) to reach corresponding files in the second path.
+
         """
         if isinstance(self.index, FilesIndex):
             if isinstance(src, str):
-                if write and not self.index.dirs:
-                    file_name = self.index.get_fullpath(ix).replace('\\', '/').split('/')[-1]
-                    if not os.path.exists(src):
-                        os.makedirs(src)
-                    file_name = os.path.join(os.path.abspath(src), file_name)
-                    return file_name
-
                 if self.index.dirs:
                     fullpath = self.index.get_fullpath(ix)
                     file_name = os.path.join(fullpath, src)
+
                 else:
-                    raise ValueError("File index must be built on directories to locate files with src")
+                    file_name = os.path.basename(self.index.get_fullpath(ix))
+                    file_name = os.path.join(os.path.abspath(src), file_name)
 
             elif isinstance(src, FilesIndex):
                 try:
                     file_name = src.get_fullpath(ix)
                 except KeyError:
-                    raise ValueError("File {} is not indexed in the received index".format(ix))
+                    raise KeyError("File {} is not indexed in the received index".format(ix))
 
             elif src is None:
                 file_name = self.index.get_fullpath(ix)
@@ -687,7 +713,7 @@ class Batch(BaseBatch):
     @inbatch_parallel('indices', target='f')
     def _dump_blosc(self, ix, dst, components=None):
         """ Save blosc packed data to file """
-        file_name = self._get_file_name(ix, dst, write=True)
+        file_name = self._get_file_name(ix, dst)
         with open(file_name, 'w+b') as f:
             if self.components is None:
                 components = (None,)
