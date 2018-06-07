@@ -570,10 +570,29 @@ class Batch(BaseBatch):
         return self
 
     def _get_file_name(self, ix, src, write=False):
+        """ Get file name corresponding to current index.
+
+        Parameters
+        ----------
+        src : str or FilesIndex
+            if str, can be name of a file with extension in the indexed path (i.e self.index.dirs must be True)
+            if FilesIndex it must contain the same 
+
+
+            or if called from dump with write=True, src can be a name of a path where data
+            will be dumped in files named the same names as in current index (built from files)
+
+        """
         if isinstance(self.index, FilesIndex):
+            
+
+
+            
             if isinstance(src, str):
                 if write and not self.index.dirs:
                     file_name = self.index.get_fullpath(ix).replace('\\','/').split('/')[-1]
+                    if not os.path.exists(src):
+                        os.makedirs(src)
                     file_name = os.path.join(os.path.abspath(src), file_name)
                     return file_name
 
