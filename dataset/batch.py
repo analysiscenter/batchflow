@@ -576,18 +576,13 @@ class Batch(BaseBatch):
         ----------
         src : str or FilesIndex
             if str, can be name of a file with extension in the indexed path (i.e self.index.dirs must be True)
-            if FilesIndex it must contain the same 
+            if FilesIndex it must contain the same indices values as in the self.index.
 
-
-            or if called from dump with write=True, src can be a name of a path where data
-            will be dumped in files named the same names as in current index (built from files)
-
+        write : bool
+            write = True is designed to be called from dump. Then src must be str and stand for a name of a folder
+            where data will be dumped in files named the same names as in current index.
         """
         if isinstance(self.index, FilesIndex):
-            
-
-
-            
             if isinstance(src, str):
                 if write and not self.index.dirs:
                     file_name = self.index.get_fullpath(ix).replace('\\','/').split('/')[-1]
@@ -602,11 +597,11 @@ class Batch(BaseBatch):
                 else:
                     raise ValueError("File index must be built on directories to locate files with src")
 
-            elif isinstance(src, FilesIndex): # test and check whether it is also possible to load with src.index.dirs=False             
+            elif isinstance(src, FilesIndex):
                 try:
                     file_name = src.get_fullpath(ix)
-                except KeyError:
-                    print("File {} is not indexed in received index".format(ix))
+                except Exception as e:
+                    raise ValueError("File {} is not indexed in the received index".format(ix))
 
             elif src is None:
                 file_name = self.index.get_fullpath(ix)
