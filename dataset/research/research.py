@@ -491,9 +491,9 @@ class ExecutableUnit:
 
     def reset_iter(self):
         if self.pipeline is not None:
-            self.pipeline.pipeline.reset_iter()
+            self.pipeline.reset_iter()
         if self.root_pipeline is not None:
-            self.root_pipeline.pipeline.reset_iter()
+            self.root_pipeline.reset_iter()
 
     def _clear_result(self):
         self.result = {var: [] for var in self.variables}
