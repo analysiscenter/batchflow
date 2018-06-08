@@ -490,6 +490,7 @@ class ExecutableUnit:
         return new_unit
 
     def reset_iter(self):
+        """ Reset iterators in pipelines """
         if self.pipeline is not None:
             self.pipeline.reset_iter()
         if self.root_pipeline is not None:
