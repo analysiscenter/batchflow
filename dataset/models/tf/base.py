@@ -1526,7 +1526,7 @@ class TFModel(BaseModel):
             return inputs
 
         if kwargs.get('filters') is None:
-            kwargs['filters'] = cls.num_channels(x, kwargs['data_format'])
+            kwargs['filters'] = cls.num_channels(inputs, kwargs['data_format'])
 
         x = upsample(inputs, factor=factor, layout=layout, name=name, **kwargs)
         if resize_to is not None:
