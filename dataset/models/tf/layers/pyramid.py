@@ -5,7 +5,7 @@ import tensorflow as tf
 from . import conv_block, upsample
 
 
-def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pyramid=(1, 2, 3, 6),
+def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pyramid=(0, 1, 2, 3, 6),
                     name='psp', **kwargs):
     """ Pyramid Pooling module
 
@@ -24,7 +24,8 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
     pool_op : str
         a pooling operation ('mean' or 'max')
     pyramid : tuple of int
-        feature region sizes, e.g. (1, 2, 3, 6)
+        feature region sizes, e.g. (0, 1, 2, 3, 6).
+        `0` is used to include inputs into the output tensor.
     name : str
         a layer name that will be used as a scope.
 
@@ -41,25 +42,30 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
     with tf.variable_scope(name):
         if None in shape[1:]:
             # if some dimension is undefined
-            raise ValueError("Pyramid pooling can only be applied to a tensor with fully defined shape.")
+            raise ValueError("Pyramid pooling can only be applied to a tensor with a fully defined shape.")
         else:
             item_shape = np.array(shape[1: -1] if data_format == 'channels_last' else shape[2:])
 
-            layers = [inputs]
+            layers = []
             for level in pyramid:
-                pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
-                pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
+                if level == 0:
+                    x = inputs
+                else:
+                    pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
+                    pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
 
-                x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
-                               name='pool-%d' % level, **kwargs)
-                x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv-%d' % level, **kwargs)
-                x = upsample(x, layout='b', shape=item_shape, name='upsample-%d' % level, **kwargs)
+                    x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
+                                   name='pool-%d' % level, **kwargs)
+                    x = conv_block(x, layout, filters=filters, kernel_size=kernel_size,
+                                   name='conv-%d' % level, **kwargs)
+                    x = upsample(x, layout='b', shape=item_shape, name='upsample-%d' % level, **kwargs)
                 layers.append(x)
             x = tf.concat(layers, axis=axis)
     return x
 
 
-def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), name='aspp', **kwargs):
+def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), image_level_features=2,
+         name='aspp', **kwargs):
     """ Atrous Spatial Pyramid Pooling module
 
     Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation
@@ -76,7 +82,9 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), n
     kernel_size : int
         kernel size (default=3)
     rates : tuple of int
-        dilation rates for branches (default=(6, 12, 18))
+        dilation rates for branches, default=(6, 12, 18)
+    image_level_features : int
+        the number of image level features in each dimension, default=2
     name : str
         name of the layer that will be used as a scope.
 
@@ -97,6 +105,9 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), n
             x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
                            name='conv-%d' % level, **kwargs)
             layers.append(x)
+
+        x = pyramid_pooling(inputs, filters=filters, pyramid=(image_level_features,), **kwargs)
+        layers.append(x)
 
         x = tf.concat(layers, axis=axis, name='concat')
         x = conv_block(x, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
