@@ -185,7 +185,7 @@ class Pipeline:
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
             raise AttributeError()
-        elif self._is_batch_method(name):
+        elif self._is_batch_method(name, cls=self.dataset.batch_class):
             self._action_list.append({'name': name})
             return self.append_action
         else:
