@@ -19,7 +19,8 @@ class Variable:
             self.init_on_each_run = init_on_each_run
         self._lock = threading.Lock() if lock else None
         self.value = None
-        self.initialize(pipeline=pipeline)
+        if not self.init_on_each_run:
+            self.initialize(pipeline=pipeline)
 
     def __getstate__(self):
         state = self.__dict__.copy()

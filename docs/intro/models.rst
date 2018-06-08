@@ -257,4 +257,4 @@ However, as far as ``TensorFlow`` is concerned, its optimizers have a parameter 
 
 Ready to use models
 ===================
-See documentation for :doc:`Tensorflow models <tf_models>` and the list of :doc:`implemented architectures <tf_models_zoo>`.
+See documentation for :doc:`Tensorflow models <tf_models>` and the list of :doc:`implemented architectures <model_zoo_tf>`.
