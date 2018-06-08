@@ -1,10 +1,11 @@
 """ Contains pyramid layers """
+import numpy as np
 import tensorflow as tf
 
-from .conv_block import conv_block
+from . import conv_block, upsample
 
 
-def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pool_size=(1, 2, 3, 6),
+def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pyramid=(1, 2, 3, 6),
                     name='psp', **kwargs):
     """ Pyramid Pooling module
 
@@ -17,48 +18,42 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
     layout : str
         layout for convolution layers
     filters : int
-        the number of filters in the output tensor
+        the number of filters in each pyramid branch
     kernel_size : int
         kernel size
-    pool_size : tuple of int
-        feature region sizes - pooling kernel sizes (e.g. [1, 2, 3, 6])
+    pool_op : str
+        a pooling operation ('mean' or 'max')
+    pyramid : tuple of int
+        feature region sizes, e.g. (1, 2, 3, 6)
     name : str
-        name of the layer that will be used as a scope.
+        a layer name that will be used as a scope.
 
     Returns
     -------
     tf.Tensor
     """
-    upsample = upsample if upsample is not None else {}
-    upsample_args = {**kwargs, **upsample}
-
     shape = inputs.get_shape().as_list()
     data_format = kwargs.get('data_format', 'channels_last')
     axis = -1 if data_format == 'channels_last' else 1
     if filters is None:
-        filters = shape[axis] // len(pool_size)
-
+        filters = shape[axis] // len(pyramid)
 
     with tf.variable_scope(name):
-        x = inputs
-
         if None in shape[1:]:
             # if some dimension is undefined
+            raise ValueError("Pyramid pooling can only be applied to a tensor with fully defined shape.")
         else:
-            if data_format == 'channels_last':
-                item_shape = shape[1: -1]
-            else:
-                item_shape = shape[2:]
+            item_shape = np.array(shape[1: -1] if data_format == 'channels_last' else shape[2:])
 
             layers = [inputs]
-            for level in pool_size:
+            for level in pyramid:
                 pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
                 pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
 
-                x = conv_block(x, 'p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_size,
+                x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
                                name='pool-%d' % level, **kwargs)
                 x = conv_block(x, layout, filters=filters, kernel_size=kernel_size, name='conv-%d' % level, **kwargs)
-                x = upsample(x, layout='b', shape=shape, name='upsample-%d' % level, **upsample_args)
+                x = upsample(x, layout='b', shape=item_shape, name='upsample-%d' % level, **kwargs)
                 layers.append(x)
             x = tf.concat(layers, axis=axis)
     return x
