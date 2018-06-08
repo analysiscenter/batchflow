@@ -83,7 +83,7 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
         kernel size (default=3)
     rates : tuple of int
         dilation rates for branches, default=(6, 12, 18)
-    image_level_features : int
+    image_level_features : int or tuple of int
         the number of image level features in each dimension, default=2
     name : str
         name of the layer that will be used as a scope.
@@ -93,9 +93,11 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
     tf.Tensor
     """
     data_format = kwargs.get('data_format', 'channels_last')
-    axis = -1 if data_format == 'channels_axis' else 1
+    axis = -1 if data_format == 'channels_last' else 1
     if filters is None:
         filters = inputs.get_shape().as_list()[axis]
+    if isinstance(image_level_features, int):
+        image_level_features = (image_level_features,)
 
     with tf.variable_scope(name):
         x = conv_block(inputs, layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs)
@@ -106,7 +108,7 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
                            name='conv-%d' % level, **kwargs)
             layers.append(x)
 
-        x = pyramid_pooling(inputs, filters=filters, pyramid=(image_level_features,), **kwargs)
+        x = pyramid_pooling(inputs, filters=filters, pyramid=image_level_features, **kwargs)
         layers.append(x)
 
         x = tf.concat(layers, axis=axis, name='concat')
