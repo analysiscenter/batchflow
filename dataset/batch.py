@@ -248,12 +248,13 @@ class Batch(BaseBatch):
             components = tuple(components)
 
         data = self._data
-        if self.components is None:
+        if self.components is None or data is None:
             self.components = components
             data = tuple()
         else:
             self.components = self.components + components
-            data = data + tuple(init)
+            data = data + (init,)
+
         self.make_item_class(local=True)
         self._data = data
 
@@ -568,19 +569,75 @@ class Batch(BaseBatch):
             dst[:] = tr_res
         return self
 
-    def _get_file_name(self, ix, src, ext):
-        if src is None:
-            if isinstance(self.index, FilesIndex):
-                src = self.index.get_fullpath(ix)
+    def _get_file_name(self, ix, src):
+        """ Get full path file name corresponding to the current index.
+
+        Parameters
+        ----------
+        src : str, FilesIndex or None
+            if None, full path to the indexed item will be returned.
+            if FilesIndex it must contain the same indices values as in the self.index.
+            if str, behavior depends on wheter self.index.dirs is True. If self.index.dirs is True
+            then src will be appended to the end of the full paths from self.index. Else if
+            self.index.dirs is False then src is considered as a directory name and the basenames
+            from self.index will be appended to the end of src.
+
+        Examples
+        --------
+        Let folder "/some/path/*.dcm" contain files "001.png", "002.png", etc. Then if self.index
+        was built as
+
+        >>> index = FilesIndex(path="/some/path/*.png", no_ext=True)
+
+        Then _get_file_name(ix, src="augmented_images/") will return filenames:
+        "augmented_images/001.png", "augmented_images/002.png", etc.
+
+
+        Let folder "/some/path/*" contain folders "001", "002", etc. Then if self.index
+        was built as
+
+        >>> index = FilesIndex(path="/some/path/*", dirs=True)
+
+        Then _get_file_name(ix, src="masks.png") will return filenames:
+        "/some/path/001/masks.png", "/some/path/002/masks.png", etc.
+
+
+        If you have two directories "images/*.png", "labels/*png" with identical filenames,
+        you can build two instances of FilesIndex and use the first one to biuld your Dataset
+
+        >>> index_images = FilesIndex(path="/images/*.png", no_ext=True)
+        >>> index_labels = FilesIndex(path="/labels/*.png", no_ext=True)
+        >>> dset = Dataset(index=index_images, batch_class=Batch)
+
+        Then build dataset using the first one
+        _get_file_name(ix, src=index_labels) to reach corresponding files in the second path.
+
+        """
+        if isinstance(self.index, FilesIndex):
+            if isinstance(src, str):
                 if self.index.dirs:
-                    file_name = os.path.join(src, 'data.' + ext)
+                    fullpath = self.index.get_fullpath(ix)
+                    file_name = os.path.join(fullpath, src)
+
                 else:
-                    file_name = src + '.' + ext
+                    file_name = os.path.basename(self.index.get_fullpath(ix))
+                    file_name = os.path.join(os.path.abspath(src), file_name)
+
+            elif isinstance(src, FilesIndex):
+                try:
+                    file_name = src.get_fullpath(ix)
+                except KeyError:
+                    raise KeyError("File {} is not indexed in the received index".format(ix))
+
+            elif src is None:
+                file_name = self.index.get_fullpath(ix)
+
             else:
-                raise ValueError("File locations must be specified to dump/load data")
+                raise ValueError("Src must be either str, FilesIndex or None")
+
+            return file_name
         else:
-            file_name = os.path.join(os.path.abspath(src), str(ix) + '.' + ext)
-        return file_name
+            raise ValueError("File locations must be specified to dump/load data")
 
     def _assemble_component(self, result, *args, component, **kwargs):
         """ Assemble one component after parallel execution.
@@ -643,20 +700,20 @@ class Batch(BaseBatch):
     @inbatch_parallel('indices', post='_assemble', target='f')
     def _load_blosc(self, ix, src=None, components=None):
         """ Load data from a blosc packed file """
-        file_name = self._get_file_name(ix, src, 'blosc')
+        file_name = self._get_file_name(ix, src)
         with open(file_name, 'rb') as f:
             data = dill.loads(blosc.decompress(f.read()))
-            if self.components is None:
-                components = (data.keys()[0],)
-            else:
-                components = tuple(components or self.components)
-            item = tuple(data[i] for i in components)
+            components = tuple(components or self.components)
+            try:
+                item = tuple(data[i] for i in components)
+            except Exception as e:
+                raise KeyError('Cannot find components in corresponfig file', e)
         return item
 
     @inbatch_parallel('indices', target='f')
     def _dump_blosc(self, ix, dst, components=None):
         """ Save blosc packed data to file """
-        file_name = self._get_file_name(ix, dst, 'blosc')
+        file_name = self._get_file_name(ix, dst)
         with open(file_name, 'w+b') as f:
             if self.components is None:
                 components = (None,)
@@ -759,6 +816,9 @@ class Batch(BaseBatch):
         """
         _ = args
         components = [components] if isinstance(components, str) else components
+        if components is not None:
+            self.add_components(components)
+
         if fmt is None:
             self.put_into_data(src, components)
         elif fmt == 'blosc':
