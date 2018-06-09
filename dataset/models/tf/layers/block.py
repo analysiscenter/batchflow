@@ -205,7 +205,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 args = dict(depth=kwargs.get('depth'), data_format=data_format)
 
             elif layer in ['b', 'B', 'N', 'X']:
-                args = dict(factor=kwargs.get('factor'), data_format=data_format)
+                args = dict(factor=kwargs.get('factor'), shape=kwargs.get('shape'), data_format=data_format)
                 if kwargs.get('upsampling_layout'):
                     args['layout'] = kwargs.get('upsampling_layout')
 

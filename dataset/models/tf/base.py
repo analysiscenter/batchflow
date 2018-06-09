@@ -881,23 +881,23 @@ class TFModel(BaseModel):
             tf.get_collection_ref('attrs').append(graph_item)
 
     @classmethod
-    def crop(cls, inputs, shape_images, data_format='channels_last'):
+    def crop(cls, inputs, resize_to, data_format='channels_last'):
         """ Crop input tensor to a shape of a given image.
-        If shape_image has not fully defined shape (shape_image.get_shape() has at least one None),
+        If resize_to does not have a fully defined shape (resize_to.get_shape() has at least one None),
         the returned tf.Tensor will be of unknown shape except the number of channels.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        shape_images : tf.Tensor
-            a source images to which
+        resize_to : tf.Tensor
+            a tensor which shape the inputs should be resized to
         data_format : str {'channels_last', 'channels_first'}
             data format
         """
 
-        static_shape = cls.spatial_shape(shape_images, data_format, False)
-        dynamic_shape = cls.spatial_shape(shape_images, data_format, True)
+        static_shape = cls.spatial_shape(resize_to, data_format, False)
+        dynamic_shape = cls.spatial_shape(resize_to, data_format, True)
 
         if None in cls.shape(inputs) + static_shape:
             return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
@@ -1497,7 +1497,7 @@ class TFModel(BaseModel):
         return x
 
     @classmethod
-    def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):
+    def upsample(cls, inputs, factor=None, resize_to=None, layout='b', name='upsample', **kwargs):
         """ Upsample input tensor
 
         Parameters
@@ -1506,8 +1506,10 @@ class TFModel(BaseModel):
             a tensor to resize and a tensor which size to resize to
         factor : int
             an upsamping scale
+        resize_to : tf.Tensor
+            a tensor which shape the output should be resized to
         layout : str
-            resizing technique, a sequence of:
+            a resizing technique, a sequence of:
 
             - R - use residual connection with bilinear additive upsampling (must be the first symbol)
             - b - bilinear resize
@@ -1523,17 +1525,10 @@ class TFModel(BaseModel):
         if np.all(factor == 1):
             return inputs
 
-        resize_to = None
-        if isinstance(inputs, (list, tuple)):
-            x, resize_to = inputs
-        else:
-            x = inputs
-        inputs = None
-
         if kwargs.get('filters') is None:
-            kwargs['filters'] = cls.num_channels(x, kwargs['data_format'])
+            kwargs['filters'] = cls.num_channels(inputs, kwargs['data_format'])
 
-        x = upsample(x, factor=factor, layout=layout, name=name, **kwargs)
+        x = upsample(inputs, factor=factor, layout=layout, name=name, **kwargs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x

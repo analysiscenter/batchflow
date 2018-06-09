@@ -112,7 +112,7 @@ Mostly, pipelines are needed to train machine learning models or predict using t
 
 See :doc:`Working with models <models>` to understand what a model is and how to use it within pipelines.
 
-There is a bunch of :doc:`predefined models <models_zoo>` which you can use out of the box.
+There is a bunch of :doc:`predefined models <model_zoo>` which you can use out of the box.
 
 
 Best practices

@@ -104,7 +104,7 @@ class ResNetAttention(TFModel):
         upsample_args = cls.pop('upsample', kwargs)
 
         with tf.variable_scope(name):
-            x, resize_to = inputs
+            x, skip = inputs
             inputs = None
             x = conv_block(x, layout='p', name='pool', **kwargs)
             b = ResNet.block(x, name='resblock_1', **kwargs)
@@ -114,7 +114,8 @@ class ResNetAttention(TFModel):
                 i = cls.mask((b, b), level=level-1, name='submask-%d' % level, **kwargs)
                 c = ResNet.block(c + i, name='resblock_3', **kwargs)
 
-            x = cls.upsample((c, resize_to), name='interpolation', data_format=kwargs['data_format'], **upsample_args)
+            x = cls.upsample(c, resize_to=skip, name='interpolation', data_format=kwargs['data_format'],
+                             **upsample_args)
         return x
 
     @classmethod
