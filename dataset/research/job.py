@@ -38,6 +38,7 @@ class Job:
             units = OrderedDict()
             for name, unit in self.executable_units.items():
                 unit = unit.get_copy()
+                unit.reset_iter()
                 if unit.pipeline is not None:
                     import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
                 else:
