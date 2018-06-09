@@ -60,7 +60,7 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
                                    name='conv-%d' % level, **kwargs)
                     x = upsample(x, layout='b', shape=item_shape, name='upsample-%d' % level, **kwargs)
                 layers.append(x)
-            x = tf.concat(layers, axis=axis)
+            x = tf.concat(layers, axis=axis, name='concat')
     return x
 
 
@@ -80,13 +80,16 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
     filters : int
         the number of filters in the output tensor
     kernel_size : int
-        kernel size (default=3)
+        kernel size for dilated branches (default=3)
     rates : tuple of int
         dilation rates for branches, default=(6, 12, 18)
     image_level_features : int or tuple of int
-        the number of image level features in each dimension, default=2
+        the number of image level features in each dimension. 
+        Default is 2, i.e. 2x2=4 pooling features will be calculated for 2d images,
+        and 2x2x2=8 features per 3d item. 
+        Tuple allows to define several image level features, e.g (2, 3, 4).
     name : str
-        name of the layer that will be used as a scope.
+        a layer name that will be used as a scope.
 
     Returns
     -------
@@ -108,7 +111,8 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
                            name='conv-%d' % level, **kwargs)
             layers.append(x)
 
-        x = pyramid_pooling(inputs, filters=filters, pyramid=image_level_features, **kwargs)
+        x = pyramid_pooling(inputs, filters=filters, pyramid=image_level_features,
+                            name='image_level_features', **kwargs)
         layers.append(x)
 
         x = tf.concat(layers, axis=axis, name='concat')
