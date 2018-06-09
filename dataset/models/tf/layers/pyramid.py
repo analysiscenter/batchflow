@@ -24,8 +24,9 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
     pool_op : str
         a pooling operation ('mean' or 'max')
     pyramid : tuple of int
-        feature region sizes, e.g. (0, 1, 2, 3, 6).
-        `0` is used to include inputs into the output tensor.
+        the number of feature regions in each dimension, default is (0, 1, 2, 3, 6).
+
+        `0` is used to include `inputs` into the output tensor.
     name : str
         a layer name that will be used as a scope.
 
@@ -84,12 +85,18 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
     rates : tuple of int
         dilation rates for branches, default=(6, 12, 18)
     image_level_features : int or tuple of int
-        the number of image level features in each dimension. 
+        the number of image level features in each dimension.
+
         Default is 2, i.e. 2x2=4 pooling features will be calculated for 2d images,
-        and 2x2x2=8 features per 3d item. 
+        and 2x2x2=8 features per 3d item.
+
         Tuple allows to define several image level features, e.g (2, 3, 4).
     name : str
         a layer name that will be used as a scope.
+
+    See also
+    --------
+    pyramid_pooling
 
     Returns
     -------
