@@ -216,6 +216,7 @@ class TFModel(BaseModel):
         self.train_step = None
         self._train_lock = threading.Lock()
         self._attrs = []
+        self._saver = None
         self._to_classes = {}
         self._inputs = {}
         self.inputs = None
@@ -816,8 +817,9 @@ class TFModel(BaseModel):
         with self.graph.as_default():
             if not os.path.exists(path):
                 os.makedirs(path)
-            saver = tf.train.Saver()
-            saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
+            if self._saver is None:
+                self._saver = tf.train.Saver()
+            self._saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
             with open(os.path.join(path, 'attrs.json'), 'w') as f:
                 json.dump(self._attrs, f)
 
