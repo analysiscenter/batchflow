@@ -19,3 +19,7 @@ def binarize(mask, threshold=.5):
         binary mask of the same shape as the input mask
     """
     return mask >= threshold
+
+@njit
+def sigmoid(arr):
+    return 1. / (1. + np.exp(-arr))
