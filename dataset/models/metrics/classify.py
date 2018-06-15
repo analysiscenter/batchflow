@@ -2,11 +2,25 @@
 import numpy as np
 
 from ... import mjit, parallel
-from .utils import binarize
+from . import Metrics, binarize
+#from .utils import binarize
 
 
-class ClassificationMetrics:
-    def __init__(self, targets, predictions, bin=False, threshold=.5):
+class ClassificationMetrics(Metrics):
+    """ Metrics used for 2-class classification and semantic segmentation models
+
+    Parameters
+    ----------
+    targets : np.array
+        Ground-truth labels or probabilities
+    predictions : np.array
+        Predicted probabilites for a positive class (labeled as 1)
+    bin : bool or None
+        whether to binarize targets and predictions (default is True)
+    threshold : float
+        A binarization level (lower values become 0, equal or greater values become 1)
+    """
+    def __init__(self, targets, predictions, bin=True, threshold=.5):
         if targets.ndim != predictions.ndim:
             raise ValueError("targets and predictions should have similar shapes.")
         if targets.ndim not in (1, 2):
@@ -28,10 +42,10 @@ class ClassificationMetrics:
         self._calc_confusion()
 
 
-    def all(self):
+    def _all(self):
         return [self.targets, self.predictions]
 
-    def items(self):
+    def _items(self):
         return ([self.targets[i], self.predictions[i]] for i in range(len(self.targets)))
 
     def _confusion_conditions(self):
@@ -60,9 +74,6 @@ class ClassificationMetrics:
     def false_negative(self):
         return self._return(self._confusion_matrix[:, 1, 0])
 
-    def false_negative(self):
-        return self._return(self._confusion_matrix[:, 1, 0])
-
     def condition_positive(self):
         return self._return(self._confusion_matrix[:, :, 0].sum(axis=1))
 
@@ -85,7 +96,7 @@ class ClassificationMetrics:
         return self.true_positive_rate()
 
     def recall(self):
-        return sself.true_positive_rate()
+        return self.true_positive_rate()
 
     def false_positive_rate(self):
         return self.false_positive() / self.condition_negative()
