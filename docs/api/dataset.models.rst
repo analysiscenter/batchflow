@@ -4,6 +4,7 @@ dataset.models
 
 .. toctree::
 
+    dataset.models.metrics
     dataset.models.tf
 
 
