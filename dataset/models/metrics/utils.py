@@ -2,7 +2,7 @@
 from numba import njit
 
 
-@njit
+@njit(nogil=True)
 def binarize(mask, threshold=.5):
     """ Create a binary mask from probabilities with a given threshold.
 
@@ -20,6 +20,7 @@ def binarize(mask, threshold=.5):
     """
     return mask >= threshold
 
-@njit
+
+@njit(nogil=True)
 def sigmoid(arr):
     return 1. / (1. + np.exp(-arr))
