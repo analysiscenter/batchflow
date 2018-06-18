@@ -1,7 +1,17 @@
 """ Contains a base metrics class """
 
+
 class Metrics:
-    """ Base metrics evalation class """
+    """ Base metrics evalation class
+
+    Examples
+    --------
+
+    ::
+
+    m = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
+    m.evaluate(['sensitivity', 'specificity'], agg='micro')
+    """
     def evaluate(self, metrics, *args, **kwargs):
         """ Calculates metrics
 
@@ -9,6 +19,8 @@ class Metrics:
         ----------
         metrics : list of str
             metrics names
+        args, kwargs
+            metric-specific parameters
 
         Returns
         -------
