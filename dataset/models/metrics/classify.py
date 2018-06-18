@@ -1,7 +1,6 @@
 """ Contains two class classification metrics """
 import numpy as np
 
-from ... import parallel
 from . import Metrics, binarize, sigmoid
 
 
@@ -179,8 +178,7 @@ class ClassificationMetrics(Metrics):
 
     def accuracy(self, *args, **kwargs):
         _ = args, kwargs
-        acc = np.sum([self.true_positive(l) for l in range(self.num_classes)], axis=0)
-        return acc / self.total_population()
+        return np.sum([self.true_positive(l) for l in range(self.num_classes)], axis=0) / self.total_population()
 
     def positive_predictive_value(self, label=None, agg='micro'):
         return self._calc_agg_metric(self.true_positive, self.prediction_positive, label, agg)
