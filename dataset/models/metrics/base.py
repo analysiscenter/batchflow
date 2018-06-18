@@ -2,7 +2,7 @@
 
 class Metrics:
     """ Base metrics evalation class """
-    def evaluate(self, metrics):
+    def evaluate(self, metrics, *args, **kwargs):
         """ Calculates metrics
 
         Parameters
@@ -19,5 +19,5 @@ class Metrics:
         res = {}
         for name in metrics:
             metric_fn = getattr(self, name)
-            res[name] = metric_fn()
+            res[name] = metric_fn(*args, **kwargs)
         return res

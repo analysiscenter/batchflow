@@ -1,5 +1,6 @@
 """ Contains utility function for metrics evaluation """
 from numba import njit
+import numpy as np
 
 
 @njit(nogil=True)

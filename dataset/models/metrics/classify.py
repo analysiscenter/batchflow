@@ -134,7 +134,7 @@ class ClassificationMetrics(Metrics):
         return self.false_positive(label) / self.condition_negative(label)
 
     def fallout(self, label=0):
-        return self.false_positive_rate()
+        return self.false_positive_rate(label)
 
     def false_negative_rate(self, label=0):
         return self.false_negative(label) / self.condition_positive(label)
@@ -149,7 +149,7 @@ class ClassificationMetrics(Metrics):
         return self.true_negative_rate(label)
 
     def prevalence(self, label=0):
-        return self.condition_positive(label) / self.total_population(label)
+        return self.condition_positive(label) / self.total_population()
 
     def accuracy(self, label=0):
         return (self.true_positive(label) + self.true_negative(label)) / self.total_population()
