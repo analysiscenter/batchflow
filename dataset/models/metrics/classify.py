@@ -1,6 +1,11 @@
 """ Contains two class classification metrics """
-import numpy as np
+import warnings
+#warnings.filterwarnings("ignore")
 
+import numpy as np
+from numba import njit
+
+from ... import mjit, parallel
 from . import Metrics, binarize, sigmoid
 
 
@@ -65,7 +70,7 @@ class ClassificationMetrics(Metrics):
         self.targets = targets
         self.predictions = predictions
 
-        self._confusion_matrix = None
+        self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.int64)
         self._calc_confusion()
 
     def _to_labels(self, arr, fmt, axis, threshold):
@@ -80,47 +85,53 @@ class ClassificationMetrics(Metrics):
                 arr = arr.argmax(axis=axis)
         return arr
 
-    def _calc_confusion(self):
-        self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.int64)
-        for t in range(self.num_classes):
-            coords = np.where(self.targets == t)
-            pred_classes = self.predictions[coords]
-            for i in range(len(coords[0])):
-                item = self._confusion_matrix[coords[0][i]]
-                item[pred_classes[i], t] += 1
+    def _confusion_params(self):
+        self._confusion_matrix[:] = 0
+        return [[self.targets, self.predictions, self.num_classes, self._confusion_matrix]]
+
+    @parallel("_confusion_params")
+    @mjit
+    def _calc_confusion(self, targets, predictions, num_classes, confusion):
+        for i in range(targets.shape[0]):
+            ta = targets[i].flatten()
+            pr = predictions[i].flatten()
+            for t in range(num_classes):
+                coords = np.where(ta == t)
+                for c in pr[coords]:
+                    confusion[i, c, t] += 1
 
     def _return(self, value):
         return value[0] if self._convert_to_scalar else value
 
-    def true_positive(self, label=0, *args, **kwargs):
+    def true_positive(self, label=1, *args, **kwargs):
         _ = args, kwargs
         return self._return(self._confusion_matrix[:, label, label])
 
-    def false_positive(self, label=0, *args, **kwargs):
+    def false_positive(self, label=1, *args, **kwargs):
         _ = args, kwargs
         return self.prediction_positive(label) - self.true_positive(label)
 
-    def true_negative(self, label=0, *args, **kwargs):
+    def true_negative(self, label=1, *args, **kwargs):
         _ = args, kwargs
         return self.condition_negative(label) - self.false_positive(label)
 
-    def false_negative(self, label=0, *args, **kwargs):
+    def false_negative(self, label=1, *args, **kwargs):
         _ = args, kwargs
         return self.condition_positive(label) - self.true_positive(label)
 
-    def condition_positive(self, label=0, *args, **kwargs):
+    def condition_positive(self, label=1, *args, **kwargs):
         _ = args, kwargs
         return self._return(self._confusion_matrix[:, :, label].sum(axis=1))
 
-    def condition_negative(self, label=0, *args, **kwargs):
+    def condition_negative(self, label=1, *args, **kwargs):
         _ = args, kwargs
         return self.total_population() - self.condition_positive(label)
 
-    def prediction_positive(self, label=0, *args, **kwargs):
+    def prediction_positive(self, label=1, *args, **kwargs):
         _ = args, kwargs
         return self._return(self._confusion_matrix[:, label].sum(axis=1))
 
-    def prediction_negative(self, label=0, *args, **kwargs):
+    def prediction_negative(self, label=1, *args, **kwargs):
         _ = args, kwargs
         return self.total_population() - self.prediction_positive(label)
 
@@ -128,26 +139,30 @@ class ClassificationMetrics(Metrics):
         _ = args, kwargs
         return self._return(self._confusion_matrix.sum(axis=(1, 2)))
 
-    def _calc_agg_metric(self, numer, denom, label=None, agg=None):
+    def _calc_agg_metric(self, numer, denom, label=None, agg=None, when_zero=None):
+        _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1])
         if self.num_classes > 2:
             label = label if label is not None else list(range(self.num_classes))
             label = label if isinstance(label, (list, tuple)) else [label]
             label_value = [(numer(l, agg=agg), denom(l, agg=agg)) for l in label]
+            print('val', label_value)
 
             if agg is None:
-                value = [l[0] / l[1] for l in label_value]
+                value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
                 value = value[0] if len(value) == 1 else np.array(value).T
             if agg == 'micro':
                 value = np.sum([l[0] for l in label_value], axis=0) / np.sum([l[1] for l in label_value], axis=0)
             elif agg in ['macro', 'mean']:
                 value = np.mean([l[0] / l[1] for l in label_value], axis=0)
         else:
-            label = label if label is not None else 0
-            value = numer(label) / denom(label)
+            label = label if label is not None else 1
+            d = denom(label)
+            n = numer(label)
+            value = np.where(d > 0, n / d, _when_zero(n))
         return value
 
     def true_positive_rate(self, label=None, agg='micro'):
-        return self._calc_agg_metric(self.true_positive, self.condition_positive, label, agg)
+        return self._calc_agg_metric(self.true_positive, self.condition_positive, label, agg, when_zero=(0, 1))
 
     def sensitivity(self, label=None, agg='micro'):
         return self.true_positive_rate(label, agg)
@@ -156,19 +171,19 @@ class ClassificationMetrics(Metrics):
         return self.true_positive_rate(label, agg)
 
     def false_positive_rate(self, label=None, agg='micro'):
-        return self._calc_agg_metric(self.false_positive, self.condition_negative, label, agg)
+        return self._calc_agg_metric(self.false_positive, self.condition_negative, label, agg, when_zero=(1, 0))
 
     def fallout(self, label=None, agg='micro'):
         return self.false_positive_rate(label, agg)
 
     def false_negative_rate(self, label=None, agg='micro'):
-        return self._calc_agg_metric(self.false_negative, self.condition_positive, label, agg)
+        return self._calc_agg_metric(self.false_negative, self.condition_positive, label, agg, when_zero=(1, 0))
 
     def miss_rate(self, label=None, agg='micro'):
         return self.false_negative_rate(label, agg)
 
     def true_negative_rate(self, label=None, agg='micro'):
-        return self._calc_agg_metric(self.true_negative, self.condition_negative, label, agg)
+        return self._calc_agg_metric(self.true_negative, self.condition_negative, label, agg, when_zero=(0, 1))
 
     def specificity(self, label=None, agg='micro'):
         return self.true_negative_rate(label, agg)
@@ -181,19 +196,19 @@ class ClassificationMetrics(Metrics):
         return np.sum([self.true_positive(l) for l in range(self.num_classes)], axis=0) / self.total_population()
 
     def positive_predictive_value(self, label=None, agg='micro'):
-        return self._calc_agg_metric(self.true_positive, self.prediction_positive, label, agg)
+        return self._calc_agg_metric(self.true_positive, self.prediction_positive, label, agg, when_zero=(0, 1))
 
     def precision(self, label=None, agg='micro'):
         return self.positive_predictive_value(label, agg)
 
     def false_discovery_rate(self, label=None, agg='micro'):
-        return self._calc_agg_metric(self.false_positive, self.prediction_positive, label, agg)
+        return self._calc_agg_metric(self.false_positive, self.prediction_positive, label, agg, when_zero=(1, 0))
 
     def false_omission_rate(self, label=None, agg='micro'):
-        return self._calc_agg_metric(self.false_negative, self.prediction_negative, label, agg)
+        return self._calc_agg_metric(self.false_negative, self.prediction_negative, label, agg, when_zero=(1, 0))
 
     def negative_predictive_value(self, label=None, agg='micro'):
-        return self._calc_agg_metric(self.true_negative, self.prediction_negative, label, agg)
+        return self._calc_agg_metric(self.true_negative, self.prediction_negative, label, agg, when_zero=(0, 1))
 
     def positive_likelihood_ratio(self, label=None, agg='micro'):
         return self._calc_agg_metric(self.true_positive_rate, self.false_positive_rate, label, agg)
