@@ -145,15 +145,16 @@ class ClassificationMetrics(Metrics):
             label = label if label is not None else list(range(self.num_classes))
             label = label if isinstance(label, (list, tuple)) else [label]
             label_value = [(numer(l, agg=agg), denom(l, agg=agg)) for l in label]
-            print('val', label_value)
 
             if agg is None:
                 value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
                 value = value[0] if len(value) == 1 else np.array(value).T
             if agg == 'micro':
-                value = np.sum([l[0] for l in label_value], axis=0) / np.sum([l[1] for l in label_value], axis=0)
+                n = np.sum([l[0] for l in label_value], axis=0)
+                d = np.sum([l[1] for l in label_value], axis=0)
+                value = np.where(d > 0, n / d, _when_zero(n))
             elif agg in ['macro', 'mean']:
-                value = np.mean([l[0] / l[1] for l in label_value], axis=0)
+                value = np.mean([np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value], axis=0)
         else:
             label = label if label is not None else 1
             d = denom(label)
