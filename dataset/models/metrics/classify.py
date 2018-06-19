@@ -100,39 +100,47 @@ class ClassificationMetrics(Metrics):
                     confusion[i, c, t] += 1
 
     def _return(self, value):
-        return value[0] if self._convert_to_scalar else value
+        return value[0] if self._convert_to_scalar and isinstance(value, np.ndarray) else value
 
-    def true_positive(self, label=1, *args, **kwargs):
-        _ = args, kwargs
-        return self._return(self._confusion_matrix[:, label, label])
+    def _count(self, f, label=None):
+        if self.num_classes > 2:
+            if label is None:
+                v = np.array([self._return(f(l)) for l in range(self.num_classes)]).T
+                return v
+        label = 1 if label is None else label
+        return self._return(f(label))
 
-    def false_positive(self, label=1, *args, **kwargs):
+    def true_positive(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self.prediction_positive(label) - self.true_positive(label)
+        return self._count(lambda l: self._confusion_matrix[:, l, l], label)
 
-    def true_negative(self, label=1, *args, **kwargs):
+    def false_positive(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self.condition_negative(label) - self.false_positive(label)
+        return self._count(lambda l: self.prediction_positive(l) - self.true_positive(l), label)
 
-    def false_negative(self, label=1, *args, **kwargs):
+    def true_negative(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self.condition_positive(label) - self.true_positive(label)
+        return self._count(lambda l: self.condition_negative(l) - self.false_positive(l), label)
 
-    def condition_positive(self, label=1, *args, **kwargs):
+    def false_negative(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self._return(self._confusion_matrix[:, :, label].sum(axis=1))
+        return self._count(lambda l: self.condition_positive(l) - self.true_positive(l), label)
 
-    def condition_negative(self, label=1, *args, **kwargs):
+    def condition_positive(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self.total_population() - self.condition_positive(label)
+        return self._count(lambda l: self._confusion_matrix[:, :, l].sum(axis=1), label)
 
-    def prediction_positive(self, label=1, *args, **kwargs):
+    def condition_negative(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self._return(self._confusion_matrix[:, label].sum(axis=1))
+        return self._count(lambda l: self.total_population() - self.condition_positive(l), label)
 
-    def prediction_negative(self, label=1, *args, **kwargs):
+    def prediction_positive(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self.total_population() - self.prediction_positive(label)
+        return self._count(lambda l: self._confusion_matrix[:, l].sum(axis=1), label)
+
+    def prediction_negative(self, label=None, *args, **kwargs):
+        _ = args, kwargs
+        return self._count(lambda l: self.total_population() - self.prediction_positive(l), label)
 
     def total_population(self, *args, **kwargs):
         _ = args, kwargs
