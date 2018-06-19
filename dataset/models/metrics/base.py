@@ -29,9 +29,9 @@ class Metrics:
 
         Returns
         -------
-        dict
-            key - metric name
-            value - metric value
+            Dictionary:
+            - key - metric name
+            - value - metric value
         """
         res = {}
         for name in metrics:

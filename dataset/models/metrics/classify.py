@@ -43,6 +43,16 @@ class ClassificationMetrics(Metrics):
               and (batch_items,) for 2-class tasks.
               For aggregations use rate metrics, such as `true_positive_rate`, `false_positive_rate`, etc.
 
+    **Aggregation**
+
+    In a multiclass case metrics might be calculated with or without class aggregations.
+
+    Available aggregation are:
+
+    - `None` - no aggregation, calculate metrics for each class individually (one-vs-all)
+    - `'micro'` - calculate metrics globally by counting the total true positives,
+                  false negatives, false positives, etc. across all classes
+    - `'macro'` - calculate metrics for each class, and take their mean
 
     Examples
     --------
