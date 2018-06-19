@@ -1,9 +1,8 @@
 """ Contains two class classification metrics """
 import warnings
-#warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")
 
 import numpy as np
-from numba import njit
 
 from ... import mjit, parallel
 from . import Metrics, binarize, sigmoid
@@ -93,11 +92,11 @@ class ClassificationMetrics(Metrics):
     @mjit
     def _calc_confusion(self, targets, predictions, num_classes, confusion):
         for i in range(targets.shape[0]):
-            ta = targets[i].flatten()
-            pr = predictions[i].flatten()
+            targ = targets[i].flatten()
+            pred = predictions[i].flatten()
             for t in range(num_classes):
-                coords = np.where(ta == t)
-                for c in pr[coords]:
+                coords = np.where(targ == t)
+                for c in pred[coords]:
                     confusion[i, c, t] += 1
 
     def _return(self, value):
