@@ -4,13 +4,16 @@
 class Metrics:
     """ Base metrics evalation class
 
+    This class is not supposed to be instantiated.
+    Use specific children classes instead (e.g. :class:`.ClassificationMetrics`).
+
     Examples
     --------
 
     ::
 
-    m = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
-    m.evaluate(['sensitivity', 'specificity'], agg='micro')
+        m = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
+        m.evaluate(['sensitivity', 'specificity'], agg='micro')
     """
     def evaluate(self, metrics, *args, **kwargs):
         """ Calculates metrics
@@ -18,8 +21,10 @@ class Metrics:
         Parameters
         ----------
         metrics : list of str
-            metrics names
-        args, kwargs
+            metric names
+        args
+            metric-specific parameters
+        kwargs
             metric-specific parameters
 
         Returns

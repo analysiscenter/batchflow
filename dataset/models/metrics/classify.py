@@ -9,7 +9,7 @@ from . import Metrics, binarize, sigmoid
 
 
 class ClassificationMetrics(Metrics):
-    """ Metrics used for classification models
+    """ Metrics to assess classification models
 
     Parameters
     ----------
@@ -38,13 +38,20 @@ class ClassificationMetrics(Metrics):
     However, if `axis` is None, then two class classification is assumed and `targets` / `predictions`
     should contain probabilities or logits for a positive class only.
 
+    .. note:: Count-based metrics (`true_positive`, `false_positive`, etc.) do not support aggregations.
+              They always produce the output of (batch_items, num_classes) shape for multi-class tasks
+              and (batch_items,) for 2-class tasks.
+              For aggregations use rate metrics, such as `true_positive_rate`, `false_positive_rate`, etc.
+
+
     Examples
     --------
 
     ::
 
-    m = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
-    m.evaluate(['sensitivity', 'specificity'], agg='micro')
+        m = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
+        m.evaluate(['sensitivity', 'specificity'], agg='micro')
+
     """
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5):
         self.num_classes = num_classes if num_classes is not None else 2 if axis is None else targets.shape[axis]
@@ -79,7 +86,7 @@ class ClassificationMetrics(Metrics):
             if axis is None:
                 if fmt == 'logits':
                     arr = sigmoid(arr)
-                arr = binarize(arr, threshold)
+                arr = binarize(arr, threshold).astype('int8')
             else:
                 arr = arr.argmax(axis=axis)
         return arr
