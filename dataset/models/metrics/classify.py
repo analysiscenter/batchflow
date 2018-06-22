@@ -92,11 +92,9 @@ class ClassificationMetrics(Metrics):
                              targets.shape, predictions.shape)
         predictions = self._to_labels(predictions, fmt, axis, threshold)
 
-        self._convert_to_scalar = False
         if targets.ndim == 1:
             targets = targets.reshape(1, -1)
             predictions = predictions.reshape(1, -1)
-            self._convert_to_scalar = True
 
         self.targets = targets
         self.predictions = predictions
@@ -132,7 +130,7 @@ class ClassificationMetrics(Metrics):
                     confusion[i, c, t] += 1
 
     def _return(self, value):
-        return value[0] if self._convert_to_scalar and isinstance(value, np.ndarray) else value
+        return value[0] if isinstance(value, np.ndarray) and value.shape == (1, ) else value
 
     def _count(self, f, label=None):
         if self.num_classes > 2:
