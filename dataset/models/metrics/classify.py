@@ -28,16 +28,16 @@ class ClassificationMetrics(Metrics):
 
     Notes
     -----
-    Input arrays (`targets` and `predictions`) might be vectors or multidimensional arrays,
+    - Input arrays (`targets` and `predictions`) might be vectors or multidimensional arrays,
     where the first dimension represents batch items. The latter is useful for pixel-level metrics.
 
-    `num_classes` and `axis` cannot be both None. If `axis` is specified, then `predictions` should be
-    a one-hot array with class information provided in the given axis (class probabilities or logits).
+    - When `axis` is specified, `predictions` should be a one-hot array with class information provided
+    in the given axis (class probabilities or logits).
 
-    If `fmt` is 'labels', `num_classes` should be specified. Due to randomness any given batch may not
+    - If `fmt` is 'labels', `num_classes` should be specified. Due to randomness any given batch may not
     contain items of some classes, so all the labels cannot be inferred as simply as `labels.max()`.
 
-    If `fmt` is 'proba' or 'logits', then `axis` points to the one-hot dimension.
+    - If `fmt` is 'proba' or 'logits', then `axis` points to the one-hot dimension.
     However, if `axis` is None, then two class classification is assumed and `targets` / `predictions`
     should contain probabilities or logits for a positive class only.
 
@@ -50,10 +50,12 @@ class ClassificationMetrics(Metrics):
     - a vector with batch size items if input is a multidimensional array (e.g. images or sequences)
       and there are just 2 classes or multiclass averaging is on.
     - a vector with `num_classes` items if input is a vector for multiclass casse without averaging.
-    - a 2d array `(batch_items, num_classes)` for multidimensional input in a multiclass case without averaging.
+    - a 2d array `(batch_items, num_classes)` for multidimensional inputs in a multiclass case without averaging.
 
     .. note:: Count-based metrics (`true_positive`, `false_positive`, etc.) do not support mutliclass averaging.
-              For multiclass averaging use rate metrics, such as `true_positive_rate`, `false_positive_rate`, etc.
+              They always return counts for each class separately.
+              For multiclass tasks rate metrics, such as `true_positive_rate`, `false_positive_rate`, etc.,
+              might seem more convenient.
 
     **Multiclass metrics**
 
@@ -99,7 +101,7 @@ class ClassificationMetrics(Metrics):
         self.targets = targets
         self.predictions = predictions
 
-        self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.int32)
+        self._confusion_matrix = None
         if confusion:
             self._calc_confusion()
 
@@ -115,13 +117,12 @@ class ClassificationMetrics(Metrics):
                 arr = arr.argmax(axis=axis)
         return arr
 
-    def _confusion_params(self):
-        self._confusion_matrix[:] = 0
-        return [[self.targets, self.predictions, self.num_classes, self._confusion_matrix]]
+    def _calc_confusion(self):
+        self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.int32)
+        return self._calc_confusion_jit(self.targets, self.predictions, self.num_classes, self._confusion_matrix)
 
-    @parallel("_confusion_params")
     @mjit
-    def _calc_confusion(self, targets, predictions, num_classes, confusion):
+    def _calc_confusion_jit(self, targets, predictions, num_classes, confusion):
         for i in range(targets.shape[0]):
             targ = targets[i].flatten()
             pred = predictions[i].flatten()
@@ -136,8 +137,7 @@ class ClassificationMetrics(Metrics):
     def _count(self, f, label=None):
         if self.num_classes > 2:
             if label is None:
-                v = np.array([self._return(f(l)) for l in range(self.num_classes)]).T
-                return v
+                return np.array([self._return(f(l)) for l in range(self.num_classes)]).T
         label = 1 if label is None else label
         return self._return(f(label))
 
