@@ -1,7 +1,6 @@
 """ Contains metrics for segmentation """
 import numpy as np
 
-from ... import parallel
 from . import ClassificationMetrics, get_components
 
 

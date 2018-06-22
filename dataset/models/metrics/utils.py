@@ -1,8 +1,7 @@
 """ Contains utility function for metrics evaluation """
-from numba import njit, prange, jit
+from numba import njit, prange
 import numpy as np
 from scipy.ndimage import measurements
-from time import time
 
 
 @njit(nogil=True)
@@ -32,7 +31,7 @@ def sigmoid(arr):
 @njit(nogil=True, parallel=True)
 def _get_components(connected_array, num_components):
     components = np.zeros((num_components, connected_array.ndim, 2), dtype=np.int32)
-    for i in prange(num_components):
+    for i in prange(num_components):    # pylint: disable=not-an-iterable
         coords = np.where(connected_array == (i + 1))
         for d in range(components.shape[1]):
             components[i, d, 0] = np.min(coords[d])
@@ -40,6 +39,7 @@ def _get_components(connected_array, num_components):
     return components
 
 def get_components(inputs, batch=True):
+    """ Find connected components """
     coords = []
     num_items = len(inputs) if batch else 1
     for i in range(num_items):

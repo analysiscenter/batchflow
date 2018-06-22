@@ -4,7 +4,7 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 
-from ... import mjit, parallel
+from ... import mjit
 from . import Metrics, binarize, sigmoid
 
 
