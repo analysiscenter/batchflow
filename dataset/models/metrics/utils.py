@@ -43,7 +43,7 @@ def get_components(inputs, batch=True):
     coords = []
     num_items = len(inputs) if batch else 1
     for i in range(num_items):
-        connected_array, num_components = measurements.label(inputs, output=None)
+        connected_array, num_components = measurements.label(inputs[i], output=None)
         c = _get_components(connected_array, num_components)
         coords.append(c)
     return coords if batch else coords[0]
