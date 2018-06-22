@@ -14,20 +14,20 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5, iot=.5):
         super().__init__(targets, predictions, fmt, num_classes, axis, threshold, confusion=False)
         self.iot = iot
-        self.target_components = self._get_components(self.targets)
-        self.predicted_components = self._get_components(self.predictions)
+        self.target_instances = self._get_instances(self.targets)
+        self.predicted_instances = self._get_instances(self.predictions)
         self._calc_confusion()
 
-    def _get_components(self, inputs):
+    def _get_instances(self, inputs):
         return get_components(inputs, batch=True)
 
     def _calc_confusion(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes - 1, 2, 2), dtype=np.intp)
 
-        for i in range(len(self.target_components)):
-            for j in range(len(self.target_components[i])):
+        for i in range(len(self.target_instances)):
+            for j in range(len(self.target_instances[i])):
                 for k in range(self.num_classes - 1):
-                    c = self.target_components[i][j]
+                    c = self.target_instances[i][j]
                     coords = [slice(i, i+1)]
                     for d in range(c.shape[0]):
                         coords.append(slice(c[d, 0], c[d, 1]))
@@ -38,10 +38,10 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
                     else:
                         self._confusion_matrix[i, k, 0, 1] += 1
 
-        for i in range(len(self.predicted_components)):
-            for j in range(len(self.predicted_components[i])):
+        for i in range(len(self.predicted_instances)):
+            for j in range(len(self.predicted_instances[i])):
                 for k in range(self.num_classes - 1):
-                    c = self.predicted_components[i][j]
+                    c = self.predicted_instances[i][j]
                     coords = [slice(i, i+1)]
                     for d in range(c.shape[0]):
                         coords.append(slice(c[d, 0], c[d, 1]))
