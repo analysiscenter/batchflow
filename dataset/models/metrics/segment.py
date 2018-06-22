@@ -3,7 +3,6 @@ import numpy as np
 
 from ... import parallel
 from . import ClassificationMetrics, get_components
-from time import time
 
 
 class SegmentationMetricsByPixels(ClassificationMetrics):
@@ -11,16 +10,14 @@ class SegmentationMetricsByPixels(ClassificationMetrics):
     pass
 
 
-class SegmentationMetricsByComponents(ClassificationMetrics):
-    """ Metrics to assess segmentation models with connected components """
+class SegmentationMetricsByInstances(ClassificationMetrics):
+    """ Metrics to assess segmentation models by instances (connected components) """
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5, iot=.5):
         super().__init__(targets, predictions, fmt, num_classes, axis, threshold, confusion=False)
         self.iot = iot
         self.target_components = get_components(self.targets, batch=True)
         self.predicted_components = get_components(self.predictions, batch=True)
-        t = time()
         self._calc_confusion()
-        print('matrix', time() - t)
 
     def _calc_confusion(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes - 1, 2, 2), dtype=np.int32)
@@ -50,3 +47,22 @@ class SegmentationMetricsByComponents(ClassificationMetrics):
                     targ = self.targets[coords]
                     if np.sum(pred) / targ.size < self.iot:
                         self._confusion_matrix[i, k, 1, 0] += 1
+
+    def true_positive(self, label=None, *args, **kwargs):
+        _ = args, kwargs
+        return self._count(lambda l: self._confusion_matrix[:, l-1, 1, 1], label)
+
+    def true_negative(self, label=None, *args, **kwargs):
+        raise ValueError("True negaitve is inapplicable for instance-based metrics")
+
+    def condition_positive(self, label=None, *args, **kwargs):
+        _ = args, kwargs
+        return self._count(lambda l: self._confusion_matrix[:, l-1, :, 1].sum(axis=1), label)
+
+    def prediction_positive(self, label=None, *args, **kwargs):
+        _ = args, kwargs
+        return self._count(lambda l: self._confusion_matrix[:, l-1, 1].sum(axis=1), label)
+
+    def total_population(self, *args, **kwargs):
+        _ = args, kwargs
+        return self._return(self._confusion_matrix[:, 0].sum(axis=(1, 2)))
