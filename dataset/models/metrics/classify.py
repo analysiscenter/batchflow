@@ -118,7 +118,7 @@ class ClassificationMetrics(Metrics):
         return arr
 
     def _calc_confusion(self):
-        self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.int32)
+        self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.intp)
         return self._calc_confusion_jit(self.targets, self.predictions, self.num_classes, self._confusion_matrix)
 
     @mjit
@@ -163,7 +163,7 @@ class ClassificationMetrics(Metrics):
 
     def condition_negative(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self._count(lambda l: self.total_population() - self.condition_positive(l), label)
+        return self._count(lambda l: self.total_population(l) - self.condition_positive(l), label)
 
     def prediction_positive(self, label=None, *args, **kwargs):
         _ = args, kwargs
@@ -171,7 +171,7 @@ class ClassificationMetrics(Metrics):
 
     def prediction_negative(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self._count(lambda l: self.total_population() - self.prediction_positive(l), label)
+        return self._count(lambda l: self.total_population(l) - self.prediction_positive(l), label)
 
     def total_population(self, *args, **kwargs):
         _ = args, kwargs

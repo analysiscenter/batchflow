@@ -14,12 +14,15 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5, iot=.5):
         super().__init__(targets, predictions, fmt, num_classes, axis, threshold, confusion=False)
         self.iot = iot
-        self.target_components = get_components(self.targets, batch=True)
-        self.predicted_components = get_components(self.predictions, batch=True)
+        self.target_components = self._get_components(self.targets)
+        self.predicted_components = self._get_components(self.predictions)
         self._calc_confusion()
 
+    def _get_components(self, inputs):
+        return get_components(inputs, batch=True)
+
     def _calc_confusion(self):
-        self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes - 1, 2, 2), dtype=np.int32)
+        self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes - 1, 2, 2), dtype=np.intp)
 
         for i in range(len(self.target_components)):
             for j in range(len(self.target_components[i])):
@@ -62,6 +65,6 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
         _ = args, kwargs
         return self._count(lambda l: self._confusion_matrix[:, l-1, 1].sum(axis=1), label)
 
-    def total_population(self, *args, **kwargs):
+    def total_population(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self._return(self._confusion_matrix[:, 0].sum(axis=(1, 2)))
+        return self._return(self._confusion_matrix[:, label - 1].sum(axis=(1, 2)))
