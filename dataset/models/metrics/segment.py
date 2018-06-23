@@ -64,7 +64,7 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
         return self._count(lambda l: self._confusion_matrix[:, l-1, 1, 1], label)
 
     def true_negative(self, label=None, *args, **kwargs):
-        raise ValueError("True negaitve is inapplicable for instance-based metrics")
+        raise ValueError("True negative is inapplicable for instance-based metrics")
 
     def condition_positive(self, label=None, *args, **kwargs):
         _ = args, kwargs
