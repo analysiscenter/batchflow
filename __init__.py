@@ -1,4 +1,4 @@
-import sys
-import importlib
+import os
 
-sys.modules[__package__] = importlib.import_module('.dataset', __package__)
+from .dataset import *
+__path__ = [os.path.join(os.path.dirname(__file__), 'dataset')]
