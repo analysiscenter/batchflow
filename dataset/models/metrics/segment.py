@@ -30,6 +30,10 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
         self.target_instances = self._get_instances(self.one_hot(self.targets), axis)
         self.predicted_instances = self._get_instances(self.one_hot(self.predictions), axis)
         self._calc_confusion()
+
+    def free(self):
+        """ Free memory allocated for intermediate data """
+        super().free()
         self.target_instances = None
         self.predicted_instances = None
 

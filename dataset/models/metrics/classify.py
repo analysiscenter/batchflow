@@ -122,6 +122,11 @@ class ClassificationMetrics(Metrics):
         """ Convert an array of labels into a one-hot array """
         return np.eye(self.num_classes)[inputs]
 
+    def free(self):
+        """ Free memory allocated for intermediate data """
+        self.targets = None
+        self.predictions = None
+
     def _calc_confusion(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.intp)
         return self._calc_confusion_jit(self.targets, self.predictions, self.num_classes, self._confusion_matrix)

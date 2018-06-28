@@ -14,7 +14,12 @@ dataset.models.metrics
     :show-inheritance:
 
 
-.. autoclass:: dataset.models.metrics.SegmentationMetrics
+.. autoclass:: dataset.models.metrics.SegmentationMetricsByPixels
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: dataset.models.metrics.SegmentationMetricsByInstances
     :members:
     :undoc-members:
     :show-inheritance:
