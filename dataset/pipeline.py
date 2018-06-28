@@ -912,30 +912,34 @@ class Pipeline:
 
         ::
 
-        pipeline = (dataset.p
-            .init_variable('metrics')
-            .init_variable('inferred_masks')
-            .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
-                           save_to=V('inferred_masks'))
-            .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
-                            fmt='proba', axis=-1, save_to=V('metrics'))
-            .run(BATCH_SIZE, bar=True)
-        )
+            pipeline = (dataset.p
+                .init_variable('metrics')
+                .init_variable('inferred_masks')
+                .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
+                               save_to=V('inferred_masks'))
+                .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
+                                fmt='proba', axis=-1, save_to=V('metrics'))
+                .run(BATCH_SIZE, bar=True)
+            )
 
-        metrics = pipeline.get_variable('metrics')
-        metrics.evaluate(['sensitivity', 'specificity'])
+            metrics = pipeline.get_variable('metrics')
+            metrics.evaluate(['sensitivity', 'specificity'])
         """
         self._action_list.append({'name': GATHER_METRICS_ID, 'metrics_class': metrics_class,
-                                 'save_to': save_to, 'mode': 'm'})
+                                  'save_to': save_to})
         return self.append_action(*args, **kwargs)
 
     def _exec_gather_metrics(self, batch, action):
         metrics_class = self._eval_expr(action['metrics_class'], batch)
         metrics = metrics_class(*action['args'], **action['kwargs'])
         if action['save_to'] is not None:
-            value = action['save_to'].get(batch)
+            value = action['save_to'].get(batch) if isinstance(action['save_to'], NamedExpression)
+                    else action['save_to']
             value = metrics if value is None else value + metrics
-            action['save_to'].set(value, batch)
+            if isinstance(action['save_to'], NamedExpression):
+                action['save_to'].set(value, batch)
+            else:
+                action['save_to'] = value
 
     def join(self, *pipelines):
         """ Join one or several pipelines """

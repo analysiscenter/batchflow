@@ -168,6 +168,7 @@ Read a model specfication to find out what it needs for predicting and what its 
 
 .. _saving_a_model:
 
+
 Saving a model
 ==============
 
@@ -258,3 +259,6 @@ However, as far as ``TensorFlow`` is concerned, its optimizers have a parameter 
 Ready to use models
 ===================
 See documentation for :doc:`Tensorflow models <tf_models>` and the list of :doc:`implemented architectures <model_zoo_tf>`.
+
+Model metrics
+=============
