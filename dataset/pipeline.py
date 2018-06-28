@@ -933,8 +933,8 @@ class Pipeline:
         metrics_class = self._eval_expr(action['metrics_class'], batch)
         metrics = metrics_class(*action['args'], **action['kwargs'])
         if action['save_to'] is not None:
-            value = action['save_to'].get(batch) if isinstance(action['save_to'], NamedExpression)
-                    else action['save_to']
+            named_expr = isinstance(action['save_to'], NamedExpression)
+            value = action['save_to'].get(batch) if  named_expr else action['save_to']
             value = metrics if value is None else value + metrics
             if isinstance(action['save_to'], NamedExpression):
                 action['save_to'].set(value, batch)

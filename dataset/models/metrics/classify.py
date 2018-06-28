@@ -151,7 +151,6 @@ class ClassificationMetrics(Metrics):
         self.predictions = None
 
     def __add__(self, other):
-        # pylint: disable: protected-access
         if other is None:
             return self
 
@@ -160,9 +159,9 @@ class ClassificationMetrics(Metrics):
 
         metrics = self.copy()
         if self._no_zero_axis:
-            metrics._confusion_matrix = self._confusion_matrix + other._confusion_matrix
+            metrics._confusion_matrix = self._confusion_matrix + other._confusion_matrix    # pylint: disable: protected-access
         else:
-            metrics._confusion_matrix = np.concatenate((self._confusion_matrix, other._confusion_matrix), axis=0)
+            metrics._confusion_matrix = np.concatenate((self._confusion_matrix, other._confusion_matrix), axis=0)  # pylint: disable: protected-access
 
         return metrics
 
