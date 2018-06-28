@@ -8,7 +8,6 @@ class SegmentationMetricsByPixels(ClassificationMetrics):
     """ Metrics to assess segmentation models pixel-wise """
     pass
 
-
 class SegmentationMetricsByInstances(ClassificationMetrics):
     """ Metrics to assess segmentation models by instances (connected components)
 
@@ -23,17 +22,14 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
     For other parameters see :class:`~.ClassificationMetrics`.
 
     """
-    def __init__(self, targets=None, predictions=None, fmt='proba', num_classes=None, axis=None,
-                 skip_bg=True, threshold=.5, iot=.5):
+    def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None,
+                 skip_bg=True, threshold=.5, iot=.5, confusion=True):
         super().__init__(targets, predictions, fmt, num_classes, axis, threshold, skip_bg, confusion=False)
         self.iot = iot
 
-        if targets is None:
-            self.target_instances = None
-            self.predicted_instances = None
-        else:
-            self.target_instances = self._get_instances(self.one_hot(self.targets), axis)
-            self.predicted_instances = self._get_instances(self.one_hot(self.predictions), axis)
+        self.target_instances = self._get_instances(self.one_hot(self.targets), axis)
+        self.predicted_instances = self._get_instances(self.one_hot(self.predictions), axis)
+        if confusion:
             self._calc_confusion()
 
     def free(self):

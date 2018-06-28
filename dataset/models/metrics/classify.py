@@ -1,4 +1,5 @@
 """ Contains two class classification metrics """
+from copy import copy
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -31,8 +32,17 @@ class ClassificationMetrics(Metrics):
     - Input arrays (`targets` and `predictions`) might be vectors or multidimensional arrays,
     where the first dimension represents batch items. The latter is useful for pixel-level metrics.
 
+    - Both `targets` and `predictions` usually contain the same data (labels, probabilities or logits).
+    However, `targets` might be labels, while `predictions` are probabilities / logits.
+    For that to work:
+
+    - `targets` should have the shape which exactly 1 dimension smaller, than `predictions` shape;
+    - `axis` should point to that dimension;
+    - `fmt` should contain format of `predictions`.
+
     - When `axis` is specified, `predictions` should be a one-hot array with class information provided
-    in the given axis (class probabilities or logits).
+    in the given axis (class probabilities or logits). In this case `targets` can contain labels (sew above)
+    or probabilities / logits in the very same axis.
 
     - If `fmt` is 'labels', `num_classes` should be specified. Due to randomness any given batch may not
     contain items of some classes, so all the labels cannot be inferred as simply as `labels.max()`.
@@ -78,18 +88,17 @@ class ClassificationMetrics(Metrics):
         m.evaluate(['sensitivity', 'specificity'], multiclass='macro')
 
     """
-    def __init__(self, targets=None, predictions=None, fmt='proba', num_classes=None, axis=None, threshold=.5,
+    def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5,
                  skip_bg=False, confusion=True):
         self.targets = None
         self.predictions = None
         self._confusion_matrix = None
         self.skip_bg = skip_bg
         self.num_classes = None if axis is None else predictions.shape[axis]
-        self.num_classes = self.num_classes or num_classes or 2
+        self.num_classes = self.num_classes or num_classes
 
-        if targets is None:
-            # which means that metrics object is created in a operation with other metrics objects
-            return
+        if fmt in ['proba', 'logits'] and axis is None:
+            raise ValueError('axis cannot be None when fmt is proba or logits')
 
         if targets.ndim == predictions.ndim:
             # targets and predictions contain the same info (labels, probabilities or logits)
@@ -105,12 +114,20 @@ class ClassificationMetrics(Metrics):
         if targets.ndim == 1:
             targets = targets.reshape(1, -1)
             predictions = predictions.reshape(1, -1)
+            self._no_zero_axis = True
+        else:
+            self._no_zero_axis = False
 
         self.targets = targets
         self.predictions = predictions
 
         if confusion:
             self._calc_confusion()
+
+    def copy(self):
+        metrics = copy(self)
+        metrics.free()
+        return metrics
 
     def _to_labels(self, arr, fmt, axis, threshold):
         if fmt == 'labels':
@@ -134,12 +151,23 @@ class ClassificationMetrics(Metrics):
         self.predictions = None
 
     def __add__(self, other):
+        if other is None:
+            return self
+
         if not isinstance(other, ClassificationMetrics):
             raise TypeError("Summation is allowed only for metrics")
 
-        metrics = type(self)()
-        metrics._confusion_matrix = np.concatenate((self._confusion_matrix, other._confusion_matrix), axis=0)
+        metrics = self.copy()
+        if self._no_zero_axis:
+            metrics._confusion_matrix = self._confusion_matrix + other._confusion_matrix
+        else:
+            metrics._confusion_matrix = np.concatenate((self._confusion_matrix, other._confusion_matrix), axis=0)
+
         return metrics
+
+    def extend(self, value):
+        """ Accumulate metrics from several instances """
+        return self + value
 
     def _calc_confusion(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.intp)

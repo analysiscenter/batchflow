@@ -22,6 +22,7 @@ PIPELINE_ID = '#_pipeline'
 IMPORT_MODEL_ID = '#_import_model'
 TRAIN_MODEL_ID = '#_train_model'
 PREDICT_MODEL_ID = '#_predict_model'
+GATHER_METRICS_ID = '#_gather_metrics'
 INC_VARIABLE_ID = '#_inc_variable'
 UPDATE_VARIABLE_ID = '#_update_variable'
 CALL_ID = '#_call'
@@ -31,6 +32,7 @@ _ACTIONS = {
     IMPORT_MODEL_ID: '_exec_import_model',
     TRAIN_MODEL_ID: '_exec_train_model',
     PREDICT_MODEL_ID: '_exec_predict_model',
+    GATHER_METRICS_ID: '_exec_gather_metrics',
     INC_VARIABLE_ID: '_exec_inc_variable',
     UPDATE_VARIABLE_ID: '_exec_update_variable',
     CALL_ID: '_exec_call',
@@ -885,6 +887,55 @@ class Pipeline:
         """ Save a model """
         model = self.get_model_by_name(name)
         model.save(*args, **kwargs)
+
+    def gather_metrics(self, metrics_class, *args, save_to=None, **kwargs):
+        """ Collect metrics for a model
+
+        Parameters
+        ----------
+        metrics_class : class
+            A class which calculates metrics
+
+        args
+        kwargs
+            Parameters for metrics calculation
+
+        save_to : a named expression
+            A location where metrics will be saved to.
+
+        Notes
+        -----
+        For available metrics see :mod:`.models.metrics`.
+
+        Examples
+        --------
+
+        ::
+
+        pipeline = (dataset.p
+            .init_variable('metrics')
+            .init_variable('inferred_masks')
+            .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
+                           save_to=V('inferred_masks'))
+            .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
+                            fmt='proba', axis=-1, save_to=V('metrics'))
+            .run(BATCH_SIZE, bar=True)
+        )
+
+        metrics = pipeline.get_variable('metrics')
+        metrics.evaluate(['sensitivity', 'specificity'])
+        """
+        self._action_list.append({'name': GATHER_METRICS_ID, 'metrics_class': metrics_class,
+                                 'save_to': save_to, 'mode': 'm'})
+        return self.append_action(*args, **kwargs)
+
+    def _exec_gather_metrics(self, batch, action):
+        metrics_class = self._eval_expr(action['metrics_class'], batch)
+        metrics = metrics_class(*action['args'], **action['kwargs'])
+        if action['save_to'] is not None:
+            value = action['save_to'].get(batch)
+            value = metrics if value is None else value + metrics
+            action['save_to'].set(value, batch)
 
     def join(self, *pipelines):
         """ Join one or several pipelines """
