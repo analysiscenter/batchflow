@@ -23,13 +23,18 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
     For other parameters see :class:`~.ClassificationMetrics`.
 
     """
-    def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None,
+    def __init__(self, targets=None, predictions=None, fmt='proba', num_classes=None, axis=None,
                  skip_bg=True, threshold=.5, iot=.5):
         super().__init__(targets, predictions, fmt, num_classes, axis, threshold, skip_bg, confusion=False)
         self.iot = iot
-        self.target_instances = self._get_instances(self.one_hot(self.targets), axis)
-        self.predicted_instances = self._get_instances(self.one_hot(self.predictions), axis)
-        self._calc_confusion()
+
+        if targets is None:
+            self.target_instances = None
+            self.predicted_instances = None
+        else:
+            self.target_instances = self._get_instances(self.one_hot(self.targets), axis)
+            self.predicted_instances = self._get_instances(self.one_hot(self.predictions), axis)
+            self._calc_confusion()
 
     def free(self):
         """ Free memory allocated for intermediate data """

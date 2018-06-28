@@ -78,11 +78,18 @@ class ClassificationMetrics(Metrics):
         m.evaluate(['sensitivity', 'specificity'], multiclass='macro')
 
     """
-    def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5,
+    def __init__(self, targets=None, predictions=None, fmt='proba', num_classes=None, axis=None, threshold=.5,
                  skip_bg=False, confusion=True):
+        self.targets = None
+        self.predictions = None
+        self._confusion_matrix = None
         self.skip_bg = skip_bg
         self.num_classes = None if axis is None else predictions.shape[axis]
         self.num_classes = self.num_classes or num_classes or 2
+
+        if targets is None:
+            # which means that metrics object is created in a operation with other metrics objects
+            return
 
         if targets.ndim == predictions.ndim:
             # targets and predictions contain the same info (labels, probabilities or logits)
@@ -102,7 +109,6 @@ class ClassificationMetrics(Metrics):
         self.targets = targets
         self.predictions = predictions
 
-        self._confusion_matrix = None
         if confusion:
             self._calc_confusion()
 
@@ -126,6 +132,14 @@ class ClassificationMetrics(Metrics):
         """ Free memory allocated for intermediate data """
         self.targets = None
         self.predictions = None
+
+    def __add__(self, other):
+        if not isinstance(other, ClassificationMetrics):
+            raise TypeError("Summation is allowed only for metrics")
+
+        metrics = type(self)()
+        metrics._confusion_matrix = np.concatenate((self._confusion_matrix, other._confusion_matrix), axis=0)
+        return metrics
 
     def _calc_confusion(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.intp)
