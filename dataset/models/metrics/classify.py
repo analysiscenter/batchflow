@@ -125,6 +125,7 @@ class ClassificationMetrics(Metrics):
             self._calc_confusion()
 
     def copy(self):
+        """ Return a duplicate containing only the confusion matrix """
         metrics = copy(self)
         metrics.free()
         return metrics
@@ -151,6 +152,7 @@ class ClassificationMetrics(Metrics):
         self.predictions = None
 
     def __add__(self, other):
+        # pylint: disable=protected-access
         if other is None:
             return self
 
@@ -159,9 +161,9 @@ class ClassificationMetrics(Metrics):
 
         metrics = self.copy()
         if self._no_zero_axis:
-            metrics._confusion_matrix = self._confusion_matrix + other._confusion_matrix    # pylint: disable: protected-access
+            metrics._confusion_matrix = self._confusion_matrix + other._confusion_matrix
         else:
-            metrics._confusion_matrix = np.concatenate((self._confusion_matrix, other._confusion_matrix), axis=0)  # pylint: disable: protected-access
+            metrics._confusion_matrix = np.concatenate((self._confusion_matrix, other._confusion_matrix), axis=0)
 
         return metrics
 
