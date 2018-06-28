@@ -1,5 +1,5 @@
 """ Contains utility function for metrics evaluation """
-from numba import njit, prange
+from numba import njit
 import numpy as np
 from scipy.ndimage import measurements
 
