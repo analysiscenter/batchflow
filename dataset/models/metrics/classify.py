@@ -78,8 +78,11 @@ class ClassificationMetrics(Metrics):
         m.evaluate(['sensitivity', 'specificity'], multiclass='macro')
 
     """
-    def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5, confusion=True):
-        self.num_classes = num_classes if num_classes is not None else 2 if axis is None else targets.shape[axis]
+    def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5,
+                 skip_bg=False, confusion=True):
+        self.skip_bg = skip_bg
+        self.num_classes = None if axis is None else predictions.shape[axis]
+        self.num_classes = self.num_classes or num_classes or 2
 
         if targets.ndim == predictions.ndim:
             # targets and predictions contain the same info (labels, probabilities or logits)
@@ -115,6 +118,10 @@ class ClassificationMetrics(Metrics):
                 arr = arr.argmax(axis=axis)
         return arr
 
+    def one_hot(self, inputs):
+        """ Convert an array of labels into a one-hot array """
+        return np.eye(self.num_classes)[inputs]
+
     def _calc_confusion(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.intp)
         return self._calc_confusion_jit(self.targets, self.predictions, self.num_classes, self._confusion_matrix)
@@ -132,10 +139,15 @@ class ClassificationMetrics(Metrics):
     def _return(self, value):
         return value[0] if isinstance(value, np.ndarray) and value.shape == (1, ) else value
 
+    def _all_labels(self):
+        labels = 1 if self.skip_bg else 0
+        labels = list(range(labels, self.num_classes))
+        return labels
+
     def _count(self, f, label=None):
         if self.num_classes > 2:
             if label is None:
-                return np.array([self._return(f(l)) for l in range(self.num_classes)]).T
+                return np.array([self._return(f(l)) for l in self._all_labels()]).T
         label = 1 if label is None else label
         return self._return(f(label))
 
@@ -178,9 +190,9 @@ class ClassificationMetrics(Metrics):
     def _calc_multiclass_metric(self, numer, denom, label=None, multiclass=None, when_zero=None):
         _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1])
         if self.num_classes > 2:
-            label = label if label is not None else list(range(self.num_classes))
-            label = label if isinstance(label, (list, tuple)) else [label]
-            label_value = [(numer(l, multiclass=multiclass), denom(l, multiclass=multiclass)) for l in label]
+            labels = label if label is not None else self._all_labels()
+            labels = labels if isinstance(labels, (list, tuple)) else [labels]
+            label_value = [(numer(l, multiclass=multiclass), denom(l, multiclass=multiclass)) for l in labels]
 
             if multiclass is None:
                 value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
@@ -234,7 +246,7 @@ class ClassificationMetrics(Metrics):
 
     def accuracy(self, *args, **kwargs):
         _ = args, kwargs
-        return np.sum([self.true_positive(l) for l in range(self.num_classes)], axis=0) / self.total_population()
+        return np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
 
     def positive_predictive_value(self, label=None, multiclass='macro'):
         return self._calc_multiclass_metric(self.true_positive, self.prediction_positive, label, multiclass,

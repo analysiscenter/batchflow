@@ -28,22 +28,15 @@ def sigmoid(arr):
     return 1. / (1. + np.exp(-arr))
 
 
-@njit(nogil=True, parallel=True)
-def _get_components(connected_array, num_components):
-    components = np.zeros((num_components, connected_array.ndim, 2), dtype=np.int32)
-    for i in prange(num_components):    # pylint: disable=not-an-iterable
-        coords = np.where(connected_array == (i + 1))
-        for d in range(components.shape[1]):
-            components[i, d, 0] = np.min(coords[d])
-            components[i, d, 1] = np.max(coords[d]) + 1
-    return components
-
 def get_components(inputs, batch=True):
     """ Find connected components """
     coords = []
     num_items = len(inputs) if batch else 1
     for i in range(num_items):
         connected_array, num_components = measurements.label(inputs[i], output=None)
-        c = _get_components(connected_array, num_components)
-        coords.append(c)
+        comps = []
+        for j in range(num_components):
+            c = np.where(connected_array == (j + 1))
+            comps.append(c)
+        coords.append(comps)
     return coords if batch else coords[0]
