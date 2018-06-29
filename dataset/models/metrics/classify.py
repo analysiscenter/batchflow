@@ -48,7 +48,7 @@ class ClassificationMetrics(Metrics):
       contain items of some classes, so all the labels cannot be inferred as simply as `labels.max()`.
 
     - If `fmt` is 'proba' or 'logits', then `axis` points to the one-hot dimension.
-      However, if `axis` is None, then two class classification is assumed and `targets` / `predictions`
+      However, if `axis` is None, two class classification is assumed and `targets` / `predictions`
       should contain probabilities or logits for a positive class only.
 
 
@@ -84,8 +84,8 @@ class ClassificationMetrics(Metrics):
 
     ::
 
-        m = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
-        m.evaluate(['sensitivity', 'specificity'], multiclass='macro')
+        metrics = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
+        metrics.evaluate(['sensitivity', 'specificity'], multiclass='macro')
 
     """
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5,

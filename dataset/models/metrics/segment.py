@@ -9,7 +9,8 @@ class SegmentationMetricsByPixels(ClassificationMetrics):
     pass
 
 class SegmentationMetricsByInstances(ClassificationMetrics):
-    """ Metrics to assess segmentation models by instances (connected components)
+    """ Metrics to assess segmentation models by instances (i.e. connected components of one class,
+    e.g. cancer nodules, faces, )
 
     Parameters
     ----------
@@ -25,8 +26,8 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None,
                  skip_bg=True, threshold=.5, iot=.5, confusion=True):
         super().__init__(targets, predictions, fmt, num_classes, axis, threshold, skip_bg, confusion=False)
-        self.iot = iot
 
+        self.iot = iot
         self.target_instances = self._get_instances(self.one_hot(self.targets), axis)
         self.predicted_instances = self._get_instances(self.one_hot(self.predictions), axis)
         if confusion:

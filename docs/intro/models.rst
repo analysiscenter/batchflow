@@ -263,7 +263,7 @@ See documentation for :doc:`Tensorflow models <tf_models>` and the list of :doc:
 
 Model metrics
 =============
-Module :doc:`API <../api/dataset.models.metrics>`. comes in handy to evaluate models.
+Module :doc:`models.metrics <../api/dataset.models.metrics>` comes in handy to evaluate model performance.
 It contains many useful metrics (sensitivity, specificity, accuracy, false discovery rate and many others)
 for different scenarios (2-class and multiclass classification, pixel-wise and instance-wise semantic segmentation).
 
@@ -280,7 +280,7 @@ Or in a pipeline::
         .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
                        save_to=V('inferred_masks'))
         .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
-                        fmt='proba', axis=-1, save_to=V('metrics'))
+                        fmt='proba', save_to=V('metrics'))
         .run(BATCH_SIZE)
     )
 
