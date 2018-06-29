@@ -260,5 +260,31 @@ Ready to use models
 ===================
 See documentation for :doc:`Tensorflow models <tf_models>` and the list of :doc:`implemented architectures <model_zoo_tf>`.
 
+
 Model metrics
 =============
+Module :doc:`API <../api/dataset.models.metrics>`. comes in handy to evaluate models.
+It contains many useful metrics (sensitivity, specificity, accuracy, false discovery rate and many others)
+for different scenarios (2-class and multiclass classification, pixel-wise and instance-wise semantic segmentation).
+
+Models can be evaluated in a one-shot manner when you pass `targets` and `predictions`::
+
+    metrics = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
+    metrics.evaluate(['sensitivity', 'specificity'], multiclass='macro')
+
+Or in a pipeline::
+
+    pipeline = (test_dataset.p
+        .init_variables(['metrics', 'inferred_masks'])
+        .import_model('unet', train_pipeline)
+        .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
+                       save_to=V('inferred_masks'))
+        .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
+                        fmt='proba', axis=-1, save_to=V('metrics'))
+        .run(BATCH_SIZE)
+    )
+
+    metrics = pipeline.get_variable('metrics')
+    print(metrics.evaluate(['sensitivity', 'specificity']))
+
+For more information about metrics see :doc:`API <../api/dataset.models.metrics>`.

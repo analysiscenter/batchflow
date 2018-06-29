@@ -30,26 +30,26 @@ class ClassificationMetrics(Metrics):
     Notes
     -----
     - Input arrays (`targets` and `predictions`) might be vectors or multidimensional arrays,
-    where the first dimension represents batch items. The latter is useful for pixel-level metrics.
+      where the first dimension represents batch items. The latter is useful for pixel-level metrics.
 
     - Both `targets` and `predictions` usually contain the same data (labels, probabilities or logits).
-    However, `targets` might be labels, while `predictions` are probabilities / logits.
-    For that to work:
+      However, `targets` might be labels, while `predictions` are probabilities / logits.
+      For that to work:
 
-    - `targets` should have the shape which exactly 1 dimension smaller, than `predictions` shape;
-    - `axis` should point to that dimension;
-    - `fmt` should contain format of `predictions`.
+      - `targets` should have the shape which exactly 1 dimension smaller, than `predictions` shape;
+      - `axis` should point to that dimension;
+      - `fmt` should contain format of `predictions`.
 
     - When `axis` is specified, `predictions` should be a one-hot array with class information provided
-    in the given axis (class probabilities or logits). In this case `targets` can contain labels (sew above)
-    or probabilities / logits in the very same axis.
+      in the given axis (class probabilities or logits). In this case `targets` can contain labels (sew above)
+      or probabilities / logits in the very same axis.
 
     - If `fmt` is 'labels', `num_classes` should be specified. Due to randomness any given batch may not
-    contain items of some classes, so all the labels cannot be inferred as simply as `labels.max()`.
+      contain items of some classes, so all the labels cannot be inferred as simply as `labels.max()`.
 
     - If `fmt` is 'proba' or 'logits', then `axis` points to the one-hot dimension.
-    However, if `axis` is None, then two class classification is assumed and `targets` / `predictions`
-    should contain probabilities or logits for a positive class only.
+      However, if `axis` is None, then two class classification is assumed and `targets` / `predictions`
+      should contain probabilities or logits for a positive class only.
 
 
     **Metrics**
@@ -95,10 +95,10 @@ class ClassificationMetrics(Metrics):
         self._confusion_matrix = None
         self.skip_bg = skip_bg
         self.num_classes = None if axis is None else predictions.shape[axis]
-        self.num_classes = self.num_classes or num_classes
+        self.num_classes = self.num_classes or num_classes or 2
 
-        if fmt in ['proba', 'logits'] and axis is None:
-            raise ValueError('axis cannot be None when fmt is proba or logits')
+        if fmt in ['proba', 'logits'] and axis is None and self.num_classes > 2:
+            raise ValueError('axis cannot be None for multiclass case when fmt is proba or logits')
 
         if targets.ndim == predictions.ndim:
             # targets and predictions contain the same info (labels, probabilities or logits)
@@ -144,7 +144,7 @@ class ClassificationMetrics(Metrics):
 
     def one_hot(self, inputs):
         """ Convert an array of labels into a one-hot array """
-        return np.eye(self.num_classes)[inputs]
+        return np.eye(self.num_classes)[inputs] if self.num_classes > 2 else inputs
 
     def free(self):
         """ Free memory allocated for intermediate data """

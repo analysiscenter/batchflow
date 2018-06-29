@@ -915,6 +915,7 @@ class Pipeline:
             pipeline = (dataset.p
                 .init_variable('metrics')
                 .init_variable('inferred_masks')
+                .import_model('unet', train_pipeline)
                 .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
                                save_to=V('inferred_masks'))
                 .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
