@@ -280,11 +280,11 @@ Or in a pipeline::
         .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
                        save_to=V('inferred_masks'))
         .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
-                        fmt='proba', save_to=V('metrics'))
+                        fmt='proba', save_to=V('metrics'), mode='u')
         .run(BATCH_SIZE)
     )
 
     metrics = pipeline.get_variable('metrics')
     print(metrics.evaluate(['sensitivity', 'specificity']))
 
-For more information about metrics see :doc:`API <../api/dataset.models.metrics>`.
+For more information about metrics see :doc:`metrics API <../api/dataset.models.metrics>` and :meth:`~.Pipeline.gather_metrics`.

@@ -911,7 +911,7 @@ class Pipeline:
 
         Notes
         -----
-        For available metrics see :mod:`dataset.models.metrics`.
+        For available metrics see :class:`metrics API <.metrics.Metrics>`.
 
         Mode 'w' saves metrics for the last batch only which is convenient for metrics evaluation during training.
 
