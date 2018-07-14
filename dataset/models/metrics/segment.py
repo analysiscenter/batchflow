@@ -8,11 +8,12 @@ class SegmentationMetricsByPixels(ClassificationMetrics):
     """ Metrics to assess segmentation models pixel-wise """
 
     def iou(self, label=None, *args, **kwargs):
+        """ Intersection-over-union """
         eps = 1e-15
-        tp = np.sum(self.true_positive(label, *args, **kwargs))
-        fn = np.sum(self.false_negative(label, *args, **kwargs))
-        fp = np.sum(self.false_positive(label, *args, **kwargs))
-        return (tp + eps) / (tp + fn + fp + eps)
+        true_positive = np.sum(self.true_positive(label, *args, **kwargs))
+        false_negative = np.sum(self.false_negative(label, *args, **kwargs))
+        false_positive = np.sum(self.false_positive(label, *args, **kwargs))
+        return (true_positive + eps) / (true_positive + false_negative + false_positive + eps)
 
 class SegmentationMetricsByInstances(ClassificationMetrics):
     """ Metrics to assess segmentation models by instances (i.e. connected components of one class,
