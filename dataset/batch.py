@@ -49,8 +49,7 @@ class Batch(BaseBatch):
         """: Pipeline - a pipeline the batch is being used in """
         if self._local is not None and hasattr(self._local, 'pipeline'):
             return self._local.pipeline
-        else:
-            return self._pipeline
+        return self._pipeline
 
     @pipeline.setter
     def pipeline(self, val):
