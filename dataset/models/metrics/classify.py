@@ -165,6 +165,7 @@ class ClassificationMetrics(Metrics):
             self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)
 
     def __getitem__(self, item):
+        # pylint: disable=protected-access
         metrics = self.copy()
         metrics._confusion_matrix = metrics._confusion_matrix[item]
         return metrics
@@ -249,7 +250,8 @@ class ClassificationMetrics(Metrics):
                 d = np.sum([l[1] for l in label_value], axis=0)
                 value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
             elif multiclass in ['macro', 'mean']:
-                value = np.mean([np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value], axis=0).reshape(-1, 1)
+                value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
+                value = np.mean(value, axis=0).reshape(-1, 1)
         else:
             label = label if label is not None else 1
             d = denom(label)
@@ -293,7 +295,8 @@ class ClassificationMetrics(Metrics):
         return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs)
 
     def accuracy(self, agg='mean'):
-        value =  np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
+        """ An accuracy of detecting all the classes combined """
+        value = np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
         if agg == 'mean':
             value = np.mean(value, axis=0)
         return value

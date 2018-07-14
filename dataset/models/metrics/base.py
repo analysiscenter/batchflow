@@ -1,6 +1,4 @@
 """ Contains a base metrics class """
-import numpy as np
-
 
 class Metrics:
     """ Base metrics evalation class
