@@ -6,7 +6,14 @@ from . import ClassificationMetrics, get_components
 
 class SegmentationMetricsByPixels(ClassificationMetrics):
     """ Metrics to assess segmentation models pixel-wise """
-    pass
+
+    def iou(self, label=None, *args, **kwargs):
+        """ Intersection-over-union """
+        eps = 1e-15
+        true_positive = np.sum(self.true_positive(label, *args, **kwargs))
+        false_negative = np.sum(self.false_negative(label, *args, **kwargs))
+        false_positive = np.sum(self.false_positive(label, *args, **kwargs))
+        return (true_positive + eps) / (true_positive + false_negative + false_positive + eps)
 
 class SegmentationMetricsByInstances(ClassificationMetrics):
     """ Metrics to assess segmentation models by instances (i.e. connected components of one class,
