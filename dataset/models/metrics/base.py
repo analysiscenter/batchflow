@@ -1,4 +1,5 @@
 """ Contains a base metrics class """
+import numpy as np
 
 
 class Metrics:
@@ -13,14 +14,14 @@ class Metrics:
     ::
 
         m = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
-        m.evaluate(['sensitivity', 'specificity'], agg='micro')
+        m.evaluate(['sensitivity', 'specificity'], multiclass='micro')
     """
     def evaluate(self, metrics, *args, **kwargs):
         """ Calculates metrics
 
         Parameters
         ----------
-        metrics : list of str
+        metrics : str or list of str
             metric names
         args
             metric-specific parameters
@@ -29,12 +30,18 @@ class Metrics:
 
         Returns
         -------
-            Dictionary:
+        metric value or dict
+
+            if metrics is a list, then a dict is returned::
             - key - metric name
             - value - metric value
         """
+        _metrics = [metrics] if isinstance(metrics, str) else metrics
+
         res = {}
-        for name in metrics:
+        for name in _metrics:
             metric_fn = getattr(self, name)
             res[name] = metric_fn(*args, **kwargs)
+        res = res[metrics] if isinstance(metrics, str) else res
+
         return res

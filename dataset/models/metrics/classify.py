@@ -89,7 +89,7 @@ class ClassificationMetrics(Metrics):
 
     """
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5,
-                 skip_bg=False, confusion=True):
+                 skip_bg=False, calc=True):
         self.targets = None
         self.predictions = None
         self._confusion_matrix = None
@@ -121,8 +121,8 @@ class ClassificationMetrics(Metrics):
         self.targets = targets
         self.predictions = predictions
 
-        if confusion:
-            self._calc_confusion()
+        if calc:
+            self._calc()
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
@@ -151,23 +151,25 @@ class ClassificationMetrics(Metrics):
         self.targets = None
         self.predictions = None
 
-    def __add__(self, other):
+    def append(self, metrics):
+        """ Append confusion matrix with data from another metrics"""
         # pylint: disable=protected-access
-        if other is None:
-            return self
+        self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)
 
-        if not isinstance(other, ClassificationMetrics):
-            raise TypeError("Summation is allowed only for metrics")
-
-        metrics = self.copy()
+    def update(self, metrics):
+        """ Update confusion matrix with data from another metrics"""
+        # pylint: disable=protected-access
         if self._no_zero_axis:
-            metrics._confusion_matrix = self._confusion_matrix + other._confusion_matrix
+            self._confusion_matrix = self._confusion_matrix + metrics._confusion_matrix
         else:
-            metrics._confusion_matrix = np.concatenate((self._confusion_matrix, other._confusion_matrix), axis=0)
+            self._confusion_matrix = np.concatenate((self._confusion_matrix, metrics._confusion_matrix), axis=0)
 
+    def __getitem__(self, item):
+        metrics = self.copy()
+        metrics._confusion_matrix = metrics._confusion_matrix[item]
         return metrics
 
-    def _calc_confusion(self):
+    def _calc(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes, self.num_classes), dtype=np.intp)
         return self._calc_confusion_jit(self.targets, self.predictions, self.num_classes, self._confusion_matrix)
 
@@ -232,7 +234,7 @@ class ClassificationMetrics(Metrics):
         _ = args, kwargs
         return self._return(self._confusion_matrix.sum(axis=(1, 2)))
 
-    def _calc_multiclass_metric(self, numer, denom, label=None, multiclass=None, when_zero=None):
+    def _calc_agg(self, numer, denom, label=None, agg='mean', multiclass='macro', when_zero=None):
         _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1])
         if self.num_classes > 2:
             labels = label if label is not None else self._all_labels()
@@ -241,86 +243,94 @@ class ClassificationMetrics(Metrics):
 
             if multiclass is None:
                 value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-                value = value[0] if len(value) == 1 else np.array(value).T
-            if multiclass == 'micro':
+                value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, self.num_classes)
+            elif multiclass == 'micro':
                 n = np.sum([l[0] for l in label_value], axis=0)
                 d = np.sum([l[1] for l in label_value], axis=0)
-                value = np.where(d > 0, n / d, _when_zero(n))
+                value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
             elif multiclass in ['macro', 'mean']:
-                value = np.mean([np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value], axis=0)
+                value = np.mean([np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value], axis=0).reshape(-1, 1)
         else:
             label = label if label is not None else 1
             d = denom(label)
             n = numer(label)
-            value = np.where(d > 0, n / d, _when_zero(n))
+            value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
+
+        if agg == 'mean':
+            value = np.mean(value, axis=0)
+        value = np.squeeze(value)
+
         return value
 
-    def true_positive_rate(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.true_positive, self.condition_positive, label, multiclass,
-                                            when_zero=(0, 1))
+    def true_positive_rate(self, *args, **kwargs):
+        return self._calc_agg(self.true_positive, self.condition_positive, *args, **kwargs, when_zero=(0, 1))
 
-    def sensitivity(self, label=None, multiclass='macro'):
-        return self.true_positive_rate(label, multiclass)
+    def sensitivity(self, *args, **kwargs):
+        return self.true_positive_rate(*args, **kwargs)
 
-    def recall(self, label=None, multiclass='macro'):
-        return self.true_positive_rate(label, multiclass)
+    def recall(self, *args, **kwargs):
+        return self.true_positive_rate(*args, **kwargs)
 
-    def false_positive_rate(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.false_positive, self.condition_negative, label, multiclass,
-                                            when_zero=(1, 0))
+    def false_positive_rate(self, *args, **kwargs):
+        return self._calc_agg(self.false_positive, self.condition_negative, *args, **kwargs, when_zero=(1, 0))
 
-    def fallout(self, label=None, multiclass='macro'):
-        return self.false_positive_rate(label, multiclass)
+    def fallout(self, *args, **kwargs):
+        return self.false_positive_rate(*args, **kwargs)
 
-    def false_negative_rate(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.false_negative, self.condition_positive, label, multiclass,
-                                            when_zero=(1, 0))
+    def false_negative_rate(self, *args, **kwargs):
+        return self._calc_agg(self.false_negative, self.condition_positive, *args, **kwargs, when_zero=(1, 0))
 
-    def miss_rate(self, label=None, multiclass='macro'):
-        return self.false_negative_rate(label, multiclass)
+    def miss_rate(self, *args, **kwargs):
+        return self.false_negative_rate(*args, **kwargs)
 
-    def true_negative_rate(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.true_negative, self.condition_negative, label, multiclass,
-                                            when_zero=(0, 1))
+    def true_negative_rate(self, *args, **kwargs):
+        return self._calc_agg(self.true_negative, self.condition_negative, *args, **kwargs, when_zero=(0, 1))
 
-    def specificity(self, label=None, multiclass='macro'):
-        return self.true_negative_rate(label, multiclass)
+    def specificity(self, *args, **kwargs):
+        return self.true_negative_rate(*args, **kwargs)
 
-    def prevalence(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.condition_positive, self.total_population, label, multiclass)
+    def prevalence(self, *args, **kwargs):
+        return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs)
 
-    def accuracy(self, *args, **kwargs):
-        _ = args, kwargs
-        return np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
+    def accuracy(self, agg='mean'):
+        value =  np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
+        if agg == 'mean':
+            value = np.mean(value, axis=0)
+        return value
 
-    def positive_predictive_value(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.true_positive, self.prediction_positive, label, multiclass,
-                                            when_zero=(0, 1))
+    def positive_predictive_value(self, *args, **kwargs):
+        return self._calc_agg(self.true_positive, self.prediction_positive, *args, **kwargs, when_zero=(0, 1))
 
-    def precision(self, label=None, multiclass='macro'):
-        return self.positive_predictive_value(label, multiclass)
+    def precision(self, *args, **kwargs):
+        return self.positive_predictive_value(*args, **kwargs)
 
-    def false_discovery_rate(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.false_positive, self.prediction_positive, label, multiclass,
-                                            when_zero=(1, 0))
+    def false_discovery_rate(self, *args, **kwargs):
+        return self._calc_agg(self.false_positive, self.prediction_positive, *args, **kwargs, when_zero=(1, 0))
 
-    def false_omission_rate(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.false_negative, self.prediction_negative, label, multiclass,
-                                            when_zero=(1, 0))
+    def false_omission_rate(self, *args, **kwargs):
+        return self._calc_agg(self.false_negative, self.prediction_negative, *args, **kwargs, when_zero=(1, 0))
 
-    def negative_predictive_value(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.true_negative, self.prediction_negative, label, multiclass,
-                                            when_zero=(0, 1))
+    def negative_predictive_value(self, *args, **kwargs):
+        return self._calc_agg(self.true_negative, self.prediction_negative, *args, **kwargs, when_zero=(0, 1))
 
-    def positive_likelihood_ratio(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.true_positive_rate, self.false_positive_rate, label, multiclass)
+    def positive_likelihood_ratio(self, *args, **kwargs):
+        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, **kwargs)
 
-    def negative_likelihood_ratio(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.false_negative_rate, self.true_negative_rate, label, multiclass)
+    def negative_likelihood_ratio(self, *args, **kwargs):
+        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs)
 
-    def diagnostics_odds_ratio(self, label=None, multiclass='macro'):
-        return self._calc_multiclass_metric(self.positive_likelihood_ratio, self.negative_likelihood_ratio, label,
-                                            multiclass)
+    def diagnostics_odds_ratio(self, *args, **kwargs):
+        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs)
 
-    def f1_score(self, label=None, multiclass='macro'):
-        return 2 / (1 / self.recall(label, multiclass) + 1 / self.precision(label, multiclass))
+    def f1_score(self, *args, **kwargs):
+        return 2 / (1 / self.recall(*args, **kwargs) + 1 / self.precision(*args, **kwargs))
+
+    def dice(self, *args, **kwargs):
+        return self.f1_score(*args, **kwargs)
+
+    def jaccard(self, *args, **kwargs):
+        d = self.dice(*args, **kwargs)
+        return d / (2 - d)
+
+    def iou(self, *args, **kwargs):
+        return self.jaccard(*args, **kwargs)

@@ -5,7 +5,43 @@ from . import ClassificationMetrics, get_components
 
 
 class SegmentationMetricsByPixels(ClassificationMetrics):
-    """ Metrics to assess segmentation models pixel-wise """
+    """ Metrics to assess segmentation models pixel-wise
+
+    Notes
+    -----
+    Rate metrics are evaluated for each item independently. So there are two levels of metrics aggregation:
+
+    - multi-class averaging
+    - dataset aggregation.
+
+    For instance, if you have a dataset of 100 pictures (each having size of 256x256) of 10 classes and
+    you need to calculate an accuracy of semantic segmentation, then:
+
+    - `evaluate(['accuracy'], agg=None, multiclass=None)` will return an array of shape (100, 10) containing accuracy
+      of each class for each image separately.
+
+    - `evaluate(['accuracy'], agg='mean', multiclass=None)` will return a vector of shape (10,) containing
+      an accuracy of each class averaged across all images.
+
+    - `evaluate(['accuracy'], agg=None, multiclass='macro')` will return a vector of shape (100,) containing
+      an accuracy of each image separately averaged across all classes.
+
+    - `evaluate(['accuracy'], agg='mean', multiclass='macro')` will return a single value of
+      an average accuracy of all classes and images combined.
+
+    The default values are `agg='mean', multiclass='macro'`.
+
+    For multi-class averaging see :class:`~.ClassificationMetrics`.
+
+    Examples
+    --------
+    ::
+
+        metrics = SegmentationMetricsByPixels(targets, predictions, num_classes=10, fmt='labels')
+        metrics.evaluate('specificity')
+        metrics.evaluate(['sensitivity', 'jaccard'], agg='mean', multiclass=None)
+
+    """
     pass
 
 class SegmentationMetricsByInstances(ClassificationMetrics):
@@ -24,14 +60,14 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
 
     """
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None,
-                 skip_bg=True, threshold=.5, iot=.5, confusion=True):
-        super().__init__(targets, predictions, fmt, num_classes, axis, threshold, skip_bg, confusion=False)
+                 skip_bg=True, threshold=.5, iot=.5, calc=True):
+        super().__init__(targets, predictions, fmt, num_classes, axis, threshold, skip_bg, calc=False)
 
         self.iot = iot
         self.target_instances = self._get_instances(self.one_hot(self.targets), axis)
         self.predicted_instances = self._get_instances(self.one_hot(self.predictions), axis)
-        if confusion:
-            self._calc_confusion()
+        if calc:
+            self._calc()
 
     def free(self):
         """ Free memory allocated for intermediate data """
@@ -65,7 +101,7 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
                 instances.append(one_class)
         return instances
 
-    def _calc_confusion(self):
+    def _calc(self):
         self._confusion_matrix = np.zeros((self.targets.shape[0], self.num_classes - 1, 2, 2), dtype=np.intp)
 
         for k in range(1, self.num_classes):
