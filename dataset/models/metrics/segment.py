@@ -6,7 +6,13 @@ from . import ClassificationMetrics, get_components
 
 class SegmentationMetricsByPixels(ClassificationMetrics):
     """ Metrics to assess segmentation models pixel-wise """
-    pass
+
+    def iou(self, label=None, *args, **kwargs):
+        eps = 1e-15
+        tp = np.sum(self.true_positive(label, *args, **kwargs))
+        fn = np.sum(self.false_negative(label, *args, **kwargs))
+        fp = np.sum(self.false_positive(label, *args, **kwargs))
+        return (tp + eps) / (tp + fn + fp + eps)
 
 class SegmentationMetricsByInstances(ClassificationMetrics):
     """ Metrics to assess segmentation models by instances (i.e. connected components of one class,
