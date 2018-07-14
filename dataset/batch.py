@@ -49,8 +49,7 @@ class Batch(BaseBatch):
         """: Pipeline - a pipeline the batch is being used in """
         if self._local is not None and hasattr(self._local, 'pipeline'):
             return self._local.pipeline
-        else:
-            return self._pipeline
+        return self._pipeline
 
     @pipeline.setter
     def pipeline(self, val):
@@ -868,31 +867,3 @@ class Batch(BaseBatch):
     def save(self, *args, **kwargs):
         """ Save batch data to a file (an alias for dump method)"""
         return self.dump(*args, **kwargs)
-
-
-class ArrayBatch(Batch):
-    """ Base Batch class for array-like datasets
-    Batch data is a numpy array.
-    If components are defined, then each component data is a numpy array
-    """
-    def _assemble_load(self, all_res, *args, **kwargs):
-        _ = args
-        if any_action_failed(all_res):
-            raise RuntimeError("Cannot assemble the batch", all_res)
-
-        if self.components is None:
-            self._data = np.stack([res[0] for res in all_res])
-        else:
-            components = tuple(kwargs.get('components', None) or self.components)
-            for i, comp in enumerate(components):
-                _data = np.stack([res[i] for res in all_res])
-                setattr(self, comp, _data)
-        return self
-
-
-class DataFrameBatch(Batch):
-    """ Base Batch class for datasets stored in pandas DataFrames """
-    def _assemble_load(self, all_res, *args, **kwargs):
-        """ Build the batch data after loading data from files """
-        _ = all_res, args, kwargs
-        return self

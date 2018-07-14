@@ -168,6 +168,7 @@ Read a model specfication to find out what it needs for predicting and what its 
 
 .. _saving_a_model:
 
+
 Saving a model
 ==============
 
@@ -258,3 +259,32 @@ However, as far as ``TensorFlow`` is concerned, its optimizers have a parameter 
 Ready to use models
 ===================
 See documentation for :doc:`Tensorflow models <tf_models>` and the list of :doc:`implemented architectures <model_zoo_tf>`.
+
+
+Model metrics
+=============
+Module :doc:`models.metrics <../api/dataset.models.metrics>` comes in handy to evaluate model performance.
+It contains many useful metrics (sensitivity, specificity, accuracy, false discovery rate and many others)
+for different scenarios (2-class and multiclass classification, pixel-wise and instance-wise semantic segmentation).
+
+Models can be evaluated in a one-shot manner when you pass `targets` and `predictions`::
+
+    metrics = ClassificationMetrics(targets, predictions, num_classes=10, fmt='labels')
+    metrics.evaluate(['sensitivity', 'specificity'], multiclass='macro')
+
+Or in a pipeline::
+
+    pipeline = (test_dataset.p
+        .init_variables(['metrics', 'inferred_masks'])
+        .import_model('unet', train_pipeline)
+        .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
+                       save_to=V('inferred_masks'))
+        .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
+                        fmt='proba', save_to=V('metrics'), mode='u')
+        .run(BATCH_SIZE)
+    )
+
+    metrics = pipeline.get_variable('metrics')
+    print(metrics.evaluate(['sensitivity', 'specificity']))
+
+For more information about metrics see :doc:`metrics API <../api/dataset.models.metrics>` and :meth:`~.Pipeline.gather_metrics`.

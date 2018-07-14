@@ -374,8 +374,8 @@ def mjit(*args, nopython=True, nogil=True, **kwargs):
 
         @functools.wraps(method)
         def _wrapped_method(self, *args, **kwargs):
-            res = func(None, *args, **kwargs) or self
-            return res
+            _ = self
+            return func(None, *args, **kwargs)
         return _wrapped_method
 
     if len(args) == 1 and (callable(args[0])) and len(kwargs) == 0:

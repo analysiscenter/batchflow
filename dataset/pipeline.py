@@ -22,6 +22,7 @@ PIPELINE_ID = '#_pipeline'
 IMPORT_MODEL_ID = '#_import_model'
 TRAIN_MODEL_ID = '#_train_model'
 PREDICT_MODEL_ID = '#_predict_model'
+GATHER_METRICS_ID = '#_gather_metrics'
 INC_VARIABLE_ID = '#_inc_variable'
 UPDATE_VARIABLE_ID = '#_update_variable'
 CALL_ID = '#_call'
@@ -31,6 +32,7 @@ _ACTIONS = {
     IMPORT_MODEL_ID: '_exec_import_model',
     TRAIN_MODEL_ID: '_exec_train_model',
     PREDICT_MODEL_ID: '_exec_predict_model',
+    GATHER_METRICS_ID: '_exec_gather_metrics',
     INC_VARIABLE_ID: '_exec_inc_variable',
     UPDATE_VARIABLE_ID: '_exec_update_variable',
     CALL_ID: '_exec_call',
@@ -885,6 +887,65 @@ class Pipeline:
         """ Save a model """
         model = self.get_model_by_name(name)
         model.save(*args, **kwargs)
+
+    def gather_metrics(self, metrics_class, *args, save_to=None, mode='w', **kwargs):
+        """ Collect metrics for a model
+
+        Parameters
+        ----------
+        metrics_class : class
+            A class which calculates metrics
+
+        args
+        kwargs
+            Parameters for metrics calculation
+
+        save_to : a named expression
+            A location where metrics will be saved to.
+
+        mode : str
+            a method of storing metrics::
+            - 'w' - overwrite saved metrics with a new value. This is a default mode.
+            - 'a' - append a new value to earlier saved metrics
+            - 'u' - update earlier saved metrics with a new value
+
+        Notes
+        -----
+        For available metrics see :class:`metrics API <.metrics.Metrics>`.
+
+        Mode 'w' saves metrics for the last batch only which is convenient for metrics evaluation during training.
+
+        Mode 'u' is more suitable to calculate metrics during testing / validation.
+
+        Mode 'a' collects the history of batch metrics.
+
+        Examples
+        --------
+
+        ::
+
+            pipeline = (dataset.test.p
+                .init_variable('metrics')
+                .init_variable('inferred_masks')
+                .import_model('unet', train_pipeline)
+                .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
+                               save_to=V('inferred_masks'))
+                .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
+                                fmt='proba', axis=-1, save_to=V('metrics'), mode='u')
+                .run(BATCH_SIZE, bar=True)
+            )
+
+            metrics = pipeline.get_variable('metrics')
+            metrics.evaluate(['sensitivity', 'specificity'])
+        """
+        self._action_list.append({'name': GATHER_METRICS_ID, 'metrics_class': metrics_class,
+                                  'save_to': save_to, 'mode': mode})
+        return self.append_action(*args, **kwargs)
+
+    def _exec_gather_metrics(self, batch, action):
+        metrics_class = self._eval_expr(action['metrics_class'], batch)
+        metrics = metrics_class(*action['args'], **action['kwargs'])
+        self._save_output(batch, None, metrics, action['save_to'], action['mode'])
 
     def join(self, *pipelines):
         """ Join one or several pipelines """

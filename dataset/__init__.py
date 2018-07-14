@@ -6,7 +6,7 @@ if sys.version_info < (3, 5):
     raise ImportError("Dataset module requires Python 3.5 or higher")
 
 from .base import Baseset
-from .batch import Batch, ArrayBatch, DataFrameBatch
+from .batch import Batch
 from .batch_image import ImagesBatch
 from .config import Config
 from .dataset import Dataset

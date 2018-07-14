@@ -48,7 +48,9 @@ class NamedExpression:
         set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update
         """
         var = self.get(*args, **kwargs)
-        if isinstance(var, (set, dict)):
+        if var is None:
+            self.assign(value, *args, **kwargs)
+        elif isinstance(var, (set, dict)):
             var.update(value)
         else:
             var.append(value)
@@ -56,13 +58,21 @@ class NamedExpression:
     def extend(self, value, *args, **kwargs):
         """ Extend a named expression with a new value
         (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists) """
-        self.get(*args, **kwargs).extend(value)
+        var = self.get(*args, **kwargs)
+        if var is None:
+            self.assign(value, *args, **kwargs)
+        else:
+            var.extend(value)
 
     def update(self, value, *args, **kwargs):
         """ Update a named expression with a new value
         (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
         or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update) """
-        self.get(*args, **kwargs).update(value)
+        var = self.get(*args, **kwargs)
+        if var is not None:
+            var.update(value)
+        else:
+            self.assign(value, *args, **kwargs)
 
     def __repr__(self):
         return type(self).__name__ + '(' + str(self.name) + ')'
