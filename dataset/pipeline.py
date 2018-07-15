@@ -13,6 +13,7 @@ from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
+from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
 
 
 JOIN_ID = '#_join'
@@ -38,6 +39,13 @@ _ACTIONS = {
     CALL_ID: '_exec_call',
     PRINT_ID: '_exec_print',
 }
+
+
+METRICS = dict(
+    classification=ClassificationMetrics,
+    mask=SegmentationMetricsByPixels,
+    instance=SegmentationMetricsByInstances
+)
 
 
 def mult_option(a, b):
@@ -893,8 +901,14 @@ class Pipeline:
 
         Parameters
         ----------
-        metrics_class : class
-            A class which calculates metrics
+        metrics_class : class or str
+            A class which calculates metrics (see :class:`~.models.metrics.Metrics`)
+
+            If str:
+
+            - 'class' for `:class:`~.ClassificationMetrics`)
+            - 'mask' for `:class:`~.SegmentationMetricsByPixels`)
+            - 'instance' for `:class:`~.SegmentationMetricsByInstances`)
 
         args
         kwargs
@@ -944,6 +958,14 @@ class Pipeline:
 
     def _exec_gather_metrics(self, batch, action):
         metrics_class = self._eval_expr(action['metrics_class'], batch)
+        if isinstance(metrics_class, str):
+            available_metrics = [m for m in METRICS if metrics_class in m]
+            if len(available_metrics) > 1:
+                raise ValueError('Metrics name is ambiguous', metrics_class)
+            metrics_class = METRICS[available_metrics[0]]
+        elif not isinstance(metrics_class, type):
+            raise TypeError('Metrics can be a string or a class', metrics_class)
+
         metrics = metrics_class(*action['args'], **action['kwargs'])
         self._save_output(batch, None, metrics, action['save_to'], action['mode'])
 

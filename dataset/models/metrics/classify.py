@@ -5,7 +5,7 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 
-from ... import mjit
+from ...decorators import mjit
 from . import Metrics, binarize, sigmoid
 
 

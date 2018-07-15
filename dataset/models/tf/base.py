@@ -1168,7 +1168,7 @@ class TFModel(BaseModel):
         config['body'] = {}
         config['head'] = {}
         config['predictions'] = None
-        config['output'] = {}
+        config['output'] = None
         config['optimizer'] = ('Adam', dict())
 
         if is_best_practice():
