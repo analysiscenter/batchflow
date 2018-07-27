@@ -683,7 +683,7 @@ class Pipeline:
         pipeline = self._eval_expr(action['pipeline'], batch=batch)
         self.models.import_model(source, pipeline, model_name)
 
-    def train_model(self, name, make_data=None, save_to=None, mode='w', *args, **kwargs):
+    def train_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
         """ Train a model
 
         Parameters
@@ -751,7 +751,7 @@ class Pipeline:
                                   'save_to': save_to, 'mode': mode})
         return self.append_action(*args, **kwargs)
 
-    def predict_model(self, name, make_data=None, save_to=None, mode='w', *args, **kwargs):
+    def predict_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
         """ Predict using a model
 
         Parameters
@@ -824,7 +824,7 @@ class Pipeline:
 
     def _make_model_args(self, batch, action, model):
         make_data = action['make_data'] or {}
-        args = tuple()
+        args = action['args']
         kwargs = dict()
 
         if callable(make_data):
