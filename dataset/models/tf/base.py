@@ -12,16 +12,18 @@ import numpy as np
 import tensorflow as tf
 
 from ... import is_best_practice, Config
+from ..utils import unpack_fn_from_config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
+from .losses import softmax_cross_entropy, dice
 from .train import piecewise_constant
 
 
 LOSSES = {
     'mse': tf.losses.mean_squared_error,
     'bce': tf.losses.sigmoid_cross_entropy,
-    'ce': tf.losses.softmax_cross_entropy,
-    'crossentropy': tf.losses.softmax_cross_entropy,
+    'ce': softmax_cross_entropy,
+    'crossentropy': softmax_cross_entropy,
     'absolutedifference': tf.losses.absolute_difference,
     'l1': tf.losses.absolute_difference,
     'cosine': tf.losses.cosine_distance,
@@ -29,6 +31,7 @@ LOSSES = {
     'hinge': tf.losses.hinge_loss,
     'huber': tf.losses.huber_loss,
     'logloss': tf.losses.log_loss,
+    'dice': dice,
 }
 
 DECAYS = {
@@ -36,9 +39,8 @@ DECAYS = {
     'invtime': tf.train.inverse_time_decay,
     'naturalexp': tf.train.natural_exp_decay,
     'const': piecewise_constant,
-    'poly': tf.train.polynomial_decay
+    'poly': tf.train.polynomial_decay,
 }
-
 
 
 class TFModel(BaseModel):
@@ -65,12 +67,12 @@ class TFModel(BaseModel):
         - dict {'name': name, \**args}
 
         where name might be one of:
-            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`)
+            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
             - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
               (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
             - callable
 
-        If loss is callable, then it should add the result to a loss collection.
+        If loss is a callable, then it should add the result to a loss collection.
         Otherwise, ``add_loss`` should be set to True. An optional collection might also be specified through
         ``loss_collection`` parameter.
 
@@ -80,8 +82,8 @@ class TFModel(BaseModel):
         Examples:
 
         - ``{'loss': 'mse'}``
-        - ``{'loss': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}``
-        - ``{'loss': tf.losses.huber_loss, 'reduction': tf.losses.Reduction.MEAN}``
+        - ``{'loss': {'name': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}}``
+        - ``{'loss': (tf.losses.huber_loss, {'reduction': tf.losses.Reduction.MEAN})}``
         - ``{'loss': external_loss_fn_with_add_loss_inside}``
         - ``{'loss': external_loss_fn_without_add_loss, 'add_loss': True}``
         - ``{'loss': external_loss_fn_to_collection, 'add_loss': True, 'loss_collection': tf.GraphKeys.LOSSES}``
@@ -295,7 +297,7 @@ class TFModel(BaseModel):
         inputs : dict
             - key : str
                 a placeholder name
-            - values : dict or tuple
+            - values : str or dict or tuple
                 each input's config
 
         Input config:
@@ -306,11 +308,13 @@ class TFModel(BaseModel):
         ``shape`` : int, tuple, list or None (default)
             a tensor shape which includes the number of channels/classes and doesn't include a batch size.
 
-        ``classes`` : array-like or None (default)
-            an array of class labels if data labels are strings or anything else except ``np.arange(num_classes)``
+        ``classes`` : int, array-like or None (default)
+            a number of class or an array of class labels if data labels are strings or anything else except
+            ``np.arange(num_classes)``.
 
-        ``data_format`` : str {``'channels_first'``, ``'channels_last'``} or {``'f'``, ``'l'``}
+        ``data_format`` : str {'channels_first', 'channels_last'} or {'f', 'l'}
             The ordering of the dimensions in the inputs. Default is 'channels_last'.
+            For brevity ``data_format`` may be shortened to ``df``.
 
         ``transform`` : str or callable
             Predefined transforms are
@@ -320,7 +324,7 @@ class TFModel(BaseModel):
               with depth ``d`` (should be int)
 
         ``name`` : str
-            a name for the transformed and reshaped tensor.
+            a name for the transformed tensor.
 
         If an input config is a tuple, it should contain all items exactly in the order shown above:
         dtype, shape, classes, data_format, transform, name.
@@ -331,6 +335,12 @@ class TFModel(BaseModel):
         A placholder with ``dtype``, ``shape`` and with a name ``key`` is created first.
         Then it is transformed with a ``transform`` function in accordance with ``data_format``.
         The resulting tensor will have the name ``name``.
+
+        **Aliases**
+        If an input config is a string, it should point to another key from inputs dict.
+        This creates an alias to another input which might be convenient to substitute tensor names.
+
+        By default, `targets` is aliased to `labels` or `masks` if present.
 
         Parameters
         ----------
@@ -369,6 +379,13 @@ class TFModel(BaseModel):
         if len(wrong_names) > 0:
             raise ValueError('Inputs contain duplicate names:', wrong_names)
 
+        # add default aliases
+        if 'labels' in config and 'targets' not in config:
+            config['targets'] = 'labels'
+        elif 'masks' in config and 'targets' not in config:
+            config['targets'] = 'masks'
+        # if targets is defined in the input dict, these implicit aliases will be overwritten.
+
         param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
         defaults = dict(data_format='channels_last')
 
@@ -376,7 +393,9 @@ class TFModel(BaseModel):
         tensors = dict()
 
         for input_name, input_config in config.items():
-            if isinstance(input_config, (tuple, list)):
+            if isinstance(input_config, str):
+                continue
+            elif isinstance(input_config, (tuple, list)):
                 input_config = list(input_config) + [None for _ in param_names]
                 input_config = input_config[:len(param_names)]
                 input_config = dict(zip(param_names, input_config))
@@ -402,6 +421,8 @@ class TFModel(BaseModel):
             placeholders[input_name] = tensor
             self.store_to_attr(input_name, tensor)
 
+            if 'df' in input_config and 'data_format' not input_config:
+                input_config['data_format'] = input_config['df']
             if input_config.get('data_format') == 'l':
                 input_config['data_format'] = 'channels_last'
             elif input_config.get('data_format') == 'f':
@@ -423,6 +444,14 @@ class TFModel(BaseModel):
             self._inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
             if name is not None:
                 self._inputs[name] = self._inputs[input_name]
+
+        # check for aliases
+        for input_name, input_config in config.items():
+            if isinstance(input_config, str) and input_name not in self._inputs:
+                self._inputs[input_name] = self._inputs[input_config]
+                tensors[input_name] = tensors[input_config]
+                placeholders[input_name] = placeholders[input_config]
+                self.store_to_attr(input_name, tensors[input_name])
 
         self.inputs = tensors
 
@@ -495,32 +524,16 @@ class TFModel(BaseModel):
         tensor = mip(tensor, depth=depth, data_format=self.data_format(input_name))
         return tensor
 
-    def _unpack_fn_from_config(self, param, config=None):
-        par = config.get(param)
-
-        if par is None:
-            return None, {}
-
-        if isinstance(par, (tuple, list)):
-            if len(par) == 0:
-                par_name = None
-            elif len(par) == 1:
-                par_name, par_args = par[0], {}
-            elif len(par) == 2:
-                par_name, par_args = par
-            else:
-                par_name, par_args = par[0], par[1:]
-        elif isinstance(par, dict):
-            par = par.copy()
-            par_name, par_args = par.pop('name', None), par
-        else:
-            par_name, par_args = par, {}
-
-        return par_name, par_args
+    def _check_tensor(self, name):
+        try:
+            tensor = getattr(self, name)
+        except AttributeError:
+            raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
+        return tensor
 
     def _make_loss(self, config):
         """ Return a loss function from config """
-        loss, args = self._unpack_fn_from_config('loss', config)
+        loss, args = unpack_fn_from_config('loss', config)
 
         add_loss = False
         if loss is None:
@@ -538,27 +551,21 @@ class TFModel(BaseModel):
             if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
         else:
-            try:
-                predictions = getattr(self, 'predictions')
-            except AttributeError:
-                raise KeyError("Model %s does not have 'predictions' tensor" % type(self).__name__)
-            try:
-                targets = getattr(self, 'targets')
-            except AttributeError:
-                raise KeyError("Model %s does not have 'targets' tensor" % type(self).__name__)
-            else:
-                add_loss = args.pop('add_loss', False)
-                if add_loss:
-                    loss_collection = args.pop('loss_collection', None)
-                tensor_loss = loss(targets, predictions, **args)
-                if add_loss:
-                    if loss_collection:
-                        tf.losses.add_loss(tensor_loss, loss_collection)
-                    else:
-                        tf.losses.add_loss(tensor_loss)
+            predictions = self._check_tensor('predictions')
+            targets = self._check_tensor('targets')
+
+            add_loss = args.pop('add_loss', False)
+            if add_loss:
+                loss_collection = args.pop('loss_collection', None)
+            tensor_loss = loss(targets, predictions, **args)
+            if add_loss:
+                if loss_collection:
+                    tf.losses.add_loss(tensor_loss, loss_collection)
+                else:
+                    tf.losses.add_loss(tensor_loss)
 
     def _make_decay(self, config):
-        decay_name, decay_args = self._unpack_fn_from_config('decay', config)
+        decay_name, decay_args = unpack_fn_from_config('decay', config)
 
         if decay_name is None:
             pass
@@ -574,7 +581,7 @@ class TFModel(BaseModel):
         return decay_name, decay_args
 
     def _make_optimizer(self, config):
-        optimizer_name, optimizer_args = self._unpack_fn_from_config('optimizer', config)
+        optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
 
         if optimizer_name is None or callable(optimizer_name):
             pass
@@ -721,7 +728,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None, use_lock=False):   # pylint: disable=arguments-differ
+    def train(self, fetches=None, feed_dict=None, use_lock=False, **kwargs):   # pylint: disable=arguments-differ
         """ Train the model with the data provided
 
         Parameters
@@ -740,8 +747,25 @@ class TFModel(BaseModel):
         See also
         --------
         `Tensorflow Session run <https://www.tensorflow.org/api_docs/python/tf/Session#run>`_
+
+        Notes
+        -----
+        ``feed_dict`` is not required as all placeholder names and their data can be passed directly.
+
+        Examples
+        --------
+
+        ::
+
+            model.train(fetches='loss', feed_dict={'images': B('images'), 'labels': B('labels')})
+
+        The same as::
+
+            model.train(fetches='loss', images=B('images'), labels=B('labels'))
         """
         with self.graph.as_default():
+            feed_dict = {} if feed_dict is None else feed_dict
+            feed_dict = {**feed_dict, **kwargs}
             _feed_dict = self._fill_feed_dict(feed_dict, is_training=True)
             if fetches is None:
                 _fetches = tuple()
@@ -766,7 +790,7 @@ class TFModel(BaseModel):
 
             return self._fill_output(output, _fetches)
 
-    def predict(self, fetches=None, feed_dict=None):      # pylint: disable=arguments-differ
+    def predict(self, fetches=None, feed_dict=None, **kwargs):      # pylint: disable=arguments-differ
         """ Get predictions on the data provided
 
         Parameters
@@ -780,16 +804,29 @@ class TFModel(BaseModel):
         -------
         Calculated values of tensors in `fetches` in the same structure
 
-        Notes
-        -----
-        The only difference between `predict` and `train` is that `train` also executes a `train_step` operation
-        which involves calculating and applying gradients and thus chainging model weights.
-
         See also
         --------
         `Tensorflow Session run <https://www.tensorflow.org/api_docs/python/tf/Session#run>`_
+
+        Notes
+        -----
+        ``feed_dict`` is not required as all placeholder names and their data can be passed directly.
+
+        Examples
+        --------
+
+        ::
+
+            model.predict(fetches='loss', feed_dict={'images': B('images'), 'labels': B('labels')})
+
+        The same as::
+
+            model.predict(fetches='loss', images=B('images'), labels=B('labels'))
+
         """
         with self.graph.as_default():
+            feed_dict = {} if feed_dict is None else feed_dict
+            feed_dict = {**feed_dict, **kwargs}
             _feed_dict = self._fill_feed_dict(feed_dict, is_training=False)
             _fetches = self._fill_fetches(fetches, default='predictions')
             output = self.session.run(_fetches, _feed_dict)
@@ -993,7 +1030,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
-        """ Last network layers which produce output from the network embedding
+        """ The last network layers which produce predictions
 
         Parameters
         ----------
@@ -1122,13 +1159,9 @@ class TFModel(BaseModel):
 
     def _add_output_accuracy(self, inputs, name, attr_prefix, **kwargs):
         channels_axis = self.channels_axis(kwargs.get('data_format'))
-        true_labels = tf.argmax(self.targets, axis=channels_axis)
-        if not hasattr(self, attr_prefix + 'labels'):
-            self._add_output_labels(inputs, 'labels', attr_prefix, **kwargs)
-        x = getattr(self, attr_prefix + 'labels')
-        x = tf.cast(x, true_labels.dtype)
-        x = tf.cast(tf.equal(true_labels, x), 'float')
-        accuracy = tf.reduce_mean(x, axis=channels_axis, name=name)
+        true_labels = self.targets
+        predicted_labels = tf.argmax(inputs, axis=channels_axis, name=name)
+        accuracy = tf.reduce_mean(tf.cast(tf.equal(true_labels, predicted_labels), 'float'), name=name)
         self.store_to_attr(attr_prefix + name, accuracy)
 
     def _add_output_callable(self, inputs, oper, name, attr_prefix, **kwargs):
@@ -1168,6 +1201,7 @@ class TFModel(BaseModel):
         config['input_block'] = {}
         config['body'] = {}
         config['head'] = {}
+        config['predictions'] = None
         config['output'] = {}
         config['optimizer'] = ('Adam', dict())
 
@@ -1209,7 +1243,6 @@ class TFModel(BaseModel):
                 config['head']['num_classes'] = self.num_classes('targets')
                 return config
         """
-
         config = self.default_config()
 
         config = config + self.config

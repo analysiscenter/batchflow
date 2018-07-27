@@ -10,7 +10,7 @@ A typical minimal config includes ``inputs`` and ``input_block`` sections::
 
     model_config = {
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
+                       targets={'classes': 10}),
         'input_block/inputs': 'images'
     }
 
@@ -18,9 +18,7 @@ A minimal training pipeline consists of :meth:`~.Pipeline.init_model` and :meth:
 
     pipeline = my_dataset.p
         .init_model('dynamic', MyModel, 'my_model', model_config)
-        .train_model('my_model', fetches='loss',
-                     feed_dict={'images': B('images'),
-                                'labels': B('labels')})
+        .train_model('my_model', fetches='loss', images=B('images'), labels=B('labels'))
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
 
 To create an inference pipeline replace ``train_model`` with :meth:`~.Pipeline.predict_model`.
@@ -34,8 +32,7 @@ A pipeline can also :meth:`~.TFModel.load` a pretrained model which was previous
 
     pipeline = my_dataset.p
         .init_model('dynamic', MyModel, 'my_model', model_config)
-        .predict_model('my_model', fetches='predictions',
-                       feed_dict={'images': B('images')})
+        .predict_model('my_model', fetches='predictions', images=B('images'))
         .run(BATCH_SIZE)
 
 Note that you can indicate through 'build' option whether a model graph needs to be created or updated by calling :meth:`~TFModel.build`.
@@ -103,7 +100,7 @@ Classification with 10 classes::
         ...
         'loss': 'ce',
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'})
+                       targets={'classes': 10})
         'head': dict(layout='cdV', filters=10, dropout_rate=.2),
         'input_block/inputs': 'images'
     }
@@ -149,19 +146,20 @@ Each input might have following parameters:
         - ``'mip @ d'`` - maximum intensity projection :func:`~.layers.mip` with depth ``d`` (should be int)
 
     ``name`` : str
-        a name for the transformed and reshaped tensor.
+        a name for the transformed tensor.
 
 Even though all parameters are optional, at least some of them should be specified for each input tensor.
 
-For instance, this config will create placeholders with the names ``images`` and ``labels``::
+For instance, this config will create placeholders with the names ``images`` and ``targets``::
 
     model_config = {
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
+                       targets={'classes': 10}),
     }
 
-Later, names ``images`` and ``labels`` will be used to feed data into the model when training or predicting.
-Besides, one-hot encoding will be applied to ``labels`` and the encoded tensor will be named ``targets``.
+Later, names ``images`` and ``targets`` will be used to feed data into the model when training or predicting.
+Take into account that one-hot encoding is not required for labels when using cross-entropy loss as it is applied
+automatically. However, for custom losses one-hot encoding might be necessary.
 
 For more information on the configuration of the inputs, see :meth:`~dataset.models.tf.TFModel._make_inputs`.
 
@@ -204,28 +202,31 @@ head
 For many models head is just another :func:`~.layers.conv_block`. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.
 
 
-output
-------
-Output defines the content of ``predictions`` tensor which is used in the configured model loss. Besides, additional operations and metrics might be specified here to be used during model training or evaluation.
+predictions
+-----------
+It defines the content of ``predictions`` tensor which is used in the configured model loss.
 
-For instance, make predictions a probability distribution::
-
-    {'output': dict(predictions='proba')}
-
-Mostly, predictions tensor is just the head output and thus it needs no configuration.
-However, different losses might require different predictions (e.g. 'ce' expects logits, while 'dice' takes probabilities).
-
-To control model training procedure you might also need auxiliary operations to assess model quality::
-
-    {'output': dict(ops=['labels', 'accuracy'])}
-
-``predictions`` and ``ops`` options take an operation name. And available operations are:
-    - None - do nothing
+Available operations are:
+    - None - do nothing (identity operation)
     - callable - apply a given function to an output tensor
     - 'proba' - softmax
     - 'sigmoid' - sigmoid
-    - 'labels' - argmax
-    - 'accuracy' - the share of correctly predicted labels.
+    - 'labels' - argmax.
+
+Mostly, the predictions tensor is just the head output and thus it needs no configuration.
+However, different losses might require different predictions (e.g. cross entropy expects logits,
+while some custom loss might expect probabilities).
+
+output
+------
+Output defines the auxiliary operations which are applied to the head output.
+These operations can be used during model training or evaluation.
+
+For instance, 'proba' gets probabilities if head outputs logits::
+
+    {'output': ['proba', 'labels']}
+
+For advanced usage see :meth:`~.TFModel.output`.
 
 
 Loss, learning rate decay, optimizer
@@ -245,8 +246,8 @@ where name might be one of:
 For example::
 
     {'loss': 'mse'}
-    {'loss': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}
-    {'loss': tf.losses.huber_loss, 'reduction': tf.losses.Reduction.MEAN}
+    {'loss': {'name': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}}
+    {'loss': (tf.losses.huber_loss, {'reduction': tf.losses.Reduction.MEAN})}
     {'loss': external_loss_fn}
 
 Available short names for losses: mse, ce, l1, cos, hinge, huber, logloss, dice.
@@ -263,7 +264,7 @@ Short names for decay: exp, invtime, naturalexp, const, poly.
 
     {'optimizer': 'Adam'}
     {'optimizer': ('Ftlr', {'learning_rate_power': 0})}
-    {'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}
+    {'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}}
     {'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}
     {'optimizer': some_optimizer_fn}
 
@@ -322,8 +323,8 @@ Here we split network configuration and network definition into separate methods
 
         def build_config(self, names=None):
             config = super().build_config(names)
-            config['head']['units'] = self.num_classes('targets')
-            config['head']['filters'] = self.num_classes('targets')
+            config['head/units'] = self.num_classes('targets')
+            config['head/filters'] = self.num_classes('targets')
             return config
 
         @classmethod
@@ -348,7 +349,7 @@ Now you can train the model with a simple pipeline::
         'decay': 'invtime',
         'optimizer': 'Adam',
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'shape': 10, 'transform': 'ohe', 'name': 'targets'}),
+                       targets={'classes': 10}),
         'input_block/inputs': 'images'
     }
 
@@ -356,8 +357,7 @@ Now you can train the model with a simple pipeline::
         .init_variable('loss_history', init_on_each_run=list)
         .init_model('dynamic', MyModel, 'my_model', model_config)
         .train_model('my_model', fetches='loss',
-                     feed_dict={'images': B('images'),
-                                'labels': B('labels')},
+                     images=B('images'), targets=B('labels'),
                      save_to=V('loss_history'), mode='a')
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
 

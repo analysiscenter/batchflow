@@ -61,12 +61,12 @@ from dataset.models.tf import ResNet34
 my_workflow = my_dataset.pipeline()
               .init_model('dynamic', ResNet34, config={
                           'inputs': {'images': {'shape': B('image_shape')},
-                                     'labels': {'classes': 10, 'transform': 'ohe', 'name': 'targets'}}
+                                     'targets': {'classes': 10}}
                           'input_block/inputs': 'images'})
               .load('/some/path')
               .some_transform()
               .another_transform()
-              .train_model('ResNet34', feed_dict={'images': B('images'), 'labels': B('labels')})
+              .train_model('ResNet34', images=B('images'), targets=B('labels'))
               .run(BATCH_SIZE, shuffle=True)
 ```
 
