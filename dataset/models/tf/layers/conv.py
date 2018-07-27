@@ -181,11 +181,9 @@ def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding=
                    'filters': filters,
                    'kernel_size': 1,
                    'strides': 1,
+                   'dilation_rate': 1,
                    'name': 'pointwise'}
-        if not transpose:
-            _kwargs['dilation_rate'] = 1
-
-        output = conv_layer(**_kwargs)
+        output = conv(**_kwargs)
     else:
         output = depthwise_conv
 

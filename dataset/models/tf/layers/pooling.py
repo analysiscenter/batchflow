@@ -80,14 +80,14 @@ def average_pooling(inputs, pool_size, strides, padding='same', data_format='cha
     else:
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
-def pooling(inputs, pool_op, *args, **kwargs):
+def pooling(inputs, op, *args, **kwargs):
     """ Multi-dimensional pooling layer.
 
     Parameters
     ----------
     inputs: tf.Tensor
         input tensor
-    pool_op: str
+    op: str
         pooling operation ('max', 'mean', 'average', 'avg')
     pool_size: int
         the size of the pooling window
@@ -104,25 +104,25 @@ def pooling(inputs, pool_op, *args, **kwargs):
     -------
     tf.Tensor
     """
-    if pool_op == 'max':
+    if op == 'max':
         x = max_pooling(inputs, *args, **kwargs)
-    elif pool_op in ['mean', 'average', 'avg']:
+    elif op in ['mean', 'average', 'avg']:
         x = average_pooling(inputs, *args, **kwargs)
-    elif pool_op in ['frac-max', 'fractional-max']:
+    elif op in ['frac-max', 'fractional-max']:
         x = fractional_pooling(inputs, 'max', *args, **kwargs)
-    elif pool_op in ['frac-avg', 'fractional-avg', 'frac-mean', 'fractional-mean']:
+    elif op in ['frac-avg', 'fractional-avg', 'frac-mean', 'fractional-mean']:
         x = fractional_pooling(inputs, 'mean', *args, **kwargs)
     return x
 
 
-def global_pooling(inputs, pool_op, data_format='channels_last', keep_dims=False, name=None):
+def global_pooling(inputs, op, data_format='channels_last', keep_dims=False, name=None):
     """ Multi-dimensional global pooling layer.
 
     Parameters
     ----------
     inputs: tf.Tensor
         input tensor
-    pool_op: str
+    op: str
         pooling operation ('max', 'mean', 'average', 'avg')
     data_format: str
         'channels_last' or 'channels_first'
@@ -144,9 +144,9 @@ def global_pooling(inputs, pool_op, data_format='channels_last', keep_dims=False
     else:
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
-    if pool_op == 'max':
+    if op == 'max':
         x = tf.reduce_max(inputs, axis=axis, keep_dims=keep_dims, name=name)
-    elif pool_op in ['mean', 'average', 'avg']:
+    elif op in ['mean', 'average', 'avg']:
         x = tf.reduce_mean(inputs, axis=axis, keep_dims=keep_dims, name=name)
     return x
 
@@ -188,7 +188,7 @@ def global_max_pooling(inputs, data_format='channels_last', name=None):
     return global_pooling(inputs, 'max', data_format, name=name)
 
 
-def fractional_pooling(inputs, pool_op, pool_size=1.4142, pseudo_random=False, overlapping=False,
+def fractional_pooling(inputs, op, pool_size=1.4142, pseudo_random=False, overlapping=False,
                        data_format='channels_last', **kwargs):
     """ Fractional max-pooling layer.
 
@@ -196,7 +196,7 @@ def fractional_pooling(inputs, pool_op, pool_size=1.4142, pseudo_random=False, o
     ----------
     inputs: tf.Tensor
         input tensor
-    pool_op: str
+    op: str
         pooling operation ('max', 'mean', 'average', 'avg')
     pool_size : float
         pooling ratio (default=1.4142)
@@ -219,10 +219,10 @@ def fractional_pooling(inputs, pool_op, pool_size=1.4142, pseudo_random=False, o
     """
     dim = inputs.shape.ndims - 2
 
-    if pool_op == 'max':
-        pool_op = tf.nn.fractional_max_pool
-    elif pool_op in ['mean', 'average', 'avg']:
-        pool_op = tf.nn.fractional_avg_pool
+    if op == 'max':
+        op = tf.nn.fractional_max_pool
+    elif op in ['mean', 'average', 'avg']:
+        op = tf.nn.fractional_avg_pool
 
     _pooling_ratio = np.ones(inputs.shape.ndims)
     axis = 1 if data_format == 'channels_last' else 2
@@ -234,10 +234,10 @@ def fractional_pooling(inputs, pool_op, pool_size=1.4142, pseudo_random=False, o
             axis = 2 if data_format == 'channels_last' else -1
             x = tf.expand_dims(inputs, axis=axis)
             _pooling_ratio[axis] = 1
-            x, _, _ = pool_op(x, _pooling_ratio, pseudo_random, overlapping, **kwargs)
+            x, _, _ = op(x, _pooling_ratio, pseudo_random, overlapping, **kwargs)
             x = tf.squeeze(x, [axis])
     elif dim in [2, 3]:
-        x, _, _ = pool_op(inputs, _pooling_ratio, pseudo_random, overlapping, **kwargs)
+        x, _, _ = op(inputs, _pooling_ratio, pseudo_random, overlapping, **kwargs)
     else:
         raise ValueError("Number of dimensions in the inputs tensor should be 1, 2 or 3, but given %d" % dim)
 
