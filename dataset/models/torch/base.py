@@ -1,10 +1,432 @@
+import re
+import threading
+
+import torch
 import torch.nn as nn
+
+from ... import is_best_practice, Config
+from .. import BaseModel
+from ..utils import unpack_fn_from_config
+from .utils import get_output_shape
+from .layers import ConvBlock, Identity
+from .losses import CrossEntropyLoss
+
+
+LOSSES = {
+    'mse': nn.MSELoss,
+    'bce': nn.BCEWithLogitsLoss,
+    'ce': CrossEntropyLoss,
+    'crossentropy': nn.CrossEntropyLoss,
+    'absolutedifference': nn.L1Loss,
+    'l1': nn.L1Loss,
+    'cosine': nn.CosineSimilarity,
+    'cos': nn.CosineSimilarity,
+    'hinge': nn.HingeEmbeddingLoss,
+    'huber': nn.SmoothL1Loss,
+    'logloss': CrossEntropyLoss,
+}
+
+
+DECAYS = {
+    'exp': torch.optim.lr_scheduler.ExponentialLR,
+}
 
 
 class TorchModel(BaseModel):
-    r""" Base class for all torch models
+    r""" Base class for torch models
     """
     def __init__(self, *args, **kwargs):
+        self._train_lock = threading.Lock()
+        self.loss_fn = None
+        self.lr_decay = None
+        self.optimizer = None
+        self.model = None
+        self._model_jit = None
+        self._inputs = dict()
+
         super().__init__(*args, **kwargs)
 
-        self.module = nn.Module()
+    def build(self, *args, **kwargs):
+        """ """
+        config = self.build_config()
+
+        self._build(config)
+
+        if self.loss_fn is None:
+            self._make_loss(config)
+        if self.optimizer is None:
+            self._make_optimizer(config)
+
+    def _make_inputs(self, names=None, config=None):
+        """ Create model input data from config provided
+
+        **Configuration**
+
+        inputs : dict
+            - key : str
+                a placeholder name
+            - values : dict or tuple
+                each input's config
+
+        Input config:
+
+        ``dtype`` : str or torch.dtype (by default 'float32')
+            data type
+
+        ``shape`` : int, tuple, list or None (default)
+            a tensor shape which includes the number of channels/classes and doesn't include a batch size.
+
+        ``classes`` : int, array-like or None (default)
+            an array of class labels if data labels are strings or anything else except ``np.arange(num_classes)``
+
+        ``data_format`` : str {'channels_first', 'channels_last'} or {'f', 'l'}
+            The ordering of the dimensions in the inputs. Default is 'channels_last'.
+            For brevity ``data_format`` may be shortened to ``df``.
+
+        ``name`` : str
+            a name for the transformed and reshaped tensor.
+
+        If an input config is a tuple, it should contain all items exactly in the order shown above:
+        dtype, shape, classes, data_format, transform, name.
+        If an item is None, the default value will be used instead.
+
+
+        Parameters
+        ----------
+        names : list
+            tensor names that are expected in the config's 'inputs' section
+
+        Raises
+        ------
+        KeyError if there is any name missing in the config's 'inputs' section.
+        ValueError if there are duplicate names.
+        """
+        # pylint:disable=too-many-statements
+        config = config.get('inputs')
+
+        names = names or []
+        missing_names = set(names) - set(config.keys())
+        if len(missing_names) > 0:
+            raise KeyError("Inputs should contain {} names".format(missing_names))
+
+        placeholder_names = set(config.keys())
+        tensor_names = set(x.get('name') for x in config.values() if isinstance(x, dict) and x.get('name'))
+        wrong_names = placeholder_names & tensor_names
+        if len(wrong_names) > 0:
+            raise ValueError('Inputs contain duplicate names:', wrong_names)
+
+        param_names = ('dtype', 'shape', 'classes', 'transform', 'name')
+
+        for input_name, input_config in config.items():
+            if isinstance(input_config, (tuple, list)):
+                input_config = list(input_config) + [None for _ in param_names]
+                input_config = input_config[:len(param_names)]
+                input_config = dict(zip(param_names, input_config))
+                input_config = dict((k, v) for k, v in input_config.items() if v is not None)
+
+            shape = input_config.get('shape')
+            if isinstance(shape, int):
+                shape = (shape,)
+            if shape:
+                input_config['shape'] = tuple([None] + list(shape))
+
+            self._inputs[input_name] = dict(config=input_config)
+
+        #self.inputs = tensors
+
+    def _make_loss(self, config):
+        """ Return a loss function from config """
+        loss, args = unpack_fn_from_config('loss', config)
+
+        if isinstance(loss, str):
+            loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
+        elif isinstance(loss, str) and hasattr(nn, loss):
+            loss = getattr(nn, loss)
+        elif isinstance(loss, str) and hasattr(nn, loss + "Loss"):
+            loss = getattr(nn, loss + "Loss")
+        elif isinstance(loss, type):
+            pass
+        elif callable(loss):
+            loss = lambda **a: partial(loss, **args)
+            args = {}
+        else:
+            raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
+
+        self.loss_fn = loss(**args)
+
+    def _make_optimizer(self, config):
+        optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
+
+        if optimizer_name is None or callable(optimizer_name):
+            pass
+        elif isinstance(optimizer_name, str) and hasattr(torch.optim, optimizer_name):
+            optimizer_name = getattr(torch.optim, optimizer_name)
+        else:
+            raise ValueError("Unknown optimizer", optimizer_name)
+
+        if optimizer_name:
+            self.optimizer = optimizer_name(self.model.parameters(), **optimizer_args)
+        else:
+            raise ValueError("Optimizer is not defined", optimizer_name)
+
+        decay_name, decay_args = self._make_decay(config)
+        if decay_name is not None:
+            self.lr_decay = decay_name(self.optimizer, **decay_args)
+
+    def _make_decay(self, config):
+        decay_name, decay_args = unpack_fn_from_config('decay', config)
+
+        if decay_name is None or callable(decay_name):
+            pass
+        elif isinstance(decay_name, str) and hasattr(torch.optim.lr_scheduler, decay_name):
+            decay_name = getattr(torch.optim.lr_scheduler, decay_name)
+        elif decay_name in DECAYS:
+            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
+        else:
+            raise ValueError("Unknown learning rate decay method", decay_name)
+
+        return decay_name, decay_args
+
+    def get_tensor_config(self, tensor):
+        if isinstance(tensor, str):
+            return self._inputs[tensor]['config']
+
+    def shape(self, tensor):
+        config = self.get_tensor_config(tensor)
+        return config['shape']
+
+    def num_channels(self, tensor, data_format='channels_first'):
+        """ Return number of channels in the input tensor """
+        shape = self.shape(tensor)
+        axis = self.channels_axis(data_format)
+        return shape[axis]
+
+    def spatial_dim(self, tensor):
+        shape = self.shape(tensor)
+        return len(shape) - 2
+
+    def has_classes(self, tensor):
+        """ Check if a tensor has classes defined in the config """
+        config = self.get_tensor_config(tensor)
+        has = config.get('classes') is not None
+        return has
+
+    def classes(self, tensor):
+        """ Return the  number of classes """
+        config = self.get_tensor_config(tensor)
+        classes = config.get('classes')
+        if isinstance(classes, int):
+            return np.arange(classes)
+        return np.asarray(classes)
+
+    def num_classes(self, tensor):
+        """ Return the  number of classes """
+        if self.has_classes(tensor):
+            classes = self.classes(tensor)
+            return classes if isinstance(classes, int) else len(classes)
+        return self.num_channels(tensor)
+
+    @classmethod
+    def default_config(cls):
+        """ Define model defaults
+
+        You need to override this method if you expect your model or its blocks to serve as a base for other models
+        (e.g. VGG for FCN, ResNet for LinkNet, etc).
+
+        Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
+        specific to the model, but independent of anything else (like image shapes, number of classes, etc).
+
+        These defaults can be changed in :meth:`~.TorchModel.build_config` or when calling :meth:`.Pipeline.init_model`.
+
+        Usually, it looks like::
+
+            @classmethod
+            def default_config(cls):
+                config = TorchModel.default_config()
+                config['input_block'].update(dict(layout='cnap', filters=16, kernel_size=7, strides=2,
+                                                  pool_size=3, pool_strides=2))
+                config['body/filters'] = 32
+                config['head'].update(dict(layout='cnadV', dropout_rate=.2))
+                return config
+        """
+        config = Config({})
+        config['inputs'] = {}
+        config['common'] = {}
+        config['input_block'] = {}
+        config['body'] = {}
+        config['head'] = {}
+        config['predictions'] = None
+        config['output'] = {}
+        config['optimizer'] = ('Adam', dict())
+
+        if is_best_practice():
+            config['common'] = {'batch_norm': {'momentum': .1}}
+
+        return config
+
+    @classmethod
+    def get_defaults(cls, name, kwargs):
+        """ Fill block params from default config and kwargs """
+        config = cls.default_config()
+        _config = config.get(name)
+        config = {**config['common'], **_config, **kwargs}
+        return config
+
+    def build_config(self, names=None):
+        """ Define a model architecture configuration
+
+        It takes just 2 steps:
+
+        #. Define names for input data and make input tensors by calling ``super().build_config(names)``.
+
+           If the model config does not contain any name from ``names``, :exc:`KeyError` is raised.
+
+           See :meth:`._make_inputs` for details.
+
+        #. Define parameters for :meth:`~.TorchModel.input_block`, :meth:`~.TorchModel.body`, :meth:`~.TorchModel.head`
+           which depend on inputs.
+
+        #. Don't forget to return ``config``.
+
+        Typically it looks like this::
+
+            def build_config(self, names=None):
+                names = names or ['images', 'labels']
+                config = super().build_config(names)
+                config['head/num_classes'] = self.num_classes('targets')
+                return config
+        """
+
+        config = self.default_config()
+
+        config = config + self.config
+
+        if config.get('inputs'):
+            self._make_inputs(names, config)
+            inputs = config.get('input_block/inputs')
+
+            # if isinstance(inputs, str):
+            #     config['input_block/inputs'] = self.inputs[inputs]
+            # elif isinstance(inputs, list):
+            #     config['input_block/inputs'] = [self.inputs[name] for name in inputs]
+            # else:
+            #     raise ValueError('input_block/inputs should be specified with a name or a list of names.')
+
+        return config
+
+    def _add_block(self, blocks, block, shape):
+        if block is not None:
+            shape = get_output_shape(block, shape)
+            blocks.append(block)
+        return blocks, shape
+
+    def _build(self, config=None):
+        shape = self.shape(config['input_block/inputs'])
+        blocks = []
+
+        input_block = self.input_block(**config['input_block'], shape=shape)
+        blocks, shape = self._add_block(blocks, input_block, shape)
+
+        body = self.body(**config['body'], shape=shape)
+        blocks, shape = self._add_block(blocks, body, shape)
+
+        head = self.head(**config['head'], shape=shape)
+        blocks, shape = self._add_block(blocks, head, shape)
+
+        self.model = nn.Sequential(*blocks)
+        #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
+
+    @classmethod
+    def input_block(cls, **kwargs):
+        """ Transform inputs with a convolution block
+
+        Notes
+        -----
+        For parameters see :class:`.ConvBlock`.
+
+        Returns
+        -------
+        torch.nn.Module or None
+        """
+        kwargs = cls.get_defaults('input_block', kwargs)
+        if kwargs.get('layout'):
+            return ConvBlock(**kwargs)
+        return None
+
+    @classmethod
+    def body(cls, **kwargs):
+        """ Base layers which produce a network embedding
+
+        Notes
+        -----
+        For parameters see :class:`.ConvBlock`.
+
+        Returns
+        -------
+        torch.nn.Module or None
+        """
+        kwargs = cls.get_defaults('body', kwargs)
+        if kwargs.get('layout'):
+            return ConvBlock(**kwargs)
+        return None
+
+    @classmethod
+    def head(cls, **kwargs):
+        """ The last network layers which produce predictions
+
+        Notes
+        -----
+        For parameters see :class:`.ConvBlock`.
+
+        Returns
+        -------
+        torch.nn.Module or None
+        """
+        kwargs = cls.get_defaults('head', kwargs)
+        if kwargs.get('layout'):
+            return ConvBlock(**kwargs)
+        return None
+
+    def output(self):
+        """ """
+        pass
+
+    def train(self, inputs, targets, use_lock=False):    # pylint: disable=arguments-differ
+        """ Train the model with the data provided
+        """
+        device = 'cpu'
+        inputs = torch.from_numpy(inputs) #.to(device)
+        targets = torch.from_numpy(targets) #.to(device)
+
+        if use_lock:
+            self._train_lock.acquire()
+
+        self.model.train()
+
+        if self.lr_decay:
+            self.lr_decay()
+        self.optimizer.zero_grad()
+        predictions = self.model(inputs)
+        loss = self.loss_fn(predictions, targets)
+        loss.backward()
+        self.optimizer.step()
+
+        if use_lock:
+            self._train_lock.acquire()
+
+        return loss
+
+    def predict(self, inputs, targets):    # pylint: disable=arguments-differ
+        """ Get predictions on the data provided
+        """
+        device = 'cpu'
+        inputs = torch.Tensor(inputs).to(device)
+        targets = torch.LongTensor(targets).to(device)
+
+        self.model.eval()
+
+        with torch.no_grad():
+            predictions = self.model(inputs)
+            loss = self.loss_fn(predictions, targets)
+
+        return loss
