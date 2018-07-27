@@ -108,7 +108,6 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
     prefix : str
     suffix : str
     """
-
     def _decorator(cls):
         for func_name, func in transformations.items():
             def _method_decorator():
@@ -175,7 +174,6 @@ class BaseImagesBatch(Batch):
         NotImplementedError
             If this method is not defined in a child class
         """
-
         _ = self, ix, src, dst, fmt
         raise NotImplementedError("Must be implemented in a child class")
 
@@ -195,7 +193,6 @@ class BaseImagesBatch(Batch):
         components : str, sequence
             components to download.
         """
-
         if fmt == 'image':
             return self._load_image(src, fmt=fmt, dst=components)
         return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
@@ -218,7 +215,6 @@ class BaseImagesBatch(Batch):
         NotImplementedError
             If this method is not defined in a child class
         """
-
         _ = self, ix, src, dst, fmt
         raise NotImplementedError("Must be implemented in a child class")
 
@@ -245,12 +241,9 @@ class BaseImagesBatch(Batch):
         -------
         self
         """
-
         if fmt == 'image':
             return self._dump_image(components, dst, fmt=kwargs.pop('ext'))
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
-
-
 
 
 @transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
@@ -274,9 +267,7 @@ class ImagesBatch(BaseImagesBatch):
     Y v
 
     Pixel's position is defined as (x, y)
-
     """
-
     @classmethod
     def _get_image_shape(cls, image):
         if isinstance(image, PIL.Image.Image):
@@ -307,12 +298,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to.
         fmt : str
             Format of an image.
-
-        Returns
-        -------
-        self
         """
-
         return PIL.Image.open(self._make_path(ix, src))
 
     @inbatch_parallel(init='indices')
@@ -329,19 +315,12 @@ class ImagesBatch(BaseImagesBatch):
             Folder where to dump.
         fmt : str
             Format of saved image.
-
-        Returns
-        -------
-        self
         """
-
         if dst is None:
             raise RuntimeError('You must specify `dst`')
         image = self.get(ix, src)
         ix = str(ix) + '.' + fmt if fmt is not None else str(ix)
         image.save(os.path.join(dst, ix))
-
-
 
     def _assemble_component(self, result, *args, component='images', **kwargs):
         """ Assemble one component after parallel execution.
@@ -356,7 +335,6 @@ class ImagesBatch(BaseImagesBatch):
             If True then all images are cropped from the top left corner to have similar shapes.
             Shape is chosen to be minimal among given images.
         """
-
         if isinstance(result[0], PIL.Image.Image):
             setattr(self, component, np.asarray(result, dtype=object))
         else:
@@ -365,7 +343,7 @@ class ImagesBatch(BaseImagesBatch):
             except ValueError:
                 setattr(self, component, np.asarray(result, dtype=object))
 
-    def _to_array_(self, image):
+    def _to_array_(self, image, dtype=None, channels='last'):
         """converts images in Batch to np.ndarray format
 
         Parameters
@@ -374,14 +352,17 @@ class ImagesBatch(BaseImagesBatch):
             Component to get images from. Default is 'images'.
         dst : str
             Component to write images to. Default is 'images'.
-        Returns
-        -------
-        self
         """
-
         image = np.array(image)
         if len(image.shape) == 2:
-            image = image[..., None]
+            if channels == 'last':
+                image = image[..., None]
+            else:
+                image = image[None, ...]
+
+            if dtype is not None:
+                image = image.astype(dtype)
+
         return image
 
     def _to_pil_(self, image, mode=None):
@@ -393,9 +374,6 @@ class ImagesBatch(BaseImagesBatch):
             Component to get images from. Default is 'images'.
         dst : str
             Component to write images to. Default is 'images'.
-        Returns
-        -------
-        self
         """
         if isinstance(image, PIL.Image.Image):
             return image
@@ -443,7 +421,6 @@ class ImagesBatch(BaseImagesBatch):
         -------
         sequence : calculated origin in the form (column, row)
         """
-
         if isinstance(origin, str):
             if origin == 'top_left':
                 origin = 0, 0
@@ -493,7 +470,6 @@ class ImagesBatch(BaseImagesBatch):
         -------
         self
         """
-
         original_shape = self._get_image_shape(image)
         rescaled_shape = list(np.int32(np.ceil(np.asarray(original_shape)*factor)))
         rescaled_image = image.resize(rescaled_shape, resample=resample)
@@ -528,12 +504,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         origin = self._calc_origin(shape, origin, image.size)
         right_bottom = origin + shape
 
@@ -563,11 +534,7 @@ class ImagesBatch(BaseImagesBatch):
 
         mask : None, PIL.Image, np.ndarray of np.uint8
             mask passed to PIL.Image.paste
-        Returns
-        -------
-        self
         """
-
         if not isinstance(background, PIL.Image.Image):
             background = PIL.Image.fromarray(background)
         else:
@@ -605,7 +572,6 @@ class ImagesBatch(BaseImagesBatch):
         -------
         np.ndarray : image after described actions
         """
-
         n_channels = len(transformed_image.getbands())
         if n_channels == 1:
             background = np.zeros(original_shape, dtype=np.uint8)
@@ -667,7 +633,6 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
-
         return image.resize(*args, **kwargs)
 
     def _shift_(self, image, offset, mode='const'):
@@ -685,7 +650,6 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
-
         if mode == 'const':
             return image.transform(size=image.size,
                                    method=PIL.Image.AFFINE,
@@ -714,7 +678,6 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
-
         return PIL.ImageOps.expand(image, *args, **kwargs)
 
     def _rotate_(self, image, *args, **kwargs):
@@ -739,7 +702,6 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
-
         return image.rotate(*args, **kwargs)
 
     def _flip_(self, image, mode='lr'):
@@ -757,12 +719,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         if mode == 'lr':
             return PIL.ImageOps.mirror(image)
         return PIL.ImageOps.flip(image)
@@ -780,12 +737,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         if channels == 'all':
             image = PIL.ImageChops.invert(image)
         else:
@@ -822,12 +774,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         mask_size = np.asarray(self._get_image_shape(image))
         mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
         image = np.array(image)
@@ -863,12 +810,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         if isinstance(low, Number):
             low = tuple([low]*3)
         if isinstance(high, Number):
@@ -890,9 +832,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
         """
-
         return PIL.ImageEnhance.Brightness(image).enhance(multiplier)
 
     def _multiply_(self, image, multiplier=1., clip=False, preserve_type=False):
@@ -912,12 +852,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         multiplier = np.float32(multiplier)
         if isinstance(image, PIL.Image.Image):
             return PIL.Image.fromarray(np.clip(multiplier*np.asarray(image), 0, 255).astype(np.uint8))
@@ -946,12 +881,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         term = np.float32(term)
         if isinstance(image, PIL.Image.Image):
             return PIL.Image.fromarray(np.clip(term+np.asarray(image), 0, 255).astype(np.uint8))
@@ -976,12 +906,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         return image.convert(mode)
 
     def _posterize_(self, image, bits=4):
@@ -999,12 +924,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         return PIL.ImageOps.posterize(image, bits)
 
     def _cutout_(self, image, origin, shape, color):
@@ -1039,12 +959,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         image = image.copy()
         shape = (shape, shape) if isinstance(shape, Number) else shape
         origin = self._calc_origin(shape, origin, self._get_image_shape(image))
@@ -1062,7 +977,6 @@ class ImagesBatch(BaseImagesBatch):
         dst : str
             Component to put patches in.
         """
-
         _ = args, kwargs
         new_items = np.concatenate(patches)
         setattr(self, dst, new_items)
@@ -1089,12 +1003,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         _ = dst
         image = self.get(ix, src)
         image_shape = self._get_image_shape(image)
@@ -1139,12 +1048,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._add_(image, noise, clip, preserve_type)
 
@@ -1166,12 +1070,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._multiply_(image, noise, clip, preserve_type)
 
@@ -1196,12 +1095,7 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
-
-        Returns
-        -------
-        self
         """
-
         image = np.array(image)
         # full shape is needed
         shape = image.shape
