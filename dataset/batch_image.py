@@ -341,7 +341,9 @@ class ImagesBatch(BaseImagesBatch):
             try:
                 setattr(self, component, np.stack(result))
             except ValueError:
-                setattr(self, component, np.asarray(result, dtype=object))
+                array_result = np.empty(len(result), dtype=object)
+                array_result[:] = result
+                setattr(self, component, array_result)
 
     def _to_array_(self, image, dtype=None, channels='last'):
         """converts images in Batch to np.ndarray format

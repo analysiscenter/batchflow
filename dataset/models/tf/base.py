@@ -148,22 +148,13 @@ class TFModel(BaseModel):
     head : dict
         parameters for the head layers, usually :func:`.conv_block` parameters
 
-    output : dict
-        predictions : str
-            operation to apply for body output tensor to make the network predictions.
-            The tensor's name is 'predictions' which is later used in the loss function.
-        ops : tuple of str
-            additional operations
-        prefix : str or tuple of str
-            prefixes for additional output tensor names (default='output')
+    predictions : str or callable
+        an operation applied to the head output to make the predictions tensor which is used in the loss function.
 
-        Operations supported are:
+    output : dict or list
+        auxiliary operations
 
-            - ``None`` - do nothing (identity)
-            - 'accuracy' - accuracy metrics (the share of ``true_labels == predicted_labels``)
-            - 'proba' - multiclass probabilities (softmax)
-            - 'labels' - most probable labels (argmax)
-
+    For more details about predictions and auxiliary output operations see :meth:`.TFModel.output`.
 
     **How to create your own model**
 
@@ -218,6 +209,7 @@ class TFModel(BaseModel):
         self.train_step = None
         self._train_lock = threading.Lock()
         self._attrs = []
+        self._saver = None
         self._to_classes = {}
         self._inputs = {}
         self.inputs = None
@@ -421,7 +413,7 @@ class TFModel(BaseModel):
             placeholders[input_name] = tensor
             self.store_to_attr(input_name, tensor)
 
-            if 'df' in input_config and 'data_format' not input_config:
+            if 'df' in input_config and 'data_format' not in input_config:
                 input_config['data_format'] = input_config['df']
             if input_config.get('data_format') == 'l':
                 input_config['data_format'] = 'channels_last'
@@ -853,8 +845,9 @@ class TFModel(BaseModel):
         with self.graph.as_default():
             if not os.path.exists(path):
                 os.makedirs(path)
-            saver = tf.train.Saver()
-            saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
+            if self._saver is None:
+                self._saver = tf.train.Saver()
+            self._saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
             with open(os.path.join(path, 'attrs.json'), 'w') as f:
                 json.dump(self._attrs, f)
 
@@ -884,9 +877,9 @@ class TFModel(BaseModel):
                 graph_files = glob.glob(os.path.join(path, '*.meta'))
                 graph_files = [os.path.splitext(os.path.basename(graph))[0] for graph in graph_files]
                 all_steps = []
-                for graph in graph_files:
+                for _graph in graph_files:
                     try:
-                        step = int(graph.split('-')[-1])
+                        step = int(_graph.split('-')[-1])
                     except ValueError:
                         pass
                     else:
@@ -918,28 +911,27 @@ class TFModel(BaseModel):
             tf.get_collection_ref('attrs').append(graph_item)
 
     @classmethod
-    def crop(cls, inputs, shape_images, data_format='channels_last'):
+    def crop(cls, inputs, resize_to, data_format='channels_last'):
         """ Crop input tensor to a shape of a given image.
-        If shape_image has not fully defined shape (shape_image.get_shape() has at least one None),
+        If resize_to does not have a fully defined shape (resize_to.get_shape() has at least one None),
         the returned tf.Tensor will be of unknown shape except the number of channels.
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
-        shape_images : tf.Tensor
-            a source images to which
+        resize_to : tf.Tensor
+            a tensor which shape the inputs should be resized to
         data_format : str {'channels_last', 'channels_first'}
             data format
         """
 
-        static_shape = cls.spatial_shape(shape_images, data_format, False)
-        dynamic_shape = cls.spatial_shape(shape_images, data_format, True)
+        static_shape = cls.spatial_shape(resize_to, data_format, False)
+        dynamic_shape = cls.spatial_shape(resize_to, data_format, True)
 
         if None in cls.shape(inputs) + static_shape:
             return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
-        else:
-            return cls._static_crop(inputs, static_shape, data_format)
+        return cls._static_crop(inputs, static_shape, data_format)
 
     @classmethod
     def _static_crop(cls, inputs, shape, data_format='channels_last'):
@@ -1021,7 +1013,7 @@ class TFModel(BaseModel):
         --------
         ::
 
-            MyModel.body(2, inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
+            MyModel.body(inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
         """
         kwargs = cls.fill_params('body', **kwargs)
         if kwargs.get('layout'):
@@ -1051,72 +1043,92 @@ class TFModel(BaseModel):
         --------
         A fully convolutional head with 3x3 and 1x1 convolutions and global max pooling:
 
-            MyModel.head(2, network_embedding, layout='cacaP', filters=[128, num_classes], kernel_size=[3, 1])
+            MyModel.head(network_embedding, layout='cacaP', filters=[128, num_classes], kernel_size=[3, 1])
 
         A fully connected head with dropouts, a dense layer with 1000 units and final dense layer with class logits::
 
-            MyModel.head(2, network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
+            MyModel.head(network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
         kwargs = cls.fill_params('head', **kwargs)
         if kwargs.get('layout'):
             return conv_block(inputs, name=name, **kwargs)
         return inputs
 
-    def output(self, inputs, ops=None, prefix=None, **kwargs):
-        """ Add output operations to a model graph, like predictions, quality metrics, etc.
+    def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
+        """ Add output operations to the model graph, like predicted probabilities or labels, etc.
 
         Parameters
         ----------
         inputs : tf.Tensor or a sequence of tf.Tensors
             input tensors
 
-        ops : a sequence of str or callable
-            operation names::
+        predictions : str or callable
+            an operation applied to inputs to get `predictions` tensor which is used in a loss function:
+
             - 'sigmoid' - add ``sigmoid(inputs)``
             - 'proba' - add ``softmax(inputs)``
             - 'labels' - add ``argmax(inputs)``
-            - 'accuracy' - add ``mean(predicted_labels == true_labels)``
-            - callable - add an arbitrary operation
+            - callable - add a user-defined operation
 
-        prefix : a sequence of str
-            a prefix for each input if there are multiple inputs
+        ops : a sequence of operations or an ordered dict
+            auxiliary operations
+
+            If dict:
+
+            - key - a prefix for each input
+            - value - a sequence of aux operations
 
         Raises
         ------
         ValueError if the number of outputs does not equal to the number of prefixes
         TypeError if inputs is not a Tensor or a sequence of Tensors
-        """
-        kwargs = self.fill_params('output', **kwargs)
-        predictions_op = self.pop('predictions', kwargs, default=None)
 
+        Examples
+        --------
+
+        ::
+
+            config = {
+                'output': ['proba', 'labels']
+            }
+
+        However, if one of the placeholders also has a name 'labels', then it will be lost as the model
+        will rewrite a name 'labels' with an output.
+
+        That is where a dict might be convenient::
+
+            config = {
+                'output': {'predicted': ['proba', 'labels']}
+            }
+
+        Now the output will be stored under names 'predicted_proba' and 'predicted_labels'.
+
+        For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
+        """
         if ops is None:
             ops = []
-        elif not isinstance(ops, (list, tuple)):
+        elif not isinstance(ops, (dict, tuple, list)):
             ops = [ops]
+        if not isinstance(ops, dict):
+            ops = {'': ops}
 
         if not isinstance(inputs, (tuple, list)):
             inputs = [inputs]
-            prefix = prefix or 'output'
-            prefix = [prefix]
-
-        if len(inputs) != len(prefix):
-            raise ValueError('Each output in multiple output models should have its own prefix')
 
         for i, tensor in enumerate(inputs):
             if not isinstance(tensor, tf.Tensor):
                 raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
 
-            current_prefix = prefix[i]
-            if current_prefix:
-                ctx = tf.variable_scope(current_prefix)
+            prefix = [*ops.keys()][i]
+            if prefix:
+                ctx = tf.variable_scope(prefix)
                 ctx.__enter__()
             else:
                 ctx = None
-            attr_prefix = current_prefix + '_' if current_prefix else ''
+            attr_prefix = prefix + '_' if prefix else ''
 
-            pred_prefix = '' if len(inputs) == 1 else attr_prefix
-            self._add_output_op(tensor, predictions_op, 'predictions', pred_prefix, **kwargs)
-            for oper in ops:
+            self._add_output_op(tensor, predictions, 'predictions', '', **kwargs)
+            for oper in ops[prefix]:
                 self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
 
             if ctx:
@@ -1131,8 +1143,6 @@ class TFModel(BaseModel):
             self._add_output_proba(inputs, name, attr_prefix, **kwargs)
         elif oper == 'labels':
             self._add_output_labels(inputs, name, attr_prefix, **kwargs)
-        elif oper == 'accuracy':
-            self._add_output_accuracy(inputs, name, attr_prefix, **kwargs)
         elif callable(oper):
             self._add_output_callable(inputs, oper, None, attr_prefix, **kwargs)
 
@@ -1153,16 +1163,9 @@ class TFModel(BaseModel):
         self.store_to_attr(attr_prefix + name, proba)
 
     def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
-        channels_axis = self.channels_axis(kwargs.get('data_format'))
-        predicted_labels = tf.argmax(inputs, axis=channels_axis, name=name)
-        self.store_to_attr(attr_prefix + name, predicted_labels)
-
-    def _add_output_accuracy(self, inputs, name, attr_prefix, **kwargs):
-        channels_axis = self.channels_axis(kwargs.get('data_format'))
-        true_labels = self.targets
-        predicted_labels = tf.argmax(inputs, axis=channels_axis, name=name)
-        accuracy = tf.reduce_mean(tf.cast(tf.equal(true_labels, predicted_labels), 'float'), name=name)
-        self.store_to_attr(attr_prefix + name, accuracy)
+        class_axis = self.channels_axis(kwargs.get('data_format'))
+        predicted_classes = tf.argmax(inputs, axis=class_axis, name=name)
+        self.store_to_attr(attr_prefix + name, predicted_classes)
 
     def _add_output_callable(self, inputs, oper, name, attr_prefix, **kwargs):
         _ = kwargs
@@ -1170,7 +1173,6 @@ class TFModel(BaseModel):
         name = name or oper.__name__
         self.store_to_attr(attr_prefix + name, x)
         return x
-
 
     @classmethod
     def default_config(cls):
@@ -1202,7 +1204,7 @@ class TFModel(BaseModel):
         config['body'] = {}
         config['head'] = {}
         config['predictions'] = None
-        config['output'] = {}
+        config['output'] = None
         config['optimizer'] = ('Adam', dict())
 
         if is_best_practice():
@@ -1268,12 +1270,11 @@ class TFModel(BaseModel):
         config['input_block'] = {**defaults, **config['input_block']}
         config['body'] = {**defaults, **config['body']}
         config['head'] = {**defaults, **config['head']}
-        config['output'] = {**defaults, **config['output']}
 
         x = self.input_block(**config['input_block'])
         x = self.body(inputs=x, **config['body'])
         output = self.head(inputs=x, **config['head'])
-        self.output(output, **config['output'])
+        self.output(output, predictions=config['predictions'], ops=config['output'], **defaults)
 
     @classmethod
     def channels_axis(cls, data_format):
@@ -1310,7 +1311,7 @@ class TFModel(BaseModel):
         return has
 
     def classes(self, tensor):
-        """ Return the  number of classes """
+        """ Return the classes """
         config = self.get_tensor_config(tensor)
         classes = config.get('classes')
         if isinstance(classes, int):
@@ -1530,7 +1531,7 @@ class TFModel(BaseModel):
         return x
 
     @classmethod
-    def upsample(cls, inputs, factor=None, layout='b', name='upsample', **kwargs):
+    def upsample(cls, inputs, factor=None, resize_to=None, layout='b', name='upsample', **kwargs):
         """ Upsample input tensor
 
         Parameters
@@ -1539,8 +1540,10 @@ class TFModel(BaseModel):
             a tensor to resize and a tensor which size to resize to
         factor : int
             an upsamping scale
+        resize_to : tf.Tensor
+            a tensor which shape the output should be resized to
         layout : str
-            resizing technique, a sequence of:
+            a resizing technique, a sequence of:
 
             - R - use residual connection with bilinear additive upsampling (must be the first symbol)
             - b - bilinear resize
@@ -1556,17 +1559,10 @@ class TFModel(BaseModel):
         if np.all(factor == 1):
             return inputs
 
-        resize_to = None
-        if isinstance(inputs, (list, tuple)):
-            x, resize_to = inputs
-        else:
-            x = inputs
-        inputs = None
-
         if kwargs.get('filters') is None:
-            kwargs['filters'] = cls.num_channels(x, kwargs['data_format'])
+            kwargs['filters'] = cls.num_channels(inputs, kwargs['data_format'])
 
-        x = upsample(x, factor=factor, layout=layout, name=name, **kwargs)
+        x = upsample(inputs, factor=factor, layout=layout, name=name, **kwargs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x

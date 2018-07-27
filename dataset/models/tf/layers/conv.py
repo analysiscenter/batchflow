@@ -230,8 +230,7 @@ def separable_conv(inputs, *args, **kwargs):
 
     if dim == 2:
         return tf.layers.separable_conv2d(inputs, *args, **kwargs)
-    else:
-        return _separable_conv(False, inputs, *args, **kwargs)
+    return _separable_conv(False, inputs, *args, **kwargs)
 
 def separable_conv_transpose(inputs, *args, **kwargs):
     """ Make Nd depthwise transpose convolutions that acts separately on channels,

@@ -173,7 +173,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
             elif C_GROUPS[layer] == 'P':
                 pool_op = 'mean' if layer == 'V' else kwargs.pop('pool_op', 'max')
-                args = dict(op=pool_op, data_format=data_format, keep_dims=kwargs.get('keep_dims', False))
+                args = dict(op=pool_op, data_format=data_format, keepdims=kwargs.get('keep_dims', False))
 
             elif layer in ['d', 'D']:
                 if dropout_rate:
@@ -186,7 +186,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 args = dict(depth=kwargs.get('depth'), data_format=data_format)
 
             elif layer in ['b', 'B', 'N', 'X']:
-                args = dict(factor=kwargs.get('factor'), data_format=data_format)
+                args = dict(factor=kwargs.get('factor'), shape=kwargs.get('shape'), data_format=data_format)
                 if kwargs.get('upsampling_layout'):
                     args['layout'] = kwargs.get('upsampling_layout')
 

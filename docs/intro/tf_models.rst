@@ -100,7 +100,7 @@ Classification with 10 classes::
         ...
         'loss': 'ce',
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       targets={'classes': 10})
+                       labels={'classes': 10})
         'head': dict(layout='cdV', filters=10, dropout_rate=.2),
         'input_block/inputs': 'images'
     }
@@ -349,7 +349,7 @@ Now you can train the model with a simple pipeline::
         'decay': 'invtime',
         'optimizer': 'Adam',
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       targets={'classes': 10}),
+                       labels={'classes': 10}),
         'input_block/inputs': 'images'
     }
 
@@ -357,7 +357,7 @@ Now you can train the model with a simple pipeline::
         .init_variable('loss_history', init_on_each_run=list)
         .init_model('dynamic', MyModel, 'my_model', model_config)
         .train_model('my_model', fetches='loss',
-                     images=B('images'), targets=B('labels'),
+                     images=B('images'), labels=B('labels'),
                      save_to=V('loss_history'), mode='a')
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
 
