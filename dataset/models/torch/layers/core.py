@@ -96,12 +96,14 @@ class Activation(nn.Module):
             raise ValueError("Activation can be str, nn.Module or a callable, but given", activation)
 
     def forward(self, x):
+        """ Make forward pass """
         if self.activation:
             return self.activation(x, *self.args, **self.kwargs)
         return x
 
 
 def _get_padding(padding=0, kernel_size=None, dilation=1, **kwargs):
+    _ = kwargs
     if isinstance(padding, str):
         if padding == 'valid':
             padding = 0
@@ -155,36 +157,38 @@ CONV = {
 }
 
 class Conv(_Conv):
-    """ """
+    """ Multi-dimensional convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
                  dilation=None, dilation_rate=None, groups=None, bias=True, shape=None):
         super().__init__(filters, kernel_size, stride, strides, padding,
                          dilation, dilation_rate, groups, bias, shape, CONV)
 
 class _SeparableConv(nn.Module):
-    """ """
+    """ A universal multi-dimensional separable convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
                  dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, shape=None, _fn=None):
+        super().__init__()
+
         in_channels = get_num_channels(shape)
         out_channels = in_channels * depth_multiplier
         self.conv = _fn(out_channels, kernel_size, stride, strides, padding,
-                         dilation, dilation_rate, in_channels, bias, shape)
+                        dilation, dilation_rate, in_channels, bias, shape)
 
         if filters != out_channels:
             self.conv = nn.Sequential(
-                            self.conv,
-                            Conv(filters, 1, 1, 1, padding, 1, 1, 1, bias, self.conv.output_shape)
-                        )
+                self.conv,
+                Conv(filters, 1, 1, 1, padding, 1, 1, 1, bias, self.conv.output_shape)
+            )
 
     def forward(self, x):
         return self.conv(x)
 
 class SeparableConv(_SeparableConv):
-    """ """
+    """ Multi-dimensional separable convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
                  dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, shape=None):
         super().__init__(filters, kernel_size, stride, strides, padding,
-                         dilation, dilation_rate, groups, bias, shape, Conv)
+                         dilation, dilation_rate, bias, depth_multiplier, shape, Conv)
 
 CONV_TR = {
     1: nn.ConvTranspose1d,
@@ -193,19 +197,19 @@ CONV_TR = {
 }
 
 class ConvTranspose(_Conv):
-    """ """
+    """ Multi-dimensional transposed convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
                  dilation=None, dilation_rate=None, groups=None, bias=True, shape=None):
         super().__init__(filters, kernel_size, stride, strides, padding,
-                         dilation, dilation_rate, groups, bias, False, shape, CONV_TR)
+                         dilation, dilation_rate, groups, bias, shape, CONV_TR)
 
 
 class SeparableConvTranspose(_SeparableConv):
-    """ """
+    """ Multi-dimensional transposed separable convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
                  dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, shape=None):
         super().__init__(filters, kernel_size, stride, strides, padding,
-                         dilation, dilation_rate, groups, bias, shape, ConvTranspose)
+                         dilation, dilation_rate, bias, depth_multiplier, shape, ConvTranspose)
 
 BATCH_NORM = {
     1: nn.BatchNorm1d,
@@ -214,7 +218,7 @@ BATCH_NORM = {
 }
 
 class BatchNorm(nn.Module):
-    """ """
+    """ Multi-dimensional batch normalization layer """
     def __init__(self, shape=None, **kwargs):
         super().__init__()
         num_features = get_num_channels(shape)
@@ -231,7 +235,7 @@ DROPOUT = {
 }
 
 class Dropout(nn.Module):
-    """ """
+    """ Multi-dimensional dropout layer """
     def __init__(self, shape=None, **kwargs):
         super().__init__()
         self.dropout = DROPOUT[get_num_dims(shape)](**kwargs)
@@ -241,6 +245,7 @@ class Dropout(nn.Module):
 
 
 class _Pool(nn.Module):
+    """ A universal pooling layer """
     def __init__(self, shape=None, _fn=None, **kwargs):
         super().__init__()
         if isinstance(_fn, dict):
@@ -259,7 +264,7 @@ MAXPOOL = {
 }
 
 class MaxPool(_Pool):
-    """ """
+    """ Multi-dimensional max pooling layer """
     def __init__(self, **kwargs):
         kwargs['padding'] = _get_padding(kwargs['padding'], kwargs['kernel_size'], kwargs['dilation'])
         super().__init__(_fn=MAXPOOL, **kwargs)
@@ -272,13 +277,13 @@ AVGPOOL = {
 }
 
 class AvgPool(_Pool):
-    """ """
+    """ Multi-dimensional average pooling layer """
     def __init__(self, **kwargs):
         kwargs['padding'] = _get_padding(kwargs['padding'], kwargs['kernel_size'], kwargs['dilation'])
         super().__init__(_fn=AVGPOOL, **kwargs)
 
 class Pool(_Pool):
-    """ """
+    """ Multi-dimensional pooling layer """
     def __init__(self, shape=None, op='max', **kwargs):
         if op == 'max':
             _fn = MaxPool
@@ -297,7 +302,7 @@ ADAPTIVE_MAXPOOL = {
 }
 
 class AdaptiveMaxPool(_Pool):
-    """ """
+    """ Multi-dimensional adaptive max pooling layer """
     def __init__(self, shape=None, output_size=None, **kwargs):
         super().__init__(_fn=ADAPTIVE_MAXPOOL, shape=shape, output_size=output_size, **kwargs)
         self.output_shape = tuple(shape[:2]) + tuple(output_size)
@@ -310,14 +315,14 @@ ADAPTIVE_AVGPOOL = {
 }
 
 class AdaptiveAvgPool(_Pool):
-    """ """
+    """ Multi-dimensional adaptive average pooling layer """
     def __init__(self, shape=None, output_size=None, **kwargs):
         super().__init__(_fn=ADAPTIVE_AVGPOOL, shape=shape, output_size=output_size, **kwargs)
         self.output_shape = tuple(shape[:2]) + tuple(output_size)
 
 
 class AdaptivePool(_Pool):
-    """ """
+    """ Multi-dimensional adaptive pooling layer """
     def __init__(self, op='max', shape=None, **kwargs):
         if op == 'max':
             _fn = AdaptiveMaxPool
@@ -328,7 +333,7 @@ class AdaptivePool(_Pool):
 
 
 class GlobalPool(nn.Module):
-    """ """
+    """ Multi-dimensional global pooling layer """
     def __init__(self, shape=None, op='max', **kwargs):
         super().__init__()
         pool_shape = [1] * len(shape[2:])

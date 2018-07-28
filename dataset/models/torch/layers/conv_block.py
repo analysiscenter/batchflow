@@ -5,7 +5,7 @@ import torch.nn as nn
 from .core import Dense, Activation, \
                   Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, \
                   Dropout, BatchNorm, Pool, GlobalPool
-from ..utils import get_num_dims, get_output_shape, get_shape
+from ..utils import get_output_shape, get_shape
 from ...utils import unpack_args
 
 
@@ -64,6 +64,9 @@ C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
 
 
 class ConvBlock(nn.Module):
+    """ Complex multi-dimensional block with a sequence of convolutions, batch normalization, activation, pooling,
+    dropout and even dense layers.
+    """
     def __init__(self, inputs=None, layout='', filters=0, kernel_size=3, strides=1, padding='same', dilation_rate=1,
                  depth_multiplier=1, activation='relu', pool_size=2, pool_strides=2, dropout_rate=0, units=None,
                  shape=None, **kwargs):
@@ -74,7 +77,7 @@ class ConvBlock(nn.Module):
 
         if len(self.layout) == 0:
             logger.warning('ConvBlock: layout is empty, so there is nothing to do')
-            return None
+            return
 
         shape = shape or get_shape(inputs)
 
@@ -85,13 +88,11 @@ class ConvBlock(nn.Module):
             layout_dict[C_GROUPS[layer]][1] += 1
 
         modules = []
-        for i, layer in enumerate(self.layout):
+        for _, layer in enumerate(self.layout):
 
             layout_dict[C_GROUPS[layer]][0] += 1
             layer_name = C_LAYERS[layer]
             layer_fn = FUNC_LAYERS[layer_name]
-
-            dim = get_num_dims(shape)
 
             layer_args = kwargs.get(layer_name, {})
             skip_layer = layer_args is False or isinstance(layer_args, dict) and layer_args.get('disable', False)
@@ -107,9 +108,13 @@ class ConvBlock(nn.Module):
                     raise ValueError('units cannot be None if layout includes dense layers')
                 args = dict(units=units, shape=shape)
 
-            elif layer == 'c':
+            elif layer in ['c', 't']:
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             dilation_rate=dilation_rate, shape=shape)
+
+            elif layer in ['C', 'T']:
+                args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
+                            dilation_rate=dilation_rate, depth_multiplier=depth_multiplier, shape=shape)
 
             elif layer == 'n':
                 args = dict(shape=shape)
@@ -149,6 +154,7 @@ class ConvBlock(nn.Module):
 
 
     def forward(self, x):
+        """ Make forward pass """
         if self.layout:
             x = self.block(x)
         return x

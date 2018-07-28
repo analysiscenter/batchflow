@@ -7,7 +7,7 @@ def get_num_channels(inputs, axis=1):
     """ Return a number of channels """
     return get_shape(inputs)[axis]
 
-def get_num_dims(inputs, axis=1):
+def get_num_dims(inputs):
     """ Return a number of semantic dimensions (i.e. excluding batch and channels axis)"""
     if isinstance(inputs, np.ndarray):
         dim = inputs.ndim
@@ -30,6 +30,7 @@ def get_shape(inputs):
     raise TypeError('inputs can be array, tensor or tuple/list', inputs)
 
 def get_output_shape(layer, shape=None):
+    """ Return layer shape if it is defined """
     if hasattr(layer, 'output_shape'):
         return tuple(layer.output_shape)
     return shape

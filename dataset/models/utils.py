@@ -14,6 +14,7 @@ def unpack_args(args, layer_no, layers_max):
 
 
 def unpack_fn_from_config(param, config=None):
+    """ Return params from config """
     par = config.get(param)
 
     if par is None:

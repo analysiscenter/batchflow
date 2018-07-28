@@ -1,6 +1,9 @@
+""" Cotains base class for Torch models """
 import re
 import threading
+from functools import partial
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -8,7 +11,7 @@ from ... import is_best_practice, Config
 from .. import BaseModel
 from ..utils import unpack_fn_from_config
 from .utils import get_output_shape
-from .layers import ConvBlock, Identity
+from .layers import ConvBlock
 from .losses import CrossEntropyLoss
 
 
@@ -16,7 +19,7 @@ LOSSES = {
     'mse': nn.MSELoss,
     'bce': nn.BCEWithLogitsLoss,
     'ce': CrossEntropyLoss,
-    'crossentropy': nn.CrossEntropyLoss,
+    'crossentropy': CrossEntropyLoss,
     'absolutedifference': nn.L1Loss,
     'l1': nn.L1Loss,
     'cosine': nn.CosineSimilarity,
@@ -37,18 +40,24 @@ class TorchModel(BaseModel):
     """
     def __init__(self, *args, **kwargs):
         self._train_lock = threading.Lock()
+        self.device = None
         self.loss_fn = None
         self.lr_decay = None
         self.optimizer = None
         self.model = None
         self._model_jit = None
         self._inputs = dict()
+        self.predictions = None
+        self.loss = None
 
         super().__init__(*args, **kwargs)
 
     def build(self, *args, **kwargs):
-        """ """
+        """ Build the model """
         config = self.build_config()
+
+        if 'device' in config:
+            self.device = torch.device(config['device'])
 
         self._build(config)
 
@@ -188,8 +197,10 @@ class TorchModel(BaseModel):
         return decay_name, decay_args
 
     def get_tensor_config(self, tensor):
+        """ Return tensor configuration """
         if isinstance(tensor, str):
             return self._inputs[tensor]['config']
+        raise TypeError("tensor is expected to be a name for config's inputs section")
 
     def shape(self, tensor):
         config = self.get_tensor_config(tensor)
@@ -256,11 +267,11 @@ class TorchModel(BaseModel):
         config['body'] = {}
         config['head'] = {}
         config['predictions'] = None
-        config['output'] = {}
+        config['output'] = None
         config['optimizer'] = ('Adam', dict())
 
-        if is_best_practice():
-            config['common'] = {'batch_norm': {'momentum': .1}}
+        #if is_best_practice():
+        #    config['common'] = {'batch_norm': {'momentum': .1}}
 
         return config
 
@@ -303,14 +314,6 @@ class TorchModel(BaseModel):
 
         if config.get('inputs'):
             self._make_inputs(names, config)
-            inputs = config.get('input_block/inputs')
-
-            # if isinstance(inputs, str):
-            #     config['input_block/inputs'] = self.inputs[inputs]
-            # elif isinstance(inputs, list):
-            #     config['input_block/inputs'] = [self.inputs[name] for name in inputs]
-            # else:
-            #     raise ValueError('input_block/inputs should be specified with a name or a list of names.')
 
         return config
 
@@ -388,45 +391,83 @@ class TorchModel(BaseModel):
         return None
 
     def output(self):
-        """ """
+        """ Defines auxiliary model operations """
         pass
 
-    def train(self, inputs, targets, use_lock=False):    # pylint: disable=arguments-differ
+    def _fill_value(self, inputs):
+        inputs = torch.from_numpy(inputs)
+        if self.device:
+            inputs = inputs.to(self.device)
+        return inputs
+
+    def _fill_param(self, inputs):
+        if isinstance(inputs, tuple):
+            inputs_list = []
+            for i in inputs:
+                v = self._fill_value(i)
+                inputs_list.append(v)
+            inputs = inputs_list
+        else:
+            inputs = self._fill_value(inputs)
+        return inputs
+
+    def _fill_input(self, inputs, targets):
+        inputs = self._fill_param(inputs)
+        targets = self._fill_param(targets)
+        return inputs, targets
+
+    def _fill_output(self, fetches):
+        _fetches = [fetches] if isinstance(fetches, str) else fetches
+
+        output = []
+        for f in _fetches:
+            if hasattr(self, f):
+                v = getattr(self, f)
+                if isinstance(v, (torch.Tensor, torch.autograd.Variable)):
+                    v = v.detach().numpy()
+                output.append(v)
+            else:
+                raise KeyError('Unknown value to fetch', f)
+
+        output = output[0] if isinstance(fetches, str) else type(fetches)(output)
+
+        return output
+
+    def train(self, inputs, targets, fetches=None, use_lock=False):    # pylint: disable=arguments-differ
         """ Train the model with the data provided
         """
-        device = 'cpu'
-        inputs = torch.from_numpy(inputs) #.to(device)
-        targets = torch.from_numpy(targets) #.to(device)
-
         if use_lock:
             self._train_lock.acquire()
+
+        inputs, targets = self._fill_input(inputs, targets)
 
         self.model.train()
 
         if self.lr_decay:
             self.lr_decay()
         self.optimizer.zero_grad()
-        predictions = self.model(inputs)
-        loss = self.loss_fn(predictions, targets)
-        loss.backward()
+        self.predictions = self.model(inputs)
+        self.loss = self.loss_fn(self.predictions, targets)
+        self.loss.backward()
         self.optimizer.step()
 
         if use_lock:
             self._train_lock.acquire()
 
-        return loss
+        output = self._fill_output(fetches)
 
-    def predict(self, inputs, targets):    # pylint: disable=arguments-differ
+        return output
+
+    def predict(self, inputs, targets, fetches=None):    # pylint: disable=arguments-differ
         """ Get predictions on the data provided
         """
-        device = 'cpu'
-        inputs = torch.Tensor(inputs).to(device)
-        targets = torch.LongTensor(targets).to(device)
+        inputs, targets = self._fill_input(inputs, targets)
 
         self.model.eval()
 
         with torch.no_grad():
-            predictions = self.model(inputs)
-            loss = self.loss_fn(predictions, targets)
+            self.predictions = self.model(inputs)
+            self.loss = self.loss_fn(self.predictions, targets)
 
-        return loss
+        output = self._fill_output(fetches)
+        return output
