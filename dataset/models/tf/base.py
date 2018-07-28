@@ -696,27 +696,27 @@ class TFModel(BaseModel):
         return _fetches
 
 
-    def _fill_output(self, output, fetches):
-        def _recast_output(out, ix=None):
-            if isinstance(out, np.ndarray):
-                fetch = fetches[ix] if ix is not None else fetches
-                if isinstance(fetch, str):
-                    fetch = self.graph.get_tensor_by_name(fetch)
-                if fetch in self._to_classes:
-                    return self.classes(self._to_classes[fetch])[out]
-            return out
+    def _recast_output(self, out, ix=None, fetches=None):
+        if isinstance(out, np.ndarray):
+            fetch = fetches[ix] if ix is not None else fetches
+            if isinstance(fetch, str):
+                fetch = self.graph.get_tensor_by_name(fetch)
+            if fetch in self._to_classes:
+                return self.classes(self._to_classes[fetch])[out]
+        return out
 
+    def _fill_output(self, output, fetches):
         if isinstance(output, (tuple, list)):
             _output = []
             for i, o in enumerate(output):
-                _output.append(_recast_output(o, i))
+                _output.append(self._recast_output(o, i, fetches))
             output = type(output)(_output)
         elif isinstance(output, dict):
             _output = type(output)()
             for k, v in output.items():
-                _output.update({k: _recast_output(v, k)})
+                _output.update({k: self._recast_output(v, k, fetches)})
         else:
-            output = _recast_output(output)
+            output = self._recast_output(output, fetches=fetches)
 
         return output
 
