@@ -425,7 +425,7 @@ class Pipeline:
             self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
             self.variables.unlock(action['var_name'])
         else:
-            raise KeyError("No such variable %s exists", action['var_name'])
+            raise KeyError("No such variable %s exists" % action['var_name'])
 
     def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable lazily during pipeline execution
