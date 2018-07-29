@@ -174,7 +174,7 @@ class TFModel(BaseModel):
     Things worth mentioning:
 
     #. Input data and its parameters should be defined in configuration under ``inputs`` key.
-       See :meth:`._make_inputs` for details.
+       See :meth:`.TFModel._make_inputs` for details.
 
     #. You might want to use a convenient multidimensional :func:`.conv_block`,
        as well as :func:`~.layers.global_average_pooling`, :func:`~.layers.mip`, or other predefined layers.
@@ -187,7 +187,7 @@ class TFModel(BaseModel):
     #. In many cases there is no need to write a loss function, learning rate decay and optimizer
        as they might be defined through config.
 
-    #. For a configured loss one of the inputs should have a name ``targets`` and
+    #. For a configured loss to work one of the inputs should have a name ``targets`` and
        one of the tensors in your model should have a name ``predictions``.
        They will be used in a loss function.
 
@@ -524,7 +524,6 @@ class TFModel(BaseModel):
         return tensor
 
     def _make_loss(self, config):
-        """ Return a loss function from config """
         loss, args = unpack_fn_from_config('loss', config)
 
         add_loss = False
@@ -1065,10 +1064,10 @@ class TFModel(BaseModel):
         predictions : str or callable
             an operation applied to inputs to get `predictions` tensor which is used in a loss function:
 
-            - 'sigmoid' - add ``sigmoid(inputs)``
-            - 'proba' - add ``softmax(inputs)``
-            - 'labels' - add ``argmax(inputs)``
-            - callable - add a user-defined operation
+            - 'sigmoid' - ``sigmoid(inputs)``
+            - 'proba' - ``softmax(inputs)``
+            - 'labels' - ``argmax(inputs)``
+            - callable - a user-defined operation
 
         ops : a sequence of operations or an ordered dict
             auxiliary operations
@@ -1080,7 +1079,7 @@ class TFModel(BaseModel):
 
         Raises
         ------
-        ValueError if the number of outputs does not equal to the number of prefixes
+        ValueError if the number of inputs does not equal to the number of prefixes
         TypeError if inputs is not a Tensor or a sequence of Tensors
 
         Examples
@@ -1093,7 +1092,7 @@ class TFModel(BaseModel):
             }
 
         However, if one of the placeholders also has a name 'labels', then it will be lost as the model
-        will rewrite a name 'labels' with an output.
+        will rewrite the name 'labels' with an output.
 
         That is where a dict might be convenient::
 
@@ -1230,7 +1229,7 @@ class TFModel(BaseModel):
 
            If the model config does not contain any name from ``names``, :exc:`KeyError` is raised.
 
-           See :meth:`._make_inputs` for details.
+           See :meth:`.TFModel._make_inputs` for details.
 
         #. Define parameters for :meth:`.TFModel.input_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head`
            which depend on inputs.
