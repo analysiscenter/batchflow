@@ -37,6 +37,134 @@ DECAYS = {
 
 class TorchModel(BaseModel):
     r""" Base class for torch models
+
+    **Configuration**
+
+    ``build`` and ``load`` are inherited from :class:`.BaseModel`.
+
+    device : str or torch.device
+        if str, a device name (e.g. 'cpu' or 'cuda:0').
+
+    inputs : dict
+        model inputs (see :meth:`._make_inputs`)
+
+    loss - a loss function, might be defined in one of three formats:
+        - name
+        - tuple (name, args)
+        - dict {'name': name, \**args}
+
+        where name might be one of:
+            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            - a class name from `torch losses <https://pytorch.org/docs/stable/nn.html#loss-functions>`_
+              (e.g. `'PoissonNLL'` or `'TripletMargin'`)
+            - a module class
+            - callable
+
+        Examples:
+
+        - ``{'loss': 'mse'}``
+        - ``{'loss': ('KLDiv', {'reduction': 'none'})``
+        - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
+        - ``{'loss': my_custom_loss_fn}``
+
+    decay - a learning rate decay algorithm might be defined in one of three formats:
+        - name
+        - tuple (name, args)
+        - dict {'name': name, **args}
+
+        where name might be one of:
+
+        - short name ('exp')
+        - a class name from `torch.optim.lr_scheduler
+          <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate`_
+          (e.g. 'LambdaLR')
+        - a class with ``_LRScheduler`` interface
+        - a callable which takes optimizer and optional args
+
+        Examples:
+
+        - ``{'decay': 'exp'}``
+        - ``{'decay': ('StepLR', {'steps_size': 10000})}``
+        - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5}``
+
+    optimizer - an optimizer might be defined in one of three formats:
+            - name
+            - tuple (name, args)
+            - dict {'name': name, \**args}
+
+            where name might be one of:
+
+            - short name (e.g. 'Adam', 'Adagrad', any optimizer from
+              `torch.optim <https://pytorch.org/docs/stable/optim.html#algorithms>`_)
+            - a class with ``Optimizer`` interface
+            - a callable which takes model parameters and optional args.
+
+        Examples:
+
+        - ``{'optimizer': 'Adam'}``
+        - ``{'optimizer': ('SparseAdam', {'lr': 0.01})}``
+        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
+        - ``{'optimizer': {'name': MyCustomOptimizer, momentum=0.95}}``
+
+    common : dict
+        default parameters for all :class:`.ConvBlock`
+
+    input_block : dict
+        parameters for the input block, usually :class:`.ConvBlock` parameters.
+
+        The only required parameter here is ``input_block/inputs`` which should contain a name or
+        a list of names from ``inputs`` which tensors will be passed to ``input_block`` as ``inputs``.
+
+        Examples:
+
+        - ``{'input_block/inputs': 'images'}``
+        - ``{'input_block': dict(inputs='features')}``
+        - ``{'input_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
+
+    body : dict
+        parameters for the base network layers, usually :class:`.ConvBlock` parameters
+
+    head : dict
+        parameters for the head layers, usually :class:`.ConvBlock` parameters
+
+    predictions : str or callable
+        an operation applied to the head output to make the predictions tensor which is used in the loss function.
+
+    output : dict or list
+        auxiliary operations
+
+    For more details about predictions and auxiliary output operations see :meth:`.TorchModel.output`.
+
+    **How to create your own model**
+
+    #. Take a look at :class:`~.ConvBlock` since it is widely used as a building block almost everywhere.
+
+    #. Define model defaults (e.g. number of filters, batch normalization options, etc)
+       by overriding :meth:`.TorchModel.default_config`.
+       Or skip it and hard code all the parameters in unpredictable places without the possibility to
+       change them easily through model's config.
+
+    #. Define build configuration (e.g. number of classes, etc)
+       by overriding :meth:`~.TorchModel.build_config`.
+
+    #. Override :meth:`~.TorchModel.input_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
+       In many cases defaults and build config are just enough to build a network without additional code writing.
+
+    Things worth mentioning:
+
+    #. Input data and its parameters should be defined in configuration under ``inputs`` key.
+       See :meth:`.TorchModel._make_inputs` for details.
+
+    #. You might want to use a convenient multidimensional :class:`.ConvBlock`,
+       as well as other predefined layers from ``dataset.models.torch.layers``.
+       Of course, you can use usual `Torch layers <https://pytorch.org/docs/stable/nn.html>`_.
+
+    #. In many cases there is no need to write a loss function, learning rate decay and optimizer
+       as they might be defined through config.
+
+    #. For a configured loss to work one of the inputs should have a name ``targets`` and
+       the model output is considered ``predictions``.
+       They will be passed to a loss function.
     """
     def __init__(self, *args, **kwargs):
         self._train_lock = threading.Lock()
@@ -110,7 +238,6 @@ class TorchModel(BaseModel):
         KeyError if there is any name missing in the config's 'inputs' section.
         ValueError if there are duplicate names.
         """
-        # pylint:disable=too-many-statements
         config = config.get('inputs')
 
         names = names or []
@@ -144,7 +271,6 @@ class TorchModel(BaseModel):
         #self.inputs = tensors
 
     def _make_loss(self, config):
-        """ Return a loss function from config """
         loss, args = unpack_fn_from_config('loss', config)
 
         if isinstance(loss, str):
@@ -166,7 +292,7 @@ class TorchModel(BaseModel):
     def _make_optimizer(self, config):
         optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
 
-        if optimizer_name is None or callable(optimizer_name):
+        if optimizer_name is None or callable(optimizer_name) or isinstance(optimizer_name, type):
             pass
         elif isinstance(optimizer_name, str) and hasattr(torch.optim, optimizer_name):
             optimizer_name = getattr(torch.optim, optimizer_name)
@@ -185,7 +311,7 @@ class TorchModel(BaseModel):
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
 
-        if decay_name is None or callable(decay_name):
+        if decay_name is None or callable(decay_name) or isinstance(decay_name, type)::
             pass
         elif isinstance(decay_name, str) and hasattr(torch.optim.lr_scheduler, decay_name):
             decay_name = getattr(torch.optim.lr_scheduler, decay_name)
@@ -292,7 +418,7 @@ class TorchModel(BaseModel):
 
            If the model config does not contain any name from ``names``, :exc:`KeyError` is raised.
 
-           See :meth:`._make_inputs` for details.
+           See :meth:`._TorchModel.make_inputs` for details.
 
         #. Define parameters for :meth:`~.TorchModel.input_block`, :meth:`~.TorchModel.body`, :meth:`~.TorchModel.head`
            which depend on inputs.
