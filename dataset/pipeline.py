@@ -1105,7 +1105,7 @@ class Pipeline:
             if target in ['threads', 't']:
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
             elif target in ['mpc', 'm']:
-                self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)   # pylint: disable=redefined-variable-type
+                self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
 

@@ -64,8 +64,8 @@ class MetaComponentsTuple(type):
         _ = kwargs
         super().__init__(*args, (BaseComponentsTuple,), {})
 
-    def __new__(mcs, name, components):
-        comp_class = super().__new__(mcs, name, (BaseComponentsTuple,), {})
+    def __new__(cls, name, components):
+        comp_class = super().__new__(cls, name, (BaseComponentsTuple,), {})
         comp_class.components = components
         for i, comp in enumerate(components):
             setattr(comp_class, comp, ComponentDescriptor(i))
