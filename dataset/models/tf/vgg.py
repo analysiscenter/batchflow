@@ -136,7 +136,7 @@ class VGG16(VGG):
     @classmethod
     def default_config(cls):
         config = VGG.default_config()
-        config['body']['arch'] = _VGG16_ARCH
+        config['body/arch'] = _VGG16_ARCH
         return config
 
 
@@ -145,7 +145,7 @@ class VGG19(VGG):
     @classmethod
     def default_config(cls):
         config = VGG.default_config()
-        config['body']['arch'] = _VGG19_ARCH
+        config['body/arch'] = _VGG19_ARCH
         return config
 
 
@@ -154,5 +154,5 @@ class VGG7(VGG):
     @classmethod
     def default_config(cls):
         config = VGG.default_config()
-        config['body']['arch'] = _VGG7_ARCH
+        config['body/arch'] = _VGG7_ARCH
         return config

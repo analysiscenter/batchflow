@@ -1,6 +1,6 @@
-=================
-Tensorflow models
-=================
+============
+Torch models
+============
 
 Getting started
 ===============
@@ -354,4 +354,4 @@ Ready to use models
 .. toctree::
    :maxdepth: 2
 
-   ../api/dataset.models.torch
+   ../api/dataset.models.torch.models

@@ -33,4 +33,6 @@ def get_output_shape(layer, shape=None):
     """ Return layer shape if it is defined """
     if hasattr(layer, 'output_shape'):
         return tuple(layer.output_shape)
+    elif isinstance(layer, torch.nn.Sequential):
+        return get_output_shape(layer[-1])
     return shape

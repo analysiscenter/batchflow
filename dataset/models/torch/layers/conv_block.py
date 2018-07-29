@@ -65,11 +65,11 @@ C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
 
 class ConvBlock(nn.Module):
     """ Complex multi-dimensional block with a sequence of convolutions, batch normalization, activation, pooling,
-    dropout and even dense layers.
+    dropout, dense and other layers.
     """
-    def __init__(self, inputs=None, layout='', filters=0, kernel_size=3, strides=1, padding='same', dilation_rate=1,
+    def __init__(self, layout='', filters=0, kernel_size=3, strides=1, padding='same', dilation_rate=1,
                  depth_multiplier=1, activation='relu', pool_size=2, pool_strides=2, dropout_rate=0, units=None,
-                 shape=None, **kwargs):
+                 inputs=None, shape=None, **kwargs):
         super().__init__()
 
         layout = layout or ''
@@ -101,36 +101,35 @@ class ConvBlock(nn.Module):
                 pass
 
             elif layer == 'a':
-                args = dict(activation=activation, shape=shape)
+                args = dict(activation=activation)
 
             elif layer == 'f':
                 if units is None:
                     raise ValueError('units cannot be None if layout includes dense layers')
-                args = dict(units=units, shape=shape)
+                args = dict(units=units)
 
             elif layer in ['c', 't']:
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
-                            dilation_rate=dilation_rate, shape=shape)
+                            dilation_rate=dilation_rate)
 
             elif layer in ['C', 'T']:
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
-                            dilation_rate=dilation_rate, depth_multiplier=depth_multiplier, shape=shape)
+                            dilation_rate=dilation_rate, depth_multiplier=depth_multiplier)
 
             elif layer == 'n':
-                args = dict(shape=shape)
+                args = dict()
 
             elif C_GROUPS[layer] == 'p':
                 pool_op = 'mean' if layer == 'v' else kwargs.pop('pool_op', 'max')
-                args = dict(op=pool_op, kernel_size=pool_size, stride=pool_strides, padding=padding, dilation=1,
-                            shape=shape)
+                args = dict(op=pool_op, kernel_size=pool_size, stride=pool_strides, padding=padding, dilation=1)
 
             elif C_GROUPS[layer] == 'P':
                 pool_op = 'mean' if layer == 'V' else kwargs.pop('pool_op', 'max')
-                args = dict(op=pool_op, shape=shape)
+                args = dict(op=pool_op)
 
             elif layer in ['d', 'D']:
                 if dropout_rate:
-                    args = dict(p=dropout_rate, shape=shape)
+                    args = dict(p=dropout_rate)
                 else:
                     logger.warning('ConvBlock: dropout_rate is zero or undefined, so dropout layer is skipped')
                     skip_layer = True
@@ -145,13 +144,12 @@ class ConvBlock(nn.Module):
                 args = {**args, **layer_args}
                 args = unpack_args(args, *layout_dict[C_GROUPS[layer]])
 
-                new_layer = layer_fn(**args)
+                new_layer = layer_fn(**args, shape=shape)
                 modules.append(new_layer)
                 shape = get_output_shape(new_layer, shape)
 
         self.block = nn.Sequential(*modules)
         self.output_shape = shape
-
 
     def forward(self, x):
         """ Make forward pass """

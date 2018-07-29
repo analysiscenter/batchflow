@@ -412,4 +412,4 @@ Ready to use models
 .. toctree::
    :maxdepth: 2
 
-   ../api/dataset.models.tf
+   ../api/dataset.models.tf.models

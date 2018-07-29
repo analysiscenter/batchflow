@@ -46,7 +46,7 @@ class TorchModel(BaseModel):
         if str, a device name (e.g. 'cpu' or 'cuda:0').
 
     inputs : dict
-        model inputs (see :meth:`._make_inputs`)
+        model inputs (see :meth:`~.TorchModel._make_inputs`)
 
     loss - a loss function, might be defined in one of three formats:
         - name
@@ -76,7 +76,7 @@ class TorchModel(BaseModel):
 
         - short name ('exp')
         - a class name from `torch.optim.lr_scheduler
-          <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate`_
+          <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate>`_
           (e.g. 'LambdaLR')
         - a class with ``_LRScheduler`` interface
         - a callable which takes optimizer and optional args
@@ -268,7 +268,12 @@ class TorchModel(BaseModel):
 
             self._inputs[input_name] = dict(config=input_config)
 
-        #self.inputs = tensors
+        # add default aliases
+        if 'targets' not in config:
+            if 'labels' in config:
+                self._inputs['targets'] = self._inputs['labels']
+            elif 'masks' in config:
+                self._inputs['targets'] = self._inputs['masks']
 
     def _make_loss(self, config):
         loss, args = unpack_fn_from_config('loss', config)
