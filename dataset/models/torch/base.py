@@ -311,7 +311,7 @@ class TorchModel(BaseModel):
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
 
-        if decay_name is None or callable(decay_name) or isinstance(decay_name, type)::
+        if decay_name is None or callable(decay_name) or isinstance(decay_name, type):
             pass
         elif isinstance(decay_name, str) and hasattr(torch.optim.lr_scheduler, decay_name):
             decay_name = getattr(torch.optim.lr_scheduler, decay_name)
