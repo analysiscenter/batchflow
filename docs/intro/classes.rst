@@ -15,5 +15,6 @@ Classes and capabilities
    models
    tf_models
    tf_layers
+   torch_models
    research
    model_zoo

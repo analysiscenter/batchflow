@@ -527,7 +527,9 @@ class TorchModel(BaseModel):
         return inputs
 
     def _fill_param(self, inputs):
-        if isinstance(inputs, tuple):
+        if inputs is None:
+            pass
+        elif isinstance(inputs, tuple):
             inputs_list = []
             for i in inputs:
                 v = self._fill_value(i)
@@ -584,7 +586,7 @@ class TorchModel(BaseModel):
 
         return output
 
-    def predict(self, inputs, targets, fetches=None):    # pylint: disable=arguments-differ
+    def predict(self, inputs, targets=None, fetches=None):    # pylint: disable=arguments-differ
         """ Get predictions on the data provided
         """
         inputs, targets = self._fill_input(inputs, targets)
@@ -593,7 +595,10 @@ class TorchModel(BaseModel):
 
         with torch.no_grad():
             self.predictions = self.model(inputs)
-            self.loss = self.loss_fn(self.predictions, targets)
+            if targets is None:
+                self.loss = None
+            else:
+                self.loss = self.loss_fn(self.predictions, targets)
 
         output = self._fill_output(fetches)
         return output
