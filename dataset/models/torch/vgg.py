@@ -98,7 +98,7 @@ class VGG(TorchModel):
         return x
 
     @classmethod
-    def block(cls, depth3, depth1, filters, downscale, name='block', **kwargs):
+    def block(cls, depth3, depth1, filters, downscale, **kwargs):
         """ A sequence of 3x3 and 1x1 convolutions followed by pooling
 
         Parameters
