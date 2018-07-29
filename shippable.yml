@@ -14,7 +14,7 @@ build:
   pre_ci:
     docker pull $DOCKER_ACC/$DOCKER_REPO:$TAG
   ci:
-    - pip3 install protobuf
+    - pip3 install -U astroid
     - pylint3 -rn --rcfile pylintrc dataset
     - pytest -v --junitxml=shippable/testresults/pytests.xml
 
