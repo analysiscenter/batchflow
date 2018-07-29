@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ... import is_best_practice, Config
+from ... import Config
 from .. import BaseModel
 from ..utils import unpack_fn_from_config
 from .utils import get_output_shape
