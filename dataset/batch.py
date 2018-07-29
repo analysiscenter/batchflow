@@ -166,8 +166,7 @@ class Batch(BaseBatch):
         _ = component
         if isinstance(data[0], np.ndarray):
             return np.concatenate(data)
-        else:
-            raise TypeError("Unknown data type", type(data[0]))
+        raise TypeError("Unknown data type", type(data[0]))
 
     def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
@@ -337,8 +336,7 @@ class Batch(BaseBatch):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
             attr = getattr(self.data, name)
             return attr
-        else:
-            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
         if self.components is not None:
@@ -732,9 +730,9 @@ class Batch(BaseBatch):
             else:
                 _data = pd.read_csv(src, *args, **kwargs)
         elif fmt == 'feather':
-            _data = feather.read_dataframe(src, *args, **kwargs)  # pylint: disable=redefined-variable-type
+            _data = feather.read_dataframe(src, *args, **kwargs)
         elif fmt == 'hdf5':
-            _data = pd.read_hdf(src, *args, **kwargs)         # pylint: disable=redefined-variable-type
+            _data = pd.read_hdf(src, *args, **kwargs)
 
         # Put into this batch only part of it (defined by index)
         if isinstance(_data, pd.DataFrame):

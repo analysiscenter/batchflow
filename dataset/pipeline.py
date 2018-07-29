@@ -1022,7 +1022,6 @@ class Pipeline:
                         self._batch_queue.put(batch, block=True)
                         skip_batch = False
                     self._prefetch_queue.task_done()
-        return None
 
     def reset_iter(self, exclude_dataset=False):
         """ Clear all iteration metadata in order to start iterating from scratch """

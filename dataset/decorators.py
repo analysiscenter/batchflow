@@ -152,8 +152,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                     print(all_errors)
                     traceback.print_tb(all_errors[0].__traceback__)
                 return self
-            else:
-                return post_fn(all_results, *args, **kwargs)
+            return post_fn(all_results, *args, **kwargs)
 
         def _prepare_args(self, args, kwargs):
             params = list()

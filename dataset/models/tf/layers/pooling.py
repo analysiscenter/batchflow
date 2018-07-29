@@ -38,8 +38,7 @@ def max_pooling(inputs, pool_size, strides, padding='same', data_format='channel
         return tf.layers.max_pooling2d(inputs, pool_size, strides, padding, data_format, name)
     elif dim == 3:
         return tf.layers.max_pooling3d(inputs, pool_size, strides, padding, data_format, name)
-    else:
-        raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
+    raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
 
 def average_pooling(inputs, pool_size, strides, padding='same', data_format='channels_last', name=None):
@@ -77,8 +76,7 @@ def average_pooling(inputs, pool_size, strides, padding='same', data_format='cha
         return tf.layers.average_pooling2d(inputs, pool_size, strides, padding, data_format, name)
     elif dim == 3:
         return tf.layers.average_pooling3d(inputs, pool_size, strides, padding, data_format, name)
-    else:
-        raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
+    raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
 def pooling(inputs, op, *args, **kwargs):
     """ Multi-dimensional pooling layer.

@@ -658,8 +658,7 @@ class ImagesBatch(BaseImagesBatch):
                                    data=(1, 0, -offset[0], 0, 1, -offset[1]))
         elif mode == 'wrap':
             return PIL.ImageChops.offset(image, *offset)
-        else:
-            raise ValueError("`mode` must be one of ['const', 'wrap']")
+        raise ValueError("mode must be one of ['const', 'wrap']")
 
 
     def _pad_(self, image, *args, **kwargs):
@@ -780,7 +779,7 @@ class ImagesBatch(BaseImagesBatch):
         mask_size = np.asarray(self._get_image_shape(image))
         mask_salt = np.random.binomial(1, p_noise, size=mask_size).astype(bool)
         image = np.array(image)
-        if isinstance(size, (tuple, int)) and (size == (1, 1) or size == 1) and not callable(color):
+        if isinstance(size, (tuple, int)) and size in [1, (1, 1)] and not callable(color):
             image[mask_salt] = color
         else:
             size_lambda = size if callable(size) else lambda: size
@@ -858,13 +857,12 @@ class ImagesBatch(BaseImagesBatch):
         multiplier = np.float32(multiplier)
         if isinstance(image, PIL.Image.Image):
             return PIL.Image.fromarray(np.clip(multiplier*np.asarray(image), 0, 255).astype(np.uint8))
+        dtype = image.dtype if preserve_type else np.float
+        if clip:
+            image = np.clip(multiplier*image, 0, 255 if dtype == np.uint8 else 1.)
         else:
-            dtype = image.dtype if preserve_type else np.float
-            if clip:
-                image = np.clip(multiplier*image, 0, 255 if dtype == np.uint8 else 1.)
-            else:
-                image = multiplier * image
-            return image.astype(dtype)
+            image = multiplier * image
+        return image.astype(dtype)
 
     def _add_(self, image, term=1., clip=False, preserve_type=False):
         """ Add term to each pixel.
@@ -887,13 +885,12 @@ class ImagesBatch(BaseImagesBatch):
         term = np.float32(term)
         if isinstance(image, PIL.Image.Image):
             return PIL.Image.fromarray(np.clip(term+np.asarray(image), 0, 255).astype(np.uint8))
+        dtype = image.dtype if preserve_type else np.float
+        if clip:
+            image = np.clip(term+image, 0, 255 if dtype == np.uint8 else 1.)
         else:
-            dtype = image.dtype if preserve_type else np.float
-            if clip:
-                image = np.clip(term+image, 0, 255 if dtype == np.uint8 else 1.)
-            else:
-                image = term + image
-            return image.astype(dtype)
+            image = term + image
+        return image.astype(dtype)
 
     def _pil_convert_(self, image, mode="L"):
         """ Convert image. Actually calls image.convert(mode)
