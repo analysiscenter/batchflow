@@ -100,12 +100,10 @@ class ConfigAlias:
     def alias(self, as_string=False, delim='-'):
         """ Returns alias. """
         config_alias = {item[0].alias: item[1].alias for item in self._config}
-        if as_string is False:
-            result = config_alias
-        else:
+        if as_string:
             config_alias = collections.OrderedDict(sorted(config_alias.items()))
-            result = delim.join([str(key)+'_'+str(value) for key, value in config_alias.items()])
-        return result
+            config_alias = delim.join([str(key)+'_'+str(value) for key, value in config_alias.items()])
+        return config_alias
 
     def config(self):
         """ Returns values. """
@@ -177,10 +175,10 @@ class Grid:
 
     def __len__(self):
         if self.grid is None:
-            result = 0
+            x = 0
         else:
-            result = len(self.grid)
-        return result
+            x = len(self.grid)
+        return x
 
     def __mul__(self, other):
         if self.grid is None:

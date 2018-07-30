@@ -346,10 +346,10 @@ class Research:
 
     def _set_default_json(self, obj):
         try:
-            result = json.dumps(obj)
+            x = json.dumps(obj)
         except TypeError:
-            result = str(obj)
-        return result
+            x = str(obj)
+        return x
 
     def _json(self):
         description = copy(self.__dict__)
@@ -553,11 +553,11 @@ class ExecutableUnit:
     def _call_pipeline(self, iteration, *args, **kwargs):
         _ = args, kwargs
         if self.to_run:
-            result = self.run()
+            x = self.run()
         else:
-            result = self.next_batch()
+            x = self.next_batch()
         self.put_result(iteration)
-        return result
+        return x
 
     def _call_function(self, iteration, *args, **kwargs):
         result = self.function(iteration, *args, **kwargs)
