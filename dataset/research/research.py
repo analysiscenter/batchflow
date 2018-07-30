@@ -310,11 +310,12 @@ class Research:
 
     def _get_gpu_list(self, gpu):
         if gpu is None:
-            return []
+            gpu = []
         elif isinstance(gpu, str):
-            return [int(item) for item in gpu.split(',')]
+            gpu = [int(item) for item in gpu.split(',')]
         else:
-            return gpu
+            gpu = gpu
+        return gpu
 
     def _folder_exists(self, name):
         name = name or 'research'
@@ -345,9 +346,10 @@ class Research:
 
     def _set_default_json(self, obj):
         try:
-            json.dumps(obj)
+            result = json.dumps(obj)
         except TypeError:
-            return str(obj)
+            result = str(obj)
+        return result
 
     def _json(self):
         description = copy(self.__dict__)
@@ -511,9 +513,10 @@ class ExecutableUnit:
     def next_batch(self):
         """ Next batch from pipeline """
         if self.pipeline is not None:
-            return self.pipeline.next_batch()
+            batch = self.pipeline.next_batch()
         else:
             raise TypeError("ExecutableUnit should be pipeline, not a function")
+        return batch
 
     def run(self):
         """ Run pipeline """
@@ -534,18 +537,18 @@ class ExecutableUnit:
         """ Next batch from root pipeline """
         if self.root_pipeline is not None:
             batch = self.root_pipeline.next_batch()
-            return batch
         else:
             raise TypeError("ExecutableUnit should have root pipeline")
+        return batch
 
     def execute_for(self, batch, iteration):
         """ Execute pipeline for batch from root """
         _ = iteration
         if self.pipeline is not None:
             batch = self.pipeline.execute_for(batch)
-            return batch
         else:
             raise TypeError("ExecutableUnit should be pipeline, not a function")
+        return batch
 
     def _call_pipeline(self, iteration, *args, **kwargs):
         _ = args, kwargs
@@ -604,7 +607,8 @@ class ExecutableUnit:
         in_step = sum([(iteration+1) % item == 0 for item in step_rule])
 
         if n_iters is None:
-            return in_list or in_step
+            action_list = in_list or in_step
         else:
             in_final = -1 in list_rule and iteration+1 == n_iters
-            return in_list or in_step or in_final
+            action_list = in_list or in_step or in_final
+        return action_list

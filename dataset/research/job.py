@@ -74,7 +74,7 @@ class Job:
             while True:
                 try:
                     batch = self.executable_units[name].next_batch_root()
-                    exceptions = self._parallel_run(iteration, name, batch, actions)
+                    exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
                 except StopIteration:
                     break
         else:
@@ -83,7 +83,7 @@ class Job:
             except StopIteration as e:
                 exceptions = [e] * len(self.experiments)
             else:
-                exceptions = self._parallel_run(iteration, name, batch, actions)
+                exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
         self.put_all_results(iteration, name, actions)
         return exceptions
 

@@ -33,9 +33,10 @@ class KV:
 
     def _get_name(self, value):
         if hasattr(value, '__name__'):
-            return value.__name__
+            name = value.__name__
         else:
-            return str(value)
+            name = str(value)
+        return name
 
 class Option:
     """ Class for single-parameter option. There is an algebra of options (see :class:`~.Grid` operations)
@@ -100,10 +101,11 @@ class ConfigAlias:
         """ Returns alias. """
         config_alias = {item[0].alias: item[1].alias for item in self._config}
         if as_string is False:
-            return config_alias
+            result = config_alias
         else:
             config_alias = collections.OrderedDict(sorted(config_alias.items()))
-            return delim.join([str(key)+'_'+str(value) for key, value in config_alias.items()])
+            result = delim.join([str(key)+'_'+str(value) for key, value in config_alias.items()])
+        return result
 
     def config(self):
         """ Returns values. """
@@ -175,34 +177,40 @@ class Grid:
 
     def __len__(self):
         if self.grid is None:
-            return 0
+            result = 0
         else:
-            return len(self.grid)
+            result = len(self.grid)
+        return result
 
     def __mul__(self, other):
         if self.grid is None:
-            return other
+            result = other
         elif isinstance(other, Grid):
             if other.grid is None:
-                return self
-            res = list(product(self.grid, other.grid))
-            res = [item[0] + item[1] for item in res]
-            return Grid(res)
+                result = self
+            else:
+                res = list(product(self.grid, other.grid))
+                res = [item[0] + item[1] for item in res]
+            result = Grid(res)
         elif isinstance(other, Option):
-            return self * Grid([[other]])
+            result = self * Grid([[other]])
+        else:
+            raise TypeError('Arguments must be Grids or Options')
+        return result
 
     def __add__(self, other):
         if self.grid is None:
-            return other
+            result = other
         elif isinstance(other, Option):
-            return self + Grid(other)
+            result = self + Grid(other)
         elif other.grid is None:
-            return self
+            result = self
         elif isinstance(other, Grid):
             if other.grid is None:
-                return self
+                result = self
             else:
-                return Grid(self.grid + other.grid)
+                result = Grid(self.grid + other.grid)
+        return result
 
     def __repr__(self):
         return 'Grid(' + str(self.alias()) + ')'

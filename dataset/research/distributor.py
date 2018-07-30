@@ -51,12 +51,13 @@ class Distributor:
 
     def _get_worker_gpu(self, n_workers, index):
         if len(self.gpu) == 1:
-            return [self.gpu[0]]
+            gpu = [self.gpu[0]]
         else:
             length = len(self.gpu) // n_workers
             start = index * length
             end = start + length
-        return self.gpu[start:end]
+            gpu = self.gpu[start:end]
+        return gpu
 
     def run(self, jobs, dirname, n_jobs, n_iters, logfile=None, errorfile=None, progress_bar=False, *args, **kwargs):
         """ Run disributor and workers.
