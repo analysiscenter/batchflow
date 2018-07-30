@@ -199,7 +199,7 @@ class FasterRCNN(TFModel):
 
         anchors = []
         for scale in scales:
-            for ratio in ratios:
+            for current_ratio in ratios:
                 image_height, image_width = image_shape
                 map_height, map_width = map_shape
                 n = map_height * map_width
@@ -215,8 +215,8 @@ class FasterRCNN(TFModel):
                 i = i.reshape((-1))
 
                 s = np.ones((n)) * scale
-                ratio0 = np.ones((n)) * ratio[0]
-                ratio1 = np.ones((n)) * ratio[1]
+                ratio0 = np.ones((n)) * current_ratio[0]
+                ratio1 = np.ones((n)) * current_ratio[1]
 
                 height = s * ratio0
                 width = s * ratio1
