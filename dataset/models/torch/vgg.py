@@ -6,7 +6,7 @@ import torch.nn as nn
 from ... import is_best_practice
 from . import TorchModel
 from .layers import ConvBlock
-from .utils import get_output_shape
+from .utils import get_shape
 
 
 _VGG16_ARCH = [
@@ -73,7 +73,7 @@ class VGG(TorchModel):
         return config
 
     @classmethod
-    def body(cls, **kwargs):
+    def body(cls, inputs=None, **kwargs):
         """ Create base VGG layers
 
         Parameters
@@ -85,15 +85,14 @@ class VGG(TorchModel):
         arch = kwargs.pop('arch')
         if not isinstance(arch, (list, tuple)):
             raise TypeError("arch must be list or tuple, but {} was given.".format(type(arch)))
-        shape = kwargs.pop('shape')
         block = kwargs.pop('block')
         block = {**block, **kwargs}
 
         blocks = []
         for block_cfg in arch:
-            x = cls.block(*block_cfg, **block, shape=shape)
+            x = cls.block(*block_cfg, **block, inputs=inputs)
             blocks.append(x)
-            shape = get_output_shape(x)
+            inputs = get_shape(x)
         x = nn.Sequential(*blocks)
         return x
 

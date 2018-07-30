@@ -1197,7 +1197,7 @@ class TFModel(BaseModel):
                 config['head'].update(dict(layout='cnadV', dropout_rate=.2))
                 return config
         """
-        config = {}
+        config = Config()
         config['inputs'] = {}
         config['common'] = {}
         config['input_block'] = {}
@@ -1211,7 +1211,7 @@ class TFModel(BaseModel):
             config['common'] = {'batch_norm': {'momentum': .1}}
             config['optimizer'][1].update({'use_locking': True})
 
-        return Config(config)
+        return config
 
     @classmethod
     def fill_params(cls, _name, **kwargs):

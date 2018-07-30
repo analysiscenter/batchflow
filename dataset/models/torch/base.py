@@ -10,7 +10,6 @@ import torch.nn as nn
 from ... import Config
 from .. import BaseModel
 from ..utils import unpack_fn_from_config
-from .utils import get_output_shape
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss
 
@@ -391,7 +390,7 @@ class TorchModel(BaseModel):
                 config['head'].update(dict(layout='cnadV', dropout_rate=.2))
                 return config
         """
-        config = Config({})
+        config = Config()
         config['inputs'] = {}
         config['common'] = {}
         config['input_block'] = {}
@@ -400,9 +399,6 @@ class TorchModel(BaseModel):
         config['predictions'] = None
         config['output'] = None
         config['optimizer'] = ('Adam', dict())
-
-        #if is_best_practice():
-        #    config['common'] = {'batch_norm': {'momentum': .1}}
 
         return config
 
@@ -448,24 +444,24 @@ class TorchModel(BaseModel):
 
         return config
 
-    def _add_block(self, blocks, block, shape):
+    def _add_block(self, blocks, block):
         if block is not None:
-            shape = get_output_shape(block, shape)
             blocks.append(block)
-        return blocks, shape
+        return blocks
 
     def _build(self, config=None):
         shape = self.shape(config['input_block/inputs'])
         blocks = []
+        config.pop('input_block/inputs')
 
-        input_block = self.input_block(**config['input_block'], shape=shape)
-        blocks, shape = self._add_block(blocks, input_block, shape)
+        input_block = self.input_block(**config['input_block'], inputs=shape)
+        self._add_block(blocks, input_block)
 
-        body = self.body(**config['body'], shape=shape)
-        blocks, shape = self._add_block(blocks, body, shape)
+        body = self.body(**config['body'], inputs=input_block or shape)
+        self._add_block(blocks, body)
 
-        head = self.head(**config['head'], shape=shape)
-        blocks, shape = self._add_block(blocks, head, shape)
+        head = self.head(**config['head'], inputs=body or shape)
+        self._add_block(blocks, head)
 
         self.model = nn.Sequential(*blocks)
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])

@@ -36,7 +36,7 @@ class SqueezeNet(TFModel):
         #config['body/layout'] = 'ffbfmbffbffmbf'
 
         num_blocks = config['body/layout'].count('f')
-        layers_filters = 32 * 2 ** np.arange(num_blocks//2 + num_blocks%2)
+        layers_filters = 16 * 2 ** np.arange(num_blocks//2 + num_blocks%2)
         layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
         config['body/filters'] = layers_filters
 
@@ -76,14 +76,17 @@ class SqueezeNet(TFModel):
         layout = kwargs.pop('layout')
         filters = kwargs.pop('filters')
 
-        x, inputs = inputs, None
+        x = inputs
         bypass = None
+        block_no = 0
         with tf.variable_scope(name):
             for i, block in enumerate(layout):
                 if block == 'b':
                     bypass = x
-                if block == 'f':
-                    x = cls.fire_block(x, filters=filters[i], name='fire-block-%d' % i, **kwargs)
+                    continue
+                elif block == 'f':
+                    x = cls.fire_block(x, filters=filters[block_no], name='fire-block-%d' % i, **kwargs)
+                    block_no += 1
                 elif block == 'm':
                     x = conv_block(x, 'p', name='max-pool-%d' % i, **kwargs)
 

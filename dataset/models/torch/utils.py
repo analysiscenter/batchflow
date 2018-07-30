@@ -19,16 +19,20 @@ def get_num_dims(inputs):
         raise TypeError('inputs can be array, tensor or tuple/list', inputs)
     return max(1, dim - 2)
 
-def get_shape(inputs):
+def get_shape(inputs, shape=None):
     """ Return inputs shape """
-    if isinstance(inputs, np.ndarray):
+    if inputs is None:
+        pass
+    elif isinstance(inputs, np.ndarray):
         shape = inputs.shape
     elif isinstance(inputs, torch.Tensor):
         shape = tuple(inputs.shape)
     elif isinstance(inputs, (torch.Size, tuple, list)):
         shape = tuple(inputs)
+    elif isinstance(inputs, torch.nn.Module):
+        shape = get_output_shape(inputs, shape)
     else:
-        raise TypeError('inputs can be array, tensor or tuple/list', inputs)
+        raise TypeError('inputs can be array, tensor, tuple/list or layer', type(inputs))
     return shape
 
 def get_output_shape(layer, shape=None):

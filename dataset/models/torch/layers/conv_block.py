@@ -5,7 +5,7 @@ import torch.nn as nn
 from .core import Dense, Activation, \
                   Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, \
                   Dropout, BatchNorm, Pool, GlobalPool
-from ..utils import get_output_shape, get_shape
+from ..utils import get_shape
 from ...utils import unpack_args
 
 
@@ -69,7 +69,7 @@ class ConvBlock(nn.Module):
     """
     def __init__(self, layout='', filters=0, kernel_size=3, strides=1, padding='same', dilation_rate=1,
                  depth_multiplier=1, activation='relu', pool_size=2, pool_strides=2, dropout_rate=0, units=None,
-                 inputs=None, shape=None, **kwargs):
+                 inputs=None, **kwargs):
         super().__init__()
 
         layout = layout or ''
@@ -79,7 +79,7 @@ class ConvBlock(nn.Module):
             logger.warning('ConvBlock: layout is empty, so there is nothing to do')
             return
 
-        shape = shape or get_shape(inputs)
+        shape = get_shape(inputs)
 
         layout_dict = {}
         for layer in self.layout:
@@ -146,7 +146,7 @@ class ConvBlock(nn.Module):
 
                 new_layer = layer_fn(**args, shape=shape)
                 modules.append(new_layer)
-                shape = get_output_shape(new_layer, shape)
+                shape = get_shape(new_layer, shape)
 
         self.block = nn.Sequential(*modules)
         self.output_shape = shape
