@@ -57,12 +57,12 @@ def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
     if dim == 2:
         dafo = 'NHWC' if data_format == 'channels_last' else 'NCHW'
         return tf.depth_to_space(inputs, block_size, name, data_format=dafo)
-    else:
-        if data_format == 'channels_first':
-            inputs = tf.transpose(inputs, [0] + list(range(2, dim+2)) + [1])
-        x = _depth_to_space(inputs, block_size, name)
-        if data_format == 'channels_first':
-            x = tf.transpose(x, [0, dim+1] + list(range(1, dim+1)))
+
+    if data_format == 'channels_first':
+        inputs = tf.transpose(inputs, [0] + list(range(2, dim+2)) + [1])
+    x = _depth_to_space(inputs, block_size, name)
+    if data_format == 'channels_first':
+        x = tf.transpose(x, [0, dim+1] + list(range(1, dim+1)))
     return x
 
 

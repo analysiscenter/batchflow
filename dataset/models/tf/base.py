@@ -654,12 +654,13 @@ class TFModel(BaseModel):
         if isinstance(name, str):
             if hasattr(self, name):
                 return getattr(self, name)
-            elif ':' in name:
+
+            if ':' in name:
                 return name
-            else:
-                tensors = tf.get_collection(name)
-                if len(tensors) != 0:
-                    return tensors
+
+            tensors = tf.get_collection(name)
+            if len(tensors) != 0:
+                return tensors
             return name + ':0'
         return name
 

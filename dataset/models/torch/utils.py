@@ -22,17 +22,19 @@ def get_num_dims(inputs):
 def get_shape(inputs):
     """ Return inputs shape """
     if isinstance(inputs, np.ndarray):
-        return inputs.shape
+        shape = inputs.shape
     elif isinstance(inputs, torch.Tensor):
-        return tuple(inputs.shape)
+        shape = tuple(inputs.shape)
     elif isinstance(inputs, (torch.Size, tuple, list)):
-        return tuple(inputs)
-    raise TypeError('inputs can be array, tensor or tuple/list', inputs)
+        shape = tuple(inputs)
+    else:
+        raise TypeError('inputs can be array, tensor or tuple/list', inputs)
+    return shape
 
 def get_output_shape(layer, shape=None):
     """ Return layer shape if it is defined """
     if hasattr(layer, 'output_shape'):
-        return tuple(layer.output_shape)
+        shape = tuple(layer.output_shape)
     elif isinstance(layer, torch.nn.Sequential):
-        return get_output_shape(layer[-1])
+        shape = get_output_shape(layer[-1])
     return shape

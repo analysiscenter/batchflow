@@ -653,13 +653,14 @@ class ImagesBatch(BaseImagesBatch):
             Probability of applying the transform. Default is 1.
         """
         if mode == 'const':
-            return image.transform(size=image.size,
-                                   method=PIL.Image.AFFINE,
-                                   data=(1, 0, -offset[0], 0, 1, -offset[1]))
+            image = image.transform(size=image.size,
+                                    method=PIL.Image.AFFINE,
+                                    data=(1, 0, -offset[0], 0, 1, -offset[1]))
         elif mode == 'wrap':
-            return PIL.ImageChops.offset(image, *offset)
-        raise ValueError("mode must be one of ['const', 'wrap']")
-
+            image = PIL.ImageChops.offset(image, *offset)
+        else:
+            raise ValueError("mode must be one of ['const', 'wrap']")
+        return image
 
     def _pad_(self, image, *args, **kwargs):
         """ Calls PIL.ImageOps.expand.
