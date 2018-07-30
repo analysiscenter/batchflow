@@ -40,9 +40,10 @@ class Config:
         single value or a tuple
         """
         if isinstance(config, Config):
-            return config.pop(variables, None, **kwargs)
+            value = config.pop(variables, None, **kwargs)
         else:
-            return self._get(variables, config, pop=True, **kwargs)
+            value = self._get(variables, config, pop=True, **kwargs)
+        return value
 
     def get(self, variables, config=None, default=None):
         """ Returns variables from config
@@ -249,9 +250,10 @@ class Config:
             dict_items
         """
         if flatten:
-            return self.flatten().items()
+            items = self.flatten().items()
         else:
-            return self.config.items()
+            items = self.config.items()
+        return items
 
     def keys(self, flatten=False):
         """ Returns config keys
@@ -266,9 +268,10 @@ class Config:
             dict_keys
         """
         if flatten:
-            return self.flatten().keys()
+            keys = self.flatten().keys()
         else:
-            return self.config.keys()
+            keys = self.config.keys()
+        return keys
 
     def values(self, flatten=False):
         """ Return config values
@@ -283,9 +286,10 @@ class Config:
             dict_values
         """
         if flatten:
-            return self.flatten().values()
+            values = self.flatten().values()
         else:
-            return self.config.values()
+            values = self.config.values()
+        return values
 
     def update(self, other=None, **kwargs):
         """ Update config with values from other
