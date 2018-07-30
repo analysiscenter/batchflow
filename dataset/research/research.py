@@ -553,11 +553,10 @@ class ExecutableUnit:
     def _call_pipeline(self, iteration, *args, **kwargs):
         _ = args, kwargs
         if self.to_run:
-            x = self.run()
+            self.run()
         else:
-            x = self.next_batch()
+            self.next_batch()
         self.put_result(iteration)
-        return x
 
     def _call_function(self, iteration, *args, **kwargs):
         result = self.function(iteration, *args, **kwargs)
