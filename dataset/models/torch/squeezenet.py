@@ -4,7 +4,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from . import TorchModel
 from .layers import ConvBlock
@@ -72,6 +71,20 @@ class SqueezeNet(TorchModel):
 
 
 class SqueezeNetBody(nn.Module):
+    """ A sequence of fire and pooling blocks
+
+        Parameters
+        ----------
+        layout : str
+            A sequence of blocks:
+
+            - f : fire block
+            - m : max-pooling
+            - b : bypass
+
+        filters : list of int
+            The number of output filters for each fire block.
+    """
     def __init__(self, layout, filters, inputs=None, **kwargs):
         super().__init__()
 
@@ -131,8 +144,12 @@ class FireBlock(nn.Module):
 
     Parameters
     ----------
+    layout : str
+        A sequence of layers (default is 'cna')
     filters : int
-        the number of filters in each convolution layer
+        the number of filters in the convolution layer
+
+    For other params see :class:`.ConvBlock`.
     """
     def __init__(self, layout='cna', filters=None, inputs=None, **kwargs):
         super().__init__()
