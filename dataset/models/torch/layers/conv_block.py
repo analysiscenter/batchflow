@@ -4,13 +4,12 @@ import torch.nn as nn
 
 from .core import Dense, Activation, \
                   Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, \
-                  Dropout, BatchNorm, Pool, GlobalPool
+                  Dropout, BatchNorm, Pool, GlobalPool, Upsample, PixelShuffle
 from ..utils import get_shape
 from ...utils import unpack_args
 
 
 logger = logging.getLogger(__name__)
-
 
 FUNC_LAYERS = {
     'activation': Activation,
@@ -26,6 +25,8 @@ FUNC_LAYERS = {
     'batch_norm': BatchNorm,
     'dropout': Dropout,
     'alpha_dropout': nn.AlphaDropout,
+    'upsample': Upsample,
+    'subpixel_conv': PixelShuffle,
 }
 
 
@@ -46,6 +47,8 @@ C_LAYERS = {
     'n': 'batch_norm',
     'd': 'dropout',
     'D': 'alpha_dropout',
+    'u': 'upsample',
+    'X': 'subpixel_conv',
 }
 
 
@@ -134,6 +137,12 @@ class ConvBlock(nn.Module):
                     logger.warning('ConvBlock: dropout_rate is zero or undefined, so dropout layer is skipped')
                     skip_layer = True
 
+            elif layer == 'u':
+                args = dict(scale_factor=kwargs.get('factor'), mode=kwargs.get('upsample_mode', 'bilinear'))
+
+            elif layer == 'X':
+                args = dict(upscale_factor=kwargs.get('factor'))
+
             else:
                 raise ValueError('Unknown layer symbol', layer)
 
@@ -144,7 +153,9 @@ class ConvBlock(nn.Module):
                 args = {**args, **layer_args}
                 args = unpack_args(args, *layout_dict[C_GROUPS[layer]])
 
-                new_layer = layer_fn(**args, shape=shape)
+                if 'dataset.' in layer_fn.__module__:
+                    args['shape'] = shape
+                new_layer = layer_fn(**args)
                 modules.append(new_layer)
                 shape = get_shape(new_layer, shape)
 

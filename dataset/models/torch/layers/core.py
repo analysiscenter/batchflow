@@ -1,5 +1,6 @@
 """ Contains common layers """
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ..utils import get_num_dims, get_num_channels
 
@@ -345,3 +346,35 @@ class GlobalPool(nn.Module):
 
     def forward(self, x):
         return self.pool(x)
+
+
+class Upsample(nn.Module):
+    """ Upsample inputs with a given factor
+
+    Notes
+    -----
+    This is just a wrapper around ``F.interpolate``.
+    """
+    def __init__(self, *args, shape=None, **kwargs):
+        super().__init__()
+        _ = args
+        self.kwargs = kwargs
+
+        self.output_shape = [*shape]
+        for i, s in enumerate(self.output_shape[2:]):
+            self.output_shape[i+2] = None if s is None else s * kwargs.get('scale_factor')
+        self.output_shape = tuple(self.output_shape)
+
+    def forward(self, x):
+        return F.interpolate(x, **self.kwargs)
+
+
+class PixelShuffle(nn.PixelShuffle):
+    """ Resize input tensor with subpixel convolution (depth to space operation) """
+    def __init__(self, upscale_factor=None, shape=None):
+        super().__init__(upscale_factor)
+        self.output_shape = [*shape]
+        self.output_shape[1] = self.output_shape[1] / upscale_factor ** 2
+        for i, s in enumerate(self.output_shape[2:]):
+            self.output_shape[i+2] = None if s is None else s * upscale_factor
+        self.output_shape = tuple(self.output_shape)
