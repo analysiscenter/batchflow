@@ -450,6 +450,11 @@ class TorchModel(BaseModel):
         return blocks
 
     def _build(self, config=None):
+        defaults = {**config['common']}
+        config['input_block'] = {**defaults, **config['input_block']}
+        config['body'] = {**defaults, **config['body']}
+        config['head'] = {**defaults, **config['head']}
+
         shape = self.shape(config['input_block/inputs'])
         blocks = []
         config.pop('input_block/inputs')
