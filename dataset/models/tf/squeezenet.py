@@ -73,21 +73,24 @@ class SqueezeNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
+        block = kwargs.pop('block', {})
         layout = kwargs.pop('layout')
         filters = kwargs.pop('filters')
+        if isinstance(filters, int):
+            filters = [filters] * layout.count('f')
 
         x = inputs
         bypass = None
         block_no = 0
         with tf.variable_scope(name):
-            for i, block in enumerate(layout):
-                if block == 'b':
+            for i, b in enumerate(layout):
+                if b == 'b':
                     bypass = x
                     continue
-                elif block == 'f':
-                    x = cls.fire_block(x, filters=filters[block_no], name='fire-block-%d' % i, **kwargs)
+                elif b == 'f':
+                    x = cls.fire_block(x, filters=filters[block_no], name='fire-block-%d' % i, **{**kwargs, **block})
                     block_no += 1
-                elif block == 'm':
+                elif b == 'm':
                     x = conv_block(x, 'p', name='max-pool-%d' % i, **kwargs)
 
                 if bypass is not None:

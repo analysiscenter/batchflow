@@ -121,6 +121,8 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
         a tensor to resize
     factor : int
         upsampling factor
+    layout : str
+        layers applied before depth-to-space transform
     name : str
         scope name
     data_format : {'channels_last', 'channels_first'}
@@ -136,8 +138,10 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
     layout = kwargs.pop('layout', 'cna')
     kwargs['filters'] = channels*factor**dim
 
+    x = inputs
     with tf.variable_scope(name):
-        x = conv_block(inputs, layout, kernel_size=1, name='conv', data_format=data_format, **kwargs)
+        if layout:
+            x = conv_block(inputs, layout, kernel_size=1, name='conv', data_format=data_format, **kwargs)
         x = depth_to_space(x, block_size=factor, name='d2s', data_format=data_format)
     return x
 
@@ -151,6 +155,8 @@ def resize_bilinear_additive(inputs, factor=2, name='bilinear_additive', data_fo
         a tensor to resize
     factor : int
         upsampling factor
+    layout : str
+        layers applied between bilinear resize and xip
     name : str
         scope name
     data_format : {'channels_last', 'channels_first'}
