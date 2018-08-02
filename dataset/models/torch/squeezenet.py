@@ -51,6 +51,7 @@ class SqueezeNet(TorchModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
+
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
         if config.get('head/filters') is None:
@@ -90,18 +91,22 @@ class SqueezeNetBody(nn.Module):
 
         self.layout = layout
 
+        if isinstance(filters, int):
+            filters = [filters] * layout.count('f')
+        block = kwargs.pop('block', {})
+
         x = inputs
         bypass = None
         block_no = 0
-        for i, block in enumerate(self.layout):
-            if block == 'b':
+        for i, b in enumerate(self.layout):
+            if b == 'b':
                 bypass = x
                 continue
-            elif block == 'f':
-                x = FireBlock(filters=filters[block_no], inputs=x, **kwargs)
+            elif b == 'f':
+                x = FireBlock(filters=filters[block_no], inputs=x, **{**kwargs, **block})
                 block_no += 1
                 self.add_module('fire%d' % i, x)
-            elif block == 'm':
+            elif b == 'm':
                 x = ConvBlock('p', inputs=x, **kwargs)
                 self.add_module('pool%d' % i, x)
 
@@ -157,7 +162,7 @@ class FireBlock(nn.Module):
         self.exp1 = ConvBlock(layout, filters*4, kernel_size=1, inputs=self.entry, **kwargs)
         self.exp3 = ConvBlock(layout, filters*4, kernel_size=3, inputs=self.entry, **kwargs)
 
-        self.output_shape = [*get_shape(self.exp3)]
+        self.output_shape = list(get_shape(self.exp3))
         self.output_shape[1] = self.output_shape[1] * 2
         self.output_shape = tuple(self.output_shape)
 
