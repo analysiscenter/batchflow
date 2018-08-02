@@ -56,8 +56,7 @@ class VGG(TorchModel):
         if is_best_practice():
             config['head'] = dict(layout='Vdf', dropout_rate=.8, units=2)
         else:
-            config['head/layout'] = 'dfa dfa f'
-            config['head/units'] = [4096, 4096, 2]
+            config['head'] = dict(layout='dfa dfa f', units=[4096, 4096, 2], dropout_rate=.8)
 
         config['loss'] = 'ce'
         #config['decay'] = ('const', dict(boundaries=[92500, 185000, 277500], values=[1e-2, 1e-3, 1e-4, 1e-5]))
