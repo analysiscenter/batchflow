@@ -434,7 +434,6 @@ class TorchModel(BaseModel):
                 config['head/num_classes'] = self.num_classes('targets')
                 return config
         """
-
         config = self.default_config()
 
         config = config + self.config
@@ -586,7 +585,7 @@ class TorchModel(BaseModel):
         self.optimizer.step()
 
         if use_lock:
-            self._train_lock.acquire()
+            self._train_lock.release()
 
         output = self._fill_output(fetches)
 
