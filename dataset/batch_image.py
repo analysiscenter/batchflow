@@ -114,8 +114,7 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
                 #pylint: disable=cell-var-from-loop
                 added_func = func
                 @wraps(added_func)
-                def _method(self, *args, **kwargs):
-                    _ = self
+                def _method(_, *args, **kwargs):
                     return added_func(*args, **kwargs)
                 return _method
             method_name = ''.join((prefix, func_name, suffix))
