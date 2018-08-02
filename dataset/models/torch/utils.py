@@ -9,14 +9,8 @@ def get_num_channels(inputs, axis=1):
 
 def get_num_dims(inputs):
     """ Return a number of semantic dimensions (i.e. excluding batch and channels axis)"""
-    if isinstance(inputs, np.ndarray):
-        dim = inputs.ndim
-    elif isinstance(inputs, torch.Tensor):
-        dim = inputs.dim()
-    elif isinstance(inputs, (torch.Size, tuple, list)):
-        dim = len(inputs)
-    else:
-        raise TypeError('inputs can be array, tensor or tuple/list', inputs)
+    shape = get_shape(inputs)
+    dim = len(shape)
     return max(1, dim - 2)
 
 def get_shape(inputs, shape=None):
