@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from .core import Dense, Activation, \
                   Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, \
-                  Dropout, BatchNorm, Pool, GlobalPool, Upsample, PixelShuffle
+                  Dropout, BatchNorm, Pool, GlobalPool, Upsample, SubPixelConv
 from ..utils import get_shape
 from ...utils import unpack_args
 
@@ -26,7 +26,7 @@ FUNC_LAYERS = {
     'dropout': Dropout,
     'alpha_dropout': nn.AlphaDropout,
     'upsample': Upsample,
-    'subpixel_conv': PixelShuffle,
+    'subpixel_conv': SubPixelConv,
 }
 
 
@@ -82,14 +82,13 @@ class ConvBlock(nn.Module):
             logger.warning('ConvBlock: layout is empty, so there is nothing to do')
             return
 
-        shape = get_shape(inputs)
-
         layout_dict = {}
         for layer in self.layout:
             if C_GROUPS[layer] not in layout_dict:
                 layout_dict[C_GROUPS[layer]] = [-1, 0]
             layout_dict[C_GROUPS[layer]][1] += 1
 
+        new_layer = inputs
         modules = []
         for _, layer in enumerate(self.layout):
 
@@ -154,13 +153,15 @@ class ConvBlock(nn.Module):
                 args = unpack_args(args, *layout_dict[C_GROUPS[layer]])
 
                 if 'dataset.' in layer_fn.__module__:
-                    args['shape'] = shape
+                    args['inputs'] = new_layer
+
                 new_layer = layer_fn(**args)
                 modules.append(new_layer)
-                shape = get_shape(new_layer, shape)
 
         self.block = nn.Sequential(*modules)
-        self.output_shape = shape
+        self.output_shape = get_shape(self.block)
+        print(layout, self.block)
+        print()
 
     def forward(self, x):
         """ Make forward pass """

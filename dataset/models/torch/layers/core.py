@@ -1,8 +1,9 @@
 """ Contains common layers """
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_num_dims, get_num_channels
+from ..utils import get_num_dims, get_num_channels, get_shape
 
 
 ACTIVATIONS = {f.lower(): f for f in dir(nn)}
@@ -16,9 +17,9 @@ class Identity(nn.Module):
     It slows training and inference so you should have a very good reason to use it.
     For instance, this could be a good option to replace some other module when debugging.
     """
-    def __init__(self, shape=None):
+    def __init__(self, inputs=None):
         super().__init__()
-        self.output_shape = tuple([*shape])
+        self.output_shape = get_shape(inputs)
 
     def forward(self, x):
         return x
@@ -26,24 +27,34 @@ class Identity(nn.Module):
 
 class Flatten(nn.Module):
     """ A module which reshapes inputs into 2-dimension (batch_items, features) """
+    def __init__(self, inputs=None):
+        super().__init__()
+        shape = get_shape(inputs)
+        if any(s is None for s in shape[1:]):
+            self.output_shape = (shape[0], None)
+        else:
+            self.output_shape = (shape[0], np.prod(shape[1:]).tolist())
+
     def forward(self, x):
         return x.view(x.size(0), -1)
 
 
 class Dense(nn.Module):
     """ A dense layer """
-    def __init__(self, units=None, out_features=None, bias=True, shape=None):
+    def __init__(self, units=None, out_features=None, bias=True, inputs=None):
         super().__init__()
 
         units = units or out_features
 
-        self.output_shape = [*shape]
-        self.output_shape[-1] = units
-        self.output_shape = tuple(self.output_shape)
+        shape = get_shape(inputs)
+        self.output_shape = (shape[0], units)
 
-        self.linear = nn.Linear(shape[-1], units, bias)
+        self.linear = nn.Linear(np.prod(shape[1:]), units, bias)
 
     def forward(self, x):
+        """ Make forward pass """
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         return self.linear(x)
 
 
@@ -70,12 +81,12 @@ class Activation(nn.Module):
     kwargs
         custom named arguments
     """
-    def __init__(self, activation, *args, shape=None, **kwargs):
+    def __init__(self, activation, *args, inputs=None, **kwargs):
         super().__init__()
 
         self.args = tuple()
         self.kwargs = {}
-        self.output_shape = shape
+        self.output_shape = get_shape(inputs)
 
         if activation is None:
             self.activation = None
@@ -103,29 +114,46 @@ class Activation(nn.Module):
         return x
 
 
-def _get_padding(padding=0, kernel_size=None, dilation=1, **kwargs):
+def _calc_padding(padding=0, kernel_size=None, dilation=1, **kwargs):
     _ = kwargs
     if isinstance(padding, str):
         if padding == 'valid':
             padding = 0
         elif padding == 'same':
-            padding = dilation * (kernel_size - 1) // 2
+            if isinstance(kernel_size, tuple):
+                padding = tuple([dilation * (k - 1) // 2 for k in kernel_size])
+            else:
+                padding = dilation * (kernel_size - 1) // 2
         else:
             raise ValueError("padding can be 'same' or 'valid' or int")
     return padding
 
+def _calc_output_shape(inputs, kernel_size=None, stride=None, dilation=None, padding=None, transposed=False, **kwargs):
+    shape = get_shape(inputs)
+    output_shape = list(shape)
+    for i in range(2, len(shape)):
+        if shape[i]:
+            k = kernel_size[i - 2] if isinstance(kernel_size, tuple) else kernel_size
+            p = padding[i - 2] if isinstance(padding, tuple) else padding
+            s = stride[i - 2] if isinstance(stride, tuple) else stride
+            d = dilation[i - 2] if isinstance(dilation, tuple) else dilation
+            if transposed:
+                output_shape[i] = (shape[i] - 1) * s + k - 2 * p
+            else:
+                output_shape[i] = (shape[i] + 2 * p - d * (k - 1) - 1) // s + 1
+        else:
+            output_shape[i] = None
+    output_shape[1] = kwargs.get('out_channels') or output_shape[1]
+    return tuple(output_shape)
 
 class _Conv(nn.Module):
     """ An universal module for plain and transposed convolutions """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
-                 dilation=None, dilation_rate=None, groups=None, bias=True, shape=None, _fn=None):
-
+                 dilation=None, dilation_rate=None, groups=None, bias=True, inputs=None,
+                 _fn=None, transposed=False):
         super().__init__()
 
-        self.input_shape = shape
-        self.output_shape = [*shape]
-        self.output_shape[1] = filters
-        self.output_shape = tuple(self.output_shape)
+        shape = get_shape(inputs)
 
         args = {}
 
@@ -143,9 +171,11 @@ class _Conv(nn.Module):
 
         args['bias'] = bias
 
-        args['padding'] = _get_padding(padding, args['kernel_size'], args['dilation'])
+        args['padding'] = _calc_padding(padding, args['kernel_size'], args['dilation'])
 
         self.conv = _fn[get_num_dims(shape)](**args)
+
+        self.output_shape = _calc_output_shape(shape, **args, transposed=transposed)
 
     def forward(self, x):
         return self.conv(x)
@@ -160,25 +190,25 @@ CONV = {
 class Conv(_Conv):
     """ Multi-dimensional convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
-                 dilation=None, dilation_rate=None, groups=None, bias=True, shape=None):
+                 dilation=None, dilation_rate=None, groups=None, bias=True, inputs=None):
         super().__init__(filters, kernel_size, stride, strides, padding,
-                         dilation, dilation_rate, groups, bias, shape, CONV)
+                         dilation, dilation_rate, groups, bias, inputs, CONV)
 
 class _SeparableConv(nn.Module):
     """ A universal multi-dimensional separable convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
-                 dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, shape=None, _fn=None):
+                 dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None, _fn=None):
         super().__init__()
 
-        in_channels = get_num_channels(shape)
+        in_channels = get_num_channels(inputs)
         out_channels = in_channels * depth_multiplier
         self.conv = _fn(out_channels, kernel_size, stride, strides, padding,
-                        dilation, dilation_rate, in_channels, bias, shape)
+                        dilation, dilation_rate, in_channels, bias, inputs)
 
         if filters != out_channels:
             self.conv = nn.Sequential(
                 self.conv,
-                Conv(filters, 1, 1, 1, padding, 1, 1, 1, bias, self.conv.output_shape)
+                Conv(filters, 1, 1, 1, padding, 1, 1, 1, bias, inputs=self.conv.output_shape)
             )
 
     def forward(self, x):
@@ -187,9 +217,9 @@ class _SeparableConv(nn.Module):
 class SeparableConv(_SeparableConv):
     """ Multi-dimensional separable convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
-                 dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, shape=None):
+                 dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None):
         super().__init__(filters, kernel_size, stride, strides, padding,
-                         dilation, dilation_rate, bias, depth_multiplier, shape, Conv)
+                         dilation, dilation_rate, bias, depth_multiplier, inputs, Conv)
 
 CONV_TR = {
     1: nn.ConvTranspose1d,
@@ -200,17 +230,17 @@ CONV_TR = {
 class ConvTranspose(_Conv):
     """ Multi-dimensional transposed convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
-                 dilation=None, dilation_rate=None, groups=None, bias=True, shape=None):
+                 dilation=None, dilation_rate=None, groups=None, bias=True, inputs=None):
         super().__init__(filters, kernel_size, stride, strides, padding,
-                         dilation, dilation_rate, groups, bias, shape, CONV_TR)
+                         dilation, dilation_rate, groups, bias, inputs, CONV_TR, True)
 
 
 class SeparableConvTranspose(_SeparableConv):
     """ Multi-dimensional transposed separable convolutional layer """
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
-                 dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, shape=None):
+                 dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None):
         super().__init__(filters, kernel_size, stride, strides, padding,
-                         dilation, dilation_rate, bias, depth_multiplier, shape, ConvTranspose)
+                         dilation, dilation_rate, bias, depth_multiplier, inputs, ConvTranspose, True)
 
 BATCH_NORM = {
     1: nn.BatchNorm1d,
@@ -220,10 +250,11 @@ BATCH_NORM = {
 
 class BatchNorm(nn.Module):
     """ Multi-dimensional batch normalization layer """
-    def __init__(self, shape=None, **kwargs):
+    def __init__(self, inputs=None, **kwargs):
         super().__init__()
-        num_features = get_num_channels(shape)
-        self.norm = BATCH_NORM[get_num_dims(shape)](num_features=num_features, **kwargs)
+        num_features = get_num_channels(inputs)
+        self.norm = BATCH_NORM[get_num_dims(inputs)](num_features=num_features, **kwargs)
+        self.output_shape = get_shape(inputs)
 
     def forward(self, x):
         return self.norm(x)
@@ -237,9 +268,10 @@ DROPOUT = {
 
 class Dropout(nn.Module):
     """ Multi-dimensional dropout layer """
-    def __init__(self, shape=None, **kwargs):
+    def __init__(self, inputs=None, **kwargs):
         super().__init__()
-        self.dropout = DROPOUT[get_num_dims(shape)](**kwargs)
+        self.dropout = DROPOUT[get_num_dims(inputs)](**kwargs)
+        self.output_shape = get_shape(inputs)
 
     def forward(self, x):
         return self.dropout(x)
@@ -247,12 +279,12 @@ class Dropout(nn.Module):
 
 class _Pool(nn.Module):
     """ A universal pooling layer """
-    def __init__(self, shape=None, _fn=None, **kwargs):
+    def __init__(self, inputs=None, _fn=None, **kwargs):
         super().__init__()
         if isinstance(_fn, dict):
-            self.pool = _fn[get_num_dims(shape)](**kwargs)
+            self.pool = _fn[get_num_dims(inputs)](**kwargs)
         else:
-            self.pool = _fn(shape=shape, **kwargs)
+            self.pool = _fn(inputs=inputs, **kwargs)
 
     def forward(self, x):
         return self.pool(x)
@@ -267,8 +299,9 @@ MAXPOOL = {
 class MaxPool(_Pool):
     """ Multi-dimensional max pooling layer """
     def __init__(self, **kwargs):
-        kwargs['padding'] = _get_padding(kwargs['padding'], kwargs['kernel_size'], kwargs['dilation'])
+        kwargs['padding'] = _calc_padding(kwargs['padding'], kwargs['kernel_size'], kwargs['dilation'])
         super().__init__(_fn=MAXPOOL, **kwargs)
+        self.output_shape = _calc_output_shape(**kwargs)
 
 
 AVGPOOL = {
@@ -280,17 +313,19 @@ AVGPOOL = {
 class AvgPool(_Pool):
     """ Multi-dimensional average pooling layer """
     def __init__(self, **kwargs):
-        kwargs['padding'] = _get_padding(kwargs['padding'], kwargs['kernel_size'], kwargs['dilation'])
+        kwargs['padding'] = _calc_padding(kwargs['padding'], kwargs['kernel_size'], kwargs['dilation'])
         super().__init__(_fn=AVGPOOL, **kwargs)
+        self.output_shape = _calc_output_shape(**kwargs)
 
 class Pool(_Pool):
     """ Multi-dimensional pooling layer """
-    def __init__(self, shape=None, op='max', **kwargs):
+    def __init__(self, inputs=None, op='max', **kwargs):
         if op == 'max':
             _fn = MaxPool
         elif op in ['avg', 'mean']:
             _fn = AvgPool
-        super().__init__(_fn=_fn, shape=shape, **kwargs)
+        super().__init__(_fn=_fn, inputs=inputs, **kwargs)
+        self.output_shape = self.pool.output_shape
 
     def forward(self, x):
         return self.pool(x)
@@ -304,8 +339,9 @@ ADAPTIVE_MAXPOOL = {
 
 class AdaptiveMaxPool(_Pool):
     """ Multi-dimensional adaptive max pooling layer """
-    def __init__(self, shape=None, output_size=None, **kwargs):
-        super().__init__(_fn=ADAPTIVE_MAXPOOL, shape=shape, output_size=output_size, **kwargs)
+    def __init__(self, inputs=None, output_size=None, **kwargs):
+        shape = get_shape(inputs)
+        super().__init__(_fn=ADAPTIVE_MAXPOOL, inputs=inputs, output_size=output_size, **kwargs)
         self.output_shape = tuple(shape[:2]) + tuple(output_size)
 
 
@@ -317,36 +353,42 @@ ADAPTIVE_AVGPOOL = {
 
 class AdaptiveAvgPool(_Pool):
     """ Multi-dimensional adaptive average pooling layer """
-    def __init__(self, shape=None, output_size=None, **kwargs):
-        super().__init__(_fn=ADAPTIVE_AVGPOOL, shape=shape, output_size=output_size, **kwargs)
+    def __init__(self, inputs=None, output_size=None, **kwargs):
+        shape = get_shape(inputs)
+        super().__init__(_fn=ADAPTIVE_AVGPOOL, inputs=inputs, output_size=output_size, **kwargs)
         self.output_shape = tuple(shape[:2]) + tuple(output_size)
 
 
 class AdaptivePool(_Pool):
     """ Multi-dimensional adaptive pooling layer """
-    def __init__(self, op='max', shape=None, **kwargs):
+    def __init__(self, op='max', inputs=None, **kwargs):
         if op == 'max':
             _fn = AdaptiveMaxPool
         elif op in ['avg', 'mean']:
             _fn = AdaptiveAvgPool
-        super().__init__(_fn=_fn, shape=shape, **kwargs)
+        super().__init__(_fn=_fn, inputs=inputs, **kwargs)
         self.output_shape = self.pool.output_shape
 
 
 class GlobalPool(nn.Module):
     """ Multi-dimensional global pooling layer """
-    def __init__(self, shape=None, op='max', **kwargs):
+    def __init__(self, inputs=None, op='max', **kwargs):
         super().__init__()
+        shape = get_shape(inputs)
         pool_shape = [1] * len(shape[2:])
         self.output_shape = tuple(shape[:2])
-        self.pool = nn.Sequential(
-            AdaptivePool(op=op, output_size=pool_shape, shape=shape, **kwargs),
-            Flatten()
-        )
+        self.pool = AdaptivePool(op=op, output_size=pool_shape, inputs=inputs, **kwargs)
 
     def forward(self, x):
-        return self.pool(x)
+        x = self.pool(x)
+        return x.view(x.size(0), -1)
 
+_UPSAMPLE_MODES = {
+    'n': 'nearest',
+    'l': 'linear',
+    'b': 'bilinear',
+    't': 'trilinear',
+}
 
 class Upsample(nn.Module):
     """ Upsample inputs with a given factor
@@ -355,11 +397,16 @@ class Upsample(nn.Module):
     -----
     This is just a wrapper around ``F.interpolate``.
     """
-    def __init__(self, *args, shape=None, **kwargs):
+    def __init__(self, *args, inputs=None, **kwargs):
         super().__init__()
         _ = args
         self.kwargs = kwargs
 
+        mode = self.kwargs.get('mode')
+        if mode in _UPSAMPLE_MODES:
+            self.kwargs['mode'] = _UPSAMPLE_MODES[mode]
+
+        shape = get_shape(inputs)
         self.output_shape = [*shape]
         for i, s in enumerate(self.output_shape[2:]):
             self.output_shape[i+2] = None if s is None else s * kwargs.get('scale_factor')
@@ -370,11 +417,31 @@ class Upsample(nn.Module):
 
 
 class PixelShuffle(nn.PixelShuffle):
-    """ Resize input tensor with subpixel convolution (depth to space operation) """
-    def __init__(self, upscale_factor=None, shape=None):
+    """ Resize input tensor with depth to space operation """
+    def __init__(self, upscale_factor=None, inputs=None):
         super().__init__(upscale_factor)
+        shape = get_shape(inputs)
         self.output_shape = [*shape]
         self.output_shape[1] = self.output_shape[1] / upscale_factor ** 2
         for i, s in enumerate(self.output_shape[2:]):
             self.output_shape[i+2] = None if s is None else s * upscale_factor
         self.output_shape = tuple(self.output_shape)
+
+
+class SubPixelConv(nn.Module):
+    """ Resize input tensor with subpixel convolution (convolution + depth to space operation) """
+    def __init__(self, layout=None, factor=None, inputs=None, **kwargs):
+        super().__init__()
+
+        if layout:
+            conv = ConvBlock(layout=layout, inputs=inputs, **kwargs)
+            inputs = conv
+        shuffle = PixelShuffle(factor, inputs=inputs)
+        if layout:
+            self.conv = nn.Sequential(conv, shuffle)
+        else:
+            self.conv = shuffle
+        self.output_shape = get_output_shape(self.conv)
+
+    def forward(self, x):
+        return self.conv(x)
