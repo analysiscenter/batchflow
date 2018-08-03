@@ -6,9 +6,6 @@ import torch.nn.functional as F
 from ..utils import get_num_dims, get_num_channels, get_shape
 
 
-ACTIVATIONS = {f.lower(): f for f in dir(nn)}
-
-
 class Identity(nn.Module):
     """ Module which just returns its inputs
 
@@ -57,6 +54,8 @@ class Dense(nn.Module):
             x = x.view(x.size(0), -1)
         return self.linear(x)
 
+
+ACTIVATIONS = {f.lower(): f for f in dir(nn)}
 
 class Activation(nn.Module):
     """ A proxy activation module
