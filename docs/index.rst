@@ -147,12 +147,12 @@ Please cite Dataset in your publications if it helps your research.
 
 ::
 
-    Roman Kh et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
+    Roman Khudorozhkov et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
 
 ::
 
     @misc{roman_kh_2017_1041203,
-      author       = {Roman Kh and et al},
+      author       = {Khudorozhkov, Roman and others},
       title        = {Dataset library for fast ML workflows},
       year         = 2017,
       doi          = {10.5281/zenodo.1041203},
