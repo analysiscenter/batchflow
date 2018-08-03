@@ -137,7 +137,7 @@ class ConvBlock(nn.Module):
                     skip_layer = True
 
             elif layer == 'u':
-                args = dict(scale_factor=kwargs.get('factor'), mode=kwargs.get('upsample_mode', 'bilinear'))
+                args = dict(scale_factor=kwargs.get('factor'), mode=kwargs.get('mode', 'bilinear'))
 
             elif layer == 'X':
                 args = dict(upscale_factor=kwargs.get('factor'))
@@ -160,8 +160,6 @@ class ConvBlock(nn.Module):
 
         self.block = nn.Sequential(*modules)
         self.output_shape = get_shape(self.block)
-        print(layout, self.block)
-        print()
 
     def forward(self, x):
         """ Make forward pass """

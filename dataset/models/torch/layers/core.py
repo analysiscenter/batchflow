@@ -383,6 +383,7 @@ class GlobalPool(nn.Module):
         x = self.pool(x)
         return x.view(x.size(0), -1)
 
+
 _UPSAMPLE_MODES = {
     'n': 'nearest',
     'l': 'linear',
@@ -428,20 +429,6 @@ class PixelShuffle(nn.PixelShuffle):
         self.output_shape = tuple(self.output_shape)
 
 
-class SubPixelConv(nn.Module):
-    """ Resize input tensor with subpixel convolution (convolution + depth to space operation) """
-    def __init__(self, layout=None, factor=None, inputs=None, **kwargs):
-        super().__init__()
-
-        if layout:
-            conv = ConvBlock(layout=layout, inputs=inputs, **kwargs)
-            inputs = conv
-        shuffle = PixelShuffle(factor, inputs=inputs)
-        if layout:
-            self.conv = nn.Sequential(conv, shuffle)
-        else:
-            self.conv = shuffle
-        self.output_shape = get_output_shape(self.conv)
-
-    def forward(self, x):
-        return self.conv(x)
+class SubPixelConv(PixelShuffle):
+    """ An alias for PixelShuffle """
+    pass
