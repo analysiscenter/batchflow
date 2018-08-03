@@ -13,7 +13,7 @@ class EncoderDecoder(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with 'images' (see :meth:`._make_inputs`)
+        dict with 'images' (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
         encoder : dict

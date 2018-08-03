@@ -77,11 +77,11 @@ class SklearnModel(BaseModel):
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
-            Subset of the training data
+        X : array-like
+            Subset of the training data, shape (n_samples, n_features)
 
-        y : numpy array, shape (n_samples,)
-            Subset of the target values
+        y : numpy array
+            Subset of the target values, shape (n_samples,)
 
         Notes
         -----
@@ -97,8 +97,8 @@ class SklearnModel(BaseModel):
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
-            Subset of the training data
+        X : array-like
+            Subset of the training data, shape (n_samples, n_features)
 
         Notes
         -----
@@ -106,7 +106,7 @@ class SklearnModel(BaseModel):
 
         Returns
         -------
-        array, shape (n_samples,)
-            Predicted value per sample.
+        array
+            Predicted value per sample, shape (n_samples,)
         """
         return self.estimator.predict(X, *args, **kwargs)

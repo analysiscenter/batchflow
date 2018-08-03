@@ -30,7 +30,7 @@ class Inception_v3(Inception):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
     """
     @classmethod
     def default_config(cls):

@@ -59,7 +59,7 @@ class TFModel(BaseModel):
         `Tensorflow session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
 
     inputs : dict
-        model inputs (see :meth:`._make_inputs`)
+        model inputs (see :meth:`.TFModel._make_inputs`)
 
     loss - a loss function, might be defined in one of three formats:
         - name
@@ -609,7 +609,7 @@ class TFModel(BaseModel):
         Returns
         -------
         dict
-            tensor config (see :meth:`._make_inputs`)
+            tensor config (see :meth:`.TFModel._make_inputs`)
 
         Raises
         ------

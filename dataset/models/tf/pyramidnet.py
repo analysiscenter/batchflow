@@ -18,7 +18,7 @@ class PyramidNet(ResNet):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'labels' (see :meth:`._make_inputs`)
+        dict with 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
     input_block : dict
         parameters for the input block (see :func:`.conv_block`).

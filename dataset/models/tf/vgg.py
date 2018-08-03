@@ -37,7 +37,7 @@ class VGG(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
+        dict with keys 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
     body/arch : list of tuple of int
         Each list item contains parameters for one network block as a tuple of 4 ints:

@@ -15,7 +15,7 @@ class DenseNet(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'labels'. See :meth:`.TFModel._make_inputs`.
+        dict with 'images' and 'labels'. See :meth:`~.TFModel._make_inputs`.
 
     input_block : dict
 

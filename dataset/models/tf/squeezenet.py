@@ -14,7 +14,7 @@ class SqueezeNet(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
+        dict with keys 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
         layout : str

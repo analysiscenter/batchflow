@@ -16,7 +16,7 @@ class GlobalConvolutionNetwork(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
         encoder : dict

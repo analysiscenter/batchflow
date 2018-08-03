@@ -16,7 +16,7 @@ class SqueezeNet(TorchModel):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'labels' (see :meth:`.TorchModel._make_inputs`)
+        dict with keys 'images' and 'labels' (see :meth:`~.TorchModel._make_inputs`)
 
     body : dict
         layout : str
@@ -154,6 +154,8 @@ class FireBlock(nn.Module):
     filters : int
         the number of filters in the convolution layer
 
+    Notes
+    -----
     For other params see :class:`.ConvBlock`.
     """
     def __init__(self, layout='cna', filters=None, inputs=None, **kwargs):
