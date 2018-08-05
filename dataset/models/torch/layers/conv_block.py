@@ -183,7 +183,7 @@ class ConvBlock(nn.Module):
         x = conv_block('ca ca ca nd', [32, 32, 64], [5, 3, 3], strides=[1, 1, 2], dropout_rate=.15, inputs=prev_layer)
 
     """
-    def __init__(self, layout='', filters=0, kernel_size=3, strides=1, padding='same', dilation_rate=1,
+    def __init__(self, layout='', filters=None, kernel_size=3, strides=1, padding='same', dilation_rate=1,
                  depth_multiplier=1, activation='relu', pool_size=2, pool_strides=2, dropout_rate=0, units=None,
                  inputs=None, **kwargs):
         super().__init__()
@@ -259,9 +259,8 @@ class ConvBlock(nn.Module):
                 raise ValueError('Unknown layer symbol', layer)
 
             if not skip_layer:
-                layer_args = layer_args.copy()
-                if 'disable' in layer_args:
-                    del layer_args['disable']
+                layer_args = layer_args.copy() if isinstance(layer_args, dict) else {}
+                layer_args.pop('disable', None)
                 args = {**args, **layer_args}
                 args = unpack_args(args, *layout_dict[C_GROUPS[layer]])
 
