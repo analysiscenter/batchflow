@@ -106,10 +106,10 @@ class TorchModel(BaseModel):
         - ``{'optimizer': {'name': MyCustomOptimizer, momentum=0.95}}``
 
     common : dict
-        default parameters for all :class:`.ConvBlock`
+        default parameters for all blocks (see :class:`.ConvBlock`)
 
-    input_block : dict
-        parameters for the input block, usually :class:`.ConvBlock` parameters.
+    input_block : dict or nn.Module
+        a user-defined module or parameters for the input block, usually :class:`.ConvBlock` parameters.
 
         The only required parameter here is ``input_block/inputs`` which should contain a name or
         a list of names from ``inputs`` which tensors will be passed to ``input_block`` as ``inputs``.
@@ -119,12 +119,13 @@ class TorchModel(BaseModel):
         - ``{'input_block/inputs': 'images'}``
         - ``{'input_block': dict(inputs='features')}``
         - ``{'input_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
+        - ``{'input_block': MyCustomModule(some_param=1, another_param=2)}``
 
-    body : dict
-        parameters for the base network layers, usually :class:`.ConvBlock` parameters
+    body : dict or nn.Module
+        a user-defined module or parameters for the base network layers, usually :class:`.ConvBlock` parameters
 
-    head : dict
-        parameters for the head layers, usually :class:`.ConvBlock` parameters
+    head : dict or nn.Module
+        a user-defined module or parameters for the head layers, usually :class:`.ConvBlock` parameters
 
     predictions : str or callable
         an operation applied to the head output to make the predictions tensor which is used in the loss function.
@@ -443,35 +444,31 @@ class TorchModel(BaseModel):
 
         return config
 
-    def _add_block(self, blocks, block):
+    def _add_block(self, blocks, name, config, inputs):
+        if isinstance(config[name], nn.Module):
+            block = config[name]
+        elif isinstance(config[name], dict):
+            block = getattr(self, name)(**{**config['common'], **config[name]}, inputs=inputs)
+        else:
+            raise TypeError('block can be confugired as a Module or a dict with parameters')
         if block is not None:
             blocks.append(block)
-        return blocks
+        return block
 
     def _build(self, config=None):
-        defaults = {**config['common']}
-        config['input_block'] = {**defaults, **config['input_block']}
-        config['body'] = {**defaults, **config['body']}
-        config['head'] = {**defaults, **config['head']}
-
         shape = self.shape(config['input_block/inputs'])
-        blocks = []
         config.pop('input_block/inputs')
 
-        input_block = self.input_block(**config['input_block'], inputs=shape)
-        self._add_block(blocks, input_block)
-
-        body = self.body(**config['body'], inputs=input_block or shape)
-        self._add_block(blocks, body)
-
-        head = self.head(**config['head'], inputs=body or shape)
-        self._add_block(blocks, head)
+        blocks = []
+        input_block = self._add_block(blocks, 'input_block', config, shape)
+        body = self._add_block(blocks, 'body', config, input_block or shape)
+        self._add_block(blocks, 'head', config, body or shape)
 
         self.model = nn.Sequential(*blocks)
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
 
     @classmethod
-    def input_block(cls, **kwargs):
+    def input_block(cls, _module=None, **kwargs):
         """ Transform inputs with a convolution block
 
         Notes
@@ -488,7 +485,7 @@ class TorchModel(BaseModel):
         return None
 
     @classmethod
-    def body(cls, **kwargs):
+    def body(cls, _module=None, **kwargs):
         """ Base layers which produce a network embedding
 
         Notes
@@ -505,7 +502,7 @@ class TorchModel(BaseModel):
         return None
 
     @classmethod
-    def head(cls, **kwargs):
+    def head(cls, _module=None, **kwargs):
         """ The last network layers which produce predictions
 
         Notes
