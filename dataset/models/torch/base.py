@@ -408,6 +408,7 @@ class TorchModel(BaseModel):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
         _config = config.get(name)
+        kwargs = kwargs or {}
         config = {**config['common'], **_config, **kwargs}
         return config
 
