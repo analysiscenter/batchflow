@@ -2,6 +2,7 @@
 
 import numpy as np
 from .base import Baseset
+from .batch import Batch
 from .dsindex import DatasetIndex
 from .pipeline import Pipeline
 
@@ -15,7 +16,7 @@ class Dataset(Baseset):
     indices
     is_split
     """
-    def __init__(self, index, batch_class=None, preloaded=None, *args, **kwargs):
+    def __init__(self, index, batch_class=Batch, preloaded=None, *args, **kwargs):
         super().__init__(index, *args, **kwargs)
         self.batch_class = batch_class
         self.preloaded = preloaded

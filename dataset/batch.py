@@ -25,7 +25,6 @@ except ImportError:
 
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, any_action_failed
-from .dataset import Dataset
 from .batch_base import BaseBatch
 from .components import MetaComponentsTuple
 
@@ -173,15 +172,14 @@ class Batch(BaseBatch):
 
         Parameters
         ----------
-        dataset: could be a dataset or a Dataset class
+        dataset
+            an instance or a subclass of Dataset
 
         Returns
         -------
         an instance of a class specified by `dataset` arg, preloaded with this batch data
         """
-        if dataset is None:
-            dataset_class = Dataset
-        elif isinstance(dataset, Dataset):
+        if isinstance(dataset, Dataset):
             dataset_class = dataset.__class__
         elif isinstance(dataset, type):
             dataset_class = dataset
