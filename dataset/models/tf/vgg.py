@@ -54,7 +54,7 @@ class VGG(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
-        config['body/block'] = dict(layout='cna')
+        config['body/block'] = dict(layout='cna', pool_size=2, pool_strides=2)
         if is_best_practice():
             config['head'] = dict(layout='Vdf', dropout_rate=.8, units=2)
         else:
