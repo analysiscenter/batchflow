@@ -112,38 +112,65 @@ class Activation(nn.Module):
             return self.activation(x, *self.args, **self.kwargs)
         return x
 
+def _get_padding(kernel_size=None, dilation=1):
+    p = dilation * (kernel_size - 1) // 2
+    p = (p + 1, p) if kernel_size % 2 == 0 else p
+    return p
 
-def _calc_padding(padding=0, kernel_size=None, dilation=1, **kwargs):
+def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, **kwargs):
     _ = kwargs
+
+    dims = get_num_dims(inputs)
+
     if isinstance(padding, str):
         if padding == 'valid':
             padding = 0
         elif padding == 'same':
-            if isinstance(kernel_size, tuple):
-                padding = tuple([dilation * (k - 1) // 2 for k in kernel_size])
+            if transposed:
+                padding = 0
+            elif dims > 1:
+                if isinstance(kernel_size, int):
+                    kernel_size = (kernel_size,) * dims
+                if isinstance(dilation, int):
+                    dilation = (dilation,) * dims
+                padding = tuple(_get_padding(kernel_size[i], dilation[i]) for i in range(dims))
+                # need_padding = any(isinstance(axis, tuple) and axis[0] != axis[1] for axis in padding)
+                # if not need_padding:
+                #     padding = tuple(x[0] for x in padding)
             else:
-                padding = dilation * (kernel_size - 1) // 2
+                padding = _get_padding(kernel_size, dilation)
         else:
-            raise ValueError("padding can be 'same' or 'valid' or int")
+            raise ValueError("padding can be 'same' or 'valid'")
+    elif isinstance(padding, int):
+        pass
+    elif isinstance(padding, tuple):
+        pass
+    else:
+        raise ValueError("padding can be 'same' or 'valid' or int or tuple of int")
+
     return padding
 
-def _calc_output_shape(inputs, kernel_size=None, stride=None, dilation=None, padding=None, transposed=False, **kwargs):
+def _calc_output_shape(inputs, kernel_size=None, stride=None, dilation=None, padding=0, transposed=False, **kwargs):
     shape = get_shape(inputs)
     output_shape = list(shape)
+
     for i in range(2, len(shape)):
         if shape[i]:
             k = kernel_size[i - 2] if isinstance(kernel_size, tuple) else kernel_size
             p = padding[i - 2] if isinstance(padding, tuple) else padding
+            p = sum(p) if isinstance(p, tuple) else p * 2
             s = stride[i - 2] if isinstance(stride, tuple) else stride
             d = dilation[i - 2] if isinstance(dilation, tuple) else dilation
             if transposed:
-                output_shape[i] = (shape[i] - 1) * s + k - 2 * p
+                output_shape[i] = (shape[i] - 1) * s + k - p
             else:
-                output_shape[i] = (shape[i] + 2 * p - d * (k - 1) - 1) // s + 1
+                output_shape[i] = (shape[i] + p - d * (k - 1) - 1) // s + 1
         else:
             output_shape[i] = None
+
     output_shape[1] = kwargs.get('out_channels') or output_shape[1]
     return tuple(output_shape)
+
 
 class _Conv(nn.Module):
     """ An universal module for plain and transposed convolutions """
@@ -170,13 +197,22 @@ class _Conv(nn.Module):
 
         args['bias'] = bias
 
-        args['padding'] = _calc_padding(padding, args['kernel_size'], args['dilation'])
+        _padding = _calc_padding(shape, padding=padding, transposed=transposed, **args)
+        if isinstance(_padding, tuple) and isinstance(_padding[0], tuple):
+            args['padding'] = 0
+            self.padding = sum(_padding, ())
+        else:
+            args['padding'] = _padding
+            self.padding = 0
 
         self.conv = _fn[get_num_dims(shape)](**args)
 
-        self.output_shape = _calc_output_shape(shape, **args, transposed=transposed)
+        args.pop('padding')
+        self.output_shape = _calc_output_shape(shape, padding=_padding, transposed=transposed, **args)
 
     def forward(self, x):
+        if self.padding:
+            x = F.pad(x, self.padding[::-1])
         return self.conv(x)
 
 
@@ -278,14 +314,27 @@ class Dropout(nn.Module):
 
 class _Pool(nn.Module):
     """ A universal pooling layer """
-    def __init__(self, inputs=None, _fn=None, **kwargs):
+    def __init__(self, inputs=None, padding='same', _fn=None, **kwargs):
         super().__init__()
+
+        self.padding = None
+
         if isinstance(_fn, dict):
+            if padding is not None:
+                _padding = _calc_padding(inputs, padding=padding, **kwargs)
+                self.output_shape = _calc_output_shape(inputs, padding=_padding, **kwargs)
+                if isinstance(_padding, tuple) and isinstance(_padding[0], tuple):
+                    self.padding = sum(_padding, ())
+                else:
+                    kwargs['padding'] = _padding
+
             self.pool = _fn[get_num_dims(inputs)](**kwargs)
         else:
             self.pool = _fn(inputs=inputs, **kwargs)
 
     def forward(self, x):
+        if self.padding:
+            x = F.pad(x, self.padding[::-1])
         return self.pool(x)
 
 
@@ -297,11 +346,8 @@ MAXPOOL = {
 
 class MaxPool(_Pool):
     """ Multi-dimensional max pooling layer """
-    def __init__(self, **kwargs):
-        kwargs['padding'] = _calc_padding(kwargs['padding'], kwargs['kernel_size'], kwargs['dilation'])
+    def __init__(self, padding='same', **kwargs):
         super().__init__(_fn=MAXPOOL, **kwargs)
-        self.output_shape = _calc_output_shape(**kwargs)
-
 
 AVGPOOL = {
     1: nn.AvgPool1d,
@@ -311,10 +357,9 @@ AVGPOOL = {
 
 class AvgPool(_Pool):
     """ Multi-dimensional average pooling layer """
-    def __init__(self, **kwargs):
-        kwargs['padding'] = _calc_padding(kwargs['padding'], kwargs['kernel_size'], kwargs['dilation'])
+    def __init__(self, padding='same', **kwargs):
         super().__init__(_fn=AVGPOOL, **kwargs)
-        self.output_shape = _calc_output_shape(**kwargs)
+
 
 class Pool(_Pool):
     """ Multi-dimensional pooling layer """
@@ -325,9 +370,6 @@ class Pool(_Pool):
             _fn = AvgPool
         super().__init__(_fn=_fn, inputs=inputs, **kwargs)
         self.output_shape = self.pool.output_shape
-
-    def forward(self, x):
-        return self.pool(x)
 
 
 ADAPTIVE_MAXPOOL = {
@@ -340,7 +382,7 @@ class AdaptiveMaxPool(_Pool):
     """ Multi-dimensional adaptive max pooling layer """
     def __init__(self, inputs=None, output_size=None, **kwargs):
         shape = get_shape(inputs)
-        super().__init__(_fn=ADAPTIVE_MAXPOOL, inputs=inputs, output_size=output_size, **kwargs)
+        super().__init__(_fn=ADAPTIVE_MAXPOOL, inputs=inputs, output_size=output_size, padding=None, **kwargs)
         self.output_shape = tuple(shape[:2]) + tuple(output_size)
 
 
@@ -354,7 +396,7 @@ class AdaptiveAvgPool(_Pool):
     """ Multi-dimensional adaptive average pooling layer """
     def __init__(self, inputs=None, output_size=None, **kwargs):
         shape = get_shape(inputs)
-        super().__init__(_fn=ADAPTIVE_AVGPOOL, inputs=inputs, output_size=output_size, **kwargs)
+        super().__init__(_fn=ADAPTIVE_AVGPOOL, inputs=inputs, output_size=output_size, padding=None, **kwargs)
         self.output_shape = tuple(shape[:2]) + tuple(output_size)
 
 
@@ -365,7 +407,7 @@ class AdaptivePool(_Pool):
             _fn = AdaptiveMaxPool
         elif op in ['avg', 'mean']:
             _fn = AdaptiveAvgPool
-        super().__init__(_fn=_fn, inputs=inputs, **kwargs)
+        super().__init__(_fn=_fn, inputs=inputs, padding=None, **kwargs)
         self.output_shape = self.pool.output_shape
 
 
