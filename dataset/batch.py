@@ -25,19 +25,21 @@ except ImportError:
 
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, any_action_failed
-from .batch_base import BaseBatch
 from .components import MetaComponentsTuple
 
 
-class Batch(BaseBatch):
+class Batch:
     """ The core Batch class """
     _item_class = None
     components = None
 
     def __init__(self, index, preloaded=None, *args, **kwargs):
+        _ = args, kwargs
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
-        super().__init__(index, *args, **kwargs)
+        self.index = index
+        self._data_named = None
+        self._data = None
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
         self._local = None
@@ -167,7 +169,7 @@ class Batch(BaseBatch):
             return np.concatenate(data)
         raise TypeError("Unknown data type", type(data[0]))
 
-    def as_dataset(self, dataset=None):
+    def as_dataset(self, dataset):
         """ Makes a new dataset from batch data
 
         Parameters
@@ -179,12 +181,12 @@ class Batch(BaseBatch):
         -------
         an instance of a class specified by `dataset` arg, preloaded with this batch data
         """
-        if isinstance(dataset, Dataset):
-            dataset_class = dataset.__class__
+        if dataset is None:
+            raise ValueError('dataset can be an instance of Dataset (sub)class or the class itself, but not None')
         elif isinstance(dataset, type):
             dataset_class = dataset
         else:
-            raise TypeError("dataset should be some Dataset class or an instance of some Dataset class or None")
+            dataset_class = dataset.__class__
         return dataset_class(self.index, batch_class=type(self), preloaded=self.data)
 
     @property

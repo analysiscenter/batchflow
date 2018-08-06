@@ -7,7 +7,6 @@ import warnings
 import queue as q
 import numpy as np
 
-from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
@@ -184,12 +183,14 @@ class Pipeline:
         new_p.dataset = other
         return new_p
 
-    @staticmethod
-    def _is_batch_method(name, cls=None):
-        cls = BaseBatch if cls is None else cls
+    def _is_batch_method(self, name, cls=None):
+        if cls is None and self.dataset is not None:
+            cls = self.dataset.batch_class
+        else:
+            return True
         if hasattr(cls, name) and callable(getattr(cls, name)):
             return True
-        return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
+        return any(self._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
 
     def __getattr__(self, name):
         """ Check if an unknown attr is an action from some batch class """
