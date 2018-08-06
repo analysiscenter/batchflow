@@ -36,8 +36,8 @@ class SqueezeNet(TFModel):
         #config['body/layout'] = 'ffbfmbffbffmbf'
 
         num_blocks = config['body/layout'].count('f')
-        layers_filters = 16 * 2 ** np.arange(num_blocks//2 + num_blocks%2)
-        layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
+        layers_filters = 16 * np.arange(1, num_blocks//2 + num_blocks%2 + 1)
+        layers_filters = np.repeat(layers_filters, 2)[:num_blocks].tolist()
         config['body/filters'] = layers_filters
 
         config['head'] = dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5)
