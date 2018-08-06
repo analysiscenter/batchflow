@@ -7,3 +7,4 @@ Models
     dataset.models.torch.base
     dataset.models.torch.vgg
     dataset.models.torch.squeezenet
+    dataset.models.torch.unet
