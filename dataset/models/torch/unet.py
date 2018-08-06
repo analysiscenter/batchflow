@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ... import is_best_practice
 from .layers import ConvBlock
 from . import TorchModel
 from .utils import get_shape
@@ -173,11 +172,11 @@ class DecoderBlock(nn.Module):
     """ An upsampling block aggregating a skip connection """
     def __init__(self, filters, upsample, decoder, inputs=None, **kwargs):
         super().__init__()
-        self.upsample = ConvBlock(filters=filters, inputs=inputs, **upsample)
+        self.upsample = ConvBlock(filters=filters, inputs=inputs, **{**kwargs, **upsample})
         shape = list(get_shape(self.upsample))
         shape[1] *= 2
         shape = tuple(shape)
-        self.decoder = ConvBlock(filters=filters, inputs=shape, **decoder)
+        self.decoder = ConvBlock(filters=filters, inputs=shape, **{**kwargs, **decoder})
         self.output_shape = self.decoder.output_shape
 
     def forward(self, x, skip):
