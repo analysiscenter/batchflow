@@ -32,23 +32,25 @@ class UNet(TFModel):
         config = TFModel.default_config()
 
         config['common'] = dict(conv=dict(use_bias=False))
-        filters = 64   # number of filters in the first block
-        config['input_block'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
-        config['body/num_blocks'] = 4
-        config['body/filters'] = 2 ** np.arange(config['body']['num_blocks']) * filters * 2
-        config['body/upsample'] = dict(layout='tna', factor=2)
-        config['head'].update(dict(layout='cna cna', filters=filters, kernel_size=3, strides=1))
+        config['body/num_blocks'] = 5
+        config['body/filters'] = (2 ** np.arange(config['body/num_blocks']) * 64).tolist()
+        config['body/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
+        config['body/encoder'] = dict(layout='cnacna', kernel_size=3)
+        config['body/upsample'] = dict(layout='tna', kernel_size=2, strides=2)
+        config['body/decoder'] = dict(layout='cnacna', kernel_size=3)
+        config['head'] = dict(layout='c', kernel_size=1, strides=1)
 
         config['loss'] = 'ce'
-        if is_best_practice('optimizer'):
-            config['optimizer'] = 'Adam'
-        else:
-            # The article does not specify the initial learning rate. 1e-4 was chosen arbitrarily.
-            config['optimizer'] = ('Momentum', dict(learning_rate=1e-4, momentum=.99))
+        # The article does not specify the initial learning rate. 1e-4 was chosen arbitrarily.
+        config['optimizer'] = ('Momentum', dict(learning_rate=1e-4, momentum=.99))
+
         return config
 
     def build_config(self, names=None):
         config = super().build_config(names)
+
+        if self.config.get('body/filters') is None:
+            config['body/filters'] = (2 ** np.arange(config['body/num_blocks']) * 64).tolist()
         if config.get('head/num_classes') is None:
             config['head/num_classes'] = self.num_classes('targets')
         return config
@@ -72,21 +74,27 @@ class UNet(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         filters = kwargs.pop('filters')
+        downsample = kwargs.pop('downsample')
+        encoder = kwargs.pop('encoder')
+        upsample = kwargs.pop('upsample')
+        decoder = kwargs.pop('decoder')
 
         with tf.variable_scope(name):
             x, inputs = inputs, None
-            encoder_outputs = [x]
+            encoder_outputs = []
             for i, ifilters in enumerate(filters):
-                x = cls.encoder_block(x, ifilters, name='encoder-'+str(i), **kwargs)
+                down = downsample if i > 0 else None
+                x = cls.encoder_block(x, ifilters, down, encoder, name='encoder-'+str(i), **kwargs)
                 encoder_outputs.append(x)
 
-            for i, ifilters in enumerate(filters[::-1]):
-                x = cls.decoder_block((x, encoder_outputs[-i-2]), ifilters//2, name='decoder-'+str(i), **kwargs)
+            for i, ifilters in enumerate(filters[-2::-1]):
+                x = cls.decoder_block((x, encoder_outputs[-i-2]), ifilters, upsample, decoder,
+                                      name='decoder-'+str(i), **kwargs)
 
         return x
 
     @classmethod
-    def encoder_block(cls, inputs, filters, name, **kwargs):
+    def encoder_block(cls, inputs, filters, downsample=None, encoder=None, name='encoder', **kwargs):
         """ 2x2 max pooling with stride 2 and two 3x3 convolutions
 
         Parameters
@@ -95,6 +103,10 @@ class UNet(TFModel):
             input tensor
         filters : int
             number of output filters
+        downsample : dict or None
+            parameters for downsampling block (skipped if None)
+        encoder : dict
+            parameters for encoding block
         name : str
             scope name
 
@@ -102,11 +114,16 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        x = conv_block(inputs, 'pcnacna', filters, kernel_size=3, name=name, pool_size=2, pool_strides=2, **kwargs)
+        encoder = cls.fill_params('body/encoder', **encoder)
+        with tf.variable_scope(name):
+            if downsample:
+                downsample = cls.fill_params('body/downsample', **downsample)
+                inputs = conv_block(inputs, filters=filters, name='downsample', **{**kwargs, **downsample})
+            x = conv_block(inputs, filters=filters, name='encoder', **{**kwargs, **encoder})
         return x
 
     @classmethod
-    def decoder_block(cls, inputs, filters, name, **kwargs):
+    def decoder_block(cls, inputs, filters, upsample=None, decoder=None, name='decoder', **kwargs):
         """ 3x3 convolution and 2x2 transposed convolution
 
         Parameters
@@ -115,6 +132,10 @@ class UNet(TFModel):
             input tensor
         filters : int
             number of output filters
+        upsample : dict
+            parameters for upsampling block
+        decoder : dict
+            parameters for decoding block
         name : str
             scope name
 
@@ -122,17 +143,17 @@ class UNet(TFModel):
         -------
         tf.Tensor
         """
-        config = cls.fill_params('body', **kwargs)
-        upsample_args = cls.pop('upsample', config)
+        upsample = cls.fill_params('body/upsample', **upsample)
+        decoder = cls.fill_params('body/decoder', **decoder)
 
         with tf.variable_scope(name):
             x, skip = inputs
             inputs = None
-            x = cls.upsample(x, filters=filters, name='upsample', **upsample_args, **kwargs)
+            x = cls.upsample(x, filters=filters, name='upsample', **{**kwargs, **upsample})
             x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
             axis = cls.channels_axis(kwargs.get('data_format'))
             x = tf.concat((skip, x), axis=axis)
-            x = conv_block(x, 'cna cna', filters=filters, kernel_size=3, name='conv', **kwargs)
+            x = conv_block(x, filters=filters, name='conv', **{**kwargs, **decoder})
         return x
 
     @classmethod
@@ -153,7 +174,5 @@ class UNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('head', **kwargs)
-        with tf.variable_scope(name):
-            x = conv_block(inputs, name='conv', **kwargs)
-            x = conv_block(x, name='last', **{**kwargs, **dict(filters=num_classes, kernel_size=1, layout='c')})
+        x = conv_block(inputs, filters=num_classes, units=num_classes, name=name, **kwargs)
         return x
