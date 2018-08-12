@@ -183,9 +183,9 @@ class ConvBlock(nn.Module):
         x = conv_block('ca ca ca nd', [32, 32, 64], [5, 3, 3], strides=[1, 1, 2], dropout_rate=.15, inputs=prev_layer)
 
     """
-    def __init__(self, layout='', filters=None, kernel_size=3, strides=1, padding='same', dilation_rate=1,
+    def __init__(self, inputs=None, layout='', filters=None, kernel_size=3, strides=1, padding='same', dilation_rate=1,
                  depth_multiplier=1, activation='relu', pool_size=2, pool_strides=2, dropout_rate=0, units=None,
-                 inputs=None, **kwargs):
+                 **kwargs):
         super().__init__()
 
         layout = layout or ''

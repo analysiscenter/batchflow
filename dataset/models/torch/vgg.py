@@ -78,7 +78,11 @@ class VGG(TorchModel):
         Parameters
         ----------
         arch : list of tuples
-            (number of 3x3 conv, number of 1x1 conv, number of filters, whether to downscale)
+            number of 3x3 conv, number of 1x1 conv, number of filters, whether to downscale
+
+        Returns
+        -------
+        nn.Module
         """
         kwargs = cls.get_defaults('body', kwargs)
         arch = kwargs.pop('arch')
@@ -88,15 +92,15 @@ class VGG(TorchModel):
         block = {**block, **kwargs}
 
         blocks = []
+        x = inputs
         for block_cfg in arch:
-            x = cls.block(*block_cfg, **block, inputs=inputs)
+            x = cls.block(x, *block_cfg, **block)
             blocks.append(x)
-            inputs = get_shape(x)
         x = nn.Sequential(*blocks)
         return x
 
     @classmethod
-    def block(cls, depth3, depth1, filters, downscale, **kwargs):
+    def block(cls, inputs, depth3, depth1, filters, downscale, **kwargs):
         """ A sequence of 3x3 and 1x1 convolutions followed by pooling
 
         Parameters
@@ -109,11 +113,15 @@ class VGG(TorchModel):
             the number of filters in each convolution layer
         downscale : bool
             whether to decrease spatial dimension at the end of the block
+
+        Returns
+        -------
+        nn.Module
         """
         kwargs = cls.get_defaults('body/block', kwargs)
         layout = kwargs.pop('layout') * (depth3 + depth1) + 'p' * downscale
         kernels = [3] * depth3 + [1] * depth1
-        x = ConvBlock(layout, filters, kernels, **kwargs)
+        x = ConvBlock(inputs, layout, filters, kernels, **kwargs)
         return x
 
 

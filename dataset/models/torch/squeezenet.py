@@ -27,6 +27,9 @@ class SqueezeNet(TorchModel):
             - b : bypass
 
             Default is 'fffmffffmf'.
+
+        block : dict
+            FireBlock parameters
     """
     @classmethod
     def default_config(cls):
@@ -66,6 +69,10 @@ class SqueezeNet(TorchModel):
         ----------
         layout : str
             a sequence of block types
+
+        Returns
+        -------
+        nn.Module
         """
         kwargs = cls.get_defaults('body', kwargs)
         return SqueezeNetBody(**kwargs)
@@ -85,6 +92,9 @@ class SqueezeNetBody(nn.Module):
 
         filters : list of int
             The number of output filters for each fire block.
+
+        block : dict
+            FireBlock parameters
     """
     def __init__(self, layout, filters, inputs=None, **kwargs):
         super().__init__()
@@ -103,11 +113,11 @@ class SqueezeNetBody(nn.Module):
                 bypass = x
                 continue
             elif b == 'f':
-                x = FireBlock(filters=filters[block_no], inputs=x, **{**kwargs, **block})
+                x = FireBlock(x, filters=filters[block_no], **{**kwargs, **block})
                 block_no += 1
                 self.add_module('fire%d' % i, x)
             elif b == 'm':
-                x = ConvBlock('p', inputs=x, **kwargs)
+                x = ConvBlock(x, 'p', **kwargs)
                 self.add_module('pool%d' % i, x)
 
             if bypass is not None:
@@ -115,7 +125,7 @@ class SqueezeNetBody(nn.Module):
                 x_channels = get_num_channels(x)
 
                 if x_channels != bypass_channels:
-                    bypass = ConvBlock('c', x_channels, kernel_size=1, inputs=bypass, **kwargs)
+                    bypass = ConvBlock(bypass, 'c', x_channels, kernel_size=1, **kwargs)
                 else:
                     bypass = None
                 self.add_module('bypass%d' % (i-1), bypass)
@@ -158,11 +168,11 @@ class FireBlock(nn.Module):
     -----
     For other params see :class:`.ConvBlock`.
     """
-    def __init__(self, layout='cna', filters=None, inputs=None, **kwargs):
+    def __init__(self, inputs, layout='cna', filters=None, **kwargs):
         super().__init__()
-        self.entry = ConvBlock(layout, filters, kernel_size=1, inputs=inputs, **kwargs)
-        self.exp1 = ConvBlock(layout, filters*4, kernel_size=1, inputs=self.entry, **kwargs)
-        self.exp3 = ConvBlock(layout, filters*4, kernel_size=3, inputs=self.entry, **kwargs)
+        self.entry = ConvBlock(inputs, layout, filters, kernel_size=1, **kwargs)
+        self.exp1 = ConvBlock(self.entry, layout, filters*4, kernel_size=1, **kwargs)
+        self.exp3 = ConvBlock(self.entry, layout, filters*4, kernel_size=3, **kwargs)
 
         self.output_shape = list(get_shape(self.exp3))
         self.output_shape[1] = self.output_shape[1] * 2
