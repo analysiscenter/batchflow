@@ -173,7 +173,6 @@ class TorchModel(BaseModel):
         self.lr_decay = None
         self.optimizer = None
         self.model = None
-        self._model_jit = None
         self._inputs = dict()
         self.predictions = None
         self.loss = None
@@ -449,7 +448,7 @@ class TorchModel(BaseModel):
         if isinstance(config[name], nn.Module):
             block = config[name]
         elif isinstance(config[name], dict):
-            block = getattr(self, name)(**{**config['common'], **config[name]}, inputs=inputs)
+            block = getattr(self, name)(inputs=inputs, **{**config['common'], **config[name]})
         else:
             raise TypeError('block can be confugired as a Module or a dict with parameters')
         if block is not None:
@@ -469,7 +468,7 @@ class TorchModel(BaseModel):
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
 
     @classmethod
-    def input_block(cls, _module=None, **kwargs):
+    def input_block(cls, **kwargs):
         """ Transform inputs with a convolution block
 
         Notes
@@ -486,7 +485,7 @@ class TorchModel(BaseModel):
         return None
 
     @classmethod
-    def body(cls, _module=None, **kwargs):
+    def body(cls, **kwargs):
         """ Base layers which produce a network embedding
 
         Notes
@@ -503,7 +502,7 @@ class TorchModel(BaseModel):
         return None
 
     @classmethod
-    def head(cls, _module=None, **kwargs):
+    def head(cls, **kwargs):
         """ The last network layers which produce predictions
 
         Notes

@@ -6,7 +6,6 @@ import torch.nn as nn
 from ... import is_best_practice
 from . import TorchModel
 from .layers import ConvBlock
-from .utils import get_shape
 
 
 _VGG16_ARCH = [
@@ -72,7 +71,7 @@ class VGG(TorchModel):
         return config
 
     @classmethod
-    def body(cls, inputs=None, **kwargs):
+    def body(cls, inputs, **kwargs):
         """ Create base VGG layers
 
         Parameters
