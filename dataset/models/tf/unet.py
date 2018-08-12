@@ -22,6 +22,18 @@ class UNet(TFModel):
         filters : list of int
             number of filters in each block (default=[128, 256, 512, 1024])
 
+        downsample : dict
+            parameters for downsampling block
+
+        encoder : dict
+            encoder block parameters
+
+        upsample : dict
+            parameters for upsampling block
+
+        decoder : dict
+            decoder block parameters
+
     head : dict
         num_classes : int
             number of semantic classes
@@ -63,7 +75,7 @@ class UNet(TFModel):
         inputs : tf.Tensor
             input tensor
         filters : tuple of int
-            number of filters in downsampling blocks
+            number of filters in encoder blocks
         name : str
             scope name
 

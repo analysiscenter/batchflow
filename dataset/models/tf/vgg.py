@@ -82,7 +82,7 @@ class VGG(TFModel):
         inputs : tf.Tensor
             input tensor
         arch : list of tuples
-            (number of 3x3 conv, number of 1x1 conv, number of filters, whether to downscale)
+            number of 3x3 conv, number of 1x1 conv, number of filters, whether to downscale
         name : str
             scope name
 
