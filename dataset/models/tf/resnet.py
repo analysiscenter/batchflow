@@ -25,7 +25,7 @@ class ResNet(TFModel):
     Notes
     -----
     This class is intended to define custom ResNets.
-    For more convenience use predefined :class:`.ResNet18`, :class:`.ResNet34`,
+    For more convenience use predefined :class:`~.tf.ResNet18`, :class:`~tf..ResNet34`,
     and others described down below.
 
     **Configuration**
@@ -71,8 +71,8 @@ class ResNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
-        config['input_block'].update(dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                          pool_size=3, pool_strides=2))
+        config['input_block'] = dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                     pool_size=3, pool_strides=2)
 
         config['body/block'] = dict(layout=None, post_activation=None, downsample=False,
                                     bottleneck=False, bottleneck_factor=4,
@@ -91,6 +91,7 @@ class ResNet(TFModel):
             lr = .1
             config['decay'] = ('const', dict(boundaries=[117188, 234375], values=[lr, lr/10, lr/100]))
             config['optimizer'] = ('Momentum', dict(momentum=.9))
+
         return config
 
     @classmethod
@@ -370,13 +371,15 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def next_conv_block(cls, inputs, filters, bottleneck, resnext_factor, name, **kwargs):
+    def next_conv_block(cls, inputs, layout, filters, bottleneck, resnext_factor, name, **kwargs):
         """ ResNeXt convolution block
 
         Parameters
         ----------
         inputs : tf.Tensor
             input tensor
+        layout : str
+            a sequence of layers in the block
         filters : int
             number of output filters
         bottleneck : bool
@@ -396,7 +399,8 @@ class ResNet(TFModel):
         sub_blocks = []
         with tf.variable_scope(name):
             for i in range(resnext_factor):
-                x = cls.conv_block(inputs, filters=_filters, bottleneck=bottleneck, bottleneck_factor=filters//4,
+                x = cls.conv_block(inputs, layout, filters=_filters, bottleneck=bottleneck,
+                                   bottleneck_factor=filters//4,
                                    name='next_conv_block-%d' % i, **kwargs)
                 sub_blocks.append(x)
             x = tf.add_n(sub_blocks)
@@ -438,8 +442,8 @@ class ResNet18(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-        config['body']['num_blocks'] = [2, 2, 2, 2]
-        config['body']['block']['bottleneck'] = False
+        config['body/num_blocks'] = [2, 2, 2, 2]
+        config['body/block/bottleneck'] = False
         return config
 
 
@@ -448,8 +452,8 @@ class ResNet34(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-        config['body']['num_blocks'] = [3, 4, 6, 3]
-        config['body']['block']['bottleneck'] = False
+        config['body/num_blocks'] = [3, 4, 6, 3]
+        config['body/block/bottleneck'] = False
         return config
 
 
@@ -458,7 +462,7 @@ class ResNet50(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet34.default_config()
-        config['body']['block']['bottleneck'] = True
+        config['body/block/bottleneck'] = True
         return config
 
 
@@ -467,8 +471,8 @@ class ResNet101(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-        config['body']['num_blocks'] = [3, 4, 23, 3]
-        config['body']['block']['bottleneck'] = True
+        config['body/num_blocks'] = [3, 4, 23, 3]
+        config['body/block/bottleneck'] = True
         return config
 
 
@@ -477,6 +481,50 @@ class ResNet152(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet.default_config()
-        config['body']['num_blocks'] = [3, 8, 36, 3]
-        config['body']['block']['bottleneck'] = True
+        config['body/num_blocks'] = [3, 8, 36, 3]
+        config['body/block/bottleneck'] = True
+        return config
+
+class ResNeXt18(ResNet):
+    """ The ResNeXt-18 architecture """
+    @classmethod
+    def default_config(cls):
+        config = ResNet18.default_config()
+        config['body/block/resnext'] = True
+        return config
+
+
+class ResNeXt34(ResNet):
+    """ The ResNeXt-34 architecture """
+    @classmethod
+    def default_config(cls):
+        config = ResNet34.default_config()
+        config['body/block/resnext'] = True
+        return config
+
+
+class ResNeXt50(ResNet):
+    """ The ResNeXt-50 architecture """
+    @classmethod
+    def default_config(cls):
+        config = ResNet50.default_config()
+        config['body/block/resnext'] = True
+        return config
+
+
+class ResNeXt101(ResNet):
+    """ The ResNeXt-101 architecture """
+    @classmethod
+    def default_config(cls):
+        config = ResNet101.default_config()
+        config['body/block/resnext'] = True
+        return config
+
+
+class ResNeXt152(ResNet):
+    """ The ResNeXt-152 architecture """
+    @classmethod
+    def default_config(cls):
+        config = ResNet152.default_config()
+        config['body/block/resnext'] = True
         return config

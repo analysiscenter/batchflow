@@ -5,7 +5,8 @@ from .linknet import LinkNet
 from .unet import UNet
 from .vnet import VNet
 from .fcn import FCN, FCN32, FCN16, FCN8
-from .resnet import ResNet, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
+from .resnet import ResNet, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
+                    ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152
 from .inception_v1 import Inception_v1
 from .inception_v3 import Inception_v3
 from .inception_v4 import Inception_v4
