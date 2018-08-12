@@ -395,15 +395,20 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        _filters = 4 if bottleneck else [4, filters]
-        sub_blocks = []
-        with tf.variable_scope(name):
-            for i in range(resnext_factor):
-                x = cls.conv_block(inputs, layout, filters=_filters, bottleneck=bottleneck,
-                                   bottleneck_factor=filters//4,
-                                   name='next_conv_block-%d' % i, **kwargs)
-                sub_blocks.append(x)
-            x = tf.add_n(sub_blocks)
+        if bottleneck:
+            sub_blocks = []
+            with tf.variable_scope(name):
+                for i in range(resnext_factor):
+                    x = cls.conv_block(inputs, layout, filters=4, bottleneck=True,
+                                       bottleneck_factor=filters//4,
+                                       name='next_conv_block-%d' % i, **kwargs)
+                    sub_blocks.append(x)
+                x = tf.add_n(sub_blocks)
+        else:
+            _filters = resnext_factor * 4
+            x = cls.conv_block(inputs, layout, filters=[_filters, filters], bottleneck=False, bottleneck_factor=4,
+                               name=name, **kwargs)
+
         return x
 
     @classmethod
