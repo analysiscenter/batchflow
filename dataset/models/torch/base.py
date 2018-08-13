@@ -422,8 +422,8 @@ class TorchModel(BaseModel):
 
            See :meth:`._TorchModel.make_inputs` for details.
 
-        #. Define parameters for :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body`, :meth:`~.TorchModel.head`
-           which depend on inputs.
+        #. Define parameters for :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body`,
+           :meth:`~.TorchModel.head` which depend on inputs.
 
         #. Don't forget to return ``config``.
 
