@@ -28,7 +28,7 @@ class MobileNet(TFModel):
     inputs : dict
         dict with 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
-    input_block : dict
+    initial_block : dict
         parameters for the initial block (default is 'cna', 32, 3, strides=2)
 
     body : dict
@@ -44,7 +44,7 @@ class MobileNet(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['input_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
+        config['initial_block'] = dict(layout='cna', filters=32, kernel_size=3, strides=2)
         config['body'].update(_V1_DEFAULT_BODY)
         config['head'].update(dict(layout='Vf'))
 
@@ -135,7 +135,7 @@ class MobileNet_v2(TFModel):
     inputs : dict
         dict with 'images' and 'labels' (see :meth:`.TFModel._make_inputs`)
 
-    input_block : dict
+    initial_block : dict
         parameters for the initial block (default is 'cna', 32, 3, strides=2)
 
     body : dict
@@ -153,7 +153,7 @@ class MobileNet_v2(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common'].update(dict(activation=tf.nn.relu6))
-        config['input_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
+        config['initial_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
         config['body'].update(dict(width_factor=1, layout=deepcopy(_V2_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnacnV', filters=[1280, 2], kernel_size=1))
 

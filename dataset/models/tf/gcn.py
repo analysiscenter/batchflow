@@ -41,7 +41,7 @@ class GlobalConvolutionNetwork(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
-        config['input_block'].update(dict(layout='cna', filters=64, kernel_size=7, strides=2))
+        config['initial_block'] = dict(layout='cna', filters=64, kernel_size=7, strides=2)
         config['body/encoder'] = dict(base_class=ResNet101, filters=[256, 512, 1024, 2048])
         config['body/block'] = dict(layout='cn cn', filters=21, kernel_size=11)
         config['body/res_block'] = False

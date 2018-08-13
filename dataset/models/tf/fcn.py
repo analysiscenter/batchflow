@@ -14,7 +14,7 @@ class FCN(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/dropout_rate'] = .5
-        config['input_block/base_network'] = VGG16
+        config['initial_block/base_network'] = VGG16
         config['body/filters'] = 100
         config['body/upsample'] = dict(layout='t', kernel_size=4)
         config['head/upsample'] = dict(layout='t')
@@ -34,7 +34,7 @@ class FCN(TFModel):
         return config
 
     @classmethod
-    def input_block(cls, inputs, base_network, name='input_block', **kwargs):
+    def initial_block(cls, inputs, base_network, name='initial_block', **kwargs):
         """ Base network
 
         Parameters
@@ -51,7 +51,7 @@ class FCN(TFModel):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            x = base_network.input_block(inputs, name='input_block', **kwargs)
+            x = base_network.initial_block(inputs, name='initial_block', **kwargs)
             x = base_network.body(x, name='body', **kwargs)
         return x
 
@@ -103,7 +103,7 @@ class FCN32(FCN):
     inputs : dict
         dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
 
-    input_block : dict
+    initial_block : dict
         base_network : class
             base network (VGG16 by default)
 
@@ -152,7 +152,7 @@ class FCN16(FCN):
     inputs : dict
         dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
 
-    input_block : dict
+    initial_block : dict
         base_network : class
             base network (VGG16 by default)
         skip_name : str
@@ -173,14 +173,14 @@ class FCN16(FCN):
     def default_config(cls):
         config = FCN.default_config()
         config['head']['upsample'].update(dict(factor=16, kernel_size=32))
-        config['input_block']['skip_name'] = '/input_block/body/block-3/output:0'
+        config['initial_block']['skip_name'] = '/initial_block/body/block-3/output:0'
         return config
 
     @classmethod
-    def input_block(cls, inputs, name='input_block', **kwargs):
-        kwargs = cls.fill_params('input_block', **kwargs)
+    def initial_block(cls, inputs, name='initial_block', **kwargs):
+        kwargs = cls.fill_params('initial_block', **kwargs)
 
-        x = FCN.input_block(inputs, name=name, **kwargs)
+        x = FCN.initial_block(inputs, name=name, **kwargs)
         skip_name = tf.get_default_graph().get_name_scope() + kwargs['skip_name']
         skip = tf.get_default_graph().get_tensor_by_name(skip_name)
         return x, skip
@@ -225,7 +225,7 @@ class FCN8(FCN):
     inputs : dict
         dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
 
-    input_block : dict
+    initial_block : dict
         base_network : class
             base network (VGG16 by default)
         skip1_name : str
@@ -249,14 +249,14 @@ class FCN8(FCN):
     def default_config(cls):
         config = FCN.default_config()
         config['head']['upsample'].update(dict(factor=8, kernel_size=16))
-        config['input_block']['skip1_name'] = '/input_block/body/block-3/output:0'
-        config['input_block']['skip2_name'] = '/input_block/body/block-2/output:0'
+        config['initial_block']['skip1_name'] = '/initial_block/body/block-3/output:0'
+        config['initial_block']['skip2_name'] = '/initial_block/body/block-2/output:0'
         return config
 
     @classmethod
-    def input_block(cls, inputs, name='input_block', **kwargs):
-        kwargs = cls.fill_params('input_block', **kwargs)
-        x = FCN.input_block(inputs, name=name, **kwargs)
+    def initial_block(cls, inputs, name='initial_block', **kwargs):
+        kwargs = cls.fill_params('initial_block', **kwargs)
+        x = FCN.initial_block(inputs, name=name, **kwargs)
         skip1_name = tf.get_default_graph().get_name_scope() + kwargs['skip1_name']
         skip1 = tf.get_default_graph().get_tensor_by_name(skip1_name)
         skip2_name = tf.get_default_graph().get_name_scope() + kwargs['skip2_name']

@@ -6,12 +6,12 @@ Getting started
 ===============
 A model might be used for training or inference. In both cases you need to specify a model config and a pipeline.
 
-A typical minimal config includes ``inputs`` and ``input_block`` sections::
+A typical minimal config includes ``inputs`` and ``initial_block`` sections::
 
     model_config = {
         'inputs': dict(images={'shape': (128, 128, 3)},
                        targets={'classes': 10}),
-        'input_block/inputs': 'images'
+        'initial_block/inputs': 'images'
     }
 
 A minimal training pipeline consists of :meth:`~.Pipeline.init_model` and :meth:`~.Pipeline.train_model`::
@@ -49,15 +49,15 @@ Model structure
 ===============
 A typical model comprises of
 
-- input_block
+- initial_block
 - body (which, in turn, might include blocks)
 - head.
 
 This division might seem somewhat arbitrary, though, many modern networks follow it.
 
 
-input_block
------------
+initial_block
+-------------
 This block just transforms the raw inputs into more managable and initially preprocessed tensors.
 
 Some networks do not need this (like VGG). However, most network have 1 or 2 convolutional layers
@@ -103,7 +103,7 @@ Classification with 10 classes::
         'loss': 'ce',
         'inputs': dict(images={'shape': (128, 128, 3)},
                        labels={'classes': 10})
-        'input_block/inputs': 'images',
+        'initial_block/inputs': 'images',
         'head': dict(layout='cdV', filters=10, dropout_rate=.2),
     }
 
@@ -114,7 +114,7 @@ Regression::
         'loss': 'mse',
         'inputs': dict(heart_signals={'shape': (4000, 1)},
                        targets={'shape': 1})
-        'input_block/inputs': 'heart_signals',
+        'initial_block/inputs': 'heart_signals',
         'head': dict(layout='df', units=1, dropout_rate=.2),
     }
 
@@ -159,14 +159,14 @@ input block
 Input block specifies which inputs flow into the model to turn into prediction::
 
     model_config = {
-        'input_block/inputs': 'images',
+        'initial_block/inputs': 'images',
     }
 
 As the default input block contains a :class:`~.ConvBlock`, all its parameters might be also specfied in the config::
 
     model_config = {
-        'input_block': dict(layout='cnap', filters=64, kernel_size=7, strides=2),
-        'input_block/inputs': 'images',
+        'initial_block': dict(layout='cnap', filters=64, kernel_size=7, strides=2),
+        'initial_block/inputs': 'images',
     }
 
 So the configured input block gets `images` tensor and applies a convolution with 7x7 kernel and stride 2.
@@ -174,7 +174,7 @@ So the configured input block gets `images` tensor and applies a convolution wit
 For :doc:`predefined models <model_zoo_torch>` input block has the default configuration according to the original article.
 So you almost never need to redefine it.
 
-However, ``input_block/inputs`` should always be specified.
+However, ``initial_block/inputs`` should always be specified.
 
 
 body
@@ -302,7 +302,7 @@ Now you can train the model with a simple pipeline::
         'optimizer': 'Adam',
         'inputs': dict(images={'shape': (128, 128, 3)},
                        labels={'classes': 10}),
-        'input_block/inputs': 'images'
+        'initial_block/inputs': 'images'
     }
 
     pipeline = my_dataset.p
@@ -330,7 +330,7 @@ As a result, the very same model class might be used
 
 Things worth mentioning:
 
-#. Override :meth:`~.TorchModel.input_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
+#. Override :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
    In many cases config is just enough to build a network without additional code writing.
 
 #. Input data and its parameters should be defined in configuration under ``inputs`` key.

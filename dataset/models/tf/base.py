@@ -130,17 +130,17 @@ class TFModel(BaseModel):
     common : dict
         default parameters for all :func:`.conv_block`
 
-    input_block : dict
+    initial_block : dict
         parameters for the input block, usually :func:`.conv_block` parameters.
 
-        The only required parameter here is ``input_block/inputs`` which should contain a name or
-        a list of names from ``inputs`` which tensors will be passed to ``input_block`` as ``inputs``.
+        The only required parameter here is ``initial_block/inputs`` which should contain a name or
+        a list of names from ``inputs`` which tensors will be passed to ``initial_block`` as ``inputs``.
 
         Examples:
 
-        - ``{'input_block/inputs': 'images'}``
-        - ``{'input_block': dict(inputs='features')}``
-        - ``{'input_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
+        - ``{'initial_block/inputs': 'images'}``
+        - ``{'initial_block': dict(inputs='features')}``
+        - ``{'initial_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
 
     body : dict
         parameters for the base network layers, usually :func:`.conv_block` parameters
@@ -168,7 +168,7 @@ class TFModel(BaseModel):
     #. Define build configuration (e.g. number of classes, etc)
        by overriding :meth:`~.TFModel.build_config`.
 
-    #. Override :meth:`~.TFModel.input_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
+    #. Override :meth:`~.TFModel.initial_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
        In many cases defaults and build config are just enough to build a network without additional code writing.
 
     Things worth mentioning:
@@ -967,7 +967,7 @@ class TFModel(BaseModel):
         return x
 
     @classmethod
-    def input_block(cls, inputs, name='input_block', **kwargs):
+    def initial_block(cls, inputs, name='initial_block', **kwargs):
         """ Transform inputs with a convolution block
 
         Parameters
@@ -985,7 +985,7 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
-        kwargs = cls.fill_params('input_block', **kwargs)
+        kwargs = cls.fill_params('initial_block', **kwargs)
         if kwargs.get('layout'):
             return conv_block(inputs, name=name, **kwargs)
         return inputs
@@ -1191,16 +1191,16 @@ class TFModel(BaseModel):
             @classmethod
             def default_config(cls):
                 config = TFModel.default_config()
-                config['input_block'].update(dict(layout='cnap', filters=16, kernel_size=7, strides=2,
-                                                  pool_size=3, pool_strides=2))
-                config['body']['filters'] = 32
-                config['head'].update(dict(layout='cnadV', dropout_rate=.2))
+                config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
+                                               pool_size=3, pool_strides=2)
+                config['body/filters'] = 32
+                config['head'] = dict(layout='cnadV', dropout_rate=.2)
                 return config
         """
         config = Config()
         config['inputs'] = {}
         config['common'] = {}
-        config['input_block'] = {}
+        config['initial_block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['predictions'] = None
@@ -1232,7 +1232,7 @@ class TFModel(BaseModel):
 
            See :meth:`.TFModel._make_inputs` for details.
 
-        #. Define parameters for :meth:`.TFModel.input_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head`
+        #. Define parameters for :meth:`.TFModel.initial_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head`
            which depend on inputs.
 
         #. Don't forget to return ``config``.
@@ -1252,26 +1252,26 @@ class TFModel(BaseModel):
         if config.get('inputs'):
             with tf.variable_scope('inputs'):
                 self._make_inputs(names, config)
-            inputs = self.get('input_block/inputs', config)
+            inputs = self.get('initial_block/inputs', config)
 
             if isinstance(inputs, str):
                 config['common/data_format'] = self.data_format(inputs)
-                config['input_block/inputs'] = self.inputs[inputs]
+                config['initial_block/inputs'] = self.inputs[inputs]
             elif isinstance(inputs, list):
-                config['input_block/inputs'] = [self.inputs[name] for name in inputs]
+                config['initial_block/inputs'] = [self.inputs[name] for name in inputs]
             else:
-                raise ValueError('input_block/inputs should be specified with a name or a list of names.')
+                raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
 
         return config
 
 
     def _build(self, config=None):
         defaults = {'is_training': self.is_training, **config['common']}
-        config['input_block'] = {**defaults, **config['input_block']}
+        config['initial_block'] = {**defaults, **config['initial_block']}
         config['body'] = {**defaults, **config['body']}
         config['head'] = {**defaults, **config['head']}
 
-        x = self.input_block(**config['input_block'])
+        x = self.initial_block(**config['initial_block'])
         x = self.body(inputs=x, **config['body'])
         output = self.head(inputs=x, **config['head'])
         self.output(output, predictions=config['predictions'], ops=config['output'], **defaults)

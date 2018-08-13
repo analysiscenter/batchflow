@@ -35,7 +35,7 @@ class SqueezeNet(TorchModel):
     def default_config(cls):
         config = TorchModel.default_config()
 
-        config['input_block'] = dict(layout='cnap', filters=96, kernel_size=7, strides=2,
+        config['initial_block'] = dict(layout='cnap', filters=96, kernel_size=7, strides=2,
                                      pool_size=3, pool_strides=2)
         config['body/layout'] = 'fffmffffmf'
         #config['body/layout'] = 'ffbfmbffbffmbf'

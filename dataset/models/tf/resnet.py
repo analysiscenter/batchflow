@@ -33,7 +33,7 @@ class ResNet(TFModel):
     inputs : dict
         dict with 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
-    input_block : dict
+    initial_block : dict
         filters : int
             number of filters (default=64)
 
@@ -71,8 +71,8 @@ class ResNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
-        config['input_block'] = dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                     pool_size=3, pool_strides=2)
+        config['initial_block'] = dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                       pool_size=3, pool_strides=2)
 
         config['body/block'] = dict(layout=None, post_activation=None, downsample=False,
                                     bottleneck=False, bottleneck_factor=4,
@@ -107,7 +107,7 @@ class ResNet(TFModel):
         if config.get('body/filters') is None:
             width = config['body/block/width_factor']
             num_blocks = config['body/num_blocks']
-            filters = config['input_block/filters']
+            filters = config['initial_block/filters']
             config['body/filters'] = (2 ** np.arange(len(num_blocks)) * filters * width).tolist()
 
         if config.get('head/units') is None:

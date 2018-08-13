@@ -108,18 +108,18 @@ class TorchModel(BaseModel):
     common : dict
         default parameters for all blocks (see :class:`.ConvBlock`)
 
-    input_block : dict or nn.Module
+    initial_block : dict or nn.Module
         a user-defined module or parameters for the input block, usually :class:`.ConvBlock` parameters.
 
-        The only required parameter here is ``input_block/inputs`` which should contain a name or
-        a list of names from ``inputs`` which tensors will be passed to ``input_block`` as ``inputs``.
+        The only required parameter here is ``initial_block/inputs`` which should contain a name or
+        a list of names from ``inputs`` which tensors will be passed to ``initial_block`` as ``inputs``.
 
         Examples:
 
-        - ``{'input_block/inputs': 'images'}``
-        - ``{'input_block': dict(inputs='features')}``
-        - ``{'input_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
-        - ``{'input_block': MyCustomModule(some_param=1, another_param=2)}``
+        - ``{'initial_block/inputs': 'images'}``
+        - ``{'initial_block': dict(inputs='features')}``
+        - ``{'initial_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
+        - ``{'initial_block': MyCustomModule(some_param=1, another_param=2)}``
 
     body : dict or nn.Module
         a user-defined module or parameters for the base network layers, usually :class:`.ConvBlock` parameters
@@ -147,7 +147,7 @@ class TorchModel(BaseModel):
     #. Define build configuration (e.g. number of classes, etc)
        by overriding :meth:`~.TorchModel.build_config`.
 
-    #. Override :meth:`~.TorchModel.input_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
+    #. Override :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
        In many cases defaults and build config are just enough to build a network without additional code writing.
 
     Things worth mentioning:
@@ -384,16 +384,16 @@ class TorchModel(BaseModel):
             @classmethod
             def default_config(cls):
                 config = TorchModel.default_config()
-                config['input_block'].update(dict(layout='cnap', filters=16, kernel_size=7, strides=2,
-                                                  pool_size=3, pool_strides=2))
+                config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
+                                               pool_size=3, pool_strides=2)
                 config['body/filters'] = 32
-                config['head'].update(dict(layout='cnadV', dropout_rate=.2))
+                config['head'] = dict(layout='cnadV', dropout_rate=.2)
                 return config
         """
         config = Config()
         config['inputs'] = {}
         config['common'] = {}
-        config['input_block'] = {}
+        config['initial_block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['predictions'] = None
@@ -422,7 +422,7 @@ class TorchModel(BaseModel):
 
            See :meth:`._TorchModel.make_inputs` for details.
 
-        #. Define parameters for :meth:`~.TorchModel.input_block`, :meth:`~.TorchModel.body`, :meth:`~.TorchModel.head`
+        #. Define parameters for :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body`, :meth:`~.TorchModel.head`
            which depend on inputs.
 
         #. Don't forget to return ``config``.
@@ -456,19 +456,19 @@ class TorchModel(BaseModel):
         return block
 
     def _build(self, config=None):
-        shape = self.shape(config['input_block/inputs'])
-        config.pop('input_block/inputs')
+        shape = self.shape(config['initial_block/inputs'])
+        config.pop('initial_block/inputs')
 
         blocks = []
-        input_block = self._add_block(blocks, 'input_block', config, shape)
-        body = self._add_block(blocks, 'body', config, input_block or shape)
+        initial_block = self._add_block(blocks, 'initial_block', config, shape)
+        body = self._add_block(blocks, 'body', config, initial_block or shape)
         self._add_block(blocks, 'head', config, body or shape)
 
         self.model = nn.Sequential(*blocks)
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
 
     @classmethod
-    def input_block(cls, **kwargs):
+    def initial_block(cls, **kwargs):
         """ Transform inputs with a convolution block
 
         Notes
@@ -479,7 +479,7 @@ class TorchModel(BaseModel):
         -------
         torch.nn.Module or None
         """
-        kwargs = cls.get_defaults('input_block', kwargs)
+        kwargs = cls.get_defaults('initial_block', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(**kwargs)
         return None

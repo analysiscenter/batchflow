@@ -24,7 +24,7 @@ class FasterRCNN(TFModel):
         config['rcn_batch'] = 64
         config['nms_threshold'] = 0.2
         config['rpn_thresholds'] = (0.3, 0.7)
-        config['input_block']['base_network'] = VGG7
+        config['initial_block']['base_network'] = VGG7
 
         return config
 
@@ -40,7 +40,7 @@ class FasterRCNN(TFModel):
         self.rpn_thresholds = config['rpn_thresholds']
         return config
 
-    def input_block(self, inputs, base_network, name='input_block', **kwargs):
+    def initial_block(self, inputs, base_network, name='initial_block', **kwargs):
         train_mode = tf.placeholder(tf.bool, shape=(), name='train_mode')
         self.store_to_attr('train_mode', train_mode)
 
