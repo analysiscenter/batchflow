@@ -720,7 +720,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None, use_lock=False, **kwargs):   # pylint: disable=arguments-differ
+    def train(self, fetches=None, feed_dict=None, use_lock=False, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -782,7 +782,7 @@ class TFModel(BaseModel):
 
             return self._fill_output(output, _fetches)
 
-    def predict(self, fetches=None, feed_dict=None, **kwargs):      # pylint: disable=arguments-differ
+    def predict(self, fetches=None, feed_dict=None, **kwargs):
         """ Get predictions on the data provided
 
         Parameters

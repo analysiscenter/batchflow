@@ -345,7 +345,7 @@ class DatasetIndex(Baseset):
             yield batch
 
 
-    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ
+    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):
         """ Create a batch from given indices.
         if `pos` is `False`, then `batch_indices` should contain the indices
         which should be included in the batch (so expected batch is just the very same batch_indices)
@@ -401,7 +401,7 @@ class FilesIndex(DatasetIndex):
         self.dirs = False
         super().__init__(*args, **kwargs)
 
-    def build_index(self, index=None, path=None, *args, **kwargs):     # pylint: disable=arguments-differ
+    def build_index(self, index=None, path=None, *args, **kwargs):
         """ Build index from a path string or an index given. """
         if path is None:
             return self.build_from_index(index, *args, **kwargs)

@@ -1,5 +1,4 @@
 """ Contains models for sci-kit learn estimators """
-# pylint: disable=arguments-differ
 
 try:
     from sklearn.external import joblib as pickle
