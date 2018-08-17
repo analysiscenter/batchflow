@@ -17,7 +17,7 @@ from .job import Job
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
     def __init__(self):
-        self.executable_units = OrderedDict()
+        self.executables = OrderedDict()
         self.loaded = False
         self.branches = 1
         self.trails = 3
@@ -41,11 +41,13 @@ class Research:
 
         Parameters
         ----------
-        root : dataset.Pipeline
-            'root' must have run action with `lazy=True`. If `branch` is None then `root`
-            may contain parameters that can be defined by grid.
-        branch : dataset.Pipeline or None
-            if not None, for resulting batch from `root` `branch.execute_for(batch)` will be called.
+        root : Pipeline
+            a pipeline to execute when the research is run. It must contain `run` action with `lazy=True`.
+            Only if `branch` is None, `root` may contain parameters that can be defined by grid.
+        branch : Pipeline or None
+            a parallelized pipeline to execute within the research.
+            Several copies of branch pipeline will be executed in parallel per each batch
+            received from the root pipeline.
             May contain parameters that can be defined by grid.
         variables : str, list of str or None
             names of pipeline variables to save after each iteration into results. All of them must be
@@ -54,7 +56,7 @@ class Research:
             If `branch` is None or be defined in `branch` if `branch` is not None.
             If None, pipeline will be executed without any dumping
         name : str
-            pipeline name inside research. If name is None, pipeline will have name `ppl_{index}`
+            pipeline name. If None, pipeline will have name `pipeline_{index}`
         execute : int, str or list of int or str
             If -1, pipeline will be executed just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
@@ -84,15 +86,15 @@ class Research:
         All parameters in `root` or `branch` that are defined in grid should be defined
         as `C('parameter_name')`. Corresponding parameter in grid must have the same `'parameter_name'`.
         """
-        name = name or 'unit_' + str(len(self.executable_units))
+        name = name or 'pipeline_' + str(len(self.executables) + 1)
 
-        if name in self.executable_units:
+        if name in self.executables:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
-        unit = ExecutableUnit()
+        unit = Executable()
         unit.add_pipeline(root, name, branch, variables,
                           execute, dump, run, logging, **kwargs)
-        self.executable_units[name] = unit
+        self.executables[name] = unit
         return self
 
     def function(self, function, returns=None, name=None, execute='%1', dump=-1,
@@ -103,7 +105,7 @@ class Research:
         ----------
         function : callable
             callable object with following parameters:
-                experiment : `OrderedDict` of ExecutableUnits
+                experiment : `OrderedDict` of Executable
                     all pipelines and functions that were added to Research
                 iteration : int
                     iteration when function is called
@@ -112,7 +114,7 @@ class Research:
             names for function returns to save into results
             if None, `function` will be executed without any saving results and dumping
         name : str (default None)
-            function name inside research. If name is None, pipeline will have name `func_{index}`
+            function name. If None, a function will have name `func_{index}`
         execute : int, str or list of int or str
             If -1, function will be executed just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
@@ -137,24 +139,24 @@ class Research:
 
         **How to use experiment**
 
-        Each pipeline and function added to Research is saved as an :class:`~.ExecutableUnit`.
+        Each pipeline and function added to Research is saved as an :class:`~.Executable`.
 
         Experiment is an `OrderedDict` of all pipelines and functions that were added to Research
-        and are running in current Job. Key is a name of `ExecutableUnit`, value is `ExecutableUnit`.
+        and are running in current Job. Key is a name of `Executable`, value is `Executable`.
         """
 
-        name = name or 'unit_' + str(len(self.executable_units))
+        name = name or 'func_' + str(len(self.executables) + 1)
 
-        if name in self.executable_units:
+        if name in self.executables:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
         if on_root and returns is not None:
             raise ValueError("If function on root, then it mustn't have returns")
 
-        unit = ExecutableUnit()
+        unit = Executable()
         unit.add_function(function, name, execute, dump,
                           returns, on_root, logging, *args, **kwargs)
-        self.executable_units[name] = unit
+        self.executables[name] = unit
 
         return self
 
@@ -199,7 +201,7 @@ class Research:
 
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
-        jobs = (Job(self.executable_units, n_iters,
+        jobs = (Job(self.executables, n_iters,
                     list(zip(*chunk))[0], list(zip(*chunk))[1], branches, name)
                 for chunk in configs_chunks
                )
@@ -364,19 +366,19 @@ class Research:
             res.loaded = True
             return res
 
-class ExecutableUnit:
+class Executable:
     """ Function or pipeline
 
     **Attributes**
 
     function : callable
-        is None if `ExecutableUnit` is a pipeline
+        is None if `Executable` is a pipeline
     pipeline : Pipeline
-        is None if `ExecutableUnit` is a function
+        is None if `Executable` is a function
     root_pipeline : Pipeline
-        is None if `ExecutableUnit` is a function or pipeline is not divided into root and branch
+        is None if `Executable` is a function or pipeline is not divided into root and branch
     result : dict
-        current results of the `ExecutableUnit`. Keys are names of variables (for pipeline)
+        current results of the `Executable`. Keys are names of variables (for pipeline)
         or returns (for function) values are lists of variable values
     path : str
         path to the folder where results will be dumped
@@ -515,7 +517,7 @@ class ExecutableUnit:
         if self.pipeline is not None:
             batch = self.pipeline.next_batch()
         else:
-            raise TypeError("ExecutableUnit should be pipeline, not a function")
+            raise TypeError("Executable should be pipeline, not a function")
         return batch
 
     def run(self):
@@ -524,21 +526,21 @@ class ExecutableUnit:
             self.pipeline.reset_iter()
             self.pipeline.run()
         else:
-            raise TypeError("ExecutableUnit should be pipeline, not a function")
+            raise TypeError("Executable should be pipeline, not a function")
 
     def reset_root_iter(self):
         """ Reset pipeline iterator """
         if self.root_pipeline is not None:
             self.root_pipeline.reset_iter()
         else:
-            raise TypeError("ExecutableUnit must have root")
+            raise TypeError("Executable must have root")
 
     def next_batch_root(self):
         """ Next batch from root pipeline """
         if self.root_pipeline is not None:
             batch = self.root_pipeline.next_batch()
         else:
-            raise TypeError("ExecutableUnit should have root pipeline")
+            raise TypeError("Executable should have root pipeline")
         return batch
 
     def execute_for(self, batch, iteration):
@@ -547,7 +549,7 @@ class ExecutableUnit:
         if self.pipeline is not None:
             batch = self.pipeline.execute_for(batch)
         else:
-            raise TypeError("ExecutableUnit should be pipeline, not a function")
+            raise TypeError("Executable should be pipeline, not a function")
         return batch
 
     def _call_pipeline(self, iteration, *args, **kwargs):
