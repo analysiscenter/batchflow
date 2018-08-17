@@ -83,6 +83,9 @@ class Activation(nn.Module):
     def __init__(self, activation, *args, inputs=None, **kwargs):
         super().__init__()
 
+        if 'inplace' not in kwargs:
+            kwargs['inplace'] = True
+
         self.args = tuple()
         self.kwargs = {}
         self.output_shape = get_shape(inputs)
