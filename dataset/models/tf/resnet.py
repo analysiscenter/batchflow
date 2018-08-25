@@ -403,7 +403,7 @@ class ResNet(TFModel):
             with tf.variable_scope(name):
                 out_filters = filters * kwargs['bottleneck_factor']
                 in_filters = out_filters // 2 // resnext_factor
-                filters=[in_filters, in_filters, out_filters]
+                filters = [in_filters, in_filters, out_filters]
                 for i in range(resnext_factor):
                     x = cls.conv_block(inputs, layout, filters=filters, bottleneck=True,
                                        name='next_conv_block-%d' % i, **kwargs)

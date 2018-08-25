@@ -12,7 +12,6 @@ Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 <https://arxiv.org/abs/1611.05431>`_"
 """
 import numpy as np
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -75,7 +74,7 @@ class ResNet(TorchModel):
         config = TorchModel.default_config()
         config['common/conv/bias'] = False
         config['initial_block'] = dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                     pool_size=3, pool_strides=2)
+                                       pool_size=3, pool_strides=2)
 
         config['body/block'] = dict(layout=None, post_activation=None, downsample=False,
                                     bottleneck=False, bottleneck_factor=4,
@@ -167,9 +166,9 @@ class ResNet(TorchModel):
         -------
         nn.Module
         """
-        x1 = cls.block(inputs, downsample=downsample, **kwargs)
-        x2 = cls.block(x1, downsample=False, **kwargs)
-        return nn.Sequential(x1, x2)
+        first = cls.block(inputs, downsample=downsample, **kwargs)
+        second = cls.block(x1, downsample=False, **kwargs)
+        return nn.Sequential(first, second)
 
     @classmethod
     def block(cls, inputs, **kwargs):
@@ -213,7 +212,7 @@ class ResNet(TorchModel):
         width_factor = cls.pop('width_factor', kwargs)
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
         resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
-        se_block, se_factor = cls.pop(['se_block', 'se_factor'], kwargs)
+        #se_block, se_factor = cls.pop(['se_block', 'se_factor'], kwargs)
         post_activation = cls.pop('post_activation', kwargs)
         if isinstance(post_activation, bool) and post_activation:
             post_activation = 'an'
@@ -394,16 +393,7 @@ class ResNet(TorchModel):
         kwargs : dict
             body params
         """
-        num_blocks = cls.get('num_blocks', cls.get_defaults('body', kwargs))
-
-        x = cls.body(inputs, name='body', **kwargs)
-
-        encoder_tensors = []
-        for i, _ in enumerate(num_blocks):
-            pass
-
-        return encoder_tensors
-
+        pass
 
 class ResBlock(nn.Module):
     """ Add modules """
