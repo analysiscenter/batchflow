@@ -226,6 +226,8 @@ class ConvBlock(nn.Module):
             elif layer in ['c', 't']:
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
                             dilation_rate=dilation_rate)
+                if 'groups' in kwargs:
+                    args['groups'] = kwargs['groups']
 
             elif layer in ['C', 'T']:
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
