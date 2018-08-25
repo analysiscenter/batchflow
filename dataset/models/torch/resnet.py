@@ -167,7 +167,7 @@ class ResNet(TorchModel):
         nn.Module
         """
         first = cls.block(inputs, downsample=downsample, **kwargs)
-        second = cls.block(x1, downsample=False, **kwargs)
+        second = cls.block(first, downsample=False, **kwargs)
         return nn.Sequential(first, second)
 
     @classmethod
