@@ -56,11 +56,11 @@ class ResNet(TFModel):
             width_factor : int
                 widening factor to make WideResNet (default=1)
             se_block : bool
-                whether to use squeeze-and-excitation blocks (default=0)
+                whether to use squeeze-and-excitation blocks (default=False)
             se_factor : int
                 squeeze-and-excitation channels ratio (default=16)
             resnext : bool
-                whether to use aggregated ResNeXt block (default=0)
+                whether to use aggregated ResNeXt block (default=False)
             resnext_factor : int
                 the number of aggregations in ResNeXt block (default=32)
 
@@ -233,7 +233,7 @@ class ResNet(TFModel):
             filters = filters * width_factor
             if resnext:
                 x = cls.next_conv_block(inputs, layout, filters, bottleneck, resnext_factor, name='conv',
-                                        downsample=downsample, **kwargs)
+                                        downsample=downsample, bottleneck_factor=bottleneck_factor, **kwargs)
             else:
                 x = cls.conv_block(inputs, layout, filters, bottleneck, bottleneck_factor, name='conv',
                                    downsample=downsample, **kwargs)
@@ -273,7 +273,7 @@ class ResNet(TFModel):
         return x
 
     @classmethod
-    def conv_block(cls, inputs, layout, filters, bottleneck, bottleneck_factor, **kwargs):
+    def conv_block(cls, inputs, layout, filters, bottleneck, bottleneck_factor=None, **kwargs):
         """ ResNet convolution block
 
         Parameters
@@ -345,12 +345,14 @@ class ResNet(TFModel):
             input tensor
         layout : str
             a sequence of layers in the block
-        filters : int
-            number of filters in the first two convolutions
+        filters : int or list of int
+            if int, number of filters in the first convolution.
+            if list, number of filters in each layer.
         kernel_size : int or tuple
             convolution kernel size
         bottleneck_factor : int
-            scale factor for the number of filters
+            scale factor for the number of filters in the last convolution
+            (if filters is int, otherwise is not used)
         downsample : bool
             whether to decrease spatial dimensions with strides=2
         kwargs : dict
@@ -366,8 +368,9 @@ class ResNet(TFModel):
             strides = ([1, 2] + [1] * n) if downsample else 1
         else:
             strides = kwargs.pop('strides')
-        x = conv_block(inputs, layout, [filters, filters, filters * bottleneck_factor], kernel_size=kernel_size,
-                       strides=strides, **kwargs)
+        if isinstance(filters, int):
+            filters = [filters, filters, filters * bottleneck_factor]
+        x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
         return x
 
     @classmethod
@@ -398,16 +401,17 @@ class ResNet(TFModel):
         if bottleneck:
             sub_blocks = []
             with tf.variable_scope(name):
+                out_filters = filters * kwargs['bottleneck_factor']
+                in_filters = out_filters // 2 // resnext_factor
+                filters=[in_filters, in_filters, out_filters]
                 for i in range(resnext_factor):
-                    x = cls.conv_block(inputs, layout, filters=4, bottleneck=True,
-                                       bottleneck_factor=filters//4,
+                    x = cls.conv_block(inputs, layout, filters=filters, bottleneck=True,
                                        name='next_conv_block-%d' % i, **kwargs)
                     sub_blocks.append(x)
                 x = tf.add_n(sub_blocks)
         else:
             _filters = resnext_factor * 4
-            x = cls.conv_block(inputs, layout, filters=[_filters, filters], bottleneck=False, bottleneck_factor=4,
-                               name=name, **kwargs)
+            x = cls.conv_block(inputs, layout, filters=[_filters, filters], bottleneck=False, name=name, **kwargs)
 
         return x
 
@@ -489,6 +493,7 @@ class ResNet152(ResNet):
         config['body/num_blocks'] = [3, 8, 36, 3]
         config['body/block/bottleneck'] = True
         return config
+
 
 class ResNeXt18(ResNet):
     """ The ResNeXt-18 architecture """
