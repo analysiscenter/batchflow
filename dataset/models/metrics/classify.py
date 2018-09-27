@@ -235,7 +235,7 @@ class ClassificationMetrics(Metrics):
         _ = args, kwargs
         return self._return(self._confusion_matrix.sum(axis=(1, 2)))
 
-    def _calc_agg(self, numer, denom, label=None, agg='mean', multiclass='macro', when_zero=None):
+    def _calc_agg(self, numer, denom, label=None, multiclass='macro', when_zero=None):
         _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1])
         if self.num_classes > 2:
             labels = label if label is not None else self._all_labels()
@@ -258,10 +258,9 @@ class ClassificationMetrics(Metrics):
             n = numer(label)
             value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
 
-        if agg == 'mean':
-            value = np.mean(value, axis=0)
         value = np.squeeze(value)
-
+        if value.ndim == 0:
+            value = value.item()
         return value
 
     def true_positive_rate(self, *args, **kwargs):
@@ -294,11 +293,12 @@ class ClassificationMetrics(Metrics):
     def prevalence(self, *args, **kwargs):
         return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs)
 
-    def accuracy(self, agg='mean'):
+    def accuracy(self):
         """ An accuracy of detecting all the classes combined """
         value = np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
-        if agg == 'mean':
-            value = np.mean(value, axis=0)
+        value = np.squeeze(value)
+        if value.ndim == 0:
+            value = value.item()
         return value
 
     def positive_predictive_value(self, *args, **kwargs):
