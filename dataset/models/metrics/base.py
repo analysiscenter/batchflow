@@ -26,7 +26,7 @@ class Metrics:
         if agg is not None:
             agg_fn = self._agg_fn_dict.get(agg)
             if agg_fn is None:
-                raise ValueError("Unknown aggregation type")
+                raise ValueError("Unknown aggregation type", agg)
             metric = agg_fn(metric)
 
         metric = np.squeeze(metric)
