@@ -1,5 +1,6 @@
 """ Contains two class classification metrics """
 from copy import copy
+from functools import partial
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -90,12 +91,16 @@ class ClassificationMetrics(Metrics):
     """
     def __init__(self, targets, predictions, fmt='proba', num_classes=None, axis=None, threshold=.5,
                  skip_bg=False, calc=True):
+        super().__init__()
         self.targets = None
         self.predictions = None
         self._confusion_matrix = None
         self.skip_bg = skip_bg
         self.num_classes = None if axis is None else predictions.shape[axis]
         self.num_classes = self.num_classes or num_classes or 2
+        self._agg_fn_dict = {
+            'mean': partial(np.mean, axis=0),
+        }
 
         if fmt in ['proba', 'logits'] and axis is None and self.num_classes > 2:
             raise ValueError('axis cannot be None for multiclass case when fmt is proba or logits')
@@ -235,7 +240,7 @@ class ClassificationMetrics(Metrics):
         _ = args, kwargs
         return self._return(self._confusion_matrix.sum(axis=(1, 2)))
 
-    def _calc_agg(self, numer, denom, label=None, agg='mean', multiclass='macro', when_zero=None):
+    def _calc_agg(self, numer, denom, label=None, multiclass='macro', when_zero=None):
         _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1])
         if self.num_classes > 2:
             labels = label if label is not None else self._all_labels()
@@ -257,10 +262,6 @@ class ClassificationMetrics(Metrics):
             d = denom(label)
             n = numer(label)
             value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
-
-        if agg == 'mean':
-            value = np.mean(value, axis=0)
-        value = np.squeeze(value)
 
         return value
 
@@ -294,12 +295,9 @@ class ClassificationMetrics(Metrics):
     def prevalence(self, *args, **kwargs):
         return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs)
 
-    def accuracy(self, agg='mean'):
+    def accuracy(self):
         """ An accuracy of detecting all the classes combined """
-        value = np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
-        if agg == 'mean':
-            value = np.mean(value, axis=0)
-        return value
+        return np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
 
     def positive_predictive_value(self, *args, **kwargs):
         return self._calc_agg(self.true_positive, self.prediction_positive, *args, **kwargs, when_zero=(0, 1))
