@@ -98,7 +98,7 @@ class ClassificationMetrics(Metrics):
         self.skip_bg = skip_bg
         self.num_classes = None if axis is None else predictions.shape[axis]
         self.num_classes = self.num_classes or num_classes or 2
-        self.agg_fn_dict = {
+        self._agg_fn_dict = {
             'mean': partial(np.mean, axis=0),
         }
 
