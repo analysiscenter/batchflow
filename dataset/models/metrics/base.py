@@ -19,12 +19,12 @@ class Metrics:
     """
     def __init__(self, *args, **kwargs):
         _ = args, kwargs
-        self.agg_fn_dict = {}
+        self._agg_fn_dict = {}
 
-    def _aggregate_metrics(self, metric, agg=None):
+    def _aggregate(self, metric, agg=None):
         """ Aggregate metrics calculated for different batches or instances """
         if agg is not None:
-            agg_fn = self.agg_fn_dict.get(agg)
+            agg_fn = self._agg_fn_dict.get(agg)
             if agg_fn is None:
                 raise ValueError("Unknown aggregation type")
             metric = agg_fn(metric)
@@ -62,7 +62,7 @@ class Metrics:
         for name in _metrics:
             metric_fn = getattr(self, name)
             metric_val = metric_fn(*args, **kwargs)
-            res[name] = self._aggregate_metrics(metric_val, agg)
+            res[name] = self._aggregate(metric_val, agg)
         res = res[metrics] if isinstance(metrics, str) else res
 
         return res
