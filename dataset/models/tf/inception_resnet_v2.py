@@ -22,7 +22,7 @@ class InceptionResNet_v2(Inception):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'labels' (see :meth:`._make_inputs`)
+        dict with 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
     body/arch : dict
         architecture: network layout, block layout, number of filters in each block, pooling parameters
@@ -31,8 +31,8 @@ class InceptionResNet_v2(Inception):
     def default_config(cls):
         config = Inception.default_config()
         config['common']['layout'] = 'cna'
-        config['input_block'].update(dict(layout='cna', filters=[32, 64, 96, 192],
-                                          pool_size=3, pool_strides=2))
+        config['initial_block'] = dict(layout='cna', filters=[32, 64, 96, 192],
+                                       pool_size=3, pool_strides=2)
         config['body']['layout'] = 'A'*5 + 'a' + 'B'*10 +'b' + 'C'*5
         config['body']['arch'] = _DEFAULT_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.8))
@@ -52,7 +52,7 @@ class InceptionResNet_v2(Inception):
         return config
 
     @classmethod
-    def input_block(cls, inputs, name='input_block', **kwargs):
+    def initial_block(cls, inputs, name='initial_block', **kwargs):
         """Input network block.
 
         For details see figure 3 in the article.
@@ -69,7 +69,7 @@ class InceptionResNet_v2(Inception):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            kwargs = cls.fill_params('input_block', **kwargs)
+            kwargs = cls.fill_params('initial_block', **kwargs)
             layout, filters = cls.pop(['layout', 'filters'], kwargs)
             axis = cls.channels_axis(kwargs['data_format'])
 

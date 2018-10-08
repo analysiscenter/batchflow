@@ -36,11 +36,11 @@ def _get_method_by_alias(alias, module, tf_distributions=None):
     # fetch fullname
     fullname = ALIASES.get(alias, {module: alias for module in ['np', 'tf', 'ss']}).get(module, None)
     if fullname is None:
-        raise ValueError("Distribution %s has no implementaion in module %s", alias, module)
+        raise ValueError("Distribution %s has no implementaion in module %s" % (alias, module))
 
     # check that the randomizer is implemented in corresponding module
     if not hasattr(rnd_submodules[module], fullname):
-        raise ValueError("Distribution %s has no implementaion in module %s", fullname, module)
+        raise ValueError("Distribution %s has no implementaion in module %s" % (fullname, module))
 
     return fullname
 

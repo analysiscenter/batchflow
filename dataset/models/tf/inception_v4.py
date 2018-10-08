@@ -20,7 +20,7 @@ class Inception_v4(Inception):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
    """
     @classmethod
     def default_config(cls):
@@ -33,8 +33,8 @@ class Inception_v4(Inception):
         """
         config = Inception.default_config()
 
-        config['input_block'].update(dict(layout='cna', filters=[32, 64, 96, 192],
-                                          pool_size=3, pool_strides=2))
+        config['initial_block'] = dict(layout='cna', filters=[32, 64, 96, 192],
+                                       pool_size=3, pool_strides=2)
         config['body']['layout'] = 'AAAArBBBBBBBGCCC'
         config['body']['arch'] = _DEFAULT_V4_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.8))
@@ -54,7 +54,7 @@ class Inception_v4(Inception):
         return config
 
     @classmethod
-    def input_block(cls, inputs, name='input_block', **kwargs):
+    def initial_block(cls, inputs, name='initial_block', **kwargs):
         """Input network block.
 
         For details see figure 3 in the article.
@@ -71,7 +71,7 @@ class Inception_v4(Inception):
         tf.Tensor
         """
         with tf.variable_scope(name):
-            kwargs = cls.fill_params('input_block', **kwargs)
+            kwargs = cls.fill_params('initial_block', **kwargs)
             layout, filters = cls.pop(['layout', 'filters'], kwargs)
             axis = cls.channels_axis(kwargs['data_format'])
 

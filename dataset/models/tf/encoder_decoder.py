@@ -13,7 +13,7 @@ class EncoderDecoder(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with 'images' (see :meth:`._make_inputs`)
+        dict with 'images' (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
         encoder : dict
@@ -45,7 +45,7 @@ class EncoderDecoder(TFModel):
 
         config = {
             'inputs': dict(images={'shape': B('image_shape'), 'name': 'targets'}),
-            'input_block/inputs': 'images',
+            'initial_block/inputs': 'images',
             'encoder/base_class': ResNet18,
             'embedding/filters': 16,
             'decoder': dict(num_stages=3, factor=8, layout='tna')

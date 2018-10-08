@@ -1,6 +1,7 @@
 [![License](https://img.shields.io/github/license/analysiscenter/dataset.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Python](https://img.shields.io/badge/python-3.5,%203.6-blue.svg)](https://python.org)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-1.4-orange.svg)](https://tensorflow.org)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-1.8-orange.svg)](https://tensorflow.org)
+[![PyTorch](https://img.shields.io/badge/PyTorch-0.4-orange.svg)](https://pytorch.org)
 [![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/dataset)
 
 # Dataset
@@ -61,12 +62,12 @@ from dataset.models.tf import ResNet34
 my_workflow = my_dataset.pipeline()
               .init_model('dynamic', ResNet34, config={
                           'inputs': {'images': {'shape': B('image_shape')},
-                                     'labels': {'classes': 10, 'transform': 'ohe', 'name': 'targets'}}
+                                     'labels': {'classes': 10}}
                           'input_block/inputs': 'images'})
               .load('/some/path')
               .some_transform()
               .another_transform()
-              .train_model('ResNet34', feed_dict={'images': B('images'), 'labels': B('labels')})
+              .train_model('ResNet34', images=B('images'), labels=B('labels'))
               .run(BATCH_SIZE, shuffle=True)
 ```
 
@@ -134,12 +135,12 @@ Please cite Dataset in your publications if it helps your research.
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1041203.svg)](https://doi.org/10.5281/zenodo.1041203)
 
 ```
-Roman Kh et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
+Roman Khudorozhkov et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
 ```
 
 ```
 @misc{roman_kh_2017_1041203,
-  author       = {Roman Kh and et al},
+  author       = {Khudorozhkov, Roman and others},
   title        = {Dataset library for fast ML workflows},
   year         = 2017,
   doi          = {10.5281/zenodo.1041203},

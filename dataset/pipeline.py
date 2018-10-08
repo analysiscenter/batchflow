@@ -7,7 +7,6 @@ import warnings
 import queue as q
 import numpy as np
 
-from .batch_base import BaseBatch
 from .base import Baseset
 from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
@@ -43,6 +42,7 @@ _ACTIONS = {
 
 METRICS = dict(
     classification=ClassificationMetrics,
+    segmentation=SegmentationMetricsByPixels,
     mask=SegmentationMetricsByPixels,
     instance=SegmentationMetricsByInstances
 )
@@ -183,12 +183,14 @@ class Pipeline:
         new_p.dataset = other
         return new_p
 
-    @staticmethod
-    def _is_batch_method(name, cls=None):
-        cls = BaseBatch if cls is None else cls
+    def _is_batch_method(self, name, cls=None):
+        if cls is None and self.dataset is not None:
+            cls = self.dataset.batch_class
+        else:
+            return True
         if hasattr(cls, name) and callable(getattr(cls, name)):
             return True
-        return any(Pipeline._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
+        return any(self._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
 
     def __getattr__(self, name):
         """ Check if an unknown attr is an action from some batch class """
@@ -425,7 +427,7 @@ class Pipeline:
             self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
             self.variables.unlock(action['var_name'])
         else:
-            raise KeyError("No such variable %s exists", action['var_name'])
+            raise KeyError("No such variable %s exists" % action['var_name'])
 
     def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable lazily during pipeline execution
@@ -693,7 +695,7 @@ class Pipeline:
         pipeline = self._eval_expr(action['pipeline'], batch=batch)
         self.models.import_model(source, pipeline, model_name)
 
-    def train_model(self, name, make_data=None, save_to=None, mode='w', *args, **kwargs):
+    def train_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
         """ Train a model
 
         Parameters
@@ -761,7 +763,7 @@ class Pipeline:
                                   'save_to': save_to, 'mode': mode})
         return self.append_action(*args, **kwargs)
 
-    def predict_model(self, name, make_data=None, save_to=None, mode='w', *args, **kwargs):
+    def predict_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
         """ Predict using a model
 
         Parameters
@@ -834,7 +836,7 @@ class Pipeline:
 
     def _make_model_args(self, batch, action, model):
         make_data = action['make_data'] or {}
-        args = tuple()
+        args = action['args']
         kwargs = dict()
 
         if callable(make_data):
@@ -902,12 +904,12 @@ class Pipeline:
         Parameters
         ----------
         metrics_class : class or str
-            A class which calculates metrics (see :class:`~.models.metrics.Metrics`)
+            A class which calculates metrics (see :class:`~.Metrics`)
 
             If str:
 
             - 'class' for `:class:`~.ClassificationMetrics`)
-            - 'mask' for `:class:`~.SegmentationMetricsByPixels`)
+            - 'segmentation' or 'mask' for `:class:`~.SegmentationMetricsByPixels`)
             - 'instance' for `:class:`~.SegmentationMetricsByInstances`)
 
         args
@@ -944,7 +946,7 @@ class Pipeline:
                 .import_model('unet', train_pipeline)
                 .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
                                save_to=V('inferred_masks'))
-                .gather_metrics(SegmentationMetricsByPixels, targets=B('masks'), predictions=V('inferred_masks'),
+                .gather_metrics('masks', targets=B('masks'), predictions=V('inferred_masks'),
                                 fmt='proba', axis=-1, save_to=V('metrics'), mode='u')
                 .run(BATCH_SIZE, bar=True)
             )
@@ -962,6 +964,8 @@ class Pipeline:
             available_metrics = [m for m in METRICS if metrics_class in m]
             if len(available_metrics) > 1:
                 raise ValueError('Metrics name is ambiguous', metrics_class)
+            elif len(available_metrics) == 0:
+                raise ValueError('Metrics not found', metrics_class)
             metrics_class = METRICS[available_metrics[0]]
         elif not isinstance(metrics_class, type):
             raise TypeError('Metrics can be a string or a class', metrics_class)
@@ -1022,7 +1026,6 @@ class Pipeline:
                         self._batch_queue.put(batch, block=True)
                         skip_batch = False
                     self._prefetch_queue.task_done()
-        return None
 
     def reset_iter(self, exclude_dataset=False):
         """ Clear all iteration metadata in order to start iterating from scratch """
@@ -1106,7 +1109,7 @@ class Pipeline:
             if target in ['threads', 't']:
                 self._executor = cf.ThreadPoolExecutor(max_workers=prefetch + 1)
             elif target in ['mpc', 'm']:
-                self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)   # pylint: disable=redefined-variable-type
+                self._executor = cf.ProcessPoolExecutor(max_workers=prefetch + 1)
             else:
                 raise ValueError("target should be one of ['threads', 'mpc']")
 

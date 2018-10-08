@@ -30,7 +30,7 @@ class Inception_v3(Inception):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
     """
     @classmethod
     def default_config(cls):
@@ -42,9 +42,9 @@ class Inception_v3(Inception):
             default parameters to build network
         """
         config = Inception.default_config()
-        config['input_block'].update(dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
-                                          kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1],
-                                          pool_size=3, pool_strides=2, padding='valid'))
+        config['initial_block'] = dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
+                                       kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1],
+                                       pool_size=3, pool_strides=2, padding='valid')
         config['body']['layout'] = 'bbbrffffmee'
         config['body']['arch'] = _DEFAULT_V3_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.8))

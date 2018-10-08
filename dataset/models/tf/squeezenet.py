@@ -14,7 +14,7 @@ class SqueezeNet(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with keys 'images' and 'labels' (see :meth:`._make_inputs`)
+        dict with keys 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
         layout : str
@@ -30,14 +30,14 @@ class SqueezeNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
-        config['input_block'].update(dict(layout='cnap', filters=96, kernel_size=7, strides=2,
-                                          pool_size=3, pool_strides=2))
+        config['initial_block'] = dict(layout='cnap', filters=96, kernel_size=7, strides=2,
+                                       pool_size=3, pool_strides=2)
         config['body/layout'] = 'fffmffffmf'
         #config['body/layout'] = 'ffbfmbffbffmbf'
 
         num_blocks = config['body/layout'].count('f')
-        layers_filters = 32 * 2 ** np.arange(num_blocks//2 + num_blocks%2)
-        layers_filters = np.repeat(layers_filters, 2)[:num_blocks].copy()
+        layers_filters = 16 * np.arange(1, num_blocks//2 + num_blocks%2 + 1)
+        layers_filters = np.repeat(layers_filters, 2)[:num_blocks].tolist()
         config['body/filters'] = layers_filters
 
         config['head'] = dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5)
@@ -73,18 +73,24 @@ class SqueezeNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
+        block = kwargs.pop('block', {})
         layout = kwargs.pop('layout')
         filters = kwargs.pop('filters')
+        if isinstance(filters, int):
+            filters = [filters] * layout.count('f')
 
-        x, inputs = inputs, None
+        x = inputs
         bypass = None
+        block_no = 0
         with tf.variable_scope(name):
-            for i, block in enumerate(layout):
-                if block == 'b':
+            for i, b in enumerate(layout):
+                if b == 'b':
                     bypass = x
-                if block == 'f':
-                    x = cls.fire_block(x, filters=filters[i], name='fire-block-%d' % i, **kwargs)
-                elif block == 'm':
+                    continue
+                elif b == 'f':
+                    x = cls.fire_block(x, filters=filters[block_no], name='fire-block-%d' % i, **{**kwargs, **block})
+                    block_no += 1
+                elif b == 'm':
                     x = conv_block(x, 'p', name='max-pool-%d' % i, **kwargs)
 
                 if bypass is not None:

@@ -72,12 +72,14 @@ class DatasetIndex(Baseset):
         if isinstance(index, slice):
             start = self._pos[index.start] if index.start is not None else None
             stop = self._pos[index.stop] if index.stop is not None else None
-            return slice(start, stop, index.step)
+            pos = slice(start, stop, index.step)
         elif isinstance(index, str):
-            return self._pos[index]
+            pos = self._pos[index]
         elif isinstance(index, Iterable):
-            return np.asarray([self._pos[ix] for ix in index])
-        return self._pos[index]
+            pos = np.asarray([self._pos[ix] for ix in index])
+        else:
+            pos = self._pos[index]
+        return pos
 
     def subset_by_pos(self, pos):
         """ Return subset of index by given positions in the index. """
@@ -334,17 +336,16 @@ class DatasetIndex(Baseset):
         while True:
             if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
                 return
-            else:
-                try:
-                    batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
-                except StopIteration:
-                    return
-                if 'bar' in iter_params:
-                    iter_params['bar'].update(1)
-                yield batch
+            try:
+                batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
+            except StopIteration:
+                return
+            if 'bar' in iter_params:
+                iter_params['bar'].update(1)
+            yield batch
 
 
-    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):   # pylint: disable=arguments-differ
+    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):
         """ Create a batch from given indices.
         if `pos` is `False`, then `batch_indices` should contain the indices
         which should be included in the batch (so expected batch is just the very same batch_indices)
@@ -400,7 +401,7 @@ class FilesIndex(DatasetIndex):
         self.dirs = False
         super().__init__(*args, **kwargs)
 
-    def build_index(self, index=None, path=None, *args, **kwargs):     # pylint: disable=arguments-differ
+    def build_index(self, index=None, path=None, *args, **kwargs):
         """ Build index from a path string or an index given. """
         if path is None:
             return self.build_from_index(index, *args, **kwargs)

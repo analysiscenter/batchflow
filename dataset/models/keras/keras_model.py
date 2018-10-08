@@ -83,9 +83,7 @@ class KerasModel(Model, BaseModel):
         """
         if x is not None:
             return Model.predict_on_batch(self, x=x)
-        else:
-            raise ValueError("Argument 'x' must not be None")
-        return None
+        raise ValueError("Argument 'x' must not be None")
 
     @functools.wraps(Model.load_weights)
     def load(self, *args, **kwargs):

@@ -152,8 +152,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                     print(all_errors)
                     traceback.print_tb(all_errors[0].__traceback__)
                 return self
-            else:
-                return post_fn(all_results, *args, **kwargs)
+            return post_fn(all_results, *args, **kwargs)
 
         def _prepare_args(self, args, kwargs):
             params = list()
@@ -323,14 +322,16 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 _target = target
 
             if asyncio.iscoroutinefunction(method) or _target in ['async', 'a']:
-                return wrap_with_async(self, args, kwargs)
+                x = wrap_with_async(self, args, kwargs)
             elif _target in ['threads', 't']:
-                return wrap_with_threads(self, args, kwargs)
+                x = wrap_with_threads(self, args, kwargs)
             elif _target in ['mpc', 'm']:
-                return wrap_with_mpc(self, args, kwargs)
+                x = wrap_with_mpc(self, args, kwargs)
             elif _target in ['for', 'f']:
-                return wrap_with_for(self, args, kwargs)
-            raise ValueError('Wrong parallelization target:', _target)
+                x = wrap_with_for(self, args, kwargs)
+            else:
+                raise ValueError('Wrong parallelization target:', _target)
+            return x
         return wrapped_method
     return inbatch_parallel_decorator
 

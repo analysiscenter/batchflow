@@ -6,21 +6,19 @@ Getting started
 ===============
 A model might be used for training or inference. In both cases you need to specify a model config and a pipeline.
 
-A typical minimal config includes ``inputs`` and ``input_block`` sections::
+A typical minimal config includes ``inputs`` and ``initial_block`` sections::
 
     model_config = {
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
-        'input_block/inputs': 'images'
+                       targets={'classes': 10}),
+        'initial_block/inputs': 'images'
     }
 
 A minimal training pipeline consists of :meth:`~.Pipeline.init_model` and :meth:`~.Pipeline.train_model`::
 
     pipeline = my_dataset.p
         .init_model('dynamic', MyModel, 'my_model', model_config)
-        .train_model('my_model', fetches='loss',
-                     feed_dict={'images': B('images'),
-                                'labels': B('labels')})
+        .train_model('my_model', fetches='loss', images=B('images'), labels=B('labels'))
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
 
 To create an inference pipeline replace ``train_model`` with :meth:`~.Pipeline.predict_model`.
@@ -34,8 +32,7 @@ A pipeline can also :meth:`~.TFModel.load` a pretrained model which was previous
 
     pipeline = my_dataset.p
         .init_model('dynamic', MyModel, 'my_model', model_config)
-        .predict_model('my_model', fetches='predictions',
-                       feed_dict={'images': B('images')})
+        .predict_model('my_model', fetches='predictions', images=B('images'))
         .run(BATCH_SIZE)
 
 Note that you can indicate through 'build' option whether a model graph needs to be created or updated by calling :meth:`~TFModel.build`.
@@ -50,15 +47,15 @@ Model structure
 ===============
 A typical model comprises of
 
-- input_block
+- initial_block
 - body (which, in turn, might include blocks)
 - head.
 
 This division might seem somewhat arbitrary, though, many modern networks follow it.
 
 
-input_block
------------
+initial_block
+-------------
 This block just transforms the raw inputs into more managable and initially preprocessed tensors.
 
 Some networks do not need this (like VGG). However, most network have 1 or 2 convolutional layers
@@ -103,9 +100,9 @@ Classification with 10 classes::
         ...
         'loss': 'ce',
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'})
+                       labels={'classes': 10})
         'head': dict(layout='cdV', filters=10, dropout_rate=.2),
-        'input_block/inputs': 'images'
+        'initial_block/inputs': 'images'
     }
 
 Regression::
@@ -116,7 +113,7 @@ Regression::
         'inputs': dict(heart_signals={'shape': (4000, 1)},
                        targets={'shape': 1})
         'head': dict(layout='df', units=1, dropout_rate=.2),
-        'input_block/inputs': 'heart_signals'
+        'initial_block/inputs': 'heart_signals'
     }
 
 
@@ -149,19 +146,20 @@ Each input might have following parameters:
         - ``'mip @ d'`` - maximum intensity projection :func:`~.layers.mip` with depth ``d`` (should be int)
 
     ``name`` : str
-        a name for the transformed and reshaped tensor.
+        a name for the transformed tensor.
 
 Even though all parameters are optional, at least some of them should be specified for each input tensor.
 
-For instance, this config will create placeholders with the names ``images`` and ``labels``::
+For instance, this config will create placeholders with the names ``images`` and ``targets``::
 
     model_config = {
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
+                       targets={'classes': 10}),
     }
 
-Later, names ``images`` and ``labels`` will be used to feed data into the model when training or predicting.
-Besides, one-hot encoding will be applied to ``labels`` and the encoded tensor will be named ``targets``.
+Later, names ``images`` and ``targets`` will be used to feed data into the model when training or predicting.
+Take into account that one-hot encoding is not required for labels when using cross-entropy loss as it is applied
+automatically. However, for custom losses one-hot encoding might be necessary.
 
 For more information on the configuration of the inputs, see :meth:`~dataset.models.tf.TFModel._make_inputs`.
 
@@ -173,21 +171,21 @@ input block
 Input block specifies which inputs flow into the model to turn into prediction::
 
     model_config = {
-        'input_block/inputs': 'images',
+        'initial_block/inputs': 'images',
     }
 
 As the default input block contains a :func:`~.layers.conv_block`, all its parameters might be also specfied in the config::
 
     model_config = {
-        'input_block': dict(layout='cnap', filters=64, kernel_size=7, strides=2),
-        'input_block/inputs': 'images',
+        'initial_block': dict(layout='cnap', filters=64, kernel_size=7, strides=2),
+        'initial_block/inputs': 'images',
     }
 
 So the configured input block gets `images` tensor and applies a convolution with 7x7 kernel and stride 2.
 
 For :doc:`predefined models <model_zoo_tf>` input block has the default configuration in accordance with the original article. So you almost never need to redefine it.
 
-However, ``input_block/inputs`` should always be specified.
+However, ``initial_block/inputs`` should always be specified.
 
 
 body
@@ -204,28 +202,31 @@ head
 For many models head is just another :func:`~.layers.conv_block`. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.
 
 
-output
-------
-Output defines the content of ``predictions`` tensor which is used in the configured model loss. Besides, additional operations and metrics might be specified here to be used during model training or evaluation.
+predictions
+-----------
+It defines the content of ``predictions`` tensor which is used in the configured model loss.
 
-For instance, make predictions a probability distribution::
-
-    {'output': dict(predictions='proba')}
-
-Mostly, predictions tensor is just the head output and thus it needs no configuration.
-However, different losses might require different predictions (e.g. 'ce' expects logits, while 'dice' takes probabilities).
-
-To control model training procedure you might also need auxiliary operations to assess model quality::
-
-    {'output': dict(ops=['labels', 'accuracy'])}
-
-``predictions`` and ``ops`` options take an operation name. And available operations are:
-    - None - do nothing
+Available operations are:
+    - None - do nothing (identity operation)
     - callable - apply a given function to an output tensor
     - 'proba' - softmax
     - 'sigmoid' - sigmoid
-    - 'labels' - argmax
-    - 'accuracy' - the share of correctly predicted labels.
+    - 'labels' - argmax.
+
+Mostly, the predictions tensor is just the head output and thus it needs no configuration.
+However, different losses might require different predictions (e.g. cross entropy expects logits,
+while some custom loss might expect probabilities).
+
+output
+------
+Output defines the auxiliary operations which are applied to the head output.
+These operations can be used during model training or evaluation.
+
+For instance, 'proba' gets probabilities if head outputs logits::
+
+    {'output': ['proba', 'labels']}
+
+For advanced usage see :meth:`~.TFModel.output`.
 
 
 Loss, learning rate decay, optimizer
@@ -245,8 +246,8 @@ where name might be one of:
 For example::
 
     {'loss': 'mse'}
-    {'loss': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}
-    {'loss': tf.losses.huber_loss, 'reduction': tf.losses.Reduction.MEAN}
+    {'loss': {'name': 'sigmoid_cross_entropy', 'label_smoothing': 1e-6}}
+    {'loss': (tf.losses.huber_loss, {'reduction': tf.losses.Reduction.MEAN})}
     {'loss': external_loss_fn}
 
 Available short names for losses: mse, ce, l1, cos, hinge, huber, logloss, dice.
@@ -263,7 +264,7 @@ Short names for decay: exp, invtime, naturalexp, const, poly.
 
     {'optimizer': 'Adam'}
     {'optimizer': ('Ftlr', {'learning_rate_power': 0})}
-    {'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}
+    {'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}}
     {'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}
     {'optimizer': some_optimizer_fn}
 
@@ -322,8 +323,8 @@ Here we split network configuration and network definition into separate methods
 
         def build_config(self, names=None):
             config = super().build_config(names)
-            config['head']['units'] = self.num_classes('targets')
-            config['head']['filters'] = self.num_classes('targets')
+            config['head/units'] = self.num_classes('targets')
+            config['head/filters'] = self.num_classes('targets')
             return config
 
         @classmethod
@@ -348,16 +349,15 @@ Now you can train the model with a simple pipeline::
         'decay': 'invtime',
         'optimizer': 'Adam',
         'inputs': dict(images={'shape': (128, 128, 3)},
-                       labels={'shape': 10, 'transform': 'ohe', 'name': 'targets'}),
-        'input_block/inputs': 'images'
+                       labels={'classes': 10}),
+        'initial_block/inputs': 'images'
     }
 
     pipeline = my_dataset.p
         .init_variable('loss_history', init_on_each_run=list)
         .init_model('dynamic', MyModel, 'my_model', model_config)
         .train_model('my_model', fetches='loss',
-                     feed_dict={'images': B('images'),
-                                'labels': B('labels')},
+                     images=B('images'), labels=B('labels'),
                      save_to=V('loss_history'), mode='a')
         .run(BATCH_SIZE, shuffle=True, n_epochs=5)
 
@@ -379,7 +379,7 @@ As a result, the very same model class might be used
 
 Things worth mentioning:
 
-#. Override :meth:`~.TFModel.input_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
+#. Override :meth:`~.TFModel.initial_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
    In many cases config is just enough to build a network without additional code writing.
 
 #. Input data and its parameters should be defined in configuration under ``inputs`` key.
@@ -412,4 +412,4 @@ Ready to use models
 .. toctree::
    :maxdepth: 2
 
-   ../api/dataset.models.tf
+   ../api/dataset.models.tf.models

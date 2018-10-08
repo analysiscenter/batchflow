@@ -4,8 +4,9 @@ and define data processing and machine learning workflows even for datasets that
 
 Documentation - https://analysiscenter.github.io/dataset/
 """
-from setuptools import setup, find_packages
 import re
+from setuptools import setup, find_packages
+
 
 with open('dataset/__init__.py', 'r') as f:
     version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE).group(1)

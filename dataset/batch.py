@@ -25,20 +25,21 @@ except ImportError:
 
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, any_action_failed
-from .dataset import Dataset
-from .batch_base import BaseBatch
 from .components import MetaComponentsTuple
 
 
-class Batch(BaseBatch):
+class Batch:
     """ The core Batch class """
     _item_class = None
     components = None
 
     def __init__(self, index, preloaded=None, *args, **kwargs):
+        _ = args, kwargs
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
-        super().__init__(index, *args, **kwargs)
+        self.index = index
+        self._data_named = None
+        self._data = None
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
         self._local = None
@@ -166,28 +167,26 @@ class Batch(BaseBatch):
         _ = component
         if isinstance(data[0], np.ndarray):
             return np.concatenate(data)
-        else:
-            raise TypeError("Unknown data type", type(data[0]))
+        raise TypeError("Unknown data type", type(data[0]))
 
-    def as_dataset(self, dataset=None):
+    def as_dataset(self, dataset):
         """ Makes a new dataset from batch data
 
         Parameters
         ----------
-        dataset: could be a dataset or a Dataset class
+        dataset
+            an instance or a subclass of Dataset
 
         Returns
         -------
         an instance of a class specified by `dataset` arg, preloaded with this batch data
         """
         if dataset is None:
-            dataset_class = Dataset
-        elif isinstance(dataset, Dataset):
-            dataset_class = dataset.__class__
+            raise ValueError('dataset can be an instance of Dataset (sub)class or the class itself, but not None')
         elif isinstance(dataset, type):
             dataset_class = dataset
         else:
-            raise TypeError("dataset should be some Dataset class or an instance of some Dataset class or None")
+            dataset_class = dataset.__class__
         return dataset_class(self.index, batch_class=type(self), preloaded=self.data)
 
     @property
@@ -337,8 +336,7 @@ class Batch(BaseBatch):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
             attr = getattr(self.data, name)
             return attr
-        else:
-            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     def __setattr__(self, name, value):
         if self.components is not None:
@@ -732,9 +730,9 @@ class Batch(BaseBatch):
             else:
                 _data = pd.read_csv(src, *args, **kwargs)
         elif fmt == 'feather':
-            _data = feather.read_dataframe(src, *args, **kwargs)  # pylint: disable=redefined-variable-type
+            _data = feather.read_dataframe(src, *args, **kwargs)
         elif fmt == 'hdf5':
-            _data = pd.read_hdf(src, *args, **kwargs)         # pylint: disable=redefined-variable-type
+            _data = pd.read_hdf(src, *args, **kwargs)
 
         # Put into this batch only part of it (defined by index)
         if isinstance(_data, pd.DataFrame):

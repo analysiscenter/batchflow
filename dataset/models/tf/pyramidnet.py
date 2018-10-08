@@ -18,10 +18,10 @@ class PyramidNet(ResNet):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'labels' (see :meth:`._make_inputs`)
+        dict with 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
-    input_block : dict
-        parameters for the input block (see :func:`.conv_block`).
+    initial_block : dict
+        parameters for the initial block (see :func:`.conv_block`).
 
     body : dict
         num_blocks : list of int
@@ -56,7 +56,7 @@ class PyramidNet(ResNet):
 
         if config.get('body/filters') is None:
             w = config['body/block/widening']
-            filters = config['input_block/filters']
+            filters = config['initial_block/filters']
             config['body/filters'] = []
             for g in config['body/num_blocks']:
                 bfilters = [filters +  w * b for b in range(1, g + 1)]

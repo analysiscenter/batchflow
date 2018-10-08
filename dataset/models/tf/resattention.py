@@ -16,7 +16,7 @@ class ResNetAttention(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with images and labels (see :meth:`._make_inputs`)
+        dict with images and labels (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
         layout : str
@@ -39,8 +39,8 @@ class ResNetAttention(TFModel):
         config = TFModel.default_config()
 
         filters = 64   # number of filters in the first block
-        config['input_block'].update(dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
-                                          pool_size=3, pool_strides=2))
+        config['initial_block'] = dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
+                                       pool_size=3, pool_strides=2)
 
         config['body'] = dict(bottleneck=True, downsample=False)
         config['body']['trunk'] = dict(bottleneck=True, downsample=False)
@@ -189,7 +189,7 @@ class ResNetAttention56(ResNetAttention):
     def default_config(cls):
         config = ResNetAttention.default_config()
 
-        filters = config['input_block']['filters']   # number of filters in the first block
+        filters = config['initial_block']['filters']   # number of filters in the first block
         config['body']['layout'] = 'r2r1r0rrr'
         config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 2, 2, 3, 3, 3]) * filters
 
@@ -201,7 +201,7 @@ class ResNetAttention92(ResNetAttention):
     def default_config(cls):
         config = ResNetAttention.default_config()
 
-        filters = config['input_block']['filters']   # number of filters in the first block
+        filters = config['initial_block']['filters']   # number of filters in the first block
         config['body']['layout'] = 'r2r11r000rrr'
         config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3]) * filters
 

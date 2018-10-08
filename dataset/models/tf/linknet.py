@@ -19,7 +19,7 @@ class LinkNet(TFModel):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'masks' (see :meth:`._make_inputs`)
+        dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
         num_blocks : int
@@ -38,8 +38,8 @@ class LinkNet(TFModel):
 
         filters = 64   # number of filters in the first block
 
-        config['input_block'].update(dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
-                                          pool_size=3, pool_strides=2))
+        config['initial_block'] = dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
+                                       pool_size=3, pool_strides=2)
         config['body/num_blocks'] = 4
         config['body/upsample'] = dict(layout='tna', factor=2, kernel_size=3)
 
@@ -54,7 +54,7 @@ class LinkNet(TFModel):
     def build_config(self, names=None):
         config = super().build_config(names)
         if config.get('body/filters') is None:
-            config['body/filters'] = 2 ** np.arange(config['body/num_blocks']) * config['input_block/filters']
+            config['body/filters'] = 2 ** np.arange(config['body/num_blocks']) * config['initial_block/filters']
         if config.get('head/num_classes') is None:
             config['head/num_classes'] = self.num_classes('targets')
         config['head']['targets'] = self.targets

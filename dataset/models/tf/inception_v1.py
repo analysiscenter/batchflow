@@ -28,7 +28,7 @@ class Inception_v1(Inception):
     **Configuration**
 
     inputs : dict
-        dict with 'images' and 'labels' (see :meth:`._make_inputs`)
+        dict with 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
 
     body/arch : dict
         architecture: network layout, block layout, number of filters in each block, pooling parameters
@@ -37,9 +37,9 @@ class Inception_v1(Inception):
     def default_config(cls):
         config = Inception.default_config()
         config['common']['layout'] = 'cn'
-        config['input_block'].update(dict(layout='cnp cn cn p', filters=[64, 64, 192],
-                                          kernel_size=[7, 3, 3], strides=[2, 1, 1],
-                                          pool_size=3, pool_strides=2))
+        config['initial_block'] = dict(layout='cnp cn cn p', filters=[64, 64, 192],
+                                       kernel_size=[7, 3, 3], strides=[2, 1, 1],
+                                       pool_size=3, pool_strides=2)
         config['body']['arch'] = _DEFAULT_V1_ARCH
         config['body']['layout'] = 'bbrbbbbbrbb'
         config['head'].update(dict(layout='Vdf', dropout_rate=.4))

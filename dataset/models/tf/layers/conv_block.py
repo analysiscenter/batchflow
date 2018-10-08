@@ -90,18 +90,14 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         pooling operation ('max', 'mean', 'frac')
     dropout_rate : float
         Default is 0.
-    is_training : bool or tf.Tensor
-        Default is True.
-    reuse : bool
-        whether to user layer variables if exist
-    pool_op : str
-        pooling operation ('max', 'mean', 'frac-max', 'frac-mean')
-    global_pool_op : str
-        global pooling operation ('max', 'mean')
     factor : int or tuple of int
         upsampling factor
     upsampling_layout : str
         layout for upsampling layers
+    is_training : bool or tf.Tensor
+        Default is True.
+    reuse : bool
+        whether to user layer variables if exist
 
     dense : dict
         parameters for dense layers, like initializers, regularalizers, etc
