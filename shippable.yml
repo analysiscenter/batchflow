@@ -16,6 +16,7 @@ build:
   ci:
     - >
       export LC_ALL="en_US.UTF-8" &&
+      dpkg-reconfigure locales &&
       pip3 install psutil &&
       pip3 install sphinx &&
       git checkout --orphan gh-pages &&
