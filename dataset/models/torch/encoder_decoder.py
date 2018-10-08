@@ -95,7 +95,7 @@ class EncoderDecoder(TorchModel):
         return x
 
     @classmethod
-    def head(cls, inputs, targets, name='head', **kwargs):
+    def head(cls, inputs, targets, **kwargs):
         """ Linear convolutions with kernel 1 """
         x = cls.crop(inputs, targets, kwargs['data_format'])
         channels = cls.num_channels(targets)
@@ -103,7 +103,7 @@ class EncoderDecoder(TorchModel):
         return x
 
     @classmethod
-    def encoder(cls, inputs, base_class=None, name='encoder', **kwargs):
+    def encoder(cls, inputs, base_class=None, **kwargs):
         """ Create encoder from a base_class model
 
         Parameters
@@ -111,12 +111,8 @@ class EncoderDecoder(TorchModel):
         inputs
             input tensor
         base_class : TorchModel
-            a model class (default=ResNet101).
+            a model class (default=ResNet18).
             Should implement ``make_encoder`` method.
-        name : str
-            scope name
-        kwargs : dict
-            parameters for ``make_encoder`` method
 
         Returns
         -------
@@ -125,11 +121,11 @@ class EncoderDecoder(TorchModel):
         if base_class is None:
             x = inputs
         else:
-            x = base_class.make_encoder(inputs, name=name, **kwargs)
+            x = base_class.make_encoder(inputs, **kwargs)
         return x
 
     @classmethod
-    def embedding(cls, inputs, name='embedding', **kwargs):
+    def embedding(cls, inputs, **kwargs):
         """ Create embedding from inputs tensor
 
         Parameters
@@ -142,7 +138,7 @@ class EncoderDecoder(TorchModel):
         nn.Module
         """
         if kwargs.get('layout') is not None:
-            x = ConvBlock(inputs, name=name, **kwargs)
+            x = ConvBlock(inputs, **kwargs)
         else:
             x = inputs
         return x
@@ -171,7 +167,7 @@ class EncoderDecoder(TorchModel):
 
         x = inputs[-1]
         for i in range(steps):
-            x = cls.upsample(x, factor=factor[i], name='decoder-'+str(i), **kwargs)
+            x = cls.upsample(x, factor=factor[i], **kwargs)
 
         return x
 

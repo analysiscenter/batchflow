@@ -80,7 +80,7 @@ class VNet(TorchModel):
 
         decoders = []
         for i, ifilters in enumerate(filters[-2::-1]):
-            x = cls.decoder_block((x, encoder_outputs[-i-2]), layout=layout[-i-1], filters=ifilters*2, **kwargs)
+            x = cls.decoder_block(x, encoders[-i-2], layout=layout[-i-1], filters=ifilters*2, **kwargs)
             decoders.append(x)
 
         return VNetBody(encoders, decoders)
@@ -109,15 +109,15 @@ class VNet(TorchModel):
         return x
 
     @classmethod
-    def decoder_block(cls, inputs, **kwargs):
+    def decoder_block(cls, inputs, skip, **kwargs):
         """ 2x2x2 transposed convolution + 5x5x5 convolutions
 
         Parameters
         ----------
         inputs
             input tensor
-        name : str
-            scope name
+        skip
+            skip connection
 
         Returns
         -------
@@ -127,9 +127,7 @@ class VNet(TorchModel):
         layout, filters, kernel_size = cls.pop(['layout', 'filters', 'kernel_size'], kwargs)
         upsample_args = cls.pop('upsample', kwargs)
 
-        x, skip = inputs
-        inputs = None
-        x = cls.upsample(x, filters=filters, name='upsample', **upsample_args, **kwargs)
+        x = cls.upsample(inputs, filters=filters, name='upsample', **upsample_args, **kwargs)
         x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
         x = torch.cat([skip, x], dim=1)
         x = ResNet.block(x, layout=layout, filters=filters, kernel_size=kernel_size, downsample=0, **kwargs)
