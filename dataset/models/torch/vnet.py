@@ -81,7 +81,7 @@ class VNet(TorchModel):
         for i, ifilters in enumerate(filters[-2::-1]):
             x = cls.decoder_block((x, encoder_outputs[-i-2]), layout=layout[-i-1], filters=ifilters*2, **kwargs)
 
-        return x
+        return VNetBody(encoders, decoders)
 
     @classmethod
     def encoder_block(cls, inputs, downsample=True, **kwargs):
@@ -152,4 +152,63 @@ class VNet(TorchModel):
         """
         kwargs = cls.get_defaults('head', kwargs)
         x = ConvBlock(inputs, filters=num_classes, **kwargs)
+        return x
+
+
+class VNetBody(nn.Module):
+    """ A sequence of encoder and decoder blocks with skip connections """
+    def __init__(self, encoders, decoders):
+        super().__init__()
+        self.encoders = nn.ModuleList(encoders)
+        self.decoders = nn.ModuleList(decoders)
+        self.output_shape = self.decoders[-1].output_shape
+
+    def forward(self, x):
+        skip = []
+        for encoder in self.encoders:
+            x = encoder(x)
+            skip.append(x)
+
+        for i, decoder in enumerate(self.decoders):
+            x = decoder(x, skip=skip[-i-2])
+
+        return x
+
+class DecoderBlock(nn.Module):
+    """ An upsampling block aggregating a skip connection
+
+        Parameters
+        ----------
+        filters : int
+            number of output filters
+        upsample : dict
+            parameters for upsample layers
+        decoder : dict
+            parameters for decoder kayers
+        inputs
+            previous block or tensor
+        skip
+            skip connection block or tensor
+        kwargs
+            common parameters for layers
+    """
+    def __init__(self, inputs, skip, filters, upsample, decoder, **kwargs):
+        super().__init__()
+        _ = skip
+        self.upsample = ConvBlock(inputs, filters=filters, **{**kwargs, **upsample})
+        shape = list(get_shape(self.upsample))
+        shape[1] *= 2
+        shape = tuple(shape)
+        self.decoder = ConvBlock(shape, filters=filters, **{**kwargs, **decoder})
+        self.output_shape = self.decoder.output_shape
+
+    def forward(self, x, skip):
+        x = self.upsample(x)
+        if x.size() > skip.size():
+            shape = [slice(None, c) for c in skip.size()[2:]]
+            shape = tuple([slice(None, None), slice(None, None)] + shape)
+            x = x[shape]
+
+        x = torch.cat([skip, x], dim=1)
+        x = self.decoder(x)
         return x

@@ -113,9 +113,9 @@ class EncoderDecoder(TorchModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
+        inputs
             input tensor
-        base_class : TFModel
+        base_class : TorchModel
             a model class (default=ResNet101).
             Should implement ``make_encoder`` method.
         name : str
@@ -136,19 +136,15 @@ class EncoderDecoder(TorchModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
+        inputs
             input tensor
-        name : str
-            scope name
-        kwargs : dict
-            parameters for :func:`~.tf.layers.conv_block`
 
         Returns
         -------
-        tf.Tensor
+        nn.Module
         """
         if kwargs.get('layout') is not None:
-            x = conv_block(inputs, name=name, **kwargs)
+            x = ConvBlock(inputs, name=name, **kwargs)
         else:
             x = inputs
         return x
@@ -159,16 +155,12 @@ class EncoderDecoder(TorchModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
+        inputs
             input tensor
-        name : str
-            scope name
-        kwargs : dict
-            parameters for ``upsample`` method
 
         Returns
         -------
-        tf.Tensor
+        nn.Module
         """
         steps = kwargs.pop('num_stages', len(inputs)-1)
         factor = kwargs.pop('factor')
@@ -183,4 +175,26 @@ class EncoderDecoder(TorchModel):
             x = inputs[-1]
             for i in range(steps):
                 x = cls.upsample(x, factor=factor[i], name='decoder-'+str(i), **kwargs)
+        return x
+
+
+class EncoderDecoderBody(nn.Module):
+    """ A sequence of encoder and decoder blocks with skip connections """
+    def __init__(self, encoders, decoders, skip=True):
+        super().__init__()
+        self.encoders = nn.ModuleList(encoders)
+        self.decoders = nn.ModuleList(decoders)
+        self.skip = skip
+        self.output_shape = self.decoders[-1].output_shape
+
+    def forward(self, x):
+        skips = []
+        for encoder in self.encoders:
+            x = encoder(x)
+            skips.append(x)
+
+        for i, decoder in enumerate(self.decoders):
+            skip = skips[-i-2] if self.skip else None
+            x = decoder(x, skip=skip)
+
         return x
