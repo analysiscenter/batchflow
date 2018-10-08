@@ -1,6 +1,7 @@
 [![License](https://img.shields.io/github/license/analysiscenter/dataset.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Python](https://img.shields.io/badge/python-3.5,%203.6-blue.svg)](https://python.org)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-1.4-orange.svg)](https://tensorflow.org)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-1.8-orange.svg)](https://tensorflow.org)
+[![PyTorch](https://img.shields.io/badge/PyTorch-0.4-orange.svg)](https://pytorch.org)
 [![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/dataset)
 
 # Dataset
