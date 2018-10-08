@@ -1,10 +1,8 @@
 """  Encoder-decoder """
-import torch
 import torch.nn as nn
 
 from .layers import ConvBlock
 from . import TorchModel
-from .utils import get_shape
 from .resnet import ResNet18
 
 
@@ -67,48 +65,45 @@ class EncoderDecoder(TorchModel):
         return config
 
     @classmethod
-    def body(cls, inputs, name='body', **kwargs):
+    def body(cls, inputs, **kwargs):
         """ Create encoder, embedding and decoder
 
         Parameters
         ----------
-        inputs : tf.Tensor
+        inputs
             input tensor
         filters : tuple of int
             number of filters in decoder blocks
-        name : str
-            scope name
 
         Returns
         -------
-        tf.Tensor
+        nn.Module
         """
         kwargs = cls.fill_params('body', **kwargs)
         encoder = kwargs.pop('encoder')
         decoder = kwargs.pop('decoder')
         embedding = kwargs.pop('embedding')
 
-        with tf.variable_scope(name):
-            encoder_outputs = cls.encoder(inputs, **encoder, **kwargs)
+        encoder_outputs = cls.encoder(inputs, **encoder, **kwargs)
 
-            x = cls.embedding(encoder_outputs[-1], **embedding, **kwargs)
-            if x != encoder_outputs[-1]:
-                encoder_outputs += [x]
+        x = cls.embedding(encoder_outputs[-1], **embedding, **kwargs)
+        if x != encoder_outputs[-1]:
+            encoder_outputs += [x]
 
-            x = cls.decoder(encoder_outputs, **decoder, **kwargs)
+        x = cls.decoder(encoder_outputs, **decoder, **kwargs)
+
         return x
 
     @classmethod
     def head(cls, inputs, targets, name='head', **kwargs):
         """ Linear convolutions with kernel 1 """
-        with tf.variable_scope(name):
-            x = cls.crop(inputs, targets, kwargs['data_format'])
-            channels = cls.num_channels(targets)
-            x = conv_block(x, layout='c', filters=channels, kernel_size=1, **kwargs)
+        x = cls.crop(inputs, targets, kwargs['data_format'])
+        channels = cls.num_channels(targets)
+        x = ConvBlock(x, layout='c', filters=channels, kernel_size=1, **kwargs)
         return x
 
     @classmethod
-    def encoder(cls, inputs, base_class, name='encoder', **kwargs):
+    def encoder(cls, inputs, base_class=None, name='encoder', **kwargs):
         """ Create encoder from a base_class model
 
         Parameters
@@ -125,9 +120,12 @@ class EncoderDecoder(TorchModel):
 
         Returns
         -------
-        list of tf.Tensor
+        nn.Module
         """
-        x = base_class.make_encoder(inputs, name=name, **kwargs)
+        if base_class is None:
+            x = inputs
+        else:
+            x = base_class.make_encoder(inputs, name=name, **kwargs)
         return x
 
     @classmethod
@@ -150,7 +148,7 @@ class EncoderDecoder(TorchModel):
         return x
 
     @classmethod
-    def decoder(cls, inputs, name='decoder', **kwargs):
+    def decoder(cls, inputs, **kwargs):
         """ Create decoder with a given number of upsampling stages
 
         Parameters
@@ -171,10 +169,10 @@ class EncoderDecoder(TorchModel):
         elif not isinstance(factor, list):
             raise TypeError('factor should be int or list of int, but %s was given' % type(factor))
 
-        with tf.variable_scope(name):
-            x = inputs[-1]
-            for i in range(steps):
-                x = cls.upsample(x, factor=factor[i], name='decoder-'+str(i), **kwargs)
+        x = inputs[-1]
+        for i in range(steps):
+            x = cls.upsample(x, factor=factor[i], name='decoder-'+str(i), **kwargs)
+
         return x
 
 

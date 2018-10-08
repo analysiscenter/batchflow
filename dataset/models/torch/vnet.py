@@ -2,13 +2,13 @@
 <https://arxiv.org/abs/1606.04797>`_"
 """
 import numpy as np
+import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from ... import is_best_practice
 from .layers import ConvBlock
 from . import TorchModel
-from .utils import get_shape, get_num_dims, get_num_channels
+from .utils import get_shape
 from .resnet import ResNet
 
 
@@ -72,14 +72,16 @@ class VNet(TorchModel):
         kwargs = cls.get_defaults('body', kwargs)
         layout, filters = cls.pop(['layout', 'filters'], kwargs)
 
-        x, inputs = inputs, None
-        encoder_outputs = []
+        x = inputs
+        encoders = []
         for i, ifilters in enumerate(filters):
             x = cls.encoder_block(x, layout=layout[i], filters=ifilters, downsample=i > 0, **kwargs)
-            encoder_outputs.append(x)
+            encoders.append(x)
 
+        decoders = []
         for i, ifilters in enumerate(filters[-2::-1]):
             x = cls.decoder_block((x, encoder_outputs[-i-2]), layout=layout[-i-1], filters=ifilters*2, **kwargs)
+            decoders.append(x)
 
         return VNetBody(encoders, decoders)
 
@@ -129,8 +131,7 @@ class VNet(TorchModel):
         inputs = None
         x = cls.upsample(x, filters=filters, name='upsample', **upsample_args, **kwargs)
         x = cls.crop(x, skip, data_format=kwargs.get('data_format'))
-        axis = cls.channels_axis(kwargs.get('data_format'))
-        x = tf.concat((skip, x), axis=axis)
+        x = torch.cat([skip, x], dim=1)
         x = ResNet.block(x, layout=layout, filters=filters, kernel_size=kernel_size, downsample=0, **kwargs)
 
         return x
