@@ -1062,9 +1062,11 @@ class Pipeline:
         self._init_variables_before_run()
 
 
-    def gen_rebatch(self, *args, **kwargs):
+    def gen_rebatch(self, batch_size, shuffle, n_epochs, drop_last, prefetch, *args, **kwargs):
         """ Generate batches for rebatch operation """
         _action = self._action_list[0]
+        if _action['pipeline'].dataset is None:
+            _action['pipeline'].dataset = self.dataset
         self._rest_batch = None
         while True:
             if self._rest_batch is None:
@@ -1076,6 +1078,8 @@ class Pipeline:
                 self._rest_batch = None
             while cur_len < _action['batch_size']:
                 try:
+                    kwargs.update(batch_size=batch_size, shuffle=shuffle, n_epochs=n_epochs, drop_last=drop_last,
+                                  prefetch=prefetch)
                     new_batch = _action['pipeline'].next_batch(*args, **kwargs)
                 except StopIteration:
                     break
