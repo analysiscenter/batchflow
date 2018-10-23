@@ -25,5 +25,5 @@ def softmax_cross_entropy(labels, logits, *args, **kwargs):
     c = tf.cast(tf.equal(labels_shape, logits_shape), tf.int32)
     e = tf.equal(tf.reduce_sum(c, axis=-1), logits_shape.shape[-1])
     labels = tf.cond(e, lambda: tf.cast(labels, dtype=logits.dtype),
-                     lambda: tf.one_hot(labels, logits_shape[-1], dtype=logits.dtype))
+                     lambda: tf.one_hot(tf.cast(labels, tf.int32), logits_shape[-1], dtype=logits.dtype))
     return tf.losses.softmax_cross_entropy(labels, logits, *args, **kwargs)
