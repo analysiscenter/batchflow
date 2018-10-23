@@ -146,9 +146,9 @@ def global_pooling(inputs, op, data_format='channels_last', keepdims=False, name
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
 
     if op == 'max':
-        x = tf.reduce_max(inputs, axis=axis, keep_dims=keepdims, name=name)
+        x = tf.reduce_max(inputs, axis=axis, keepdims=keepdims, name=name)
     elif op in ['mean', 'average', 'avg']:
-        x = tf.reduce_mean(inputs, axis=axis, keep_dims=keepdims, name=name)
+        x = tf.reduce_mean(inputs, axis=axis, keepdims=keepdims, name=name)
 
     return x
 
