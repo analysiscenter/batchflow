@@ -292,11 +292,11 @@ class DatasetIndex(Baseset):
             If `False`, than the last batch in each epoch could contain repeating indices (which might be a problem)
             and the very last batch could contain fewer than `batch_size` items.
 
-            For instance, `next_batch(3, shuffle=False, n_epochs=2, drop_last=False)` for a dataset with 4 items returns
+            For instance, `gen_batch(3, shuffle=False, n_epochs=2, drop_last=False)` for a dataset with 4 items returns
             indices [0,1,2], [3,0,1], [2,3].
-            While `next_batch(3, shuffle=False, n_epochs=2, drop_last=True)` returns indices [0,1,2], [0,1,2].
+            While `gen_batch(3, shuffle=False, n_epochs=2, drop_last=True)` returns indices [0,1,2], [0,1,2].
 
-            Take into account that `next_batch(3, shuffle=True, n_epochs=2, drop_last=False)` could return batches
+            Take into account that `gen_batch(3, shuffle=True, n_epochs=2, drop_last=False)` could return batches
             [3,0,1], [2,0,2], [1,3]. Here the second batch contains two items with the same index "2".
             This might become a problem if some action uses `batch.get_pos()` or `batch.index.get_pos()` methods so that
             one of the identical items will be missed.

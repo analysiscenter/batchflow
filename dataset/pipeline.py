@@ -1092,15 +1092,84 @@ class Pipeline:
                 yield batch
 
 
-    def gen_batch(self, batch_size, *args, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, on_iter=None,
-                  **kwargs):
+    def gen_batch(self, *args, **kwargs):
+        """ Generate batches
+
+        Parameters
+        ----------
+        batch_size : int
+            desired number of items in the batch (the actual batch could contain fewer items)
+
+        shuffle : bool, int, class:`numpy.random.RandomState` or callable
+            specifies the order of items, could be:
+
+            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
+                if `True`, items are shuffled randomly before each epoch.
+
+            - int - a seed number for a random shuffle.
+
+            - :class:`numpy.random.RandomState` instance.
+
+            - callable - a function which takes an array of item indices in the initial order
+                (as they appear in the index) and returns the order of items.
+
+        n_epochs : int
+            the number of epochs required.
+
+        drop_last : bool
+            if `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
+
+            If `False`, than the last batch in each epoch could contain repeating indices (which might be a problem)
+            and the very last batch could contain fewer than `batch_size` items.
+
+            See :meth:`DatasetIndex.gen_batch` for details.
+
+        bar : bool or 'n'
+            whether to show a `tqdm` progress bar.
+            If 'n', than uses `tqdm_notebook`.
+
+        prefetch : int
+            a number of batches to process in advance (default=0)
+
+        target : 'threads' or 'mpc'
+            batch parallization engine used for prefetching (default='threads').
+            'mpc' rarely works well due to complicated and slow python's inper-process communications.
+
+        Yields
+        ------
+        an instance of the batch class returned by the last action
+
+        Examples
+        --------
+
+        ::
+
+            for batch in pipeline.gen_batch(C('batch_size'), shuffle=True, n_epochs=2, drop_last=True):
+                # do whatever you want
+        """
+        if len(args) == 0 and len(kwargs) == 0:
+            if self._lazy_run is None:
+                raise RuntimeError("gen_batch without arguments requires a lazy run at the end of the pipeline")
+            args, kwargs = self._lazy_run
+
+        args_value = self._eval_expr(args)
+        kwargs_value = self._eval_expr(kwargs)
+
+        return self._gen_batch(*args_value, **kwargs_value)
+
+
+    def _gen_batch(self, *args, **kwargs):
         """ Generate batches """
         target = kwargs.pop('target', 'threads')
+        prefetch = kwargs.pop('prefetch', 0)
+        on_iter = kwargs.pop('on_iter', None)
 
         if len(self._action_list) > 0 and self._action_list[0]['name'] == REBATCH_ID:
-            batch_generator = self.gen_rebatch(batch_size, shuffle, n_epochs, drop_last, prefetch, *args, **kwargs)
+            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
+            prefetch = 0
         else:
-            batch_generator = self.dataset.gen_batch(batch_size, shuffle, n_epochs, drop_last, *args, **kwargs)
+            self.reset_iter(exclude_dataset=True)
+            batch_generator = self.dataset.gen_batch(*args, **kwargs)
 
         if prefetch > 0:
             # pool cannot have more than 63 workers
@@ -1157,7 +1226,8 @@ class Pipeline:
         if len(args) == 0 and len(kwargs) == 0:
             if self._lazy_run is None:
                 raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
-            batch_res = self.next_batch(*self._lazy_run[0], **self._lazy_run[1])
+            args, kwargs = self._lazy_run
+            batch_res = self.next_batch(*args, **kwargs)
         elif True or kwargs.get('prefetch', 0) > 0:
             if self._batch_generator is None:
                 self._lazy_run = args, kwargs
