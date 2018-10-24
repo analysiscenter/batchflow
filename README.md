@@ -141,7 +141,7 @@ Roman Khudorozhkov et al. BatchFlow library for fast ML workflows. 2017. doi:10.
 ```
 @misc{roman_kh_2017_1041203,
   author       = {Khudorozhkov, Roman and others},
-  title        = {Batch Flow library for fast ML workflows},
+  title        = {BatchFlow library for fast ML workflows},
   year         = 2017,
   doi          = {10.5281/zenodo.1041203},
   url          = {https://doi.org/10.5281/zenodo.1041203}
