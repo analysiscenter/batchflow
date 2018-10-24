@@ -470,7 +470,7 @@ When you need an extremely fast processing, `numba <http://numba.pydata.org/>`_ 
 However, it works only with functions, but not with methods. It is not a big issue as you can write
 a method which calls a function. It is not convenient, though. And code becomes not so easy to follow.
 
-That is why you'll love `@mjit` decorator. It looks absolutely like `@jit <https://numba.pydata.org/numba-doc/latest/user/jit.html/>`_, but with methods.
+That is why you'll love `@mjit` decorator. It looks absolutely like `@jit <https://numba.pydata.org/numba-doc/latest/user/jit.html/>`_, but it works with methods.
 
 .. code-block:: python
 
@@ -505,4 +505,4 @@ That is why you'll love `@mjit` decorator. It looks absolutely like `@jit <https
           You can redefine these parameters when needed.
 
 `prange <https://numba.pydata.org/numba-doc/latest/user/parallel.html>`_ is also allowed within `@mjit` methods.
-`@inbatch_parallel` works as fast, though. So choose freely what is most convenient in each case.
+`@inbatch_parallel` works as fast, though. So choose freely what is more convenient in each case.

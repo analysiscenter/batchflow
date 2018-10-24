@@ -1,9 +1,9 @@
-""" Dataset enables a fast processing of large dataset using flexible pipelines """
+""" BatchFlow enables a fast processing of large dataset using flexible pipelines """
 
 import sys
 
 if sys.version_info < (3, 5):
-    raise ImportError("Dataset module requires Python 3.5 or higher")
+    raise ImportError("BatchFlow module requires Python 3.5 or higher")
 
 from .base import Baseset
 from .batch import Batch

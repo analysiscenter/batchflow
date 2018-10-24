@@ -1,14 +1,14 @@
 """
-Dataset helps you conveniently work with random or sequential batches of your data
+BatchFlow helps you conveniently work with random or sequential batches of your data
 and define data processing and machine learning workflows even for datasets that do not fit into memory.
 
-Documentation - https://analysiscenter.github.io/dataset/
+Documentation - https://analysiscenter.github.io/batchflow/
 """
 import re
 from setuptools import setup, find_packages
 
 
-with open('dataset/__init__.py', 'r') as f:
+with open('batchflow/__init__.py', 'r') as f:
     version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE).group(1)
 
 
@@ -20,7 +20,7 @@ setup(
     name='dataset',
     packages=find_packages(exclude=['examples']),
     version=version,
-    url='https://github.com/analysiscenter/dataset',
+    url='https://github.com/analysiscenter/batchflow',
     license='Apache License 2.0',
     author='Roman Kh at al',
     author_email='rhudor@gmail.com',
