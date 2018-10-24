@@ -1,15 +1,15 @@
-[![License](https://img.shields.io/github/license/analysiscenter/dataset.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![License](https://img.shields.io/github/license/analysiscenter/batchflow.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Python](https://img.shields.io/badge/python-3.5,%203.6-blue.svg)](https://python.org)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-1.8-orange.svg)](https://tensorflow.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-0.4-orange.svg)](https://pytorch.org)
-[![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/dataset)
+[![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/batchflow)
 
-# Dataset
+# BatchFlow
 
-`Dataset` helps you conveniently work with random or sequential batches of your data
+`BatchFlow` helps you conveniently work with random or sequential batches of your data
 and define data processing and machine learning workflows even for datasets that do not fit into memory.
 
-For more details see [the documentation and tutorials](https://analysiscenter.github.io/dataset/).
+For more details see [the documentation and tutorials](https://analysiscenter.github.io/batchflow/).
 
 Main features:
 - flexible batch generaton
@@ -53,11 +53,11 @@ for i in range(NUM_ITERS):
 
 
 ## Train a neural network
-`Dataset` includes ready-to-use proven architectures like VGG, Inception, ResNet and many others.
+`BatchFlow` includes ready-to-use proven architectures like VGG, Inception, ResNet and many others.
 To apply them to your data just choose a model, specify the inputs (like the number of classes or images shape)
 and call `train_model`. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.
 ```python
-from dataset.models.tf import ResNet34
+from batchflow.models.tf import ResNet34
 
 my_workflow = my_dataset.pipeline()
               .init_model('dynamic', ResNet34, config={
@@ -71,13 +71,13 @@ my_workflow = my_dataset.pipeline()
               .run(BATCH_SIZE, shuffle=True)
 ```
 
-For more advanced cases and detailed API see [the documentation](https://analysiscenter.github.io/dataset/).
+For more advanced cases and detailed API see [the documentation](https://analysiscenter.github.io/batchflow/).
 
 
 ## Best practice magic
 To improve model quality and accelerate training import `best_practice` module:
 ```python
-from dataset import best_practice
+from batchflow import best_practice
 ```
 This will change some models defaults (for instance, batch norm momentum, ResNet block layouts, etc) we find more useful and
 consistently bringing better results (faster training and more accurate predictions).
@@ -85,39 +85,39 @@ consistently bringing better results (faster training and more accurate predicti
 
 ## Installation
 
-> `Dataset` module is in the beta stage. Your suggestions and improvements are very welcome.
+> `BatchFlow` module is in the beta stage. Your suggestions and improvements are very welcome.
 
-> `Dataset` supports python 3.5 or higher.
+> `BatchFlow` supports python 3.5 or higher.
 
 ### Python package
 With modern [pipenv](https://docs.pipenv.org/)
 ```
-pipenv install git+https://github.com/analysiscenter/dataset.git#egg=dataset
+pipenv install git+https://github.com/analysiscenter/batchflow.git#egg=batchflow
 ```
 
 With old-fashioned [pip](https://pip.pypa.io/en/stable/)
 ```
-pip3 install git+https://github.com/analysiscenter/dataset.git
+pip3 install git+https://github.com/analysiscenter/batchflow.git
 ```
 
-After that just import `dataset`:
+After that just import `batchflow`:
 ```python
-import dataset as ds
+import batchflow as bf
 ```
 
 ### Git submodule
-In many cases it might be more convenient to install `dataset` as a submodule in your project repository than as a python package.
+In many cases it might be more convenient to install `batchflow` as a submodule in your project repository than as a python package.
 ```
-git submodule add https://github.com/analysiscenter/dataset.git
+git submodule add https://github.com/analysiscenter/batchflow.git
 git submodule init
 git submodule update
 ```
 
-If your python file is located in another directory, you might need to add a path to `dataset`:
+If your python file is located in another directory, you might need to add a path to `batchflow`:
 ```python
 import sys
-sys.path.insert(0, "/path/to/dataset")
-import dataset as ds
+sys.path.insert(0, "/path/to/batchflow")
+import batchflow as bf
 ```
 
 What is great about using a submodule that every commit in your project can be linked to its own commit of a submodule.
@@ -125,23 +125,23 @@ This is extremely convenient in a fast paced research environment.
 
 Relative import is also possible:
 ```python
-from .dataset import Dataset
+from .batchflow import Dataset
 ```
 
 
-## Citing Dataset
-Please cite Dataset in your publications if it helps your research.
+## Citing BatchFlow
+Please cite BatchFlow in your publications if it helps your research.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1041203.svg)](https://doi.org/10.5281/zenodo.1041203)
 
 ```
-Roman Khudorozhkov et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
+Roman Khudorozhkov et al. BatchFlow library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
 ```
 
 ```
 @misc{roman_kh_2017_1041203,
   author       = {Khudorozhkov, Roman and others},
-  title        = {Dataset library for fast ML workflows},
+  title        = {Batch Flow library for fast ML workflows},
   year         = 2017,
   doi          = {10.5281/zenodo.1041203},
   url          = {https://doi.org/10.5281/zenodo.1041203}
