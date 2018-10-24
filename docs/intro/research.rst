@@ -12,9 +12,9 @@ Firstly, import classes from `dataset` to create pipelines:
 
 .. code-block:: python
 
-    from dataset import B, C, V, F, Config
-    from dataset.opensets import MNIST
-    from dataset.models.tf import VGG7, VGG16
+    from batchflow import B, C, V, F, Config
+    from batchflow.opensets import MNIST
+    from batchflow.models.tf import VGG7, VGG16
 
 Define model config. All parameters that we want to vary we define as ``C('parameter_name')``: 
 
@@ -294,4 +294,4 @@ Logfile:
 API
 ---
 
-See :doc:`Research API <../api/dataset.research>`.
+See :doc:`Research API <../api/batchflow.research>`.

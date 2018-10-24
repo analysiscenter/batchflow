@@ -51,9 +51,9 @@ That's a fully working example. Just try it with a simple pipeline:
 
 .. code-block:: python
 
-    from dataset.openses import MNIST
-    from dataset.models.tf import TFModel
-    from dataset.models.tf.layers import conv_block, global_average_pooling
+    from batchflow.opensets import MNIST
+    from batchflow.models.tf import TFModel
+    from batchflow.models.tf.layers import conv_block, global_average_pooling
 
     mnist = MNIST()
 
@@ -116,86 +116,86 @@ For the full list of available layers see :func:`~.models.tf.layers.conv_block` 
 Transposed convolution
 ======================
 
-.. autofunction:: dataset.models.tf.layers.conv_transpose
+.. autofunction:: batchflow.models.tf.layers.conv_transpose
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.conv1d_transpose
+.. autofunction:: batchflow.models.tf.layers.conv1d_transpose
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.separable_conv_transpose
+.. autofunction:: batchflow.models.tf.layers.separable_conv_transpose
     :noindex:
 
 
 Separable convolution
 =====================
-.. autofunction:: dataset.models.tf.layers.separable_conv
+.. autofunction:: batchflow.models.tf.layers.separable_conv
     :noindex:
 
 
 Pooling
 =======
-.. autofunction:: dataset.models.tf.layers.pooling
+.. autofunction:: batchflow.models.tf.layers.pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.max_pooling
+.. autofunction:: batchflow.models.tf.layers.max_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.average_pooling
+.. autofunction:: batchflow.models.tf.layers.average_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.fractional_pooling
+.. autofunction:: batchflow.models.tf.layers.fractional_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.global_pooling
+.. autofunction:: batchflow.models.tf.layers.global_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.global_max_pooling
+.. autofunction:: batchflow.models.tf.layers.global_max_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.global_average_pooling
+.. autofunction:: batchflow.models.tf.layers.global_average_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.mip
+.. autofunction:: batchflow.models.tf.layers.mip
     :noindex:
 
 
 Flatten
 =======
-.. autofunction:: dataset.models.tf.layers.flatten
+.. autofunction:: batchflow.models.tf.layers.flatten
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.flatten2d
+.. autofunction:: batchflow.models.tf.layers.flatten2d
     :noindex:
 
 
 Maximum intensity projection
 ============================
-.. autofunction:: dataset.models.tf.layers.mip
+.. autofunction:: batchflow.models.tf.layers.mip
     :noindex:
 
 
 Upsampling
 ==========
-.. autofunction:: dataset.models.tf.layers.upsample
+.. autofunction:: batchflow.models.tf.layers.upsample
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.resize_bilinear
+.. autofunction:: batchflow.models.tf.layers.resize_bilinear
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.resize_bilinear_additive
+.. autofunction:: batchflow.models.tf.layers.resize_bilinear_additive
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.subpixel_conv
+.. autofunction:: batchflow.models.tf.layers.subpixel_conv
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.depth_to_space
+.. autofunction:: batchflow.models.tf.layers.depth_to_space
     :noindex:
 
 
 Pyramid Pooling
 ===============
-.. autofunction:: dataset.models.tf.layers.pyramid_pooling
+.. autofunction:: batchflow.models.tf.layers.pyramid_pooling
     :noindex:
 
-.. autofunction:: dataset.models.tf.layers.aspp
+.. autofunction:: batchflow.models.tf.layers.aspp
     :noindex:

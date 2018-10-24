@@ -1,7 +1,7 @@
 ===================================
-Welcome to Dataset's documentation!
+Welcome to BatchFlow's documentation!
 ===================================
-`Dataset` helps you conveniently work with random or sequential batches of your data
+`BatchFlow` helps you conveniently work with random or sequential batches of your data
 and define data processing and machine learning workflows even for datasets that do not fit into memory.
 
 Main features:
@@ -25,7 +25,7 @@ Contents
 
    intro/intro
    intro/classes
-   api/dataset
+   api/batchflow
 
 
 Basic usage
@@ -59,11 +59,11 @@ or ::
 
 Train a neural network
 ======================
-Dataset includes ready-to-use proven architectures like VGG, Inception, ResNet and many others.
+BatchFlow includes ready-to-use proven architectures like VGG, Inception, ResNet and many others.
 To apply them to your data just choose a model, specify the inputs (like the number of classes or images shape)
 and call ``train_model``. Of course, you can also choose a loss function, an optimizer and many other parameters, if you want.::
 
-    from dataset.models.tf import ResNet34
+    from batchflow.models.tf import ResNet34
 
     my_workflow = my_dataset.pipeline()
                   .init_model('dynamic', ResNet34, config={
@@ -81,7 +81,7 @@ Best practice magic
 ===================
 To improve model quality and accelerate training import :doc:`best_practice <intro/best_practice>` module::
 
-    from dataset import best_practice
+    from batchflow import best_practice
 
 This will change some models defaults (for instance, batch norm momentum, ResNet block layouts, etc) we find more useful and
 consistently bringing better results (faster training and more accurate predictions).
@@ -96,64 +96,64 @@ Python package
 
 With modern `pipenv <https://docs.pipenv.org/>`_::
 
-    pipenv install git+https://github.com/analysiscenter/dataset.git#egg=dataset
+    pipenv install git+https://github.com/analysiscenter/batchflow.git#egg=batchflow
 
 With old-fashioned `pip <https://pip.pypa.io/en/stable/>`_::
 
-    pip3 install git+https://github.com/analysiscenter/dataset.git
+    pip3 install git+https://github.com/analysiscenter/batchflow.git
 
 
-After that just import `dataset`::
+After that just import `batchflow`::
 
-    import dataset as ds
+    import batchflow as ds
 
 
 Git submodule
 -------------
 
-.. note:: `Dataset` module is in the beta stage. Your suggestions and improvements are very welcome.
+.. note:: `BatchFlow` module is in the beta stage. Your suggestions and improvements are very welcome.
 
-.. note:: `Dataset` supports python 3.5 or higher.
+.. note:: `BatchFlow` supports python 3.5 or higher.
 
 
-In many cases it is much more convenient to install `dataset` as a submodule in your project repository than as a python package::
+In many cases it is much more convenient to install `batchflow` as a submodule in your project repository than as a python package::
 
-    git submodule add https://github.com/analysiscenter/dataset.git
+    git submodule add https://github.com/analysiscenter/batchflow.git
     git submodule init
     git submodule update
 
 
-If your python file is located in another directory, you might need to add a path to `dataset` submodule location::
+If your python file is located in another directory, you might need to add a path to `batchflow` submodule location::
 
     import sys
-    sys.path.insert(0, "/path/to/dataset")
-    import dataset as ds
+    sys.path.insert(0, "/path/to/batchflow")
+    import batchflow as bf
 
 What is great about using a submodule is that every commit in your project can be linked to its own commit of a submodule.
 This is extremely convenient in a fast paced research environment.
 
 Relative import is also possible::
 
-    from .dataset import Dataset
+    from .batchflow import Dataset
 
 
 
-Citing Dataset
-==============
-Please cite Dataset in your publications if it helps your research.
+Citing BatchFlow
+================
+Please cite BatchFlow in your publications if it helps your research.
 
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.1041203.svg
    :target: https://doi.org/10.5281/zenodo.1041203
 
 ::
 
-    Roman Khudorozhkov et al. Dataset library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
+    Roman Khudorozhkov et al. BatchFlow library for fast ML workflows. 2017. doi:10.5281/zenodo.1041203
 
 ::
 
     @misc{roman_kh_2017_1041203,
       author       = {Khudorozhkov, Roman and others},
-      title        = {Dataset library for fast ML workflows},
+      title        = {BatchFlow library for fast ML workflows},
       year         = 2017,
       doi          = {10.5281/zenodo.1041203},
       url          = {https://doi.org/10.5281/zenodo.1041203}

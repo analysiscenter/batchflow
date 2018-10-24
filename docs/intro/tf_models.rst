@@ -60,14 +60,14 @@ This block just transforms the raw inputs into more managable and initially prep
 
 Some networks do not need this (like VGG). However, most network have 1 or 2 convolutional layers
 and sometimes also a max pooling layer with stride 2. These layers can be put into body, as well.
-But the input block takes all irregular front layers, thus allowing for a regular body structure.
+But the initial block takes all irregular front layers, thus allowing for a regular body structure.
 
 
 body
 ----
 Body contains a repetitive structure of building blocks. Most networks (like VGG, ResNet and the likes) have a straight sequence of blocks, while others (e.g. UNet, LinkNet, RefineNet, ResNetAttention) look like graphs with many interconnections.
 
-Input block's output goes into body as inputs.
+Initial block's output goes into body as inputs.
 And body's output is a compressed representation (embedding) of the input tensors.
 It can later be used for various tasks: classification, regression, detection, etc.
 So ``body`` produces a task-independent embedding.
@@ -161,29 +161,30 @@ Later, names ``images`` and ``targets`` will be used to feed data into the model
 Take into account that one-hot encoding is not required for labels when using cross-entropy loss as it is applied
 automatically. However, for custom losses one-hot encoding might be necessary.
 
-For more information on the configuration of the inputs, see :meth:`~dataset.models.tf.TFModel._make_inputs`.
+For more information on the configuration of the inputs, see :meth:`~batchflow.models.tf.TFModel._make_inputs`.
 
 Models based on :class:`.TFModel` expect that one of the inputs has a name ``targets`` (before or after transformations),
 while model output turns into a tensor named ``predictions``. These tensors are used to define a model loss function.
 
-input block
------------
-Input block specifies which inputs flow into the model to turn into prediction::
+Initial block
+-------------
+Initial block specifies which inputs flow into the model to turn into prediction::
 
     model_config = {
         'initial_block/inputs': 'images',
     }
 
-As the default input block contains a :func:`~.layers.conv_block`, all its parameters might be also specfied in the config::
+As the default initial block contains a :func:`~.layers.conv_block`, all its parameters might be also specfied in the config::
 
     model_config = {
         'initial_block': dict(layout='cnap', filters=64, kernel_size=7, strides=2),
         'initial_block/inputs': 'images',
     }
 
-So the configured input block gets `images` tensor and applies a convolution with 7x7 kernel and stride 2.
+So the configured initial block gets `images` tensor and applies a convolution with 7x7 kernel and stride 2.
 
-For :doc:`predefined models <model_zoo_tf>` input block has the default configuration in accordance with the original article. So you almost never need to redefine it.
+For :doc:`predefined models <model_zoo_tf>` an initial block has the default configuration in accordance with the original paper.
+So you almost never need to redefine it.
 
 However, ``initial_block/inputs`` should always be specified.
 
@@ -291,8 +292,8 @@ Just redefine ``body()`` method.
 For example, let's create a small fully convolutional network with 3 layers of 3x3 convolutions, batch normalization, dropout
 and a dense layer at the end::
 
-    from dataset.models.tf import TFModel
-    from dataset.models.tf.layers import conv_block
+    from batchflow.models.tf import TFModel
+    from batchflow.models.tf.layers import conv_block
 
     class MyModel(TFModel):
         def body(self, inputs, **kwargs):
@@ -310,8 +311,8 @@ The right way
 -------------
 Here we split network configuration and network definition into separate methods::
 
-    from dataset.models.tf import TFModel
-    from dataset.models.tf.layers import conv_block
+    from batchflow.models.tf import TFModel
+    from batchflow.models.tf.layers import conv_block
 
     class MyModel(TFModel):
         @classmethod
@@ -412,4 +413,4 @@ Ready to use models
 .. toctree::
    :maxdepth: 2
 
-   ../api/dataset.models.tf.models
+   ../api/batchflow.models.tf.models

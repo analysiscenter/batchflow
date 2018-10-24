@@ -78,7 +78,7 @@ In order to accelerate data processing you can run batch methods in parallel:
 
 .. code-block:: python
 
-    from dataset import Batch, inbatch_parallel, action
+    from batchflow import Batch, inbatch_parallel, action
 
     class MyBatch(Batch):
         ...
@@ -132,7 +132,7 @@ To perform multiple experiments with different parameters you can use `Research`
 
 .. code-block:: python
 
-    from dataset.research import Research
+    from batchflow.research import Research
     ...
     research = (Research()
                 .add_pipeline(train_pipeline, variables='loss', name='train')

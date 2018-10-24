@@ -98,7 +98,7 @@ Link a pipeline to a dataset.
 
 The complete example::
 
-   from dataset import Pipeline
+   from batchflow import Pipeline
 
    with Pipeline() as p:
        preprocessing_pipeline = p.load('/some/path')
@@ -120,7 +120,7 @@ A template pipeline
 
 .. code-block:: python
 
-   from dataset import Pipeline
+   from batchflow import Pipeline
 
    my_pipeline = Pipeline()
                    .some_action()
@@ -128,7 +128,7 @@ A template pipeline
 
 Or through a context manager with pipeline algebra::
 
-   from dataset import Pipeline
+   from batchflow import Pipeline
 
    with Pipeline() as p:
        my_pipeline = p.some_action() + p.another_action()
@@ -402,7 +402,7 @@ Mostly, `join` is used as follows::
         .load(components=['labels', 'masks'])
     )
 
-See :func:`~dataset.Batch.load` for more details.
+See :func:`~batchflow.Batch.load` for more details.
 
 Merging pipelines
 ^^^^^^^^^^^^^^^^^

@@ -7,7 +7,7 @@ Basic usage
 
 The ``inbatch_parallel`` decorator allows to run a method in parallel::
 
-   from dataset import Batch, inbatch_parallel, action
+   from batchflow import Batch, inbatch_parallel, action
 
    class MyBatch(Batch):
        ...
@@ -275,7 +275,7 @@ This is where ``any_action_failed`` might come in handy:
 
 .. code-block:: python
 
-   from dataset import Batch, action, inbatch_parallel, any_action_failed
+   from batchflow import Batch, action, inbatch_parallel, any_action_failed
 
    class MyBatch(Batch):
        ...
@@ -298,7 +298,7 @@ If an action-method changes data directly, you don't need a ``post``-function.
 
 .. code-block:: python
 
-   from dataset import Batch, action, inbatch_parallel, any_action_failed
+   from batchflow import Batch, action, inbatch_parallel, any_action_failed
 
    class MyBatch(Batch):
        ...
@@ -313,7 +313,7 @@ However, ``numba`` or ``cython`` allow for a real multithreading.
 
 .. code-block:: python
 
-   from dataset import Batch, action, inbatch_parallel, any_action_failed
+   from batchflow import Batch, action, inbatch_parallel, any_action_failed
    from numba import njit
 
    @njit(nogil=True)
@@ -375,7 +375,7 @@ With ``mpc`` you might run calculations in separate processes thus removing GIL 
 
 .. code-block:: python
 
-   from dataset import Batch, action, inbatch_parallel
+   from batchflow import Batch, action, inbatch_parallel
 
    def mpc_fn(data, index, arg):
        # do something

@@ -31,7 +31,7 @@ In other cases it can be a list of domain-specific identificators (e.g. client i
 
    dataset_index = DatasetIndex(dataframe['client_id'])
 
-You will rarely need to work with an index directly, but if you want to do something specific you may use its :doc:`public API <../api/dataset.index>`.
+You will rarely need to work with an index directly, but if you want to do something specific you may use its :doc:`public API <../api/batchflow.index>`.
 
 .. _FilesIndex:
 
@@ -107,9 +107,9 @@ build_index
 
 You might want to redefine `build_index` method which actually creates the index.
 It takes all the arguments from the constructor and returns a numpy array with index items.
-This method is called automatically from the :class:`~dataset.DatasetIndex` constructor.
+This method is called automatically from the :class:`~batchflow.DatasetIndex` constructor.
 
 API
 ---
 
-See :doc:`Index API <../api/dataset.index>`.
+See :doc:`Index API <../api/batchflow.index>`.

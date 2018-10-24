@@ -10,7 +10,7 @@ Model class
 
 Models are defined in model classes. You can take ready to use architectures or write your own models.::
 
-   from dataset.models import BaseModel
+   from batchflow.models import BaseModel
 
    class MyModel(BaseModel):
        def _build(self, *args, **kwargs):
@@ -41,7 +41,7 @@ First of all, a model should be initialized::
                              .init_model('static', MyModel, 'my_model', config)
                              ...
 
-In :meth:`~dataset.Pipeline.init_model()` you state a mode (``static`` or ``dynamic``), a model class, an optional short model name (otherwise, a class name will be used) and an optional configuration.
+In :meth:`~batchflow.Pipeline.init_model()` you state a mode (``static`` or ``dynamic``), a model class, an optional short model name (otherwise, a class name will be used) and an optional configuration.
 A static model is initialized immediately in the ``init_model``, while a dynamic model will be initialized when the pipeline is run and the very first batch flows into the pipeline.
 
 If a model was already created in another pipeline, it might be `imported <#importing-models>`_.
@@ -95,7 +95,7 @@ A train action should be stated below an initialization action::
        .train_model('my_model', x=B('images'), y=B('labels'))
    )
 
-:meth:`~dataset.Pipeline.train_model` arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.
+:meth:`~batchflow.Pipeline.train_model` arguments might be specific to a particular model you use. So read a model specfication to find out what it expects for training.
 
 Model independent arguments are:
 
@@ -155,7 +155,7 @@ You can also write an action which works with a model directly.::
 Predicting with a model
 =======================
 
-:meth:`~dataset.Pipeline.predict_model` is very similar to `train_model <#training-a-model>`_ described above::
+:meth:`~batchflow.Pipeline.predict_model` is very similar to `train_model <#training-a-model>`_ described above::
 
    full_workflow = (my_dataset.p
        .init_model('static', MyModel, 'my_model', config)
@@ -179,7 +179,7 @@ You can write a model to a persistent storage at any time by calling ``save_mode
 As usual, the first argument is a model name, while all other arguments are model specific, so read a model documentation
 to find out what parameters are required to save a model.
 
-Note, that :meth:`~dataset.Pipeline.save_model` is imperative, i.e. it saves a model right now, but not when a pipeline is executed.
+Note, that :meth:`~batchflow.Pipeline.save_model` is imperative, i.e. it saves a model right now, but not when a pipeline is executed.
 Thus, it cannot be a part of a pipeline's chain of actions (otherwise, this would save the model after processing each batch,
 which might be highly undesired).
 
@@ -237,7 +237,7 @@ This can be easily achieved with a model import.::
 
    infer = (inference_pipeline_template << some_dataset).run(INFER_BATCH_SIZE, shuffle=False)
 
-When ``inference_pipeline_template`` is run, the model ``Resnet50`` from ``train_pipeline`` will be imported. If you still have questions about import_model, search the answer in :meth:`~dataset.Pipeline.import_model`.
+When ``inference_pipeline_template`` is run, the model ``Resnet50`` from ``train_pipeline`` will be imported. If you still have questions about import_model, search the answer in :meth:`~batchflow.Pipeline.import_model`.
 
 
 Parallel training

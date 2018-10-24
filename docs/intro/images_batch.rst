@@ -10,45 +10,45 @@ The class has two components: ``images`` and ``labels``.
 
 Conversion between formats
 --------------------------
-Almost all actions in the batch work with `PIL` images. If dataset contains `np.ndarray` images, just call :meth:`to_pil <dataset.ImagesBatch.to_pil>` method to convert them inside batch.
-To convert images to `np.ndarray` use :meth:`to_array <dataset.ImagesBatch.to_array>` (this must be done, for example, before passing images to a tensorflow model).
+Almost all actions in the batch work with `PIL` images. If dataset contains `np.ndarray` images, just call :meth:`to_pil <batchflow.ImagesBatch.to_pil>` method to convert them inside batch.
+To convert images to `np.ndarray` use :meth:`to_array <batchflow.ImagesBatch.to_array>` (this might be needed, for example, before passing images to a model).
 
 Augmentation
 ------------
 
 ImagesBatch provides typical augmentation actions, for example:
 
-* :meth:`crop <dataset.ImagesBatch.crop>` -- crop rectangular area from an image
+* :meth:`crop <batchflow.ImagesBatch.crop>` -- crop rectangular area from an image
     ..  image:: ../_static/ImagesBatch_examples/crop.png
-* :meth:`flip <dataset.ImagesBatch.flip>` -- flip an image (left to right or upside down)
+* :meth:`flip <batchflow.ImagesBatch.flip>` -- flip an image (left to right or upside down)
     ..  image:: ../_static/ImagesBatch_examples/flip.png
-* :meth:`scale <dataset.ImagesBatch.scale>` -- scale an image (stretch or tie)
+* :meth:`scale <batchflow.ImagesBatch.scale>` -- scale an image (stretch or tie)
     ..  image:: ../_static/ImagesBatch_examples/scale.png
-* :meth:`put_on_background <dataset.ImagesBatch.put_on_background>` -- put an image on a given background
+* :meth:`put_on_background <batchflow.ImagesBatch.put_on_background>` -- put an image on a given background
     ..  image:: ../_static/ImagesBatch_examples/put_on_background.png
-* :meth:`resize <dataset.ImagesBatch.resize>` -- resize an image a to the given shape
+* :meth:`resize <batchflow.ImagesBatch.resize>` -- resize an image a to the given shape
     ..  image:: ../_static/ImagesBatch_examples/resize.png
-* :meth:`pad <dataset.ImagesBatch.pad>` -- add constant values to the border of an image (enlarging the last's shape)
+* :meth:`pad <batchflow.ImagesBatch.pad>` -- add constant values to the border of an image (enlarging the last's shape)
     ..  image:: ../_static/ImagesBatch_examples/pad.png
-* :meth:`invert <dataset.ImagesBatch.invert>` -- invert given channels in an image
+* :meth:`invert <batchflow.ImagesBatch.invert>` -- invert given channels in an image
     ..  image:: ../_static/ImagesBatch_examples/invert.png
-* :meth:`salt <dataset.ImagesBatch.salt>` -- set pixels in random positions to given colour
+* :meth:`salt <batchflow.ImagesBatch.salt>` -- set pixels in random positions to given colour
     ..  image:: ../_static/ImagesBatch_examples/salt.png
-* :meth:`clip <dataset.ImagesBatch.clip>` -- truncate pixels' values
+* :meth:`clip <batchflow.ImagesBatch.clip>` -- truncate pixels' values
     ..  image:: ../_static/ImagesBatch_examples/threshold.png
-* :meth:`multiply <dataset.ImagesBatch.multiply>` -- multiply an image by the given number
+* :meth:`multiply <batchflow.ImagesBatch.multiply>` -- multiply an image by the given number
     ..  image:: ../_static/ImagesBatch_examples/multiply.png
-* :meth:`multiplicative_noise <dataset.ImagesBatch.multiplicative_noise>` -- add multiplicative noise to an image
+* :meth:`multiplicative_noise <batchflow.ImagesBatch.multiplicative_noise>` -- add multiplicative noise to an image
     ..  image:: ../_static/ImagesBatch_examples/multiplicative_noise.png
-* :meth:`add <dataset.ImagesBatch.add>` -- add given term to an image
+* :meth:`add <batchflow.ImagesBatch.add>` -- add given term to an image
     ..  image:: ../_static/ImagesBatch_examples/add.png
-* :meth:`additive_noise <dataset.ImagesBatch.additive_noise>` -- add additive noise an image
+* :meth:`additive_noise <batchflow.ImagesBatch.additive_noise>` -- add additive noise an image
     ..  image:: ../_static/ImagesBatch_examples/additive_noise.png
-* :meth:`posterize <dataset.ImagesBatch.posterize>` -- posterize an image
+* :meth:`posterize <batchflow.ImagesBatch.posterize>` -- posterize an image
     ..  image:: ../_static/ImagesBatch_examples/posterize.png
-* :meth:`cutout <dataset.ImagesBatch.cutout>` -- add colored rectangular areas to an image
+* :meth:`cutout <batchflow.ImagesBatch.cutout>` -- add colored rectangular areas to an image
     ..  image:: ../_static/ImagesBatch_examples/cutout.png
-* :meth:`elastic_transform <dataset.ImagesBatch.elastic_transform>` -- add colored rectangular areas to an image
+* :meth:`elastic_transform <batchflow.ImagesBatch.elastic_transform>` -- add colored rectangular areas to an image
     ..  image:: ../_static/ImagesBatch_examples/elastic.png
 
 
@@ -100,18 +100,18 @@ Rotate each image with probability 0.7 by its own sampled angle
         .rotate(angle=P(R('normal', loc=0, scale=1)), p=0.7)
         ...
 
-See more details in `the augmentation tutorial <https://github.com/analysiscenter/dataset/blob/master/examples/tutorials/06_image_augmentation.ipynb>`_.
+See more details in `the augmentation tutorial <https://github.com/analysiscenter/batchflow/blob/master/examples/tutorials/06_image_augmentation.ipynb>`_.
 
 Loading from files
 ------------------
 
-To load images, use action :meth:`load <dataset.ImagesBatch.load>` with ``fmt='image'``.
+To load images, use action :meth:`load <batchflow.ImagesBatch.load>` with ``fmt='image'``.
 
 
 Saving
 ------
 
-To dump images, use action :meth:`dump <dataset.ImagesBatch.dump>`
+To dump images, use action :meth:`dump <batchflow.ImagesBatch.dump>`
 
 
 `transform_actions` decorator
@@ -120,9 +120,9 @@ To dump images, use action :meth:`dump <dataset.ImagesBatch.dump>`
 This decorator finds all defined methods whose names starts with user-defined `suffix` and `prefix` and
 decorates them with ``wrapper`` which is an argument too.
 
-For example, there are two wrapper functions defined in :class:`~dataset.Batch`:
-    1. :meth:`~dataset.Batch.apply_transform_all`
-    2. :meth:`~dataset.Batch.apply_transform`
+For example, there are two wrapper functions defined in :class:`~batchflow.Batch`:
+    1. :meth:`~batchflow.Batch.apply_transform_all`
+    2. :meth:`~batchflow.Batch.apply_transform`
 
 And, by default, all methods that start with '_' and end with '_' are wrapped with the first mentioned method and those ones that start with '_' and end with '_all' are wrapped by the second one.
 
@@ -131,7 +131,7 @@ Defining custom actions
 
 There are 3 ways to define an action:
 
-    1. By writting a classic ``action`` like in  :class:`~dataset.Batch`
+    1. By writting a classic ``action`` like in  :class:`~batchflow.Batch`
     2. By writing a method that takes ``image`` as the first argument and returns transformed one. Method's name must be surrounded by unary '_'.
     3. By writing a method that takes nd.array of ``images`` as the first argument and ``indices`` as the second. This method transforms ``images[indices]`` and returns ``images``. Method's name must start with '_' and end with '_all'.
 
@@ -148,7 +148,7 @@ It must have the following signature:
 
    ``_method_name_(image, ...)``
 
-This method is actually wrapped with :meth:`~dataset.Batch.apply_transform`. And (usually) executed in parallel for each image.
+This method is actually wrapped with :meth:`~batchflow.Batch.apply_transform`. And (usually) executed in parallel for each image.
 
 
 .. note:: If you define these actions in a child class then you must decorate it with ``@transform_actions(prefix='_', suffix='_', wrapper='apply_transform')``
@@ -194,7 +194,7 @@ It must have the following signature:
 
    ``_method_name_all(images, indices, ...)``
 
-This method is actually wrapped with :meth:`~dataset.Batch.apply_transform_all`. And executed once with the whole batch passed. ``indices`` parameter declares images that must be transformed (it is needed, for example, if you want to perform action only to the subset of the elements. See below for more details)
+This method is actually wrapped with :meth:`~batchflow.Batch.apply_transform_all`. And executed once with the whole batch passed. ``indices`` parameter declares images that must be transformed (it is needed, for example, if you want to perform action only to the subset of the elements. See below for more details)
 
 
 .. note:: If you define these actions in a child class then you must decorate it with ``@transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')``
@@ -249,4 +249,4 @@ Cropping to patches
 -------------------------
 
 If you have a very big image then you can compose little patches from it.
-See :meth:`split_to_patches <dataset.ImagesBatch.split_to_patches>` and tutorial for more details.
+See :meth:`split_to_patches <batchflow.ImagesBatch.split_to_patches>` and tutorial for more details.
