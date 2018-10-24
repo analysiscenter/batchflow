@@ -266,7 +266,7 @@ class ConvBlock(nn.Module):
                 args = {**args, **layer_args}
                 args = unpack_args(args, *layout_dict[C_GROUPS[layer]])
 
-                if 'dataset.' in layer_fn.__module__:
+                if 'batchflow.' in layer_fn.__module__:
                     args['inputs'] = new_layer
 
                 new_layer = layer_fn(**args)
@@ -274,6 +274,7 @@ class ConvBlock(nn.Module):
 
         self.block = nn.Sequential(*modules)
         self.output_shape = get_shape(self.block)
+
 
     def forward(self, x):
         """ Make forward pass """

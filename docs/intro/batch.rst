@@ -289,7 +289,7 @@ Make all I/O in `async` methods even if there is nothing to parallelize
        .do_something_else()
 
 Init-function `run_once` runs the decorated method once (so no parallelism whatsoever).
-Besides, the methods does not receive any additional arguments, only those passed to it directly.
+Besides, the method does not receive any additional arguments, only those passed to it directly.
 However, an `action` defined as asynchronous will be waited for.
 You may define your own `post`-method in order to check the result and process the exceptions if they arise.
 
