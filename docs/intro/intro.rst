@@ -21,7 +21,7 @@ In simple cases it can be just a `numpy.arange`:
 
 Most of the times creating an index in one line of code is all you need to do about a dataset index.
 
-For more details see :doc:`How to work with an Index <index>`.
+For more details see :doc:`How to work with an Index <dsindex>`.
 
 
 Dataset
