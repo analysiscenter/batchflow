@@ -5,7 +5,7 @@ API
 .. toctree::
    :maxdepth: 4
 
-   dataset.core
-   dataset.opensets
-   dataset.models
-   dataset.research
+   batchflow.core
+   batchflow.opensets
+   batchflow.models
+   batchflow.research

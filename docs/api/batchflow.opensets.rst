@@ -6,7 +6,7 @@ dataset.opensets
 MNIST
 -----
 
-.. autoclass:: dataset.opensets.MNIST
+.. autoclass:: batchflow.opensets.MNIST
     :members:
     :undoc-members:
     :show-inheritance:
@@ -15,7 +15,7 @@ MNIST
 CIFAR10
 -------
 
-.. autoclass:: dataset.opensets.CIFAR10
+.. autoclass:: batchflow.opensets.CIFAR10
     :members:
     :undoc-members:
     :show-inheritance:
@@ -24,7 +24,7 @@ CIFAR10
 CIFAR100
 --------
 
-.. autoclass:: dataset.opensets.CIFAR100
+.. autoclass:: batchflow.opensets.CIFAR100
     :members:
     :undoc-members:
     :show-inheritance:

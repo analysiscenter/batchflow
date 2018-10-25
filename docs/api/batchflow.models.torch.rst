@@ -6,4 +6,3 @@ batchflow.models.torch
 
     batchflow.models.torch.models
     Custom layers and blocks <batchflow.models.torch.layers>
-    Custom losses <batchflow.models.torch.losses>

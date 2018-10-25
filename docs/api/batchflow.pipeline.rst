@@ -4,6 +4,6 @@ Pipeline
 .. toctree::
    :maxdepth: 2
 
-.. autoclass:: dataset.Pipeline
+.. autoclass:: batchflow.Pipeline
     :members:
     :undoc-members:

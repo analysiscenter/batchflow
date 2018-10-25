@@ -6,7 +6,7 @@ dataset.research
 Research
 --------
 
-.. autoclass:: dataset.research.Research
+.. autoclass:: batchflow.research.Research
     :members:
     :undoc-members:
     :member-order: bysource
@@ -14,32 +14,32 @@ Research
 ExecutableUnit
 --------------
 
-.. autoclass:: dataset.research.research.ExecutableUnit
+.. autoclass:: batchflow.research.research.Executable
 
 Grid
 ----
 
-.. autoclass:: dataset.research.Grid
+.. autoclass:: batchflow.research.Grid
     :members:
     :undoc-members:
 
 Option
 ------
 
-.. autoclass:: dataset.research.Option
+.. autoclass:: batchflow.research.Option
     :members:
     :undoc-members:
 
 KV
 --
 
-.. autoclass:: dataset.research.KV
+.. autoclass:: batchflow.research.KV
     :members:
     :undoc-members:
 
 ConfigAlias
 -----------
 
-.. autoclass:: dataset.research.ConfigAlias
+.. autoclass:: batchflow.research.ConfigAlias
     :members:
     :undoc-members:

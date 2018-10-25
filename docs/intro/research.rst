@@ -8,7 +8,7 @@ Basic usage
 -----------
 Let's compare `VGG7` and `VGG16` performance on `MNIST` dataset with different layouts of convolutional blocks. For each combination of layout and model class, we train model for 1000 iterations and repeat that process 10 times and save accuracy and loss on train and accuracy on test.
 
-Firstly, import classes from `dataset` to create pipelines:
+Firstly, import classes from `batchflow` to create pipelines:
 
 .. code-block:: python
 
@@ -32,7 +32,7 @@ Define model config. All parameters that we want to vary we define as ``C('param
 
 Strictly saying, the whole ``model_config`` with different ``'model_config/body/block/layout'`` is a pipeline parameter but due to a substitution rule of named expressions you can define named expression inside of `dict` or `Config` that is used as action parameter (See :doc:`Named expressions <../intro/named_expr>`).
 
-Define dataset and train pipeline:
+Define a dataset and train a pipeline:
 
 .. code-block:: python
 

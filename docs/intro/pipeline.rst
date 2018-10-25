@@ -462,4 +462,4 @@ See :doc:`Working with models <models>`.
 
 API
 ===
-See :doc:`pipelines API <../api/dataset.pipeline>`.
+See :doc:`pipelines API <../api/batchflow.pipeline>`.

@@ -264,7 +264,7 @@ the list of :doc:`implemented architectures <model_zoo>`.
 
 Model metrics
 =============
-Module :doc:`models.metrics <../api/dataset.models.metrics>` comes in handy to evaluate model performance.
+Module :doc:`models.metrics <../api/batchflow.models.metrics>` comes in handy to evaluate model performance.
 It contains many useful metrics (sensitivity, specificity, accuracy, false discovery rate and many others)
 for different scenarios (2-class and multiclass classification, pixel-wise and instance-wise semantic segmentation).
 
@@ -288,4 +288,4 @@ Or in a pipeline::
     metrics = pipeline.get_variable('metrics')
     print(metrics.evaluate(['sensitivity', 'specificity']))
 
-For more information about metrics see :doc:`metrics API <../api/dataset.models.metrics>` and :meth:`~.Pipeline.gather_metrics`.
+For more information about metrics see :doc:`metrics API <../api/batchflow.models.metrics>` and :meth:`~.Pipeline.gather_metrics`.

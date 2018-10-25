@@ -85,7 +85,7 @@ Not surprisingly, many networks comprise different types of blocks, for example:
 - SqueezeNet alternates fire blocks with max-pooling.
 
 When creating a custom model you can have as many block types as you need, though aim to make them universal and reusable elsewhere.
-For instance, :class:`~.LinkNet`, :class:`~.GlobalConvolutionNetwork`, and :class:`~.ResNetAttention` use :class:`~.ResNet` blocks.
+For instance, :class:`~.LinkNet`, :class:`~.GlobalConvolutionNetwork`, and :class:`~.ResNetAttention` use :class:`~.tf.ResNet` blocks.
 
 
 head
@@ -193,7 +193,7 @@ body
 ----
 Body is the main part of a model. Thus its configuration highly depends on the model structure and purpose.
 
-For instance, :class:`~.ResNet` body config includes ``block`` section with specific residual block parameters. While :class:`~.UNet` body contains ``upsample`` section which specifies the technique to resize tensors in a decoder part of the network.
+For instance, :class:`~.tf.ResNet` body config includes ``block`` section with specific residual block parameters. While :class:`~.tf.UNet` body contains ``upsample`` section which specifies the technique to resize tensors in a decoder part of the network.
 
 See the model documentation to find out how to configure its body.
 
@@ -384,7 +384,7 @@ Things worth mentioning:
    In many cases config is just enough to build a network without additional code writing.
 
 #. Input data and its parameters should be defined in configuration under ``inputs`` key.
-   See :meth:`._make_inputs` for details.
+   See :meth:`.TFModel._make_inputs` for details.
 
 #. You might want to use a convenient multidimensional :func:`.conv_block` and other predefined :doc:`layers <tf_layers>`.
    Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.

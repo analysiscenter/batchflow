@@ -4,7 +4,7 @@ Sampler
 .. toctree::
    :maxdepth: 2
 
-.. automodule:: dataset.sampler
+.. automodule:: batchflow.sampler
     :member-order: bysource
     :members:
     :undoc-members:
