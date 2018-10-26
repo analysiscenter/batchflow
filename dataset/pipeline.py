@@ -142,6 +142,7 @@ class Pipeline:
         new_p1.variables += pipe2.variables
         new_p1.models += pipe2.models
         new_p1.dataset = new_p1.dataset or pipe2.dataset
+        new_p1._lazy_run = new_p1._lazy_run or pipe2._lazy_run
         return new_p1
 
     def get_last_action_proba(self):
