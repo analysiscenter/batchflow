@@ -81,7 +81,7 @@ class Option:
     def __add__(self, other):
         return Grid(self) + Grid(other)
 
-    def gen_configs(self, n_items=None):
+    def gen_configs(self, n_items=1):
         """ Returns Configs created from the option """
         grid = Grid(self)
         return grid.gen_configs(n_items)
