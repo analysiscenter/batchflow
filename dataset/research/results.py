@@ -111,4 +111,4 @@ class Results():
                             }))
                         else:
                             df.append(pd.DataFrame({**alias, 'repetition': repetition, 'unit': unit, **res}))
-        return pd.concat(df).reset_index(drop=True)
+        return pd.concat(df, ignore_index=True)
