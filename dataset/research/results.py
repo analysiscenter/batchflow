@@ -88,11 +88,12 @@ class Results():
 
         for config_alias in self.configs:
             config = config_alias.config()
-            alias = config_alias.alias(as_string=True)
+            alias = config_alias.alias(as_string=False)
+            alias_str = config_alias.alias(as_string=True)
             for repetition in self.repetitions:
                 for unit in self.units:
-                    path = os.path.join(self.path, 'results', alias, str(repetition), unit+'_*')
-                    files = glob.glob(path)
+                    path = os.path.join(self.path, 'results', alias_str, str(repetition))
+                    files = glob.glob(os.path.join(glob.escape(path), unit + '_*'))
                     files = self._sort_files(files, self.iterations)
                     if len(files) != 0:
                         res = []
@@ -103,11 +104,11 @@ class Results():
                         self._fix_length(res)
                         if use_alias:
                             df.append(pd.DataFrame({
-                                'config': alias,
+                                'config': alias_str,
                                 'repetition': repetition,
                                 'unit': unit, 
                                 **res
                             }))
                         else:
-                            df.append(pd.DataFrame({**config, 'repetition': repetition, 'unit': unit, **res}))
+                            df.append(pd.DataFrame({**alias, 'repetition': repetition, 'unit': unit, **res}))
         return pd.concat(df)
