@@ -36,15 +36,36 @@ class Results():
         return value
 
     def _sort_files(self, files, iterations):
-        files = OrderedDict({file: int(file.split('_')[-1]) for file in files})
-        return OrderedDict(sorted(files.items(), key=lambda x: x[1])).keys()
+        files = {file: int(file.split('_')[-1]) for file in files}
+        files = OrderedDict(sorted(files.items(), key=lambda x: x[1]))
+        result = []
+        start = 0
+        for name, end in files.items():
+            intersection = pd.np.intersect1d(iterations, pd.np.arange(start, end))
+            if len(intersection) > 0:
+                result.append((name, intersection))
+            start = end
+        return OrderedDict(result)
+
+    def _slice_file(self, dumped_file, iterations_to_load, variables):
+        iterations = dumped_file['iteration']
+        if len(iterations) > 0:
+            elements_to_load = pd.np.array([pd.np.isin(it, iterations_to_load) for it in iterations])
+            res = OrderedDict()
+            for variable in ['iteration', *variables]:
+                if variable in dumped_file:
+                    res[variable] = pd.np.array(dumped_file[variable])[elements_to_load]
+        else:
+            res = None
+        return res
 
     def _concat(self, results, variables):
         res = {key: [] for key in [*variables, 'iteration']}
         for chunk in results:
-            for key, values in res.items():
-                if key in chunk:
-                    values.extend(chunk[key])
+            if chunk is not None:
+                for key, values in res.items():
+                    if key in chunk:
+                        values.extend(chunk[key])
         return res
 
     def _fix_length(self, chunk):
@@ -64,7 +85,8 @@ class Results():
         return result
 
 
-    def load(self, units=None, repetitions=None, variables=None, configs=None, aliases=None, use_alias=False):
+    def load(self, units=None, repetitions=None, variables=None, configs=None,
+             iterations=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -75,6 +97,10 @@ class Results():
             numbers of repetitions to load
         variables : str, list or None
             names of variables to load
+        configs, aliases : dict, Config, Option, Grid or None
+            configs to load
+        iterations : int, list or None
+            iterations to load
         use_alias : bool
             if True, the resulting DataFrame will have one column with alias, else it will
             have column for each option in grid
@@ -96,11 +122,13 @@ class Results():
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
 
+        if iterations is None:
+            iterations = list(range(self.research.n_iters))
+
         self.units = self._get_list(units)
         self.repetitions = self._get_list(repetitions)
         self.variables = self._get_list(variables)
-
-        self.iterations = list(range(self.research.n_iters))
+        self.iterations = self._get_list(iterations)
 
         df = []
 
@@ -115,9 +143,9 @@ class Results():
                     files = self._sort_files(files, self.iterations)
                     if len(files) != 0:
                         res = []
-                        for filename in files:
+                        for filename, iterations_to_load in files.items():
                             with open(filename, 'rb') as file:
-                                res.append(dill.load(file))
+                                res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
                         res = self._concat(res, self.variables)
                         self._fix_length(res)
                         if use_alias:
