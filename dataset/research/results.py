@@ -139,7 +139,7 @@ class Results():
             for repetition in self.repetitions:
                 for unit in self.units:
                     path = os.path.join(self.path, 'results', alias_str, str(repetition))
-                    files = glob.glob(os.path.join(glob.escape(path), unit + '_*'))
+                    files = glob.glob(os.path.join(glob.escape(path), unit + '_[0-9]*'))
                     files = self._sort_files(files, self.iterations)
                     if len(files) != 0:
                         res = []
@@ -157,4 +157,4 @@ class Results():
                             }))
                         else:
                             df.append(pd.DataFrame({**alias, 'repetition': repetition, 'unit': unit, **res}))
-        return pd.concat(df, ignore_index=True)
+        return pd.concat(df, ignore_index=True) if len(df) > 0 else pd.DataFrame(None)
