@@ -85,14 +85,14 @@ class Results():
         return result
 
 
-    def load(self, units=None, repetitions=None, variables=None, configs=None,
+    def load(self, names=None, repetitions=None, variables=None, configs=None,
              iterations=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
         Parameters
         ----------
-        units : str, list or None
-            names of pipleines and functions to load
+        names : str, list or None
+            names of units (pipleines and functions) to load
         repetitions : int, list or None
             numbers of repetitions to load
         variables : str, list or None
@@ -113,8 +113,8 @@ class Results():
         else:
             self.configs = self._filter_configs(alias=aliases)
 
-        if units is None:
-            units = list(self.research.executables.keys())
+        if names is None:
+            names = list(self.research.executables.keys())
         
         if repetitions is None:
             repetitions = list(range(self.research.n_reps))
@@ -125,7 +125,7 @@ class Results():
         if iterations is None:
             iterations = list(range(self.research.n_iters))
 
-        self.units = self._get_list(units)
+        self.names = self._get_list(names)
         self.repetitions = self._get_list(repetitions)
         self.variables = self._get_list(variables)
         self.iterations = self._get_list(iterations)
@@ -137,7 +137,7 @@ class Results():
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
             for repetition in self.repetitions:
-                for unit in self.units:
+                for unit in self.names:
                     path = os.path.join(self.path, 'results', alias_str, str(repetition))
                     files = glob.glob(os.path.join(glob.escape(path), unit + '_[0-9]*'))
                     files = self._sort_files(files, self.iterations)
@@ -152,9 +152,9 @@ class Results():
                             df.append(pd.DataFrame({
                                 'config': alias_str,
                                 'repetition': repetition,
-                                'unit': unit, 
+                                'name': unit, 
                                 **res
                             }))
                         else:
-                            df.append(pd.DataFrame({**alias, 'repetition': repetition, 'unit': unit, **res}))
+                            df.append(pd.DataFrame({**alias, 'repetition': repetition, 'name': unit, **res}))
         return pd.concat(df, ignore_index=True) if len(df) > 0 else pd.DataFrame(None)
