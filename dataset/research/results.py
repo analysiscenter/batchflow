@@ -7,6 +7,7 @@ import pandas as pd
 from collections import OrderedDict
 from .. import Config
 from .research import Research
+from .grid import Grid, Option
 
 class Results():
     """ Class for dealing with results of research
@@ -52,7 +53,18 @@ class Results():
             if len(value) < max_len:
                 value.extend([pd.np.nan] * (max_len - len(value)))
 
-    def load(self, units=None, repetitions=None, variables=None, use_alias=False):
+    def _filter_configs(self, config=None, alias=None):
+        result = None
+        if config is None and alias is None:
+            raise ValueError('At least one of parameters config and alias must be not None')
+        if config is not None:
+            result = self.configs.subset(config, by_alias=False)
+        else:
+            result = self.configs.subset(alias, by_alias=True)
+        return result
+
+
+    def load(self, units=None, repetitions=None, variables=None, configs=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -67,7 +79,13 @@ class Results():
             if True, the resulting DataFrame will have one column with alias, else it will
             have column for each option in grid
         """
-        self.configs = [config for config in self.research.grid_config.gen_configs()]
+        self.configs = self.research.grid_config
+        if configs is None and aliases is None:
+            self.configs = list(self.configs.gen_configs())
+        elif configs is not None:
+            self.configs = self._filter_configs(config=configs)
+        else:
+            self.configs = self._filter_configs(alias=aliases)
 
         if units is None:
             units = list(self.research.executables.keys())
