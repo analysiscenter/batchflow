@@ -23,7 +23,7 @@ class Metrics:
 
     def _aggregate(self, metric, agg=None):
         """ Aggregate metrics calculated for different batches or instances """
-        if agg is not None:
+        if not np.isscalar(metric) and agg is not None:
             agg_fn = self._agg_fn_dict.get(agg)
             if agg_fn is None:
                 raise ValueError("Unknown aggregation type", agg)
@@ -34,7 +34,7 @@ class Metrics:
             metric = metric.item()
         return metric
 
-    def evaluate(self, metrics, agg=None, *args, **kwargs):
+    def evaluate(self, metrics, agg='mean', *args, **kwargs):
         """ Calculates metrics
 
         Parameters
