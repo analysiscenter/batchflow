@@ -159,7 +159,7 @@ class Results():
                                 pd.DataFrame({
                                     **alias,
                                     'repetition': repetition,
-                                    'name': unit, 
+                                    'name': unit,
                                     **res
                                 })
                                 )
