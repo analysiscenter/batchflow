@@ -2,12 +2,10 @@
 
 import os
 import glob
+from collections import OrderedDict
 import dill
 import pandas as pd
-from collections import OrderedDict
-from .. import Config
 from .research import Research
-from .grid import Grid, Option
 
 class Results():
     """ Class for dealing with results of research
@@ -17,7 +15,7 @@ class Results():
     path : str
         path to root folder of research
     research : Research
-        instance of Research 
+        instance of Research
     """
     def __init__(self, path=None, research=None):
         if path is None and research is None:
@@ -70,7 +68,7 @@ class Results():
 
     def _fix_length(self, chunk):
         max_len = max([len(value) for value in chunk.values()])
-        for key, value in chunk.items():
+        for value in chunk.values():
             if len(value) < max_len:
                 value.extend([pd.np.nan] * (max_len - len(value)))
 
@@ -115,7 +113,7 @@ class Results():
 
         if names is None:
             names = list(self.research.executables.keys())
-        
+
         if repetitions is None:
             repetitions = list(range(self.research.n_reps))
 
@@ -130,10 +128,9 @@ class Results():
         self.variables = self._get_list(variables)
         self.iterations = self._get_list(iterations)
 
-        df = []
+        data_frame = []
 
         for config_alias in self.configs:
-            config = config_alias.config()
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
             for repetition in self.repetitions:
@@ -149,12 +146,21 @@ class Results():
                         res = self._concat(res, self.variables)
                         self._fix_length(res)
                         if use_alias:
-                            df.append(pd.DataFrame({
-                                'config': alias_str,
-                                'repetition': repetition,
-                                'name': unit, 
-                                **res
-                            }))
+                            data_frame.append(
+                                pd.DataFrame({
+                                    'config': alias_str,
+                                    'repetition': repetition,
+                                    'name': unit,
+                                    **res
+                                })
+                            )
                         else:
-                            df.append(pd.DataFrame({**alias, 'repetition': repetition, 'name': unit, **res}))
-        return pd.concat(df, ignore_index=True) if len(df) > 0 else pd.DataFrame(None)
+                            data_frame.append(
+                                pd.DataFrame({
+                                    **alias,
+                                    'repetition': repetition,
+                                    'name': unit, 
+                                    **res
+                                })
+                                )
+        return pd.concat(data_frame, ignore_index=True) if len(data_frame) > 0 else pd.DataFrame(None)

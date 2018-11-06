@@ -270,9 +270,7 @@ class Grid:
                     large = full_config.alias()
                 else:
                     small = partial_config.config().flatten()
-                    large = full_config.config().flatten()                 
+                    large = full_config.config().flatten()
                 if len(set(small.items()) - set(large.items())) == 0:
                     results.append(full_config)
         return results
-
-
