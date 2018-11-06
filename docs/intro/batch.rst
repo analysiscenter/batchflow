@@ -13,7 +13,7 @@ Index
 Data
 ====
 
-The base :class:`~dataset.Batch` class has a private property :attr:`~dataset.Batch._data` which you can use to store your data in. Just call :func:`~dataset.Batch.put_into_data`. After that, you can access data through a public property :attr:`~dataset.Batch.data`. This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.::
+The base :class:`~batchflow.Batch` class has a private property :attr:`~batchflow.Batch._data` which you can use to store your data in. Just call :func:`~batchflow.Batch.put_into_data`. After that, you can access data through a public property :attr:`~batchflow.Batch.data`. This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.::
 
     class MyBatch(Batch):
         def some_method(self):
@@ -34,13 +34,13 @@ To fill in the batch with preloaded data you might initialize it with `preloaded
 
    batch = MyBatch(index, preloaded=data)
 
-So :attr:`~dataset.Batch.data` will contain data right after batch creation and you don't need to call :func:`~dataset.Batch.load` action.
+So :attr:`~batchflow.Batch.data` will contain data right after batch creation and you don't need to call :func:`~batchflow.Batch.load` action.
 
 You also might initialize the whole dataset::
 
    dataset = Dataset(index, batch_class=Mybatch, preloaded=data)
 
-Thus :func:`~dataset.Dataset.gen_batch` and :func:`~dataset.Dataset.next_batch` will create batches that contain preloaded data.
+Thus :func:`~batchflow.Dataset.gen_batch` and :func:`~batchflow.Dataset.next_batch` will create batches that contain preloaded data.
 
 To put it simply, `preloaded=data` is roughly equivalent to `batch.load(data, fmt=None)`.
 
@@ -73,7 +73,7 @@ Action methods
 
 In order to convert a batch class method to an action you add `@action` decorator::
 
-   from dataset import Batch, action
+   from batchflow import Batch, action
 
    class MyBatch(Batch):
        ...
@@ -89,7 +89,7 @@ If an `action` changes the instance's data directly, it may simply return `self`
 Models and model-based actions
 ==============================
 
-To get access to a model just call :func:`~dataset.Batch.get_model_by_name` within actions or ordinary batch class methods.::
+To get access to a model just call :func:`~batchflow.Batch.get_model_by_name` within actions or ordinary batch class methods.::
 
    class MyBatch(Batch):
        ...
@@ -106,7 +106,7 @@ Running methods in parallel
 
 As a batch can be quite large it might make sense to parallel the computations. And it is pretty easy to do::
 
-   from dataset import Batch, inbatch_parallel, action
+   from batchflow import Batch, inbatch_parallel, action
 
    class MyBatch(Batch):
        ...
@@ -289,11 +289,11 @@ Make all I/O in `async` methods even if there is nothing to parallelize
        .do_something_else()
 
 Init-function `run_once` runs the decorated method once (so no parallelism whatsoever).
-Besides, the methods does not receive any additional arguments, only those passed to it directly.
+Besides, the method does not receive any additional arguments, only those passed to it directly.
 However, an `action` defined as asynchronous will be waited for.
 You may define your own `post`-method in order to check the result and process the exceptions if they arise.
 
 API
 ---
 
-See :doc:`Batch API <../api/dataset.batch>`.
+See :doc:`Batch API <../api/batchflow.batch>`.

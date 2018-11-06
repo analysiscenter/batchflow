@@ -7,7 +7,7 @@ Basic usage
 
 The ``inbatch_parallel`` decorator allows to run a method in parallel::
 
-   from dataset import Batch, inbatch_parallel, action
+   from batchflow import Batch, inbatch_parallel, action
 
    class MyBatch(Batch):
        ...
@@ -275,7 +275,7 @@ This is where ``any_action_failed`` might come in handy:
 
 .. code-block:: python
 
-   from dataset import Batch, action, inbatch_parallel, any_action_failed
+   from batchflow import Batch, action, inbatch_parallel, any_action_failed
 
    class MyBatch(Batch):
        ...
@@ -298,7 +298,7 @@ If an action-method changes data directly, you don't need a ``post``-function.
 
 .. code-block:: python
 
-   from dataset import Batch, action, inbatch_parallel, any_action_failed
+   from batchflow import Batch, action, inbatch_parallel, any_action_failed
 
    class MyBatch(Batch):
        ...
@@ -313,7 +313,7 @@ However, ``numba`` or ``cython`` allow for a real multithreading.
 
 .. code-block:: python
 
-   from dataset import Batch, action, inbatch_parallel, any_action_failed
+   from batchflow import Batch, action, inbatch_parallel, any_action_failed
    from numba import njit
 
    @njit(nogil=True)
@@ -375,7 +375,7 @@ With ``mpc`` you might run calculations in separate processes thus removing GIL 
 
 .. code-block:: python
 
-   from dataset import Batch, action, inbatch_parallel
+   from batchflow import Batch, action, inbatch_parallel
 
    def mpc_fn(data, index, arg):
        # do something
@@ -470,7 +470,7 @@ When you need an extremely fast processing, `numba <http://numba.pydata.org/>`_ 
 However, it works only with functions, but not with methods. It is not a big issue as you can write
 a method which calls a function. It is not convenient, though. And code becomes not so easy to follow.
 
-That is why you'll love `@mjit` decorator. It looks absolutely like `@jit <https://numba.pydata.org/numba-doc/latest/user/jit.html/>`_, but with methods.
+That is why you'll love `@mjit` decorator. It looks absolutely like `@jit <https://numba.pydata.org/numba-doc/latest/user/jit.html/>`_, but it works with methods.
 
 .. code-block:: python
 
@@ -505,4 +505,4 @@ That is why you'll love `@mjit` decorator. It looks absolutely like `@jit <https
           You can redefine these parameters when needed.
 
 `prange <https://numba.pydata.org/numba-doc/latest/user/parallel.html>`_ is also allowed within `@mjit` methods.
-`@inbatch_parallel` works as fast, though. So choose freely what is most convenient in each case.
+`@inbatch_parallel` works as fast, though. So choose freely what is more convenient in each case.
