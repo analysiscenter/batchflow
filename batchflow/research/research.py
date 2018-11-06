@@ -714,6 +714,13 @@ class Results():
         use_alias : bool
             if True, the resulting DataFrame will have one column with alias, else it will
             have column for each option in grid
+
+        Return
+        ------
+        pandas.DataFrame
+            DataFrame will have columns: iteration, repetition, name (of pipeline/function)
+            and columns for config. Also it will have column for each variable of pipeline
+            and output of the function that was saved as a result of the research.
         """
         self.configs = self.research.grid_config
         if configs is None and aliases is None:
