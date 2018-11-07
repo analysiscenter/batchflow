@@ -697,7 +697,7 @@ class Results():
 
 
     def load(self, names=None, repetitions=None, variables=None, iterations=None,
-             configs=None, aliases=None, use_alias=False, fmt='df'):
+             configs=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -713,16 +713,14 @@ class Results():
         configs, aliases : dict, Config, Option, Grid or None
             configs to load
         use_alias : bool
-            if True, the resulting DataFrame/dict will have one column/item with alias, else it will
-            have column/item for each option in grid
-        fmt : str
-            format of the output: 'df' (pandas.DataFrame) or 'dict'
+            if True, the resulting DataFrame will have one column with alias, else it will
+            have column for each option in grid
 
         Returns
         -------
         pandas.DataFrame or dict
-            will have columns/keys: iteration, repetition, name (of pipeline/function)
-            and column/key for config. Also it will have column/key for each variable of pipeline
+            will have columns: iteration, repetition, name (of pipeline/function)
+            and column for config. Also it will have column for each variable of pipeline
             and output of the function that was saved as a result of the research.
 
         **How to perform slicing**
@@ -751,6 +749,13 @@ class Results():
             ```
             will load output of ``accuracy`` function at the first repetitions for configs
             that contain layout 'cna' or 'can' for iterations starting with 5000.
+            The resulting dataframe will have columns 'repetition', 'iteration', 'name',
+            'accuracy', 'layout', 'model'. One can get the same in the follwing way:
+            ```
+            results = Results(research=research).load()
+            results = results[(results.repetition == 0) & (results.iterations >= 5000) &
+                              (results.name == 'test_accuracy') & results.layout.isin(['cna', 'can'])]
+            ```
         """
         self.configs = self.research.grid_config
         transform = lambda x: pd.DataFrame(x) if fmt == 'df' else x
