@@ -718,8 +718,8 @@ class Results():
         fmt : str
             format of the output: 'df' (pandas.DataFrame) or 'dict'
 
-        Return
-        ------
+        Returns
+        -------
         pandas.DataFrame or dict
             will have columns/keys: iteration, repetition, name (of pipeline/function)
             and column/key for config. Also it will have column/key for each variable of pipeline
