@@ -697,7 +697,7 @@ class Results():
 
 
     def load(self, names=None, repetitions=None, variables=None, iterations=None,
-              configs=None, aliases=None, use_alias=False, as_dataframe=True):
+             configs=None, aliases=None, use_alias=False, as_dataframe=True):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -788,10 +788,10 @@ class Results():
                                 }
                                 )
         if len(all_results) > 0:
-            result = {key: [] for key in all_results[0]}
-            for key in result:
-                for df in all_results:
-                    result[key] += df[key]
+            concat_results = {key: [] for key in all_results[0]}
+            for key in concat_results:
+                for result in all_results:
+                    concat_results[key] += result[key]
         else:
-            result = None
-        return transform(result)
+            concat_results = None
+        return transform(concat_results)
