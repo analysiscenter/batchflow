@@ -683,6 +683,7 @@ class Results():
         for value in chunk.values():
             if len(value) < max_len:
                 value.extend([pd.np.nan] * (max_len - len(value)))
+        return max_len
 
     def _filter_configs(self, config=None, alias=None):
         result = None
@@ -695,8 +696,8 @@ class Results():
         return result
 
 
-    def load(self, names=None, repetitions=None, variables=None, configs=None,
-             iterations=None, aliases=None, use_alias=False):
+    def load(self, names=None, repetitions=None, variables=None, iterations=None,
+              configs=None, aliases=None, use_alias=False, as_dataframe=True):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -707,22 +708,25 @@ class Results():
             numbers of repetitions to load
         variables : str, list or None
             names of variables to load
-        configs, aliases : dict, Config, Option, Grid or None
-            configs to load
         iterations : int, list or None
             iterations to load
+        configs, aliases : dict, Config, Option, Grid or None
+            configs to load
         use_alias : bool
-            if True, the resulting DataFrame will have one column with alias, else it will
-            have column for each option in grid
+            if True, the resulting DataFrame/dict will have one column/item with alias, else it will
+            have column/item for each option in grid
+        as_dataframe : bool
+            return pandas.DataFrame or dict
 
         Return
         ------
-        pandas.DataFrame
-            DataFrame will have columns: iteration, repetition, name (of pipeline/function)
-            and columns for config. Also it will have column for each variable of pipeline
+        pandas.DataFrame or dict
+            will have columns/keys: iteration, repetition, name (of pipeline/function)
+            and column/key for config. Also it will have column/key for each variable of pipeline
             and output of the function that was saved as a result of the research.
         """
         self.configs = self.research.grid_config
+        transform = lambda x: pd.DataFrame(x) if as_dataframe else x
         if configs is None and aliases is None:
             self.configs = list(self.configs.gen_configs())
         elif configs is not None:
@@ -747,7 +751,7 @@ class Results():
         self.variables = self._get_list(variables)
         self.iterations = self._get_list(iterations)
 
-        data_frame = []
+        all_results = []
 
         for config_alias in self.configs:
             alias = config_alias.alias(as_string=False)
@@ -763,23 +767,31 @@ class Results():
                             with open(filename, 'rb') as file:
                                 res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
                         res = self._concat(res, self.variables)
-                        self._fix_length(res)
+                        max_len = self._fix_length(res)
                         if use_alias:
-                            data_frame.append(
-                                pd.DataFrame({
-                                    'config': alias_str,
-                                    'repetition': repetition,
-                                    'name': unit,
+                            all_results.append(
+                                {
+                                    'config': [alias_str] * max_len,
+                                    'repetition': [repetition] * max_len,
+                                    'name': [unit] * max_len,
                                     **res
-                                })
-                            )
-                        else:
-                            data_frame.append(
-                                pd.DataFrame({
-                                    **alias,
-                                    'repetition': repetition,
-                                    'name': unit,
-                                    **res
-                                })
+                                }
                                 )
-        return pd.concat(data_frame, ignore_index=True) if len(data_frame) > 0 else pd.DataFrame(None)
+                        else:
+                            _alias = {key: [value] * max_len for key, value in alias.items()}
+                            all_results.append(
+                                {
+                                    **_alias,
+                                    'repetition': [repetition] * max_len,
+                                    'name': [unit] * max_len,
+                                    **res
+                                }
+                                )
+        if len(all_results) > 0:
+            result = {key: [] for key in all_results[0]}
+            for key in result:
+                for df in all_results:
+                    result[key] += df[key]
+        else:
+            result = None
+        return transform(result)
