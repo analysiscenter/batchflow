@@ -175,7 +175,7 @@ class Research:
         return self
 
     def load_results(self, *args, **kwargs):
-        """ Load results of research as pandas.DataFrame (see Results.load). """
+        """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
     def _create_jobs(self, n_reps, n_iters, branches, name):
@@ -697,7 +697,7 @@ class Results():
 
 
     def load(self, names=None, repetitions=None, variables=None, iterations=None,
-             configs=None, aliases=None, use_alias=False, as_dataframe=True):
+             configs=None, aliases=None, use_alias=False, fmt='df'):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -715,8 +715,8 @@ class Results():
         use_alias : bool
             if True, the resulting DataFrame/dict will have one column/item with alias, else it will
             have column/item for each option in grid
-        as_dataframe : bool
-            return pandas.DataFrame or dict
+        fmt : str
+            format of the output: 'df' (pandas.DataFrame) or 'dict'
 
         Return
         ------
@@ -726,7 +726,7 @@ class Results():
             and output of the function that was saved as a result of the research.
         """
         self.configs = self.research.grid_config
-        transform = lambda x: pd.DataFrame(x) if as_dataframe else x
+        transform = lambda x: pd.DataFrame(x) if fmt == 'df' else x
         if configs is None and aliases is None:
             self.configs = list(self.configs.gen_configs())
         elif configs is not None:
