@@ -52,6 +52,7 @@ class Upsample(nn.Module):
                 kwargs['strides'] = factor
 
         self.upsample = ConvBlock(layout=layout, factor=factor, inputs=inputs, **kwargs)
+        self.output_shape = self.upsample.output_shape
 
     def forward(self, x):
         return self.upsample(x)
