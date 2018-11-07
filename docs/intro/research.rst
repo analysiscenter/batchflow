@@ -155,6 +155,8 @@ Method ``run`` starts computations:
 
 All results will be saved as ``{research_name}/results/{config_alias}/{repetition_index}/{unitname}_{iteration}`` as pickled dict (by dill) where keys are variable names and values are lists of corresponding values. 
 
+There is method ``load_results`` to create ``pandas.DataFrame`` with results of the research.
+
 Parallel runnings
 -----------------
 

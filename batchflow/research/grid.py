@@ -81,7 +81,7 @@ class Option:
     def __add__(self, other):
         return Grid(self) + Grid(other)
 
-    def gen_configs(self, n_items=None):
+    def gen_configs(self, n_items=1):
         """ Returns Configs created from the option """
         grid = Grid(self)
         return grid.gen_configs(n_items)
@@ -95,7 +95,12 @@ class ConfigAlias:
         keys and values are KV or objects
     """
     def __init__(self, config):
-        self._config = config
+        _config = []
+        for item in config:
+            key = item[0] if isinstance(item[0], KV) else KV(item[0])
+            value = item[1] if isinstance(item[1], KV) else KV(item[1])
+            _config.append((key, value))
+        self._config = _config
 
     def alias(self, as_string=False, delim='-'):
         """ Returns alias. """
@@ -242,3 +247,30 @@ class Grid:
                         yield res
                         res = [ConfigAlias(list(zip(keys, parameters)))]
                 yield res
+
+    def subset(self, grid, by_alias=True):
+        """ Get grid subset produces by another grid
+
+        Parameters
+        ----------
+        grid : Grid
+
+        by_alias : bool
+            if True, perform subsetting by aliases, else by real values
+        """
+        results = []
+        if isinstance(grid, (Config, dict)):
+            slice_configs = [ConfigAlias(grid.items())]
+        else:
+            slice_configs = list(grid.gen_configs())
+        for full_config in self.gen_configs():
+            for partial_config in slice_configs:
+                if by_alias:
+                    small = partial_config.alias()
+                    large = full_config.alias()
+                else:
+                    small = partial_config.config().flatten()
+                    large = full_config.config().flatten()
+                if len(set(small.items()) - set(large.items())) == 0:
+                    results.append(full_config)
+        return results

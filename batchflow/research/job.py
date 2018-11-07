@@ -69,7 +69,8 @@ class Job:
 
     def parallel_execute_for(self, iteration, name, actions):
         """ Parallel execution of pipeline 'name' """
-        if actions[0]['run']:
+        run = [action['run'] for action in actions if action is not None][0]
+        if run:
             self.executable_units[name].reset_root_iter()
             while True:
                 try:
