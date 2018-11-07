@@ -1066,6 +1066,12 @@ class Pipeline:
     def gen_rebatch(self, *args, **kwargs):
         """ Generate batches for rebatch operation """
         _action = self._action_list[0]
+
+        if _action['pipeline'].dataset is None:
+            pipeline = _action['pipeline'] << self.dataset
+        else:
+            pipeline = self.from_pipeline(_action['pipeline'])
+
         self._rest_batch = None
         while True:
             if self._rest_batch is None:
@@ -1077,7 +1083,7 @@ class Pipeline:
                 self._rest_batch = None
             while cur_len < _action['batch_size']:
                 try:
-                    new_batch = _action['pipeline'].next_batch(*args, **kwargs)
+                    new_batch = pipeline.next_batch(*args, **kwargs)
                 except StopIteration:
                     break
                 else:
