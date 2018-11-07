@@ -724,6 +724,33 @@ class Results():
             will have columns/keys: iteration, repetition, name (of pipeline/function)
             and column/key for config. Also it will have column/key for each variable of pipeline
             and output of the function that was saved as a result of the research.
+
+        **How to perform slicing**
+            Method `load` with default parameters will create pandas.DataFrame with all dumped
+            parameters. To specify subset of results one can define names of pipelines/functions,
+            produced variables/outputs of them, repetitions, iterations and configs. For example,
+            we have the following research:
+            
+            ```
+            grid = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
+
+            research = (Research()
+            .pipeline(train_ppl, variables='loss', name='train')
+            .pipeline(test_ppl, name='test', execute='%100', run=True, import_from='train')
+            .function(accuracy, returns='accuracy', name='test_accuracy',
+                      execute='%100', pipeline='test')
+            .grid(grid))
+
+            research.run(n_reps=2, n_iters=10000)
+            ```
+            The code
+            ```
+            Results(research=research).load(repetitions=0, iterations=np.arange(5000, 10000),
+                                            variables='accuracy', names='test_accuracy',
+                                            configs=Option('layout', ['cna', 'can']))
+            ```
+            will load output of ``accuracy`` function at the first repetitions for configs
+            that contain layout 'cna' or 'can' for iterations starting with 5000.
         """
         self.configs = self.research.grid_config
         transform = lambda x: pd.DataFrame(x) if fmt == 'df' else x
