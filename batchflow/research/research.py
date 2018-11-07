@@ -683,7 +683,6 @@ class Results():
         for value in chunk.values():
             if len(value) < max_len:
                 value.extend([pd.np.nan] * (max_len - len(value)))
-        return max_len
 
     def _filter_configs(self, config=None, alias=None):
         result = None
@@ -728,7 +727,7 @@ class Results():
             parameters. To specify subset of results one can define names of pipelines/functions,
             produced variables/outputs of them, repetitions, iterations and configs. For example,
             we have the following research:
-            
+
             ```
             grid = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
 
@@ -758,7 +757,6 @@ class Results():
             ```
         """
         self.configs = self.research.grid_config
-        transform = lambda x: pd.DataFrame(x) if fmt == 'df' else x
         if configs is None and aliases is None:
             self.configs = list(self.configs.gen_configs())
         elif configs is not None:
@@ -799,31 +797,23 @@ class Results():
                             with open(filename, 'rb') as file:
                                 res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
                         res = self._concat(res, self.variables)
-                        max_len = self._fix_length(res)
+                        self._fix_length(res)
                         if use_alias:
                             all_results.append(
-                                {
-                                    'config': [alias_str] * max_len,
-                                    'repetition': [repetition] * max_len,
-                                    'name': [unit] * max_len,
+                                pd.DataFrame({
+                                    'config': alias_str,
+                                    'repetition': repetition,
+                                    'name': unit,
                                     **res
-                                }
+                                })
                                 )
                         else:
-                            _alias = {key: [value] * max_len for key, value in alias.items()}
                             all_results.append(
-                                {
-                                    **_alias,
-                                    'repetition': [repetition] * max_len,
-                                    'name': [unit] * max_len,
+                                pd.DataFrame({
+                                    **alias,
+                                    'repetition': repetition,
+                                    'name': unit,
                                     **res
-                                }
+                                })
                                 )
-        if len(all_results) > 0:
-            concat_results = {key: [] for key in all_results[0]}
-            for key in concat_results:
-                for result in all_results:
-                    concat_results[key] += result[key]
-        else:
-            concat_results = None
-        return transform(concat_results)
+        return pd.concat(all_results) if len(all_results) > 0 else pd.DataFrame(None)
