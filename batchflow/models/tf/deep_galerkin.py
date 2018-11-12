@@ -54,8 +54,43 @@ class DeepGalerkin(TFModel):
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
-        # add multiplication for binding of boundary and initial conditions
-        return super().head(inputs, name, **kwargs)
+        inputs = super().head(inputs, name, **kwargs)
+        if kwargs.get("bind_bc_ic", True):
+            domain = kwargs.get("domain")
+            if domain is None:
+                # default domain is unit cube
+                form = kwargs.get("form")
+                n_dims = len(form.get("d1", form.get("d2", None)))
+                domain = [[0, 1]] * n_dims
+
+            # multiplicator for binding boundary and initial conditions
+            lower = [bounds[0] for bounds in domain]
+            upper = [bounds[1] for bounds in domain]
+
+            model_graph = inputs.graph
+            coordinates = [model_graph.get_tensor_by_name('coordinates:' + str(i)) for i in range(n_dims)]
+            ic = kwargs.get("initial_condition")
+            if ic is not None:
+                prefix_len = n_dims - 1
+            else:
+                prefix_len = n_dims
+
+            spatial_coords = tf.concat(coordinates[:prefix_len], axis=1)
+            lower_spatial = tf.constant(lower[:prefix_len], shape=(1, prefix_len), dtype=tf.float32)
+            upper_spatial = tf.constant(upper[:prefix_len], shape=(1, prefix_len), dtype=tf.float32)
+            multiplicator = tf.reduce_prod((spatial_coords - lower) * (upper - spatial_coords) / (upper - lower)**2,
+                                           axis=1)
+            # addition term if needed
+            add_term = 0
+            if ic is not None:
+                shifted = coordinates[:, -1:] - tf.constant(lower[-1:], shape=(1, 1), dtype=tf.float32)
+                scale = tf.Variable(1.0, name='time_scale')
+                multiplicator *= tf.sigmoid(shifted / scale) - 0.5
+                add_term += ic(spatial_coords) if callable(ic) else ic
+
+            inputs = add_term + multiplicator * inputs
+
+        return inputs
 
     @classmethod
     def output(cls, inputs, predictions=None, ops=None, prefix=None, **kwargs):
