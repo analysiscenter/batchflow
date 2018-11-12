@@ -1162,6 +1162,7 @@ class Pipeline:
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
 
+        self.reset_iter(exclude_dataset=True)
         return self._gen_batch(*args_value, **kwargs_value)
 
 
@@ -1175,7 +1176,6 @@ class Pipeline:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
             prefetch = 0
         else:
-            self.reset_iter(exclude_dataset=True)
             batch_generator = self.dataset.gen_batch(*args, **kwargs)
 
         if prefetch > 0:
