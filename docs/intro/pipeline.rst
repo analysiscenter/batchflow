@@ -189,7 +189,7 @@ next_batch function
 Run
 ^^^
 
-.. code-block:: python
+To execute the pipeline right now for all iterations at once::
 
    my_pipeline = (dataset.p
       .some_action()
@@ -198,37 +198,32 @@ Run
       .run(BATCH_SIZE, n_epochs=2, drop_last=True, bar=True)
    )
 
-Usually, `run` should be used to execute the pipeline just one time.
-However, sequential runs are also possible thanks to `reset`.
+Some people prefer a slightly longer, but a bit more certain name `run_now`.
 
-Initialize and run the pipeline for 2 epochs::
+Usually `run` is used to execute the pipeline from scratch. But you might continue the pipeline which was run before::
 
-   my_pipeline.run(BATCH_SIZE, n_epochs=2)
+    my_pipeline.run_now(BATCH_SIZE, n_epochs=3, init_vars=False)
 
-Continue the same pipeline without resetting models and variables::
-
-   my_pipeline.run(BATCH_SIZE, n_epochs=2, reset=False)
-
-Without `reset=False` the pipeline will be created again from scratch.
+In this case the pipeline variables aren't reinitialized and keep their values from the previous run.
 
 
 Lazy run
 ^^^^^^^^
 
-.. code-block:: python
+You can add `run` with `lazy=True` or just `run_later` as the last action in the pipeline and
+then call `run()` or `next_batch()` without arguments at all::
 
     my_pipeline = (dataset.p
         .some_action()
         .other_action()
         .yet_another_action()
-        .run(BATCH_SIZE, n_epochs=None, drop_last=True, lazy=True)
+        .run_later(BATCH_SIZE, n_epochs=None, drop_last=True)
     )
 
     for i in range(MAX_ITER):
         batch = my_pipeline.next_batch()
         # do whatever you want
 
-You can add `run` with `lazy=True` as the last action in the pipeline and then call `run()` or `next_batch()` without arguments at all.
 
 
 Single execution

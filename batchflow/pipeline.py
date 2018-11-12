@@ -1028,7 +1028,7 @@ class Pipeline:
                         skip_batch = False
                     self._prefetch_queue.task_done()
 
-    def reset_iter(self, exclude_dataset=False):
+    def reset_iter(self, dataset=True, init_vars=True):
         """ Clear all iteration metadata in order to start iterating from scratch """
         def _clear_queue(queue):
             if queue is not None:
@@ -1057,10 +1057,11 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
 
-        if not exclude_dataset and self.dataset is not None:
+        if dataset and self.dataset is not None:
             self.dataset.reset_iter()
 
-        self._init_variables_before_run()
+        if init_vars:
+            self._init_variables_before_run()
 
 
     def gen_rebatch(self, *args, **kwargs):
@@ -1140,7 +1141,7 @@ class Pipeline:
 
         target : 'threads' or 'mpc'
             batch parallization engine used for prefetching (default='threads').
-            'mpc' rarely works well due to complicated and slow python's inper-process communications.
+            'mpc' rarely works well due to complicated and slow python's inter-process communications.
 
         Yields
         ------
@@ -1162,7 +1163,6 @@ class Pipeline:
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
 
-        self.reset_iter(exclude_dataset=True)
         return self._gen_batch(*args_value, **kwargs_value)
 
 
@@ -1220,15 +1220,17 @@ class Pipeline:
                         on_iter(batch_res)
 
     def create_batch(self, batch_index, *args, **kwargs):
-        """ Create a new batch by given indices and execute all previous lazy actions """
+        """ Create a new batch by given indices and execute all lazy actions """
         batch = self.dataset.create_batch(batch_index, *args, **kwargs)
         batch_res = self.execute_for(batch)
         return batch_res
 
     def next_batch(self, *args, **kwargs):
-        """ Get the next batch and execute all previous lazy actions
+        """ Get the next batch and execute all lazy actions
 
-            next_batch(batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+        See also
+        --------
+        :meth:`~Pipeline.gen_batch`
         """
         if len(args) == 0 and len(kwargs) == 0:
             if self._lazy_run is None:
@@ -1255,20 +1257,35 @@ class Pipeline:
                     pass
         return batch_res
 
-    def run(self, *args, reset=True, **kwargs):
+    def run(self, *args, init_vars=True, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
 
-            run(batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
+        Parameters
+        ----------
+        init_vars : bool
+            whether to clear all the pipeline variables
+
+        See also
+        --------
+        :meth:`~Pipeline.gen_batch`
         """
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
         else:
-            if reset:
-                self.reset_iter()
+            self.reset_iter(init_vars=init_vars)
             if len(args) == 0 and len(kwargs) == 0:
                 args, kwargs = self._lazy_run
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
+
             for _ in self.gen_batch(*args, **kwargs):
                 pass
         return self
+
+    def run_now(self, *args, **kwargs):
+        """ Execute pipeline immediately """
+        return self.run(*args, **kwargs, lazy=False)
+
+    def run_later(self, *args, **kwargs):
+        """ Define params to execute pipeline later """
+        return self.run(*args, **kwargs, lazy=True)
