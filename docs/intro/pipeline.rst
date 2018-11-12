@@ -198,6 +198,20 @@ Run
       .run(BATCH_SIZE, n_epochs=2, drop_last=True, bar=True)
    )
 
+Usually, `run` should be used to execute the pipeline just one time.
+However, sequential runs are also possible thanks to `reset`.
+
+Initialize and run the pipeline for 2 epochs::
+
+   my_pipeline.run(BATCH_SIZE, n_epochs=2)
+
+Continue the same pipeline without resetting models and variables::
+
+   my_pipeline.run(BATCH_SIZE, n_epochs=2, reset=False)
+
+Without `reset=False` the pipeline will be created again from scratch.
+
+
 Lazy run
 ^^^^^^^^
 

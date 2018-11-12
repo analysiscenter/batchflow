@@ -1255,7 +1255,7 @@ class Pipeline:
                     pass
         return batch_res
 
-    def run(self, *args, **kwargs):
+    def run(self, *args, reset=True, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
 
             run(batch_size, shuffle=True, n_epochs=1, drop_last=False, prefetch=0, *args, **kwargs):
@@ -1263,7 +1263,8 @@ class Pipeline:
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
         else:
-            self.reset_iter()
+            if reset:
+                self.reset_iter()
             if len(args) == 0 and len(kwargs) == 0:
                 args, kwargs = self._lazy_run
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
