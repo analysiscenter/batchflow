@@ -12,7 +12,7 @@ class PyramidNet(ResNet):
     Notes
     -----
     This class is intended to define custom PyramidNets.
-    For more convenience use predefined :class:`.PyramidNet18`, :class:`.PyramidNet34`,
+    For more convenience use predefined :class:`.tf.PyramidNet18`, :class:`.tf.PyramidNet34`,
     and others described down below.
 
     **Configuration**
@@ -31,14 +31,14 @@ class PyramidNet(ResNet):
             widening : int
                 an increment of filters number in each block (default=8)
 
-            and other :class:`~.ResNet` block params
+            and other :class:`~.tf.ResNet` block params
 
     head : dict
         'Vdf' with dropout_rate=.4
 
     Notes
     -----
-    Also see :class:`~.TFModel` and :class:`~.ResNet` configuration.
+    Also see :class:`~.TFModel` and :class:`~.tf.ResNet` configuration.
     """
     @classmethod
     def default_config(cls):
