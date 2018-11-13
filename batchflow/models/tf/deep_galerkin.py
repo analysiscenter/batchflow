@@ -22,7 +22,7 @@ class DeepGalerkin(TFModel):
         return super().initial_block(inputs, name, **kwargs)
 
     @classmethod
-    def form_calculator(cls, form, coordinates, name='_callable'):
+    def _make_form_calculator(cls, form, coordinates, name='_callable'):
         """ Get callable that computes differential form of a tf.Tensor
         with respect to coordinates.
         """
@@ -53,42 +53,54 @@ class DeepGalerkin(TFModel):
         return _callable
 
     @classmethod
+    def _make_time_multiplier(mode):
+        if mode == "sigmoid":
+            def _callable(shifted_time):
+                log_scale = tf.Variable(0.0, name='time_scale')
+                return tf.sigmoid(shifted_time * tf.exp(log_scale)) - 0.5
+        elif mode == "linear":
+            def _callable(shifted_time):
+                log_scale = tf.Variable(0.0, name='time_scale')
+                return shifted_time * tf.exp(log_scale)
+        elif callable(mode):
+            _callable = mode
+        else:
+            raise ValueError("mode should be either sigmoid, linear or callable")
+
+        return _callable
+
+    @classmethod
     def head(cls, inputs, name='head', **kwargs):
         inputs = super().head(inputs, name, **kwargs)
         if kwargs.get("bind_bc_ic", True):
-            domain = kwargs.get("domain")
-            if domain is None:
-                # default domain is unit cube
-                form = kwargs.get("form")
-                n_dims = len(form.get("d1", form.get("d2", None)))
-                domain = [[0, 1]] * n_dims
+            form = kwargs.get("form")
+            n_dims = len(form.get("d1", form.get("d2", None)))
+            domain = kwargs.get("domain", [[0, 1]] * n_dims)
 
-            # multiplicator for binding boundary and initial conditions
-            lower = [bounds[0] for bounds in domain]
-            upper = [bounds[1] for bounds in domain]
-
-            model_graph = inputs.graph
-            coordinates = [model_graph.get_tensor_by_name('coordinates:' + str(i)) for i in range(n_dims)]
+            # multiplicator for binding boundary conditions
+            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
+            coordinates = [inputs.graph.get_tensor_by_name('coordinates:' + str(i)) for i in range(n_dims)]
             ic = kwargs.get("initial_condition")
-            if ic is not None:
-                prefix_len = n_dims - 1
-            else:
-                prefix_len = n_dims
+            n_dims_xs = n_dims if ic not None else n_dims - 1
 
-            spatial_coords = tf.concat(coordinates[:prefix_len], axis=1)
-            lower_spatial = tf.constant(lower[:prefix_len], shape=(1, prefix_len), dtype=tf.float32)
-            upper_spatial = tf.constant(upper[:prefix_len], shape=(1, prefix_len), dtype=tf.float32)
-            multiplicator = tf.reduce_prod((spatial_coords - lower) * (upper - spatial_coords) / (upper - lower)**2,
-                                           axis=1)
-            # addition term if needed
+            xs = tf.concat(coordinates[:n_dims_xs], axis=1)
+            lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
+                                  for bounds in (lower, upper)]
+            multiplier = tf.reduce_prod((xs - lower_tf) * (upper_tf - xs) / (upper_tf - lower_tf)**2, axis=1)
+
+            # addition term and time-multiplier
             add_term = 0
-            if ic is not None:
-                shifted = coordinates[:, -1:] - tf.constant(lower[-1:], shape=(1, 1), dtype=tf.float32)
-                scale = tf.Variable(1.0, name='time_scale')
-                multiplicator *= tf.sigmoid(shifted / scale) - 0.5
-                add_term += ic(spatial_coords) if callable(ic) else ic
+            if ic is None:
+                add_term += kwargs.get("boundary_condition", 0)
+            else:
+                # ingore boundary condition as it is automatically set by initial condition
+                shifted = coordinates[-1:] - tf.constant(lower[-1:], shape=(1, 1), dtype=tf.float32)
+                time_mode = kwargs.get("time_multiplier", "sigmoid")
+                multiplier *= cls._make_time_multiplier(time_mode)(shifted)
+                add_term += ic(coordinates[:n_dims_xs]) if callable(ic) else ic
 
-            inputs = add_term + multiplicator * inputs
+            # apply transformation to inputs
+            inputs = add_term + multiplier * inputs
 
         return inputs
 
@@ -101,8 +113,7 @@ class DeepGalerkin(TFModel):
         """
         form = kwargs.get("form")
         n_dims = len(form.get("d1", form.get("d2", None)))
-        model_graph = inputs.graph
-        coordinates = [model_graph.get_tensor_by_name('coordinates:' + str(i)) for i in range(n_dims)]
+        coordinates = [inputs.graph.get_tensor_by_name('coordinates:' + str(i)) for i in range(n_dims)]
 
         # parsing engine for differentials-logging
         if ops is None:
@@ -136,11 +147,11 @@ class DeepGalerkin(TFModel):
                     if order == "d2":
                         form = np.diag(form)
                     form = {order: form}
-                    _compute_op = cls.form_calculator(form, coordinates, name=op)
+                    _compute_op = cls._make_form_calculator(form, coordinates, name=op)
 
                     # write this callable to outputs-dict
                     _ops[prefix][i] = _compute_op
 
         # differential form from lhs of the equation
-        _compute_predictions = cls.form_calculator(form, coordinates)
+        _compute_predictions = cls._make_form_calculator(form, coordinates)
         return super().output(inputs, _compute_predictions, _ops, prefix, **kwargs)
