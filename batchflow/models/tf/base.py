@@ -1139,7 +1139,7 @@ class TFModel(BaseModel):
         if oper is None:
             self._add_output_identity(inputs, name, attr_prefix, **kwargs)
         elif oper == 'softplus':
-            self._add_output_sofplus(inputs, name, attr_prefix, **kwargs)
+            self._add_output_softplus(inputs, name, attr_prefix, **kwargs)
         elif oper == 'sigmoid':
             self._add_output_sigmoid(inputs, name, attr_prefix, **kwargs)
         elif oper == 'proba':
