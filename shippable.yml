@@ -20,12 +20,12 @@ build:
       pip3 install sphinx &&
       git checkout --orphan gh-pages &&
       rm -rf * &&
-      git checkout master dataset docs &&
+      git checkout master batchflow docs &&
       cd docs &&
       make html &&
       cd .. &&
       mv docs/_build/html/* . &&
-      rm -rf docs dataset &&
+      rm -rf docs batchflow &&
       touch .nojekyll &&
       echo "language: none" > shippable.yml &&
       git add -A . &&
