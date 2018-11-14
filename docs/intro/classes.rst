@@ -4,7 +4,7 @@ Classes and capabilities
 .. toctree::
    :maxdepth: 2
 
-   index
+   dsindex
    dataset
    batch
    images_batch

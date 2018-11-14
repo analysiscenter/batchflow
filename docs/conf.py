@@ -20,7 +20,7 @@
 # import os
 import sys
 sys.path.append("..")
-import dataset
+import batchflow
 
 
 extensions = [
@@ -45,13 +45,13 @@ source_parsers = {
 
 master_doc = 'index'
 
-project = 'Dataset'
+project = 'BatchFlow'
 copyright = '2017, Analysis Center'
 author = 'Analysis Center'
 
 
 # The full version, including alpha/beta/rc tags.
-release = dataset.__version__
+release = batchflow.__version__
 # The short X.Y version.
 version = '.'.join(release.split('.')[:2])
 
@@ -129,7 +129,7 @@ viewcode_import = True
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'Datasetdoc'
+htmlhelp_basename = 'BatchFlowdoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -156,7 +156,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'Dataset.tex', 'Dataset Documentation',
+    (master_doc, 'BatchFlow.tex', 'BatchFlow Documentation',
      author, 'manual'),
 ]
 
@@ -166,7 +166,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'dataset', 'Dataset Documentation',
+    (master_doc, 'dataset', 'BatchFlow Documentation',
      [author], 1)
 ]
 
@@ -177,9 +177,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'Dataset', 'Dataset Documentation',
-     author, 'Dataset', 'One line description of project.',
+    (master_doc, 'BatchFlow', 'BatchFlow Documentation',
+     author, 'BatchFlow', 'One line description of project.',
      'Miscellaneous'),
 ]
 
-#github_doc_root = 'http://github.com/analysiscenter/dataset/'
+#github_doc_root = 'http://github.com/analysiscenter/batchflow/'

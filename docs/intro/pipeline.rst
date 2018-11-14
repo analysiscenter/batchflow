@@ -98,7 +98,7 @@ Link a pipeline to a dataset.
 
 The complete example::
 
-   from dataset import Pipeline
+   from batchflow import Pipeline
 
    with Pipeline() as p:
        preprocessing_pipeline = p.load('/some/path')
@@ -120,7 +120,7 @@ A template pipeline
 
 .. code-block:: python
 
-   from dataset import Pipeline
+   from batchflow import Pipeline
 
    my_pipeline = Pipeline()
                    .some_action()
@@ -128,7 +128,7 @@ A template pipeline
 
 Or through a context manager with pipeline algebra::
 
-   from dataset import Pipeline
+   from batchflow import Pipeline
 
    with Pipeline() as p:
        my_pipeline = p.some_action() + p.another_action()
@@ -189,7 +189,7 @@ next_batch function
 Run
 ^^^
 
-.. code-block:: python
+To execute the pipeline right now for all iterations at once::
 
    my_pipeline = (dataset.p
       .some_action()
@@ -198,23 +198,32 @@ Run
       .run(BATCH_SIZE, n_epochs=2, drop_last=True, bar=True)
    )
 
+Some people prefer a slightly longer, but a bit more certain name `run_now`.
+
+Usually `run` is used to execute the pipeline from scratch. But you might continue the pipeline which was run before::
+
+    my_pipeline.run_now(BATCH_SIZE, n_epochs=3, init_vars=False)
+
+In this case the pipeline variables aren't reinitialized and keep their values from the previous run.
+
+
 Lazy run
 ^^^^^^^^
 
-.. code-block:: python
+You can add `run` with `lazy=True` or just `run_later` as the last action in the pipeline and
+then call `run()` or `next_batch()` without arguments at all::
 
     my_pipeline = (dataset.p
         .some_action()
         .other_action()
         .yet_another_action()
-        .run(BATCH_SIZE, n_epochs=None, drop_last=True, lazy=True)
+        .run_later(BATCH_SIZE, n_epochs=None, drop_last=True)
     )
 
     for i in range(MAX_ITER):
         batch = my_pipeline.next_batch()
         # do whatever you want
 
-You can add `run` with `lazy=True` as the last action in the pipeline and then call `run()` or `next_batch()` without arguments at all.
 
 
 Single execution
@@ -402,7 +411,7 @@ Mostly, `join` is used as follows::
         .load(components=['labels', 'masks'])
     )
 
-See :func:`~dataset.Batch.load` for more details.
+See :func:`~batchflow.Batch.load` for more details.
 
 Merging pipelines
 ^^^^^^^^^^^^^^^^^
@@ -462,4 +471,4 @@ See :doc:`Working with models <models>`.
 
 API
 ===
-See :doc:`pipelines API <../api/dataset.pipeline>`.
+See :doc:`pipelines API <../api/batchflow.pipeline>`.

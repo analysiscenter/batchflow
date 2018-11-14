@@ -1,5 +1,6 @@
 """ File with simple model example of convolution network """
-from dataset.models.tf import TFModel
+from batchflow.models.tf import TFModel
+
 
 class ConvModel(TFModel):
     """ Class to build conv model """

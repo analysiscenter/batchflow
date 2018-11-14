@@ -10,7 +10,7 @@ to process a small subset of data (batch).
 
 .. code-block:: python
 
-   from dataset import DatasetIndex, Dataset, Batch
+   from batchflow import DatasetIndex, Dataset, Batch
 
    client_index = DatasetIndex(client_ids_list)
    client_dataset = Dataset(client_index, batch_class=Batch)
@@ -69,8 +69,8 @@ You might also create batches with `next_batch` function::
         batch_with_data = client_batch.load(client_data)
         # ...
 
-The only difference is that :func:`~dataset.Dataset.gen_batch` is a generator,
-while :func:`~dataset.Dataset.next_batch` is just an ordinary method.
+The only difference is that :func:`~batchflow.Dataset.gen_batch` is a generator,
+while :func:`~batchflow.Dataset.next_batch` is just an ordinary method.
 
 Parameters
 ^^^^^^^^^^
@@ -114,4 +114,4 @@ And then create a dataset with a new batch class:
 API
 ---
 
-See :doc:`Dataset API <../api/dataset.dataset>`.
+See :doc:`Dataset API <../api/batchflow.dataset>`.

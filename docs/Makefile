@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = python3 -msphinx
-SPHINXPROJ    = Dataset
+SPHINXPROJ    = BatchFlow
 SOURCEDIR     = .
 BUILDDIR      = _build
 
@@ -19,12 +19,12 @@ gh-pages:
 	cd ..
 	git checkout gh-pages
 	git reset HEAD
-	git checkout master dataset docs
+	git checkout master batchflow docs
 	cd docs
 	make html
 	mv -fv _build/html/* ..
 	cd ..
-	rm -rf dataset docs
+	rm -rf batchflow docs
 	git add -A
 	git commit -am "Generated new doc"
 
