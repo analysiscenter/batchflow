@@ -71,6 +71,4 @@ class Dataset(Baseset):
     def __rshift__(self, other):
         if not isinstance(other, Pipeline):
             raise TypeError("Pipeline is expected, but got %s. Use as dataset >> pipeline" % type(other))
-        new_p = other.from_pipeline(other)
-        new_p.dataset = self
-        return new_p
+        return other << self

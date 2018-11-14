@@ -154,7 +154,7 @@ class Baseset:
     def reset_iter(self):
         """ Clear all iteration metadata in order to start iterating from scratch """
         self._iter_params = self.get_default_iter_params()
-        if hasattr(self.index, 'reset_iter'):
+        if isinstance(self.index, Baseset):
             self.index.reset_iter()
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, bar=False, *args, **kwargs):

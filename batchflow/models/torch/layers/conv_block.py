@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from .core import Dense, Activation, \
                   Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, \
-                  Dropout, BatchNorm, Pool, GlobalPool, Upsample, SubPixelConv
+                  Dropout, BatchNorm, Pool, GlobalPool, Interpolate, SubPixelConv
 from ..utils import get_shape
 from ...utils import unpack_args
 
@@ -25,7 +25,8 @@ FUNC_LAYERS = {
     'batch_norm': BatchNorm,
     'dropout': Dropout,
     'alpha_dropout': nn.AlphaDropout,
-    'upsample': Upsample,
+    'resize_bilinear': Interpolate,
+    'resize_nn': Interpolate,
     'subpixel_conv': SubPixelConv,
 }
 
@@ -47,7 +48,8 @@ C_LAYERS = {
     'n': 'batch_norm',
     'd': 'dropout',
     'D': 'alpha_dropout',
-    'u': 'upsample',
+    'b': 'resize_bilinear',
+    'N': 'resize_nn',
     'X': 'subpixel_conv',
 }
 
@@ -121,6 +123,8 @@ class ConvBlock(nn.Module):
         number of neurons in dense layers
     factor : int or tuple of int
         upsampling factor
+    shape : tuple of int
+        a shape to upsample to
     inputs : torch.Tensor, torch.nn.Module, numpy.ndarray or tuple
         shape or an example of input tensor to infer shape
     dense : dict
@@ -251,8 +255,13 @@ class ConvBlock(nn.Module):
                     logger.warning('ConvBlock: dropout_rate is zero or undefined, so dropout layer is skipped')
                     skip_layer = True
 
-            elif layer == 'u':
-                args = dict(scale_factor=kwargs.get('factor'), mode=kwargs.get('mode', 'bilinear'))
+            elif layer == 'b':
+                args = dict(scale_factor=kwargs.get('factor'), mode=kwargs.get('mode', 'bilinear'),
+                            size=kwargs.get('shape'))
+
+            elif layer == 'N':
+                args = dict(scale_factor=kwargs.get('factor'), mode=kwargs.get('mode', 'nearest'),
+                            size=kwargs.get('shape'))
 
             elif layer == 'X':
                 args = dict(upscale_factor=kwargs.get('factor'))

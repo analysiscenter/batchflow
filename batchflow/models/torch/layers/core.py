@@ -428,19 +428,23 @@ class GlobalPool(nn.Module):
         return x.view(x.size(0), -1)
 
 
-_UPSAMPLE_MODES = {
+_INTERPOLATE_MODES = {
     'n': 'nearest',
     'l': 'linear',
     'b': 'bilinear',
     't': 'trilinear',
 }
 
-class Upsample(nn.Module):
+class Interpolate(nn.Module):
     """ Upsample inputs with a given factor
 
     Notes
     -----
     This is just a wrapper around ``F.interpolate``.
+
+    For brevity ``mode`` can be specified with the first letter only: 'n', 'l', 'b', 't'.
+
+    All the parameters should the specified as keyword arguments (i.e. with names and values).
     """
     def __init__(self, *args, inputs=None, **kwargs):
         super().__init__()
@@ -448,13 +452,16 @@ class Upsample(nn.Module):
         self.kwargs = kwargs
 
         mode = self.kwargs.get('mode')
-        if mode in _UPSAMPLE_MODES:
-            self.kwargs['mode'] = _UPSAMPLE_MODES[mode]
+        if mode in _INTERPOLATE_MODES:
+            self.kwargs['mode'] = _INTERPOLATE_MODES[mode]
 
         shape = get_shape(inputs)
         self.output_shape = [*shape]
-        for i, s in enumerate(self.output_shape[2:]):
-            self.output_shape[i+2] = None if s is None else s * kwargs.get('scale_factor')
+        if 'size' in kwargs:
+            self.output_shape[2:] = kwargs['size']
+        else:
+            for i, s in enumerate(self.output_shape[2:]):
+                self.output_shape[i+2] = None if s is None else s * kwargs['scale_factor']
         self.output_shape = tuple(self.output_shape)
 
     def forward(self, x):

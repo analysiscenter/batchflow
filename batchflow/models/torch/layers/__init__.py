@@ -2,5 +2,6 @@
 from .core import Identity, Activation, Dense, Flatten, \
                   Conv, SeparableConv, ConvTranspose, SeparableConvTranspose, \
                   BatchNorm, Dropout, Pool, AdaptivePool, GlobalPool, \
-                  Upsample, PixelShuffle, SubPixelConv
+                  Interpolate, PixelShuffle, SubPixelConv
 from .conv_block import ConvBlock
+from .upsample import Upsample
