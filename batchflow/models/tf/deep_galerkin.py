@@ -3,7 +3,7 @@
 import numpy as np
 import tensorflow as tf
 
-from dataset.models.tf import TFModel
+from . import TFModel
 
 
 class DeepGalerkin(TFModel):
@@ -15,8 +15,8 @@ class DeepGalerkin(TFModel):
         """ Initial block of the model.
         """
         # make sure that the rest of the network is computed using separate coordinates
-        n_dims = cls.get_shape(inputs)
-        inputs = tf.split(inputs, n_dims, name='coordinates')
+        n_dims = cls.shape(inputs)[0]
+        inputs = tf.split(inputs, n_dims, axis=1, name='coordinates')
         inputs = tf.concat(inputs, axis=1)
 
         return super().initial_block(inputs, name, **kwargs)
@@ -27,8 +27,8 @@ class DeepGalerkin(TFModel):
         with respect to coordinates.
         """
         n_dims = len(coordinates)
-        d1_coeffs = form.get("d1", np.zeros(shape=(n_dims, ))).reshape(-1)
-        d2_coeffs = form.get("d2", np.zeros(shape=(n_dims, n_dims))).reshape(n_dims, n_dims)
+        d1_coeffs = np.array(form.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
+        d2_coeffs = np.array(form.get("d2", np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
 
         if (np.all(d1_coeffs == 0) and np.all(d2_coeffs == 0)):
             raise ValueError('Nothing to compute here! Either d1 or d2 must be non-zero')
@@ -37,15 +37,15 @@ class DeepGalerkin(TFModel):
             """ Compute differential form.
             """
             # derivatives of the first order
-            vars = coordinates.reshape(-1)[d1_coeffs != 0]
+            vars = [coordinates[i] for i in np.nonzero(d1_coeffs)[0]]
             result = sum(coeff * d1_ for coeff, d1_ in zip(d1_coeffs[d1_coeffs != 0], tf.gradients(net, vars)))
 
             # derivatives of the second order
             for i in range(n_dims):
-                vars = coordinates.reshape(-1)[d2_coeffs[i, :] != 0]
+                vars = [coordinates[i] for i in np.nonzero(d2_coeffs[i, :])[0]]
                 if len(coordinates) > 0:
                     d1 = tf.gradients(net, coordinates[i])[0]
-                    result += sum(coeff * d2_ for coeff, d2_ in zip(d2_coeffs[i, [d2_coeffs[i, :] != 0]],
+                    result += sum(coeff * d2_ for coeff, d2_ in zip(d2_coeffs[i, d2_coeffs[i, :] != 0],
                                                                     tf.gradients(d1, vars)))
             return result
 
@@ -79,9 +79,9 @@ class DeepGalerkin(TFModel):
 
             # multiplicator for binding boundary conditions
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
-            coordinates = [inputs.graph.get_tensor_by_name('coordinates:' + str(i)) for i in range(n_dims)]
+            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/coordinates:' + str(i)) for i in range(n_dims)]
             ic = kwargs.get("initial_condition")
-            n_dims_xs = n_dims if ic not None else n_dims - 1
+            n_dims_xs = n_dims if ic is None else n_dims - 1
 
             xs = tf.concat(coordinates[:n_dims_xs], axis=1)
             lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
@@ -104,8 +104,7 @@ class DeepGalerkin(TFModel):
 
         return inputs
 
-    @classmethod
-    def output(cls, inputs, predictions=None, ops=None, prefix=None, **kwargs):
+    def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
         """ Output block of the model.
 
         Computes differential form for lhs of the equation. In addition, allows for convenient
@@ -113,7 +112,8 @@ class DeepGalerkin(TFModel):
         """
         form = kwargs.get("form")
         n_dims = len(form.get("d1", form.get("d2", None)))
-        coordinates = [inputs.graph.get_tensor_by_name('coordinates:' + str(i)) for i in range(n_dims)]
+        coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/coordinates:' + str(i))
+                       for i in range(n_dims)]
 
         # parsing engine for differentials-logging
         if ops is None:
@@ -147,11 +147,11 @@ class DeepGalerkin(TFModel):
                     if order == "d2":
                         form = np.diag(form)
                     form = {order: form}
-                    _compute_op = cls._make_form_calculator(form, coordinates, name=op)
+                    _compute_op = self._make_form_calculator(form, coordinates, name=op)
 
                     # write this callable to outputs-dict
                     _ops[prefix][i] = _compute_op
 
         # differential form from lhs of the equation
-        _compute_predictions = cls._make_form_calculator(form, coordinates)
+        _compute_predictions = self._make_form_calculator(form, coordinates)
         return super().output(inputs, _compute_predictions, _ops, prefix, **kwargs)
