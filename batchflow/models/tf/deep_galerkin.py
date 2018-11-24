@@ -9,6 +9,36 @@ from . import TFModel
 class DeepGalerkin(TFModel):
     """ Deep Galerkin model for solving partial differential equations (PDEs).
     """
+    def _make_inputs(self, names=None, config=None):
+        """ Parse the dimensionality of PDE-problem and set up the
+        creation of needed placeholders accordingly.
+        """
+        common = config.get('common')
+        if common is None:
+            raise ValueError("The PDE-problem is not specified. Use 'common' config to set up the problem.")
+
+        # fetch pde's dimensionality
+        form = common.get("form")
+        n_dims = len(form.get("d1", form.get("d2", None)))
+
+        # make sure inputs-placeholder of pde's dimension (x_1, /dots, x_n, t) is created
+        config.update({'initial_block/inputs': 'points',
+                       'inputs': dict(points={'shape': (n_dims, )})})
+        placeholders_, tensors_ = super()._make_inputs(names, config)
+
+        # calculate targets-tensor using rhs of pde and created points-tensor
+        points = getattr(self, 'inputs').get('points')
+        Q = common.get('Q', 0)
+        if not callable(Q):
+            if isinstance(Q, (float, int)):
+                Q_val = Q
+                Q = lambda *args: Q_val * tf.ones_like(tf.reduce_sum(points, axis=1, keepdims=True))
+            else:
+                raise ValueError("Cannot parse right-hand-side of the equation")
+
+        self.store_to_attr('targets', Q(points))
+
+        return placeholders_, tensors_
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
@@ -153,5 +183,5 @@ class DeepGalerkin(TFModel):
                     _ops[prefix][i] = _compute_op
 
         # differential form from lhs of the equation
-        _compute_predictions = self._make_form_calculator(form, coordinates)
+        _compute_predictions = self._make_form_calculator(form, coordinates, name='predictions')
         return super().output(inputs, _compute_predictions, _ops, prefix, **kwargs)
