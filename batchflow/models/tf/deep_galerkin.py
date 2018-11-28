@@ -83,7 +83,7 @@ class DeepGalerkin(TFModel):
         return _callable
 
     @classmethod
-    def _make_time_multiplier(mode):
+    def _make_time_multiplier(cls, mode):
         if mode == "sigmoid":
             def _callable(shifted_time):
                 log_scale = tf.Variable(0.0, name='time_scale')
@@ -112,11 +112,13 @@ class DeepGalerkin(TFModel):
             coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/coordinates:' + str(i)) for i in range(n_dims)]
             ic = kwargs.get("initial_condition")
             n_dims_xs = n_dims if ic is None else n_dims - 1
-
-            xs = tf.concat(coordinates[:n_dims_xs], axis=1)
-            lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
-                                  for bounds in (lower, upper)]
-            multiplier = tf.reduce_prod((xs - lower_tf) * (upper_tf - xs) / (upper_tf - lower_tf)**2, axis=1)
+            multiplier = 1
+            if n_dims_xs > 0:
+                xs = tf.concat(coordinates[:n_dims_xs], axis=1)
+                lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
+                                      for bounds in (lower, upper)]
+                multiplier *= tf.reduce_prod((xs - lower_tf) * (upper_tf - xs) / (upper_tf - lower_tf)**2, axis=1,
+                                             name='xs_multiplier')
 
             # addition term and time-multiplier
             add_term = 0
@@ -124,7 +126,7 @@ class DeepGalerkin(TFModel):
                 add_term += kwargs.get("boundary_condition", 0)
             else:
                 # ingore boundary condition as it is automatically set by initial condition
-                shifted = coordinates[-1:] - tf.constant(lower[-1:], shape=(1, 1), dtype=tf.float32)
+                shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs.get("time_multiplier", "sigmoid")
                 multiplier *= cls._make_time_multiplier(time_mode)(shifted)
                 add_term += ic(coordinates[:n_dims_xs]) if callable(ic) else ic
@@ -132,7 +134,7 @@ class DeepGalerkin(TFModel):
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
 
-        return inputs
+        return tf.identity(inputs, name='approximator')
 
     def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
         """ Output block of the model.
@@ -140,6 +142,7 @@ class DeepGalerkin(TFModel):
         Computes differential form for lhs of the equation. In addition, allows for convenient
         logging of differentials into output ops.
         """
+        self.store_to_attr('approximator', inputs)
         form = kwargs.get("form")
         n_dims = len(form.get("d1", form.get("d2", None)))
         coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/coordinates:' + str(i))
