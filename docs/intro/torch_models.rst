@@ -155,7 +155,7 @@ For more information on the configuration of the inputs, see :meth:`~.TorchModel
 
 
 initial block
------------
+-------------
 Initial block specifies which inputs flow into the model to turn into prediction::
 
     model_config = {

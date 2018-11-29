@@ -1240,6 +1240,7 @@ class Pipeline:
         elif True or kwargs.get('prefetch', 0) > 0:
             if self._batch_generator is None:
                 self._lazy_run = args, kwargs
+                self.reset_iter()
                 self._batch_generator = self.gen_batch(*args, **kwargs)
             batch_res = next(self._batch_generator)
         else:

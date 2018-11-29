@@ -7,7 +7,7 @@ from collections import Iterable
 import numpy as np
 import tqdm
 
-from . import Baseset
+from .base import Baseset
 
 
 class DatasetIndex(Baseset):
