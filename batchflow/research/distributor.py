@@ -235,15 +235,15 @@ class Worker:
 
     def init(self):
         """ Run before run_job. """
-        pass
+        pass #pylint:disable=unnecessary-pass
 
     def post(self):
         """ Run after run_job. """
-        pass
+        pass #pylint:disable=unnecessary-pass
 
     def run_job(self):
         """ Main part of the worker. """
-        pass
+        pass #pylint:disable=unnecessary-pass
 
 
     def __call__(self, queue, results):
@@ -351,12 +351,12 @@ class Worker:
     @classmethod
     def log_info(cls, *args, **kwargs):
         """ Write message into log """
-        pass
+        pass #pylint:disable=unnecessary-pass
 
     @classmethod
     def log_error(cls, *args, **kwargs):
         """ Write error message into log """
-        pass
+        pass #pylint:disable=unnecessary-pass
 
 class Signal:
     """ Class for feedback from jobs and workers """

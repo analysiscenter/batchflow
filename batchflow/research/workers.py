@@ -24,7 +24,7 @@ class PipelineWorker(Worker):
 
     def post(self):
         """ Run after job execution. """
-        pass
+        pass #pylint:disable=unnecessary-pass
 
     def _execute_on_root(self, base_unit, iteration):
         _, job = self.job
