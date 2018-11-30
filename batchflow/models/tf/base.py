@@ -1167,7 +1167,7 @@ class TFModel(BaseModel):
 
     def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
         axis = self.channels_axis(kwargs['data_format'])
-        proba = tf.nn.softmax(inputs, name=name, dim=axis)
+        proba = tf.nn.softmax(inputs, name=name, axis=axis)
         self.store_to_attr(attr_prefix + name, proba)
 
     def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
