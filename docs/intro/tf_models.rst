@@ -85,7 +85,7 @@ Not surprisingly, many networks comprise different types of blocks, for example:
 - SqueezeNet alternates fire blocks with max-pooling.
 
 When creating a custom model you can have as many block types as you need, though aim to make them universal and reusable elsewhere.
-For instance, :class:`~.LinkNet`, :class:`~.GlobalConvolutionNetwork`, and :class:`~.ResNetAttention` use :class:`~.tf.ResNet` blocks.
+For instance, :class:`~.tf.LinkNet`, :class:`~.tf.GlobalConvolutionNetwork`, and :class:`~.tf.ResNetAttention` use :class:`~.tf.ResNet` blocks.
 
 
 head
@@ -174,7 +174,7 @@ Initial block specifies which inputs flow into the model to turn into prediction
         'initial_block/inputs': 'images',
     }
 
-As the default initial block contains a :func:`~.layers.conv_block`, all its parameters might be also specfied in the config::
+As the default initial block contains a :func:`~.tf.layers.conv_block`, all its parameters might be also specfied in the config::
 
     model_config = {
         'initial_block': dict(layout='cnap', filters=64, kernel_size=7, strides=2),
@@ -188,6 +188,14 @@ So you almost never need to redefine it.
 
 However, ``initial_block/inputs`` should always be specified.
 
+Initial block might be defined as a callable as well::
+
+    model_config = {
+        'initial_block': my_initial_block_fn,
+        'initial_block/inputs': 'images',
+    }
+
+
 
 body
 ----
@@ -197,10 +205,18 @@ For instance, :class:`~.tf.ResNet` body config includes ``block`` section with s
 
 See the model documentation to find out how to configure its body.
 
+Body is usually defined as a dict, but might also take a callable::
+
+    model_config = {
+        'body': my_network_ops_fn,
+    }
+
 
 head
 ----
 For many models head is just another :func:`~.layers.conv_block`. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.
+
+Head can also be defined with a callable.
 
 
 predictions
@@ -212,7 +228,8 @@ Available operations are:
     - callable - apply a given function to an output tensor
     - 'proba' - softmax
     - 'sigmoid' - sigmoid
-    - 'labels' - argmax.
+    - 'labels' - argmax
+    - 'softplus' - softplus.
 
 Mostly, the predictions tensor is just the head output and thus it needs no configuration.
 However, different losses might require different predictions (e.g. cross entropy expects logits,

@@ -1068,6 +1068,7 @@ class TFModel(BaseModel):
             - 'sigmoid' - ``sigmoid(inputs)``
             - 'proba' - ``softmax(inputs)``
             - 'labels' - ``argmax(inputs)``
+            - 'softplus' - ``softplus(inputs)``
             - callable - a user-defined operation
 
         ops : a sequence of operations or an ordered dict
@@ -1137,6 +1138,8 @@ class TFModel(BaseModel):
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
             self._add_output_identity(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'softplus':
+            self._add_output_softplus(inputs, name, attr_prefix, **kwargs)
         elif oper == 'sigmoid':
             self._add_output_sigmoid(inputs, name, attr_prefix, **kwargs)
         elif oper == 'proba':
@@ -1151,6 +1154,11 @@ class TFModel(BaseModel):
         x = tf.identity(inputs, name=name)
         self.store_to_attr(attr_prefix + name, x)
         return x
+
+    def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
+        proba = tf.nn.softplus(inputs, name=name)
+        self.store_to_attr(attr_prefix + name, proba)
 
     def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
@@ -1264,17 +1272,22 @@ class TFModel(BaseModel):
 
         return config
 
+    def _add_block(self, name, config, inputs):
+        defaults = {'is_training': self.is_training, **config['common']}
+        if callable(config[name]):
+            block = config[name](inputs, **defaults)
+        elif isinstance(config[name], dict):
+            block = getattr(self, name)(inputs=inputs, **{**defaults, **config[name]})
+        else:
+            raise TypeError('block can be configured as a function or a dict with parameters')
+        return block
 
     def _build(self, config=None):
-        defaults = {'is_training': self.is_training, **config['common']}
-        config['initial_block'] = {**defaults, **config['initial_block']}
-        config['body'] = {**defaults, **config['body']}
-        config['head'] = {**defaults, **config['head']}
-
-        x = self.initial_block(**config['initial_block'])
-        x = self.body(inputs=x, **config['body'])
-        output = self.head(inputs=x, **config['head'])
-        self.output(output, predictions=config['predictions'], ops=config['output'], **defaults)
+        inputs = config.pop('initial_block/inputs')
+        x = self._add_block('initial_block', config, inputs=inputs)
+        x = self._add_block('body', config, inputs=x)
+        output = self._add_block('head', config, inputs=x)
+        self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
 
     @classmethod
     def channels_axis(cls, data_format):

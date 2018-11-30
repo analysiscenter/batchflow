@@ -155,7 +155,7 @@ For more information on the configuration of the inputs, see :meth:`~.TorchModel
 
 
 initial block
------------
+-------------
 Initial block specifies which inputs flow into the model to turn into prediction::
 
     model_config = {
@@ -171,6 +171,8 @@ As the default initial block contains a :class:`~.ConvBlock`, all its parameters
 
 So the configured initial block gets `images` tensor and applies a convolution with 7x7 kernel and stride 2.
 
+Initial block can also be specified as `nn.Module`.
+
 For :doc:`predefined models <model_zoo_torch>` an initial block has the default configuration according to the original paper.
 So you almost never need to redefine it.
 
@@ -185,10 +187,14 @@ For instance, :class:`~.torch.ResNet` body config includes ``block`` section wit
 
 See the model documentation to find out how to configure its body.
 
+Body can be specified as `nn.Module` or a dict with parameters for a specific model.
+
 
 head
 ----
 For many models head is just another :class:`~.ConvBlock`. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.
+
+Head can be specified as `nn.Module` or a dict with :class:`~.ConvBlock` parameters.
 
 
 Loss, learning rate decay, optimizer

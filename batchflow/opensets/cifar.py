@@ -8,7 +8,7 @@ import tarfile
 import numpy as np
 import PIL
 
-from .. import DatasetIndex
+from ..dsindex import DatasetIndex
 from .base import ImagesOpenset
 
 

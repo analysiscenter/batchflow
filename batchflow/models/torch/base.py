@@ -450,7 +450,7 @@ class TorchModel(BaseModel):
         elif isinstance(config[name], dict):
             block = getattr(self, name)(inputs=inputs, **{**config['common'], **config[name]})
         else:
-            raise TypeError('block can be confugired as a Module or a dict with parameters')
+            raise TypeError('block can be configured as a Module or a dict with parameters')
         if block is not None:
             blocks.append(block)
         return block
