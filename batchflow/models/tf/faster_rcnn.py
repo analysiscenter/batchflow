@@ -13,7 +13,8 @@ from .layers import conv_block, non_max_suppression, roi_pooling_layer
 
 
 class FasterRCNN(TFModel):
-    """ Faster Region-based convolutional neural network. """
+    """ Faster Region-based convolutional neural network.
+    WARNING: FasterRCNN works with TensorFlow 1.3.0 and with fixed batch size. """
 
     @classmethod
     def default_config(cls):
