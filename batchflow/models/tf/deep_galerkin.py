@@ -118,7 +118,7 @@ class DeepGalerkin(TFModel):
                 lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
                                       for bounds in (lower, upper)]
                 multiplier *= tf.reduce_prod((xs - lower_tf) * (upper_tf - xs) / (upper_tf - lower_tf)**2, axis=1,
-                                             name='xs_multiplier')
+                                             name='xs_multiplier', keepdims=True)
 
             # addition term and time-multiplier
             add_term = 0
