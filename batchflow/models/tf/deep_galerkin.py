@@ -84,18 +84,46 @@ class DeepGalerkin(TFModel):
 
     @classmethod
     def _make_time_multiplier(cls, mode):
-        if mode == "sigmoid":
-            def _callable(shifted_time):
-                log_scale = tf.Variable(0.0, name='time_scale')
-                return tf.sigmoid(shifted_time * tf.exp(log_scale)) - 0.5
-        elif mode == "linear":
-            def _callable(shifted_time):
-                log_scale = tf.Variable(0.0, name='time_scale')
-                return shifted_time * tf.exp(log_scale)
-        elif callable(mode):
-            _callable = mode
+        mode = mode.split('_')
+        family = mode[0]
+        order = None if len(mode) == 1 else mode[1]
+
+        if family == "sigmoid":
+            if order == '0':
+                def _callable(shifted_time):
+                    log_scale = tf.Variable(0.0, name='time_scale')
+                    return tf.sigmoid(shifted_time * tf.exp(log_scale)) - 0.5
+            elif order == '00':
+                def _callable(shifted_time):
+                    log_scale = tf.Variable(0.0, name='time_scale')
+                    scale = tf.exp(log_scale)
+                    return tf.sigmoid(shifted_time * scale) - tf.sigmoid(shifted_time) * scale
+            elif order == '01':
+                def _callable(shifted_time):
+                    log_scale = tf.Variable(0.0, name='time_scale')
+                    scale = tf.exp(log_scale)
+                    return 4 * tf.sigmoid(shifted_time * scale) / scale - 2 / scale
+            else:
+                raise ValueError("Cannot parse the order of the multiplier")
+
+        elif family == "polynomial":
+            if order == '0'
+                def _callable(shifted_time):
+                    log_scale = tf.Variable(0.0, name='time_scale')
+                    return shifted_time * tf.exp(log_scale)
+            elif order == '00':
+                def _callable(shifted_time):
+                    return shifted_time**2 / 2
+            elif order == '01':
+                def _callable(shifted_time):
+                    return shifted_time
+            else:
+                raise ValueError("Cannot parse the order of the multiplier")
+
+        elif callable(family):
+            _callable = family
         else:
-            raise ValueError("mode should be either sigmoid, linear or callable")
+            raise ValueError("'mode' should start with either 'sigmoid', 'polynomial' or be a callable")
 
         return _callable
 
@@ -125,11 +153,18 @@ class DeepGalerkin(TFModel):
             if ic is None:
                 add_term += kwargs.get("boundary_condition", 0)
             else:
+                ic = ic if isinstance(ic, (tuple, list)) else (ic, )
+                ic_ = [expression if callable(expression) else lambda *args: expression for expression in ic]
+
                 # ingore boundary condition as it is automatically set by initial condition
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs.get("time_multiplier", "sigmoid")
-                multiplier *= cls._make_time_multiplier(time_mode)(shifted)
-                add_term += ic(coordinates[:n_dims_xs]) if callable(ic) else ic
+                multiplier *= cls._make_time_multiplier(time_mode + '_0' if len(ic_) == 1 else '_00')(shifted)
+                add_term += ic_[0](coordinates[:n_dims_xs])
+
+                # case of second derivative with respect to t in lhs of the equation
+                if len(ic_) > 1:
+                    add_term += ic_[1](coordinates[:n_dims_xs]) * cls._make_time_multiplier(time_mode + '_01')(shifted)
 
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
