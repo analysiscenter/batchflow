@@ -7,7 +7,61 @@ from . import TFModel
 
 
 class DeepGalerkin(TFModel):
-    """ Deep Galerkin model for solving partial differential equations (PDEs).
+    """ Deep Galerkin model for solving partial differential equations (PDEs) of the second order
+    with constant coefficients on rectangular domains using neural networks.
+
+    **Configuration**
+
+    Inherited from :class:`.TFModel`. Supports all config options from  :class:`.TFModel`,
+    including the choice of `device`, `session`, `inputs`-configuration, `loss`-function . Also
+    allows to set up the network-architecture using options `initial_block`, `body`, `head`. See
+    docstring of :class:`.TFModel` for more detail.
+
+    Left-hand-side (lhs), right-hand-side (rhs) and other properties of PDE are defined in `common`-dict:
+
+    common : dict
+        dictionary of parameters of PDE. Must contain keys
+        - form : dict
+            may contain keys 'd1' and 'd2', which define the coefficients before differentials
+            of first two orders in lhs of the equation.
+        - Q : callable or const
+            if callable, must accept and return tf.Tensor.
+        - domain : list
+            defines the rectangular domain of the equation as a sequence of coordinate-wise bounds.
+        - bind_bc_ic : bool
+            If True, modifies the network-output to bind boundary and initial conditions.
+        - initial_condition : callable or const or None or list
+            If supplied, defines the initial state of the system as a function of
+            coordinate-variables. In that case, PDE is considered to be evolution equation
+            (heat-equation or wave-equation, e.g.). If the lhs of PDE contains second-order
+            derivative w.r.t time, initial evolution-rate of the system must also be supplied.
+            In this case, the arg is a `list` with two callables (constants).
+        - time_multiplier : str or callable
+            Can be either 'sigmoid', 'polynomial' or callable. Needed if `initial_condition`
+            is supplied. Defines the multipliers applied to network for binding initial conditions.
+            `sigmoid` works better in problems with asymptotic steady states (heat equation, e.g.).
+
+    Examples
+    --------
+        common = dict(
+            form={'d1': (0, 1), 'd2': ((-1, 0), (0, 0))},
+            Q=5,
+            initial_condition=tf.sin,
+            bind_bc_ic=True,
+            domain=[[0, 1], [0, 3]],
+            time_multiplier='sigmoid')
+
+        stands for PDE given by
+            \begin{multline}
+                \frac{\partial f}{\partial t} - \frac{\partial^2 f}{\partial x^2} = 5, \\
+                f(x, 0) = \sin(x), \\
+                \Omega = [0, 1] \times [0, 3], \\
+                f(0, t) = 0 = f(1, t).
+            \end{multline}
+        while the solution to the equation is searched in the form
+            \begin{equation}
+                f(x, t) = (\sigma(x / w) - 0.5) * network(x, t) + \sin(x).
+            \end{equation}
     """
     def _make_inputs(self, names=None, config=None):
         """ Parse the dimensionality of PDE-problem and set up the
@@ -97,7 +151,7 @@ class DeepGalerkin(TFModel):
                 def _callable(shifted_time):
                     log_scale = tf.Variable(0.0, name='time_scale')
                     scale = tf.exp(log_scale)
-                    return tf.sigmoid(shifted_time * scale) - tf.sigmoid(shifted_time) * scale
+                    return tf.sigmoid(shifted_time * scale) - tf.sigmoid(shifted_time) * scale - 1 / 2 + scale / 2
             elif order == '01':
                 def _callable(shifted_time):
                     log_scale = tf.Variable(0.0, name='time_scale')
@@ -107,7 +161,7 @@ class DeepGalerkin(TFModel):
                 raise ValueError("Cannot parse the order of the multiplier")
 
         elif family == "polynomial":
-            if order == '0'
+            if order == '0':
                 def _callable(shifted_time):
                     log_scale = tf.Variable(0.0, name='time_scale')
                     return shifted_time * tf.exp(log_scale)
@@ -154,12 +208,12 @@ class DeepGalerkin(TFModel):
                 add_term += kwargs.get("boundary_condition", 0)
             else:
                 ic = ic if isinstance(ic, (tuple, list)) else (ic, )
-                ic_ = [expression if callable(expression) else lambda *args: expression for expression in ic]
+                ic_ = [expression if callable(expression) else lambda *args, e=expression: e for expression in ic]
 
                 # ingore boundary condition as it is automatically set by initial condition
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs.get("time_multiplier", "sigmoid")
-                multiplier *= cls._make_time_multiplier(time_mode + '_0' if len(ic_) == 1 else '_00')(shifted)
+                multiplier *= cls._make_time_multiplier(time_mode + '_0' if len(ic_) == 1 else time_mode +  '_00')(shifted)
                 add_term += ic_[0](coordinates[:n_dims_xs])
 
                 # case of second derivative with respect to t in lhs of the equation
