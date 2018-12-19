@@ -32,8 +32,9 @@ class DeepGalerkin(TFModel):
             If True, modifies the network-output to bind boundary and initial conditions.
         - initial_condition : callable or const or None or list
             If supplied, defines the initial state of the system as a function of
-            coordinate-variables. In that case, PDE is considered to be evolution equation
-            (heat-equation or wave-equation, e.g.). If the lhs of PDE contains second-order
+            spatial coordinates. In that case, PDE is considered to be an evolution equation
+            (heat-equation or wave-equation, e.g.). Then, first (n - 1) coordinates are spatial,
+            while the last one is the time-variable. If the lhs of PDE contains second-order
             derivative w.r.t time, initial evolution-rate of the system must also be supplied.
             In this case, the arg is a `list` with two callables (constants).
         - time_multiplier : str or callable
@@ -41,20 +42,26 @@ class DeepGalerkin(TFModel):
             is supplied. Defines the multipliers applied to network for binding initial conditions.
             `sigmoid` works better in problems with asymptotic steady states (heat equation, e.g.).
 
+    `output`-dict allows for logging of differentials of the solution-approximator. Can be used for
+    keeping track on the model-training process. See more details here: :meth:`.DeepGalerkin.output`.
+
     Examples
     --------
-        common = dict(
-            form={'d1': (0, 1), 'd2': ((-1, 0), (0, 0))},
-            Q=5,
-            initial_condition=tf.sin,
-            bind_bc_ic=True,
-            domain=[[0, 1], [0, 3]],
-            time_multiplier='sigmoid')
+
+        config = dict(
+            common = dict(
+                form={'d1': (0, 1), 'd2': ((-1, 0), (0, 0))},
+                Q=5,
+                initial_condition=lambda t: tf.sin(2 * np.pi * t),
+                bind_bc_ic=True,
+                domain=[[0, 1], [0, 3]],
+                time_multiplier='sigmoid'),
+            output='d1t')
 
         stands for PDE given by
             \begin{multline}
                 \frac{\partial f}{\partial t} - \frac{\partial^2 f}{\partial x^2} = 5, \\
-                f(x, 0) = \sin(x), \\
+                f(x, 0) = \sin(2 \pi x), \\
                 \Omega = [0, 1] \times [0, 3], \\
                 f(0, t) = 0 = f(1, t).
             \end{multline}
@@ -62,6 +69,8 @@ class DeepGalerkin(TFModel):
             \begin{equation}
                 f(x, t) = (\sigma(x / w) - 0.5) * network(x, t) + \sin(x).
             \end{equation}
+        We also track
+            $$ \frac{\partial f}{\partial t} $$
     """
     def _make_inputs(self, names=None, config=None):
         """ Parse the dimensionality of PDE-problem and set up the
@@ -96,7 +105,8 @@ class DeepGalerkin(TFModel):
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
-        """ Initial block of the model.
+        """ Initial block of the model. Implements all features from :meth:`.TFModel.initial_block`.
+        For instance, accepts layout for :func:`.conv_block`.
         """
         # make sure that the rest of the network is computed using separate coordinates
         n_dims = cls.shape(inputs)[0]
@@ -183,6 +193,13 @@ class DeepGalerkin(TFModel):
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
+        """ Head block of the model. Binds `initial_condition` or `boundary_condition`, if these
+        are supplied in the config of the model. Does so by applying one of preset multipliers to
+        the network output. Creates a tf.Tensor `approximator` - the final output of the model.
+
+        Implements all features from :meth:`.TFModel.head`. For instance, accepts layout
+        for :func:`.conv_block`.
+        """
         inputs = super().head(inputs, name, **kwargs)
         if kwargs.get("bind_bc_ic", True):
             form = kwargs.get("form")
@@ -226,10 +243,41 @@ class DeepGalerkin(TFModel):
         return tf.identity(inputs, name='approximator')
 
     def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
-        """ Output block of the model.
+        """ Output block of the model. Computes differential form for lhs of the equation.
+        In addition, allows for convenient logging of differentials into output ops. Accepts
+        all arguments from original :meth:`.TFModel.output`.
 
-        Computes differential form for lhs of the equation. In addition, allows for convenient
-        logging of differentials into output ops.
+        **Differentials-logging**
+
+        Allows for logging differentials of first and second order w.r.t. any variable. To output
+        derivative w.r.t. first coordinate
+            $$
+                \frac{\partial f}{\partial x_0}
+            $$
+
+        simply add::
+
+            config = {
+                'output': 'd1x0'
+            }
+
+        or, even simpler, as 'x', 'y', 'z' stand for first three coordinates::
+
+            config = {
+                'output': 'd1x'
+            }
+
+        while the derivative of the second order w.r.t. the last coordinate (time in equations of evolution)
+            $$
+                \frac{\partial^2 f}{\partial t^2}
+            $$
+
+        is output by::
+
+            config = {
+                'output': 'd2t'
+            }
+
         """
         self.store_to_attr('approximator', inputs)
         form = kwargs.get("form")
@@ -277,3 +325,10 @@ class DeepGalerkin(TFModel):
         # differential form from lhs of the equation
         _compute_predictions = self._make_form_calculator(form, coordinates, name='predictions')
         return super().output(inputs, _compute_predictions, _ops, prefix, **kwargs)
+
+    def predict(self, fetches=None, feed_dict=None, **kwargs):
+        """ Get predictions of the model. Overloads :meth:`.TFModel.output` :
+        `approximator`-tensor is now considered to be the main model-output.
+        """
+        fetches = 'approximator' if fetches is None else fetches
+        return super().predict(fetches, feed_dict, **kwargs)
