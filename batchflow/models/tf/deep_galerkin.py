@@ -7,7 +7,7 @@ from . import TFModel
 
 
 class DeepGalerkin(TFModel):
-    """ Deep Galerkin model for solving partial differential equations (PDEs) of the second order
+    r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
     with constant coefficients on rectangular domains using neural networks.
 
     **Configuration**
@@ -147,11 +147,35 @@ class DeepGalerkin(TFModel):
         return _callable
 
     @classmethod
-    def _make_time_multiplier(cls, mode):
-        mode = mode.split('_')
-        family = mode[0]
-        order = None if len(mode) == 1 else mode[1]
+    def _make_time_multiplier(cls, family, order=None):
+        """ Produce time multiplier: a callable, applied to an arbitrary function to bind its value
+        and, possibly, first order derivataive w.r.t. to time at $t=0$.
 
+        Parameters
+        ----------
+        family : str or callable
+            defines the functional form of the multiplier, can be either `polynomial` or `sigmoid`.
+        order : str or None
+            sets the properties of the multiplier, can be either `0` or `00` or `01`. '0'
+            fixes the value of multiplier as $0$ at $t=0$, while '00' sets both value and derivative to $0$.
+            In the same manner, '01' sets the value at $t=0$ to $0$ and the derivative to $1$.
+
+        Returns
+        -------
+        callable
+
+        Examples
+        --------
+        Form an `approximator`-tensor binding the initial value (at $t=0$) of the `network`-tensor to $sin(2 \pi x)$::
+
+            approximator = network * DeepGalerkin._make_time_multiplier('sigmoid', '0')(t) + tf.sin(2 * np.pi * x)
+
+        Bind the initial value to $sin(2 \pi x)$ and the initial rate to $cos(2 \pi x)$::
+
+            approximator = (network * DeepGalerkin._make_time_multiplier('polynomial', '00')(t) +
+                            tf.sin(2 * np.pi * x) +
+                            tf.cos(2 * np.pi * x) * DeepGalerkin._make_time_multiplier('polynomial', '01')(t))
+        """
         if family == "sigmoid":
             if order == '0':
                 def _callable(shifted_time):
@@ -168,7 +192,7 @@ class DeepGalerkin(TFModel):
                     scale = tf.exp(log_scale)
                     return 4 * tf.sigmoid(shifted_time * scale) / scale - 2 / scale
             else:
-                raise ValueError("Cannot parse the order of the multiplier")
+                raise ValueError("Order " + str(order) + " is not supported.")
 
         elif family == "polynomial":
             if order == '0':
@@ -177,17 +201,17 @@ class DeepGalerkin(TFModel):
                     return shifted_time * tf.exp(log_scale)
             elif order == '00':
                 def _callable(shifted_time):
-                    return shifted_time**2 / 2
+                    return shifted_time ** 2 / 2
             elif order == '01':
                 def _callable(shifted_time):
                     return shifted_time
             else:
-                raise ValueError("Cannot parse the order of the multiplier")
+                raise ValueError("Order " + str(order) + " is not supported.")
 
         elif callable(family):
             _callable = family
         else:
-            raise ValueError("'mode' should start with either 'sigmoid', 'polynomial' or be a callable")
+            raise ValueError("'family' should start with either 'sigmoid', 'polynomial' or be a callable.")
 
         return _callable
 
@@ -208,7 +232,8 @@ class DeepGalerkin(TFModel):
 
             # multiplicator for binding boundary conditions
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
-            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/coordinates:' + str(i)) for i in range(n_dims)]
+            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/coordinates:' + str(i))
+                           for i in range(n_dims)]
             ic = kwargs.get("initial_condition")
             n_dims_xs = n_dims if ic is None else n_dims - 1
             multiplier = 1
@@ -230,12 +255,12 @@ class DeepGalerkin(TFModel):
                 # ingore boundary condition as it is automatically set by initial condition
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs.get("time_multiplier", "sigmoid")
-                multiplier *= cls._make_time_multiplier(time_mode + '_0' if len(ic_) == 1 else time_mode +  '_00')(shifted)
+                multiplier *= cls._make_time_multiplier(time_mode, '_0' if len(ic_) == 1 else '_00')(shifted)
                 add_term += ic_[0](coordinates[:n_dims_xs])
 
                 # case of second derivative with respect to t in lhs of the equation
                 if len(ic_) > 1:
-                    add_term += ic_[1](coordinates[:n_dims_xs]) * cls._make_time_multiplier(time_mode + '_01')(shifted)
+                    add_term += ic_[1](coordinates[:n_dims_xs]) * cls._make_time_multiplier(time_mode, '_01')(shifted)
 
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
