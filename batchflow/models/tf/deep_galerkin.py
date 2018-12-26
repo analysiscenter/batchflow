@@ -148,7 +148,7 @@ class DeepGalerkin(TFModel):
 
     @classmethod
     def _make_time_multiplier(cls, family, order=None):
-        """ Produce time multiplier: a callable, applied to an arbitrary function to bind its value
+        r""" Produce time multiplier: a callable, applied to an arbitrary function to bind its value
         and, possibly, first order derivataive w.r.t. to time at $t=0$.
 
         Parameters
@@ -211,7 +211,7 @@ class DeepGalerkin(TFModel):
         elif callable(family):
             _callable = family
         else:
-            raise ValueError("'family' should start with either 'sigmoid', 'polynomial' or be a callable.")
+            raise ValueError("'family' should be either 'sigmoid', 'polynomial' or callable.")
 
         return _callable
 
@@ -268,7 +268,7 @@ class DeepGalerkin(TFModel):
         return tf.identity(inputs, name='approximator')
 
     def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
-        """ Output block of the model. Computes differential form for lhs of the equation.
+        r""" Output block of the model. Computes differential form for lhs of the equation.
         In addition, allows for convenient logging of differentials into output ops. Accepts
         all arguments from original :meth:`.TFModel.output`.
 
