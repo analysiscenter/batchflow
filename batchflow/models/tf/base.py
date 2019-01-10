@@ -1289,20 +1289,6 @@ class TFModel(BaseModel):
         output = self._add_block('head', config, inputs=x)
         self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
 
-    @classmethod
-    def channels_axis(cls, data_format):
-        """ Return the channels axis for the tensor
-
-        Parameters
-        ----------
-        data_format : str {'channels_last', 'channels_first'}
-
-        Returns
-        -------
-        number of channels : int
-        """
-        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
-
     def data_format(self, tensor, **kwargs):
         """ Return the tensor data format (channels_last or channels_first)
 
