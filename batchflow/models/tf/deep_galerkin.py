@@ -255,12 +255,12 @@ class DeepGalerkin(TFModel):
                 # ingore boundary condition as it is automatically set by initial condition
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs.get("time_multiplier", "sigmoid")
-                multiplier *= cls._make_time_multiplier(time_mode, '_0' if len(ic_) == 1 else '_00')(shifted)
+                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(ic_) == 1 else '00')(shifted)
                 add_term += ic_[0](coordinates[:n_dims_xs])
 
                 # case of second derivative with respect to t in lhs of the equation
                 if len(ic_) > 1:
-                    add_term += ic_[1](coordinates[:n_dims_xs]) * cls._make_time_multiplier(time_mode, '_01')(shifted)
+                    add_term += ic_[1](coordinates[:n_dims_xs]) * cls._make_time_multiplier(time_mode, '01')(shifted)
 
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
