@@ -352,7 +352,7 @@ class DeepGalerkin(TFModel):
         return super().output(inputs, _compute_predictions, _ops, prefix, **kwargs)
 
     def predict(self, fetches=None, feed_dict=None, **kwargs):
-        """ Get predictions of the model. Overloads :meth:`.TFModel.output` :
+        """ Get network-approximation of PDE-solution on a set of points. Overloads :meth:`.TFModel.output` :
         `approximator`-tensor is now considered to be the main model-output.
         """
         fetches = 'approximator' if fetches is None else fetches
