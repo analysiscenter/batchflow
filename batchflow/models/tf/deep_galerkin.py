@@ -256,11 +256,13 @@ class DeepGalerkin(TFModel):
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs.get("time_multiplier", "sigmoid")
                 multiplier *= cls._make_time_multiplier(time_mode, '0' if len(ic_) == 1 else '00')(shifted)
-                add_term += ic_[0](coordinates[:n_dims_xs])
+
+                xs = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
+                add_term += ic_[0](xs)
 
                 # case of second derivative with respect to t in lhs of the equation
                 if len(ic_) > 1:
-                    add_term += ic_[1](coordinates[:n_dims_xs]) * cls._make_time_multiplier(time_mode, '01')(shifted)
+                    add_term += ic_[1](xs) * cls._make_time_multiplier(time_mode, '01')(shifted)
 
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
