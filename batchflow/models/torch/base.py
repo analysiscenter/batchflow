@@ -465,6 +465,8 @@ class TorchModel(BaseModel):
         self._add_block(blocks, 'head', config, body or shape)
 
         self.model = nn.Sequential(*blocks)
+        if self.device:
+            self.model.cuda(self.device)
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
 
     @classmethod
@@ -554,7 +556,7 @@ class TorchModel(BaseModel):
             if hasattr(self, f):
                 v = getattr(self, f)
                 if isinstance(v, (torch.Tensor, torch.autograd.Variable)):
-                    v = v.detach().numpy()
+                    v = v.detach().cpu().numpy()
                 output.append(v)
             else:
                 raise KeyError('Unknown value to fetch', f)
