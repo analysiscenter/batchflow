@@ -91,15 +91,15 @@ class DeepGalerkin(TFModel):
 
         # calculate targets-tensor using rhs of pde and created points-tensor
         points = getattr(self, 'inputs').get('points')
-        Q = common.get('Q', 0)
-        if not callable(Q):
-            if isinstance(Q, (float, int)):
-                Q_val = Q
-                Q = lambda *args: Q_val * tf.ones_like(tf.reduce_sum(points, axis=1, keepdims=True))
+        q = common.get('Q', 0)
+        if not callable(q):
+            if isinstance(q, (float, int)):
+                q_val = q
+                q = lambda *args: q_val * tf.ones_like(tf.reduce_sum(points, axis=1, keepdims=True))
             else:
                 raise ValueError("Cannot parse right-hand-side of the equation")
 
-        self.store_to_attr('targets', Q(points))
+        self.store_to_attr('targets', q(points))
 
         return placeholders_, tensors_
 
@@ -138,9 +138,9 @@ class DeepGalerkin(TFModel):
             for i in range(n_dims):
                 vars = [coordinates[i] for i in np.nonzero(d2_coeffs[i, :])[0]]
                 if len(coordinates) > 0:
-                    d1 = tf.gradients(net, coordinates[i])[0]
+                    d1_ = tf.gradients(net, coordinates[i])[0]
                     result += sum(coeff * d2_ for coeff, d2_ in zip(d2_coeffs[i, d2_coeffs[i, :] != 0],
-                                                                    tf.gradients(d1, vars)))
+                                                                    tf.gradients(d1_, vars)))
             return result
 
         setattr(_callable, '__name__', name)
@@ -234,35 +234,36 @@ class DeepGalerkin(TFModel):
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
             coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/coordinates:' + str(i))
                            for i in range(n_dims)]
-            ic = kwargs.get("initial_condition")
-            n_dims_xs = n_dims if ic is None else n_dims - 1
+            init_cond = kwargs.get("initial_condition")
+            n_dims_xs = n_dims if init_cond is None else n_dims - 1
             multiplier = 1
             if n_dims_xs > 0:
-                xs = tf.concat(coordinates[:n_dims_xs], axis=1)
+                xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1)
                 lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
                                       for bounds in (lower, upper)]
-                multiplier *= tf.reduce_prod((xs - lower_tf) * (upper_tf - xs) / (upper_tf - lower_tf)**2, axis=1,
-                                             name='xs_multiplier', keepdims=True)
+                multiplier *= tf.reduce_prod((xs_spatial - lower_tf) * (upper_tf - xs_spatial) /
+                                             (upper_tf - lower_tf)**2, axis=1, name='xs_multiplier', keepdims=True)
 
             # addition term and time-multiplier
             add_term = 0
-            if ic is None:
+            if init_cond is None:
                 add_term += kwargs.get("boundary_condition", 0)
             else:
-                ic = ic if isinstance(ic, (tuple, list)) else (ic, )
-                ic_ = [expression if callable(expression) else lambda *args, e=expression: e for expression in ic]
+                init_cond = init_cond if isinstance(init_cond, (tuple, list)) else (init_cond, )
+                init_cond_ = [expression if callable(expression) else lambda *args, e=expression:
+                              e for expression in init_cond]
 
                 # ingore boundary condition as it is automatically set by initial condition
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs.get("time_multiplier", "sigmoid")
-                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(ic_) == 1 else '00')(shifted)
+                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond_) == 1 else '00')(shifted)
 
-                xs = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
-                add_term += ic_[0](xs)
+                xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
+                add_term += init_cond_[0](xs_spatial)
 
                 # case of second derivative with respect to t in lhs of the equation
-                if len(ic_) > 1:
-                    add_term += ic_[1](xs) * cls._make_time_multiplier(time_mode, '01')(shifted)
+                if len(init_cond_) > 1:
+                    add_term += init_cond_[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
 
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
