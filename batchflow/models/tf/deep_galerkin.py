@@ -350,7 +350,7 @@ class DeepGalerkin(TFModel):
                     _ops[prefix][i] = _compute_op
 
         # differential form from lhs of the equation
-        _compute_predictions = self._make_form_calculator(form, coordinates, name='predictions')
+        _compute_predictions = self._make_form_calculator(kwargs.get("form"), coordinates, name='predictions')
         return super().output(inputs, _compute_predictions, _ops, prefix, **kwargs)
 
     def predict(self, fetches=None, feed_dict=None, **kwargs):
