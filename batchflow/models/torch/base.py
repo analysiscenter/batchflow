@@ -578,8 +578,10 @@ class TorchModel(BaseModel):
         if self.lr_decay:
             self.lr_decay()
         self.optimizer.zero_grad()
+
         self.predictions = self.model(inputs)
         self.loss = self.loss_fn(self.predictions, targets)
+
         self.loss.backward()
         self.optimizer.step()
 

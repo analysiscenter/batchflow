@@ -131,7 +131,7 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
         elif padding == 'same':
             if transposed:
                 padding = 0
-            elif dims > 1:
+            else:
                 if isinstance(kernel_size, int):
                     kernel_size = (kernel_size,) * dims
                 if isinstance(dilation, int):
@@ -140,8 +140,6 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
                 # need_padding = any(isinstance(axis, tuple) and axis[0] != axis[1] for axis in padding)
                 # if not need_padding:
                 #     padding = tuple(x[0] for x in padding)
-            else:
-                padding = _get_padding(kernel_size, dilation)
         else:
             raise ValueError("padding can be 'same' or 'valid'")
     elif isinstance(padding, int):
@@ -321,7 +319,6 @@ class _Pool(nn.Module):
         super().__init__()
 
         self.padding = None
-
         if isinstance(_fn, dict):
             if padding is not None:
                 _padding = _calc_padding(inputs, padding=padding, **kwargs)
