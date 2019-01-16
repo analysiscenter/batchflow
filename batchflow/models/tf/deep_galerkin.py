@@ -334,7 +334,7 @@ class DeepGalerkin(TFModel):
                     try:
                         order = int(op[1])
                         prefix_len += 1
-                    except:
+                    except ValueError:
                         order = 1
 
                     if order > 2:
@@ -354,7 +354,7 @@ class DeepGalerkin(TFModel):
                             coord_number = int(variables[1:])
                             if order == 2:
                                 coord_number = [coord_number, coord_number]
-                        except:
+                        except ValueError:
                             coord_number = [_map_coords.get(variables[0]), _map_coords.get(variables[1])]
 
                     elif len(variables) == 4:
