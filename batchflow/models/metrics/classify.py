@@ -198,11 +198,11 @@ class ClassificationMetrics(Metrics):
         return labels
 
     def _count(self, f, label=None):
-        if self.num_classes > 2:
-            if label is None:
-                return np.array([self._return(f(l)) for l in self._all_labels()]).T
-        label = 1 if label is None else label
-        return self._return(f(label))
+        if label is None:
+            label = self._all_labels() if self.num_classes > 2 else 1
+        if np.isscalar(label):
+            return self._return(f(label))
+        return np.array([self._return(f(l)) for l in label]).T
 
     def true_positive(self, label=None, *args, **kwargs):
         _ = args, kwargs

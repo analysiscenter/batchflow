@@ -2,7 +2,7 @@ import sys
 import pytest
 
 sys.path.append('..')
-from dataset import Config
+from batchflow import Config
 
 
 @pytest.fixture
