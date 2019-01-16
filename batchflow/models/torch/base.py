@@ -361,7 +361,7 @@ class TorchModel(BaseModel):
         return np.asarray(classes)
 
     def num_classes(self, tensor):
-        """ Return the  number of classes """
+        """ Return the number of classes """
         if self.has_classes(tensor):
             classes = self.classes(tensor)
             return classes if isinstance(classes, int) else len(classes)
@@ -462,9 +462,10 @@ class TorchModel(BaseModel):
         blocks = []
         initial_block = self._add_block(blocks, 'initial_block', config, shape)
         body = self._add_block(blocks, 'body', config, initial_block or shape)
-        self._add_block(blocks, 'head', config, body or shape)
+        self._add_block(blocks, 'head', config, body or initial_block or shape)
 
         self.model = nn.Sequential(*blocks)
+
         if self.device:
             self.model.cuda(self.device)
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
