@@ -328,27 +328,58 @@ class DeepGalerkin(TFModel):
         for i, op in enumerate(_ops[prefix]):
             if isinstance(op, str):
                 op = op.replace(" ", "").replace("_", "")
-                if op.startswith("d1") or op.startswith("d2"):
-                    # parse coordinate number from needed output name
-                    order = op[:2]
-                    coord_number = _map_coords.get(op[2:])
-                    if coord_number is None:
-                        prefix_length = 3 if op[2] == "x" else 2
-                        try:
-                            coord_number = int(op[prefix_length:])
-                        except:
+                if op.startswith("d"):
+                    # parse order
+                    prefix_len = 1
+                    try:
+                        order = int(op[1])
+                        prefix_len += 1
+                    except:
+                        order = 1
+
+                    if order > 2:
+                        raise ValueError("Tracking gradients of order " + order + " is not supported.")
+
+                    # parse variables
+                    variables = op[prefix_len:]
+
+                    if len(variables) == 1:
+                        coord_number = _map_coords.get(variables)
+                        if coord_number is None:
                             raise ValueError("Cannot parse coordinate number from " + op)
+                        if order == 2:
+                            coord_number = [coord_number, coord_number]
+                    elif len(variables) == 2:
+                        try:
+                            coord_number = int(variables[1:])
+                            if order == 2:
+                                coord_number = [coord_number, coord_number]
+                        except:
+                            coord_number = [_map_coords.get(variables[0]), _map_coords.get(variables[1])]
+
+                    elif len(variables) == 4:
+                        try:
+                            coord_number = [int(variables[1]), int(variables[3])]
+                        except:
+                            raise ValueError("Cannot parse coordinate numbers from " + op)
+
+                    if isinstance(coord_number, list):
+                        if coord_number[0] is None or coord_number[1] is None:
+                            raise ValueError("Cannot parse coordinate numbers from " + op)
 
                     # make callable to compute required op
-                    form = np.zeros((n_dims, ))
-                    form[coord_number] = 1
-                    if order == "d2":
-                        form = np.diag(form)
-                    form = {order: form}
+                    form = np.zeros((n_dims, )) if order == 1 else np.zeros((n_dims, n_dims))
+                    if order == 1:
+                        form[coord_number] = 1
+                    else:
+                        form[coord_number[0], coord_number[1]] = 1
+                    form = {"d" + str(order): form}
                     _compute_op = self._make_form_calculator(form, coordinates, name=op)
 
                     # write this callable to outputs-dict
                     _ops[prefix][i] = _compute_op
+                else:
+                    raise ValueError("Cannot parse the gradient to track from " + op)
 
         # differential form from lhs of the equation
         _compute_predictions = self._make_form_calculator(kwargs.get("form"), coordinates, name='predictions')
