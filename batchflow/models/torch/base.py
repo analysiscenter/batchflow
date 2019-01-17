@@ -436,7 +436,6 @@ class TorchModel(BaseModel):
                 return config
         """
         config = self.default_config()
-
         config = config + self.config
 
         if config.get('inputs'):
@@ -521,9 +520,132 @@ class TorchModel(BaseModel):
             return ConvBlock(**kwargs)
         return None
 
-    def output(self):
-        """ Defines auxiliary model operations """
-        pass
+    def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
+        """ Add output operations to the model, like predicted probabilities or labels, etc.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor or a sequence of tf.Tensors
+            input tensors
+
+        predictions : str or callable
+            an operation applied to inputs to get `predictions` tensor which is used in a loss function:
+
+            - 'sigmoid' - ``sigmoid(inputs)``
+            - 'proba' - ``softmax(inputs)``
+            - 'labels' - ``argmax(inputs)``
+            - 'softplus' - ``softplus(inputs)``
+            - callable - a user-defined operation
+
+        ops : a sequence of operations or an ordered dict
+            auxiliary operations
+
+            If dict:
+
+            - key - a prefix for each input
+            - value - a sequence of aux operations
+
+        Raises
+        ------
+        ValueError if the number of inputs does not equal to the number of prefixes
+        TypeError if inputs is not a Tensor or a sequence of Tensors
+
+        Examples
+        --------
+
+        ::
+
+            config = {
+                'output': ['proba', 'labels']
+            }
+
+        However, if one of the placeholders also has a name 'labels', then it will be lost as the model
+        will rewrite the name 'labels' with an output.
+
+        That is where a dict might be convenient::
+
+            config = {
+                'output': {'predicted': ['proba', 'labels']}
+            }
+
+        Now the output will be stored under names 'predicted_proba' and 'predicted_labels'.
+
+        For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
+        """
+        if ops is None:
+            ops = []
+        elif not isinstance(ops, (dict, tuple, list)):
+            ops = [ops]
+        if not isinstance(ops, dict):
+            ops = {'': ops}
+
+        if not isinstance(inputs, (tuple, list)):
+            inputs = [inputs]
+
+        for i, tensor in enumerate(inputs):
+            # if not isinstance(tensor, tf.Tensor):
+            #    raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
+
+            prefix = [*ops.keys()][i]
+            # if prefix:
+            #     ctx = tf.variable_scope(prefix)
+            #     ctx.__enter__()
+            # else:
+            #     ctx = None
+            attr_prefix = prefix + '_' if prefix else ''
+
+            self._add_output_op(tensor, predictions, 'predictions', '', **kwargs)
+            for oper in ops[prefix]:
+                self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
+
+            # if ctx:
+            #     ctx.__exit__(None, None, None)
+
+    def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
+        if oper is None:
+            self._add_output_identity(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'softplus':
+            self._add_output_softplus(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'sigmoid':
+            self._add_output_sigmoid(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'proba':
+            self._add_output_proba(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'labels':
+            self._add_output_labels(inputs, name, attr_prefix, **kwargs)
+        elif callable(oper):
+            self._add_output_callable(inputs, oper, None, attr_prefix, **kwargs)
+
+    def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
+        setattr(self, attr_prefix + name, inputs)
+        return inputs
+
+    def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
+        proba = torch.nn.Softplus()(inputs)
+        setattr(self, attr_prefix + name, proba)
+
+    def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
+        proba = torch.nn.Sigmoid()(inputs)
+        setattr(self, attr_prefix + name, proba)
+
+    def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
+        axis = self.channels_axis(kwargs['data_format'])
+        proba = torch.nn.Softmax(dim=axis)(inputs)
+        setattr(self, attr_prefix + name, proba)
+
+    def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
+        class_axis = self.channels_axis(kwargs.get('data_format'))
+        predicted_classes = inputs.argmax(dim=class_axis)
+        setattr(self, attr_prefix + name, predicted_classes)
+
+    def _add_output_callable(self, inputs, oper, name, attr_prefix, **kwargs):
+        _ = kwargs
+        x = oper(inputs)
+        name = name or oper.__name__
+        setattr(self, attr_prefix + name, x)
+        return x
 
     def _fill_value(self, inputs):
         inputs = torch.from_numpy(inputs)
@@ -589,6 +711,8 @@ class TorchModel(BaseModel):
         if use_lock:
             self._train_lock.release()
 
+        config = self.build_config()
+        self.output(inputs=self.predictions, predictions=config['predictions'], ops=config['output'])
         output = self._fill_output(fetches)
 
         return output
@@ -607,5 +731,7 @@ class TorchModel(BaseModel):
             else:
                 self.loss = self.loss_fn(self.predictions, targets)
 
+        config = self.build_config()
+        self.output(inputs=self.predictions, predictions=config['predictions'], ops=config['output'])
         output = self._fill_output(fetches)
         return output
