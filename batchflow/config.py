@@ -132,8 +132,6 @@ class Config:
         config : dict, Config or None
             if None value will be putted into self.config else from config
         """
-        if value == 9:
-                import pdb; pdb.set_trace()
         if config is None:
             config = self.config
         elif isinstance(config, Config):
@@ -181,7 +179,7 @@ class Config:
         """
         if isinstance(config, Config):
             return config.config
-        elif isinstance(config, dict):
+        if isinstance(config, dict):
             items = config.items()
         elif isinstance(config, list):
             items = config

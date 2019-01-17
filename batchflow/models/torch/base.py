@@ -714,7 +714,8 @@ class TorchModel(BaseModel):
             self._train_lock.release()
 
         config = self.build_config()
-        self.output(inputs=self.predictions, predictions=config['predictions'], ops=config['output'], **config['common'])
+        self.output(inputs=self.predictions, predictions=config['predictions'],
+                    ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
 
         return output
@@ -734,6 +735,7 @@ class TorchModel(BaseModel):
                 self.loss = self.loss_fn(self.predictions, targets)
 
         config = self.build_config()
-        self.output(inputs=self.predictions, predictions=config['predictions'], ops=config['output'], **config['common'])
+        self.output(inputs=self.predictions, predictions=config['predictions'],
+                    ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
         return output
