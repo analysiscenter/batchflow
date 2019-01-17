@@ -92,7 +92,7 @@ class BaseModel:
         _ = self, args, kwargs
 
     @classmethod
-    def channels_axis(cls, data_format):
+    def channels_axis(cls, data_format='channels_last'):
         """ Return the channels axis for the tensor
 
         Parameters

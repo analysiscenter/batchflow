@@ -440,6 +440,8 @@ class TorchModel(BaseModel):
 
         if config.get('inputs'):
             self._make_inputs(names, config)
+            inputs = self.get('initial_block/inputs', config)
+            config['common/data_format'] = config['inputs/'+inputs].get('data_format')
 
         return config
 
@@ -712,7 +714,7 @@ class TorchModel(BaseModel):
             self._train_lock.release()
 
         config = self.build_config()
-        self.output(inputs=self.predictions, predictions=config['predictions'], ops=config['output'])
+        self.output(inputs=self.predictions, predictions=config['predictions'], ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
 
         return output
@@ -732,6 +734,6 @@ class TorchModel(BaseModel):
                 self.loss = self.loss_fn(self.predictions, targets)
 
         config = self.build_config()
-        self.output(inputs=self.predictions, predictions=config['predictions'], ops=config['output'])
+        self.output(inputs=self.predictions, predictions=config['predictions'], ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
         return output
