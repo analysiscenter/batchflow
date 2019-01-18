@@ -45,7 +45,6 @@ class Dense(nn.Module):
 
         shape = get_shape(inputs)
         self.output_shape = (shape[0], units)
-
         self.linear = nn.Linear(np.prod(shape[1:]), units, bias)
 
     def forward(self, x):
@@ -148,7 +147,6 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
                     stride = (stride,) * dims
                 # import pdb; pdb.set_trace()
                 padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
-
                 # need_padding = any(isinstance(axis, tuple) and axis[0] != axis[1] for axis in padding)
                 # if not need_padding:
                 #     padding = tuple(x[0] for x in padding)

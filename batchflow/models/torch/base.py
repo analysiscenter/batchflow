@@ -716,7 +716,6 @@ class TorchModel(BaseModel):
         """ Get predictions on the data provided
         """
         inputs, targets = self._fill_input(inputs, targets)
-
         self.model.eval()
 
         with torch.no_grad():
@@ -731,3 +730,48 @@ class TorchModel(BaseModel):
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
         return output
+
+    def save(self, path, *args, **kwargs):
+        """ Save tensorflow model.
+
+        Parameters
+        ----------
+        path : str
+            a path to a directory where all model files will be stored
+
+        Examples
+        --------
+        >>> torch_model = ResNet34()
+
+        Now save the model
+
+        >>> torch_model.save('/path/to/models/resnet34')
+
+        The model will be saved to /path/to/models/resnet34
+        """
+        torch.save({
+            'model_state_dict': self.model,
+            'optimizer_state_dict': self.optimizer,
+            'loss': self.loss_fn,
+            'config': self.config
+            }, path)
+
+    def load(self, path, *args, **kwargs):
+        device = kwargs.get('device') or 'cpu'
+        if isinstance(device, str):
+            device = torch.device(device)
+        checkpoint = torch.load(path, map_location=device)
+        self.model = checkpoint['model_state_dict']
+        self.optimizer = checkpoint['optimizer_state_dict']
+        self.loss_fn = checkpoint['loss']
+        self.config = self.config + checkpoint['config']
+
+        self.device = torch.device(device)
+
+        if 'cuda' in device.type:
+            self.model.to(device)
+
+
+        
+
+        
