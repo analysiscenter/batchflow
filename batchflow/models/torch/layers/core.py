@@ -115,15 +115,23 @@ class Activation(nn.Module):
             return self.activation(x, *self.args, **self.kwargs)
         return x
 
-def _get_padding(kernel_size=None, dilation=1):
-    p = dilation * (kernel_size - 1) // 2
-    p = (p + 1, p) if kernel_size % 2 == 0 else p
+def _get_padding(kernel_size=None, width=None, dilation=1, stride=1):
+    kernel_size = dilation * (kernel_size - 1) + 1
+    if stride >= width:
+        p = max(0, kernel_size - width)
+    else:
+        if width % stride == 0:
+            p = kernel_size - stride
+        else:
+            p = kernel_size - width % stride
+    p = (p // 2, p - p // 2)
     return p
 
-def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, **kwargs):
+def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
     _ = kwargs
 
     dims = get_num_dims(inputs)
+    shape = get_shape(inputs)
 
     if isinstance(padding, str):
         if padding == 'valid':
@@ -136,7 +144,11 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
                     kernel_size = (kernel_size,) * dims
                 if isinstance(dilation, int):
                     dilation = (dilation,) * dims
-                padding = tuple(_get_padding(kernel_size[i], dilation[i]) for i in range(dims))
+                if isinstance(stride, int):
+                    stride = (stride,) * dims
+                # import pdb; pdb.set_trace()
+                padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
+
                 # need_padding = any(isinstance(axis, tuple) and axis[0] != axis[1] for axis in padding)
                 # if not need_padding:
                 #     padding = tuple(x[0] for x in padding)

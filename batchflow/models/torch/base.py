@@ -589,19 +589,11 @@ class TorchModel(BaseModel):
             #    raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
 
             prefix = [*ops.keys()][i]
-            # if prefix:
-            #     ctx = tf.variable_scope(prefix)
-            #     ctx.__enter__()
-            # else:
-            #     ctx = None
             attr_prefix = prefix + '_' if prefix else ''
 
             self._add_output_op(tensor, predictions, 'predictions', '', **kwargs)
             for oper in ops[prefix]:
                 self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
-
-            # if ctx:
-            #     ctx.__exit__(None, None, None)
 
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
