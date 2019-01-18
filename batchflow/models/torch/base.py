@@ -766,12 +766,6 @@ class TorchModel(BaseModel):
         self.loss_fn = checkpoint['loss']
         self.config = self.config + checkpoint['config']
 
-        self.device = torch.device(device)
-
+        self.device = device
         if 'cuda' in device.type:
             self.model.to(device)
-
-
-        
-
-        
