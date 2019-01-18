@@ -732,7 +732,7 @@ class TorchModel(BaseModel):
         return output
 
     def save(self, path, *args, **kwargs):
-        """ Save tensorflow model.
+        """ Save torch model.
 
         Parameters
         ----------
@@ -749,6 +749,7 @@ class TorchModel(BaseModel):
 
         The model will be saved to /path/to/models/resnet34
         """
+        _ = args, kwargs
         torch.save({
             'model_state_dict': self.model,
             'optimizer_state_dict': self.optimizer,
@@ -757,6 +758,20 @@ class TorchModel(BaseModel):
             }, path)
 
     def load(self, path, *args, **kwargs):
+        """ Load a torch model from files
+
+        Parameters
+        ----------
+        path : str
+            a directory where a model is stored
+
+        Examples
+        --------
+        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
+
+        >>> torch_model.load(path='/path/to/models/resnet34')
+        """
+        _ = args, kwargs
         device = kwargs.get('device') or 'cpu'
         if isinstance(device, str):
             device = torch.device(device)
