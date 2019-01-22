@@ -527,7 +527,7 @@ class TorchModel(BaseModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor or a sequence of tf.Tensors
+        inputs : torch.Tensor or a sequence of torch.Tensors
             input tensors
 
         predictions : str or callable
@@ -585,8 +585,8 @@ class TorchModel(BaseModel):
             inputs = [inputs]
 
         for i, tensor in enumerate(inputs):
-            # if not isinstance(tensor, tf.Tensor):
-            #    raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
+            if not isinstance(tensor, torch.Tensor):
+                raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
 
             prefix = [*ops.keys()][i]
             attr_prefix = prefix + '_' if prefix else ''
