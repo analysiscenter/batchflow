@@ -1,6 +1,6 @@
 """ Contains common layers """
-import numpy as np
 import inspect
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -96,7 +96,7 @@ class Activation(nn.Module):
             a = activation.lower()
             if a in ACTIVATIONS:
                 _activation = getattr(nn, ACTIVATIONS[a])
-                has_inplace = 'inplace' in inspect.getargspec(_activation).args
+                has_inplace = 'inplace' in inspect.getfullargspec(_activation).args
                 if not has_inplace:
                     kwargs.pop('inplace', None)
                 self.activation = _activation(*args, **kwargs)
