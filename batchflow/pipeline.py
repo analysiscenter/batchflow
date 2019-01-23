@@ -288,7 +288,7 @@ class Pipeline:
         """
         return self.variables.get(name, *args, create=create, pipeline=self, **kwargs)
 
-    def init_variable(self, name, default=None, init_on_each_run=False, lock=True):
+    def init_variable(self, name, default=None, lock=True, **kwargs):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
 
@@ -297,9 +297,9 @@ class Pipeline:
         name : string
             a name of the variable
         default
-            an initial value for the variable
-        init_on_each_run : bool or default value
-            whether to initialize the variable before each run
+            an initial value for the variable set when pipeline is created
+        init_on_each_run
+            an initial value for the variable to set before each run
         lock : bool
             whether to lock a variable before each update (default: True)
 
@@ -316,7 +316,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        self.variables.create(name, default, init_on_each_run, lock=lock, pipeline=self)
+        self.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
         return self
 
     def init_variables(self, variables):
