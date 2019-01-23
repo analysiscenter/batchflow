@@ -15,9 +15,9 @@ class Variable:
                 self.default = L(init_on_each_run)
             else:
                 self.default = init_on_each_run
-            self.init_on_each_run = True
+            self._init_on_each_run = True
         else:
-            self.init_on_each_run = False
+            self._init_on_each_run = False
         self._lock = threading.Lock() if lock else None
         self.value = None
         if not self.init_on_each_run:
@@ -31,6 +31,10 @@ class Variable:
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._lock = threading.Lock() if state['_lock'] else None
+
+    @property
+    def init_on_each_run(self):
+        return self._init_on_each_run
 
     def get(self):
         """ Return a variable value """
