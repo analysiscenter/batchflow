@@ -20,7 +20,7 @@ class Variable:
             self._init_on_each_run = False
         self._lock = threading.Lock() if lock else None
         self.value = None
-        if not self._init_on_each_run:
+        if not self.init_on_each_run:
             self.initialize(pipeline=pipeline)
 
     def __getstate__(self):
@@ -31,6 +31,10 @@ class Variable:
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._lock = threading.Lock() if state['_lock'] else None
+
+    @property
+    def init_on_each_run(self):
+        return self._init_on_each_run
 
     def get(self):
         """ Return a variable value """
@@ -136,7 +140,7 @@ class VariableDirectory:
         """ Initialize all variables before a pipeline is run """
         with self._lock:
             for v in self.variables:
-                if self.variables[v]._init_on_each_run:
+                if self.variables[v].init_on_each_run:
                     self.variables[v].initialize(pipeline=pipeline)
 
     def get(self, name, *args, create=False, pipeline=None, **kwargs):
