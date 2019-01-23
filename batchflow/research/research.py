@@ -1,12 +1,14 @@
 """ Class Research and auxiliary classes for multiple experiments. """
 
 import os
+import glob
 from copy import copy, deepcopy
 from collections import OrderedDict
 from math import ceil
 import json
 import warnings
 import dill
+import pandas as pd
 
 from .. import Config, Pipeline
 from .distributor import Distributor
@@ -171,6 +173,10 @@ class Research:
         """
         self.grid_config = Grid(grid_config)
         return self
+
+    def load_results(self, *args, **kwargs):
+        """ Load results of research as pandas.DataFrame (see Results.load). """
+        return Results(research=self).load(*args, **kwargs)
 
     def _create_jobs(self, n_reps, n_iters, branches, name):
         """ Create generator of jobs. If `branches=1` or `len(branches)=1` then each job is one repetition
@@ -572,7 +578,7 @@ class Executable:
             self._call_function(iteration, *args, **kwargs)
 
     def put_result(self, iteration, result=None):
-        """ Put result from pipeline to self.results """
+        """ Put result from pipeline to self.result """
         if len(self.variables) > 0:
             if self.pipeline is not None:
                 for variable in self.variables:
@@ -613,3 +619,179 @@ class Executable:
             in_final = -1 in list_rule and iteration+1 == n_iters
             action_list = in_list or in_step or in_final
         return action_list
+
+class Results():
+    """ Class for dealing with results of research
+
+    Parameters
+    ----------
+    path : str
+        path to root folder of research
+    research : Research
+        instance of Research
+    """
+    def __init__(self, path=None, research=None):
+        if path is None and research is None:
+            raise ValueError('At least one of parameters path and research must be not None')
+        if path is None:
+            self.research = research
+            self.path = research.name
+        else:
+            self.research = Research().load(path)
+            self.path = path
+
+    def _get_list(self, value):
+        if not isinstance(value, list):
+            value = [value]
+        return value
+
+    def _sort_files(self, files, iterations):
+        files = {file: int(file.split('_')[-1]) for file in files}
+        files = OrderedDict(sorted(files.items(), key=lambda x: x[1]))
+        result = []
+        start = 0
+        for name, end in files.items():
+            intersection = pd.np.intersect1d(iterations, pd.np.arange(start, end))
+            if len(intersection) > 0:
+                result.append((name, intersection))
+            start = end
+        return OrderedDict(result)
+
+    def _slice_file(self, dumped_file, iterations_to_load, variables):
+        iterations = dumped_file['iteration']
+        if len(iterations) > 0:
+            elements_to_load = pd.np.array([pd.np.isin(it, iterations_to_load) for it in iterations])
+            res = OrderedDict()
+            for variable in ['iteration', *variables]:
+                if variable in dumped_file:
+                    res[variable] = pd.np.array(dumped_file[variable])[elements_to_load]
+        else:
+            res = None
+        return res
+
+    def _concat(self, results, variables):
+        res = {key: [] for key in [*variables, 'iteration']}
+        for chunk in results:
+            if chunk is not None:
+                for key, values in res.items():
+                    if key in chunk:
+                        values.extend(chunk[key])
+        return res
+
+    def _fix_length(self, chunk):
+        max_len = max([len(value) for value in chunk.values()])
+        for value in chunk.values():
+            if len(value) < max_len:
+                value.extend([pd.np.nan] * (max_len - len(value)))
+        return max_len
+
+    def _filter_configs(self, config=None, alias=None):
+        result = None
+        if config is None and alias is None:
+            raise ValueError('At least one of parameters config and alias must be not None')
+        if config is not None:
+            result = self.configs.subset(config, by_alias=False)
+        else:
+            result = self.configs.subset(alias, by_alias=True)
+        return result
+
+
+    def load(self, names=None, repetitions=None, variables=None, iterations=None,
+             configs=None, aliases=None, use_alias=False, as_dataframe=True):
+        """ Load results as pandas.DataFrame.
+
+        Parameters
+        ----------
+        names : str, list or None
+            names of units (pipleines and functions) to load
+        repetitions : int, list or None
+            numbers of repetitions to load
+        variables : str, list or None
+            names of variables to load
+        iterations : int, list or None
+            iterations to load
+        configs, aliases : dict, Config, Option, Grid or None
+            configs to load
+        use_alias : bool
+            if True, the resulting DataFrame/dict will have one column/item with alias, else it will
+            have column/item for each option in grid
+        as_dataframe : bool
+            return pandas.DataFrame or dict
+
+        Return
+        ------
+        pandas.DataFrame or dict
+            will have columns/keys: iteration, repetition, name (of pipeline/function)
+            and column/key for config. Also it will have column/key for each variable of pipeline
+            and output of the function that was saved as a result of the research.
+        """
+        self.configs = self.research.grid_config
+        transform = lambda x: pd.DataFrame(x) if as_dataframe else x
+        if configs is None and aliases is None:
+            self.configs = list(self.configs.gen_configs())
+        elif configs is not None:
+            self.configs = self._filter_configs(config=configs)
+        else:
+            self.configs = self._filter_configs(alias=aliases)
+
+        if names is None:
+            names = list(self.research.executables.keys())
+
+        if repetitions is None:
+            repetitions = list(range(self.research.n_reps))
+
+        if variables is None:
+            variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
+
+        if iterations is None:
+            iterations = list(range(self.research.n_iters))
+
+        self.names = self._get_list(names)
+        self.repetitions = self._get_list(repetitions)
+        self.variables = self._get_list(variables)
+        self.iterations = self._get_list(iterations)
+
+        all_results = []
+
+        for config_alias in self.configs:
+            alias = config_alias.alias(as_string=False)
+            alias_str = config_alias.alias(as_string=True)
+            for repetition in self.repetitions:
+                for unit in self.names:
+                    path = os.path.join(self.path, 'results', alias_str, str(repetition))
+                    files = glob.glob(os.path.join(glob.escape(path), unit + '_[0-9]*'))
+                    files = self._sort_files(files, self.iterations)
+                    if len(files) != 0:
+                        res = []
+                        for filename, iterations_to_load in files.items():
+                            with open(filename, 'rb') as file:
+                                res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
+                        res = self._concat(res, self.variables)
+                        max_len = self._fix_length(res)
+                        if use_alias:
+                            all_results.append(
+                                {
+                                    'config': [alias_str] * max_len,
+                                    'repetition': [repetition] * max_len,
+                                    'name': [unit] * max_len,
+                                    **res
+                                }
+                                )
+                        else:
+                            _alias = {key: [value] * max_len for key, value in alias.items()}
+                            all_results.append(
+                                {
+                                    **_alias,
+                                    'repetition': [repetition] * max_len,
+                                    'name': [unit] * max_len,
+                                    **res
+                                }
+                                )
+        if len(all_results) > 0:
+            concat_results = {key: [] for key in all_results[0]}
+            for key in concat_results:
+                for result in all_results:
+                    concat_results[key] += result[key]
+        else:
+            concat_results = None
+        return transform(concat_results)
