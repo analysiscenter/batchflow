@@ -17,7 +17,7 @@ class Variable:
                 self.default = init_on_each_run
             self._init_on_each_run = True
         else:
-            self._init_on_each_run = kwargs.get('_init_on_each_run')
+            self._init_on_each_run = kwargs.get('_init_on_each_run', False)
         self._lock = threading.Lock() if lock else None
         self.value = None
         if not self.init_on_each_run:
