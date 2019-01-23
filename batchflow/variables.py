@@ -15,12 +15,12 @@ class Variable:
                 self.default = L(init_on_each_run)
             else:
                 self.default = init_on_each_run
-            self.init_on_each_run = True
+            self._init_on_each_run = True
         else:
-            self.init_on_each_run = False
+            self._init_on_each_run = False
         self._lock = threading.Lock() if lock else None
         self.value = None
-        if not self.init_on_each_run:
+        if not self._init_on_each_run:
             self.initialize(pipeline=pipeline)
 
     def __getstate__(self):
@@ -136,7 +136,7 @@ class VariableDirectory:
         """ Initialize all variables before a pipeline is run """
         with self._lock:
             for v in self.variables:
-                if self.variables[v].init_on_each_run:
+                if self.variables[v]._init_on_each_run:
                     self.variables[v].initialize(pipeline=pipeline)
 
     def get(self, name, *args, create=False, pipeline=None, **kwargs):
