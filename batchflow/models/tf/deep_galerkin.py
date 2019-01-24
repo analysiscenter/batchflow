@@ -1,4 +1,7 @@
-""" Deep Galerkin model for solving partial differential equations. """
+""" Deep Galerkin model for solving partial differential equations. Inspired by
+Sirignano J., Spiliopoulos K. "`DGM: A deep learning algorithm for solving partial differential equations
+<http://arxiv.org/abs/1708.07469>`_"
+"""
 
 import numpy as np
 import tensorflow as tf
@@ -8,7 +11,9 @@ from . import TFModel
 
 class DeepGalerkin(TFModel):
     r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
-    with constant coefficients on rectangular domains using neural networks.
+    with constant coefficients on rectangular domains using neural networks. Inspired by
+    Sirignano J., Spiliopoulos K. "`DGM: A deep learning algorithm for solving partial differential equations
+    <http://arxiv.org/abs/1708.07469>`_"
 
     **Configuration**
 
@@ -386,7 +391,7 @@ class DeepGalerkin(TFModel):
         return super().output(inputs, _compute_predictions, _ops, prefix, **kwargs)
 
     def predict(self, fetches=None, feed_dict=None, **kwargs):
-        """ Get network-approximation of PDE-solution on a set of points. Overloads :meth:`.TFModel.output` :
+        """ Get network-approximation of PDE-solution on a set of points. Overloads :meth:`.TFModel.predict` :
         `approximator`-tensor is now considered to be the main model-output.
         """
         fetches = 'approximator' if fetches is None else fetches
