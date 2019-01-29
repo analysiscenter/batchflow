@@ -4,7 +4,7 @@ env:
   global:
     - DOCKER_ACC=analysiscenter1
     - DOCKER_REPO=ds-py3
-    - TAG="latest"
+    - TAG="cpu"
 
 build:
   pre_ci_boot:
