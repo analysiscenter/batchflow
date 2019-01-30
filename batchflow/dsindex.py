@@ -14,13 +14,18 @@ class DatasetIndex(Baseset):
     """ Stores an index for a dataset.
     The index should be 1-d array-like, e.g. numpy array, pandas Series, etc.
 
+    Parameters
+    ----------
+    index : int, 1-d array-like or callable
+        defines structure of DatasetIndex
+
     Examples
     --------
-    >>> index = DatasetIndex(all_item_ids)
+    >>> ds_index = DatasetIndex(all_item_ids)
 
-    >>> index.split([0.8, 0.2])
+    >>> ds_index.split([0.8, 0.2])
 
-    >>> item_pos = index.get_pos(item_id)
+    >>> item_pos = ds_index.get_pos(item_id)
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -34,12 +39,48 @@ class DatasetIndex(Baseset):
 
     @classmethod
     def concat(cls, *index_list):
-        """ Create index by concatenating other indices. """
+        """ Create index by concatenating other indices. 
+
+        Parameters
+        ----------
+        index_list : list
+            indices to be concatenated. each item in the list should 
+            have method .index, that returns an 1-d array-like structure
+
+        Returns
+        -------
+        DatasetIndex with one common index
+        """
         return DatasetIndex(np.concatenate([i.index for i in index_list]))
 
     @staticmethod
     def build_index(index):
-        """ Check index type and structure. """
+        """ Check index type and structure. 
+
+        Parameters
+        ----------
+        index : int, 1-d array-like or callable
+            defines structure of DatasetIndex
+
+            - list, numpy.array, pandas.DataSeries - structure is np.array
+
+            - int - structure is np.arange() of given length
+
+            - callable - a function which returns data that can 
+                be represented as array
+
+        Raises
+        ------
+        TypeError
+            if 'index' is not 1-dimensional
+
+        ValueError
+            if 'index' is empty
+
+        Returns
+        -------
+            index to be stored in class instance
+        """
         if callable(index):
             _index = index()
         else:
@@ -68,7 +109,31 @@ class DatasetIndex(Baseset):
         return dict(zip(self.indices, np.arange(len(self))))
 
     def get_pos(self, index):
-        """ Return position of an item in the index. """
+        """ Return position of an item in the index. 
+        
+        Parameters
+        ----------
+        index : int, str, slice or Iterable
+            items to return position of
+
+            - int, str - return position of that item in the DatasetIndex
+
+            - slice, Iterable - return positions of multiple items, 
+                specified by argument
+
+        Returns
+        -------
+        Positions in DatasetIndex of specified items
+
+        Examples
+        --------
+
+        Create DatasetIndex that holds index of images and get 
+            position of one of them
+
+        >>> DatasetIndex(['image_0', 'image_1']).get_pos('image_1')
+        
+        """
         if isinstance(index, slice):
             start = self._pos[index.start] if index.start is not None else None
             stop = self._pos[index.stop] if index.stop is not None else None
@@ -82,7 +147,18 @@ class DatasetIndex(Baseset):
         return pos
 
     def subset_by_pos(self, pos):
-        """ Return subset of index by given positions in the index. """
+        """ Return subset of index by given positions in the index. 
+        
+        Parameters
+        ----------
+
+        pos : int, slice, list or numpy.array
+            positions of items to include in subset
+
+        Returns
+        -------
+        numpy.array - subset of DatasetIndex.index
+        """
         return self.index[pos]
 
     def create_subset(self, index):
@@ -100,7 +176,7 @@ class DatasetIndex(Baseset):
         ----------
         shares : float or tuple of floats - train, test and validation shares.
 
-        shuffle : bool - whether to shuffle the index before split.
+        shuffle : bool, int or callable - whether to shuffle the index before split.
 
         Examples
         ---------
@@ -347,9 +423,36 @@ class DatasetIndex(Baseset):
 
     def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):
         """ Create a batch from given indices.
-        if `pos` is `False`, then `batch_indices` should contain the indices
-        which should be included in the batch (so expected batch is just the very same batch_indices)
-        otherwise `batch_indices` contains positions in the current index.
+
+        Parameters
+        ----------
+
+        batch_indices : int, slice, list, numpy.array or DatasetIndex
+            if 'pos' is True, then 'batch_indices' should contain 
+            positions of items in the current index to be returned as 
+            separate batch
+
+            if 'pos' is False, then 'batch_indices' should contain 
+            indices to be returned as separate batch 
+            (so expected batch is just the very same batch_indices)
+
+        pos : bool - flag that determines how function works
+
+        as_array : bool - flag that determines type of returned value 
+
+        Returns
+        -------
+        batch : DatasetIndex or numpy.array
+            part of initial DatasetIndex, specified by 'batch_indices'
+
+        Examples
+        --------
+
+        Create DatasetIndex with first 100 natural numbers, then 
+        get batch with every second item
+
+        >>>DatasetIndex(100).create_batch(batch_indices=2*np.arange(50))
+
         """
         _ = args, kwargs
         if isinstance(batch_indices, DatasetIndex):
