@@ -63,7 +63,89 @@ class TestBaseset:
 		assert left == right
 
 
+class TestDatasetIndex:
 
+
+	def test_build_index_int(self, dsindex_int):
+		assert (dsindex_int.index == np.arange(SIZE)).all()
+		
+	def test_build_index_list(self, dsindex_list):
+		assert (dsindex_list.index == list(range(2*SIZE, 4*SIZE))).all()
+		
+	def test_build_index_callable(self, dsindex_callable):
+		np.random.seed(0)
+		assert (dsindex_callable.index == np.random.random(SIZE)).all()
+
+	def test_build_index_dsindex(self, dsindex_list):
+		dsindex_rec = DatasetIndex(dsindex_list)
+		assert (dsindex_rec.index == dsindex_list.index).all()
+		
+	def test_build_index_empty(self):
+		with pytest.raises(ValueError):
+			dsindex_bad = DatasetIndex([])
+
+	def test_build_index_multidimensional(self):
+		with pytest.raises(TypeError):
+			dsindex_bad = DatasetIndex(np.random.random(size=(SIZE, SIZE)))
+
+
+	def test_get_pos_slice(self, dsindex_list):
+		assert dsindex_list.get_pos(slice(2*SIZE, 3*SIZE, 1)) == slice(0, SIZE, 1)
+		
+	def test_get_pos_str(self):
+		dsindex_str = DatasetIndex(['a', 'b', 'c', 'd', 'e'])
+		assert dsindex_str.get_pos('a') == 0
+		
+	def test_get_pos_str_iterable(self):
+		dsindex_str = DatasetIndex(['a', 'b', 'c', 'd', 'e'])
+		assert set(dsindex_str.get_pos(['a', 'b'])) == set(np.array([0, 1]))
+		assert (dsindex_str.get_pos(['a', 'b']) == np.array([0, 1])).all()
+		
+	def test_get_pos_int(self, dsindex_int):
+		assert dsindex_int.get_pos(SIZE-1) == SIZE-1
+		
+	def test_get_pos_iterable(self, dsindex_list):
+		assert set(dsindex_list.get_pos(range(2*SIZE, 3*SIZE))) == set(range(0, SIZE))
+		assert (dsindex_list.get_pos(range(2*SIZE, 3*SIZE)) == range(0, SIZE)).all() 
+
+
+
+
+	def test_shuffle_bool_false(self, dsindex_list):
+		left = dsindex_list._shuffle(shuffle=False) 
+		right = np.arange(len(dsindex_list))
+		assert (left == right).all()
+		
+	def test_shuffle_bool_true(self, dsindex_list):
+		left = dsindex_list._shuffle(shuffle=True)
+		assert (left != np.arange(len(dsindex_list))).any()
+		assert set(left) == set(np.arange(len(dsindex_list)))
+		
+	def test_shuffle_int(self, dsindex_list):
+		left = dsindex_list._shuffle(shuffle=SIZE)
+		assert (left != np.arange(len(dsindex_list))).any()
+		assert (left == dsindex_list._shuffle(shuffle=SIZE)).all()
+		assert set(left) == set(np.arange(len(dsindex_list)))    
+
+	def test_shuffle_randomstate(self, dsindex_list):
+		left = dsindex_list._shuffle(shuffle=np.random.RandomState())
+		assert (left != np.arange(len(dsindex_list))).any()
+		left = dsindex_list._shuffle(shuffle=np.random.RandomState(SIZE))
+		right = dsindex_list._shuffle(shuffle=np.random.RandomState(SIZE))
+		assert (left == right).all()
+		left = dsindex_list._shuffle(shuffle=np.random.RandomState())
+		assert set(left) == set(np.arange(len(dsindex_list)))  
+		
+	def test_shuffle_cross(self, dsindex_list):
+		left = dsindex_list._shuffle(shuffle=SIZE)
+		right = dsindex_list._shuffle(shuffle=np.random.RandomState(SIZE))
+		assert (left == right).all()
+
+	@pytest.mark.skip(reason='permutes index, not order')    
+	def test_shuffle_callable(self, dsindex_list):
+		left = dsindex_list._shuffle(shuffle=np.random.permutation) 
+		assert (left != np.arange(len(dsindex_list))).all()
+		assert set(left) == set(np.arange(len(dsindex_list)))
 
 
 
