@@ -9,15 +9,21 @@ from .pipeline import Pipeline
 
 
 class Dataset(Baseset):
-    """ The Dataset holds an index of all data items
-        (e.g. customers, transactions, etc)
-        and a specific action class to process a small subset of data (batch).
+    """
+    The Dataset holds an index of all data items
+    (e.g. customers, transactions, etc)
+    and a specific action class to process a small subset of data (batch).
+    ...
 
     Attributes
     ----------
     index : DatasetIndex or FilesIndex
-    indices
-    is_split
+
+    indices : class:`numpy.ndarray`
+        an array with the indices
+
+    is_split: bool
+        True if dataset has been split into train / test / validation subsets
 
     Methods
     -------
@@ -70,7 +76,16 @@ class Dataset(Baseset):
 
     @staticmethod
     def build_index(index):
-        """ Create an index
+        """ Create a DatasetIndex object from array-like data
+
+            Parameters
+            ----------
+            index : array-like
+
+            Returns
+            -------
+            index : DatasetIndex
+                DatasetIndex class object which was created from
         """
         if isinstance(index, DatasetIndex):
             return index
@@ -78,6 +93,19 @@ class Dataset(Baseset):
 
     @staticmethod
     def _is_same_index(index1, index2):
+        """ Check if index1 and index2 are equals
+
+            Parameters
+            ----------
+            index1 : array-like
+
+            index2 : array-like
+
+            Returns
+            -------
+            The result of two indices comparison 
+
+        """
         return (isinstance(index1, type(index2)) or isinstance(index2, type(index1))) and \
                index1.indices.shape == index2.indices.shape and \
                np.all(index1.indices == index2.indices)
@@ -100,13 +128,15 @@ class Dataset(Baseset):
 
             pos : bool
 
-            if `pos` is `False`, then `batch_indices` should contain the indices
-            that should be included in the batch
-            otherwise `batch_indices` should contain their positions in the current index
-
             Returns
             -------
             batch : Batch or inherited-from-Batch
+
+            Notes
+            -----
+            if `pos` is `False`, then `batch_indices` should contain the indices
+            that should be included in the batch
+            otherwise `batch_indices` should contain their positions in the current index
         """
         if not isinstance(batch_indices, DatasetIndex):
             batch_indices = self.index.create_batch(batch_indices, pos, *args, **kwargs)
@@ -128,7 +158,7 @@ class Dataset(Baseset):
 
     @property
     def p(self):
-        """:class:`dataset.Pipeline` : a short alias for `pipeline()` """
+        """A short alias for `pipeline()` """
         return self.pipeline()
 
     def __rshift__(self, other):
@@ -139,6 +169,11 @@ class Dataset(Baseset):
 
             Returns
             -------
+
+            Raises
+            ------
+            TypeError
+                If the type of other is not a Pipeline
         """
         if not isinstance(other, Pipeline):
             raise TypeError("Pipeline is expected, but got %s. Use as dataset >> pipeline" % type(other))
