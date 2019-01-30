@@ -4,7 +4,6 @@ import numpy as np
 from .base import Baseset
 from .batch import Batch
 from .dsindex import DatasetIndex
-from .dsindex import FilesIndex
 from .pipeline import Pipeline
 
 
