@@ -71,6 +71,10 @@ class VGG(TFModel):
             config['head/units'][-1] = self.num_classes('targets')
         else:
             config['head/units'] = self.num_classes('targets')
+
+        data_format = config['data_format']
+        config['initial_block'].update({'data_format':data_format})
+        config['body'].update({'data_format':data_format})
         return config
 
     @classmethod
