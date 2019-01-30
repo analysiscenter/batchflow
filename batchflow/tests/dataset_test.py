@@ -40,6 +40,18 @@ class TestDataset:
         target_index = DatasetIndex(np.arange(5))
         new_batch = dataset.create_batch(target_index)
         assert isinstance(new_batch, dataset.batch_class)
+        assert len(new_batch.index.index) == len(target_index.index)
+
+    def test_pipeline(self, dataset):
+        pipeline_config = {}
+        new_pipeline = dataset.pipeline(pipeline_config)
+        assert isinstance(new_pipeline, Pipeline)
+
+    def test_rshift(self, dataset):
+        pipeline_config = {}
+        new_pipeline = dataset.pipeline(pipeline_config)
+        train_pipeline = (new_pipeline << dataset)
+        assert isinstance(train_pipeline, Pipeline)
 
     def test_split(self, dataset):
         assert dataset.train is None
