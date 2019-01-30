@@ -103,7 +103,7 @@ class Dataset(Baseset):
 
             Returns
             -------
-            The result of two indices comparison 
+            The result of two indices comparison
 
         """
         return (isinstance(index1, type(index2)) or isinstance(index2, type(index1))) and \
