@@ -43,8 +43,8 @@ class Inception(TFModel):
         data_format = config['data_format']
         config['initial_block'].update({'data_format':data_format})
         config['body'].update({'data_format':data_format})
-        return config
-        
+        return config   
+
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
         """ Base layers.
