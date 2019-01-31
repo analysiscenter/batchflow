@@ -39,12 +39,12 @@ class DatasetIndex(Baseset):
 
     @classmethod
     def concat(cls, *index_list):
-        """ Create index by concatenating other indices. 
+        """Create index by concatenating other indices.
 
         Parameters
         ----------
         index_list : list
-            indices to be concatenated. each item in the list should 
+            indices to be concatenated. each item in the list should
             have method .index, that returns an 1-d array-like structure
 
         Returns
@@ -55,7 +55,7 @@ class DatasetIndex(Baseset):
 
     @staticmethod
     def build_index(index):
-        """ Check index type and structure. 
+        """ Check index type and structure.
 
         Parameters
         ----------
@@ -66,7 +66,7 @@ class DatasetIndex(Baseset):
 
             - int - structure is np.arange() of given length
 
-            - callable - a function which returns data that can 
+            - callable - a function which returns data that can
                 be represented as array
 
         Raises
@@ -109,8 +109,8 @@ class DatasetIndex(Baseset):
         return dict(zip(self.indices, np.arange(len(self))))
 
     def get_pos(self, index):
-        """ Return position of an item in the index. 
-        
+        """ Return position of an item in the index.
+
         Parameters
         ----------
         index : int, str, slice or Iterable
@@ -118,7 +118,7 @@ class DatasetIndex(Baseset):
 
             - int, str - return position of that item in the DatasetIndex
 
-            - slice, Iterable - return positions of multiple items, 
+            - slice, Iterable - return positions of multiple items,
                 specified by argument
 
         Returns
@@ -128,11 +128,10 @@ class DatasetIndex(Baseset):
         Examples
         --------
 
-        Create DatasetIndex that holds index of images and get 
+        Create DatasetIndex that holds index of images and get
             position of one of them
 
         >>> DatasetIndex(['image_0', 'image_1']).get_pos('image_1')
-        
         """
         if isinstance(index, slice):
             start = self._pos[index.start] if index.start is not None else None
@@ -147,8 +146,8 @@ class DatasetIndex(Baseset):
         return pos
 
     def subset_by_pos(self, pos):
-        """ Return subset of index by given positions in the index. 
-        
+        """ Return subset of index by given positions in the index.
+
         Parameters
         ----------
 
@@ -428,17 +427,17 @@ class DatasetIndex(Baseset):
         ----------
 
         batch_indices : int, slice, list, numpy.array or DatasetIndex
-            if 'pos' is True, then 'batch_indices' should contain 
-            positions of items in the current index to be returned as 
+            if 'pos' is True, then 'batch_indices' should contain
+            positions of items in the current index to be returned as
             separate batch
 
-            if 'pos' is False, then 'batch_indices' should contain 
-            indices to be returned as separate batch 
+            if 'pos' is False, then 'batch_indices' should contain
+            indices to be returned as separate batch
             (so expected batch is just the very same batch_indices)
 
         pos : bool - flag that determines how function works
 
-        as_array : bool - flag that determines type of returned value 
+        as_array : bool - flag that determines type of returned value
 
         Returns
         -------
@@ -448,7 +447,7 @@ class DatasetIndex(Baseset):
         Examples
         --------
 
-        Create DatasetIndex with first 100 natural numbers, then 
+        Create DatasetIndex with first 100 natural numbers, then
         get batch with every second item
 
         >>>DatasetIndex(100).create_batch(batch_indices=2*np.arange(50))
