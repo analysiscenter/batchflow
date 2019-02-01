@@ -788,14 +788,19 @@ class TorchModel(BaseModel):
         >>> torch_model.load(path='/path/to/models/resnet34')
         """
         _ = args, kwargs
-        device = self.config.get('device') or 'cpu'
-        if isinstance(device, str):
-            device = torch.device(device)
-        checkpoint = torch.load(path, map_location=device)
+        device = self.config.get('device')
+        if device:
+            if isinstance(device, str):
+                device = torch.device(device)
+            checkpoint = torch.load(path, map_location=device)
+        else:
+            checkpoint = torch.load(path)
         self.model = checkpoint['model_state_dict']
         self.optimizer = checkpoint['optimizer_state_dict']
         self.loss_fn = checkpoint['loss']
         self.config = self.config + checkpoint['config']
 
         self.device = device
-        self.model.to(device)
+
+        if device:
+            self.model.to(device)
