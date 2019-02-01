@@ -14,7 +14,6 @@ build:
   pre_ci:
     docker pull $DOCKER_ACC/$DOCKER_REPO:$TAG
   ci:
-    - pip3 install psutil
     - pip3 install -U pylint
     - pylint -rn --rcfile pylintrc batchflow
     - find . -wholename "*.py" | grep "tests" | xargs pylint -rn --rcfile=pylintrc
