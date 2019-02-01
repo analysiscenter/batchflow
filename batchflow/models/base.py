@@ -90,17 +90,3 @@ class BaseModel:
     def predict(self, *args, **kwargs):
         """ Make a prediction using the model  """
         _ = self, args, kwargs
-
-    @classmethod
-    def channels_axis(cls, data_format='channels_last'):
-        """ Return the channels axis for the tensor
-
-        Parameters
-        ----------
-        data_format : str {'channels_last', 'channels_first'}
-
-        Returns
-        -------
-        number of channels : int
-        """
-        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1

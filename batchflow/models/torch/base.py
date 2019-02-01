@@ -346,6 +346,21 @@ class TorchModel(BaseModel):
         shape = self.shape(tensor)
         return len(shape) - 2
 
+
+    @classmethod
+    def channels_axis(cls, data_format='channels_first'):
+        """ Return the channels axis for the tensor
+
+        Parameters
+        ----------
+        data_format : str {'channels_last', 'channels_first'}
+
+        Returns
+        -------
+        number of channels : int
+        """
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
+
     def has_classes(self, tensor):
         """ Check if a tensor has classes defined in the config """
         config = self.get_tensor_config(tensor)
@@ -441,7 +456,8 @@ class TorchModel(BaseModel):
         if config.get('inputs'):
             self._make_inputs(names, config)
             inputs = self.get('initial_block/inputs', config)
-            config['common/data_format'] = config['inputs/'+inputs].get('data_format')
+            if isinstance(inputs, str):
+                config['common/data_format'] = config['inputs'][inputs].get('data_format')
 
         return config
 
@@ -468,7 +484,7 @@ class TorchModel(BaseModel):
         self.model = nn.Sequential(*blocks)
 
         if self.device:
-            self.model.cuda(self.device)
+            self.model.to(self.device)
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
 
     @classmethod
@@ -767,12 +783,12 @@ class TorchModel(BaseModel):
 
         Examples
         --------
-        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
+        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'), device='cuda:0')
 
         >>> torch_model.load(path='/path/to/models/resnet34')
         """
         _ = args, kwargs
-        device = kwargs.get('device') or 'cpu'
+        device = self.config.get('device') or 'cpu'
         if isinstance(device, str):
             device = torch.device(device)
         checkpoint = torch.load(path, map_location=device)
@@ -782,5 +798,4 @@ class TorchModel(BaseModel):
         self.config = self.config + checkpoint['config']
 
         self.device = device
-        if 'cuda' in device.type:
-            self.model.to(device)
+        self.model.to(device)

@@ -96,6 +96,7 @@ class Activation(nn.Module):
             a = activation.lower()
             if a in ACTIVATIONS:
                 _activation = getattr(nn, ACTIVATIONS[a])
+                # check does activation has `in_place` parameter
                 has_inplace = 'inplace' in inspect.getfullargspec(_activation).args
                 if not has_inplace:
                     kwargs.pop('inplace', None)
