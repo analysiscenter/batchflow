@@ -462,7 +462,7 @@ class Interpolate(nn.Module):
 
         shape = get_shape(inputs)
         self.output_shape = [*shape]
-        if 'size' in kwargs:
+        if kwargs.get('size'):
             self.output_shape[2:] = kwargs['size']
         else:
             for i, s in enumerate(self.output_shape[2:]):
