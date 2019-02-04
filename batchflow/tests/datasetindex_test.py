@@ -5,8 +5,12 @@
 # pylint: disable=protected-access
 # pylint: disable=redefined-outer-name
 # pylint: disable=too-few-public-methods
+# pylint: disable=useless-super-delegation
+# pylint: disable=unidiomatic-typecheck
 import pytest
 import numpy as np
+import sys
+sys.path.append('../..')
 from batchflow.dsindex import DatasetIndex
 
 
@@ -84,11 +88,11 @@ class TestDatasetIndexBase:
 
     def test_build_index_empty(self):
         with pytest.raises(ValueError):
-            dsindex_bad = DatasetIndex([])
+            DatasetIndex([])
 
     def test_build_index_multidimensional(self):
         with pytest.raises(TypeError):
-            dsindex_bad = DatasetIndex(np.random.random(size=(SIZE, SIZE)))
+            DatasetIndex(np.random.random(size=(SIZE, SIZE)))
 
     #Tests for batchflow.DatasetIndex.get_pos() method
     def test_get_pos_slice(self, dsindex_list):
