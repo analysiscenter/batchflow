@@ -7,13 +7,11 @@
 # pylint: disable=too-few-public-methods
 # pylint: disable=useless-super-delegation
 # pylint: disable=unidiomatic-typecheck
+import sys
 import pytest
 import numpy as np
-import sys
 sys.path.append('../..')
 from batchflow.dsindex import DatasetIndex
-
-
 
 
 SIZE = 10
