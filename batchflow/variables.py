@@ -7,16 +7,17 @@ from .named_expr import eval_expr, L
 
 class Variable:
     """ Pipeline variable """
-    def __init__(self, default=None, init_on_each_run=False, lock=True, pipeline=None):
+    def __init__(self, default=None, lock=True, pipeline=None, **kwargs):
         self.default = default
-        if init_on_each_run is not None and not isinstance(init_on_each_run, bool):
+        if 'init_on_each_run' in kwargs:
+            init_on_each_run = kwargs.get('init_on_each_run')
             if callable(init_on_each_run):
                 self.default = L(init_on_each_run)
             else:
                 self.default = init_on_each_run
-            self.init_on_each_run = True
+            self._init_on_each_run = True
         else:
-            self.init_on_each_run = init_on_each_run
+            self._init_on_each_run = kwargs.get('_init_on_each_run', False)
         self._lock = threading.Lock() if lock else None
         self.value = None
         if not self.init_on_each_run:
@@ -30,6 +31,10 @@ class Variable:
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._lock = threading.Lock() if state['_lock'] else None
+
+    @property
+    def init_on_each_run(self):
+        return self._init_on_each_run
 
     def get(self):
         """ Return a variable value """

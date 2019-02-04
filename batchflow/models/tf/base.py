@@ -1498,6 +1498,21 @@ class TFModel(BaseModel):
         """
         return tensor.get_shape().as_list()[0]
 
+
+    @classmethod
+    def channels_axis(cls, data_format='channels_last'):
+        """ Return the channels axis for the tensor
+
+        Parameters
+        ----------
+        data_format : str {'channels_last', 'channels_first'}
+
+        Returns
+        -------
+        number of channels : int
+        """
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
+
     @classmethod
     def se_block(cls, inputs, ratio, name='se', **kwargs):
         """ Squeeze and excitation block
