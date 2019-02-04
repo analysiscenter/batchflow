@@ -1,3 +1,4 @@
+""" Contains pyramid layer """
 import numpy as np
 import torch
 import torch.nn as nn
@@ -30,14 +31,14 @@ class PyramidPooling(nn.Module):
     -------
     torch.nn.Module
     """
-    def __init__(self, inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', 
+    def __init__(self, inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean',
                  pyramid=(0, 1, 2, 3, 6), **kwargs):
         super().__init__()
-        
+
         shape = get_shape(inputs)
         self.axis = -1 if kwargs.get('data_format') == 'channels_last' else 1
-        filters = filters if filters else shape[self.axis] // len (pyramid)
-        
+        filters = filters if filters else shape[self.axis] // len(pyramid)
+
         if None in shape[1:]:
             # if some dimension is undefined
             raise ValueError("Pyramid pooling can only be applied to a tensor with a fully defined shape.")
@@ -51,8 +52,9 @@ class PyramidPooling(nn.Module):
                 else:
                     pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
                     pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
-                    
-                    pool = ConvBlock(inputs, 'p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides, **kwargs)
+
+                    pool = ConvBlock(inputs, 'p', pool_op=pool_op, pool_size=pool_size,
+                                     pool_strides=pool_strides, **kwargs)
                     conv = ConvBlock(pool, layout, filters=filters, kernel_size=kernel_size, **kwargs)
                     upsamp = Upsample(inputs=conv, factor=None, layout='b', shape=tuple(item_shape.tolist()), **kwargs)
                     module = nn.Sequential(pool, conv, upsamp)
