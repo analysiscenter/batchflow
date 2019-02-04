@@ -145,7 +145,6 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
                     dilation = (dilation,) * dims
                 if isinstance(stride, int):
                     stride = (stride,) * dims
-                # import pdb; pdb.set_trace()
                 padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
                 # need_padding = any(isinstance(axis, tuple) and axis[0] != axis[1] for axis in padding)
                 # if not need_padding:
@@ -161,10 +160,9 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
 
     return padding
 
-def _calc_output_shape(inputs, kernel_size=None, stride=None, dilation=None, padding=0, transposed=False, **kwargs):
+def _calc_output_shape(inputs, kernel_size=None, stride=None, dilation=1, padding=0, transposed=False, **kwargs):
     shape = get_shape(inputs)
     output_shape = list(shape)
-
     for i in range(2, len(shape)):
         if shape[i]:
             k = kernel_size[i - 2] if isinstance(kernel_size, tuple) else kernel_size

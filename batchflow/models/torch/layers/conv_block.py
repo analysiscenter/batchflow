@@ -242,7 +242,7 @@ class ConvBlock(nn.Module):
 
             elif C_GROUPS[layer] == 'p':
                 pool_op = 'mean' if layer == 'v' else kwargs.pop('pool_op', 'max')
-                args = dict(op=pool_op, kernel_size=pool_size, stride=pool_strides, padding=padding, dilation=1)
+                args = dict(op=pool_op, kernel_size=pool_size, stride=pool_strides, padding=padding)
 
             elif C_GROUPS[layer] == 'P':
                 pool_op = 'mean' if layer == 'V' else kwargs.pop('pool_op', 'max')
