@@ -3,7 +3,6 @@
 # pylint: disable=missing-docstring
 # pylint: disable=redefined-outer-name
 # pylint: disable=protected-access
-# pylint: disable=redefined-outer-name
 # pylint: disable=too-few-public-methods
 # pylint: disable=useless-super-delegation
 # pylint: disable=unidiomatic-typecheck
