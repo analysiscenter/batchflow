@@ -39,6 +39,12 @@ class FasterRCNN(TFModel):
 
         self.anchors_batch = config['anchors_batch']
         self.rpn_thresholds = config['rpn_thresholds']
+
+        data_format = config.get('data_format')
+        if data_format:
+            config['initial_block'].update({'data_format':data_format})
+            config['body'].update({'data_format':data_format})
+            config['head'].update({'data_format':data_format})
         return config
 
     def initial_block(self, inputs, base_network, name='initial_block', **kwargs):

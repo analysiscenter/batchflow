@@ -47,7 +47,7 @@ class Inception_v4(Inception):
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
-        """Input network block.
+        """ Input network block.
 
         For details see figure 3 in the article.
 

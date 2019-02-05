@@ -61,7 +61,6 @@ class DenseNet(TFModel):
             # boundaries - the number of iterations on the 150th and 225th epochs on CIFAR with batch size=64
             config['decay'] = ('const', dict(boundaries=[117300, 175950], values=[lr, lr/10, lr/100]))
             config['optimizer'] = ('Momentum', dict(momentum=.9))
-
         return config
 
     def build_config(self, names=None):
@@ -70,6 +69,11 @@ class DenseNet(TFModel):
             config['head/units'] = self.num_classes('targets')
         if config.get('head/filters') is None:
             config['head/filters'] = self.num_classes('targets')
+
+        data_format = config.get('data_format')
+        if data_format:
+            config['initial_block'].update({'data_format': data_format})
+            config['body'].update({'data_format': data_format})
         return config
 
     @classmethod

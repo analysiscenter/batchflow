@@ -40,9 +40,10 @@ class Inception(TFModel):
         if config.get('head/filters') is None:
             config['head/filters'] = self.num_classes('targets')
 
-        data_format = config['data_format']
-        config['initial_block'].update({'data_format':data_format})
-        config['body'].update({'data_format':data_format})
+        data_format = config.get('data_format')
+        if data_format:
+            config['initial_block'].update({'data_format': data_format})
+            config['body'].update({'data_format': data_format})
         return config
 
     @classmethod

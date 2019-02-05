@@ -62,6 +62,12 @@ class GlobalConvolutionNetwork(TFModel):
         if config.get('head/num_classes') is None:
             config['head/num_classes'] = self.num_classes('targets')
         config['head']['targets'] = self.targets
+
+        data_format = config.get('data_format')
+        if data_format:
+            config['initial_block'].update({'data_format': data_format})
+            config['body'].update({'data_format': data_format})
+            config['head'].update({'data_format': data_format})
         return config
 
     @classmethod
