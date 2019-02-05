@@ -40,10 +40,9 @@ class Inception(TFModel):
         if config.get('head/filters') is None:
             config['head/filters'] = self.num_classes('targets')
 
-        data_format = config.get('data_format')
-        if data_format:
-            config['initial_block'].update({'data_format': data_format})
-            config['body'].update({'data_format': data_format})
+        if config.get('data_format'):
+            config['common'].update({'data_format': config.get('data_format')})
+
         return config
 
     @classmethod
@@ -66,6 +65,8 @@ class Inception(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
+
+        print(kwargs)
         arch, layout = cls.pop(['arch', 'layout'], kwargs)
 
         with tf.variable_scope(name):
