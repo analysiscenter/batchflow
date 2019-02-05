@@ -20,7 +20,6 @@ class FCN(TFModel):
         config['head/upsample'] = dict(layout='t')
 
         config['loss'] = 'ce'
-        config['optimizer'] = ('Momentum', dict(learning_rate=1e-4, momentum=.9))
 
         return config
 

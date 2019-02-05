@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ... import is_best_practice
 from .layers import ConvBlock
 from . import TorchModel
 from .utils import get_shape
@@ -44,10 +43,7 @@ class VNet(TorchModel):
         config['head'] = dict(layout='c', kernel_size=1)
 
         config['loss'] = 'ce'
-        if is_best_practice('optimizer'):
-            config['optimizer'] = 'Adam'
-        else:
-            config['optimizer'] = ('SGD', dict(lr=1e-4, momentum=.99))
+
         return config
 
     def build_config(self, names=None):

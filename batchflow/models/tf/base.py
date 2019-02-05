@@ -11,7 +11,7 @@ import contextlib
 import numpy as np
 import tensorflow as tf
 
-from ... import is_best_practice, Config
+from ... import Config
 from ..utils import unpack_fn_from_config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
@@ -1207,17 +1207,13 @@ class TFModel(BaseModel):
         """
         config = Config()
         config['inputs'] = {}
-        config['common'] = {}
         config['initial_block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['predictions'] = None
         config['output'] = None
         config['optimizer'] = ('Adam', dict())
-
-        if is_best_practice():
-            config['common'] = {'batch_norm': {'momentum': .1}}
-            config['optimizer'][1].update({'use_locking': True})
+        config['common'] = {'batch_norm': {'momentum': .1}}
 
         return config
 
