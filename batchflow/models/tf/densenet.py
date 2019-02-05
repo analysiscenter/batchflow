@@ -4,7 +4,6 @@ Huang G. et al. "`Densely Connected Convolutional Networks
 """
 import tensorflow as tf
 
-from ... import is_best_practice
 from . import TFModel
 from .layers import conv_block
 
@@ -54,13 +53,6 @@ class DenseNet(TFModel):
         config['head'] = dict(layout='Vf')
 
         config['loss'] = 'ce'
-        if is_best_practice('optimizer'):
-            config['optimizer'].update(name='Adam')
-        else:
-            lr = 1e-1
-            # boundaries - the number of iterations on the 150th and 225th epochs on CIFAR with batch size=64
-            config['decay'] = ('const', dict(boundaries=[117300, 175950], values=[lr, lr/10, lr/100]))
-            config['optimizer'] = ('Momentum', dict(momentum=.9))
 
         return config
 
