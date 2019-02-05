@@ -20,11 +20,11 @@ class DatasetIndex(Baseset):
 
     Examples
     --------
-    >>> ds_index = DatasetIndex(all_item_ids)
+    >>> index = DatasetIndex(all_item_ids)
 
-    >>> ds_index.split([0.8, 0.2])
+    >>> index.split([0.8, 0.2])
 
-    >>> item_pos = ds_index.get_pos(item_id)
+    >>> item_pos = index.get_pos(item_id)
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -69,7 +69,7 @@ class DatasetIndex(Baseset):
                 Structure is numpy.arange() of given length.
 
             - callable
-                Structure is 1-d array-like return of given function.
+                Structure is return of given function (should be 1-d array-like).
 
         Raises
         ------
@@ -200,7 +200,6 @@ class DatasetIndex(Baseset):
         split into train / test / validation in 50/30/20 ratio
 
         >>> index.split([0.5, 0.3, 0.2])
-
         """
         train_share, test_share, valid_share = self.calc_split(shares)
 
@@ -468,7 +467,6 @@ class DatasetIndex(Baseset):
         get batch with every second item
 
         >>> DatasetIndex(100).create_batch(batch_indices=2*numpy.arange(50))
-
         """
         _ = args, kwargs
         if isinstance(batch_indices, DatasetIndex):
