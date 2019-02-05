@@ -3,7 +3,6 @@
 """
 import torch.nn as nn
 
-from ... import is_best_practice
 from . import TorchModel
 from .layers import ConvBlock
 
