@@ -333,6 +333,7 @@ class TorchModel(BaseModel):
         raise TypeError("tensor is expected to be a name for config's inputs section")
 
     def shape(self, tensor):
+        """ Return the tensor's shape """
         if isinstance(tensor, (list, tuple)):
             return tuple(self.get_tensor_config(t)['shape'] for t in tensor)
         return self.get_tensor_config(tensor)['shape']
