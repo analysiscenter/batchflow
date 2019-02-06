@@ -464,7 +464,7 @@ class TorchModel(BaseModel):
         blocks = []
         initial_block = self._add_block(blocks, 'initial_block', config, initial_inputs)
         body = self._add_block(blocks, 'body', config, initial_block or initial_inputs)
-        self._add_block(blocks, 'head', config, body or initial_inputs)
+        self._add_block(blocks, 'head', config, body or initial_block or initial_inputs)
 
         self.model = nn.Sequential(*blocks)
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
