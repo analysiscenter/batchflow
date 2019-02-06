@@ -333,8 +333,9 @@ class TorchModel(BaseModel):
         raise TypeError("tensor is expected to be a name for config's inputs section")
 
     def shape(self, tensor):
-        config = self.get_tensor_config(tensor)
-        return config['shape']
+        if isinstance(tensor, (list, tuple)):
+            return tuple(self.get_tensor_config(t)['shape'] for t in tensor)
+        return self.get_tensor_config(tensor)['shape']
 
     def num_channels(self, tensor, data_format='channels_first'):
         """ Return number of channels in the input tensor """
@@ -456,13 +457,13 @@ class TorchModel(BaseModel):
         return block
 
     def _build(self, config=None):
-        shape = self.shape(config['initial_block/inputs'])
+        initial_inputs = self.shape(config['initial_block/inputs'])
         config.pop('initial_block/inputs')
 
         blocks = []
-        initial_block = self._add_block(blocks, 'initial_block', config, shape)
-        body = self._add_block(blocks, 'body', config, initial_block or shape)
-        self._add_block(blocks, 'head', config, body or shape)
+        initial_block = self._add_block(blocks, 'initial_block', config, initial_inputs)
+        body = self._add_block(blocks, 'body', config, initial_block or initial_inputs)
+        self._add_block(blocks, 'head', config, body or initial_inputs)
 
         self.model = nn.Sequential(*blocks)
         #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
