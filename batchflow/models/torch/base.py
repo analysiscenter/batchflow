@@ -192,7 +192,7 @@ class TorchModel(BaseModel):
             self._make_loss(config)
         if self.optimizer is None:
             self._make_optimizer(config)
-
+            
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
 
