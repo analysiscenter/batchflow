@@ -251,7 +251,7 @@ class Batch:
             data = tuple()
         else:
             self.components = self.components + components
-            data = data + (init,)
+            data = data + init
 
         self.make_item_class(local=True)
         self._data = data

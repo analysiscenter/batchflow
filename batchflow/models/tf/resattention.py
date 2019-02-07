@@ -51,9 +51,7 @@ class ResNetAttention(TFModel):
 
         config['loss'] = 'ce'
         config['common'] = dict(conv=dict(use_bias=False))
-        lr = 1e-4
-        config['decay'] = ('const', dict(boundaries=[200000, 400000, 500000], values=[lr, lr/10, lr/100, lr/1000]))
-        config['optimizer'] = ('Momentum', dict(momentum=.9))
+
         return config
 
     def build_config(self, names=None):

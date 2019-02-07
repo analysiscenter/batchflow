@@ -333,8 +333,10 @@ class TorchModel(BaseModel):
         raise TypeError("tensor is expected to be a name for config's inputs section")
 
     def shape(self, tensor):
-        config = self.get_tensor_config(tensor)
-        return config['shape']
+        """ Return the tensor's shape """
+        if isinstance(tensor, (list, tuple)):
+            return tuple(self.get_tensor_config(t)['shape'] for t in tensor)
+        return self.get_tensor_config(tensor)['shape']
 
     def num_channels(self, tensor, data_format='channels_first'):
         """ Return number of channels in the input tensor """
@@ -353,12 +355,14 @@ class TorchModel(BaseModel):
 
         Parameters
         ----------
-        data_format : str {'channels_last', 'channels_first'}
+        data_format : str {'channels_last', 'channels_first', 'N***'} or None
 
         Returns
         -------
-        number of channels : int
+        int
         """
+        if data_format is None:
+            data_format = 'channels_first'
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     def has_classes(self, tensor):
@@ -473,13 +477,13 @@ class TorchModel(BaseModel):
         return block
 
     def _build(self, config=None):
-        shape = self.shape(config['initial_block/inputs'])
+        initial_inputs = self.shape(config['initial_block/inputs'])
         config.pop('initial_block/inputs')
 
         blocks = []
-        initial_block = self._add_block(blocks, 'initial_block', config, shape)
-        body = self._add_block(blocks, 'body', config, initial_block or shape)
-        self._add_block(blocks, 'head', config, body or initial_block or shape)
+        initial_block = self._add_block(blocks, 'initial_block', config, initial_inputs)
+        body = self._add_block(blocks, 'body', config, initial_block or initial_inputs)
+        self._add_block(blocks, 'head', config, body or initial_block or initial_inputs)
 
         self.model = nn.Sequential(*blocks)
 
@@ -641,7 +645,7 @@ class TorchModel(BaseModel):
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
-        axis = self.channels_axis(kwargs['data_format'])
+        axis = self.channels_axis(kwargs.get('data_format'))
         proba = torch.nn.Softmax(dim=axis)(inputs)
         setattr(self, attr_prefix + name, proba)
 
@@ -783,9 +787,15 @@ class TorchModel(BaseModel):
 
         Examples
         --------
-        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'), device='cuda:0')
+        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
 
         >>> torch_model.load(path='/path/to/models/resnet34')
+
+        >>> TorchModel(config={'device': 'cuda:2', 'load/path': '/path/to/models/resnet34'})
+
+        **How to move the model to device**
+        
+        The model will be moved to device specified in the model config by key `device`.
         """
         _ = args, kwargs
         device = self.config.get('device')

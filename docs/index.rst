@@ -77,16 +77,6 @@ and call ``train_model``. Of course, you can also choose a loss function, an opt
                   .run(BATCH_SIZE, shuffle=True)
 
 
-Best practice magic
-===================
-To improve model quality and accelerate training import :doc:`best_practice <intro/best_practice>` module::
-
-    from batchflow import best_practice
-
-This will change some models defaults (for instance, batch norm momentum, ResNet block layouts, etc) we find more useful and
-consistently bringing better results (faster training and more accurate predictions).
-
-
 Installation
 ============
 
@@ -105,7 +95,7 @@ With old-fashioned `pip <https://pip.pypa.io/en/stable/>`_::
 
 After that just import `batchflow`::
 
-    import batchflow as ds
+    import batchflow as bf
 
 
 Git submodule

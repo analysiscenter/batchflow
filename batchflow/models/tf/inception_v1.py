@@ -45,8 +45,6 @@ class Inception_v1(Inception):
         config['head'].update(dict(layout='Vdf', dropout_rate=.4))
         config['loss'] = 'ce'
 
-        config['decay'] = ('exp', dict(learning_rate=.01, decay_steps=62500, decay_rate=.96))
-        config['optimizer'] = dict(name='Momentum', momentum=.9)
         return config
 
     def build_config(self, names=None):
