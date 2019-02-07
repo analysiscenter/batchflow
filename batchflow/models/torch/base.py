@@ -794,7 +794,7 @@ class TorchModel(BaseModel):
         >>> TorchModel(config={'device': 'cuda:2', 'load/path': '/path/to/models/resnet34'})
 
         **How to move the model to device**
-        
+
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args, kwargs
