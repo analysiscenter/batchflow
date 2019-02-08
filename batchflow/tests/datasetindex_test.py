@@ -1,7 +1,11 @@
-"""Tests for DatasetIndex class"""
+"""Tests for DatasetIndex class.
+If needed and possible, type of DatasetIndex is specified
+at the very first line of each test.
+Tests that have '_baseset_' in the name use methods, inherited from Baseset class.
+"""
 # pylint: disable=no-self-use, missing-docstring, redefined-outer-name
 # pylint: disable=protected-access
-# pylint: disable=too-few-public-methods, useless-super-delegation
+
 import sys
 import pytest
 import numpy as np
@@ -83,220 +87,208 @@ def all_indices(request, index):
     return _all_indices
 
 
-class TestSingle:
-    """ Contains tests that are applied only to single DatasetIndex
-    instance. If possible, instance is specified at the very first line of each test.
-    Every method uses 'index' fixture.
-    """
-    def test_build_index_empty(self, index):
-        with pytest.raises(ValueError):
-            index("empty")
+def test_build_index_empty(index):
+    with pytest.raises(ValueError):
+        index("empty")
 
-    def test_build_index_multidimensional(self, index):
-        with pytest.raises(TypeError):
-            index("2-dimensional")
+def test_build_index_multidimensional(index):
+    with pytest.raises(TypeError):
+        index("2-dimensional")
 
-    def test_get_pos_int(self, index):
-        dsi = index("int")
-        assert dsi.get_pos(SIZE-1) == SIZE-1
+def test_get_pos_int(index):
+    dsi = index("int")
+    assert dsi.get_pos(SIZE-1) == SIZE-1
 
-    def test_get_pos_slice(self, index):
-        dsi = index("int")
-        assert dsi.get_pos(slice(0, SIZE-1, 2)) == slice(0, SIZE-1, 2)
+def test_get_pos_slice(index):
+    dsi = index("int")
+    assert dsi.get_pos(slice(0, SIZE-1, 2)) == slice(0, SIZE-1, 2)
 
-    def test_get_pos_str(self, index):
-        dsi = index("str")
-        assert dsi.get_pos('a') == 0
+def test_get_pos_str(index):
+    dsi = index("str")
+    assert dsi.get_pos('a') == 0
 
-    def test_get_pos_iterable(self, index):
-        dsi = index("int")
-        assert (dsi.get_pos(np.arange(SIZE)) == np.arange(SIZE)).all()
+def test_get_pos_iterable(index):
+    dsi = index("int")
+    assert (dsi.get_pos(np.arange(SIZE)) == np.arange(SIZE)).all()
 
-    def test_create_batch_pos_true(self, index):
-        """ When 'pos' is True, method creates new batch by specified positions. """
-        dsi, struct = index("list", struct=True)
-        length = len(dsi)
-        left = dsi.create_batch(range(length), pos=True).index
-        assert (left == struct).all()
+def test_create_batch_pos_true(index):
+    """ When 'pos' is True, method creates new batch by specified positions. """
+    dsi, struct = index("list", struct=True)
+    length = len(dsi)
+    left = dsi.create_batch(range(length), pos=True).index
+    assert (left == struct).all()
 
-    def test_create_batch_child(self):
-        """ Method 'create_batch' must be type-preserving. """
-        class ChildSet(DatasetIndex):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-        dsi = ChildSet(2*SIZE)
-        assert isinstance(dsi.create_batch(range(SIZE)), ChildSet)
+def test_create_batch_child():
+    """ Method 'create_batch' must be type-preserving. """
+    class ChildSet(DatasetIndex):
+        # pylint: disable=too-few-public-methods, useless-super-delegation
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+    dsi = ChildSet(2*SIZE)
+    assert isinstance(dsi.create_batch(range(SIZE)), ChildSet)
 
-    def test_next_batch_stopiter_pass(self, index):
-        """ When 'n_epochs' is None it is possible to iterate infinitely. """
-        dsi = index("small")
-        dsi.reset_iter()
-        dsi.next_batch(2, n_epochs=None)
-        dsi.next_batch(2, n_epochs=None)
+def test_next_batch_stopiter_pass(index):
+    """ When 'n_epochs' is None it is possible to iterate infinitely. """
+    dsi = index("small")
+    dsi.reset_iter()
+    dsi.next_batch(2, n_epochs=None)
+    dsi.next_batch(2, n_epochs=None)
 
-    def test_next_batch_stopiter_raise(self, index):
-        """ Iteration is blocked after end of DatasetIndex. """
-        dsi = index("small")
-        dsi.reset_iter()
+def test_next_batch_stopiter_raise(index):
+    """ Iteration is blocked after end of DatasetIndex. """
+    dsi = index("small")
+    dsi.reset_iter()
+    dsi.next_batch(2, n_epochs=1)
+    with pytest.raises(StopIteration):
         dsi.next_batch(2, n_epochs=1)
-        with pytest.raises(StopIteration):
-            dsi.next_batch(2, n_epochs=1)
 
-    def test_next_batch_smaller(self, index):
-        """ Batch_size is twice as small as length DatasetIndex. """
-        dsi = index("big")
-        dsi.reset_iter()
-        for _ in range(SIZE*SIZE):
-            n_b = dsi.next_batch(batch_size=len(dsi)//2,
-                                 n_epochs=None,
-                                 drop_last=True)
-            assert len(n_b) == len(dsi)//2
+def test_next_batch_smaller(index):
+    """ Batch_size is twice as small as length DatasetIndex. """
+    dsi = index("big")
+    dsi.reset_iter()
+    for _ in range(SIZE*SIZE):
+        n_b = dsi.next_batch(batch_size=len(dsi)//2,
+                             n_epochs=None,
+                             drop_last=True)
+        assert len(n_b) == len(dsi)//2
 
-    @pytest.mark.xfail(reason='fails because batch_size > len(dsindex)')
-    def test_next_batch_bigger(self, index):
-        """ When 'batch_size' is bigger than length of DatasetIndex, the
-        behavior is unstable.
-        """
-        dsi = index("big")
-        dsi.reset_iter()
-        for _ in range(SIZE*SIZE):
-            n_b = dsi.next_batch(batch_size=int(len(dsi)*1.2),
-                                 n_epochs=None,
-                                 drop_last=True)
-            assert len(n_b) == int(len(dsi)*1.2)
-
-
-class TestMultiple:
-    """ Contains tests that are applied to multiple possible
-    DatasetIndex instances.
-    Every method uses 'all_indices' fixture.
-
-    Tests that have '_baseset_' in the name use methods, inherited
-    from Baseset.
+@pytest.mark.xfail(reason='fails because batch_size > len(dsindex)')
+def test_next_batch_bigger(index):
+    """ When 'batch_size' is bigger than length of DatasetIndex, the
+    behavior is unstable.
     """
-    def test_baseset_len(self, all_indices):
-        """ True length is recovered from the constructor. """
-        dsi, struct = all_indices(struct=True)
-        if isinstance(struct, int):
-            length = struct
-        elif callable(struct):
-            length = len(struct())
-        else:
-            length = len(struct)
-        assert len(dsi) == length
+    dsi = index("big")
+    dsi.reset_iter()
+    for _ in range(SIZE*SIZE):
+        n_b = dsi.next_batch(batch_size=int(len(dsi)*2),
+                             n_epochs=None,
+                             drop_last=True)
+        assert len(n_b) == int(len(dsi)*2)
 
-    def test_baseset_calc_split_shares(self, all_indices):
-        dsi = all_indices()
-        with pytest.raises(ValueError):
-            dsi.calc_split(shares=[0.5, 0.5, 0.5])
-        with pytest.raises(ValueError):
-            dsi.calc_split(shares=[0.5, 0.5, 0.5, 0.5])
-        with pytest.raises(ValueError):
-            DatasetIndex(2).calc_split(shares=[0.5, 0.5, 0.5])
 
-    def test_baseset_calc_split_correctness_1(self, all_indices):
-        dsi = all_indices()
-        assert sum(dsi.calc_split()) == len(dsi)
+def test_baseset_len(all_indices):
+    """ True length is recovered from the constructor. """
+    dsi, struct = all_indices(struct=True)
+    if isinstance(struct, int):
+        length = struct
+    elif callable(struct):
+        length = len(struct())
+    else:
+        length = len(struct)
+    assert len(dsi) == length
 
-    def test_baseset_calc_split_correctness_2(self, all_indices):
-        """ If 'shares' contains 2 elements, then validation subset can be empty. """
-        dsi = all_indices()
-        _, _, valid_share = dsi.calc_split(shares=[0.5, 0.5])
-        assert valid_share == 0
+def test_baseset_calc_split_shares(all_indices):
+    dsi = all_indices()
+    with pytest.raises(ValueError):
+        dsi.calc_split(shares=[0.5, 0.5, 0.5])
+    with pytest.raises(ValueError):
+        dsi.calc_split(shares=[0.5, 0.5, 0.5, 0.5])
+    with pytest.raises(ValueError):
+        DatasetIndex(2).calc_split(shares=[0.5, 0.5, 0.5])
 
-    def test_baseset_calc_split_correctness_3(self, all_indices):
-        """ If 'shares' contains 3 elements, then validation subset is non-empty. """
-        dsi = all_indices()
-        _, _, valid_share = dsi.calc_split(shares=[0.5, 0.5, 0])
-        assert valid_share == 1
+def test_baseset_calc_split_correctness_1(all_indices):
+    dsi = all_indices()
+    assert sum(dsi.calc_split()) == len(dsi)
 
-    def test_baseset_calc_split_correctness_4(self, all_indices):
-        dsi = all_indices()
-        length = len(dsi)
-        left = dsi.calc_split(shares=[0.5, 0.5])
-        right = (0.5*length, 0.5*length, 0)
-        assert left == right
+def test_baseset_calc_split_correctness_2(all_indices):
+    """ If 'shares' contains 2 elements, then validation subset can be empty. """
+    dsi = all_indices()
+    _, _, valid_share = dsi.calc_split(shares=[0.5, 0.5])
+    assert valid_share == 0
 
-    def test_build_index(self, all_indices):
-        """ True contents of 'dsi.index' are recovered from the constructor. """
-        dsi, struct = all_indices(struct=True)
-        if isinstance(struct, int):
-            struct = np.arange(struct)
-        elif isinstance(struct, DatasetIndex):
-            struct = struct.index
-        elif callable(struct):
-            struct = struct()
-        assert (dsi.index == struct).all()
+def test_baseset_calc_split_correctness_3(all_indices):
+    """ If 'shares' contains 3 elements, then validation subset is non-empty. """
+    dsi = all_indices()
+    _, _, valid_share = dsi.calc_split(shares=[0.5, 0.5, 0])
+    assert valid_share == 1
 
-    def test_shuffle_bool_false(self, all_indices):
-        dsi = all_indices()
-        left = dsi._shuffle(shuffle=False)
-        right = np.arange(len(dsi))
-        assert (left == right).all()
+def test_baseset_calc_split_correctness_4(all_indices):
+    dsi = all_indices()
+    length = len(dsi)
+    left = dsi.calc_split(shares=[0.5, 0.5])
+    right = (0.5*length, 0.5*length, 0)
+    assert left == right
 
-    def test_shuffle_bool_true(self, all_indices):
-        dsi = all_indices()
-        left = dsi._shuffle(shuffle=True)
-        right = np.arange(len(dsi))
-        assert (left != right).any()
-        assert set(left) == set(right)
+def test_build_index(all_indices):
+    """ True contents of 'dsi.index' are recovered from the constructor. """
+    dsi, struct = all_indices(struct=True)
+    if isinstance(struct, int):
+        struct = np.arange(struct)
+    elif isinstance(struct, DatasetIndex):
+        struct = struct.index
+    elif callable(struct):
+        struct = struct()
+    assert (dsi.index == struct).all()
 
-    def test_shuffle_bool_int(self, all_indices):
-        dsi = all_indices()
-        left = dsi._shuffle(shuffle=SIZE)
-        right = np.arange(len(dsi))
-        assert (left != right).any()
-        assert set(left) == set(right)
+def test_shuffle_bool_false(all_indices):
+    dsi = all_indices()
+    left = dsi._shuffle(shuffle=False)
+    right = np.arange(len(dsi))
+    assert (left == right).all()
 
-    def test_shuffle_bool_randomstate(self, all_indices):
-        dsi = all_indices()
-        left = dsi._shuffle(shuffle=np.random.RandomState(SIZE))
-        right = np.arange(len(dsi))
-        assert (left != right).any()
-        assert set(left) == set(right)
+def test_shuffle_bool_true(all_indices):
+    dsi = all_indices()
+    left = dsi._shuffle(shuffle=True)
+    right = np.arange(len(dsi))
+    assert (left != right).any()
+    assert set(left) == set(right)
 
-    def test_shuffle_bool_cross(self, all_indices):
-        dsi = all_indices()
-        left = dsi._shuffle(shuffle=np.random.RandomState(SIZE))
-        right = dsi._shuffle(shuffle=SIZE)
-        assert (left == right).all()
+def test_shuffle_bool_int(all_indices):
+    dsi = all_indices()
+    left = dsi._shuffle(shuffle=SIZE)
+    right = np.arange(len(dsi))
+    assert (left != right).any()
+    assert set(left) == set(right)
 
-    def test_shuffle_bool_callable(self, all_indices):
-        """ Callable 'shuffle' should return order. """
-        dsi = all_indices()
-        left = dsi._shuffle(shuffle=(lambda _: np.arange(len(dsi))))
-        right = np.arange(len(dsi))
-        assert (left == right).all()
+def test_shuffle_bool_randomstate(all_indices):
+    dsi = all_indices()
+    left = dsi._shuffle(shuffle=np.random.RandomState(SIZE))
+    right = np.arange(len(dsi))
+    assert (left != right).any()
+    assert set(left) == set(right)
 
-    @pytest.mark.parametrize("repeat_time", [1]*1)
-    def test_split_correctness(self, repeat_time, all_indices):
-        """ Constants in 'shares' are such that test does not raise errors. """
-        dsi = all_indices()
-        shares = .3 - np.random.random(3) *.05 *repeat_time
-        dsi.split(shares=shares)
-        assert len(dsi) == (len(dsi.train)
-                            + len(dsi.test)
-                            + len(dsi.validation))
+def test_shuffle_bool_cross(all_indices):
+    dsi = all_indices()
+    left = dsi._shuffle(shuffle=np.random.RandomState(SIZE))
+    right = dsi._shuffle(shuffle=SIZE)
+    assert (left == right).all()
 
-    def test_create_batch_pos_false(self, all_indices):
-        """ When 'pos' is False, method returns the same, as its first argument. """
-        dsi = all_indices()
-        length = len(dsi)
-        left = dsi.create_batch(range(length), pos=False).index
-        right = range(length)
-        assert (left == right).all()
+def test_shuffle_bool_callable(all_indices):
+    """ Callable 'shuffle' should return order. """
+    dsi = all_indices()
+    left = dsi._shuffle(shuffle=(lambda _: np.arange(len(dsi))))
+    right = np.arange(len(dsi))
+    assert (left == right).all()
 
-    def test_create_batch_type(self, all_indices):
-        """ Method 'create_batch' must be type-preserving. """
-        dsi = all_indices()
-        length = len(dsi)
-        assert isinstance(dsi.create_batch(range(length)), DatasetIndex)
+@pytest.mark.parametrize("repeat_time", [1]*1)
+def test_split_correctness(repeat_time, all_indices):
+    """ Constants in 'shares' are such that test does not raise errors. """
+    dsi = all_indices()
+    shares = .3 - np.random.random(3) *.05 *repeat_time
+    dsi.split(shares=shares)
+    assert len(dsi) == (len(dsi.train)
+                        + len(dsi.test)
+                        + len(dsi.validation))
 
-    def test_next_batch_drop_last(self, all_indices):
-        """ When 'n_epochs' is None it is possible to iterate infinitely. """
-        dsi = all_indices()
-        for _ in range(SIZE*SIZE):
-            n_b = dsi.next_batch(batch_size=3,
-                                 n_epochs=None,
-                                 drop_last=True)
-            assert len(n_b) == 3
+def test_create_batch_pos_false(all_indices):
+    """ When 'pos' is False, method returns the same, as its first argument. """
+    dsi = all_indices()
+    length = len(dsi)
+    left = dsi.create_batch(range(length), pos=False).index
+    right = range(length)
+    assert (left == right).all()
+
+def test_create_batch_type(all_indices):
+    """ Method 'create_batch' must be type-preserving. """
+    dsi = all_indices()
+    length = len(dsi)
+    assert isinstance(dsi.create_batch(range(length)), DatasetIndex)
+
+def test_next_batch_drop_last(all_indices):
+    """ When 'n_epochs' is None it is possible to iterate infinitely. """
+    dsi = all_indices()
+    for _ in range(SIZE*SIZE):
+        n_b = dsi.next_batch(batch_size=3,
+                             n_epochs=None,
+                             drop_last=True)
+        assert len(n_b) == 3
