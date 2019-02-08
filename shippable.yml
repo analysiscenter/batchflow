@@ -4,7 +4,7 @@ env:
   global:
     - DOCKER_ACC=analysiscenter1
     - DOCKER_REPO=ds-py3
-    - TAG="latest"
+    - TAG="cpu"
 
 build:
   pre_ci_boot:
@@ -15,7 +15,8 @@ build:
     docker pull $DOCKER_ACC/$DOCKER_REPO:$TAG
   ci:
     - pip3 install -U pylint
-    - pylint3 -rn --rcfile pylintrc batchflow
+    - pylint -rn --rcfile pylintrc batchflow
+    - find . -wholename "*.py" | grep "tests" | xargs pylint -rn --rcfile=pylintrc
     - pytest -v --junitxml=shippable/testresults/pytests.xml
 
 integrations:

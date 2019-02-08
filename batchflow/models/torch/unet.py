@@ -45,18 +45,16 @@ class UNet(TorchModel):
     def default_config(cls):
         config = TorchModel.default_config()
 
-        config['common'] = dict(conv=dict(bias=False))
+        config['common'] = {'conv/bias': False}
         config['body/num_blocks'] = 5
         config['body/filters'] = (2 ** np.arange(config['body/num_blocks']) * 64).tolist()
         config['body/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
-        config['body/encoder'] = dict(layout='cnacna', kernel_size=3)
+        config['body/encoder'] = dict(layout='cna cna', kernel_size=3)
         config['body/upsample'] = dict(layout='tna', kernel_size=2, strides=2)
-        config['body/decoder'] = dict(layout='cnacna', kernel_size=3)
+        config['body/decoder'] = dict(layout='cna cna', kernel_size=3)
         config['head'] = dict(layout='c', kernel_size=1)
 
-        config['loss'] = 'BCE'
-        # The article does not specify the initial learning rate. 1e-4 was chosen arbitrarily.
-        config['optimizer'] = ('SGD', dict(lr=1e-4, momentum=.99))
+        config['loss'] = 'ce'
 
         return config
 

@@ -52,8 +52,6 @@ class UNet(TFModel):
         config['head'] = dict(layout='c', kernel_size=1, strides=1)
 
         config['loss'] = 'ce'
-        # The article does not specify the initial learning rate. 1e-4 was chosen arbitrarily.
-        config['optimizer'] = ('Momentum', dict(learning_rate=1e-4, momentum=.99))
 
         return config
 

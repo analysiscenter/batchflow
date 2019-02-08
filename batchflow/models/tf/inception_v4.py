@@ -40,9 +40,6 @@ class Inception_v4(Inception):
         config['head'].update(dict(layout='Vdf', dropout_rate=.8))
         config['loss'] = 'ce'
 
-        # learning rate will decrease every two epochs.
-        config['decay'] = ('exp', dict(learning_rate=.045, decay_steps=62500, decay_rate=.94))
-        config['optimizer'] = dict(name='RMSProp', epsilon=1)
         return config
 
     def build_config(self, names=None):
