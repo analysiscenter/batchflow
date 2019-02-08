@@ -1259,7 +1259,8 @@ class TFModel(BaseModel):
             inputs = self.get('initial_block/inputs', config)
 
             if isinstance(inputs, str):
-                config['common/data_format'] = self.data_format(inputs)
+                if not config.get('common/data_format'):
+                    config['common/data_format'] = self.data_format(inputs)
                 config['initial_block/inputs'] = self.inputs[inputs]
             elif isinstance(inputs, list):
                 config['initial_block/inputs'] = [self.inputs[name] for name in inputs]
