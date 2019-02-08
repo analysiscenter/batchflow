@@ -60,16 +60,16 @@ class DatasetIndex(Baseset):
         Parameters
         ----------
         index : int, 1-d array-like or callable
-            Defines structure of DatasetIndex
+            Defines content of DatasetIndex
 
-            - list, numpy.array, pandas.DataSeries
-                Structure is numpy.array
+            - 1-d array-like
+                Content is numpy.array
 
             - int
-                Structure is numpy.arange() of given length.
+                Content is numpy.arange() of given length.
 
             - callable
-                Structure is return of given function (should be 1-d array-like).
+                Content is return of given function (should be 1-d array-like).
 
         Raises
         ------
@@ -182,6 +182,7 @@ class DatasetIndex(Baseset):
         ----------
         shares : float or tuple of floats
             Train, test and validation shares.
+            If tuple of 3 floats is passed, then validation subset is always present.
 
         shuffle : bool, int or callable
             Whether to shuffle the index before split.
@@ -200,6 +201,10 @@ class DatasetIndex(Baseset):
         split into train / test / validation in 50/30/20 ratio
 
         >>> index.split([0.5, 0.3, 0.2])
+
+        use 1 sample as validation and split the rest evenly to train / test
+
+        >>> index.split([0.5, 0.5, 0])
         """
         train_share, test_share, valid_share = self.calc_split(shares)
 
@@ -436,19 +441,19 @@ class DatasetIndex(Baseset):
             yield batch
 
 
-    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):
+    def create_batch(self, index, pos=True, as_array=False, *args, **kwargs):
         """ Create a batch from given indices.
 
         Parameters
         ----------
-        batch_indices : int, slice, list, numpy.array or DatasetIndex
-            If 'pos' is True, then 'batch_indices' should contain
+        index : int, slice, list, numpy.array or DatasetIndex
+            If 'pos' is True, then 'index' should contain
             positions of items in the current index to be returned as
             separate batch.
 
-            If 'pos' is False, then 'batch_indices' should contain
+            If 'pos' is False, then 'index' should contain
             indices to be returned as separate batch
-            (so expected batch is just the very same batch_indices).
+            (so expected batch is just the very same index).
 
         pos : bool
             Flag that determines how function works.
@@ -459,24 +464,24 @@ class DatasetIndex(Baseset):
         Returns
         -------
         DatasetIndex or numpy.array
-            Part of initial DatasetIndex, specified by 'batch_indices'.
+            Part of initial DatasetIndex, specified by 'index'.
 
         Examples
         --------
         Create DatasetIndex with first 100 natural numbers, then
         get batch with every second item
 
-        >>> DatasetIndex(100).create_batch(batch_indices=2*numpy.arange(50))
+        >>> DatasetIndex(100).create_batch(index=2*numpy.arange(50))
         """
         _ = args, kwargs
-        if isinstance(batch_indices, DatasetIndex):
-            _batch_indices = batch_indices.indices
+        if isinstance(index, DatasetIndex):
+            _index = index.indices
         else:
-            _batch_indices = batch_indices
+            _index = index
         if pos:
-            batch = self.subset_by_pos(_batch_indices)
+            batch = self.subset_by_pos(_index)
         else:
-            batch = _batch_indices
+            batch = _index
         if not as_array:
             batch = self.create_subset(batch)
         return batch
