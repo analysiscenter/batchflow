@@ -152,9 +152,6 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
                 if isinstance(stride, int):
                     stride = (stride,) * dims
                 padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
-                # need_padding = any(isinstance(axis, tuple) and axis[0] != axis[1] for axis in padding)
-                # if not need_padding:
-                #     padding = tuple(x[0] for x in padding)
         else:
             raise ValueError("padding can be 'same' or 'valid'")
     elif isinstance(padding, int):

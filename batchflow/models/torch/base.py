@@ -361,8 +361,8 @@ class TorchModel(BaseModel):
         -------
         int
         """
-        if data_format is None:
-            data_format = 'channels_first'
+        data_format = data_format if data_format else 'channels_first'
+            
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     def has_classes(self, tensor):
@@ -489,7 +489,6 @@ class TorchModel(BaseModel):
 
         if self.device:
             self.model.to(self.device)
-        #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
 
     @classmethod
     def initial_block(cls, **kwargs):
