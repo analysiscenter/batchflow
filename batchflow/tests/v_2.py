@@ -1,6 +1,3 @@
-# if u pass 3 args to calc_split, u get 3 sets ::: docstring
-
-
 """Tests for DatasetIndex class"""
 # pylint: disable=no-self-use, missing-docstring, redefined-outer-name
 # pylint: disable=protected-access
@@ -11,7 +8,6 @@ import numpy as np
 sys.path.append('../..')
 from batchflow.dsindex import DatasetIndex
 
-np.random.seed(0)
 
 SIZE = 10
 
@@ -30,7 +26,6 @@ GROUP_TEST = ['int', 'list', 'big', 'callable', 'self', 'str']
 
 def struct_eval(struct):
     """ Calculate true contents of DatasetIndex.index"""
-    np.random.seed(0)
     if isinstance(struct, int):
         return np.arange(struct)
     if isinstance(struct, DatasetIndex):
@@ -59,16 +54,20 @@ def index():
         First element of the tuple contains DatasetIndex instance.
         Second element of the tuple contains true constructor of DatasetIndex instance.
     """
-    def _index(name):
+    def _index(name, struct=False):
         np.random.seed(0)
-        return DatasetIndex(CONTAINER[name]), CONTAINER[name]
+        if struct:
+            return DatasetIndex(CONTAINER[name]), CONTAINER[name]
+        return DatasetIndex(CONTAINER[name])
 
     return _index
 
 
 @pytest.fixture(params=GROUP_TEST)
-def all_indices(request, index):
-    return index(request.param)
+def all_indices(request, index, struct=False):
+    def _all_indices(struct=False):
+        return index(request.param, struct)
+    return _all_indices
 
 
 class TestSingle:
@@ -85,23 +84,23 @@ class TestSingle:
             index("2-dimensional")
 
     def test_get_pos_int(self, index):
-        dsi, _ = index("int")
+        dsi = index("int")
         assert dsi.get_pos(SIZE-1) == SIZE-1
 
     def test_get_pos_slice(self, index):
-        dsi, _ = index("int")
+        dsi = index("int")
         assert dsi.get_pos(slice(0, SIZE-1, 2)) == slice(0, SIZE-1, 2)
 
     def test_get_pos_str(self, index):
-        dsi, _ = index("str")
+        dsi = index("str")
         assert dsi.get_pos('a') == 0
 
     def test_get_pos_iterable(self, index):
-        dsi, _ = index("int")
+        dsi = index("int")
         assert (dsi.get_pos(np.arange(SIZE)) == np.arange(SIZE)).all()
 
     def test_create_batch_pos_true(self, index):
-        dsi, struct = index("list")
+        dsi, struct = index("list", struct=True)
         length = len(dsi)
         left = dsi.create_batch(range(length), pos=True).index
         right = struct_eval(struct)
@@ -115,20 +114,20 @@ class TestSingle:
         assert isinstance(dsi.create_batch(range(SIZE)), ChildSet)
 
     def test_next_batch_stopiter_pass(self, index):
-        dsi, _ = index("small")
+        dsi = index("small")
         dsi.reset_iter()
         dsi.next_batch(2, n_epochs=None)
         dsi.next_batch(2, n_epochs=None)
 
     def test_next_batch_stopiter_raise(self, index):
-        dsi, _ = index("small")
+        dsi = index("small")
         dsi.reset_iter()
         dsi.next_batch(2, n_epochs=1)
         with pytest.raises(StopIteration):
             dsi.next_batch(2, n_epochs=1)
 
     def test_next_batch_smaller(self, index):
-        dsi, _ = index("big")
+        dsi = index("big")
         dsi.reset_iter()
         for _ in range(SIZE*SIZE):
             n_b = dsi.next_batch(batch_size=len(dsi)//2,
@@ -138,7 +137,7 @@ class TestSingle:
 
     @pytest.mark.xfail(reason='fails because batch_size > len(dsindex)')
     def test_next_batch_bigger(self, index):
-        dsi, _ = index("big")
+        dsi = index("big")
         dsi.reset_iter()
         for _ in range(SIZE*SIZE):
             n_b = dsi.next_batch(batch_size=int(len(dsi)*1.2),
@@ -155,7 +154,7 @@ class TestMultiple:
     from Baseset.
     """
     def test_len(self, all_indices):
-        dsi, struct = all_indices
+        dsi, struct = all_indices(struct=True)
         if isinstance(struct, int):
             length = struct
         elif callable(struct):
@@ -165,7 +164,7 @@ class TestMultiple:
         assert len(dsi) == length
 
     def test_baseset_calc_split_shares(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         with pytest.raises(ValueError):
             dsi.calc_split(shares=[0.5, 0.5, 0.5])
         with pytest.raises(ValueError):
@@ -174,70 +173,70 @@ class TestMultiple:
             DatasetIndex(2).calc_split(shares=[0.5, 0.5, 0.5])
 
     def test_baseset_calc_split_correctness_1(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         assert sum(dsi.calc_split()) == len(dsi)
 
     @pytest.mark.xfail(reason='default value is 1, not 0. line 94 of batchflow/base.py')
     def test_baseset_calc_split_correctness_2(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         left = dsi.calc_split(shares=[0.5, 0.5])
         right = dsi.calc_split(shares=[0.5, 0.5, 0])
         assert left == right
 
     def test_baseset_calc_split_correctness_3(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         length = len(dsi)
         left = dsi.calc_split(shares=[0.5, 0.5])
         right = (0.5*length, 0.5*length, 0)
         assert left == right
 
     def test_build_index(self, all_indices):
-        dsi, struct = all_indices
+        dsi, struct = all_indices(struct=True)
         struct = struct_eval(struct)
         assert (dsi.index == struct).all()
 
     def test_shuffle_bool_false(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         left = dsi._shuffle(shuffle=False)
         right = np.arange(len(dsi))
         assert (left == right).all()
 
     def test_shuffle_bool_true(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         left = dsi._shuffle(shuffle=True)
         right = np.arange(len(dsi))
         assert (left != right).any()
         assert set(left) == set(right)
 
     def test_shuffle_bool_int(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         left = dsi._shuffle(shuffle=SIZE)
         right = np.arange(len(dsi))
         assert (left != right).any()
         assert set(left) == set(right)
 
     def test_shuffle_bool_randomstate(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         left = dsi._shuffle(shuffle=np.random.RandomState(SIZE))
         right = np.arange(len(dsi))
         assert (left != right).any()
         assert set(left) == set(right)
 
     def test_shuffle_bool_cross(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         left = dsi._shuffle(shuffle=np.random.RandomState(SIZE))
         right = dsi._shuffle(shuffle=SIZE)
         assert (left == right).all()
 
     def test_shuffle_bool_callable(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         left = dsi._shuffle(shuffle=(lambda _: np.arange(len(dsi))))
         right = np.arange(len(dsi))
         assert (left == right).all()
 
     @pytest.mark.parametrize("repeat_time", [1]*1)
     def test_split_correctness(self, repeat_time, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         shares = np.random.random(3) *.3 * repeat_time
         dsi.split(shares=shares, shuffle=True)
         assert len(dsi) == (len(dsi.train)
@@ -245,19 +244,19 @@ class TestMultiple:
                             + len(dsi.validation))
 
     def test_create_batch_pos_false(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         length = len(dsi)
         left = dsi.create_batch(range(length), pos=False).index
         right = range(length)
         assert (left == right).all()
 
     def test_create_batch_type(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         length = len(dsi)
         assert isinstance(dsi.create_batch(range(length)), DatasetIndex)
 
     def test_next_batch_drop_last(self, all_indices):
-        dsi, _ = all_indices
+        dsi = all_indices()
         for _ in range(SIZE*SIZE):
             n_b = dsi.next_batch(batch_size=3,
                                  n_epochs=None,
