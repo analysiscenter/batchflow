@@ -362,7 +362,7 @@ class TorchModel(BaseModel):
         int
         """
         data_format = data_format if data_format else 'channels_first'
-            
+
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     def has_classes(self, tensor):
