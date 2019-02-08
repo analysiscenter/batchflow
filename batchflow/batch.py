@@ -3,7 +3,7 @@
 import os
 import traceback
 import threading
-import warning
+import warnings
 
 import dill
 try:
@@ -254,7 +254,7 @@ class Batch:
         if self.components is None:
             self.components = tuple()
             data = tuple()
-            warning.warn("All batch data is erased")
+            warnings.warn("All batch data is erased")
         self.components = self.components + components
         self._data = data + init
         self.make_item_class(local=True)
