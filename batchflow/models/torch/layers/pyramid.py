@@ -12,7 +12,7 @@ from ..utils import get_shape
 class PyramidPooling(nn.Module):
     """ Pyramid Pooling module
     Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
-    
+
     Parameters
     ----------
     inputs : torch.Tensor, torch.nn.Module, numpy.ndarray or tuple
