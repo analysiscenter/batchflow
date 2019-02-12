@@ -50,7 +50,7 @@ class PyramidPooling(nn.Module):
             modules = nn.ModuleList()
             for level in pyramid:
                 if level == 0:
-                    module = Identity(inputs)
+                    module = None
                 else:
                     pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
                     pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
@@ -66,5 +66,5 @@ class PyramidPooling(nn.Module):
 
 
     def forward(self, x):
-        levels = [block(x) for block in self.blocks]
+        levels = [block(x) if block else x for block in self.blocks]
         return torch.cat(levels, dim=self.axis)
