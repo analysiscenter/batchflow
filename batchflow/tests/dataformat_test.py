@@ -2,7 +2,6 @@
 # pylint:  disable=import-error, wrong-import-position
 # pylint: disable=missing-docstring, redefined-outer-name
 import os
-import sys
 import warnings
 warnings.filterwarnings("ignore")
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -15,10 +14,13 @@ from ..models.tf.base import TFModel
 from batchflow import Pipeline, ImagesBatch, Dataset
 from batchflow import B, V
 from batchflow.models.tf.layers import conv_block
-from ..models.tf.vgg import VGG7
+from ..models.tf import VGG7, ResNet18, Inception_v1
 
-class SingleModel(TFModel):
-    pass
+
+AVAILABLE_MODELS = ['resnet', 'inception']
+
+
+
 
 @pytest.fixture()
 def single_setup():
@@ -87,6 +89,10 @@ def get_single_pipeline():
         Test pipeline that consists of initialization of needed variables and
         given model and preparing for training with given config.
     """
+
+    class SingleModel(TFModel):
+        pass
+
     def _get_single_pipeline(current_config):
         test_pipeline = (Pipeline()
                          .init_variable('current_loss')
@@ -103,62 +109,11 @@ def get_single_pipeline():
     return _get_single_pipeline
 
 
-class MultiBatch(ImagesBatch):
-    components = 'images_1', 'images_2', 'labels'
-
-
-class MultiModel(TFModel):
-    @classmethod
-    def default_config(cls):
-        config = TFModel.default_config()
-        config['body/block_1'] = {}
-        config['body/block_2'] = {}
-        return config
-
-    def build_config(self, names=None):
-        config = super().build_config(names)
-        return config
-
-    @classmethod
-    def body(cls, inputs, name='body', **kwargs):
-        kwargs = cls.fill_params('body', **kwargs)
-        with tf.variable_scope(name):
-            input_1, input_2 = inputs
-            x_1 = cls.block_1(input_1, **kwargs)
-            x_2 = cls.block_2(input_2, **kwargs)
-            dct = {**{'data_format': 'channels_last'},
-                   **cls.fill_params('common', **kwargs),
-                   **cls.fill_params('body', **kwargs),
-                   **cls.fill_params('body', **kwargs)['block_1']}
-            axis = cls.channels_axis(dct['data_format'])
-            output = tf.concat([x_1, x_2], axis=axis)
-        return output
-
-    @classmethod
-    def block_1(cls, input_1, **kwargs):
-        kwargs = cls.fill_params('body/block_1', **kwargs)
-        kwargs = {**kwargs, **kwargs['block_1']}
-
-        with tf.variable_scope('block_1'):
-            x_1 = conv_block(input_1, layout='cna',
-                             filters=8, kernel_size=11,
-                             strides=3, padding='valid', name='1', **kwargs)
-        return x_1
-
-    @classmethod
-    def block_2(cls, input_2, **kwargs):
-        kwargs = cls.fill_params('body/block_2', **kwargs)
-        kwargs = {**kwargs, **kwargs['block_2']}
-
-        with tf.variable_scope('block_2'):
-            x_2 = conv_block(input_2, layout='cna',
-                             filters=8, kernel_size=11,
-                             strides=3, padding='valid', name='2', **kwargs)
-        return x_2
-
 
 @pytest.fixture()
 def multi_setup():
+    class MultiBatch(ImagesBatch):
+        components = 'images_1', 'images_2', 'labels'
 
     def _multi_setup(d_f):
         if d_f == 'channels_last':
@@ -192,6 +147,56 @@ def multi_setup():
 
 @pytest.fixture()
 def get_multi_pipeline():
+
+    class MultiModel(TFModel):
+        @classmethod
+        def default_config(cls):
+            config = TFModel.default_config()
+            config['body/block_1'] = {}
+            config['body/block_2'] = {}
+            return config
+
+        def build_config(self, names=None):
+            config = super().build_config(names)
+            return config
+
+        @classmethod
+        def body(cls, inputs, name='body', **kwargs):
+            kwargs = cls.fill_params('body', **kwargs)
+            with tf.variable_scope(name):
+                input_1, input_2 = inputs
+                x_1 = cls.block_1(input_1, **kwargs)
+                x_2 = cls.block_2(input_2, **kwargs)
+                dct = {**{'data_format': 'channels_last'},
+                       **cls.fill_params('common', **kwargs),
+                       **cls.fill_params('body', **kwargs),
+                       **cls.fill_params('body', **kwargs)['block_1']}
+                axis = cls.channels_axis(dct['data_format'])
+                output = tf.concat([x_1, x_2], axis=axis)
+            return output
+
+        @classmethod
+        def block_1(cls, input_1, **kwargs):
+            kwargs = cls.fill_params('body/block_1', **kwargs)
+            kwargs = {**kwargs, **kwargs['block_1']}
+
+            with tf.variable_scope('block_1'):
+                x_1 = conv_block(input_1, layout='cna',
+                                 filters=8, kernel_size=11,
+                                 strides=3, padding='valid', name='1', **kwargs)
+            return x_1
+
+        @classmethod
+        def block_2(cls, input_2, **kwargs):
+            kwargs = cls.fill_params('body/block_2', **kwargs)
+            kwargs = {**kwargs, **kwargs['block_2']}
+
+            with tf.variable_scope('block_2'):
+                x_2 = conv_block(input_2, layout='cna',
+                                 filters=8, kernel_size=11,
+                                 strides=3, padding='valid', name='2', **kwargs)
+            return x_2
+
     def _get_multi_pipeline(current_config):
         test_pipeline = (Pipeline()
                          .init_variable('current_loss')
@@ -211,9 +216,9 @@ def get_multi_pipeline():
 
 
 @pytest.fixture()
-def model_noinitial_setup():
+def vgg_setup():
 
-    def _model_noinitial_setup(d_f):
+    def _vgg_setup(d_f):
 
         if d_f == 'channels_last':
             shape_in = (20, 20, 2)
@@ -236,12 +241,12 @@ def model_noinitial_setup():
                         'body/block': {'pool_size': 1, 'pool_strides':1},
                         'common': {'padding': 'valid'}}
         return fake_dataset, model_config
-    return _model_noinitial_setup
+    return _vgg_setup
 
 @pytest.fixture()
-def get_model_noinitial_pipeline():
+def get_vgg_pipeline():
 
-    def _get_model_noinitial_pipeline(model_class, current_config):
+    def _get_vgg_pipeline(model_class, current_config):
         test_pipeline = (Pipeline()
                          .init_variable('current_loss')
                          .init_model('dynamic', model_class,
@@ -254,37 +259,97 @@ def get_model_noinitial_pipeline():
                                       save_to=V('current_loss'))
                          )
         return test_pipeline
-    return _get_model_noinitial_pipeline
+    return _get_vgg_pipeline
+
 
 @pytest.fixture()
-def setup(single_setup, multi_setup, model_noinitial_setup):
+def model_setup():
 
-    def _setup(mode, d_f, model_class=None):
+    def _model_setup(d_f):
+        if d_f == 'channels_last':
+            shape_in = (100, 100, 2)
+
+        elif d_f == 'channels_first':
+            shape_in = (2, 100, 100)
+
+        size = 50
+        batch_shape = (size,) + shape_in
+        images_array = np.random.random(batch_shape)
+        labels_array = np.random.choice(10, size=size)
+        data = images_array, labels_array
+        fake_dataset = Dataset(index=size,
+                               batch_class=ImagesBatch,
+                               preloaded=data)
+
+        model_config = {'inputs': {'images': {'shape': shape_in},
+                                   'labels': {'classes': 10}},
+                        'initial_block/inputs': 'images',
+                        'body/block': {'pool_size': 1, 'pool_strides':1},
+                        'initial_block': {'padding': 'valid'}}
+        return fake_dataset, model_config
+    return _model_setup
+
+@pytest.fixture()
+def get_model_pipeline():
+
+    def _get_model_pipeline(model_class, current_config):
+        if current_config.get('body'):
+            if current_config['body'].get('data_format'):
+                current_config['initial_block']['data_format'] = current_config['body']['data_format']
+        test_pipeline = (Pipeline()
+                         .init_variable('current_loss')
+                         .init_model('dynamic', model_class,
+                                     'TestModel', current_config)
+                         .to_array()
+                         .train_model('TestModel',
+                                      fetches='loss',
+                                      images=B('images'),
+                                      labels=B('labels'),
+                                      save_to=V('current_loss'))
+                         )
+        return test_pipeline
+    return _get_model_pipeline
+
+
+@pytest.fixture()
+def setup(single_setup, multi_setup,
+          vgg_setup, model_setup):
+
+    def _setup(mode, d_f):
         if mode == 'single_input':
             return single_setup(d_f)
         if mode == 'multi_input':
             return multi_setup(d_f)
-        if mode in ['vgg']:
-            return model_noinitial_setup(d_f)
+        if mode == 'vgg':
+            return vgg_setup(d_f)
+        if mode in AVAILABLE_MODELS:
+            return model_setup(d_f)
+        return None
 
     return _setup
 
 
 @pytest.fixture
-def get_pipeline(get_single_pipeline, get_multi_pipeline, get_model_noinitial_pipeline):
+def get_pipeline(get_single_pipeline, get_multi_pipeline,
+                 get_vgg_pipeline, get_model_pipeline):
 
-    def _get_pipeline(mode, current_config, model_class=None):
+    def _get_pipeline(mode, current_config):
         if mode == 'single_input':
             return get_single_pipeline(current_config)
         if mode == 'multi_input':
             return get_multi_pipeline(current_config)
         if mode == 'vgg':
-            return get_model_noinitial_pipeline(VGG7, current_config)
+            return get_vgg_pipeline(VGG7, current_config)
+        if mode == 'resnet':
+            return get_model_pipeline(ResNet18, current_config)
+        if mode == 'inception':
+            return get_model_pipeline(Inception_v1, current_config)
+        return None
 
     return _get_pipeline
 
-
-@pytest.mark.parametrize('mode', ['multi_input', 'vgg', 'single_input'])
+# @pytest.mark.parametrize('mode', ['inception'])
+@pytest.mark.parametrize('mode', ['multi_input', 'vgg', 'single_input'] + AVAILABLE_MODELS)
 class TestPlural:
     def test_last_last_default(self, mode, setup, get_pipeline):
         """ Default value for 'data_format' is 'channels_last'. """
@@ -332,6 +397,7 @@ class TestPlural:
             pytest.fail("Should not have worked")
         except ValueError as excinfo:
             assert 'Negative dimension size' in str(excinfo)
+            assert 'layer-0' in str(excinfo)
 
     def test_last_first_body(self, mode, setup, get_pipeline):
         """ Explicitly passing wrong 'data_format' to 'config/body' raises ValueError. """
@@ -349,6 +415,7 @@ class TestPlural:
             pytest.fail("Should not have worked")
         except ValueError as excinfo:
             assert 'Negative dimension size' in str(excinfo)
+            assert 'layer-0' in str(excinfo)
 
     def test_first_last_default(self, mode, setup, get_pipeline):
         """ Default 'data_format' is 'channels_last', so passing data with
@@ -418,3 +485,4 @@ def test_first_cross_blocks(setup, get_pipeline):
         pytest.fail("Should not have worked")
     except ValueError as excinfo:
         assert 'Negative dimension size' in str(excinfo)
+        assert 'layer-0' in str(excinfo)
