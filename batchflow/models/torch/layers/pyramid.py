@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .core import Identity
 from .conv_block import ConvBlock
 from .upsample import Upsample
 from ..utils import get_shape
