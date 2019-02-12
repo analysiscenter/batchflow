@@ -12,7 +12,6 @@ class Dataset(Baseset):
     The Dataset holds an index of all data items
     (e.g. customers, transactions, etc)
     and a specific action class to process a small subset of data (batch).
-    ...
 
     Attributes
     ----------
@@ -23,10 +22,6 @@ class Dataset(Baseset):
 
     is_split: bool
         True if dataset has been split into train / test / validation subsets
-
-    Methods
-    -------
-
     """
     def __init__(self, index, batch_class=Batch, preloaded=None, *args, **kwargs):
         """ Create Dataset
@@ -42,7 +37,6 @@ class Dataset(Baseset):
             preloaded : data-type
                 For smaller dataset it might be convenient to preload all data at once
                 As a result, all created batches will contain a portion of some_data.
-
         """
         super().__init__(index, *args, **kwargs)
         self.batch_class = batch_class
@@ -58,15 +52,15 @@ class Dataset(Baseset):
             dataset : Dataset
                 Source dataset
 
-            index : DatasetIndex or FilesIndex
+            index : DatasetIndex
+                set of items from source dataset which should be in the new Dataset
 
-            batch_class : Batch or inherited-from-Batch
+            batch_class : Batch
+                type of Batch for the new Dataset
 
             Returns
             -------
-            cls : Dataset
-                The new object of class Dataset
-
+            Dataset
         """
         if (batch_class is None or (batch_class == dataset.batch_class)) and cls._is_same_index(index, dataset.index):
             return dataset
@@ -83,8 +77,7 @@ class Dataset(Baseset):
 
             Returns
             -------
-            index : DatasetIndex
-                DatasetIndex class object which was created from
+            DatasetIndex
         """
         if isinstance(index, DatasetIndex):
             return index
@@ -96,14 +89,13 @@ class Dataset(Baseset):
 
             Parameters
             ----------
-            index1 : array-like
+            index1 : DatasetIndex
 
-            index2 : array-like
+            index2 : DatasetIndex
 
             Returns
             -------
-            The result of two indices comparison
-
+            bool
         """
         return (isinstance(index1, type(index2)) or isinstance(index2, type(index1))) and \
                index1.indices.shape == index2.indices.shape and \
@@ -114,32 +106,38 @@ class Dataset(Baseset):
 
             Parameters
             ----------
-            index : DatasetIndex or Files
+            index : DatasetIndex
+
+            Returns
+            -------
+            Dataset
         """
         return type(self).from_dataset(self, index)
 
-    def create_batch(self, batch_indices, pos=False, *args, **kwargs):
+    def create_batch(self, index, pos=False, *args, **kwargs):
         """ Create a batch from given indices.
 
             Parameters
             ----------
-            batch_indices : DatasetIndex or FilesIndex
+            index : DatasetIndex
+                DatasetIndex object which consists of mast be included to the batch elements
 
             pos : bool
+                Flag, which shows does index contain positions of elements or indices
 
             Returns
             -------
-            batch : Batch or inherited-from-Batch
+            Batch
 
             Notes
             -----
-            if `pos` is `False`, then `batch_indices` should contain the indices
+            if `pos` is `False`, then `index` should contain the indices
             that should be included in the batch
-            otherwise `batch_indices` should contain their positions in the current index
+            otherwise `index` should contain their positions in the current index
         """
-        if not isinstance(batch_indices, DatasetIndex):
-            batch_indices = self.index.create_batch(batch_indices, pos, *args, **kwargs)
-        return self.batch_class(batch_indices, preloaded=self.preloaded, **kwargs)
+        if not isinstance(index, DatasetIndex):
+            batch_indices = self.index.create_batch(index, pos, *args, **kwargs)
+        return self.batch_class(index, preloaded=self.preloaded, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow
@@ -147,11 +145,12 @@ class Dataset(Baseset):
             Parameters
             ----------
             config : Config or dict
+                Config lets you initialize variables in the Pipeline object, e.g. for the augmentation task
+                https://analysiscenter.github.io/batchflow/intro/pipeline.html#initializing-a-variable
 
             Returns
             -------
-            pipeline : Pipeline
-                The new Pipeline class object
+            Pipeline
         """
         return Pipeline(self, config=config)
 
@@ -168,6 +167,8 @@ class Dataset(Baseset):
 
             Returns
             -------
+            Pipeline
+                Pipeline object which now has Dataset object as attribute
 
             Raises
             ------
