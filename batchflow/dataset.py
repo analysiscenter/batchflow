@@ -136,7 +136,7 @@ class Dataset(Baseset):
             otherwise `index` should contain their positions in the current index
         """
         if not isinstance(index, DatasetIndex):
-            batch_indices = self.index.create_batch(index, pos, *args, **kwargs)
+            index = self.index.create_batch(index, pos, *args, **kwargs)
         return self.batch_class(index, preloaded=self.preloaded, **kwargs)
 
     def pipeline(self, config=None):
