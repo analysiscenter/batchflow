@@ -1,178 +1,185 @@
-""" Tests for data_format functionality.
-Each test follows the same pattern:
-    First of all, 'fake_data' and 'config' are created via 'setup'
-    fixture. These are Dataset instance and dictionary. They serve
-    as placeholder for real data to train model on and simplest possible
-    configuration for 'train_model' action respectively.
-
-    After that, 'config' is changed by passing 'data_format' option
-    to different keys in it. This step is optional as we want
-    to test default behavior aswell.
-
-    Finally, 'test_pipeline' is created via 'get_pipeline' fixture. It is
-    then applied to 'fake_dataset'. 'next_batch' is used to actually run it.
-
-The idea behind testing protocol is that it is possible to create such architecture
-of neural network (i.e. number of layers, kernels, filters and so on) and
-such input data (i.e. size of images and number of channels) that passing
-wrong 'data_format' parameter would inevitably raise ValueError.
-
-For example, if we try to propagate 28x28x3 image through convolutional
-layer when 'kernel_size' equals 5 and 'data_format' is 'channels_first',
-it would result in negative dimension size as (3-5) is less than 0.
-For more imformation about exact architecture check fixtures file.
-
-Name of test functions has following structure:
-    test_<format of data>_<format passed to config>_<how format is passed>.
-    For example, test_last_first_common mean that created data has 'channels_last'
-    format and 'channels_first' is passed to 'config/common/data_format'.
-
-Most of the tests are used against multiple architectures, list of which is
-defined in TEST_MODELS.
-"""
-# pylint:  disable=import-error, wrong-import-position
+""" Test for passing information through config. """
+# pylint: disable=import-error, wrong-import-position
 # pylint: disable=missing-docstring, redefined-outer-name
+import os
+import warnings
+warnings.filterwarnings("ignore")
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import pytest
+import numpy as np
+
+from batchflow import Pipeline, ImagesBatch, Dataset
+from batchflow import B, V
+from ...models.tf import VGG7, ResNet18, Inception_v1
 
 
-TEST_MODELS = ['multi_input', 'single_input',
-               'vgg', 'resnet', 'inception']
+AVAILABLE_MODELS = [VGG7, ResNet18, Inception_v1]
+LOCATIONS = set(['initial_block', 'body', 'block', 'head'])
 
 
-@pytest.mark.parametrize('mode', TEST_MODELS)
-class TestPlural:
-    def test_last_last_default(self, mode, setup, get_pipeline):
-        """ Default value for 'data_format' is 'channels_last'. """
-        fake_dataset, config = setup(mode, d_f='channels_last')
+@pytest.fixture()
+def model_setup():
+    """ Pytest fixture to generate fake dataset and model config with desired format.
 
-        test_pipeline = get_pipeline(mode, current_config=config)
-        total_pipeline = test_pipeline << fake_dataset
-        n_b = total_pipeline.next_batch(7, n_epochs=None)
-        assert len(n_b.index) == 7
+    Parameters
+    ----------
+    d_f: {'channels_last', 'channels_first'}
+        desired format of returns.
 
-    def test_last_last_common(self, mode, setup, get_pipeline):
-        """ We can explicitly pass 'data_format', it has no effect in this case. """
-        fake_dataset, config = setup(mode, d_f='channels_last')
-        if 'common' not in config:
-            config['common'] = {'data_format': 'channels_last'}
-        else:
-            config['common'].update({'data_format': 'channels_last'})
-
-        test_pipeline = get_pipeline(mode, current_config=config)
-        total_pipeline = test_pipeline << fake_dataset
-        n_b = total_pipeline.next_batch(7, n_epochs=None)
-        assert len(n_b.index) == 7
-
-    def test_last_first_root(self, mode, setup, get_pipeline):
-        """ Explicitly passing wrong 'data_format' to 'config' does nothing. """
-        fake_dataset, config = setup(mode, d_f='channels_last')
-        config['data_format'] = 'channels_first'
-        test_pipeline = get_pipeline(mode, current_config=config)
-        total_pipeline = test_pipeline << fake_dataset
-        n_b = total_pipeline.next_batch(7, n_epochs=None)
-        assert len(n_b.index) == 7
-
-    def test_last_first_common(self, mode, setup, get_pipeline):
-        """ Explicitly passing wrong 'data_format' to 'config/common' raises ValueError. """
-        fake_dataset, config = setup(mode, d_f='channels_last')
-        if 'common' not in config:
-            config['common'] = {'data_format': 'channels_first'}
-        else:
-            config['common'].update({'data_format': 'channels_first'})
-
-        try:
-            test_pipeline = get_pipeline(mode, current_config=config)
-            total_pipeline = test_pipeline << fake_dataset
-            total_pipeline.next_batch(7, n_epochs=None)
-            pytest.fail("Should not have worked")
-        except ValueError as excinfo:
-            assert 'Negative dimension size' in str(excinfo)
-            assert 'layer-0' in str(excinfo)
-
-    def test_last_first_body(self, mode, setup, get_pipeline):
-        """ Explicitly passing wrong 'data_format' to 'config/body' raises ValueError. """
-        fake_dataset, config = setup(mode, d_f='channels_last')
-
-        if 'body' not in config:
-            config['body'] = {'data_format': 'channels_first'}
-        else:
-            config['body'].update({'data_format': 'channels_first'})
-
-        try:
-            test_pipeline = get_pipeline(mode, current_config=config)
-            total_pipeline = test_pipeline << fake_dataset
-            total_pipeline.next_batch(7, n_epochs=None)
-            pytest.fail("Should not have worked")
-        except ValueError as excinfo:
-            assert 'Negative dimension size' in str(excinfo)
-            assert 'layer-0' in str(excinfo)
-
-    def test_first_last_default(self, mode, setup, get_pipeline):
-        """ Default 'data_format' is 'channels_last', so passing data with
-        other format raises ValueError.
-        """
-        fake_dataset, config = setup(mode, d_f='channels_first')
-        try:
-            test_pipeline = get_pipeline(mode, current_config=config)
-            total_pipeline = test_pipeline << fake_dataset
-            total_pipeline.next_batch(7, n_epochs=None)
-            pytest.fail("Should not have worked")
-        except ValueError as excinfo:
-            assert 'Negative dimension size' in str(excinfo)
-
-    def test_first_first_common(self, mode, setup, get_pipeline):
-        """ That is intended way to communicate 'data_format' with model. """
-        fake_dataset, config = setup(mode, d_f='channels_first')
-        if 'common' not in config:
-            config['common'] = {'data_format': 'channels_first'}
-        else:
-            config['common'].update({'data_format': 'channels_first'})
-        test_pipeline = get_pipeline(mode, current_config=config)
-        total_pipeline = test_pipeline << fake_dataset
-        n_b = total_pipeline.next_batch(7, n_epochs=None)
-        assert len(n_b.index) == 7
-
-
-    def test_first_first_body(self, mode, setup, get_pipeline):
-        """ Explicitly passing 'data_format' to 'config/body'. """
-        fake_dataset, config = setup(mode, d_f='channels_first')
-
-        if 'body' not in config:
-            config['body'] = {'data_format': 'channels_first'}
-        else:
-            config['body'].update({'data_format': 'channels_first'})
-
-        test_pipeline = get_pipeline(mode, current_config=config)
-        total_pipeline = test_pipeline << fake_dataset
-        n_b = total_pipeline.next_batch(7, n_epochs=None)
-        assert len(n_b.index) == 7
-
-
-def test_first_first_blocks(setup, get_pipeline):
-    """ 'data_format' can be passed to a particular block in body,
-    though it should be explicitly stated in model definition.
+    Returns
+    -------
+    tuple
+        First element is instance of Dataset.
+        Second element is dict with model description.
     """
-    fake_dataset, config = setup('multi_input', d_f='channels_first')
+    def _model_setup(d_f):
+        if d_f == 'channels_last':
+            shape_in = (100, 100, 2)
+        elif d_f == 'channels_first':
+            shape_in = (2, 100, 100)
 
-    config['body/block_1'] = {'data_format': 'channels_first'}
-    config['body/block_2'] = {'data_format': 'channels_first'}
+        size = 50
+        batch_shape = (size,) + shape_in
+        images_array = np.random.random(batch_shape)
+        labels_array = np.random.choice(10, size=size)
+        data = images_array, labels_array
+        fake_dataset = Dataset(index=size,
+                               batch_class=ImagesBatch,
+                               preloaded=data)
 
-    test_pipeline = get_pipeline('multi_input', current_config=config)
-    total_pipeline = test_pipeline << fake_dataset
-    n_b = total_pipeline.next_batch(7, n_epochs=None)
-    assert len(n_b.index) == 7
+        model_config = {'inputs': {'images': {'shape': shape_in},
+                                   'labels': {'classes': 10}},
+                        'initial_block/inputs': 'images'}
+        return fake_dataset, model_config
 
-def test_first_cross_blocks(setup, get_pipeline):
-    """ Explicitly passing wrong 'data_format' raises ValueError. """
-    fake_dataset, config = setup('multi_input', d_f='channels_first')
+    return _model_setup
 
-    config['body/block_1'] = {'data_format': 'channels_last'}
-    config['body/block_2'] = {'data_format': 'channels_first'}
-    try:
-        test_pipeline = get_pipeline('multi_input', current_config=config)
+@pytest.fixture()
+def get_model_pipeline():
+    """ Creates instance of Pipeline that is configured to use given model
+    with passed parameters.
+
+    Parameters
+    ----------
+
+    model_class : subclass of TFModel
+        Architecture of model. List of available models is defined at 'AVAILABLE_MODELS'.
+
+    current_config : dict
+        Dictionary with parameters of model.
+
+    Returns
+    -------
+    Pipeline
+        Test pipeline that consists of initialization of model and
+        preparing for training with given config.
+    """
+    def _get_model_pipeline(model_class, current_config):
+        test_pipeline = (Pipeline()
+                         .init_variable('current_loss')
+                         .init_model('dynamic', model_class,
+                                     'TestModel', current_config)
+                         .to_array()
+                         .train_model('TestModel',
+                                      fetches='loss',
+                                      images=B('images'),
+                                      labels=B('labels'),
+                                      save_to=V('current_loss'))
+                         )
+        return test_pipeline
+    return _get_model_pipeline
+
+
+
+@pytest.mark.parametrize('model_type', ['single', 'multi'])
+class Test_dataformat():
+    """ This class holds tests that are checking ability to pass
+    'data_format' to different places in model.
+
+    There is a following pattern in every test:
+        First of all, we get class and 'config' of our model via 'model_and_config'
+        fixture.
+        Then we optionally modify 'config'. In most of them only 'location' is changed.
+        Finally, we assert that our modification was actually communicated to desired place.
+    """
+    @pytest.mark.parametrize('location', LOCATIONS)
+    def test_default_dataformat(self, location, model_type, model_and_config):
+        """ Default value for 'data_format' is 'channels_last'. """
+        model, config = model_and_config(model_type)
+        container = model(config).test_container
+        assert container['test_' + location]['data_format'] == 'channels_last'
+
+    @pytest.mark.parametrize('location', LOCATIONS)
+    def test_common_dataformat(self, location, model_type, model_and_config):
+        """ Easiest way to change 'data_format' for every part of network is to
+        pass it to 'common'.
+        """
+        model, config = model_and_config(model_type)
+        if not config.get('common'):
+            config['common'] = {'data_format': 'channels_first'}
+        else:
+            config['common'].update({'data_format': 'channels_first'})
+        container = model(config).test_container
+        assert container['test_' + location]['data_format'] == 'channels_first'
+
+    @pytest.mark.parametrize('location', LOCATIONS - set(['block']))
+    def test_loc_dataformat(self, location, model_type, model_and_config):
+        """ 'data_format' can be passed directly to desired location. """
+        model, config = model_and_config(model_type)
+        if not config.get(location):
+            config[location] = {'data_format': 'channels_first'}
+        else:
+            config[location].update({'data_format': 'channels_first'})
+        container = model(config).test_container
+        assert container['test_' + location]['data_format'] == 'channels_first'
+        for loc in LOCATIONS - set([location, 'block']):
+            assert 'channels_first' not in container['test_' + loc].values()
+
+    def test_block_dataformat(self, model_type, model_and_config):
+        """ Parameters, passed to inner parts take priority over outers. """
+        model, config = model_and_config(model_type)
+        config['body'] = {'data_format': 'channels_last'}
+        config['body/block'] = {'data_format': 'channels_first'}
+        container = model(config).test_container
+        assert container['test_block']['data_format'] == 'channels_first'
+
+
+
+@pytest.mark.parametrize('model', AVAILABLE_MODELS)
+class Test_models:
+    """ Tests in this class show that we can train model with given 'data_format.
+
+    There is a following pattern in every test:
+        First of all, we get 'fake_data' and 'config' via 'model_setup' fixture.
+        Then we optionally modify 'config'. In most cases it is done only at 'location'.
+        Finally, we assert that our modification was actually applied to model by attempting
+        to train it on a small batch.
+
+    """
+    def test_last_default(self, model, model_setup, get_model_pipeline):
+        """ Default value for 'data_format' is 'channels_last'. """
+        fake_dataset, config = model_setup(d_f='channels_last')
+
+        test_pipeline = get_model_pipeline(model, config)
         total_pipeline = test_pipeline << fake_dataset
-        total_pipeline.next_batch(7, n_epochs=None)
-        pytest.fail("Should not have worked")
-    except ValueError as excinfo:
-        assert 'Negative dimension size' in str(excinfo)
-        assert 'layer-0' in str(excinfo)
+        n_b = total_pipeline.next_batch(7, n_epochs=None)
+        assert len(n_b.index) == 7
+
+    def test_last_common(self, model, model_setup, get_model_pipeline):
+        """ We can explicitly pass 'data_format', it has no effect in this case. """
+        fake_dataset, config = model_setup(d_f='channels_last')
+        config['common'] = {'data_format': 'channels_last'}
+        test_pipeline = get_model_pipeline(model, config)
+        total_pipeline = test_pipeline << fake_dataset
+        n_b = total_pipeline.next_batch(7, n_epochs=None)
+        assert len(n_b.index) == 7
+
+    def test_first_common(self, model, model_setup, get_model_pipeline):
+        """ That is intended way to communicate 'data_format' with model. """
+        fake_dataset, config = model_setup(d_f='channels_first')
+        config['common'] = {'data_format': 'channels_first'}
+        test_pipeline = get_model_pipeline(model, config)
+        total_pipeline = test_pipeline << fake_dataset
+        n_b = total_pipeline.next_batch(7, n_epochs=None)
+        assert len(n_b.index) == 7
