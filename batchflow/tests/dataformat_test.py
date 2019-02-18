@@ -179,9 +179,10 @@ class Test_models:
         n_b = total_pipeline.next_batch(7, n_epochs=None)
         assert len(n_b.index) == 7
 
-    @pytest.mark.skipif(int(tf.__version__.split('.')[1]) < 12, reason='too old to work properly')
     def test_first_common(self, model, model_setup, get_model_pipeline):
         """ That is intended way to communicate 'data_format' with model. """
+        if int(tf.__version__.split('.')[1]) < 12:
+            pytest.skip('too old to work')
         fake_dataset, config = model_setup(d_f='channels_first')
         config['common'] = {'data_format': 'channels_first'}
         test_pipeline = get_model_pipeline(model, config)
