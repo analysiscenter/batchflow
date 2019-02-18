@@ -21,15 +21,12 @@ def single_config():
     """ Fixture that returns the simplest config for single-input model. """
 
     class SingleModel(TFModel):
+        test_container = {}
+
         @classmethod
         def default_config(cls):
             config = super().default_config()
             config['body/block'] = {}
-            return config
-
-        def build_config(self, names=None):
-            config = super().build_config(names)
-            SingleModel.test_container = {}
             return config
 
         @classmethod
@@ -73,17 +70,15 @@ def single_config():
 @pytest.fixture()
 def multi_config():
     """ Fixture that returnst the simplest config for multi-input model. """
+
     class MultiModel(TFModel):
+        test_container = {}
+
         @classmethod
         def default_config(cls):
             config = TFModel.default_config()
             config['body/block'] = {}
             config['body/branch'] = {}
-            return config
-
-        def build_config(self, names=None):
-            config = super().build_config(names)
-            MultiModel.test_container = {}
             return config
 
         @classmethod
@@ -148,16 +143,23 @@ def model_and_config(request):
                          ['single_config', 'multi_config',],
                          indirect=['model_and_config'])
 class Test_config_pass():
+    """ Tests to show correct flow of parameters passed to 'config' to
+    actual parts of the model.
+
+    There is a following pattern in every test:
+        First of all, we get model class and its 'config' via 'model_and_config' argument.
+        Then 'config' is modified by adding or changing some of the keys and values. Usually,
+        modifications are done only at part, specified by 'location' parameter.
+        At last, we check that our modifications are actually in place by observing
+        contents of 'test_container'.
+        """
     @pytest.mark.parametrize('location', LOCATIONS)
     def test_common(self, location, model_and_config):
         """ Easiest way to pass a key to all of the parts of the model is to
         pass it to 'common'.
         """
         model, config = model_and_config
-        if not config.get('common'):
-            config['common'] = {'common_key': 'common_key_modified'}
-        else:
-            config['common'].update({'common_key': 'common_key_modified'})
+        config['common/common_key'] = 'common_key_modified'
         container = model(config).test_container
         assert container['test_' + location]['common_key'] == 'common_key_modified'
 
@@ -167,11 +169,9 @@ class Test_config_pass():
         Those keys will not appear in other places.
         """
         model, config = model_and_config
+        destination = location + '/' + location + '_key'
         value = location + '_value_modified'
-        if not config.get(location):
-            config[location] = {location + '_key': value}
-        else:
-            config[location].update({location + '_key': value})
+        config[destination] = value
         container = model(config).test_container
         assert container['test_' + location][location + '_key'] == value # check that key is delivered
         for loc in LOCATIONS - set([location, 'block']):
@@ -182,11 +182,9 @@ class Test_config_pass():
         """ Parameters, passed to a certain location, take priority over 'common' keys. """
         model, config = model_and_config
         config['common'] = {location + '_key': 'wrong_value'}
+        destination = location + '/' + location + '_key'
         value = location + '_value_modified'
-        if not config.get(location):
-            config[location] = {location + '_key': value}
-        else:
-            config[location].update({location + '_key': value})
+        config[destination] = value
         container = model(config).test_container
         assert container['test_' + location][location + '_key'] == value
 
@@ -196,8 +194,8 @@ class Test_config_pass():
         passed to body).
         """
         model, config = model_and_config
-        config['body'] = {'body_key': 'body_key_modified'}
-        config['body/block'] = {'block_key': 'block_value_modified'}
+        config['body/body_key'] = 'body_key_modified'
+        config['body/block/block_key'] = 'block_value_modified'
         container = model(config).test_container
         assert container['test_block']['body_key'] == 'body_key_modified'
         assert container['test_block']['block_key'] == 'block_value_modified'
@@ -207,7 +205,7 @@ class Test_config_pass():
         the inner takes priority.
         """
         model, config = model_and_config
-        config['body'] = {'block_key': 'wrong_value'}
-        config['body/block'] = {'block_key': 'block_value_modified'}
+        config['body/block_key'] = 'wrong_value'
+        config['body/block/block_key'] = 'block_value_modified'
         container = model(config).test_container
         assert container['test_block']['block_key'] == 'block_value_modified'

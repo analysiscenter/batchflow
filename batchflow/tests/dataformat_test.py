@@ -120,10 +120,7 @@ class Test_dataformat():
         pass it to 'common'.
         """
         model, config = model_and_config
-        if not config.get('common'):
-            config['common'] = {'data_format': 'channels_first'}
-        else:
-            config['common'].update({'data_format': 'channels_first'})
+        config['common/data_format'] = 'channels_first'
         container = model(config).test_container
         assert container['test_' + location]['data_format'] == 'channels_first'
 
@@ -131,10 +128,8 @@ class Test_dataformat():
     def test_loc_dataformat(self, location, model_and_config):
         """ 'data_format' can be passed directly to desired location. """
         model, config = model_and_config
-        if not config.get(location):
-            config[location] = {'data_format': 'channels_first'}
-        else:
-            config[location].update({'data_format': 'channels_first'})
+        destination = location + '/data_format'
+        config[destination] = 'channels_first'
         container = model(config).test_container
         assert container['test_' + location]['data_format'] == 'channels_first'
         for loc in LOCATIONS - set([location, 'block']):
@@ -143,8 +138,8 @@ class Test_dataformat():
     def test_block_dataformat(self, model_and_config):
         """ Parameters, passed to inner parts take priority over outers. """
         model, config = model_and_config
-        config['body'] = {'data_format': 'channels_last'}
-        config['body/block'] = {'data_format': 'channels_first'}
+        config['body/data_format'] = 'channels_last'
+        config['body/block/data_format'] = 'channels_first'
         container = model(config).test_container
         assert container['test_block']['data_format'] == 'channels_first'
 
@@ -152,7 +147,7 @@ class Test_dataformat():
 
 @pytest.mark.parametrize('model', AVAILABLE_MODELS)
 class Test_models:
-    """ Tests in this class show that we can train model with given 'data_format.
+    """ Tests in this class show that we can train model with given 'data_format'.
 
     There is a following pattern in every test:
         First of all, we get 'fake_data' and 'config' via 'model_setup' fixture.
@@ -173,7 +168,7 @@ class Test_models:
     def test_last_common(self, model, model_setup, get_model_pipeline):
         """ We can explicitly pass 'data_format', it has no effect in this case. """
         fake_dataset, config = model_setup(d_f='channels_last')
-        config['common'] = {'data_format': 'channels_last'}
+        config['common/data_format'] = 'channels_last'
         test_pipeline = get_model_pipeline(model, config)
         total_pipeline = test_pipeline << fake_dataset
         n_b = total_pipeline.next_batch(7, n_epochs=None)
@@ -185,7 +180,7 @@ class Test_models:
         if int(tf.__version__.split('.')[1]) < 12:
             pytest.skip('too old to work')
         fake_dataset, config = model_setup(d_f='channels_first')
-        config['common'] = {'data_format': 'channels_first'}
+        config['common/data_format'] = 'channels_first'
         test_pipeline = get_model_pipeline(model, config)
         total_pipeline = test_pipeline << fake_dataset
         n_b = total_pipeline.next_batch(7, n_epochs=None)
