@@ -1,5 +1,5 @@
 """ Test for passing information through config. """
-# pylint: disable=import-error, wrong-import-position
+# pylint: disable=import-error, wrong-import-position, no-name-in-module
 # pylint: disable=missing-docstring, redefined-outer-name
 import os
 import warnings
@@ -8,10 +8,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import pytest
 import numpy as np
+import tensorflow as tf
 
 from batchflow import Pipeline, ImagesBatch, Dataset
 from batchflow import B, V
-from ...models.tf import VGG7, ResNet18, Inception_v1
+from batchflow.models.tf import VGG7, ResNet18, Inception_v1
 
 
 AVAILABLE_MODELS = [VGG7, ResNet18, Inception_v1]
@@ -92,7 +93,9 @@ def get_model_pipeline():
 
 
 
-@pytest.mark.parametrize('model_type', ['single', 'multi'])
+@pytest.mark.parametrize('model_and_config',
+                         ['single_config', 'multi_config',],
+                         indirect=['model_and_config'])
 class Test_dataformat():
     """ This class holds tests that are checking ability to pass
     'data_format' to different places in model.
@@ -103,19 +106,20 @@ class Test_dataformat():
         Then we optionally modify 'config'. In most of them only 'location' is changed.
         Finally, we assert that our modification was actually communicated to desired place.
     """
+    @pytest.mark.xfail(run=True)
     @pytest.mark.parametrize('location', LOCATIONS)
-    def test_default_dataformat(self, location, model_type, model_and_config):
+    def test_default_dataformat(self, location, model_and_config):
         """ Default value for 'data_format' is 'channels_last'. """
-        model, config = model_and_config(model_type)
+        model, config = model_and_config
         container = model(config).test_container
         assert container['test_' + location]['data_format'] == 'channels_last'
 
     @pytest.mark.parametrize('location', LOCATIONS)
-    def test_common_dataformat(self, location, model_type, model_and_config):
+    def test_common_dataformat(self, location, model_and_config):
         """ Easiest way to change 'data_format' for every part of network is to
         pass it to 'common'.
         """
-        model, config = model_and_config(model_type)
+        model, config = model_and_config
         if not config.get('common'):
             config['common'] = {'data_format': 'channels_first'}
         else:
@@ -124,9 +128,9 @@ class Test_dataformat():
         assert container['test_' + location]['data_format'] == 'channels_first'
 
     @pytest.mark.parametrize('location', LOCATIONS - set(['block']))
-    def test_loc_dataformat(self, location, model_type, model_and_config):
+    def test_loc_dataformat(self, location, model_and_config):
         """ 'data_format' can be passed directly to desired location. """
-        model, config = model_and_config(model_type)
+        model, config = model_and_config
         if not config.get(location):
             config[location] = {'data_format': 'channels_first'}
         else:
@@ -136,9 +140,9 @@ class Test_dataformat():
         for loc in LOCATIONS - set([location, 'block']):
             assert 'channels_first' not in container['test_' + loc].values()
 
-    def test_block_dataformat(self, model_type, model_and_config):
+    def test_block_dataformat(self, model_and_config):
         """ Parameters, passed to inner parts take priority over outers. """
-        model, config = model_and_config(model_type)
+        model, config = model_and_config
         config['body'] = {'data_format': 'channels_last'}
         config['body/block'] = {'data_format': 'channels_first'}
         container = model(config).test_container
@@ -175,6 +179,7 @@ class Test_models:
         n_b = total_pipeline.next_batch(7, n_epochs=None)
         assert len(n_b.index) == 7
 
+    @pytest.mark.skipif(int(tf.__version__.split('.')[1]) < 12, reason='too old to work properly')
     def test_first_common(self, model, model_setup, get_model_pipeline):
         """ That is intended way to communicate 'data_format' with model. """
         fake_dataset, config = model_setup(d_f='channels_first')
