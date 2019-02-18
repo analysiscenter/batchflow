@@ -33,32 +33,32 @@ def single_config():
             return config
 
         @classmethod
-        def initial_block(cls, inputs, name='initial_block', **kwmodel_and_configs):
-            kwmodel_and_configs = cls.fill_params(name, **kwmodel_and_configs)
-            cls.test_container['test_initial_block'] = kwmodel_and_configs
+        def initial_block(cls, inputs, name='initial_block', **kwargs):
+            kwargs = cls.fill_params(name, **kwargs)
+            cls.test_container['test_initial_block'] = kwargs
             return inputs
 
         @classmethod
-        def body(cls, inputs, name='body', **kwmodel_and_configs):
-            kwmodel_and_configs = cls.fill_params(name, **kwmodel_and_configs)
-            cls.test_container['test_body'] = kwmodel_and_configs
+        def body(cls, inputs, name='body', **kwargs):
+            kwargs = cls.fill_params(name, **kwargs)
+            cls.test_container['test_body'] = kwargs
 
-            block_model_and_configs = cls.pop('block', kwmodel_and_configs)
-            block_model_and_configs = {**kwmodel_and_configs, **block_model_and_configs}
-            inputs = cls.block(inputs, name='block', **block_model_and_configs)
+            block_args = cls.pop('block', kwargs)
+            block_args = {**kwargs, **block_args}
+            inputs = cls.block(inputs, name='block', **block_args)
             return inputs
 
         @classmethod
-        def block(cls, inputs, **kwmodel_and_configs):
-            kwmodel_and_configs = cls.fill_params('body/block', **kwmodel_and_configs)
-            cls.test_container['test_block'] = kwmodel_and_configs
+        def block(cls, inputs, **kwargs):
+            kwargs = cls.fill_params('body/block', **kwargs)
+            cls.test_container['test_block'] = kwargs
             return inputs
 
         @classmethod
-        def head(cls, inputs, name='head', **kwmodel_and_configs):
-            inputs = super().head(inputs, **kwmodel_and_configs)
-            kwmodel_and_configs = cls.fill_params(name, **kwmodel_and_configs)
-            cls.test_container['test_head'] = kwmodel_and_configs
+        def head(cls, inputs, name='head', **kwargs):
+            inputs = super().head(inputs, **kwargs)
+            kwargs = cls.fill_params(name, **kwargs)
+            cls.test_container['test_head'] = kwargs
             return inputs
 
     config = {'inputs': {'images': {'shape': (10, 10, 3)},
@@ -87,44 +87,44 @@ def multi_config():
             return config
 
         @classmethod
-        def initial_block(cls, inputs, name='initial_block', **kwmodel_and_configs):
-            kwmodel_and_configs = cls.fill_params(name, **kwmodel_and_configs)
-            cls.test_container['test_initial_block'] = kwmodel_and_configs
+        def initial_block(cls, inputs, name='initial_block', **kwargs):
+            kwargs = cls.fill_params(name, **kwargs)
+            cls.test_container['test_initial_block'] = kwargs
             return inputs
 
         @classmethod
-        def body(cls, inputs, name='body', **kwmodel_and_configs):
-            kwmodel_and_configs = cls.fill_params(name, **kwmodel_and_configs)
-            cls.test_container['test_body'] = kwmodel_and_configs
+        def body(cls, inputs, name='body', **kwargs):
+            kwargs = cls.fill_params(name, **kwargs)
+            cls.test_container['test_body'] = kwargs
 
-            block_model_and_configs = cls.pop('block', kwmodel_and_configs)
-            block_model_and_configs = {**kwmodel_and_configs, **block_model_and_configs}
-            branch_model_and_configs = cls.pop('branch', kwmodel_and_configs)
-            branch_model_and_configs = {**kwmodel_and_configs, **branch_model_and_configs}
+            block_args = cls.pop('block', kwargs)
+            block_args = {**kwargs, **block_args}
+            branch_args = cls.pop('branch', kwargs)
+            branch_args = {**kwargs, **branch_args}
             with tf.variable_scope(name):
                 input_1, input_2 = inputs
-                x_1 = cls.block(input_1, **block_model_and_configs)
-                x_2 = cls.branch(input_2, **branch_model_and_configs)
+                x_1 = cls.block(input_1, **block_args)
+                x_2 = cls.branch(input_2, **branch_args)
                 output = tf.add(x_1, x_2)
             return output
 
         @classmethod
-        def block(cls, input_1, **kwmodel_and_configs):
-            kwmodel_and_configs = cls.fill_params('body/block', **kwmodel_and_configs)
-            cls.test_container['test_block'] = kwmodel_and_configs
+        def block(cls, input_1, **kwargs):
+            kwargs = cls.fill_params('body/block', **kwargs)
+            cls.test_container['test_block'] = kwargs
             return input_1
 
         @classmethod
-        def branch(cls, input_2, **kwmodel_and_configs):
-            kwmodel_and_configs = cls.fill_params('body/branch', **kwmodel_and_configs)
-            cls.test_container['test_branch'] = kwmodel_and_configs
+        def branch(cls, input_2, **kwargs):
+            kwargs = cls.fill_params('body/branch', **kwargs)
+            cls.test_container['test_branch'] = kwargs
             return input_2
 
         @classmethod
-        def head(cls, inputs, name='head', **kwmodel_and_configs):
-            inputs = super().head(inputs, name='head', **kwmodel_and_configs)
-            kwmodel_and_configs = cls.fill_params(name, **kwmodel_and_configs)
-            cls.test_container['test_head'] = kwmodel_and_configs
+        def head(cls, inputs, name='head', **kwargs):
+            inputs = super().head(inputs, name='head', **kwargs)
+            kwargs = cls.fill_params(name, **kwargs)
+            cls.test_container['test_head'] = kwargs
             return inputs
 
     config = {'inputs': {'images_1': {'shape': (10, 10, 3)},
@@ -137,7 +137,7 @@ def multi_config():
     return MultiModel, config
 
 
-@pytest.fixture
+@pytest.fixture()
 def model_and_config(request):
     """ Fixture to get values of 'single_config' or 'multi_config'. """
     return request.getfixturevalue(request.param)
