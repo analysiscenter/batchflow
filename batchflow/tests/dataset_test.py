@@ -37,9 +37,16 @@ class TestDataset:
         assert np.isin(new_ds.indices, dataset.indices).all()
 
     def test_create_subset_wrong_index(self, dataset):
+        """
+        This method checks for correct execution create_subset method in case of
+        there should be exception during calling this method with index which is not in
+        source dataset index range.
+        Now we raises and handle AssertError
+        """
         wrong_index = DatasetIndex(np.arange(200, 225))
-        new_ds = dataset.create_subset(wrong_index)
-        assert np.isin(new_ds.indices, dataset.indices).all()
+        with pytest.raises(AssertionError) as excinfo:
+            new_ds = dataset.create_subset(wrong_index)
+            assert np.isin(new_ds.indices, dataset.indices).all()
 
     def test_create_batch(self, dataset):
         target_index = DatasetIndex(np.arange(5))
