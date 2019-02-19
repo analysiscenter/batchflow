@@ -2,7 +2,6 @@
 # pylint: disable=import-error, no-name-in-module
 # pylint: disable=missing-docstring, redefined-outer-name
 import pytest
-import tensorflow as tf
 
 from batchflow import Config
 from batchflow.models.tf import TFModel
@@ -75,7 +74,6 @@ def multi_config():
         def default_config(cls):
             config = TFModel.default_config()
             config['body/block'] = {}
-            config['body/branch'] = {}
             return config
 
         @classmethod
@@ -91,26 +89,17 @@ def multi_config():
 
             block_args = cls.pop('block', kwargs)
             block_args = {**kwargs, **block_args}
-            branch_args = cls.pop('branch', kwargs)
-            branch_args = {**kwargs, **branch_args}
 
-            input_1, input_2 = inputs
-            x_1 = cls.block(input_1, **block_args)
-            x_2 = cls.branch(input_2, **branch_args)
-            output = tf.add(x_1, x_2)
-            return output
+            input_1, _ = inputs
+            inputs = cls.block(input_1, **block_args)
+
+            return inputs
 
         @classmethod
         def block(cls, input_1, **kwargs):
             kwargs = cls.fill_params('body/block', **kwargs)
             cls.model_args['block'] = kwargs
             return input_1
-
-        @classmethod
-        def branch(cls, input_2, **kwargs):
-            kwargs = cls.fill_params('body/branch', **kwargs)
-            cls.model_args['branch'] = kwargs
-            return input_2
 
         @classmethod
         def head(cls, inputs, name='head', **kwargs):
@@ -157,8 +146,8 @@ class Test_config_pass():
         """
         model_class, config = model_and_config
         config['common/common_key'] = 'common_key_modified'
-        container = model_class(config).model_args
-        assert container[location + '/common_key'] == 'common_key_modified'
+        model_args = model_class(config).model_args
+        assert model_args[location + '/common_key'] == 'common_key_modified'
 
     @pytest.mark.parametrize('location', LOCATIONS - set(['block']))
     def test_loc(self, location, model_and_config):
@@ -169,10 +158,10 @@ class Test_config_pass():
         destination = location + '/' + location + '_key'
         value = location + '_value_modified'
         config[destination] = value
-        container = model_class(config).model_args
-        assert container[destination] == value # check that key is delivered
+        model_args = model_class(config).model_args
+        assert model_args[destination] == value # check that key is delivered
         for loc in LOCATIONS - set([location, 'block']):
-            assert value not in container[loc].values() # check that key is not present in other places
+            assert value not in model_args[loc].values() # check that key is not present in other places
 
     @pytest.mark.parametrize('location', LOCATIONS - set(['block']))
     def test_loc_priority(self, location, model_and_config):
@@ -182,8 +171,8 @@ class Test_config_pass():
         destination = location + '/' + location + '_key'
         value = location + '_value_modified'
         config[destination] = value
-        container = model_class(config).model_args
-        assert container[destination] == value
+        model_args = model_class(config).model_args
+        assert model_args[destination] == value
 
     def test_block(self, model_and_config):
         """ If model structure is nested (e.g. block inside body), inner
@@ -193,9 +182,9 @@ class Test_config_pass():
         model_class, config = model_and_config
         config['body/body_key'] = 'body_key_modified'
         config['body/block/block_key'] = 'block_value_modified'
-        container = model_class(config).model_args
-        assert container['block/body_key'] == 'body_key_modified'
-        assert container['block/block_key'] == 'block_value_modified'
+        model_args = model_class(config).model_args
+        assert model_args['block/body_key'] == 'body_key_modified'
+        assert model_args['block/block_key'] == 'block_value_modified'
 
     def test_block_priority(self, model_and_config):
         """ If the same parameter is defined both in outer and inner part,
@@ -204,5 +193,5 @@ class Test_config_pass():
         model_class, config = model_and_config
         config['body/block_key'] = 'wrong_value'
         config['body/block/block_key'] = 'block_value_modified'
-        container = model_class(config).model_args
-        assert container['block/block_key'] == 'block_value_modified'
+        model_args = model_class(config).model_args
+        assert model_args['block/block_key'] == 'block_value_modified'

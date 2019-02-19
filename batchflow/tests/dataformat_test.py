@@ -99,13 +99,13 @@ class Test_dataformat():
         Then we optionally modify 'config'. In most of them only 'location' is changed.
         Finally, we assert that our modification was actually communicated to desired place.
     """
-    @pytest.mark.xfail(run=True)
     @pytest.mark.parametrize('location', LOCATIONS)
-    def test_default_dataformat(self, location, model_and_config):
+    def test_default_dataformat(self, location, model_and_config, single_config):
         """ Default value for 'data_format' is 'channels_last'. """
-        model_class, config = model_and_config
-        container = model_class(config).model_args
-        assert container[location]['data_format'] == 'channels_last'
+        if model_and_config == single_config:
+            model_class, config = model_and_config
+            model_args = model_class(config).model_args
+            assert model_args[location + '/data_format'] == 'channels_last'
 
     @pytest.mark.parametrize('location', LOCATIONS)
     def test_common_dataformat(self, location, model_and_config):
@@ -114,8 +114,8 @@ class Test_dataformat():
         """
         model_class, config = model_and_config
         config['common/data_format'] = 'channels_first'
-        container = model_class(config).model_args
-        assert container[location + '/data_format'] == 'channels_first'
+        model_args = model_class(config).model_args
+        assert model_args[location + '/data_format'] == 'channels_first'
 
     @pytest.mark.parametrize('location', LOCATIONS - set(['block']))
     def test_loc_dataformat(self, location, model_and_config):
@@ -123,18 +123,18 @@ class Test_dataformat():
         model_class, config = model_and_config
         destination = location + '/data_format'
         config[destination] = 'channels_first'
-        container = model_class(config).model_args
-        assert container[destination] == 'channels_first'
+        model_args = model_class(config).model_args
+        assert model_args[destination] == 'channels_first'
         for loc in LOCATIONS - set([location, 'block']):
-            assert 'channels_first' not in container[loc].values()
+            assert 'channels_first' not in model_args[loc].values()
 
     def test_block_dataformat(self, model_and_config):
         """ Parameters, passed to inner parts take priority over outers. """
         model_class, config = model_and_config
         config['body/data_format'] = 'channels_last'
         config['body/block/data_format'] = 'channels_first'
-        container = model_class(config).model_args
-        assert container['block/data_format'] == 'channels_first'
+        model_args = model_class(config).model_args
+        assert model_args['block/data_format'] == 'channels_first'
 
 
 
