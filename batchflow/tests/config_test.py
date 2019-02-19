@@ -1,3 +1,4 @@
+# pylint: disable=redefined-outer-name, missing-docstring
 import sys
 import pytest
 
@@ -37,7 +38,6 @@ class TestConfig:
 
     def test_get_nested_missing_key_with_default(self, config):
         assert config.get('key2/missing key', default=1) == 1
-
 
     def test_pop_key(self, config):
         val = config.config.get('key1')

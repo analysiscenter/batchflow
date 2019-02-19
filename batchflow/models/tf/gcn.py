@@ -4,7 +4,6 @@ Improve Semantic Segmentation by Global Convolutional Network
 """
 import tensorflow as tf
 
-from ... import is_best_practice
 from .layers import conv_block
 from . import TFModel
 from .resnet import ResNet, ResNet101
@@ -51,10 +50,7 @@ class GlobalConvolutionNetwork(TFModel):
         config['head/upsample'] = dict(layout='tna', factor=2, kernel_size=4)
 
         config['loss'] = 'ce'
-        if is_best_practice('optimizer'):
-            config['optimizer'].update(name='Adam')
-        else:
-            config['optimizer'] = ('Momentum', dict(learning_rate=5e-4, momentum=.99))
+
         return config
 
     def build_config(self, names=None):

@@ -48,8 +48,7 @@ class SqueezeNet(TorchModel):
         config['head'] = dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5)
 
         config['loss'] = 'ce'
-        #config['decay'] = ('poly', dict(learning_rate=.04, decay_steps=170000))
-        config['optimizer'] = ('SGD', dict(momentum=.99, lr=.04))
+
         return config
 
     def build_config(self, names=None):

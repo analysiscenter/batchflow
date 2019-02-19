@@ -48,7 +48,7 @@ class LinkNet(TFModel):
         config['head/upsample2'] = dict(layout='t', factor=2)
 
         config['loss'] = 'ce'
-        config['optimizer'] = ('RMSProp', dict(learning_rate=5e-4))
+
         return config
 
     def build_config(self, names=None):

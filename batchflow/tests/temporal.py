@@ -1,8 +1,9 @@
 """Tests for DatasetIndex class.
-If possible, methods are tested against DatasetIndex with length of 5.
-When random values are needed, 'random_seed' is fixed to be 13.
+If needed and possible, type of DatasetIndex is specified at
+the very first line of each test.
+Tests that have '_baseset_' in the name use methods, inherited from Baseset class.
 """
-# pylint: disable=missing-docstring
+# pylint: disable=no-self-use, missing-docstring, redefined-outer-name
 # pylint: disable=protected-access
 import pytest
 import numpy as np
@@ -10,8 +11,13 @@ import numpy as np
 from batchflow import DatasetIndex
 
 
-def test_len():
+
+def test_len_int():
     dsi = DatasetIndex(5)
+    assert len(dsi) == 5
+
+def test_len_str():
+    dsi = DatasetIndex(['a', 'b', 'c', 'd', 'e'])
     assert len(dsi) == 5
 
 
@@ -29,7 +35,6 @@ def test_calc_split_correctness_1():
     assert sum(dsi.calc_split()) == 5
 
 def test_calc_split_correctness_2():
-    """ If 'shares' contains 2 elements, validation subset is empty. """
     dsi = DatasetIndex(5)
     left = dsi.calc_split(shares=[0.4, 0.6])
     right = (2, 3, 0)
@@ -42,13 +47,14 @@ def test_calc_split_correctness_3():
     assert valid_share == 1
 
 
+
 @pytest.mark.parametrize('constructor', [5,
                                          range(10, 20, 2),
                                          DatasetIndex(5),
                                          ['a', 'b', 'c', 'd', 'e'],
                                          (lambda: np.arange(5)[::-1])])
 def test_build_index(constructor):
-    """ True content of 'dsi.index' is recovered from the 'constructor'. """
+    """ True contents of 'dsi.index' are recovered from the 'constructor'. """
     dsi = DatasetIndex(constructor)
     if isinstance(constructor, int):
         constructor = np.arange(constructor)
@@ -124,17 +130,29 @@ def test_shuffle_bool_callable():
     assert (left == np.arange(5)).all()
 
 
-def test_split_correctness():
-    """ Each element of 'index' is used.
-    Constants in 'shares' are such that test does not raise errors.
-    """
+@pytest.mark.parametrize("repeat_time", [1]*1)
+def test_split_correctness(repeat_time):
+    """ Constants in 'shares' are such that test does not raise errors. """
     dsi = DatasetIndex(5)
-    shares = .3 - np.random.random(3) *.05
+    shares = .3 - np.random.random(3) *.05 *repeat_time
     dsi.split(shares=shares)
-
+    assert len(dsi) == (len(dsi.train)
+                        + len(dsi.test)
+                        + len(dsi.validation))
     assert set(dsi.index) == (set(dsi.train.index)
                               | set(dsi.test.index)
                               | set(dsi.validation.index))
+
+
+def test_create_batch_child():
+    """ Method 'create_batch' must be type-preserving. """
+    class ChildSet(DatasetIndex):
+        # pylint: disable=too-few-public-methods
+        pass
+    dsi = ChildSet(5)
+    assert isinstance(dsi.create_batch(range(5)), ChildSet)
+
+
 
 
 def test_create_batch_pos_true_list():
@@ -161,13 +179,10 @@ def test_create_batch_pos_false_int():
     left = dsi.create_batch(range(3), pos=False).index
     assert (left == range(3)).all()
 
-def test_create_batch_child():
+def test_create_batch_type():
     """ Method 'create_batch' must be type-preserving. """
-    class ChildSet(DatasetIndex):
-        # pylint: disable=too-few-public-methods
-        pass
-    dsi = ChildSet(5)
-    assert isinstance(dsi.create_batch(range(5)), ChildSet)
+    dsi = DatasetIndex(5)
+    assert isinstance(dsi.create_batch(range(5)), DatasetIndex)
 
 
 def test_next_batch_stopiter_raise():
@@ -180,8 +195,12 @@ def test_next_batch_stopiter_raise():
 def test_next_batch_stopiter_pass():
     """ When 'n_epochs' is None it is possible to iterate infinitely. """
     dsi = DatasetIndex(5)
-    for _ in range(10):
-        dsi.next_batch(1, n_epochs=None)
+    left = set()
+    right = set(dsi.index)
+    for _ in range(SIZE**2):
+        batch = dsi.next_batch(1, n_epochs=None)
+        left = left | set(batch.index)
+    assert left == right
 
 def test_next_batch_drop_last_false_1():
     """ When 'drop_last' is False 'next_batch' should cycle through index. """
@@ -248,14 +267,14 @@ def test_next_batch_smaller():
                                drop_last=True)
         assert len(batch) == 2
 
+@pytest.mark.xfail(reason='fails because batch_size > len(dsindex)')
 def test_next_batch_bigger():
     """ When 'batch_size' is bigger than length of DatasetIndex, the
     behavior is unstable.
     """
     dsi = DatasetIndex(5)
-    with pytest.raises(AssertionError):
-        for _ in range(10):
-            batch = dsi.next_batch(batch_size=7,
-                                   n_epochs=None,
-                                   drop_last=True)
-            assert len(batch) == 7
+    for _ in range(10):
+        batch = dsi.next_batch(batch_size=7,
+                               n_epochs=None,
+                               drop_last=True)
+        assert len(batch) == 7
