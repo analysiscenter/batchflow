@@ -3,7 +3,6 @@
 import os
 import traceback
 import threading
-import warnings
 
 import dill
 try:
@@ -243,21 +242,19 @@ class Batch:
         if isinstance(components, str):
             components = (components,)
             init = (init,)
-        elif isinstance(components, (tuple, list)):
+        elif isinstance(components, list):
             components = tuple(components)
-            if init is None:
-                init = (None,) * len(components)
-            else:
-                init = tuple(init)
 
         data = self._data
-        if self.components is None:
-            self.components = tuple()
+        if self.components is None or data is None:
+            self.components = components
             data = tuple()
-            warnings.warn("All batch data is erased")
-        self.components = self.components + components
+        else:
+            self.components = self.components + components
+            data = data + (init,)
+
         self.make_item_class(local=True)
-        self._data = data + init
+        self._data = data
 
         return self
 
@@ -451,7 +448,7 @@ class Batch:
 
     @action
     @inbatch_parallel(init='indices', post='_assemble')
-    def apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+    def apply_transform(self, ix, func, *args, src=None, dst=None, p=1., use_self=False, **kwargs):
         """ Apply a function to each item in the batch
 
         Parameters
@@ -474,17 +471,8 @@ class Batch:
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
-        p : float or None
-            probability of applying transform to an element in the batch
-
-            if not None, indices of relevant batch elements will be passed ``func``
-            as a named arg ``indices``.
-
-        use_self : bool
-            whether to pass ``self`` to ``func``
-
         args, kwargs
-            other parameters passed to ``func``
+            parameters passed to ``func``
 
         Notes
         -----
@@ -507,7 +495,7 @@ class Batch:
                 src_attr = (src[pos],)
             _args = tuple([*src_attr, *args])
 
-        if p is None or np.random.binomial(1, p):
+        if np.random.binomial(1, p):
             if use_self:
                 return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
@@ -517,7 +505,7 @@ class Batch:
         return src_attr
 
     @action
-    def apply_transform_all(self, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+    def apply_transform_all(self, func, *args, src=None, dst=None, p=1., use_self=False, **kwargs):
         """ Apply a function the whole batch at once
 
         Parameters
@@ -538,42 +526,19 @@ class Batch:
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
-        p : float or None
+        p : float
             probability of applying transform to an element in the batch
 
-            if not None, indices of relevant batch elements will be passed ``func``
-            as a named arg ``indices``.
-
-        use_self : bool
-            whether to pass ``self`` to ``func``
-
         args, kwargs
-            other parameters passed to ``func``
+            parameters passed to ``func``
 
         Notes
         -----
         apply_transform_all does the following::
 
             self.dst = func(self.src, *args, **kwargs)
-
-        When ``p`` is passed, random indices are chosen first and then passed to ``func``::
-
-            self.dst = func(self.src, *args, indices=random_indices, **kwargs)
-
-        Transform functions might be methods as well, when ``use_self=True``::
-
-            self.dst = func(self, self.src, *args, **kwargs)
-
-        Examples
-        --------
-
-        ::
-
-            apply_transform_all(make_masks_fn, src='images', dst='masks')
-            apply_transform_all(MyBatch.make_masks, src='images', dst='masks', use_self=True)
-            apply_transform_all(custom_crop, src='images', dst='augmented_images', p=.2)
-
         """
+
         if not isinstance(dst, str) and not isinstance(src, str):
             raise TypeError("At least of of dst and src should be attribute names, not arrays")
 
@@ -585,14 +550,14 @@ class Batch:
             else:
                 src_attr = src
             _args = tuple([src_attr, *args])
-
-        if p is not None:
-            indices = np.where(np.random.binomial(1, p, len(self)))[0]
-            kwargs['indices'] = indices
-        if use_self:
-            _args = (self, *_args)
-        tr_res = func(*_args, **kwargs)
-
+        indices = np.where(np.random.binomial(1, p, len(self)))[0]
+        if len(indices):
+            if use_self:
+                tr_res = func(self, indices=indices, *_args, **kwargs)
+            else:
+                tr_res = func(indices=indices, *_args, **kwargs)
+        else:
+            tr_res = src_attr
         if dst is None:
             pass
         elif isinstance(dst, str):
@@ -849,7 +814,7 @@ class Batch:
         _ = args
         components = [components] if isinstance(components, str) else components
         if components is not None:
-            self.add_components(np.setdiff1d(components, self.components).tolist())
+            self.add_components(components)
 
         if fmt is None:
             self.put_into_data(src, components)

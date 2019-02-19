@@ -8,6 +8,7 @@ Mobile Networks for Classification, Detection and Segmentation
 from copy import deepcopy
 import tensorflow as tf
 
+from ... import is_best_practice
 from . import TFModel
 from .layers import conv_block
 
@@ -48,7 +49,11 @@ class MobileNet(TFModel):
         config['head'].update(dict(layout='Vf'))
 
         config['loss'] = 'ce'
-
+        # learning rate will decrease every two epochs. Default decay_steps is designed
+        # for ImageNet with a batch size of 96.
+        init_lr = 1e-2 if is_best_practice('optimizer') else .45
+        config['decay'] = ('exp', dict(learning_rate=init_lr, decay_steps=20833, decay_rate=.94))
+        config['optimizer'] = 'RMSProp'
         return config
 
     def build_config(self, names=None):
@@ -153,7 +158,11 @@ class MobileNet_v2(TFModel):
         config['head'].update(dict(layout='cnacnV', filters=[1280, 2], kernel_size=1))
 
         config['loss'] = 'ce'
-
+        # learning rate will decrease every two epochs. Defaunt decay_steps is designed
+        # for imagenet with a batch size of 96.
+        init_lr = 1e-4 if is_best_practice() else .45
+        config['decay'] = ('exp', dict(learning_rate=init_lr, decay_steps=20833, decay_rate=.98))
+        config['optimizer'] = dict(name='RMSProp', momentum=.9)
         return config
 
     def build_config(self, names=None):

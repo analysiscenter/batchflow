@@ -4,6 +4,7 @@
 import tensorflow as tf
 import numpy as np
 
+from ... import is_best_practice
 from .layers import conv_block
 from . import TFModel
 from .resnet import ResNet
@@ -41,7 +42,11 @@ class VNet(TFModel):
         config['head'] = dict(layout='c', kernel_size=1)
 
         config['loss'] = 'ce'
-
+        if is_best_practice('optimizer'):
+            config['optimizer'] = 'Adam'
+        else:
+            config['decay'] = ('invtime', dict(learning_rate=1e-4, decay_steps=25000, decay_rate=10))
+            config['optimizer'] = ('Momentum', dict(momentum=.99))
         return config
 
     def build_config(self, names=None):

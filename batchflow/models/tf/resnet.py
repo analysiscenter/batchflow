@@ -14,6 +14,7 @@ Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 import numpy as np
 import tensorflow as tf
 
+from ... import is_best_practice
 from . import TFModel
 from .layers import conv_block
 
@@ -82,6 +83,14 @@ class ResNet(TFModel):
         config['head'] = dict(layout='Vdf', dropout_rate=.4)
 
         config['loss'] = 'ce'
+        if is_best_practice('optimizer'):
+            config['optimizer'] = 'Adam'
+        else:
+            # The learning rate starts from 0.1 (no warming up), and is divided by 10 at 30 and 60 epochs
+            # with batch size = 256 on ImageNet.
+            lr = .1
+            config['decay'] = ('const', dict(boundaries=[117188, 234375], values=[lr, lr/10, lr/100]))
+            config['optimizer'] = ('Momentum', dict(momentum=.9))
 
         return config
 
@@ -90,7 +99,7 @@ class ResNet(TFModel):
         """ Define conv block layout """
         _ = kwargs
         reps = 3 if bottleneck else 2
-        return 'cna' * reps
+        return 'cna' * reps if is_best_practice() else 'nac' * reps
 
     def build_config(self, names=None):
         config = super().build_config(names)
