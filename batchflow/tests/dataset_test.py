@@ -1,4 +1,4 @@
-#pylint: disable=missing-docstring
+# pylint: disable=missing-docstring
 
 import pytest
 import numpy as np
@@ -22,19 +22,21 @@ class TestDataset:
     def test_build_index(self):
         new_index = Dataset.build_index(np.arange(25))
         assert isinstance(new_index, DatasetIndex)
-        assert len(new_index.index) == 25
 
     def test_create_subset(self, dataset):
         new_index = DatasetIndex(np.arange(25))
         new_ds = dataset.create_subset(new_index)
-        assert isinstance(new_ds, Dataset)
+        assert isinstance(new_ds, dataset.__class__)
         assert np.isin(new_ds.index.index, dataset.index.index).all()
 
     def test_create_batch(self, dataset):
         target_index = DatasetIndex(np.arange(5))
-        new_batch = dataset.create_batch(target_index, pos=True)
+        uncorrect_new_index = DatasetIndex(np.arange(100, 110))
+        new_batch = dataset.create_batch(target_index)
         assert isinstance(new_batch, dataset.batch_class)
         assert len(new_batch.index.index) == len(target_index.index)
+        with pytest.raises(ValueError):
+            dataset.create_batch(uncorrect_new_index)
 
     def test_pipeline(self, dataset):
         pipeline_config = {}
