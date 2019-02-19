@@ -44,7 +44,7 @@ class TestDataset:
         Now we raises and handle AssertError
         """
         wrong_index = DatasetIndex(np.arange(200, 225))
-        with pytest.raises(AssertionError) as excinfo:
+        with pytest.raises(AssertionError):
             new_ds = dataset.create_subset(wrong_index)
             assert np.isin(new_ds.indices, dataset.indices).all()
 
