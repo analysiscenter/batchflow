@@ -15,6 +15,8 @@ class Dataset(Baseset):
 
     Attributes
     ----------
+    batch_class : Batch
+
     index : DatasetIndex or FilesIndex
 
     indices : class:`numpy.ndarray`
@@ -22,13 +24,28 @@ class Dataset(Baseset):
 
     is_split: bool
         True if dataset has been split into train / test / validation subsets
+
+    p : Pipeline
+        Actions which will be applied to this dataset
+
+    preloaded : data-type
+        For small dataset it could be convenient to preload data at first
+
+    train : Dataset
+        The train part of this dataset. It appears after splitting
+
+    test : Dataset
+        The test part of this dataset. It appears after splitting
+
+    validation : Dataset
+        The validation part of this dataset. It appears after splitting
     """
     def __init__(self, index, batch_class=Batch, preloaded=None, *args, **kwargs):
         """ Create Dataset
 
             Parameters
             ----------
-            index : DatasetIndex or FilesIndex
+            index : DatasetIndex or FilesIndex or int
                 Stores an index for a dataset
 
             batch_class : Batch or inherited-from-Batch
@@ -44,7 +61,7 @@ class Dataset(Baseset):
 
     @classmethod
     def from_dataset(cls, dataset, index, batch_class=None):
-        """ Create Dataset from another dataset with a new index
+        """ Create Dataset object from another dataset with a new index
             (usually a subset of the source dataset index)
 
             Parameters
@@ -53,7 +70,7 @@ class Dataset(Baseset):
                 Source dataset
 
             index : DatasetIndex
-                set of items from source dataset which should be in the new Dataset
+                Set of items from source dataset which should be in the new Dataset
 
             batch_class : Batch
                 type of Batch for the new Dataset
@@ -69,11 +86,12 @@ class Dataset(Baseset):
 
     @staticmethod
     def build_index(index):
-        """ Create a DatasetIndex object from array-like data
+        """ Check if instance of the index is DatasetIndex
+            if it is not - create DatasetIndex from input index
 
             Parameters
             ----------
-            index : array-like
+            index : DatasetIndex or any
 
             Returns
             -------
