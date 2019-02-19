@@ -1,4 +1,4 @@
-""" Test for passing information through config. """
+""" Test for passing information about data format via config. """
 # pylint: disable=import-error, no-name-in-module
 # pylint: disable=redefined-outer-name
 import pytest
@@ -20,63 +20,62 @@ def model_setup():
     Parameters
     ----------
     data_format: {'channels_last', 'channels_first'}
-        Desired format of returns.
+        Desired format of tensors
 
     Returns
     -------
     tuple
-        First element is instance of Dataset.
-        Second element is dict with model description.
+        an instance of Dataset
+        a model config
     """
     def _model_setup(data_format):
         if data_format == 'channels_last':
-            shape_in = (100, 100, 2)
+            image_shape = (100, 100, 2)
         elif data_format == 'channels_first':
-            shape_in = (2, 100, 100)
+            image_shape = (2, 100, 100)
 
         size = 50
-        batch_shape = (size,) + shape_in
+        batch_shape = (size,) + image_shape
         images_array = np.random.random(batch_shape)
         labels_array = np.random.choice(10, size=size)
         data = images_array, labels_array
-        fake_dataset = Dataset(index=size,
-                               batch_class=ImagesBatch,
-                               preloaded=data)
+        dataset = Dataset(index=size,
+                          batch_class=ImagesBatch,
+                          preloaded=data)
 
-        model_config = {'inputs': {'images': {'shape': shape_in},
+        model_config = {'inputs': {'images': {'shape': image_shape},
                                    'labels': {'classes': 10}},
                         'initial_block/inputs': 'images'}
-        return fake_dataset, model_config
+        return dataset, model_config
 
     return _model_setup
 
 @pytest.fixture()
-def model_pipeline():
-    """ Creates instance of Pipeline that is configured to use given model
-    with passed parameters.
+def pipeline():
+    """ Creates a pipeline configured to use a given model with a specified configuration.
 
-    Parameters
-    ----------
+    Notes
+    -----
+    Pipeline can be executed only if its config contains the following parameters:
 
-    model_class : subclass of TFModel
+    model_class : TFModel
         Architecture of model. List of available models is defined at 'AVAILABLE_MODELS'.
 
-    current_config : dict
-        Dictionary with parameters of model.
+    model_config : Config
+       Model parameters.
 
     Returns
     -------
     Pipeline
-        Test pipeline that consists of initialization of model and
-        preparing for training with given config.
+        A pipeline that contains model initialization and training with a given config.
     """
 
     test_pipeline = (Pipeline()
                      .init_variable('current_loss')
                      .init_model('dynamic', C('model_class'),
-                                 'TestModel', C('model_config'))
+                                 'model', C('model_config'))
                      .to_array()
-                     .train_model('TestModel',
+                     .train_model('model',
                                   fetches='loss',
                                   images=B('images'),
                                   labels=B('labels'),
@@ -140,41 +139,33 @@ class Test_dataformat():
 
 @pytest.mark.parametrize('model', AVAILABLE_MODELS)
 class Test_models:
-    """ Tests in this class show that we can train model with given 'data_format'.
+    """ Tests in this class show that we can (or cannot) train model with given 'data_format'.
 
     There is a following pattern in every test:
-        First of all, we get 'fake_data' and 'config' via 'model_setup' fixture.
+        First of all, we get 'data' and 'config' via 'model_setup' fixture.
         Then we optionally modify 'config'. In most cases it is done only at 'location'.
-        Finally, we assert that our modification was actually applied to model by attempting
+        Finally, we assert that our modification was actually applied to a model by attempting
         to train it on a small batch.
-
     """
-    def test_last_default(self, model, model_setup, model_pipeline):
-        """ Default value for 'data_format' is 'channels_last'. """
-        fake_dataset, config = model_setup(data_format='channels_last')
-        pipeline_config = {'model_class': model, 'model_config': config}
-        test_pipeline = model_pipeline.set_config(pipeline_config)
-        total_pipeline = test_pipeline << fake_dataset
-        batch = total_pipeline.next_batch(7, n_epochs=None)
-        assert len(batch) == 7
+    @pytest.mark.parametrize('location', ['common', 'inputs/images'])
+    @pytest.mark.parametrize('data_format', [None, pytest.param('channels_first', marks=pytest.mark.xfail), 'channels_last'])
+    def test_data_format(self, model, model_setup, pipeline, location, data_format):
+        """ We can explicitly pass 'data_format' to inputs or common
 
-    def test_last_common(self, model, model_setup, model_pipeline):
-        """ We can explicitly pass 'data_format', it has no effect in this case. """
-        fake_dataset, config = model_setup(data_format='channels_last')
-        config['common/data_format'] = 'channels_last'
-        pipeline_config = {'model_class': model, 'model_config': config}
-        test_pipeline = model_pipeline.set_config(pipeline_config)
-        total_pipeline = test_pipeline << fake_dataset
-        batch = total_pipeline.next_batch(7, n_epochs=None)
-        assert len(batch) == 7
+        Notes
+        -----
+        If `data_format` is None, use a default value.
 
-    @pytest.mark.xfail(run=True)
-    def test_first_common(self, model, model_setup, model_pipeline):
-        """ That is intended way to communicate 'data_format' with model. """
-        fake_dataset, config = model_setup(data_format='channels_first')
-        config['common/data_format'] = 'channels_first'
-        pipeline_config = {'model_class': model, 'model_config': config}
-        test_pipeline = model_pipeline.set_config(pipeline_config)
-        total_pipeline = test_pipeline << fake_dataset
-        batch = total_pipeline.next_batch(7, n_epochs=None)
-        assert len(batch) == 7
+        `channels_first` does not work in TF 1.12 on CPU as a corresponding pooling operation is not implemented yet.
+        """
+        expected_data_format = data_format or 'channels_last'
+        dataset, model_config = model_setup(data_format=expected_data_format)
+        if data_format:
+            model_config[location + '/data_format'] = data_format
+        config = {'model_class': model, 'model_config': model_config}
+        test_pipeline = (pipeline << dataset).set_config(config)
+        batch = test_pipeline.next_batch(2, n_epochs=None)
+        model = test_pipeline.get_model_by_name('model')
+
+        assert model.data_format('images') == expected_data_format
+        assert len(batch) == 2
