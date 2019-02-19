@@ -148,7 +148,8 @@ class Test_models:
         to train it on a small batch.
     """
     @pytest.mark.parametrize('location', ['common', 'inputs/images'])
-    @pytest.mark.parametrize('data_format', [None, pytest.param('channels_first', marks=pytest.mark.xfail), 'channels_last'])
+    @pytest.mark.parametrize('data_format', [None, 
+        pytest.param('channels_first', marks=pytest.mark.xfail), 'channels_last'])
     def test_data_format(self, model, model_setup, pipeline, location, data_format):
         """ We can explicitly pass 'data_format' to inputs or common
 
