@@ -130,6 +130,8 @@ class Dataset(Baseset):
             -------
             Dataset
         """
+        if not np.isin(index.indices, self.indices).all():
+            raise IndexError
         return type(self).from_dataset(self, index)
 
     def create_batch(self, index, pos=False, *args, **kwargs):
