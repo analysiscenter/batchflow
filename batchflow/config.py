@@ -18,7 +18,7 @@ class Config:
         """
         if config is None:
             self.config = dict()
-        elif isinstance(config, dict):
+        elif isinstance(config, (dict, list)):
             self.config = self.parse(config)
         else:
             self.config = config.config
@@ -152,9 +152,9 @@ class Config:
                 config[p] = dict()
             if isinstance(config[p], dict):
                 config = config[p]
-            else:
-                prefix = '/'.join(prefix[:i+1])
-                var_name = '/'.join(prefix[i+1:])
+            else: # for example, we put value with key 'a/b' into `{a: c}`
+                value = Config({'/'.join(prefix[i+1:] + [var_name]): value})
+                var_name = p
                 break
         if var_name in config and isinstance(config[var_name], dict) and isinstance(value, Config):
             config[var_name] = Config(config[var_name])
@@ -171,7 +171,7 @@ class Config:
 
         Parameters
         ----------
-        config : dict or Config
+        config : dict, Config or list
 
         Returns
         -------
@@ -179,8 +179,14 @@ class Config:
         """
         if isinstance(config, Config):
             return config.config
+        if isinstance(config, dict):
+            items = config.items()
+        elif isinstance(config, list):
+            items = config
+        else:
+            raise ValueError('config must be dict, Config or list but {} was given'.format(type(config)))
         new_config = dict()
-        for key, value in config.items():
+        for key, value in items:
             if isinstance(value, dict):
                 value = self.parse(value)
             self.put(key, value, new_config)
@@ -217,7 +223,7 @@ class Config:
     def __add__(self, other):
         if isinstance(other, dict):
             other = Config(other)
-        return Config({**self.flatten(), **other.flatten()})
+        return Config([*self.flatten().items(), *other.flatten().items()])
 
     def __radd__(self, other):
         if isinstance(other, dict):
