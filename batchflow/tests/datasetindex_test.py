@@ -226,7 +226,8 @@ def test_next_batch_drop_last_true_1():
 
 def test_next_batch_drop_last_true_2():
     """ Order and contents of generated batches may differ at different epochs.
-    'shuffle' is True, so dropped indices are different at every epoch.
+    'shuffle' is fixed with seed, so dropped indices are different
+    at every epoch, but the test is deterministic and reproducible.
     """
     dsi = DatasetIndex(5)
     left = set()
@@ -235,7 +236,7 @@ def test_next_batch_drop_last_true_2():
         batch = dsi.next_batch(batch_size=2,
                                n_epochs=None,
                                drop_last=True,
-                               shuffle=True)
+                               shuffle=13)
         left = left | set(batch.index)
     assert left == right
 
