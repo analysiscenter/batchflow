@@ -207,7 +207,7 @@ def test_next_batch_drop_last_false_2():
         left.append(len(batch))
     assert left == right
 
-def test_next_batch_drop_last_true_1():
+def test_next_batch_drop_last_true():
     """ Order and contents of generated batches is same at every epoch.
     'shuffle' is False, so dropped indices are always the same.
     """
@@ -224,21 +224,6 @@ def test_next_batch_drop_last_true_1():
         assert (batch_1.index == dsi.index[:2]).all()
         assert (batch_2.index == dsi.index[2:4]).all()
 
-def test_next_batch_drop_last_true_2():
-    """ Order and contents of generated batches may differ at different epochs.
-    'shuffle' is fixed with seed, so dropped indices are different
-    at every epoch, but the test is deterministic and reproducible.
-    """
-    dsi = DatasetIndex(5)
-    left = set()
-    right = set(dsi.index)
-    for _ in range(10):
-        batch = dsi.next_batch(batch_size=2,
-                               n_epochs=None,
-                               drop_last=True,
-                               shuffle=13)
-        left = left | set(batch.index)
-    assert left == right
 
 def test_next_batch_smaller():
     """ 'batch_size' is twice as small as length DatasetIndex. """
