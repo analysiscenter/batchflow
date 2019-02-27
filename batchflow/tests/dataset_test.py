@@ -61,7 +61,16 @@ class TestDataset:
 
     def test_split(self, dataset):
         assert dataset.train is None
-        dataset.split((0.8, 0.2))
+        train_part, test_part = 0.8, 0.2
+        dataset.split([train_part, test_part])
         assert dataset.train is not None
         assert dataset.test is not None
         assert dataset.validation is None
+        assert dataset.train.indices.shape[0]/dataset.indices.shape[0] == train_part
+        assert dataset.test.indices.shape[0]/dataset.indices.shape[0] == test_part
+        train_part, test_part, validation_part = 0.7, 0.2, 0.1
+        dataset.split([train_part, test_part])
+        assert dataset.validation is not None
+        assert dataset.train.indices.shape[0] / dataset.indices.shape[0] == train_part
+        assert dataset.test.indices.shape[0] / dataset.indices.shape[0] == test_part
+        assert dataset.validation.indices.shape[0] / dataset.indices.shape[0] == validation_part
