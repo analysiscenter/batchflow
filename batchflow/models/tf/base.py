@@ -11,7 +11,7 @@ import contextlib
 import numpy as np
 import tensorflow as tf
 
-from ... import is_best_practice, Config
+from ... import Config
 from ..utils import unpack_fn_from_config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
@@ -1207,17 +1207,13 @@ class TFModel(BaseModel):
         """
         config = Config()
         config['inputs'] = {}
-        config['common'] = {}
         config['initial_block'] = {}
         config['body'] = {}
         config['head'] = {}
         config['predictions'] = None
         config['output'] = None
         config['optimizer'] = ('Adam', dict())
-
-        if is_best_practice():
-            config['common'] = {'batch_norm': {'momentum': .1}}
-            config['optimizer'][1].update({'use_locking': True})
+        config['common'] = {'batch_norm': {'momentum': .1}}
 
         return config
 
@@ -1263,7 +1259,8 @@ class TFModel(BaseModel):
             inputs = self.get('initial_block/inputs', config)
 
             if isinstance(inputs, str):
-                config['common/data_format'] = self.data_format(inputs)
+                if not config.get('common/data_format'):
+                    config['common/data_format'] = self.data_format(inputs)
                 config['initial_block/inputs'] = self.inputs[inputs]
             elif isinstance(inputs, list):
                 config['initial_block/inputs'] = [self.inputs[name] for name in inputs]
@@ -1288,20 +1285,6 @@ class TFModel(BaseModel):
         x = self._add_block('body', config, inputs=x)
         output = self._add_block('head', config, inputs=x)
         self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
-
-    @classmethod
-    def channels_axis(cls, data_format):
-        """ Return the channels axis for the tensor
-
-        Parameters
-        ----------
-        data_format : str {'channels_last', 'channels_first'}
-
-        Returns
-        -------
-        number of channels : int
-        """
-        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     def data_format(self, tensor, **kwargs):
         """ Return the tensor data format (channels_last or channels_first)
@@ -1511,6 +1494,21 @@ class TFModel(BaseModel):
         batch size : int or None
         """
         return tensor.get_shape().as_list()[0]
+
+
+    @classmethod
+    def channels_axis(cls, data_format='channels_last'):
+        """ Return the channels axis for the tensor
+
+        Parameters
+        ----------
+        data_format : str {'channels_last', 'channels_first', 'N***'} or None
+
+        Returns
+        -------
+        int
+        """
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     @classmethod
     def se_block(cls, inputs, ratio, name='se', **kwargs):

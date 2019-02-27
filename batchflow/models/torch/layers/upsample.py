@@ -43,7 +43,7 @@ class Upsample(nn.Module):
     def __init__(self, factor=2, shape=None, layout='b', *args, inputs=None, **kwargs):
         super().__init__()
 
-        _ = args, shape
+        _ = args
 
         if 't' in layout or 'T' in layout:
             if 'kernel_size' not in kwargs:
@@ -51,7 +51,7 @@ class Upsample(nn.Module):
             if 'strides' not in kwargs:
                 kwargs['strides'] = factor
 
-        self.upsample = ConvBlock(layout=layout, factor=factor, inputs=inputs, **kwargs)
+        self.upsample = ConvBlock(layout=layout, factor=factor, shape=shape, inputs=inputs, **kwargs)
         self.output_shape = self.upsample.output_shape
 
     def forward(self, x):

@@ -333,8 +333,10 @@ class TorchModel(BaseModel):
         raise TypeError("tensor is expected to be a name for config's inputs section")
 
     def shape(self, tensor):
-        config = self.get_tensor_config(tensor)
-        return config['shape']
+        """ Return the tensor's shape """
+        if isinstance(tensor, (list, tuple)):
+            return tuple(self.get_tensor_config(t)['shape'] for t in tensor)
+        return self.get_tensor_config(tensor)['shape']
 
     def num_channels(self, tensor, data_format='channels_first'):
         """ Return number of channels in the input tensor """
@@ -345,6 +347,23 @@ class TorchModel(BaseModel):
     def spatial_dim(self, tensor):
         shape = self.shape(tensor)
         return len(shape) - 2
+
+
+    @classmethod
+    def channels_axis(cls, data_format='channels_first'):
+        """ Return the channels axis for the tensor
+
+        Parameters
+        ----------
+        data_format : str {'channels_last', 'channels_first', 'N***'} or None
+
+        Returns
+        -------
+        int
+        """
+        data_format = data_format if data_format else 'channels_first'
+
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     def has_classes(self, tensor):
         """ Check if a tensor has classes defined in the config """
@@ -361,7 +380,7 @@ class TorchModel(BaseModel):
         return np.asarray(classes)
 
     def num_classes(self, tensor):
-        """ Return the  number of classes """
+        """ Return the number of classes """
         if self.has_classes(tensor):
             classes = self.classes(tensor)
             return classes if isinstance(classes, int) else len(classes)
@@ -436,11 +455,13 @@ class TorchModel(BaseModel):
                 return config
         """
         config = self.default_config()
-
         config = config + self.config
 
         if config.get('inputs'):
             self._make_inputs(names, config)
+            inputs = self.get('initial_block/inputs', config)
+            if isinstance(inputs, str):
+                config['common/data_format'] = config['inputs'][inputs].get('data_format')
 
         return config
 
@@ -456,16 +477,18 @@ class TorchModel(BaseModel):
         return block
 
     def _build(self, config=None):
-        shape = self.shape(config['initial_block/inputs'])
+        initial_inputs = self.shape(config['initial_block/inputs'])
         config.pop('initial_block/inputs')
 
         blocks = []
-        initial_block = self._add_block(blocks, 'initial_block', config, shape)
-        body = self._add_block(blocks, 'body', config, initial_block or shape)
-        self._add_block(blocks, 'head', config, body or shape)
+        initial_block = self._add_block(blocks, 'initial_block', config, initial_inputs)
+        body = self._add_block(blocks, 'body', config, initial_block or initial_inputs)
+        self._add_block(blocks, 'head', config, body or initial_block or initial_inputs)
 
         self.model = nn.Sequential(*blocks)
-        #self.output(inputs=x, predictions=config['predictions'], ops=config['output'])
+
+        if self.device:
+            self.model.to(self.device)
 
     @classmethod
     def initial_block(cls, **kwargs):
@@ -518,9 +541,124 @@ class TorchModel(BaseModel):
             return ConvBlock(**kwargs)
         return None
 
-    def output(self):
-        """ Defines auxiliary model operations """
-        pass
+    def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
+        """ Add output operations to the model, like predicted probabilities or labels, etc.
+
+        Parameters
+        ----------
+        inputs : torch.Tensor or a sequence of torch.Tensors
+            input tensors
+
+        predictions : str or callable
+            an operation applied to inputs to get `predictions` tensor which is used in a loss function:
+
+            - 'sigmoid' - ``sigmoid(inputs)``
+            - 'proba' - ``softmax(inputs)``
+            - 'labels' - ``argmax(inputs)``
+            - 'softplus' - ``softplus(inputs)``
+            - callable - a user-defined operation
+
+        ops : a sequence of operations or an ordered dict
+            auxiliary operations
+
+            If dict:
+
+            - key - a prefix for each input
+            - value - a sequence of aux operations
+
+        Raises
+        ------
+        ValueError if the number of inputs does not equal to the number of prefixes
+        TypeError if inputs is not a Tensor or a sequence of Tensors
+
+        Examples
+        --------
+
+        ::
+
+            config = {
+                'output': ['proba', 'labels']
+            }
+
+        However, if one of the placeholders also has a name 'labels', then it will be lost as the model
+        will rewrite the name 'labels' with an output.
+
+        That is where a dict might be convenient::
+
+            config = {
+                'output': {'predicted': ['proba', 'labels']}
+            }
+
+        Now the output will be stored under names 'predicted_proba' and 'predicted_labels'.
+
+        For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
+        """
+        if ops is None:
+            ops = []
+        elif not isinstance(ops, (dict, tuple, list)):
+            ops = [ops]
+        if not isinstance(ops, dict):
+            ops = {'': ops}
+
+        if not isinstance(inputs, (tuple, list)):
+            inputs = [inputs]
+
+        for i, tensor in enumerate(inputs):
+            if not isinstance(tensor, torch.Tensor):
+                raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
+
+            prefix = [*ops.keys()][i]
+            attr_prefix = prefix + '_' if prefix else ''
+
+            self._add_output_op(tensor, predictions, 'predictions', '', **kwargs)
+            for oper in ops[prefix]:
+                self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
+
+    def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
+        if oper is None:
+            self._add_output_identity(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'softplus':
+            self._add_output_softplus(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'sigmoid':
+            self._add_output_sigmoid(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'proba':
+            self._add_output_proba(inputs, name, attr_prefix, **kwargs)
+        elif oper == 'labels':
+            self._add_output_labels(inputs, name, attr_prefix, **kwargs)
+        elif callable(oper):
+            self._add_output_callable(inputs, oper, None, attr_prefix, **kwargs)
+
+    def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
+        setattr(self, attr_prefix + name, inputs)
+        return inputs
+
+    def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
+        proba = torch.nn.Softplus()(inputs)
+        setattr(self, attr_prefix + name, proba)
+
+    def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
+        _ = kwargs
+        proba = torch.nn.Sigmoid()(inputs)
+        setattr(self, attr_prefix + name, proba)
+
+    def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
+        axis = self.channels_axis(kwargs.get('data_format'))
+        proba = torch.nn.Softmax(dim=axis)(inputs)
+        setattr(self, attr_prefix + name, proba)
+
+    def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
+        class_axis = self.channels_axis(kwargs.get('data_format'))
+        predicted_classes = inputs.argmax(dim=class_axis)
+        setattr(self, attr_prefix + name, predicted_classes)
+
+    def _add_output_callable(self, inputs, oper, name, attr_prefix, **kwargs):
+        _ = kwargs
+        x = oper(inputs)
+        name = name or oper.__name__
+        setattr(self, attr_prefix + name, x)
+        return x
 
     def _fill_value(self, inputs):
         inputs = torch.from_numpy(inputs)
@@ -554,7 +692,7 @@ class TorchModel(BaseModel):
             if hasattr(self, f):
                 v = getattr(self, f)
                 if isinstance(v, (torch.Tensor, torch.autograd.Variable)):
-                    v = v.detach().numpy()
+                    v = v.detach().cpu().numpy()
                 output.append(v)
             else:
                 raise KeyError('Unknown value to fetch', f)
@@ -576,14 +714,19 @@ class TorchModel(BaseModel):
         if self.lr_decay:
             self.lr_decay()
         self.optimizer.zero_grad()
+
         self.predictions = self.model(inputs)
         self.loss = self.loss_fn(self.predictions, targets)
+
         self.loss.backward()
         self.optimizer.step()
 
         if use_lock:
             self._train_lock.release()
 
+        config = self.build_config()
+        self.output(inputs=self.predictions, predictions=config['predictions'],
+                    ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
 
         return output
@@ -592,7 +735,6 @@ class TorchModel(BaseModel):
         """ Get predictions on the data provided
         """
         inputs, targets = self._fill_input(inputs, targets)
-
         self.model.eval()
 
         with torch.no_grad():
@@ -602,5 +744,72 @@ class TorchModel(BaseModel):
             else:
                 self.loss = self.loss_fn(self.predictions, targets)
 
+        config = self.build_config()
+        self.output(inputs=self.predictions, predictions=config['predictions'],
+                    ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
         return output
+
+    def save(self, path, *args, **kwargs):
+        """ Save torch model.
+
+        Parameters
+        ----------
+        path : str
+            a path to a directory where all model files will be stored
+
+        Examples
+        --------
+        >>> torch_model = ResNet34()
+
+        Now save the model
+
+        >>> torch_model.save('/path/to/models/resnet34')
+
+        The model will be saved to /path/to/models/resnet34
+        """
+        _ = args, kwargs
+        torch.save({
+            'model_state_dict': self.model,
+            'optimizer_state_dict': self.optimizer,
+            'loss': self.loss_fn,
+            'config': self.config
+            }, path)
+
+    def load(self, path, *args, **kwargs):
+        """ Load a torch model from files
+
+        Parameters
+        ----------
+        path : str
+            a directory where a model is stored
+
+        Examples
+        --------
+        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
+
+        >>> torch_model.load(path='/path/to/models/resnet34')
+
+        >>> TorchModel(config={'device': 'cuda:2', 'load/path': '/path/to/models/resnet34'})
+
+        **How to move the model to device**
+
+        The model will be moved to device specified in the model config by key `device`.
+        """
+        _ = args, kwargs
+        device = self.config.get('device')
+        if device:
+            if isinstance(device, str):
+                device = torch.device(device)
+            checkpoint = torch.load(path, map_location=device)
+        else:
+            checkpoint = torch.load(path)
+        self.model = checkpoint['model_state_dict']
+        self.optimizer = checkpoint['optimizer_state_dict']
+        self.loss_fn = checkpoint['loss']
+        self.config = self.config + checkpoint['config']
+
+        self.device = device
+
+        if device:
+            self.model.to(device)

@@ -3,16 +3,20 @@ import os
 import sys
 import math
 import glob
-from collections import Iterable
+from collections.abc import Iterable
 import numpy as np
 import tqdm
-
 from .base import Baseset
 
 
 class DatasetIndex(Baseset):
     """ Stores an index for a dataset.
     The index should be 1-d array-like, e.g. numpy array, pandas Series, etc.
+
+    Parameters
+    ----------
+    index : int, 1-d array-like or callable
+        defines structure of DatasetIndex
 
     Examples
     --------
@@ -34,12 +38,52 @@ class DatasetIndex(Baseset):
 
     @classmethod
     def concat(cls, *index_list):
-        """ Create index by concatenating other indices. """
+        """Create index by concatenating other indices.
+
+        Parameters
+        ----------
+        index_list : list
+            Indices to be concatenated. Each item is expected to
+            contain index property with 1-d sequence of indices.
+
+        Returns
+        -------
+        DatasetIndex
+            Contains one common index.
+        """
         return DatasetIndex(np.concatenate([i.index for i in index_list]))
 
     @staticmethod
     def build_index(index):
-        """ Check index type and structure. """
+        """ Check index type and structure.
+
+        Parameters
+        ----------
+        index : int, 1-d array-like or callable
+            Defines content of DatasetIndex
+
+            - 1-d array-like
+                Content is numpy.array
+
+            - int
+                Content is numpy.arange() of given length.
+
+            - callable
+                Content is return of given function (should be 1-d array-like).
+
+        Raises
+        ------
+        TypeError
+            If 'index' is not 1-dimensional.
+
+        ValueError
+            If 'index' is empty.
+
+        Returns
+        -------
+        numpy.array
+            Index to be stored in class instance.
+        """
         if callable(index):
             _index = index()
         else:
@@ -52,6 +96,9 @@ class DatasetIndex(Baseset):
         else:
             # index should allow for advance indexing (i.e. subsetting)
             _index = np.asarray(_index)
+
+        if np.shape(_index) == ():
+            _index = _index.reshape(1)
 
         if len(_index) == 0:
             raise ValueError("Index cannot be empty")
@@ -68,7 +115,31 @@ class DatasetIndex(Baseset):
         return dict(zip(self.indices, np.arange(len(self))))
 
     def get_pos(self, index):
-        """ Return position of an item in the index. """
+        """ Return position of an item in the index.
+
+        Parameters
+        ----------
+        index : int, str, slice or Iterable
+            Items to return positions of.
+
+            - int, str
+                Return position of that item in the DatasetIndex.
+
+            - slice, Iterable
+                Return positions of multiple items, specified by argument.
+
+        Returns
+        -------
+        numpy.array
+            Positions of specified items in DatasetIndex.
+
+        Examples
+        --------
+        Create DatasetIndex that holds index of images and get
+        position of one of them
+
+        >>> DatasetIndex(['image_0', 'image_1']).get_pos('image_1')
+        """
         if isinstance(index, slice):
             start = self._pos[index.start] if index.start is not None else None
             stop = self._pos[index.stop] if index.stop is not None else None
@@ -82,7 +153,18 @@ class DatasetIndex(Baseset):
         return pos
 
     def subset_by_pos(self, pos):
-        """ Return subset of index by given positions in the index. """
+        """ Return subset of index by given positions in the index.
+
+        Parameters
+        ----------
+        pos : int, slice, list or numpy.array
+            Positions of items to include in subset.
+
+        Returns
+        -------
+        numpy.array
+            Subset of DatasetIndex.index.
+        """
         return self.index[pos]
 
     def create_subset(self, index):
@@ -98,9 +180,12 @@ class DatasetIndex(Baseset):
 
         Parameters
         ----------
-        shares : float or tuple of floats - train, test and validation shares.
+        shares : float or tuple of floats
+            Train, test and validation shares.
+            If tuple of 3 floats is passed, then validation subset is always present.
 
-        shuffle : bool - whether to shuffle the index before split.
+        shuffle : bool, int or callable
+            Whether to shuffle the index before split.
 
         Examples
         ---------
@@ -117,6 +202,9 @@ class DatasetIndex(Baseset):
 
         >>> index.split([0.5, 0.3, 0.2])
 
+        use 1 sample as validation and split the rest evenly to train / test
+
+        >>> index.split([0.5, 0.5, 0])
         """
         train_share, test_share, valid_share = self.calc_split(shares)
 
@@ -170,26 +258,30 @@ class DatasetIndex(Baseset):
         Parameters
         ----------
         batch_size : int
-            desired number of items in the batch (the actual batch could contain fewer items)
+            Desired number of items in the batch (the actual batch could contain fewer items)
 
         shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            specifies the order of items, could be:
+            Specifies the order of items, could be:
 
-            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
-                if `True`, items are shuffled randomly before each epoch.
+            - bool
+                If `False`, items go sequentionally, one after another as they appear in the index.
+                If `True`, items are shuffled randomly before each epoch.
 
-            - int - a seed number for a random shuffle.
+            - int
+                A seed number for a random shuffle.
 
-            - :class:`numpy.random.RandomState` instance.
+            - :class:`numpy.random.RandomState` instance
+                Class for a reproducible random shuffle.
 
-            - callable - a function which takes an array of item indices in the initial order
+            - callable
+                A function which takes an array of item indices in the initial order
                 (as they appear in the index) and returns the order of items.
 
         n_epochs : int
-            the number of epochs required.
+            Number of epochs required.
 
         drop_last : bool
-            if `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
+            If `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
             If `False`, than the last batch in each epoch could contain repeating indices (which might be a problem)
             and the very last batch could contain fewer than `batch_size` items.
 
@@ -207,7 +299,7 @@ class DatasetIndex(Baseset):
         Raises
         ------
         StopIteration
-            when `n_epochs` has been reached and there is no batches left in the dataset.
+            When `n_epochs` has been reached and there is no batches left in the dataset.
 
         Examples
         --------
@@ -269,26 +361,30 @@ class DatasetIndex(Baseset):
         Parameters
         ----------
         batch_size : int
-            desired number of items in the batch (the actual batch could contain fewer items)
+            Desired number of items in the batch (the actual batch could contain fewer items).
 
         shuffle : bool, int, class:`numpy.random.RandomState` or callable
-            specifies the order of items, could be:
+            Specifies the order of items, could be:
 
-            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
-                if `True`, items are shuffled randomly before each epoch.
+            - bool
+                If `False`, items go sequentionally, one after another as they appear in the index.
+                If `True`, items are shuffled randomly before each epoch.
 
-            - int - a seed number for a random shuffle.
+            - int
+                A seed number for a random shuffle.
 
-            - :class:`numpy.random.RandomState` instance.
+            - :class:`numpy.random.RandomState` instance
+                Class for a reproducible random shuffle.
 
-            - callable - a function which takes an array of item indices in the initial order
+            - callable
+                A function which takes an array of item indices in the initial order
                 (as they appear in the index) and returns the order of items.
 
         n_epochs : int
-            the number of epochs required.
+            Number of epochs required.
 
         drop_last : bool
-            if `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
+            If `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
             If `False`, than the last batch in each epoch could contain repeating indices (which might be a problem)
             and the very last batch could contain fewer than `batch_size` items.
 
@@ -304,12 +400,12 @@ class DatasetIndex(Baseset):
             (i.e. `for item in batch`) or implicitly (through `batch[ix]`).
 
         bar : bool or 'n'
-            whether to show a `tqdm` progress bar.
-            If 'n', than uses `tqdm_notebook`.
+            Whether to show a `tqdm` progress bar.
+            If 'n', then uses `tqdm_notebook`.
 
         Yields
         ------
-        an instance of the same class with a subset of indices
+        An instance of the same class with a subset of indices
 
         Examples
         --------
@@ -345,21 +441,47 @@ class DatasetIndex(Baseset):
             yield batch
 
 
-    def create_batch(self, batch_indices, pos=True, as_array=False, *args, **kwargs):
+    def create_batch(self, index, pos=True, as_array=False, *args, **kwargs):
         """ Create a batch from given indices.
-        if `pos` is `False`, then `batch_indices` should contain the indices
-        which should be included in the batch (so expected batch is just the very same batch_indices)
-        otherwise `batch_indices` contains positions in the current index.
+
+        Parameters
+        ----------
+        index : int, slice, list, numpy.array or DatasetIndex
+            If 'pos' is True, then 'index' should contain
+            positions of items in the current index to be returned as
+            separate batch.
+
+            If 'pos' is False, then 'index' should contain
+            indices to be returned as separate batch
+            (so expected batch is just the very same index).
+
+        pos : bool
+            Flag that determines how function works.
+
+        as_array : bool
+            Flag that determines type of returned value
+
+        Returns
+        -------
+        DatasetIndex or numpy.array
+            Part of initial DatasetIndex, specified by 'index'.
+
+        Examples
+        --------
+        Create DatasetIndex with first 100 natural numbers, then
+        get batch with every second item
+
+        >>> DatasetIndex(100).create_batch(index=2*numpy.arange(50))
         """
         _ = args, kwargs
-        if isinstance(batch_indices, DatasetIndex):
-            _batch_indices = batch_indices.indices
+        if isinstance(index, DatasetIndex):
+            _index = index.indices
         else:
-            _batch_indices = batch_indices
+            _index = index
         if pos:
-            batch = self.subset_by_pos(_batch_indices)
+            batch = self.subset_by_pos(_index)
         else:
-            batch = _batch_indices
+            batch = _index
         if not as_array:
             batch = self.create_subset(batch)
         return batch
