@@ -129,6 +129,14 @@ class Dataset(Baseset):
             Returns
             -------
             Dataset
+
+            Raises
+            ------
+            IndexError
+                When a user wants to create a subset from source dataset it is necessary to be confident
+                that the index of new subset lies in the range of source dataset's index.
+                If the index lies out of the source dataset index's range, the IndexError raises.
+
         """
         if not np.isin(index.indices, self.indices).all():
             raise IndexError
