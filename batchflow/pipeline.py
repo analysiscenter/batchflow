@@ -172,7 +172,7 @@ class Pipeline:
     def __mul__(self, other):
         if isinstance(other, int) and other < 0:
             raise ValueError("Repeat count cannot be negative. Use as pipeline * positive_number")
-        elif isinstance(other, float):
+        if isinstance(other, float):
             raise ValueError("Repeat count cannot be float. Use as pipeline * integer")
         new_p = self.from_pipeline(self, repeat=other)
         return new_p
@@ -198,7 +198,7 @@ class Pipeline:
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
             raise AttributeError()
-        elif self._is_batch_method(name):
+        if self._is_batch_method(name):
             self._action_list.append({'name': name})
             return self.append_action
         else:
@@ -965,7 +965,7 @@ class Pipeline:
             available_metrics = [m for m in METRICS if metrics_class in m]
             if len(available_metrics) > 1:
                 raise ValueError('Metrics name is ambiguous', metrics_class)
-            elif len(available_metrics) == 0:
+            if len(available_metrics) == 0:
                 raise ValueError('Metrics not found', metrics_class)
             metrics_class = METRICS[available_metrics[0]]
         elif not isinstance(metrics_class, type):

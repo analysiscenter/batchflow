@@ -168,8 +168,8 @@ class Distributor:
             else:
                 self.answers[answer.job] = answer.iteration+1
             return sum(self.answers)
-        else:
-            self.answers[answer.job] += 1
+
+        self.answers[answer.job] += 1
         return sum(self.answers)
 
 class Worker:

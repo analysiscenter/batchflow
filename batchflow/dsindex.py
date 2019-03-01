@@ -149,6 +149,28 @@ class DatasetIndex(Baseset):
 
 
     def shuffle(self, shuffle, iter_params=None):
+        """ Permute indices
+
+        Parameters
+        ----------
+        shuffle : bool, int, class:`numpy.random.RandomState` or callable
+            specifies the order of items, could be:
+
+            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
+                if `True`, items are shuffled randomly before each epoch.
+
+            - int - a seed number for a random shuffle.
+
+            - :class:`numpy.random.RandomState` instance.
+
+            - callable - a function which takes an array of item indices in the initial order
+                (as they appear in the index) and returns the order of items.
+
+        Returns
+        -------
+        ndarray
+            a permuted order for indices
+        """
         if iter_params is None:
             iter_params = self.get_default_iter_params()
 
@@ -266,12 +288,11 @@ class DatasetIndex(Baseset):
                 iter_params['bar'].close()
             if drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
-            else:
-                iter_params['_stop_iter'] = True
-                return self.create_batch(rest_items, pos=True)
-        else:
-            iter_params['_start_index'] += rest_of_batch
-            return self.create_batch(batch_items, pos=True)
+            iter_params['_stop_iter'] = True
+            return self.create_batch(rest_items, pos=True)
+
+        iter_params['_start_index'] += rest_of_batch
+        return self.create_batch(batch_items, pos=True)
 
 
     def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, bar=False):

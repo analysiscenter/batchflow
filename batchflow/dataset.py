@@ -1,5 +1,5 @@
 """ Dataset """
-import copy
+import copy as deepcopy
 import numpy as np
 from .base import Baseset
 from .batch import Batch
@@ -134,7 +134,7 @@ class Dataset(Baseset):
             train_splits = list(set(range(n_splits)) - {i})
             train_indices = np.concatenate(np.asarray(splits)[train_splits])
 
-            setattr(self, 'cv'+str(i), copy.copy(self))
+            setattr(self, 'cv'+str(i), deepcopy.copy(self))
             cv_dataset = getattr(self, 'cv'+str(i))
             cv_dataset.train = self.create_subset(train_indices)
             cv_dataset.test = self.create_subset(test_indices)
@@ -150,5 +150,3 @@ class Dataset(Baseset):
             splits.append(self.indices[order[start:stop]])
             current = stop
         return splits
-
-

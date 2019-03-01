@@ -57,7 +57,7 @@ A dataset can also be partitioned for cross-validation.
 
     dataset.cv_split(n_splits=3, shuffle=True)
 
-Now parts which are also datasets can be available as `cv0`, `cv1` and so on.
+Now partitions which are also datasets can be available as `cv0`, `cv1` and so on.
 And each dataset is already split into train and test parts.
 
 .. code-block:: python
@@ -130,7 +130,6 @@ And then create a dataset with a new batch class:
 .. code-block:: python
 
    client_dataset = Dataset(client_index, batch_class=MyBatch)
-
 
 
 API
