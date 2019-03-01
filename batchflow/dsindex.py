@@ -98,9 +98,21 @@ class DatasetIndex(Baseset):
 
         Parameters
         ----------
-        shares : float or tuple of floats - train, test and validation shares.
+        shares : float or tuple of floats
+            train, test and validation shares.
 
-        shuffle : bool - whether to shuffle the index before split.
+        shuffle : bool, int, class:`numpy.random.RandomState` or callable
+            specifies the order of items, could be:
+
+            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
+                if `True`, items are shuffled randomly before each epoch.
+
+            - int - a seed number for a random shuffle.
+
+            - :class:`numpy.random.RandomState` instance.
+
+            - callable - a function which takes an array of item indices in the initial order
+                (as they appear in the index) and returns the order of items.
 
         Examples
         ---------
@@ -120,9 +132,8 @@ class DatasetIndex(Baseset):
         """
         train_share, test_share, valid_share = self.calc_split(shares)
 
-        # TODO: make a view not copy if not shuffled
         if shuffle:
-            order = self._shuffle(shuffle)
+            order = self.shuffle(shuffle)
         else:
             order = np.arange(len(self))
 
@@ -137,9 +148,9 @@ class DatasetIndex(Baseset):
             self.train = self.create_subset(self.subset_by_pos(train_pos))
 
 
-    def _shuffle(self, shuffle, iter_params=None):
+    def shuffle(self, shuffle, iter_params=None):
         if iter_params is None:
-            iter_params = self._iter_params
+            iter_params = self.get_default_iter_params()
 
         if iter_params['_order'] is None:
             order = np.arange(len(self))
@@ -226,7 +237,7 @@ class DatasetIndex(Baseset):
             raise StopIteration("Dataset is over. No more batches left.")
 
         if iter_params['_order'] is None:
-            iter_params['_order'] = self._shuffle(shuffle, iter_params)
+            iter_params['_order'] = self.shuffle(shuffle, iter_params)
         num_items = len(iter_params['_order'])
 
         rest_items = None
@@ -239,7 +250,7 @@ class DatasetIndex(Baseset):
                     rest_of_batch = batch_size
             iter_params['_start_index'] = 0
             iter_params['_n_epochs'] += 1
-            iter_params['_order'] = self._shuffle(shuffle, iter_params)
+            iter_params['_order'] = self.shuffle(shuffle, iter_params)
         else:
             rest_of_batch = batch_size
 
