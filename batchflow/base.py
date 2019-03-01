@@ -76,7 +76,7 @@ class Baseset:
         >>> some_set.calc_split([0.5, 0.3, 0.2])
         """
         _shares = [shares] if isinstance(shares, (int, float)) else shares
-        _shares = _shares if len(_shares) > 1 else _shares + [.0]
+        _shares = _shares if len(_shares) > 2 else _shares + [.0]
         _shares = np.array(_shares).ravel()         # pylint: disable=no-member
         n_items = len(self)
 
@@ -88,6 +88,8 @@ class Baseset:
             raise ValueError("A set of size %d cannot be split into %d subsets" % (n_items, len(_shares)))
 
         _shares[-1] = 1 - _shares[:-1].sum()
+        if _shares[-1] == 0:
+            _shares = _shares[:-1]
         _lens = np.round(_shares * n_items).astype('int')
 
         for s, _ in enumerate(_shares):

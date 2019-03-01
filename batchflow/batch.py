@@ -256,6 +256,7 @@ class Batch:
             data = tuple()
             warnings.warn("All batch data is erased")
         self.components = self.components + components
+
         self.make_item_class(local=True)
         self._data = data + init
 
