@@ -201,8 +201,7 @@ class Pipeline:
         if self._is_batch_method(name):
             self._action_list.append({'name': name})
             return self.append_action
-        else:
-            raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @property
     def num_actions(self):

@@ -17,8 +17,8 @@ class Dataset(Baseset):
     is_split
     """
     def __init__(self, index, batch_class=Batch, preloaded=None, *args, **kwargs):
-        if batch_class is not Batch or not issubclass(batch_class, Batch):
-            raise TypeError("batch_class should be a subclass of Batch", batch_class)
+        if batch_class is not Batch and not issubclass(batch_class, Batch):
+            raise TypeError("batch_class should be inherited from Batch", batch_class)
 
         super().__init__(index, *args, **kwargs)
         self.batch_class = batch_class
