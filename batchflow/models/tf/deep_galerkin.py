@@ -22,9 +22,9 @@ class DeepGalerkin(TFModel):
     allows to set up the network-architecture using options `initial_block`, `body`, `head`. See
     docstring of :class:`.TFModel` for more detail.
 
-    Left-hand-side (lhs), right-hand-side (rhs) and other properties of PDE are defined in `common`-dict:
+    Left-hand-side (lhs), right-hand-side (rhs) and other properties of PDE are defined in `pde`-dict:
 
-    common : dict
+    pde : dict
         dictionary of parameters of PDE. Must contain keys
         - form : dict
             may contain keys 'd1' and 'd2', which define the coefficients before differentials
@@ -54,7 +54,7 @@ class DeepGalerkin(TFModel):
     --------
 
         config = dict(
-            common = dict(
+            pde = dict(
                 form={'d1': (0, 1), 'd2': ((-1, 0), (0, 0))},
                 Q=5,
                 initial_condition=lambda t: tf.sin(2 * np.pi * t),
@@ -80,53 +80,128 @@ class DeepGalerkin(TFModel):
     @classmethod
     def default_config(cls):
         config = super().default_config()
+        config['common/time_multiplier'] = 'sigmoid'
         config['common/bind_bc_ic'] = True
         return config
 
     def build_config(self, names=None):
-        common = self.config.get('common')
-        if common is None:
-            raise ValueError("The PDE-problem is not specified. Use 'common' config to set up the problem.")
+        """ PDE-problem is fetched from 'pde' key in 'self.config',
+        and then is passed to 'common' so that all subsequent blocks get it as 'kwargs'.
+        """
+        pde = self.config.get('pde')
+        if pde is None:
+            raise ValueError("The PDE-problem is not specified. Use 'pde' config to set up the problem.")
 
         # get dimensionality
-        form = common.get("form")
+        form = pde.get("form")
         n_dims = len(form.get("d1", form.get("d2", None)))
-        self.config.update({'common/n_dims': n_dims,
+        self.config.update({'pde/n_dims': n_dims,
                             'initial_block/inputs': 'points',
                             'inputs': dict(points={'shape': (n_dims, )})})
 
         # default values for domain
-        if common.get('domain') is None:
-            self.config.update({'common/domain': [[0, 1]] * n_dims})
+        if pde.get('domain') is None:
+            self.config.update({'pde/domain': [[0, 1]] * n_dims})
 
         # default value for rhs
-        if common.get('Q') is None:
-            self.config.update({'common/Q': 0})
+        if pde.get('Q') is None:
+            self.config.update({'pde/Q': 0})
 
         # make sure that initial conditions are callable
-        init_cond = common.get('initial_condition', None)
+        init_cond = pde.get('initial_condition', None)
         if init_cond is not None:
             init_cond = init_cond if isinstance(init_cond, (tuple, list)) else (init_cond, )
             init_cond = [expression if callable(expression) else lambda *args, e=expression:
                          e for expression in init_cond]
-            self.config.update({'common/initial_condition': init_cond})
+            self.config.update({'pde/initial_condition': init_cond})
 
+        # 'common' is updated with PDE-problem
         config = super().build_config(names)
+        config['common'].update(self.config['pde'])
 
+        if config.get('output') is not None:
+            config['common/track'] = self.parse_output(config['output'], n_dims)
         return config
+
+    def parse_output(self, ops, n_dims):
+        """ Parsing engine. """
+        forms = []
+        if ops is None:
+            ops = []
+        elif not isinstance(ops, (dict, tuple, list)):
+            ops = [ops]
+        if not isinstance(ops, dict):
+            ops = {'': ops}
+        prefix = list(ops.keys())[0]
+        _ops = dict()
+        _ops[prefix] = list(ops[prefix])
+
+        _map_coords = dict(x=0, y=1, z=2, t=-1)
+        for op in _ops[prefix]:
+            if isinstance(op, str):
+                op = op.replace(" ", "").replace("_", "")
+                if op.startswith("d"):
+                    # parse order
+                    prefix_len = 1
+                    try: # for example, d2xy
+                        order = int(op[1])
+                        prefix_len += 1
+                    except ValueError: # for example, dx
+                        order = 1
+
+                    if order > 2:
+                        raise ValueError("Tracking gradients of order " + order + " is not supported.")
+
+                    # parse variables
+                    variables = op[prefix_len:]
+
+                    if len(variables) == 1: # for example, d2x
+                        coord_number = _map_coords.get(variables)
+                        if coord_number is None: # for example, dr
+                            raise ValueError("Cannot parse coordinate number from " + op)
+                        if order == 2: # for example, d2x
+                            coord_number = [coord_number, coord_number]
+                    elif len(variables) == 2: # for example, d2xy
+                        try: # for example, d2x0
+                            coord_number = int(variables[1:])
+                            if order == 2:
+                                coord_number = [coord_number, coord_number]
+                        except ValueError:
+                            coord_number = [_map_coords.get(variables[0]), _map_coords.get(variables[1])]
+
+                    elif len(variables) == 4:
+                        try:
+                            coord_number = [int(variables[1]), int(variables[3])]
+                        except:
+                            raise ValueError("Cannot parse coordinate numbers from " + op)
+
+                    if isinstance(coord_number, list):
+                        if coord_number[0] is None or coord_number[1] is None:
+                            raise ValueError("Cannot parse coordinate numbers from " + op)
+
+                    # make callable to compute required op
+                    form = np.zeros((n_dims, )) if order == 1 else np.zeros((n_dims, n_dims))
+                    if order == 1:
+                        form[coord_number] = 1
+                    else:
+                        form[coord_number[0], coord_number[1]] = 1
+                    form = {"d" + str(order): form}
+                    forms.append(form)
+        return forms, _ops[prefix]
+
 
     def _make_inputs(self, names=None, config=None):
         """ Create needed placeholders. """
         # make sure inputs-placeholder of pde's dimension (x_1, /dots, x_n, t) is created
         placeholders_, tensors_ = super()._make_inputs(names, config)
 
-        n_dims = config.get('common/n_dims')
+        n_dims = config.get('pde/n_dims')
         tensors_['points'] = tf.split(tensors_['points'], n_dims, axis=1, name='coordinates')
         tensors_['points'] = tf.concat(tensors_['points'], axis=1)
 
         # calculate targets-tensor using rhs of pde and created points-tensor
         points = getattr(self, 'inputs').get('points')
-        q = config.get('common/Q')
+        q = config.get('pde/Q')
         if not callable(q):
             if isinstance(q, (float, int)):
                 q_val = q
@@ -277,7 +352,7 @@ class DeepGalerkin(TFModel):
             # ingore boundary condition as it is automatically set by initial condition
             if init_cond:
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
-                time_mode = kwargs.get("time_multiplier", "sigmoid")
+                time_mode = kwargs.get("time_multiplier")
 
                 add_term += init_cond[0](xs_spatial)
                 multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond) == 1 else '00')(shifted)
@@ -329,78 +404,19 @@ class DeepGalerkin(TFModel):
 
         """
         self.store_to_attr('approximator', inputs)
+
         form = kwargs.get("form")
-        n_dims = len(form.get("d1", form.get("d2", None)))
+        n_dims = kwargs.get("n_dims")
         coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/inputs/coordinates:' + str(i))
                        for i in range(n_dims)]
 
-        # parsing engine for differentials-logging
-        if ops is None:
-            ops = []
-        elif not isinstance(ops, (dict, tuple, list)):
-            ops = [ops]
-        if not isinstance(ops, dict):
-            ops = {'': ops}
-        prefix = list(ops.keys())[0]
-        _ops = dict()
-        _ops[prefix] = list(ops[prefix])
-
-        _map_coords = dict(x=0, y=1, z=2, t=-1)
-        for i, op in enumerate(_ops[prefix]):
-            if isinstance(op, str):
-                op = op.replace(" ", "").replace("_", "")
-                if op.startswith("d"):
-                    # parse order
-                    prefix_len = 1
-                    try:
-                        order = int(op[1])
-                        prefix_len += 1
-                    except ValueError:
-                        order = 1
-
-                    if order > 2:
-                        raise ValueError("Tracking gradients of order " + order + " is not supported.")
-
-                    # parse variables
-                    variables = op[prefix_len:]
-
-                    if len(variables) == 1:
-                        coord_number = _map_coords.get(variables)
-                        if coord_number is None:
-                            raise ValueError("Cannot parse coordinate number from " + op)
-                        if order == 2:
-                            coord_number = [coord_number, coord_number]
-                    elif len(variables) == 2:
-                        try:
-                            coord_number = int(variables[1:])
-                            if order == 2:
-                                coord_number = [coord_number, coord_number]
-                        except ValueError:
-                            coord_number = [_map_coords.get(variables[0]), _map_coords.get(variables[1])]
-
-                    elif len(variables) == 4:
-                        try:
-                            coord_number = [int(variables[1]), int(variables[3])]
-                        except:
-                            raise ValueError("Cannot parse coordinate numbers from " + op)
-
-                    if isinstance(coord_number, list):
-                        if coord_number[0] is None or coord_number[1] is None:
-                            raise ValueError("Cannot parse coordinate numbers from " + op)
-
-                    # make callable to compute required op
-                    form = np.zeros((n_dims, )) if order == 1 else np.zeros((n_dims, n_dims))
-                    if order == 1:
-                        form[coord_number] = 1
-                    else:
-                        form[coord_number[0], coord_number[1]] = 1
-                    form = {"d" + str(order): form}
-                    _compute_op = self._make_form_calculator(form, coordinates, name=op)
-
-                    # write this callable to outputs-dict
-                    _ops[prefix][i] = _compute_op
-                else:
-                    raise ValueError("Cannot parse the gradient to track from " + op)
+        if kwargs.get('track') is not None:
+            forms, _ops = kwargs.get('track')
+            for i, form in enumerate(forms):
+                _compute_op = self._make_form_calculator(form, coordinates, name=_ops[i])
+                _ops[i] = _compute_op
+        else:
+            _ops = ['']
 
         # differential form from lhs of the equation
         _compute_predictions = self._make_form_calculator(kwargs.get("form"), coordinates, name='predictions')
