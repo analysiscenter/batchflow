@@ -77,26 +77,56 @@ class DeepGalerkin(TFModel):
         We also track
             $$ \frac{\partial f}{\partial t} $$
     """
-    def _make_inputs(self, names=None, config=None):
-        """ Parse the dimensionality of PDE-problem and set up the
-        creation of needed placeholders accordingly.
-        """
-        common = config.get('common')
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['common/bind_bc_ic'] = True
+        return config
+
+    def build_config(self, names=None):
+        common = self.config.get('common')
         if common is None:
             raise ValueError("The PDE-problem is not specified. Use 'common' config to set up the problem.")
 
-        # fetch pde's dimensionality
+        # get dimensionality
         form = common.get("form")
         n_dims = len(form.get("d1", form.get("d2", None)))
+        self.config.update({'common/n_dims': n_dims,
+                            'initial_block/inputs': 'points',
+                            'inputs': dict(points={'shape': (n_dims, )})})
 
+        # default values for domain
+        if common.get('domain') is None:
+            self.config.update({'common/domain': [[0, 1]] * n_dims})
+
+        # default value for rhs
+        if common.get('Q') is None:
+            self.config.update({'common/Q': 0})
+
+        # make sure that initial conditions are callable
+        init_cond = common.get('initial_condition', None)
+        if init_cond is not None:
+            init_cond = init_cond if isinstance(init_cond, (tuple, list)) else (init_cond, )
+            init_cond = [expression if callable(expression) else lambda *args, e=expression:
+                         e for expression in init_cond]
+            self.config.update({'common/initial_condition': init_cond})
+
+        config = super().build_config(names)
+
+        return config
+
+    def _make_inputs(self, names=None, config=None):
+        """ Create needed placeholders. """
         # make sure inputs-placeholder of pde's dimension (x_1, /dots, x_n, t) is created
-        config.update({'initial_block/inputs': 'points',
-                       'inputs': dict(points={'shape': (n_dims, )})})
         placeholders_, tensors_ = super()._make_inputs(names, config)
+
+        n_dims = config.get('common/n_dims')
+        tensors_['points'] = tf.split(tensors_['points'], n_dims, axis=1, name='coordinates')
+        tensors_['points'] = tf.concat(tensors_['points'], axis=1)
 
         # calculate targets-tensor using rhs of pde and created points-tensor
         points = getattr(self, 'inputs').get('points')
-        q = common.get('Q', 0)
+        q = config.get('common/Q')
         if not callable(q):
             if isinstance(q, (float, int)):
                 q_val = q
@@ -105,20 +135,8 @@ class DeepGalerkin(TFModel):
                 raise ValueError("Cannot parse right-hand-side of the equation")
 
         self.store_to_attr('targets', q(points))
-
         return placeholders_, tensors_
 
-    @classmethod
-    def initial_block(cls, inputs, name='initial_block', **kwargs):
-        """ Initial block of the model. Implements all features from :meth:`.TFModel.initial_block`.
-        For instance, accepts layout for :func:`.conv_block`.
-        """
-        # make sure that the rest of the network is computed using separate coordinates
-        n_dims = cls.shape(inputs)[0]
-        inputs = tf.split(inputs, n_dims, axis=1, name='coordinates')
-        inputs = tf.concat(inputs, axis=1)
-
-        return super().initial_block(inputs, name, **kwargs)
 
     @classmethod
     def _make_form_calculator(cls, form, coordinates, name='_callable'):
@@ -220,6 +238,7 @@ class DeepGalerkin(TFModel):
 
         return _callable
 
+
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
         """ Head block of the model. Binds `initial_condition` or `boundary_condition`, if these
@@ -230,45 +249,42 @@ class DeepGalerkin(TFModel):
         for :func:`.conv_block`.
         """
         inputs = super().head(inputs, name, **kwargs)
-        if kwargs.get("bind_bc_ic", True):
-            form = kwargs.get("form")
-            n_dims = len(form.get("d1", form.get("d2", None)))
-            domain = kwargs.get("domain", [[0, 1]] * n_dims)
+        if kwargs.get("bind_bc_ic"):
+            add_term = 0
+            multiplier = 1
 
-            # multiplicator for binding boundary conditions
-            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
-            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/coordinates:' + str(i))
+            # retrieving variables
+            n_dims = kwargs.get('n_dims')
+            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/inputs/coordinates:' + str(i))
                            for i in range(n_dims)]
+
+            domain = kwargs.get("domain")
+            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
+
             init_cond = kwargs.get("initial_condition")
             n_dims_xs = n_dims if init_cond is None else n_dims - 1
-            multiplier = 1
+            xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
+
+            # multiplicator for binding boundary conditions
             if n_dims_xs > 0:
-                xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1)
                 lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
                                       for bounds in (lower, upper)]
                 multiplier *= tf.reduce_prod((xs_spatial - lower_tf) * (upper_tf - xs_spatial) /
-                                             (upper_tf - lower_tf)**2, axis=1, name='xs_multiplier', keepdims=True)
+                                             (upper_tf - lower_tf)**2,
+                                             axis=1, name='xs_multiplier', keepdims=True)
 
-            # addition term and time-multiplier
-            add_term = 0
-            if init_cond is None:
-                add_term += kwargs.get("boundary_condition", 0)
-            else:
-                init_cond = init_cond if isinstance(init_cond, (tuple, list)) else (init_cond, )
-                init_cond_ = [expression if callable(expression) else lambda *args, e=expression:
-                              e for expression in init_cond]
 
-                # ingore boundary condition as it is automatically set by initial condition
+            # ingore boundary condition as it is automatically set by initial condition
+            if init_cond:
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs.get("time_multiplier", "sigmoid")
-                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond_) == 1 else '00')(shifted)
 
-                xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
-                add_term += init_cond_[0](xs_spatial)
+                add_term += init_cond[0](xs_spatial)
+                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond) == 1 else '00')(shifted)
 
                 # case of second derivative with respect to t in lhs of the equation
-                if len(init_cond_) > 1:
-                    add_term += init_cond_[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
+                if len(init_cond) > 1:
+                    add_term += init_cond[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
 
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
@@ -315,7 +331,7 @@ class DeepGalerkin(TFModel):
         self.store_to_attr('approximator', inputs)
         form = kwargs.get("form")
         n_dims = len(form.get("d1", form.get("d2", None)))
-        coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/coordinates:' + str(i))
+        coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/inputs/coordinates:' + str(i))
                        for i in range(n_dims)]
 
         # parsing engine for differentials-logging
