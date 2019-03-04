@@ -77,6 +77,22 @@ class DeepGalerkin(TFModel):
         We also track
             $$ \frac{\partial f}{\partial t} $$
     """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['ansatz'] = {}
+        return config
+
+    def _build(self, config=None):
+        """ Overloads :meth:`.TFModel._build`: adds ansatz-block for binding initial conditions.
+        """
+        inputs = config.pop('initial_block/inputs')
+        x = self._add_block('initial_block', config, inputs=inputs)
+        x = self._add_block('body', config, inputs=x)
+        x = self._add_block('head', config, inputs=x)
+        output = self._add_block('ansatz', config, inputs=x)
+        self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
+
     def _make_inputs(self, names=None, config=None):
         """ Parse the dimensionality of PDE-problem and set up the
         creation of needed placeholders accordingly.
@@ -221,15 +237,11 @@ class DeepGalerkin(TFModel):
         return _callable
 
     @classmethod
-    def head(cls, inputs, name='head', **kwargs):
-        """ Head block of the model. Binds `initial_condition` or `boundary_condition`, if these
-        are supplied in the config of the model. Does so by applying one of preset multipliers to
-        the network output. Creates a tf.Tensor `approximator` - the final output of the model.
-
-        Implements all features from :meth:`.TFModel.head`. For instance, accepts layout
-        for :func:`.conv_block`.
+    def ansatz(cls, inputs, name='ansatz', **kwargs):
+        """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
+        of the model. Does so by applying one of preset multipliers to the network output. Creates
+        a tf.Tensor `approximator` - the final output of the model.
         """
-        inputs = super().head(inputs, name, **kwargs)
         if kwargs.get("bind_bc_ic", True):
             form = kwargs.get("form")
             n_dims = len(form.get("d1", form.get("d2", None)))
