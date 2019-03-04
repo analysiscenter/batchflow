@@ -1,3 +1,8 @@
+"""
+Each fixture function generates test data for corresponding test function,
+returning specific data set depending of parameter.
+"""
+
 import sys
 import copy
 import pytest
@@ -31,4 +36,4 @@ def data_dict_init(request):
 			)
 		]
 
-	return Config(data[request.param].get('process')).config, Config(data[request.param].get('expect')).config
+	return data[request.param].get('process'), data[request.param].get('expect')
