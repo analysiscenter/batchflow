@@ -3,7 +3,6 @@
 """
 import tensorflow as tf
 
-from ... import is_best_practice
 from . import TFModel
 from .layers import conv_block
 
@@ -55,14 +54,10 @@ class VGG(TFModel):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
         config['body/block'] = dict(layout='cna', pool_size=2, pool_strides=2)
-        if is_best_practice():
-            config['head'] = dict(layout='Vdf', dropout_rate=.8, units=2)
-        else:
-            config['head'] = dict(layout='dfa dfa f', units=[4096, 4096, 2], dropout_rate=.8)
+        config['head'] = dict(layout='Vdf', dropout_rate=.8, units=2)
 
         config['loss'] = 'ce'
-        config['decay'] = ('const', dict(boundaries=[92500, 185000, 277500], values=[1e-2, 1e-3, 1e-4, 1e-5]))
-        config['optimizer'] = ('Momentum', dict(momentum=.9))
+
         return config
 
     def build_config(self, names=None):
