@@ -127,6 +127,7 @@ class DeepGalerkin(TFModel):
         return config
 
     def _make_ops(self, config):
+        """ Stores necessary operations in 'config'. """
         # retrieving variables
         ops = config.get('output')
         track = config.get('track')
@@ -164,7 +165,9 @@ class DeepGalerkin(TFModel):
                                                            name='predictions')
         return config
 
-    def _parse_op(self, op, n_dims):
+    @classmethod
+    def _parse_op(cls, op, n_dims):
+        """ Transforms string description of operation to form. """
         _map_coords = dict(x=0, y=1, z=2, t=-1)
         if isinstance(op, str):
             op = op.replace(" ", "").replace("_", "")
@@ -219,18 +222,6 @@ class DeepGalerkin(TFModel):
                 raise ValueError("Cannot parse coordinate numbers from " + op)
         return form
 
-    def _build(self, config=None):
-        """ Overloads :meth:`.TFModel._build`: adds ansatz-block for binding
-        boundary and initial conditions.
-        """
-        inputs = config.pop('initial_block/inputs')
-        x = self._add_block('initial_block', config, inputs=inputs)
-        x = self._add_block('body', config, inputs=x)
-        x = self._add_block('head', config, inputs=x)
-        output = self._add_block('ansatz', config, inputs=x)
-        self.store_to_attr('approximator', output)
-        self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
-
     def _make_inputs(self, names=None, config=None):
         """ Create needed placeholders. """
         placeholders_, tensors_ = super()._make_inputs(names, config)
@@ -284,6 +275,64 @@ class DeepGalerkin(TFModel):
         setattr(_callable, '__name__', name)
         return _callable
 
+    def _build(self, config=None):
+        """ Overloads :meth:`.TFModel._build`: adds ansatz-block for binding
+        boundary and initial conditions.
+        """
+        inputs = config.pop('initial_block/inputs')
+        x = self._add_block('initial_block', config, inputs=inputs)
+        x = self._add_block('body', config, inputs=x)
+        x = self._add_block('head', config, inputs=x)
+        output = self._add_block('ansatz', config, inputs=x)
+        self.store_to_attr('solution', output)
+        self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
+
+    @classmethod
+    def ansatz(cls, inputs, **kwargs):
+        """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
+        of the model. Does so by applying one of preset multipliers to the network output. Creates
+        a tf.Tensor `solution` - the final output of the model.
+        """
+        if kwargs.get("bind_bc_ic"):
+            add_term = 0
+            multiplier = 1
+
+            # retrieving variables
+            n_dims = kwargs.get('n_dims')
+            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/inputs/coordinates:' + str(i))
+                           for i in range(n_dims)]
+
+            domain = kwargs.get("domain")
+            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
+
+            init_cond = kwargs.get("initial_condition")
+            n_dims_xs = n_dims if init_cond is None else n_dims - 1
+            xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
+
+            # multiplicator for binding boundary conditions
+            if n_dims_xs > 0:
+                lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
+                                      for bounds in (lower, upper)]
+                multiplier *= tf.reduce_prod((xs_spatial - lower_tf) * (upper_tf - xs_spatial) /
+                                             (upper_tf - lower_tf)**2,
+                                             axis=1, name='xs_multiplier', keepdims=True)
+
+            # ignore boundary condition as it is automatically set by initial condition
+            if init_cond:
+                shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
+                time_mode = kwargs.get("time_multiplier")
+
+                add_term += init_cond[0](xs_spatial)
+                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond) == 1 else '00')(shifted)
+
+                # case of second derivative with respect to t in lhs of the equation
+                if len(init_cond) > 1:
+                    add_term += init_cond[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
+
+            # apply transformation to inputs
+            inputs = add_term + multiplier * inputs
+        return tf.identity(inputs, name='solution')
+
     @classmethod
     def _make_time_multiplier(cls, family, order=None):
         r""" Produce time multiplier: a callable, applied to an arbitrary function to bind its value
@@ -304,13 +353,13 @@ class DeepGalerkin(TFModel):
 
         Examples
         --------
-        Form an `approximator`-tensor binding the initial value (at $t=0$) of the `network`-tensor to $sin(2 \pi x)$::
+        Form an `solution`-tensor binding the initial value (at $t=0$) of the `network`-tensor to $sin(2 \pi x)$::
 
-            approximator = network * DeepGalerkin._make_time_multiplier('sigmoid', '0')(t) + tf.sin(2 * np.pi * x)
+            solution = network * DeepGalerkin._make_time_multiplier('sigmoid', '0')(t) + tf.sin(2 * np.pi * x)
 
         Bind the initial value to $sin(2 \pi x)$ and the initial rate to $cos(2 \pi x)$::
 
-            approximator = (network * DeepGalerkin._make_time_multiplier('polynomial', '00')(t) +
+            solution = (network * DeepGalerkin._make_time_multiplier('polynomial', '00')(t) +
                             tf.sin(2 * np.pi * x) +
                             tf.cos(2 * np.pi * x) * DeepGalerkin._make_time_multiplier('polynomial', '01')(t))
         """
@@ -353,55 +402,9 @@ class DeepGalerkin(TFModel):
 
         return _callable
 
-    @classmethod
-    def ansatz(cls, inputs, **kwargs):
-        """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
-        of the model. Does so by applying one of preset multipliers to the network output. Creates
-        a tf.Tensor `approximator` - the final output of the model.
-        """
-        if kwargs.get("bind_bc_ic"):
-            add_term = 0
-            multiplier = 1
-
-            # retrieving variables
-            n_dims = kwargs.get('n_dims')
-            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/inputs/coordinates:' + str(i))
-                           for i in range(n_dims)]
-
-            domain = kwargs.get("domain")
-            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
-
-            init_cond = kwargs.get("initial_condition")
-            n_dims_xs = n_dims if init_cond is None else n_dims - 1
-            xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
-
-            # multiplicator for binding boundary conditions
-            if n_dims_xs > 0:
-                lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
-                                      for bounds in (lower, upper)]
-                multiplier *= tf.reduce_prod((xs_spatial - lower_tf) * (upper_tf - xs_spatial) /
-                                             (upper_tf - lower_tf)**2,
-                                             axis=1, name='xs_multiplier', keepdims=True)
-
-            # ignore boundary condition as it is automatically set by initial condition
-            if init_cond:
-                shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
-                time_mode = kwargs.get("time_multiplier")
-
-                add_term += init_cond[0](xs_spatial)
-                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond) == 1 else '00')(shifted)
-
-                # case of second derivative with respect to t in lhs of the equation
-                if len(init_cond) > 1:
-                    add_term += init_cond[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
-
-            # apply transformation to inputs
-            inputs = add_term + multiplier * inputs
-        return tf.identity(inputs, name='approximator')
-
     def predict(self, fetches=None, feed_dict=None, **kwargs):
         """ Get network-approximation of PDE-solution on a set of points. Overloads :meth:`.TFModel.predict` :
-        `approximator`-tensor is now considered to be the main model-output.
+        `solution`-tensor is now considered to be the main model-output.
         """
-        fetches = 'approximator' if fetches is None else fetches
+        fetches = 'solution' if fetches is None else fetches
         return super().predict(fetches, feed_dict, **kwargs)
