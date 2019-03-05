@@ -8,7 +8,6 @@ import tensorflow as tf
 
 from . import TFModel
 
-
 class DeepGalerkin(TFModel):
     r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
     with constant coefficients on rectangular domains using neural networks. Inspired by
@@ -22,15 +21,15 @@ class DeepGalerkin(TFModel):
     allows to set up the network-architecture using options `initial_block`, `body`, `head`. See
     docstring of :class:`.TFModel` for more detail.
 
-    Left-hand-side (lhs), right-hand-side (rhs) and other properties of PDE are defined in `common`-dict:
+    Left-hand-side (lhs), right-hand-side (rhs) and other properties of PDE are defined in `pde`-dict:
 
-    common : dict
+    pde : dict
         dictionary of parameters of PDE. Must contain keys
         - form : dict
             may contain keys 'd1' and 'd2', which define the coefficients before differentials
             of first two orders in lhs of the equation.
         - Q : callable or const
-            if callable, must accept and return tf.Tensor.
+            right-hand-side of the equation. If callable, must accept and return tf.Tensor.
         - domain : list
             defines the rectangular domain of the equation as a sequence of coordinate-wise bounds.
         - bind_bc_ic : bool
@@ -54,7 +53,7 @@ class DeepGalerkin(TFModel):
     --------
 
         config = dict(
-            common = dict(
+            pde = dict(
                 form={'d1': (0, 1), 'd2': ((-1, 0), (0, 0))},
                 Q=5,
                 initial_condition=lambda t: tf.sin(2 * np.pi * t),
@@ -79,40 +78,162 @@ class DeepGalerkin(TFModel):
     """
     @classmethod
     def default_config(cls):
+        """ Overloads :meth:`.TFModel.default_config`. """
         config = super().default_config()
         config['ansatz'] = {}
+        config['common/time_multiplier'] = 'sigmoid'
+        config['common/bind_bc_ic'] = True
         return config
 
-    def _build(self, config=None):
-        """ Overloads :meth:`.TFModel._build`: adds ansatz-block for binding initial conditions.
+    def build_config(self, names=None):
+        """ Overloads :meth:`.TFModel.build_config`.
+        PDE-problem is fetched from 'pde' key in 'self.config', and then
+        is passed to 'common' so that all of the subsequent blocks get it as 'kwargs'.
         """
-        inputs = config.pop('initial_block/inputs')
-        x = self._add_block('initial_block', config, inputs=inputs)
-        x = self._add_block('body', config, inputs=x)
-        x = self._add_block('head', config, inputs=x)
-        output = self._add_block('ansatz', config, inputs=x)
-        self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
+        pde = self.config.get('pde')
+        if pde is None:
+            raise ValueError("The PDE-problem is not specified. Use 'pde' config to set up the problem.")
+
+        # get dimensionality
+        form = pde.get("form")
+        if form is None:
+            raise ValueError("Left-hand side is not specified. Use 'pde/form' config to set it up.")
+        n_dims = len(form.get("d1", form.get("d2", None)))
+        self.config.update({'pde/n_dims': n_dims,
+                            'initial_block/inputs': 'points',
+                            'inputs': dict(points={'shape': (n_dims, )})})
+
+        # default values for domain
+        if pde.get('domain') is None:
+            self.config.update({'pde/domain': [[0, 1]] * n_dims})
+
+        # default value for rhs
+        if pde.get('Q') is None:
+            self.config.update({'pde/Q': 0})
+
+        # make sure that initial conditions are callable
+        init_cond = pde.get('initial_condition', None)
+        if init_cond is not None:
+            init_cond = init_cond if isinstance(init_cond, (tuple, list)) else (init_cond, )
+            init_cond = [expression if callable(expression) else lambda *args, e=expression:
+                         e for expression in init_cond]
+            self.config.update({'pde/initial_condition': init_cond})
+
+        # 'common' is updated with PDE-problem
+        config = super().build_config(names)
+        config['common'].update(self.config['pde'])
+
+        config = self._make_ops(config)
+        return config
+
+    def _make_ops(self, config):
+        """ Stores necessary operations in 'config'. """
+        # retrieving variables
+        ops = config.get('output')
+        track = config.get('track')
+        n_dims = config.get('common/n_dims')
+        inputs = self.get('initial_block/inputs', config)
+        coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/inputs/coordinates:' + str(i))
+                       for i in range(n_dims)]
+
+        # ensuring that 'ops' is of the needed type
+        if ops is None:
+            ops = []
+        elif not isinstance(ops, (dict, tuple, list)):
+            ops = [ops]
+        if not isinstance(ops, dict):
+            ops = {'': ops}
+        prefix = list(ops.keys())[0]
+        _ops = dict()
+        _ops[prefix] = list(ops[prefix])
+
+        # transforming each op in config['output'] to form.
+        # for example, 'dt' is transformed to {'d1': (0, ..., 0, 1)}
+        for i, op in enumerate(_ops[prefix]):
+            form = self._parse_op(op, n_dims)
+            _compute_op = self._make_form_calculator(form, coordinates, name=op)
+            _ops[prefix][i] = _compute_op
+
+        # additional expressions to track
+        if track is not None:
+            for op in track.keys():
+                _compute_op = self._make_form_calculator(track[op], coordinates, name=op)
+                _ops[prefix].append(_compute_op)
+
+        config['output'] = _ops
+        config['predictions'] = self._make_form_calculator(config.get("common/form"), coordinates,
+                                                           name='predictions')
+        return config
+
+    @classmethod
+    def _parse_op(cls, op, n_dims):
+        """ Transforms string description of operation to form. """
+        _map_coords = dict(x=0, y=1, z=2, t=-1)
+        if isinstance(op, str):
+            op = op.replace(" ", "").replace("_", "")
+            if op.startswith("d"):
+                # parse order
+                prefix_len = 1
+                try: # for example, d2xy
+                    order = int(op[1])
+                    prefix_len += 1
+                except ValueError: # for example, dx
+                    order = 1
+
+                if order > 2:
+                    raise ValueError("Tracking gradients of order " + order + " is not supported.")
+
+                # parse variables
+                variables = op[prefix_len:]
+
+                if len(variables) == 1: # for example, d2x
+                    coord_number = _map_coords.get(variables)
+                    if coord_number is None: # for example, dr
+                        raise ValueError("Cannot parse coordinate number from " + op)
+                    if order == 2: # for example, d2x
+                        coord_number = [coord_number, coord_number]
+
+                elif len(variables) == 2: # for example, d2xy
+                    try: # for example, d2x0
+                        coord_number = int(variables[1:])
+                        if order == 2:
+                            coord_number = [coord_number, coord_number]
+                    except ValueError:
+                        coord_number = [_map_coords.get(variables[0]), _map_coords.get(variables[1])]
+
+                elif len(variables) == 4: # for example d2x5x8
+                    try:
+                        coord_number = [int(variables[1]), int(variables[3])]
+                    except:
+                        raise ValueError("Cannot parse coordinate numbers from " + op)
+
+                if isinstance(coord_number, list):
+                    if coord_number[0] is None or coord_number[1] is None:
+                        raise ValueError("Cannot parse coordinate numbers from " + op)
+
+                # make callable to compute required op
+                form = np.zeros((n_dims, )) if order == 1 else np.zeros((n_dims, n_dims))
+                if order == 1:
+                    form[coord_number] = 1
+                else:
+                    form[coord_number[0], coord_number[1]] = 1
+                form = {"d" + str(order): form}
+            else:
+                raise ValueError("Cannot parse coordinate numbers from " + op)
+        return form
 
     def _make_inputs(self, names=None, config=None):
-        """ Parse the dimensionality of PDE-problem and set up the
-        creation of needed placeholders accordingly.
-        """
-        common = config.get('common')
-        if common is None:
-            raise ValueError("The PDE-problem is not specified. Use 'common' config to set up the problem.")
-
-        # fetch pde's dimensionality
-        form = common.get("form")
-        n_dims = len(form.get("d1", form.get("d2", None)))
-
-        # make sure inputs-placeholder of pde's dimension (x_1, /dots, x_n, t) is created
-        config.update({'initial_block/inputs': 'points',
-                       'inputs': dict(points={'shape': (n_dims, )})})
+        """ Create needed placeholders. """
         placeholders_, tensors_ = super()._make_inputs(names, config)
+
+        # split input so we can access individual variables later
+        n_dims = config.get('pde/n_dims')
+        tensors_['points'] = tf.split(tensors_['points'], n_dims, axis=1, name='coordinates')
+        tensors_['points'] = tf.concat(tensors_['points'], axis=1)
 
         # calculate targets-tensor using rhs of pde and created points-tensor
         points = getattr(self, 'inputs').get('points')
-        q = common.get('Q', 0)
+        q = config.get('pde/Q')
         if not callable(q):
             if isinstance(q, (float, int)):
                 q_val = q
@@ -121,20 +242,7 @@ class DeepGalerkin(TFModel):
                 raise ValueError("Cannot parse right-hand-side of the equation")
 
         self.store_to_attr('targets', q(points))
-
         return placeholders_, tensors_
-
-    @classmethod
-    def initial_block(cls, inputs, name='initial_block', **kwargs):
-        """ Initial block of the model. Implements all features from :meth:`.TFModel.initial_block`.
-        For instance, accepts layout for :func:`.conv_block`.
-        """
-        # make sure that the rest of the network is computed using separate coordinates
-        n_dims = cls.shape(inputs)[0]
-        inputs = tf.split(inputs, n_dims, axis=1, name='coordinates')
-        inputs = tf.concat(inputs, axis=1)
-
-        return super().initial_block(inputs, name, **kwargs)
 
     @classmethod
     def _make_form_calculator(cls, form, coordinates, name='_callable'):
@@ -167,6 +275,64 @@ class DeepGalerkin(TFModel):
         setattr(_callable, '__name__', name)
         return _callable
 
+    def _build(self, config=None):
+        """ Overloads :meth:`.TFModel._build`: adds ansatz-block for binding
+        boundary and initial conditions.
+        """
+        inputs = config.pop('initial_block/inputs')
+        x = self._add_block('initial_block', config, inputs=inputs)
+        x = self._add_block('body', config, inputs=x)
+        x = self._add_block('head', config, inputs=x)
+        output = self._add_block('ansatz', config, inputs=x)
+        self.store_to_attr('solution', output)
+        self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
+
+    @classmethod
+    def ansatz(cls, inputs, **kwargs):
+        """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
+        of the model. Does so by applying one of preset multipliers to the network output. Creates
+        a tf.Tensor `solution` - the final output of the model.
+        """
+        if kwargs.get("bind_bc_ic"):
+            add_term = 0
+            multiplier = 1
+
+            # retrieving variables
+            n_dims = kwargs.get('n_dims')
+            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/inputs/coordinates:' + str(i))
+                           for i in range(n_dims)]
+
+            domain = kwargs.get("domain")
+            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
+
+            init_cond = kwargs.get("initial_condition")
+            n_dims_xs = n_dims if init_cond is None else n_dims - 1
+            xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
+
+            # multiplicator for binding boundary conditions
+            if n_dims_xs > 0:
+                lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
+                                      for bounds in (lower, upper)]
+                multiplier *= tf.reduce_prod((xs_spatial - lower_tf) * (upper_tf - xs_spatial) /
+                                             (upper_tf - lower_tf)**2,
+                                             axis=1, name='xs_multiplier', keepdims=True)
+
+            # ignore boundary condition as it is automatically set by initial condition
+            if init_cond:
+                shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
+                time_mode = kwargs.get("time_multiplier")
+
+                add_term += init_cond[0](xs_spatial)
+                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond) == 1 else '00')(shifted)
+
+                # case of second derivative with respect to t in lhs of the equation
+                if len(init_cond) > 1:
+                    add_term += init_cond[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
+
+            # apply transformation to inputs
+            inputs = add_term + multiplier * inputs
+        return tf.identity(inputs, name='solution')
+
     @classmethod
     def _make_time_multiplier(cls, family, order=None):
         r""" Produce time multiplier: a callable, applied to an arbitrary function to bind its value
@@ -187,13 +353,13 @@ class DeepGalerkin(TFModel):
 
         Examples
         --------
-        Form an `approximator`-tensor binding the initial value (at $t=0$) of the `network`-tensor to $sin(2 \pi x)$::
+        Form an `solution`-tensor binding the initial value (at $t=0$) of the `network`-tensor to $sin(2 \pi x)$::
 
-            approximator = network * DeepGalerkin._make_time_multiplier('sigmoid', '0')(t) + tf.sin(2 * np.pi * x)
+            solution = network * DeepGalerkin._make_time_multiplier('sigmoid', '0')(t) + tf.sin(2 * np.pi * x)
 
         Bind the initial value to $sin(2 \pi x)$ and the initial rate to $cos(2 \pi x)$::
 
-            approximator = (network * DeepGalerkin._make_time_multiplier('polynomial', '00')(t) +
+            solution = (network * DeepGalerkin._make_time_multiplier('polynomial', '00')(t) +
                             tf.sin(2 * np.pi * x) +
                             tf.cos(2 * np.pi * x) * DeepGalerkin._make_time_multiplier('polynomial', '01')(t))
         """
@@ -236,175 +402,9 @@ class DeepGalerkin(TFModel):
 
         return _callable
 
-    @classmethod
-    def ansatz(cls, inputs, name='ansatz', **kwargs):
-        """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
-        of the model. Does so by applying one of preset multipliers to the network output. Creates
-        a tf.Tensor `approximator` - the final output of the model.
-        """
-        if kwargs.get("bind_bc_ic", True):
-            form = kwargs.get("form")
-            n_dims = len(form.get("d1", form.get("d2", None)))
-            domain = kwargs.get("domain", [[0, 1]] * n_dims)
-
-            # multiplicator for binding boundary conditions
-            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
-            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/coordinates:' + str(i))
-                           for i in range(n_dims)]
-            init_cond = kwargs.get("initial_condition")
-            n_dims_xs = n_dims if init_cond is None else n_dims - 1
-            multiplier = 1
-            if n_dims_xs > 0:
-                xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1)
-                lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
-                                      for bounds in (lower, upper)]
-                multiplier *= tf.reduce_prod((xs_spatial - lower_tf) * (upper_tf - xs_spatial) /
-                                             (upper_tf - lower_tf)**2, axis=1, name='xs_multiplier', keepdims=True)
-
-            # addition term and time-multiplier
-            add_term = 0
-            if init_cond is None:
-                add_term += kwargs.get("boundary_condition", 0)
-            else:
-                init_cond = init_cond if isinstance(init_cond, (tuple, list)) else (init_cond, )
-                init_cond_ = [expression if callable(expression) else lambda *args, e=expression:
-                              e for expression in init_cond]
-
-                # ingore boundary condition as it is automatically set by initial condition
-                shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
-                time_mode = kwargs.get("time_multiplier", "sigmoid")
-                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond_) == 1 else '00')(shifted)
-
-                xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
-                add_term += init_cond_[0](xs_spatial)
-
-                # case of second derivative with respect to t in lhs of the equation
-                if len(init_cond_) > 1:
-                    add_term += init_cond_[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
-
-            # apply transformation to inputs
-            inputs = add_term + multiplier * inputs
-
-        return tf.identity(inputs, name='approximator')
-
-    def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
-        r""" Output block of the model. Computes differential form for lhs of the equation.
-        In addition, allows for convenient logging of differentials into output ops. Accepts
-        all arguments from original :meth:`.TFModel.output`.
-
-        **Differentials-logging**
-
-        Allows for logging differentials of first and second order w.r.t. any variable. To output
-        derivative w.r.t. first coordinate
-            $$
-                \frac{\partial f}{\partial x_0}
-            $$
-
-        simply add::
-
-            config = {
-                'output': 'd1x0'
-            }
-
-        or, even simpler, as 'x', 'y', 'z' stand for first three coordinates::
-
-            config = {
-                'output': 'd1x'
-            }
-
-        while the derivative of the second order w.r.t. the last coordinate (time in equations of evolution)
-            $$
-                \frac{\partial^2 f}{\partial t^2}
-            $$
-
-        is output by::
-
-            config = {
-                'output': 'd2t'
-            }
-
-        """
-        self.store_to_attr('approximator', inputs)
-        form = kwargs.get("form")
-        n_dims = len(form.get("d1", form.get("d2", None)))
-        coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/coordinates:' + str(i))
-                       for i in range(n_dims)]
-
-        # parsing engine for differentials-logging
-        if ops is None:
-            ops = []
-        elif not isinstance(ops, (dict, tuple, list)):
-            ops = [ops]
-        if not isinstance(ops, dict):
-            ops = {'': ops}
-        prefix = list(ops.keys())[0]
-        _ops = dict()
-        _ops[prefix] = list(ops[prefix])
-
-        _map_coords = dict(x=0, y=1, z=2, t=-1)
-        for i, op in enumerate(_ops[prefix]):
-            if isinstance(op, str):
-                op = op.replace(" ", "").replace("_", "")
-                if op.startswith("d"):
-                    # parse order
-                    prefix_len = 1
-                    try:
-                        order = int(op[1])
-                        prefix_len += 1
-                    except ValueError:
-                        order = 1
-
-                    if order > 2:
-                        raise ValueError("Tracking gradients of order " + order + " is not supported.")
-
-                    # parse variables
-                    variables = op[prefix_len:]
-
-                    if len(variables) == 1:
-                        coord_number = _map_coords.get(variables)
-                        if coord_number is None:
-                            raise ValueError("Cannot parse coordinate number from " + op)
-                        if order == 2:
-                            coord_number = [coord_number, coord_number]
-                    elif len(variables) == 2:
-                        try:
-                            coord_number = int(variables[1:])
-                            if order == 2:
-                                coord_number = [coord_number, coord_number]
-                        except ValueError:
-                            coord_number = [_map_coords.get(variables[0]), _map_coords.get(variables[1])]
-
-                    elif len(variables) == 4:
-                        try:
-                            coord_number = [int(variables[1]), int(variables[3])]
-                        except:
-                            raise ValueError("Cannot parse coordinate numbers from " + op)
-
-                    if isinstance(coord_number, list):
-                        if coord_number[0] is None or coord_number[1] is None:
-                            raise ValueError("Cannot parse coordinate numbers from " + op)
-
-                    # make callable to compute required op
-                    form = np.zeros((n_dims, )) if order == 1 else np.zeros((n_dims, n_dims))
-                    if order == 1:
-                        form[coord_number] = 1
-                    else:
-                        form[coord_number[0], coord_number[1]] = 1
-                    form = {"d" + str(order): form}
-                    _compute_op = self._make_form_calculator(form, coordinates, name=op)
-
-                    # write this callable to outputs-dict
-                    _ops[prefix][i] = _compute_op
-                else:
-                    raise ValueError("Cannot parse the gradient to track from " + op)
-
-        # differential form from lhs of the equation
-        _compute_predictions = self._make_form_calculator(kwargs.get("form"), coordinates, name='predictions')
-        return super().output(inputs, _compute_predictions, _ops, prefix, **kwargs)
-
     def predict(self, fetches=None, feed_dict=None, **kwargs):
         """ Get network-approximation of PDE-solution on a set of points. Overloads :meth:`.TFModel.predict` :
-        `approximator`-tensor is now considered to be the main model-output.
+        `solution`-tensor is now considered to be the main model-output.
         """
-        fetches = 'approximator' if fetches is None else fetches
+        fetches = 'solution' if fetches is None else fetches
         return super().predict(fetches, feed_dict, **kwargs)
