@@ -3,6 +3,7 @@
 import os
 import traceback
 import threading
+import warnings
 
 import dill
 try:
@@ -242,19 +243,22 @@ class Batch:
         if isinstance(components, str):
             components = (components,)
             init = (init,)
-        elif isinstance(components, list):
+        elif isinstance(components, (tuple, list)):
             components = tuple(components)
+            if init is None:
+                init = (None,) * len(components)
+            else:
+                init = tuple(init)
 
         data = self._data
-        if self.components is None or data is None:
-            self.components = components
+        if self.components is None:
+            self.components = tuple()
             data = tuple()
-        else:
-            self.components = self.components + components
-            data = data + (init,)
+            warnings.warn("All batch data is erased")
+        self.components = self.components + components
 
         self.make_item_class(local=True)
-        self._data = data
+        self._data = data + init
 
         return self
 
@@ -846,7 +850,7 @@ class Batch:
         _ = args
         components = [components] if isinstance(components, str) else components
         if components is not None:
-            self.add_components(components)
+            self.add_components(np.setdiff1d(components, self.components).tolist())
 
         if fmt is None:
             self.put_into_data(src, components)

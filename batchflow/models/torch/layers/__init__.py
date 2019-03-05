@@ -5,3 +5,4 @@ from .core import Identity, Activation, Dense, Flatten, \
                   Interpolate, PixelShuffle, SubPixelConv
 from .conv_block import ConvBlock
 from .upsample import Upsample
+from .pyramid import PyramidPooling

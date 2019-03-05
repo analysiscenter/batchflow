@@ -47,14 +47,6 @@ class Inception_v1(Inception):
 
         return config
 
-    def build_config(self, names=None):
-        config = super().build_config(names)
-        if config.get('head/units') is None:
-            config['head/units'] = self.num_classes('targets')
-        if config.get('head/filters') is None:
-            config['head/filters'] = self.num_classes('targets')
-        return config
-
     @classmethod
     def block(cls, inputs, filters, layout='cn', name=None, **kwargs):
         """ Inception building block

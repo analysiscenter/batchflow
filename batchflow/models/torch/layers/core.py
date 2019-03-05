@@ -1,4 +1,5 @@
 """ Contains common layers """
+import inspect
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
@@ -45,7 +46,6 @@ class Dense(nn.Module):
 
         shape = get_shape(inputs)
         self.output_shape = (shape[0], units)
-
         self.linear = nn.Linear(np.prod(shape[1:]), units, bias)
 
     def forward(self, x):
@@ -95,7 +95,12 @@ class Activation(nn.Module):
         if isinstance(activation, str):
             a = activation.lower()
             if a in ACTIVATIONS:
-                self.activation = getattr(nn, ACTIVATIONS[a])(*args, **kwargs)
+                _activation = getattr(nn, ACTIVATIONS[a])
+                # check does activation has `in_place` parameter
+                has_inplace = 'inplace' in inspect.getfullargspec(_activation).args
+                if not has_inplace:
+                    kwargs.pop('inplace', None)
+                self.activation = _activation(*args, **kwargs)
             else:
                 raise ValueError('Unknown activation', activation)
         elif isinstance(activation, nn.Module):
@@ -115,15 +120,23 @@ class Activation(nn.Module):
             return self.activation(x, *self.args, **self.kwargs)
         return x
 
-def _get_padding(kernel_size=None, dilation=1):
-    p = dilation * (kernel_size - 1) // 2
-    p = (p + 1, p) if kernel_size % 2 == 0 else p
+def _get_padding(kernel_size=None, width=None, dilation=1, stride=1):
+    kernel_size = dilation * (kernel_size - 1) + 1
+    if stride >= width:
+        p = max(0, kernel_size - width)
+    else:
+        if width % stride == 0:
+            p = kernel_size - stride
+        else:
+            p = kernel_size - width % stride
+    p = (p // 2, p - p // 2)
     return p
 
-def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, **kwargs):
+def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
     _ = kwargs
 
     dims = get_num_dims(inputs)
+    shape = get_shape(inputs)
 
     if isinstance(padding, str):
         if padding == 'valid':
@@ -131,17 +144,14 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
         elif padding == 'same':
             if transposed:
                 padding = 0
-            elif dims > 1:
+            else:
                 if isinstance(kernel_size, int):
                     kernel_size = (kernel_size,) * dims
                 if isinstance(dilation, int):
                     dilation = (dilation,) * dims
-                padding = tuple(_get_padding(kernel_size[i], dilation[i]) for i in range(dims))
-                # need_padding = any(isinstance(axis, tuple) and axis[0] != axis[1] for axis in padding)
-                # if not need_padding:
-                #     padding = tuple(x[0] for x in padding)
-            else:
-                padding = _get_padding(kernel_size, dilation)
+                if isinstance(stride, int):
+                    stride = (stride,) * dims
+                padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
         else:
             raise ValueError("padding can be 'same' or 'valid'")
     elif isinstance(padding, int):
@@ -153,10 +163,9 @@ def _calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fa
 
     return padding
 
-def _calc_output_shape(inputs, kernel_size=None, stride=None, dilation=None, padding=0, transposed=False, **kwargs):
+def _calc_output_shape(inputs, kernel_size=None, stride=None, dilation=1, padding=0, transposed=False, **kwargs):
     shape = get_shape(inputs)
     output_shape = list(shape)
-
     for i in range(2, len(shape)):
         if shape[i]:
             k = kernel_size[i - 2] if isinstance(kernel_size, tuple) else kernel_size
@@ -321,7 +330,6 @@ class _Pool(nn.Module):
         super().__init__()
 
         self.padding = None
-
         if isinstance(_fn, dict):
             if padding is not None:
                 _padding = _calc_padding(inputs, padding=padding, **kwargs)
@@ -457,7 +465,7 @@ class Interpolate(nn.Module):
 
         shape = get_shape(inputs)
         self.output_shape = [*shape]
-        if 'size' in kwargs:
+        if kwargs.get('size'):
             self.output_shape[2:] = kwargs['size']
         else:
             for i, s in enumerate(self.output_shape[2:]):
