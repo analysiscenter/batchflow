@@ -28,7 +28,7 @@ class DeepGalerkin(TFModel):
         - form : dict
             may contain keys 'd1' and 'd2', which define the coefficients before differentials
             of first two orders in lhs of the equation.
-        - Q : callable or const
+        - rhs : callable or const
             right-hand-side of the equation. If callable, must accept and return tf.Tensor.
         - domain : list
             defines the rectangular domain of the equation as a sequence of coordinate-wise bounds.
@@ -55,7 +55,7 @@ class DeepGalerkin(TFModel):
         config = dict(
             pde = dict(
                 form={'d1': (0, 1), 'd2': ((-1, 0), (0, 0))},
-                Q=5,
+                rhs=5,
                 initial_condition=lambda t: tf.sin(2 * np.pi * t),
                 bind_bc_ic=True,
                 domain=[[0, 1], [0, 3]],
@@ -108,8 +108,8 @@ class DeepGalerkin(TFModel):
             self.config.update({'pde/domain': [[0, 1]] * n_dims})
 
         # default value for rhs
-        if pde.get('Q') is None:
-            self.config.update({'pde/Q': 0})
+        if pde.get('rhs') is None:
+            self.config.update({'pde/rhs': 0})
 
         # make sure that initial conditions are callable
         init_cond = pde.get('initial_condition', None)
@@ -233,15 +233,15 @@ class DeepGalerkin(TFModel):
 
         # calculate targets-tensor using rhs of pde and created points-tensor
         points = getattr(self, 'inputs').get('points')
-        q = config.get('pde/Q')
-        if not callable(q):
-            if isinstance(q, (float, int)):
-                q_val = q
-                q = lambda *args: q_val * tf.ones_like(tf.reduce_sum(points, axis=1, keepdims=True))
+        rhs = config.get('pde/rhs')
+        if not callable(rhs):
+            if isinstance(rhs, (float, int)):
+                rhs_val = rhs
+                rhs = lambda *args: rhs_val * tf.ones_like(tf.reduce_sum(points, axis=1, keepdims=True))
             else:
                 raise ValueError("Cannot parse right-hand-side of the equation")
 
-        self.store_to_attr('targets', q(points))
+        self.store_to_attr('targets', rhs(points))
         return placeholders_, tensors_
 
     @classmethod
