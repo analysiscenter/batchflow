@@ -1,4 +1,4 @@
-"""File contains various tests for metrics in batchflow"""
+"""File contains various tests for classification metrics in batchflow"""
 import pytest
 from batchflow.models.metrics import ClassificationMetrics as cm
 import numpy as np
@@ -8,16 +8,24 @@ import numpy as np
     (np.array([[0, 1], [1, 0]]), np.array([0, 1])),
     (np.array([[[0, 1], [1, 0]], [[1, 1], [0, 0]]]), np.array([[0, 1], [1, 0]])),
 ])
-def test_diff_shapes_two_classes_acc(y_true, y_pred):
+def test_diff_shapes_two_classes(y_true, y_pred):
     """Testing different shape"""
     with pytest.raises(ValueError):
         cm(y_true, y_pred, fmt='labels', num_classes=2).accuracy()
+# может быть еще стоит передавать в функцию метрику
 
 def test_single_value_two_class():
     """Test on accuracy single value in case of two class classification"""
     y_true, y_pred = np.random.choice([0, 1], size=(5,)), np.random.choice([0, 1], size=(5,))
     acc = cm(y_true, y_pred, fmt='labels', num_classes=2).accuracy()
     assert isinstance(acc, np.floating)
+
+def test_axis_for_multiclass():
+    """Test on axis=None"""
+    y_true, y_pred = np.array([2, 3]), np.array([[0.1, 0.7, 0.9], [0.1, 0.9, 0.4]])
+    with pytest.raises(ValueError):
+        cm(y_true, y_pred, fmt='proba', axis=None, num_classes=3).accuracy()
+#тут может передать proba и logit через parametrize
 
 def test_vector_batches_two_class():
     """Test on accuracy vector with bacth shape if input is a multidimensional array"""
