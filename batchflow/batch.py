@@ -453,7 +453,7 @@ class Batch:
     @action
     @inbatch_parallel(init='indices', post='_assemble')
     def apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
-        """ Apply a function to each item in the batch
+        """ Apply a function to each item in the batch.
 
         Parameters
         ----------
@@ -466,7 +466,8 @@ class Batch:
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - sequence - a numpy-array, list, etc
-            - list of str - get data from several components
+            - tuple of str - get items from several components and use them as args
+            - list of str - get items from several components and apply `func` to each
 
         dst : str or array
             the destination to put the result in, can be:
@@ -495,20 +496,28 @@ class Batch:
                 self.dst[item] = func(self.src[item], *args, **kwargs)
         """
 
+        _to_iter = False
         if src is None:
             _args = args
         else:
             if isinstance(src, str):
                 pos = self.get_pos(None, src, ix)
                 src_attr = (getattr(self, src)[pos],)
+            elif isinstance(src, tuple) and np.all([isinstance(component, str) for component in src]):
+                src_attr = [getattr(self, component)[self.get_pos(None, component, ix)] for component in src]
             elif isinstance(src, list) and np.all([isinstance(component, str) for component in src]):
                 src_attr = [getattr(self, component)[self.get_pos(None, component, ix)] for component in src]
+                _to_iter = True
             else:
                 pos = self.get_pos(None, dst, ix)
                 src_attr = (src[pos],)
-            _args = tuple([*src_attr, *args])
+            _args = [tuple([src_item, *args]) for src_item in src_attr] if _to_iter else tuple([*src_attr, *args])
 
         if p is None or np.random.binomial(1, p):
+            if _to_iter:
+                if use_self:
+                    return tuple(func(self, *_arg, **kwargs) for _arg in _args)
+                return tuple(func(*_arg, **kwargs) for _arg in _args)
             if use_self:
                 return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
