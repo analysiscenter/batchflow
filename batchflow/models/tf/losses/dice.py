@@ -76,6 +76,11 @@ def dice(targets, predictions, weights=1.0, label_smoothing=0, scope=None,
     -------
     Tensor of the same type as targets.
     If reduction is NONE, this has the same shape as targets; otherwise, it is scalar.
+
+    Notes
+    -----
+    By default, dice will be added to ``loss_collection`` which will affect loss calculation and model training.
+    To prevent this, specify ``loss_collection=None``.
     """
     return _dice(targets, predictions, weights, label_smoothing, scope, loss_collection, reduction)
 
@@ -96,6 +101,11 @@ def dice2(targets, predictions, weights=1.0, label_smoothing=0, scope=None,
     -------
     Tensor of the same type as targets.
     If reduction is NONE, this has the same shape as targets; otherwise, it is scalar.
+
+    Notes
+    -----
+    By default, dice will be added to ``loss_collection`` which will affect loss calculation and model training.
+    To prevent this, specify ``loss_collection=None``.
     """
     return _dice(targets, predictions, weights, label_smoothing, scope, loss_collection, reduction, _square=True)
 
@@ -117,6 +127,11 @@ def dice_weighted(targets, predictions, weights=1.0, label_smoothing=0, scope=No
     -------
     Tensor of the same type as targets.
     If reduction is NONE, this has the same shape as targets; otherwise, it is scalar.
+
+    Notes
+    -----
+    By default, dice will be added to ``loss_collection`` which will affect loss calculation and model training.
+    To prevent this, specify ``loss_collection=None``.
     """
     return _dice(targets, predictions, weights, label_smoothing, scope, loss_collection, reduction,
                  _weights_power=weights_power)
@@ -139,6 +154,11 @@ def dice_weighted2(targets, predictions, weights=1.0, label_smoothing=0, scope=N
     -------
     Tensor of the same type as targets.
     If reduction is NONE, this has the same shape as targets; otherwise, it is scalar.
+
+    Notes
+    -----
+    By default, dice will be added to ``loss_collection`` which will affect loss calculation and model training.
+    To prevent this, specify ``loss_collection=None``.
     """
     return _dice(targets, predictions, weights, label_smoothing, scope, loss_collection, reduction,
                  _square=True, _weights_power=weights_power)
@@ -159,6 +179,11 @@ def dice_batch(targets, predictions, label_smoothing=0, scope=None, loss_collect
     -------
     Tensor of the same type as targets.
     If reduction is NONE, this has the same shape as targets; otherwise, it is scalar.
+
+    Notes
+    -----
+    By default, dice will be added to ``loss_collection`` which will affect loss calculation and model training.
+    To prevent this, specify ``loss_collection=None``.
     """
     return _dice(targets, predictions, 1., label_smoothing, scope, loss_collection, _per_batch=True)
 
@@ -178,6 +203,11 @@ def dice_batch2(targets, predictions, label_smoothing=0, scope=None, loss_collec
     -------
     Tensor of the same type as targets.
     If reduction is NONE, this has the same shape as targets; otherwise, it is scalar.
+
+    Notes
+    -----
+    By default, dice will be added to ``loss_collection`` which will affect loss calculation and model training.
+    To prevent this, specify ``loss_collection=None``.
     """
     return _dice(targets, predictions, 1., label_smoothing, scope, loss_collection,
                  _per_batch=True, _square=True)
