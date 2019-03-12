@@ -3,13 +3,14 @@
 # pylint: disable=redefined-outer-name
 import pytest
 import numpy as np
+from tensorflow.test import is_gpu_available
 
 from batchflow import Pipeline, ImagesBatch, Dataset
 from batchflow import B, V, C
-from batchflow.models.tf import VGG7, ResNet18, Inception_v1
+from batchflow.models.tf import VGG7, ResNet18, Inception_v1, MobileNet
 
 
-AVAILABLE_MODELS = [VGG7, ResNet18, Inception_v1]
+MODELS = [VGG7, ResNet18, Inception_v1, MobileNet]
 LOCATIONS = set(['initial_block', 'body', 'block', 'head'])
 
 
@@ -136,21 +137,21 @@ class Test_dataformat():
         assert model_args['block/data_format'] == 'channels_first'
 
 
-
-@pytest.mark.parametrize('model', AVAILABLE_MODELS)
+@pytest.mark.slow
+@pytest.mark.parametrize('model', MODELS)
 class Test_models:
-    """ Tests in this class show that we can (or cannot) train model with given 'data_format'.
+    """ Ensure that a model with given 'data_format' can be built and trained.
 
     There is a following pattern in every test:
         First of all, we get 'data' and 'config' via 'model_setup' fixture.
         Then we optionally modify 'config'. In most cases it is done only at 'location'.
         Finally, we assert that our modification was actually applied to a model by attempting
-        to train it on a small batch.
+        to build and train it with a small batch.
     """
     @pytest.mark.parametrize('location', ['common', 'inputs/images'])
     @pytest.mark.parametrize('data_format',
                              [None,
-                              pytest.param('channels_first', marks=pytest.mark.xfail),
+                              pytest.param('channels_first', marks=pytest.mark.skipif(not is_gpu_available(), 'No GPU')),
                               'channels_last'])
     def test_data_format(self, model, model_setup, pipeline, location, data_format):
         """ We can explicitly pass 'data_format' to inputs or common
@@ -159,7 +160,7 @@ class Test_models:
         -----
         If `data_format` is None, use a default value.
 
-        `channels_first` does not work in TF 1.12 on CPU as a corresponding pooling operation is not implemented yet.
+        `channels_first` might not work on CPU as corresponding convolutional and pooling kernels are not implemented yet.
         """
         expected_data_format = data_format or 'channels_last'
         dataset, model_config = model_setup(data_format=expected_data_format)

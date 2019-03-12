@@ -358,7 +358,8 @@ class TFModel(BaseModel):
                 an input tensor after transformations
         """
         # pylint:disable=too-many-statements
-        config = config.get('inputs')
+        full_config = config
+        config = full_config.get('inputs')
 
         names = names or []
         missing_names = set(names) - set(config.keys())
@@ -379,7 +380,7 @@ class TFModel(BaseModel):
         # if targets is defined in the input dict, these implicit aliases will be overwritten.
 
         param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
-        defaults = dict(data_format='channels_last')
+        defaults = dict(data_format=full_config('common/data_format', default='channels_last'))
 
         placeholders = dict()
         tensors = dict()
