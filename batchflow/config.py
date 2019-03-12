@@ -45,7 +45,7 @@ class Config:
             value = self._get(variables, config, pop=True, **kwargs)
         return value
 
-    def get(self, variables, config=None, default=None):
+    def get(self, variables, default=None, config=None):
         """ Returns variables from config
 
         Parameters
