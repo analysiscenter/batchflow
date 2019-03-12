@@ -12,6 +12,7 @@ from batchflow.models.tf import VGG7, ResNet18, Inception_v1, MobileNet
 
 MODELS = [VGG7, ResNet18, Inception_v1, MobileNet]
 LOCATIONS = set(['initial_block', 'body', 'block', 'head'])
+NO_GPU = pytest.mark.skipif(not is_gpu_available(), reason='No GPU')
 
 
 @pytest.fixture()
@@ -151,7 +152,7 @@ class Test_models:
     @pytest.mark.parametrize('location', ['common', 'inputs/images'])
     @pytest.mark.parametrize('data_format',
                              [None,
-                              pytest.param('channels_first', marks=pytest.mark.skipif(not is_gpu_available(), 'No GPU')),
+                              pytest.param('channels_first', marks=NO_GPU),
                               'channels_last'])
     def test_data_format(self, model, model_setup, pipeline, location, data_format):
         """ We can explicitly pass 'data_format' to inputs or common
@@ -160,7 +161,7 @@ class Test_models:
         -----
         If `data_format` is None, use a default value.
 
-        `channels_first` might not work on CPU as corresponding convolutional and pooling kernels are not implemented yet.
+        `channels_first` might not work on CPU as some convolutional and pooling kernels are not implemented yet.
         """
         expected_data_format = data_format or 'channels_last'
         dataset, model_config = model_setup(data_format=expected_data_format)
