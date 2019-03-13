@@ -380,7 +380,7 @@ class TFModel(BaseModel):
         # if targets is defined in the input dict, these implicit aliases will be overwritten.
 
         param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
-        defaults = dict(data_format=full_config('common/data_format', default='channels_last'))
+        defaults = dict(data_format=full_config.get('common/data_format', default='channels_last'))
 
         placeholders = dict()
         tensors = dict()
