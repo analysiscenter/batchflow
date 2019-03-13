@@ -298,11 +298,11 @@ class DeepGalerkin(TFModel):
             multiplier = 1
 
             # retrieving variables
-            n_dims = kwargs.get('n_dims')
+            n_dims = kwargs['n_dims']
             coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/inputs/coordinates:' + str(i))
                            for i in range(n_dims)]
 
-            domain = kwargs.get("domain")
+            domain = kwargs["domain"]
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
 
             init_cond = kwargs.get("initial_condition")
