@@ -313,8 +313,11 @@ class DeepGalerkin(TFModel):
     @classmethod
     def ansatz(cls, inputs, **kwargs):
         """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
-        of the model. Does so by applying one of present multipliers to the network output. Creates
-        a tf.Tensor `solution` - the final output of the model.
+        of the model. Does so by:
+        1. Applying one of preset multipliers to the network output
+           (effectively zeroing it out on boundaries)
+        2. Adding passed condition, so it is satisfied on boundaries
+        Creates a tf.Tensor `solution` - the final output of the model.
         """
         if kwargs["bind_bc_ic"]:
             add_term = 0
@@ -333,7 +336,7 @@ class DeepGalerkin(TFModel):
             n_dims_xs = n_dims if init_cond is None else n_dims - 1
             xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
 
-            # multiplicator for binding boundaries
+            # multiplicator for binding boundary conditions
             if n_dims_xs > 0:
                 lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
                                       for bounds in (lower, upper)]
@@ -341,7 +344,7 @@ class DeepGalerkin(TFModel):
                                              (upper_tf - lower_tf)**2,
                                              axis=1, name='xs_multiplier', keepdims=True)
 
-            # initial conditions are taken into account via special transformation
+            # ingore boundary condition as it is automatically set by initial condition
             if init_cond is not None:
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs["time_multiplier"]
