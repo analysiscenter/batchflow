@@ -81,7 +81,6 @@ class DeepGalerkin(TFModel):
         """ Overloads :meth:`.TFModel.default_config`. """
         config = super().default_config()
         config['ansatz'] = {}
-        config['common/boundary_condition'] = 0
         config['common/time_multiplier'] = 'sigmoid'
         config['common/bind_bc_ic'] = True
         return config
@@ -97,35 +96,42 @@ class DeepGalerkin(TFModel):
 
         # get dimensionality
         form = pde.get("form")
-        if form is None:
+        if form is not None:
+            n_dims = len(form.get("d1", form.get("d2", None)))
+            self.config.update({'pde/n_dims': n_dims,
+                                'initial_block/inputs': 'points',
+                                'inputs': dict(points={'shape': (n_dims, )})})
+        else:
             raise ValueError("Left-hand side is not specified. Use 'pde/form' config to set it up.")
-        n_dims = len(form.get("d1", form.get("d2", None)))
-        self.config.update({'pde/n_dims': n_dims,
-                            'initial_block/inputs': 'points',
-                            'inputs': dict(points={'shape': (n_dims, )})})
+
+        # default value for rhs
+        rhs = pde.get('rhs', 0)
+        if isinstance(rhs, (float, int)):
+            rhs_val = rhs
+            rhs = lambda x: rhs_val * tf.ones(shape=(tf.shape(x)[0], 1))
+            self.config.update({'pde/rhs': rhs})
+        elif not callable(rhs):
+            raise ValueError("Cannot parse right-hand-side of the equation")
 
         # default values for domain
         if pde.get('domain') is None:
             self.config.update({'pde/domain': [[0, 1]] * n_dims})
 
-        # default value for rhs
-        if pde.get('rhs') is None:
-            self.config.update({'pde/rhs': 0})
-
         # make sure that initial conditions are callable
         init_cond = pde.get('initial_condition', None)
         if init_cond is not None:
-            init_cond = init_cond if isinstance(init_cond, (tuple, list)) else (init_cond, )
+            init_cond = init_cond if isinstance(init_cond, (tuple, list)) else [init_cond]
             init_cond = [expression if callable(expression) else lambda *args, e=expression:
                          e for expression in init_cond]
             self.config.update({'pde/initial_condition': init_cond})
 
         # make sure that boundary condition is callable
-        bound_cond = pde.get('boundary_condition', None)
-        if bound_cond is not None:
-            if isinstance(bound_cond, (float, int)):
-                bound_cond_value = bound_cond
-                self.config.update({'pde/boundary_condition': lambda *args: bound_cond_value})
+        bound_cond = pde.get('boundary_condition', 0)
+        if isinstance(bound_cond, (float, int)):
+            bound_cond_value = bound_cond
+            self.config.update({'pde/boundary_condition': lambda *args: bound_cond_value})
+        elif not callable(bound_cond):
+            raise ValueError("Cannot parse boundary condition of the equation")
 
         # 'common' is updated with PDE-problem
         config = super().build_config(names)
@@ -139,7 +145,7 @@ class DeepGalerkin(TFModel):
         # retrieving variables
         ops = config.get('output')
         track = config.get('track')
-        n_dims = config.get('common/n_dims')
+        n_dims = config['common/n_dims']
         inputs = self.get('initial_block/inputs', config)
         coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/inputs/coordinates:' + str(i))
                        for i in range(n_dims)]
@@ -231,29 +237,25 @@ class DeepGalerkin(TFModel):
         return form
 
     def _make_inputs(self, names=None, config=None):
-        """ Create needed placeholders. """
+        """ Create necessary placeholders. """
         placeholders_, tensors_ = super()._make_inputs(names, config)
 
         # split input so we can access individual variables later
-        n_dims = config.get('pde/n_dims')
+        n_dims = config['pde/n_dims']
         tensors_['points'] = tf.split(tensors_['points'], n_dims, axis=1, name='coordinates')
         tensors_['points'] = tf.concat(tensors_['points'], axis=1)
 
         # calculate targets-tensor using rhs of pde and created points-tensor
         points = getattr(self, 'inputs').get('points')
-        rhs = config.get('pde/rhs')
-        if not callable(rhs):
-            if isinstance(rhs, (float, int)):
-                rhs_val = rhs
-                rhs = lambda *args: rhs_val * tf.ones_like(tf.reduce_sum(points, axis=1, keepdims=True))
-            else:
-                raise ValueError("Cannot parse right-hand-side of the equation")
-
+        rhs = config['pde/rhs']
         self.store_to_attr('targets', rhs(points))
         return placeholders_, tensors_
 
     @classmethod
     def _make_form_calculator(cls, form, coordinates, name='_callable'):
+        """ Get callable that computes differential form of a tf.Tensor
+        with respect to coordinates.
+        """
         n_dims = len(coordinates)
         d0_coeff = form.get("d0", 0)
         d1_coeffs = np.array(form.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
@@ -264,6 +266,7 @@ class DeepGalerkin(TFModel):
             raise ValueError('Nothing to compute. Some of the coefficients in "pde/form" must be non-zero')
 
         def _callable(net):
+            """ Computes differential form. """
             result = 0
 
             # function itself
@@ -282,12 +285,13 @@ class DeepGalerkin(TFModel):
 
             # derivatives of the second order
             for i in range(n_dims):
-                d1_ = tf.gradients(net, coordinates[i])[0]
-                for j, coeff in enumerate(d2_coeffs[i, :]):
-                    if callable(coeff):
-                        coeff = tf.reshape(coeff(points), shape=(-1, 1))
-                    if coeff != 0:
-                        result += tf.multiply(tf.gradients(d1_, coordinates[j])[0], coeff)
+                if np.any(d2_coeffs != 0):
+                    d1_ = tf.gradients(net, coordinates[i])[0]
+                    for j, coeff in enumerate(d2_coeffs[i, :]):
+                        if callable(coeff):
+                            coeff = tf.reshape(coeff(points), shape=(-1, 1))
+                        if coeff != 0:
+                            result += tf.multiply(tf.gradients(d1_, coordinates[j])[0], coeff)
 
             return result
 
@@ -309,10 +313,10 @@ class DeepGalerkin(TFModel):
     @classmethod
     def ansatz(cls, inputs, **kwargs):
         """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
-        of the model. Does so by applying one of preset multipliers to the network output. Creates
+        of the model. Does so by applying one of present multipliers to the network output. Creates
         a tf.Tensor `solution` - the final output of the model.
         """
-        if kwargs.get("bind_bc_ic"):
+        if kwargs["bind_bc_ic"]:
             add_term = 0
             multiplier = 1
 
@@ -325,11 +329,11 @@ class DeepGalerkin(TFModel):
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
 
             init_cond = kwargs.get("initial_condition")
-            bound_cond = kwargs.get("boundary_condition")
+            bound_cond = kwargs["boundary_condition"]
             n_dims_xs = n_dims if init_cond is None else n_dims - 1
             xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
 
-            # multiplicator for binding boundary conditions
+            # multiplicator for binding boundaries
             if n_dims_xs > 0:
                 lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
                                       for bounds in (lower, upper)]
@@ -337,19 +341,20 @@ class DeepGalerkin(TFModel):
                                              (upper_tf - lower_tf)**2,
                                              axis=1, name='xs_multiplier', keepdims=True)
 
-            # ignore boundary condition as it is automatically set by initial condition
-            if init_cond:
+            # initial conditions are taken into account via special transformation
+            if init_cond is not None:
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
-                time_mode = kwargs.get("time_multiplier")
+                time_mode = kwargs["time_multiplier"]
 
                 add_term += init_cond[0](xs_spatial)
                 multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond) == 1 else '00')(shifted)
 
-                # case of second derivative with respect to t in lhs of the equation
+                # multiple initial conditions
                 if len(init_cond) > 1:
                     add_term += init_cond[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
 
-            elif bound_cond:
+            # if there are no initial conditions, boundary conditions are used (default value is 0)
+            else:
                 add_term += bound_cond(xs_spatial)
 
             # apply transformation to inputs
