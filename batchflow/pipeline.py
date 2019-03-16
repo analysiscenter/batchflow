@@ -8,6 +8,7 @@ import queue as q
 import numpy as np
 
 from .base import Baseset
+from .config import Config
 from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
 from .model_dir import ModelDirectory
@@ -92,6 +93,7 @@ class Pipeline:
             self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
             self.models = pipeline.models.copy()
 
+        self.config = Config(self.config)
         self._stop_flag = False
         self._executor = None
         self._service_executor = None
