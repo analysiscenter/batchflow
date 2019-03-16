@@ -10,7 +10,7 @@ from . import TFModel
 
 class DeepGalerkin(TFModel):
     r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
-    with constant coefficients on rectangular domains using neural networks. Inspired by
+    with constant or functional coefficients on rectangular domains using neural networks. Inspired by
     Sirignano J., Spiliopoulos K. "`DGM: A deep learning algorithm for solving partial differential equations
     <http://arxiv.org/abs/1708.07469>`_"
 
