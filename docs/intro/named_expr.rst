@@ -152,8 +152,6 @@ P - a parallel wrapper
 It comes in handy for parallel actions so that :doc:`@inbatch_parallel <parallel>` could determine that
 different values should be passed to parallel invocations of the action.
 
-.. note:: For ``R``-expressions the default ``size`` will be ``B('size')``.
-
 For instance, each item in the batch will be rotated at its own angle::
 
     pipeline
@@ -168,14 +166,14 @@ since an angle randomized across batches only::
 Every image in the batch gets a noise of the same intensity (7%), but of a different color::
 
     pipeline.
-        .add_color_noise(p_noise=.07, color=P(R('uniform', 0, 255, size=10)))
-
-.. note:: If a batch size is greater than the variable value size, than an exception will be raised
-          as there is not enough values for each parallel invocations of an action.
+        .add_color_noise(p_noise=.07, color=P(R('uniform', 0, 255, size=3)))
 
 ``P`` can be used not only with ``R``-expressions::
 
     pipeline
         .some_action(P(V('loss_history')))
         .other_action(P(C('model_class')))
-        .yet_other_action(P(B('size')))
+        .yet_other_action(P(B('sensor_data')))
+
+However, more often ``P`` is applied to ``R``-expressions. That is why ``R`` might be omitted for brevity,
+i.e. ``P('normal', 0, 1))`` is equivalent for ``P(R('normal', 0, 1)))``, but a bit shorter.
