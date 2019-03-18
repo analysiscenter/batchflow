@@ -832,7 +832,7 @@ class ImagesBatch(BaseImagesBatch):
             c - contrast
             b - brightness
             s - sharpness
-        
+
         factors : sequnce of floats
             factors of enhancement for each operation listed in `order`.
         """
@@ -845,7 +845,7 @@ class ImagesBatch(BaseImagesBatch):
 
         if len(order) != len(factors):
             raise ValueError("'order' and 'factors' should be of same length!")
-        
+
         for alias, factor in zip(order, factors):
             enhancement = enhancements.get(alias, None)
             if enhancement is None:
