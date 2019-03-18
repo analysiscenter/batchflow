@@ -309,15 +309,12 @@ class R(NamedExpression):
         raise NotImplementedError("Assigning a value to a random variable is not supported")
 
     def __repr__(self):
-        return 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs) + ')'
+        repr_str = 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs)
+        return repr_str + ', size=' + str(self.size) + ')' if self.size else ')'
 
 
 class P(W):
     """ A wrapper for parallel actions
-
-    Notes
-    -----
-    For ``R``-expressions the default ``size`` will be ``B('size')``.
 
     Examples
     --------
@@ -332,17 +329,26 @@ class P(W):
         pipeline
             .rotate(angle=R('normal', 0, 1))
 
-    Generate 10 categorical random samples::
+    Generate 3 categorical random samples for each batch item::
 
         pipeline
-            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=10))
+            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3))
 
-    If a batch size is greater than 10, than an exception will be raised as there is not enough
-    values for each parallel invocations of an action.
+    Notes
+    -----
+    As P-wrapper is often used for ``R``-expressions, ``R`` can be omitted for brevity.
+    So ``P('normal', 0, 1))`` is equivalent to ``P(R('normal', 0, 1)))``, but a bit shorter.
     """
-    def __init__(self, name=None):
+    def __init__(self, name=None, *args, **kwargs):
+        if not isinstance(name, NamedExpression):
+            name = R(name, *args, **kwargs)
         if isinstance(name, R):
-            name.size = name.size if name.size is not None else B('size')
+            if name.size is None:
+                name.size = B('size')
+            elif isinstance(name.size, int):
+                name.size = B('size'), name.size
+            else:
+                name.size = (B('size'),) + tuple(name.size)
         super().__init__(name)
 
     def get(self, batch=None, pipeline=None, model=None, parallel=False):   # pylint:disable=arguments-differ
