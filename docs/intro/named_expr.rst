@@ -176,4 +176,4 @@ Every image in the batch gets a noise of the same intensity (7%), but of a diffe
         .yet_other_action(P(B('sensor_data')))
 
 However, more often ``P`` is applied to ``R``-expressions. That is why ``R`` might be omitted for brevity,
-i.e. ``P('normal', 0, 1))`` is equivalent for ``P(R('normal', 0, 1)))``, but a bit shorter.
+i.e. ``P('normal', 0, 1))`` is equivalent to ``P(R('normal', 0, 1)))``, but a bit shorter.

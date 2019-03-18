@@ -337,7 +337,7 @@ class P(W):
     Notes
     -----
     As P-wrapper is often used for ``R``-expressions, ``R`` can be omitted for brevity.
-    So ``P('normal', 0, 1))`` is equivalent for ``P(R('normal', 0, 1)))``, but a bit shorter.
+    So ``P('normal', 0, 1))`` is equivalent to ``P(R('normal', 0, 1)))``, but a bit shorter.
     """
     def __init__(self, name=None, *args, **kwargs):
         if not isinstance(name, NamedExpression):
