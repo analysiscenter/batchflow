@@ -821,20 +821,38 @@ class ImagesBatch(BaseImagesBatch):
         low = PIL.Image.new('RGB', image.size, low)
         return PIL.ImageChops.lighter(PIL.ImageChops.darker(image, high), low)
 
-    def _multiply_lightness_(self, image, multiplier):
-        """ Modify lightness of an image using multiplier (which operates on the lightness in HSL format)
+    def _enhance_image_(self, image, order='hcbs', factors=(1, 1, 1, 1)):
+        """ Apply enhancements from PIL.ImageEnhance to the image.
 
         Parameters
         ----------
-        multiplier : Number
-        src : str
-            Component to get images from. Default is 'images'.
-        dst : str
-            Component to write images to. Default is 'images'.
-        p : float
-            Probability of applying the transform. Default is 1.
+        order : str
+            defines order of operatoins, default is `hcbs`:
+            h - color
+            c - contrast
+            b - brightness
+            s - sharpness
+        
+        factors : sequnce of floats
+            factors of enhancement for each operation listed in `order`.
         """
-        return PIL.ImageEnhance.Brightness(image).enhance(multiplier)
+        enhancements = {
+            'h': 'Color',
+            'c': 'Contrast',
+            'b': 'Brightness',
+            's': 'Sharpness'
+        }
+
+        if len(order) != len(factors):
+            raise ValueError("'order' and 'factors' should be of same length!")
+        
+        for alias, factor in zip(order, factors):
+            enhancement = enhancements.get(alias, None)
+            if enhancement is None:
+                raise ValueError('Unknown enhancement alias: ', alias)
+            image = getattr(PIL.ImageEnhance, enhancement)(image).enhance(factor)
+
+        return image
 
     def _multiply_(self, image, multiplier=1., clip=False, preserve_type=False):
         """ Multiply each pixel by the given multiplier.
