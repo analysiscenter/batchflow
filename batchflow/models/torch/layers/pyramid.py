@@ -43,7 +43,7 @@ class PyramidPooling(nn.Module):
         if None in shape[1:]:
             # if some dimension is undefined
             raise ValueError("Pyramid pooling can only be applied to a tensor with a fully defined shape.")
-        
+
         item_shape = np.array(shape[2:] if self.axis == 1 else shape[1:-1])
 
         modules = nn.ModuleList()
@@ -55,7 +55,7 @@ class PyramidPooling(nn.Module):
                 pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
 
                 pool = ConvBlock(inputs, 'p', pool_op=pool_op, pool_size=pool_size,
-                                    pool_strides=pool_strides, **kwargs)
+                                 pool_strides=pool_strides, **kwargs)
                 conv = ConvBlock(pool, layout, filters=filters, kernel_size=kernel_size, **kwargs)
                 upsamp = Upsample(inputs=conv, factor=None, layout='b', shape=tuple(item_shape.tolist()), **kwargs)
                 module = nn.Sequential(pool, conv, upsamp)
