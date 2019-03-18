@@ -509,9 +509,9 @@ class Batch:
         if isinstance(src, list) and len(src) == len(dst):
             return tuple([self._apply_transform(ix, func, to_act, *args, src=item, use_self=use_self, **kwargs)
                           for item in src])
-        return self._apply_transform(ix, func, to_act, *args, src=src, use_self=use_self, **kwargs)
+        return self._apply_transform(ix, func, to_act, *args, src=src, dst=dst, use_self=use_self, **kwargs)
 
-    def _apply_transform(self, ix, func,  to_act, *args, src=None, use_self=False, **kwargs):
+    def _apply_transform(self, ix, func, to_act, *args, src=None, dst=None, use_self=False, **kwargs):
         """ Apply a function to each item in the batch.
 
         Parameters
@@ -530,11 +530,18 @@ class Batch:
             - sequence - a numpy-array, list, etc
             - tuple of str - get data from several components
 
+        dst : str or array
+            the destination to put the result in, can be:
+
+            - None
+            - str - a component name, e.g. 'images' or 'masks'
+            - array-like - a numpy-array, list, etc
+
         use_self : bool
             whether to pass ``self`` to ``func``
 
         args, kwargs
-            other parameters passed to ``func``  
+            other parameters passed to ``func``
         """
         if src is None:
             _args = args
