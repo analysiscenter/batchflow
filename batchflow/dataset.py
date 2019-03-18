@@ -62,6 +62,7 @@ class Dataset(Baseset):
         self.batch_class = batch_class
         self.preloaded = preloaded
 
+    @classmethod
     def from_dataset(cls, dataset, index, batch_class=None, copy=False):
         """ Create Dataset object from another dataset with a new index
             (usually a subset of the source dataset index)
@@ -224,12 +225,12 @@ class Dataset(Baseset):
         """ Create datasets for cross-validation
 
         Datasets are available as `cv0`, `cv1` and so on.
-        They already split into train and test parts.
+        They are already split into train and test parts.
 
         Parameters
         ----------
         method : {'kfold'}
-            a plitting method (only `kfold` is supported)
+            a splitting method (only `kfold` is supported)
 
         n_splits : int
             a number of folds
