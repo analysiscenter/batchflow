@@ -78,7 +78,7 @@ class TestDataset:
         assert len(dataset.validation) == 10
 
     def test_split_with_validation_implicit(self, dataset):
-        train_part, test_part, validation_part = 0.6, 0.25, 0.15
+        train_part, test_part, _ = 0.6, 0.25, 0.15
         dataset.split([train_part, test_part])
         assert dataset.validation is not None
         assert len(dataset.train) == 60

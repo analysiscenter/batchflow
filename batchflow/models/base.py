@@ -48,9 +48,9 @@ class BaseModel:
         return Config().pop(variables, config, **kwargs)
 
     @classmethod
-    def get(cls, variables, config, default=None):
+    def get(cls, variables, default=None, config=None):
         """ Return variables from config """
-        return Config().get(variables, config, default=default)
+        return Config().get(variables, default=default, config=config)
 
     @classmethod
     def put(cls, variable, value, config):
