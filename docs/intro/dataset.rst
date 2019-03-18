@@ -49,6 +49,26 @@ Parameters
 * `callable` - a function which gets an order and returns a shuffled order.
 
 
+Cross-validation
+----------------
+A dataset can also be partitioned for cross-validation.
+
+.. code-block:: python
+
+    dataset.cv_split(n_splits=3, shuffle=True)
+
+Now partitions which are also datasets can be available as `cv0`, `cv1` and so on.
+And each dataset is already split into train and test parts.
+
+.. code-block:: python
+
+    dataset = Dataset(10)
+    dataset.cv_split(n_splits=3, shuffle=False)
+    dataset.cv0.test.indices # [0, 1, 2, 3]
+    dataset.cv1.test.indices # [4, 5, 6]
+    dataset.cv2.test.indices # [7, 8, 9]
+
+
 Iterating over a dataset
 ------------------------
 
@@ -110,6 +130,7 @@ And then create a dataset with a new batch class:
 .. code-block:: python
 
    client_dataset = Dataset(client_index, batch_class=MyBatch)
+
 
 API
 ---

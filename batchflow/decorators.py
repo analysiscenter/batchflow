@@ -100,17 +100,17 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             """ Check dcorator's `init` and `post` parameters """
             if init is None:
                 raise ValueError("init cannot be None")
+
+            if isinstance(init, str):
+                try:
+                    init_fn = getattr(self, init)
+                except AttributeError:
+                    raise ValueError("init should refer to a method or property of the class", type(self).__name__,
+                                     "returning the list of arguments")
+            elif callable(init):
+                init_fn = init
             else:
-                if isinstance(init, str):
-                    try:
-                        init_fn = getattr(self, init)
-                    except AttributeError:
-                        raise ValueError("init should refer to a method or property of the class", type(self).__name__,
-                                         "returning the list of arguments")
-                elif callable(init):
-                    init_fn = init
-                else:
-                    init_fn = lambda *a, **k: init
+                init_fn = lambda *a, **k: init
 
             if post is not None:
                 if isinstance(init, str):
