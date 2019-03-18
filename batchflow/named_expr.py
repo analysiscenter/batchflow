@@ -309,7 +309,7 @@ class R(NamedExpression):
         raise NotImplementedError("Assigning a value to a random variable is not supported")
 
     def __repr__(self):
-        repr_str = 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs) 
+        repr_str = 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs)
         return repr_str + ', size=' + str(self.size) + ')' if self.size else ')'
 
 
