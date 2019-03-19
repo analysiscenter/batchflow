@@ -146,7 +146,7 @@ class DeepGalerkin(TFModel):
         ops = config.get('output')
         track = config.get('track')
         n_dims = config['common/n_dims']
-        inputs = self.get('initial_block/inputs', config)
+        inputs = config.get('initial_block/inputs', config)
         coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/inputs/coordinates:' + str(i))
                        for i in range(n_dims)]
 
