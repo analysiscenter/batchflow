@@ -80,7 +80,7 @@ class ModelDirectory:
         model = self.get(name)
         if model is None:
             raise KeyError("Model '%s' does not exist" % name)
-        elif isinstance(model, NonInitializedModel):
+        if isinstance(model, NonInitializedModel):
             with self.lock:
                 model = self.get(name)
                 if isinstance(model, NonInitializedModel):

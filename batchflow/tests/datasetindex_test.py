@@ -39,7 +39,7 @@ def test_calc_split_correctness_3():
     """ If 'shares' contains 3 elements, then validation subset is non-empty. """
     dsi = DatasetIndex(5)
     _, _, valid_share = dsi.calc_split(shares=[0.5, 0.5, 0])
-    assert valid_share == 1
+    assert valid_share == 0
 
 
 @pytest.mark.parametrize('constructor', [5,
@@ -86,41 +86,41 @@ def test_get_pos_iterable():
 
 def test_shuffle_bool_false():
     dsi = DatasetIndex(5)
-    left = dsi._shuffle(shuffle=False)
+    left = dsi.shuffle(shuffle=False)
     right = np.arange(5)
     assert (left == right).all()
 
 def test_shuffle_bool_true():
     dsi = DatasetIndex(5)
-    left = dsi._shuffle(shuffle=True)
+    left = dsi.shuffle(shuffle=True)
     right = np.arange(5)
     assert (left != right).any()
     assert set(left) == set(right)
 
 def test_shuffle_bool_int():
     dsi = DatasetIndex(5)
-    left = dsi._shuffle(shuffle=13)
+    left = dsi.shuffle(shuffle=13)
     right = np.arange(5)
     assert (left != right).any()
     assert set(left) == set(right)
 
 def test_shuffle_bool_randomstate():
     dsi = DatasetIndex(5)
-    left = dsi._shuffle(shuffle=np.random.RandomState(13))
+    left = dsi.shuffle(shuffle=np.random.RandomState(13))
     right = np.arange(5)
     assert (left != right).any()
     assert set(left) == set(right)
 
 def test_shuffle_bool_cross():
     dsi = DatasetIndex(5)
-    left = dsi._shuffle(shuffle=np.random.RandomState(13))
-    right = dsi._shuffle(shuffle=13)
+    left = dsi.shuffle(shuffle=np.random.RandomState(13))
+    right = dsi.shuffle(shuffle=13)
     assert (left == right).all()
 
 def test_shuffle_bool_callable():
     """ Callable 'shuffle' should return order. """
     dsi = DatasetIndex(5)
-    left = dsi._shuffle(shuffle=(lambda _: np.arange(5)))
+    left = dsi.shuffle(shuffle=(lambda _: np.arange(5)))
     assert (left == np.arange(5)).all()
 
 
