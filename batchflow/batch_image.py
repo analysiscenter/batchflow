@@ -842,17 +842,17 @@ class ImagesBatch(BaseImagesBatch):
             'b': 'Brightness',
             's': 'Sharpness'
         }
-        
+
         if isinstance(factor, float):
             factor = (factor,) * len(layout)
         if len(layout) != len(factor):
             raise ValueError("'layout' and 'factor' should be of same length!")
 
-        for alias, factor in zip(layout, factor):
+        for alias, multiplier in zip(layout, factor):
             enhancement = enhancements.get(alias)
             if enhancement is None:
                 raise ValueError('Unknown enhancement alias: ', alias)
-            image = getattr(PIL.ImageEnhance, enhancement)(image).enhance(factor)
+            image = getattr(PIL.ImageEnhance, enhancement)(image).enhance(multiplier)
 
         return image
 
