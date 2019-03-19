@@ -1257,7 +1257,7 @@ class TFModel(BaseModel):
         if config.get('inputs'):
             with tf.variable_scope('inputs'):
                 self._make_inputs(names, config)
-            inputs = self.get('initial_block/inputs', config)
+            inputs = config.get('initial_block/inputs')
 
             if isinstance(inputs, str):
                 if not config.get('common/data_format'):

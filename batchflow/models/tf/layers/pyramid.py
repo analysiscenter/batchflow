@@ -44,24 +44,24 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
         if None in shape[1:]:
             # if some dimension is undefined
             raise ValueError("Pyramid pooling can only be applied to a tensor with a fully defined shape.")
-        else:
-            item_shape = np.array(shape[1: -1] if data_format == 'channels_last' else shape[2:])
 
-            layers = []
-            for level in pyramid:
-                if level == 0:
-                    x = inputs
-                else:
-                    pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
-                    pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
+        item_shape = np.array(shape[1: -1] if data_format == 'channels_last' else shape[2:])
 
-                    x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
-                                   name='pool-%d' % level, **kwargs)
-                    x = conv_block(x, layout, filters=filters, kernel_size=kernel_size,
-                                   name='conv-%d' % level, **kwargs)
-                    x = upsample(x, layout='b', shape=item_shape, name='upsample-%d' % level, **kwargs)
-                layers.append(x)
-            x = tf.concat(layers, axis=axis, name='concat')
+        layers = []
+        for level in pyramid:
+            if level == 0:
+                x = inputs
+            else:
+                pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
+                pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
+
+                x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
+                               name='pool-%d' % level, **kwargs)
+                x = conv_block(x, layout, filters=filters, kernel_size=kernel_size,
+                               name='conv-%d' % level, **kwargs)
+                x = upsample(x, layout='b', shape=item_shape, name='upsample-%d' % level, **kwargs)
+            layers.append(x)
+        x = tf.concat(layers, axis=axis, name='concat')
     return x
 
 
