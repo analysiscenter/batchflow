@@ -827,7 +827,7 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         layout : str
-            defines layout of operatoins, default is `hcbs`:
+            defines layout of operations, default is `hcbs`:
             h - color
             c - contrast
             b - brightness
@@ -842,7 +842,9 @@ class ImagesBatch(BaseImagesBatch):
             'b': 'Brightness',
             's': 'Sharpness'
         }
-
+        
+        if isinstance(factor, float):
+            factor = (factor,) * len(layout)
         if len(layout) != len(factor):
             raise ValueError("'layout' and 'factor' should be of same length!")
 
