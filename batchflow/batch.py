@@ -504,7 +504,7 @@ class Batch:
             apply_transform(apply_mask, src=('images', 'masks'), dst='images', use_self=True)
             apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
         """
-        to_act = True if p is None or np.random.binomial(1, p) else False
+        to_act = bool(p is None or np.random.binomial(1, p))
 
         if isinstance(src, list) and len(src) == len(dst):
             return tuple([self._apply_transform(ix, func, to_act, *args, src=item, use_self=use_self, **kwargs)
