@@ -821,20 +821,20 @@ class ImagesBatch(BaseImagesBatch):
         low = PIL.Image.new('RGB', image.size, low)
         return PIL.ImageChops.lighter(PIL.ImageChops.darker(image, high), low)
 
-    def _enhance_image_(self, image, order='hcbs', factors=(1, 1, 1, 1)):
+    def _enhance_(self, image, layout='hcbs', factor=(1, 1, 1, 1)):
         """ Apply enhancements from PIL.ImageEnhance to the image.
 
         Parameters
         ----------
-        order : str
-            defines order of operatoins, default is `hcbs`:
+        layout : str
+            defines layout of operatoins, default is `hcbs`:
             h - color
             c - contrast
             b - brightness
             s - sharpness
 
-        factors : sequnce of floats
-            factors of enhancement for each operation listed in `order`.
+        factor : float or tuple of float
+            factor of enhancement for each operation listed in `layout`.
         """
         enhancements = {
             'h': 'Color',
@@ -843,11 +843,11 @@ class ImagesBatch(BaseImagesBatch):
             's': 'Sharpness'
         }
 
-        if len(order) != len(factors):
-            raise ValueError("'order' and 'factors' should be of same length!")
+        if len(layout) != len(factor):
+            raise ValueError("'layout' and 'factor' should be of same length!")
 
-        for alias, factor in zip(order, factors):
-            enhancement = enhancements.get(alias, None)
+        for alias, factor in zip(layout, factor):
+            enhancement = enhancements.get(alias)
             if enhancement is None:
                 raise ValueError('Unknown enhancement alias: ', alias)
             image = getattr(PIL.ImageEnhance, enhancement)(image).enhance(factor)
