@@ -507,8 +507,8 @@ class Batch:
         to_act = bool(p is None or np.random.binomial(1, p))
 
         if isinstance(src, list) and len(src) == len(dst):
-            return tuple([self._apply_transform(ix, func, to_act, *args, src=item, use_self=use_self, **kwargs)
-                          for item in src])
+            return tuple([self._apply_transform(ix, func, to_act, *args, src=component, use_self=use_self, **kwargs)
+                          for component in src])
         return self._apply_transform(ix, func, to_act, *args, src=src, dst=dst, use_self=use_self, **kwargs)
 
     def _apply_transform(self, ix, func, to_act, *args, src=None, dst=None, use_self=False, **kwargs):
