@@ -472,7 +472,7 @@ class Batch:
         dst : str or array
             the destination to put the result in, can be:
 
-            - None
+            - None - in this case dst is set to be same as src
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 

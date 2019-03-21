@@ -83,8 +83,8 @@ def transform_actions(prefix='', suffix='', wrapper=None):
                     #pylint: disable=cell-var-from-loop
                     wrapped_method = method
                     @wraps(wrapped_method)
-                    def _func(self, *args, src='images', dst='images', target='for', **kwargs):
-                        return getattr(cls, wrapper)(self, wrapped_method, src=src, dst=dst,
+                    def _func(self, *args, src='images', target='for', **kwargs):
+                        return getattr(cls, wrapper)(self, wrapped_method, src=src,
                                                      use_self=True, target=target, *args, **kwargs)
                     return _func
                 name_slice = slice(len(prefix), -len(suffix))
