@@ -495,6 +495,9 @@ class Batch:
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
 
+        If `src` is a list with two or more elements, `dst` should be list or
+        tuple of the same lenght.
+
         Examples
         --------
 
@@ -506,9 +509,12 @@ class Batch:
         """
         to_act = bool(p is None or np.random.binomial(1, p))
 
-        if isinstance(src, list) and len(src) == len(dst):
-            return tuple([self._apply_transform(ix, func, to_act, *args, src=component, use_self=use_self, **kwargs)
-                          for component in src])
+        dst = src if dst is None else dst
+
+        if isinstance(src, list) and len(src) > 1 and isinstance(dst, (list, tuple)) and len(src) == len(dst):
+            return tuple([self._apply_transform(ix, func, to_act, *args, src=src_component,
+                                                dst=dst_component, use_self=use_self, **kwargs)
+                          for src_component, dst_component in zip(src, dst)])
         return self._apply_transform(ix, func, to_act, *args, src=src, dst=dst, use_self=use_self, **kwargs)
 
     def _apply_transform(self, ix, func, to_act, *args, src=None, dst=None, use_self=False, **kwargs):
@@ -549,7 +555,7 @@ class Batch:
             if isinstance(src, str):
                 pos = self.get_pos(None, src, ix)
                 src_attr = (getattr(self, src)[pos],)
-            elif isinstance(src, tuple) and np.all([isinstance(component, str) for component in src]):
+            elif isinstance(src, (tuple, list)) and np.all([isinstance(component, str) for component in src]):
                 src_attr = [getattr(self, component)[self.get_pos(None, component, ix)] for component in src]
             else:
                 pos = self.get_pos(None, dst, ix)
