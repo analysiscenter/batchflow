@@ -564,6 +564,8 @@ class FilesIndex(DatasetIndex):
 
     def build_from_index(self, index, paths, dirs):
         """ Build index from another index for indices given. """
+        if isinstance(index, DatasetIndex):
+            index = index.indices
         if isinstance(paths, dict):
             self._paths = dict((file, paths[file]) for file in index)
         else:
