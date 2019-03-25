@@ -509,8 +509,6 @@ class Batch:
         """
         to_act = bool(p is None or np.random.binomial(1, p))
 
-        dst = src if dst is None else dst
-
         if isinstance(src, list) and len(src) > 1 and isinstance(dst, (list, tuple)) and len(src) == len(dst):
             return tuple([self._apply_transform(ix, func, to_act, *args, src=src_component,
                                                 dst=dst_component, use_self=use_self, **kwargs)
@@ -771,7 +769,12 @@ class Batch:
             traceback.print_tb(all_errors[0].__traceback__)
             raise RuntimeError("Could not assemble the batch")
         if dst is None:
-            dst = kwargs.get('components', self.components)
+            dst_default = kwargs.get('dst_default', 'src')
+            if dst_default == 'src':
+                dst = kwargs.get('src')
+            elif dst_default == 'components':
+                dst = self.components
+
         if not isinstance(dst, (list, tuple, np.ndarray)):
             dst = [dst]
 
