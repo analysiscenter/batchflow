@@ -1,22 +1,7 @@
 """File contains various tests for classification metrics in batchflow"""
 import pytest
-from batchflow.models.metrics import ClassificationMetrics as cm
 import numpy as np
-
-# define parameters
-
-TEST_PARAMETERS = [
-    (np.array([0, 1]), np.array(1)),
-    (np.array(1), np.array([0, 1])),
-    (np.array([[0, 1], [1, 0]]), np.array([0, 1])),
-    (np.array([0, 1]), np.array([[0, 1], [1, 0]])),
-    (np.array([[[0, 1], [1, 0]], [[1, 1], [0, 0]]]), np.array([[0, 1], [1, 0]])),
-    (np.array([[0, 1], [1, 0]]), np.array([[[0, 1], [1, 0]], [[1, 1], [0, 0]]]))]
-
-TEST_PARAM_MULTICLASS = [
-    (np.array(2), np.array([[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]])),
-    (np.array([[[0, 1, 0], [0, 1, 0], [1, 0, 0], [0, 0, 1]], [[1, 0, 0], [1, 1, 0], [1, 0, 1], [0, 0, 1]]]),
-     np.array([[0.1, 0.8, 0.1], [0.1, 0.8, 0.1], [0.8, 0.1, 0.1], [0.8, 0.1, 0.1]]))]
+from batchflow.models.metrics import ClassificationMetrics as cm
 
 # tests for confusion matrix
 
@@ -34,58 +19,114 @@ def test_confusion_matrix_multiclass():
     conf_matrix_calc = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3)._confusion_matrix  #pylint:disable=protected-access
     assert (conf_matrix_calc == conf_matrix).all()
 
-# accuracy tests
+# tests on shapes
 
-@pytest.mark.parametrize('y_true,y_pred', TEST_PARAMETERS)
-def test_diff_shapes_two_classes_acc(y_true, y_pred):
+@pytest.mark.parametrize('metrics', [
+    ('accuracy'),
+    ('f1_score'),
+    ('true_positive_rate'),
+    ('false_positive_rate')
+])
+def test_diff_shapes_two_classes_acc(metrics):
     """Testing different shape"""
+    y_true_1, y_pred_1 = np.array([0, 1]), np.array(1)
+    y_true_2, y_pred_2 = np.array([[0, 1], [1, 0]]), np.array([0, 1])
+    y_true_3, y_pred_3 = np.array([[[0, 1], [1, 0]], [[1, 1], [0, 0]]]), np.array([[0, 1], [1, 0]])
     with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='labels', num_classes=2).accuracy()
+        getattr(cm(y_true_1, y_pred_1, fmt='labels', num_classes=2), metrics)()
+    with pytest.raises(ValueError):
+        getattr(cm(y_true_2, y_pred_2, fmt='labels', num_classes=2), metrics)()
+    with pytest.raises(ValueError):
+        getattr(cm(y_true_3, y_pred_3, fmt='labels', num_classes=2), metrics)()
 
-@pytest.mark.parametrize('y_true,y_pred', TEST_PARAM_MULTICLASS)
-def test_diff_shapes_multiclass_acc(y_true, y_pred):
+@pytest.mark.parametrize('metrics', [
+    ('accuracy'),
+    ('f1_score'),
+    ('true_positive_rate'),
+    ('false_positive_rate')
+])
+def test_diff_shapes_multiclass_acc(metrics):
     """Testing different shape"""
+    y_true_1, y_pred_1 = np.array(2), np.array([[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]])
+    y_true_2 = np.array([[[0, 1, 0], [0, 1, 0], [1, 0, 0], [0, 0, 1]], [[1, 0, 0], [1, 1, 0], [1, 0, 1], [0, 0, 1]]])
+    y_pred_2 = np.array([[0.1, 0.8, 0.1], [0.1, 0.8, 0.1], [0.8, 0.1, 0.1], [0.8, 0.1, 0.1]])
     with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).accuracy()
+        getattr(cm(y_true_1, y_pred_1, fmt='proba', axis=1, num_classes=3), metrics)()
+    with pytest.raises(ValueError):
+        getattr(cm(y_true_2, y_pred_2, fmt='proba', axis=1, num_classes=3), metrics)()
 
-def test_single_value_two_class_acc():
+@pytest.mark.parametrize('metrics, metrics_shape', [
+    ('accuracy', ()),
+    ('f1_score', (1, 1)),
+    ('true_positive_rate', (1, 1)),
+    ('false_positive_rate', (1, 1))
+])
+def test_single_value_two_class(metrics, metrics_shape):
     """Test on accuracy single value in case of two class classification"""
     y_true, y_pred = np.random.choice([0, 1], size=(5,)), np.random.choice([0, 1], size=(5,))
-    acc = cm(y_true, y_pred, fmt='labels', num_classes=2).accuracy()
-    assert isinstance(acc, np.floating)
+    test_shape = getattr(cm(y_true, y_pred, fmt='labels', num_classes=2), metrics)().shape
+    assert test_shape == metrics_shape
 
-def test_vector_multiclass_acc():
+@pytest.mark.parametrize('metrics, metrics_shape', [
+    ('accuracy', ()),
+    ('f1_score', (1, 1)),
+    ('true_positive_rate', (1, 1)),
+    ('false_positive_rate', (1, 1))
+])
+def test_vector_multiclass(metrics, metrics_shape):
     """Test on accuracy multiclass"""
-    y_true = np.array([2, 1])
-    y_pred = np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    acc = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).accuracy()
-    assert isinstance(acc, np.floating)
+    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
+    test_shape = getattr(cm(y_true, y_pred, fmt='proba', axis=1, num_classes=2), metrics)().shape
+    assert test_shape == metrics_shape
 
-def test_vector_batches_two_class_acc():
+@pytest.mark.parametrize('metrics, metrics_shape', [
+    ('accuracy', (3, )),
+    ('f1_score', (3, 1)),
+    ('true_positive_rate', (3, 1)),
+    ('false_positive_rate', (3, 1))
+])
+def test_vector_batches_two_class(metrics, metrics_shape):
     """Test on accuracy vector with batch shape if input is a multidimensional array"""
     y_true = np.array([[[1, 1], [0, 1]], [[0, 1], [1, 1]], [[1, 0], [1, 1]]])
     y_pred = np.array([[[0, 1], [1, 1]], [[1, 0], [0, 0]], [[0, 0], [0, 1]]])
-    shape = cm(y_true, y_pred, fmt='labels', num_classes=2).accuracy().shape
-    assert shape == (3,)
+    test_shape = getattr(cm(y_true, y_pred, fmt='labels', num_classes=2), metrics)().shape
+    assert test_shape == metrics_shape
 
-def test_vector_batches_multiclass_acc():
+@pytest.mark.parametrize('metrics, metrics_shape', [
+    ('accuracy', (2, )),
+    ('f1_score', (2, 1)),
+    ('true_positive_rate', (2, 1)),
+    ('false_positive_rate', (2, 1))
+])
+def test_vector_batches_multiclass(metrics, metrics_shape):
     """Test on accuracy vector with batch shape if input is a multidimensional array multiclass"""
     y_true = np.array([[[0, 1, 0], [1, 0, 0]], [[1, 0, 0], [0, 0, 1]]])
     y_pred = np.array([[[0.1, 0.8, 0.1], [0.8, 0.1, 0.1]], [[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]]])
-    shape = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).accuracy().shape
-    assert shape == (2,)
+    test_shape = getattr(cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3), metrics)().shape
+    assert test_shape == metrics_shape
 
-def test_axis_for_multiclass_acc():
+@pytest.mark.parametrize('metrics', [
+    ('accuracy'),
+    ('f1_score'),
+    ('true_positive_rate'),
+    ('false_positive_rate')
+])
+def test_axis_for_multiclass(metrics):
     """Test on axis=None"""
     y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
     with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='proba', axis=None, num_classes=3).accuracy()
+        getattr(cm(y_true, y_pred, fmt='proba', axis=None, num_classes=3), metrics)()
 
-def test_accuracy_calculation():
+#accuracy tests
+
+@pytest.mark.parametrize('y_true,y_pred,acc', [
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 0.0),
+    (np.array([1, 1, 0, 1]), np.array([1, 1, 1, 0]), 0.5),
+    (np.array([1, 1, 0, 1]), np.array([1, 1, 0, 1]), 1.0)
+])
+def test_accuracy_calculation(y_true, y_pred, acc):
     """Test on correctness of accuracy calculation"""
-    y_true, y_pred = np.array([1, 1, 0, 1, 0, 0]), np.array([1, 1, 0, 0, 1, 1])
-    accuracy = 0.5
-    assert accuracy == cm(y_true, y_pred, fmt='labels', num_classes=2).accuracy()
+    assert acc == cm(y_true, y_pred, fmt='labels', num_classes=2).accuracy()
 
 def test_accuracy_calculation_multiclass():
     """Test on correctness of accuracy calculation"""
@@ -95,55 +136,14 @@ def test_accuracy_calculation_multiclass():
 
 # f1 score tests
 
-@pytest.mark.parametrize('y_true,y_pred', TEST_PARAMETERS)
-def test_diff_shapes_two_classes_f1(y_true, y_pred):
-    """Testing different shape"""
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='labels', num_classes=2).f1_score()
-
-@pytest.mark.parametrize('y_true,y_pred', TEST_PARAM_MULTICLASS)
-def test_diff_shapes_multiclass_f1(y_true, y_pred):
-    """Testing different shape"""
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).f1_score()
-
-def test_single_value_two_class_f1():
-    """Test on accuracy single value in case of two class classification"""
-    y_true, y_pred = np.random.choice([0, 1], size=(5,)), np.random.choice([0, 1], size=(5,))
-    shape = cm(y_true, y_pred, fmt='labels', num_classes=2).f1_score().shape
-    assert shape == (1, 1)
-
-def test_vector_multiclass_f1():
-    """Test on f1 score shape with multiclass"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    shape = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).f1_score().shape
-    assert shape == (1, 1)
-
-def test_vector_batches_two_class_f1():
-    """Test on f1 shape with bacth shape if input is a multidimensional array"""
-    y_true = np.array([[[1, 1], [0, 1]], [[0, 1], [1, 1]], [[1, 0], [1, 1]]])
-    y_pred = np.array([[[0, 1], [1, 1]], [[1, 0], [0, 0]], [[0, 0], [0, 1]]])
-    shape = cm(y_true, y_pred, fmt='labels', num_classes=2).f1_score().shape
-    assert shape == (3, 1)
-
-def test_vector_batches_multiclass_f1():
-    """Test on f1 shape with bacth shape multiclass"""
-    y_true = np.array([[[0, 1, 0], [1, 0, 0]], [[1, 0, 0], [0, 0, 1]]])
-    y_pred = np.array([[[0.1, 0.8, 0.1], [0.8, 0.1, 0.1]], [[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]]])
-    shape = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).f1_score().shape
-    assert shape == (2, 1)
-
-def test_axis_for_multiclass_f1():
-    """Test on axis=None"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='proba', axis=None, num_classes=3).f1_score()
-
-def test_f1_calculation():
+@pytest.mark.parametrize('y_true, y_pred, f1_score', [
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 0.5),
+    (np.array([1, 1, 1, 0]), np.array([1, 1, 1, 0]), 1.0)
+])
+def test_f1_calculation(y_true, y_pred, f1_score):
     """Test on correctness of f1_score calculation"""
-    y_true, y_pred = np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0])
-    f_1 = 0.5
-    assert f_1 == cm(y_true, y_pred, fmt='labels', num_classes=2).f1_score()
+    assert f1_score == cm(y_true, y_pred, fmt='labels', num_classes=2).f1_score()
 
 def test_f1_calculation_multiclass():
     """Test on correctness of f1 score"""
@@ -153,55 +153,13 @@ def test_f1_calculation_multiclass():
 
 # recall tests
 
-@pytest.mark.parametrize('y_true,y_pred', TEST_PARAMETERS)
-def test_diff_shapes_two_classes_tpr(y_true, y_pred):
-    """Testing different shape"""
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='labels', num_classes=2).true_positive_rate()
-
-@pytest.mark.parametrize('y_true,y_pred', TEST_PARAM_MULTICLASS)
-def test_diff_shapes_multiclass_tpr(y_true, y_pred):
-    """Testing different shape"""
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).true_positive_rate()
-
-def test_single_value_two_class_tpr():
-    """Test on tpr single value in case of two class classification"""
-    y_true, y_pred = np.random.choice([0, 1], size=(5,)), np.random.choice([0, 1], size=(5,))
-    shape = cm(y_true, y_pred, fmt='labels', num_classes=2).true_positive_rate().shape
-    assert shape == (1, 1)
-
-def test_vector_multiclass_tpr():
-    """Test on tpr shape multiclass"""
-    y_true = np.array([2, 1])
-    y_pred = np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    shape = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).true_positive_rate().shape
-    assert shape == (1, 1)
-
-def test_vector_batches_two_class_tpr():
-    """Test on tpr shape with batch if input is a multidimensional array"""
-    y_true = np.array([[[1, 1], [0, 1]], [[0, 1], [1, 1]], [[1, 0], [1, 1]]])
-    y_pred = np.array([[[0, 1], [1, 1]], [[1, 0], [0, 0]], [[0, 0], [0, 1]]])
-    shape = cm(y_true, y_pred, fmt='labels', num_classes=2).true_positive_rate().shape
-    assert shape == (3, 1)
-
-def test_vector_batches_multiclass_tpr():
-    """Test on tpr shape with batch multiclass"""
-    y_true = np.array([[[0, 1, 0], [1, 0, 0]], [[1, 0, 0], [0, 0, 1]]])
-    y_pred = np.array([[[0.1, 0.8, 0.1], [0.8, 0.1, 0.1]], [[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]]])
-    shape = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).true_positive_rate().shape
-    assert shape == (2, 1)
-
-def test_axis_for_multiclass_tpr():
-    """Test on axis=None"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='proba', axis=None, num_classes=3).true_positive_rate()
-
-def test_tpr_calculation():
+@pytest.mark.parametrize('y_true, y_pred, tpr', [
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 0.5),
+    (np.array([1, 1, 0, 0]), np.array([1, 1, 1, 0]), 1.0)
+])
+def test_tpr_calculation(y_true, y_pred, tpr):
     """Test on correctness of true positive rate calculation"""
-    y_true, y_pred = np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0])
-    tpr = 0.5
     assert tpr == cm(y_true, y_pred, fmt='labels', num_classes=2).true_positive_rate()
 
 def test_tpr_calculation_multiclass():
@@ -212,55 +170,13 @@ def test_tpr_calculation_multiclass():
 
 # false positive rate tests
 
-@pytest.mark.parametrize('y_true,y_pred', TEST_PARAMETERS)
-def test_diff_shapes_two_classes_fpr(y_true, y_pred):
-    """Testing different shape"""
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='labels', num_classes=2).false_positive_rate()
-
-@pytest.mark.parametrize('y_true,y_pred', TEST_PARAM_MULTICLASS)
-def test_diff_shapes_multiclass_fpr(y_true, y_pred):
-    """Testing different shape"""
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).false_positive_rate()
-
-def test_single_value_two_class_fpr():
-    """Test on fpr shape in case of two class classification"""
-    y_true, y_pred = np.array([0, 1, 0, 1]), np.array([0, 1, 1, 1])
-    shape = cm(y_true, y_pred, fmt='labels', num_classes=2).false_positive_rate().shape
-    assert shape == (1, 1)
-
-def test_vector_multiclass_fpr():
-    """Test on fpr shape multiclass"""
-    y_true = np.array([2, 1])
-    y_pred = np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    shape = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).false_positive_rate().shape
-    assert shape == (1, 1)
-
-def test_vector_batches_two_class_fpr():
-    """Test on fpr shape with batch if input is a multidimensional array"""
-    y_true = np.array([[[1, 1], [0, 1]], [[0, 1], [1, 1]], [[1, 0], [1, 1]]])
-    y_pred = np.array([[[0, 1], [1, 1]], [[1, 0], [0, 0]], [[0, 0], [0, 1]]])
-    shape = cm(y_true, y_pred, fmt='labels', num_classes=2).false_positive_rate().shape
-    assert shape == (3, 1)
-
-def test_vector_batches_multiclass_fpr():
-    """Test on fpr shape with batch multiclass"""
-    y_true = np.array([[[0, 1, 0], [1, 0, 0]], [[1, 0, 0], [0, 0, 1]]])
-    y_pred = np.array([[[0.1, 0.8, 0.1], [0.8, 0.1, 0.1]], [[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]]])
-    shape = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).false_positive_rate().shape
-    assert shape == (2, 1)
-
-def test_axis_for_multiclass_fpr():
-    """Test on axis=None"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    with pytest.raises(ValueError):
-        cm(y_true, y_pred, fmt='proba', axis=None, num_classes=3).false_positive_rate()
-
-def test_fpr_calculation():
+@pytest.mark.parametrize('y_true, y_pred, fpr', [
+    (np.array([0, 0, 0, 1]), np.array([0, 0, 0, 0]), 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 0.5),
+    (np.array([0, 0, 0, 1]), np.array([1, 1, 1, 1]), 1.0)
+])
+def test_fpr_calculation(y_true, y_pred, fpr):
     """Test on correctness of false positive rate calculation"""
-    y_true, y_pred = np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0])
-    fpr = 0.5
     assert fpr == cm(y_true, y_pred, fmt='labels', num_classes=2).false_positive_rate()
 
 def test_fpr_calculation_multiclass():
