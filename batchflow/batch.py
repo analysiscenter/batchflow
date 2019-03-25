@@ -359,7 +359,7 @@ class Batch:
         else:
             super().__setattr__(name, value)
 
-    def put_into_data(self, data, components=None):
+    def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
         if self.components is None:
             _src = data
@@ -370,7 +370,7 @@ class Batch:
         if components is None:
             self._data = _src
         else:
-            components = [components] if isinstance(components, str) else components
+            components = [dst] if isinstance(dst, str) else dst
             for i, comp in enumerate(components):
                 if isinstance(_src, dict):
                     comp_src = _src[comp]
@@ -787,13 +787,13 @@ class Batch:
             self._assemble_component(result, component=component, **kwargs)
         return self
 
-    @inbatch_parallel('indices', post='_assemble', target='f')
-    def _load_blosc(self, ix, src=None, components=None):
+    @inbatch_parallel('indices', post='_assemble', target='f', dst_default='components')
+    def _load_blosc(self, ix, src=None, dst=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src)
         with open(file_name, 'rb') as f:
             data = dill.loads(blosc.decompress(f.read()))
-            components = tuple(components or self.components)
+            components = tuple(dst or self.components)
             try:
                 item = tuple(data[i] for i in components)
             except Exception as e:
@@ -814,7 +814,7 @@ class Batch:
             data = dict(zip(components, item))
             f.write(blosc.compress(dill.dumps(data)))
 
-    def _load_table(self, src, fmt, components=None, post=None, *args, **kwargs):
+    def _load_table(self, src, fmt, dst=None, post=None, *args, **kwargs):
         """ Load a data frame from table formats: csv, hdf5, feather """
         if fmt == 'csv':
             if 'index_col' in kwargs:
@@ -835,9 +835,9 @@ class Batch:
             _data = _data.loc[list(self.indices)].compute()
 
         if callable(post):
-            _data = post(_data, src=src, fmt=fmt, components=components, **kwargs)
+            _data = post(_data, src=src, fmt=fmt, dst=dst, **kwargs)
         else:
-            components = tuple(components or self.components)
+            components = tuple(dst or self.components)
             _new_data = dict()
             for i, comp in enumerate(components):
                 _new_data[comp] = _data.iloc[:, i].values
@@ -887,7 +887,7 @@ class Batch:
         return self
 
     @action
-    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
+    def load(self, *args, src=None, fmt=None, dst=None, **kwargs):
         """ Load data from another array or a file.
 
         Parameters
@@ -898,23 +898,23 @@ class Batch:
         fmt : str
             a source format, one of None, 'blosc', 'csv', 'hdf5', 'feather'
 
-        components : None or str or tuple of str
+        dst : None or str or tuple of str
             components to load
 
         **kwargs :
             other parameters to pass to format-specific loaders
         """
         _ = args
-        components = [components] if isinstance(components, str) else components
+        components = [dst] if isinstance(dst, str) else dst
         if components is not None:
             self.add_components(np.setdiff1d(components, self.components).tolist())
 
         if fmt is None:
             self.put_into_data(src, components)
         elif fmt == 'blosc':
-            self._load_blosc(src=src, components=components, **kwargs)
+            self._load_blosc(src=src, dst=components, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:
-            self._load_table(src=src, fmt=fmt, components=components, **kwargs)
+            self._load_table(src=src, fmt=fmt, dst=components, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
         return self

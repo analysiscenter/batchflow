@@ -177,7 +177,7 @@ class BaseImagesBatch(Batch):
         raise NotImplementedError("Must be implemented in a child class")
 
     @action
-    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
+    def load(self, *args, src=None, fmt=None, dst=None, **kwargs):
         """ Load data.
 
         .. note:: if `fmt='images'` than ``components`` must be a single component (str).
@@ -189,12 +189,12 @@ class BaseImagesBatch(Batch):
             Path to the folder with data. If src is None then path is determined from the index.
         fmt : {'image', 'blosc', 'csv', 'hdf5', 'feather'}
             Format of the file to download.
-        components : str, sequence
+        dst : str, sequence
             components to download.
         """
         if fmt == 'image':
-            return self._load_image(src, fmt=fmt, dst=components)
-        return super().load(src=src, fmt=fmt, components=components, *args, **kwargs)
+            return self._load_image(src, fmt=fmt, dst=dst)
+        return super().load(src=src, fmt=fmt, dst=dst, *args, **kwargs)
 
 
     def _dump_image(self, ix, src='images', dst=None, fmt=None):
