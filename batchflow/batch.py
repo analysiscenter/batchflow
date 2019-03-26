@@ -367,7 +367,7 @@ class Batch:
             _src = data if isinstance(data, tuple) or data is None else tuple([data])
         _src = self.get_items(self.indices, _src)
 
-        if components is None:
+        if dst is None:
             self._data = _src
         else:
             components = [dst] if isinstance(dst, str) else dst
