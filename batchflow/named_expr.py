@@ -85,9 +85,9 @@ class W(NamedExpression):
     --------
     ::
 
-        N(V('variable'))
-        N(B(copy=True))
-        N(R('normal', 0, 1, size=B('size')))
+        W(V('variable'))
+        W(B(copy=True))
+        W(R('normal', 0, 1, size=B('size')))
     """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a wrapped named expression """
@@ -268,22 +268,28 @@ class D(NamedExpression):
         D('classes')
         D('organization')
     """
+    def _get_name_dataset(self, batch=None, pipeline=None, model=None):
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        pipeline = batch.pipeline or pipeline
+        dataset = pipeline.dataset if pipeline is not None else None
+        dataset = dataset or batch.dataset
+        if dataset is None:
+            raise ValueError("Dataset is not set", self)
+        return name, dataset
+
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a dataset attribute """
-        name = super().get(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline if batch is not None else pipeline
-        if hasattr(pipeline.dataset, name):
-            value = getattr(pipeline.dataset, name)
+        name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        if hasattr(dataset, name):
+            value = getattr(dataset, name)
         else:
             raise ValueError("Attribute does not exist in the dataset", name)
         return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a dataset attribute """
-        name = super().get(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline if batch is not None else pipeline
-        setattr(pipeline.dataset, name)
-
+        name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        setattr(dataset, name, value)
 
 
 class R(NamedExpression):

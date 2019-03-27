@@ -185,7 +185,7 @@ class Dataset(Baseset):
         """
         if not isinstance(index, DatasetIndex):
             index = self.index.create_batch(index, pos, *args, **kwargs)
-        return self.batch_class(index, preloaded=self.preloaded, **kwargs)
+        return self.batch_class(index, preloaded=self.preloaded, dataset=self, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow
