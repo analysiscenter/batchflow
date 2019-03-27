@@ -98,6 +98,12 @@ class Dataset(Baseset):
         if name[:2] == 'cv' and name[2:].isdigit():
             raise AttributeError("To access cross-validation call cv_split() first.")
 
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
     @staticmethod
     def build_index(index):
         """ Check if instance of the index is DatasetIndex
