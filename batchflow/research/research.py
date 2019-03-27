@@ -36,7 +36,7 @@ class Research:
         self.n_iters = None
         self.timeout = 5
 
-    def pipeline(self, root, branch=None, variables=None, name=None,
+    def pipeline(self, root, branch=None, dataset=None, fold=None, variables=None, name=None,
                  execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
@@ -94,7 +94,7 @@ class Research:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
         unit = Executable()
-        unit.add_pipeline(root, name, branch, variables,
+        unit.add_pipeline(root, name, branch, dataset, fold, variables,
                           execute, dump, run, logging, **kwargs)
         self.executables[name] = unit
         return self
@@ -178,7 +178,7 @@ class Research:
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
-    def _create_jobs(self, n_reps, n_iters, branches, name):
+    def _create_jobs(self, n_reps, n_iters, cv, branches, name):
         """ Create generator of jobs. If `branches=1` or `len(branches)=1` then each job is one repetition
         for each config from grid_config. Else each job contains several pairs `(repetition, config)`.
 
@@ -201,14 +201,17 @@ class Research:
         else:
             n_models = len(branches)
 
-        configs_with_repetitions = [(idx, configs)
+        cv = range(cv) if isinstance(cv, int) else [None]
+
+        configs_with_repetitions = [(idx, configs, fold)
                                     for idx in range(n_reps)
-                                    for configs in self.grid_config.gen_configs()]
+                                    for configs in self.grid_config.gen_configs()
+                                    for fold in cv]
 
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
         jobs = (Job(self.executables, n_iters,
-                    list(zip(*chunk))[0], list(zip(*chunk))[1], branches, name)
+                    list(zip(*chunk))[0], list(zip(*chunk))[1], list(zip(*chunk))[2], branches, name)
                 for chunk in configs_chunks
                )
 
@@ -229,7 +232,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, name=None,
+    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, cv=None, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
         """ Run research.
 
@@ -291,6 +294,7 @@ class Research:
             self.trails = trails
             self.initial_name = name
             self.name = name
+            self.cv = cv
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
@@ -309,12 +313,18 @@ class Research:
 
         self.save()
 
-        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.branches, self.name)
+        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.cv, self.branches, self.name)
 
         distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
                   n_iters=self.n_iters, progress_bar=self.progress_bar)
         return self
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
     def _get_gpu_list(self, gpu):
         if gpu is None:
@@ -445,7 +455,7 @@ class Executable:
         self._clear_result()
         self._process_iterations()
 
-    def add_pipeline(self, root_pipeline, name, branch_pipeline=None, variables=None,
+    def add_pipeline(self, root_pipeline, name, branch_pipeline=None, dataset=None, fold=None, variables=None,
                      execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add pipeline as an Executable Unit """
         variables = variables or []
@@ -463,12 +473,15 @@ class Executable:
         self.name = name
         self.pipeline = pipeline
         self.root_pipeline = root
+        self.dataset = dataset
+        self.fold = fold
         self.variables = variables
         self.execute = execute
         self.dump = dump
         self.to_run = run
         self.kwargs = kwargs
         self.logging = logging
+        self.cv = None
 
         self.action = {
             'type': 'pipeline',
@@ -498,6 +511,16 @@ class Executable:
         new_unit.result = deepcopy(new_unit.result)
         new_unit.variables = copy(new_unit.variables)
         return new_unit
+
+    def concat_dataset(self, cv):
+        """ Add dataset to root if root exists or create root pipeline on the base of dataset. """
+        if self.dataset:
+            fold = getattr(self.dataset, 'cv'+str(cv)) if self.fold else self.dataset
+            dataset = getattr(fold, self.fold) if cv else fold
+            if self.root_pipeline is not None:
+                self.root_pipeline = self.root_pipeline << dataset
+            else:
+                self.pipeline = self.pipeline << dataset
 
     def reset_iter(self):
         """ Reset iterators in pipelines """
@@ -600,7 +623,8 @@ class Executable:
 
     def create_folder(self, name):
         """ Create folder if it doesn't exist """
-        self.path = os.path.join(name, 'results', self.config.alias(as_string=True), str(self.repetition))
+        self.path = os.path.join(name, 'results', self.config.alias(as_string=True),
+                                 str(self.repetition), 'cv_' + str(self.cv))
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
@@ -695,7 +719,7 @@ class Results():
         return result
 
 
-    def load(self, names=None, repetitions=None, variables=None, iterations=None,
+    def load(self, names=None, repetitions=None, cv=None, variables=None, iterations=None,
              configs=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
@@ -770,6 +794,9 @@ class Results():
         if repetitions is None:
             repetitions = list(range(self.research.n_reps))
 
+        if cv is None:
+            cv = list(range(self.research.cv))
+
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
 
@@ -780,6 +807,7 @@ class Results():
         self.repetitions = self._get_list(repetitions)
         self.variables = self._get_list(variables)
         self.iterations = self._get_list(iterations)
+        self.cv = self._get_list(cv)
 
         all_results = []
 
@@ -787,33 +815,36 @@ class Results():
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
             for repetition in self.repetitions:
-                for unit in self.names:
-                    path = os.path.join(self.path, 'results', alias_str, str(repetition))
-                    files = glob.glob(os.path.join(glob.escape(path), unit + '_[0-9]*'))
-                    files = self._sort_files(files, self.iterations)
-                    if len(files) != 0:
-                        res = []
-                        for filename, iterations_to_load in files.items():
-                            with open(filename, 'rb') as file:
-                                res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
-                        res = self._concat(res, self.variables)
-                        self._fix_length(res)
-                        if use_alias:
-                            all_results.append(
-                                pd.DataFrame({
-                                    'config': alias_str,
-                                    'repetition': repetition,
-                                    'name': unit,
-                                    **res
-                                })
-                                )
-                        else:
-                            all_results.append(
-                                pd.DataFrame({
-                                    **alias,
-                                    'repetition': repetition,
-                                    'name': unit,
-                                    **res
-                                })
-                                )
+                for cv in self.cv:
+                    for unit in self.names:
+                        path = os.path.join(self.path, 'results', alias_str, str(repetition))
+                        files = glob.glob(os.path.join(glob.escape(path), 'cv_'+str(cv), unit + '_[0-9]*'))
+                        files = self._sort_files(files, self.iterations)
+                        if len(files) != 0:
+                            res = []
+                            for filename, iterations_to_load in files.items():
+                                with open(filename, 'rb') as file:
+                                    res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
+                            res = self._concat(res, self.variables)
+                            self._fix_length(res)
+                            if use_alias:
+                                all_results.append(
+                                    pd.DataFrame({
+                                        'config': alias_str,
+                                        'cv': cv,
+                                        'repetition': repetition,
+                                        'name': unit,
+                                        **res
+                                    })
+                                    )
+                            else:
+                                all_results.append(
+                                    pd.DataFrame({
+                                        **alias,
+                                        'cv': cv,
+                                        'repetition': repetition,
+                                        'name': unit,
+                                        **res
+                                    })
+                                    )
         return pd.concat(all_results) if len(all_results) > 0 else pd.DataFrame(None)
