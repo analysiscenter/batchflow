@@ -273,8 +273,8 @@ class Dataset(Baseset):
 
             setattr(self, 'cv'+str(i), deepcopy.copy(self))
             cv_dataset = getattr(self, 'cv'+str(i))
-            cv_dataset.train = self.create_subset(train_indices)
-            cv_dataset.test = self.create_subset(test_indices)
+            cv_dataset.train = self.create_subset(DatasetIndex(train_indices))
+            cv_dataset.test = self.create_subset(DatasetIndex(test_indices))
 
 
     def _split_kfold(self, n_splits, order):
