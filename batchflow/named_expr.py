@@ -258,6 +258,33 @@ class V(NamedExpression):
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.assign_variable(name, value, batch=batch)
 
+class D(NamedExpression):
+    """ Dataset attribute
+
+    Examples
+    --------
+    ::
+
+        D('classes')
+        D('organization')
+    """
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a value of a dataset attribute """
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        pipeline = batch.pipeline if batch is not None else pipeline
+        if hasattr(pipeline.dataset, name):
+            value = getattr(pipeline.dataset, name)
+        else:
+            raise ValueError("Attribute does not exist in the dataset", name)
+        return value
+
+    def assign(self, value, batch=None, pipeline=None, model=None):
+        """ Assign a value to a dataset attribute """
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        pipeline = batch.pipeline if batch is not None else pipeline
+        setattr(pipeline.dataset, name)
+
+
 
 class R(NamedExpression):
     """ A random value

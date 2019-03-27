@@ -13,6 +13,7 @@ There are several types of named expressions:
 * B('name') - a batch class attribute or component name
 * V('name') - a pipeline variable name
 * C('name') - a pipeline config option
+* D('name') - a dataset attribute
 * F(...) - a callable which takes a batch (could be a batch class method or an arbitrary function)
 * L(...) - an arbitrary callable (the current batch won't be passed as a parameter)
 * R(...) - a random value
@@ -65,6 +66,17 @@ At each iteration ``C('model')`` will be replaced with the current value of ``pi
 
 This is an example of a model independent pipeline which allows to change models, for instance,
 to assess performance of various models.
+
+D - dataset attribute
+=====================
+::
+
+    pipeline
+        ...
+        .load(src=D('data_path'), ...)
+        ...
+
+At each iteration ``D('data_path')`` will be replaced with the current value of ``pipeline.dataset.data_path``.
 
 
 F - callable
