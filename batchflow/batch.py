@@ -476,6 +476,8 @@ class Batch:
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
+            if src is a list, dst should be either list or None.
+
         p : float or None
             probability of applying transform to an element in the batch
 
@@ -507,15 +509,17 @@ class Batch:
             apply_transform(apply_mask, src=('images', 'masks'), dst='images', use_self=True)
             apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
         """
-        to_act = bool(p is None or np.random.binomial(1, p))
+        p = 1 if p is None or np.random.binomial(1, p) else 0
 
-        if isinstance(src, list) and len(src) > 1 and isinstance(dst, (list, tuple)) and len(src) == len(dst):
-            return tuple([self._apply_transform(ix, func, to_act, *args, src=src_component,
-                                                dst=dst_component, use_self=use_self, **kwargs)
+        dst = src if dst is None else dst
+
+        if isinstance(src, list) and len(src) > 1 and isinstance(dst, list) and len(src) == len(dst):
+            return tuple([self._apply_transform(ix, func, *args, src=src_component,
+                                                dst=dst_component, p=p, use_self=use_self, **kwargs)
                           for src_component, dst_component in zip(src, dst)])
-        return self._apply_transform(ix, func, to_act, *args, src=src, dst=dst, use_self=use_self, **kwargs)
+        return self._apply_transform(ix, func, *args, src=src, dst=dst, p=p, use_self=use_self, **kwargs)
 
-    def _apply_transform(self, ix, func, to_act, *args, src=None, dst=None, use_self=False, **kwargs):
+    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
         """ Apply a function to each item in the batch.
 
         Parameters
@@ -560,7 +564,7 @@ class Batch:
                 src_attr = (src[pos],)
             _args = tuple([*src_attr, *args])
 
-        if to_act:
+        if p:
             if use_self:
                 return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
