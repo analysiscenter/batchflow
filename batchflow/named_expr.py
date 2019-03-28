@@ -153,7 +153,7 @@ class B(NamedExpression):
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
         if name is None:
-            return batch.deepcopy() if self.copy else batch
+            return batch.copy() if self.copy else batch
         return getattr(batch, name)
 
     def assign(self, value, batch=None, pipeline=None, model=None):
@@ -178,11 +178,11 @@ class C(NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
-
-        recursive_names = name.split('/')
-        for n in recursive_names:
-            config = config.get(n)
-        return config
+        try:
+            value = config[name]
+        except KeyError:
+            raise KeyError("Name is not found in the config", name) from None
+        return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """
@@ -283,7 +283,7 @@ class D(NamedExpression):
         if hasattr(dataset, name):
             value = getattr(dataset, name)
         else:
-            raise ValueError("Attribute does not exist in the dataset", name)
+            raise KeyError("Attribute does not exist in the dataset", name)
         return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):

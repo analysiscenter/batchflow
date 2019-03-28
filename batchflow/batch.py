@@ -211,7 +211,7 @@ class Batch:
     @property
     def size(self):
         """: int - number of items in the batch """
-        return len(self.index)
+        return len(self)
 
     @property
     def data(self):
