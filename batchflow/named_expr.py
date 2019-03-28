@@ -85,9 +85,9 @@ class W(NamedExpression):
     --------
     ::
 
-        N(V('variable'))
-        N(B(copy=True))
-        N(R('normal', 0, 1, size=B('size')))
+        W(V('variable'))
+        W(B(copy=True))
+        W(R('normal', 0, 1, size=B('size')))
     """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a wrapped named expression """
@@ -153,7 +153,7 @@ class B(NamedExpression):
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
         if name is None:
-            return batch.deepcopy() if self.copy else batch
+            return batch.copy() if self.copy else batch
         return getattr(batch, name)
 
     def assign(self, value, batch=None, pipeline=None, model=None):
@@ -178,11 +178,11 @@ class C(NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
-
-        recursive_names = name.split('/')
-        for n in recursive_names:
-            config = config.get(n)
-        return config
+        try:
+            value = config[name]
+        except KeyError:
+            raise KeyError("Name is not found in the config", name) from None
+        return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """
@@ -257,6 +257,39 @@ class V(NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.assign_variable(name, value, batch=batch)
+
+class D(NamedExpression):
+    """ Dataset attribute
+
+    Examples
+    --------
+    ::
+
+        D('classes')
+        D('organization')
+    """
+    def _get_name_dataset(self, batch=None, pipeline=None, model=None):
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        pipeline = batch.pipeline or pipeline
+        dataset = pipeline.dataset if pipeline is not None else None
+        dataset = dataset or batch.dataset
+        if dataset is None:
+            raise ValueError("Dataset is not set", self)
+        return name, dataset
+
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a value of a dataset attribute """
+        name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        if hasattr(dataset, name):
+            value = getattr(dataset, name)
+        else:
+            raise KeyError("Attribute does not exist in the dataset", name)
+        return value
+
+    def assign(self, value, batch=None, pipeline=None, model=None):
+        """ Assign a value to a dataset attribute """
+        name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        setattr(dataset, name, value)
 
 
 class R(NamedExpression):

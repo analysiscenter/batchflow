@@ -35,7 +35,7 @@ class Batch:
     components = None
 
     def __init__(self, index, preloaded=None, *args, **kwargs):
-        _ = args, kwargs
+        _ = args
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
         self.index = index
@@ -45,6 +45,12 @@ class Batch:
         self._preloaded = preloaded
         self._local = None
         self._pipeline = None
+        self.create_attrs(**kwargs)
+
+    def create_attrs(self, **kwargs):
+        """ Create attributes from kwargs """
+        for attr, value in kwargs.items():
+            setattr(self, attr, value)
 
     @property
     def pipeline(self):
@@ -64,6 +70,15 @@ class Batch:
             self._local.pipeline = val
         self._pipeline = val
 
+    def __copy__(self):
+        pipeline = self.pipeline
+        self.pipeline = None
+        dump_batch = dill.dumps(self)
+        self.pipeline = pipeline
+
+        restored_batch = dill.loads(dump_batch)
+        restored_batch.pipeline = pipeline
+        return restored_batch
 
     def deepcopy(self):
         """ Return a deep copy of the batch.
@@ -76,14 +91,7 @@ class Batch:
         -------
         Batch
         """
-        pipeline = self.pipeline
-        self.pipeline = None
-        dump_batch = dill.dumps(self)
-        self.pipeline = pipeline
-
-        restored_batch = dill.loads(dump_batch)
-        restored_batch.pipeline = pipeline
-        return restored_batch
+        return self.copy()
 
     @classmethod
     def from_data(cls, index, data):
@@ -203,7 +211,7 @@ class Batch:
     @property
     def size(self):
         """: int - number of items in the batch """
-        return len(self.index)
+        return len(self)
 
     @property
     def data(self):
