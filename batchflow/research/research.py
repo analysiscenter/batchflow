@@ -175,7 +175,7 @@ class Research:
         return self
 
     def load_results(self, *args, **kwargs):
-        """ Load results of research as pandas.DataFrame (see Results.load). """
+        """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
     def _create_jobs(self, n_reps, n_iters, branches, name):
@@ -683,7 +683,6 @@ class Results():
         for value in chunk.values():
             if len(value) < max_len:
                 value.extend([pd.np.nan] * (max_len - len(value)))
-        return max_len
 
     def _filter_configs(self, config=None, alias=None):
         result = None
@@ -697,7 +696,7 @@ class Results():
 
 
     def load(self, names=None, repetitions=None, variables=None, iterations=None,
-             configs=None, aliases=None, use_alias=False, as_dataframe=True):
+             configs=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -713,20 +712,51 @@ class Results():
         configs, aliases : dict, Config, Option, Grid or None
             configs to load
         use_alias : bool
-            if True, the resulting DataFrame/dict will have one column/item with alias, else it will
-            have column/item for each option in grid
-        as_dataframe : bool
-            return pandas.DataFrame or dict
+            if True, the resulting DataFrame will have one column with alias, else it will
+            have column for each option in grid
 
-        Return
-        ------
+        Returns
+        -------
         pandas.DataFrame or dict
-            will have columns/keys: iteration, repetition, name (of pipeline/function)
-            and column/key for config. Also it will have column/key for each variable of pipeline
+            will have columns: iteration, repetition, name (of pipeline/function)
+            and column for config. Also it will have column for each variable of pipeline
             and output of the function that was saved as a result of the research.
+
+        **How to perform slicing**
+            Method `load` with default parameters will create pandas.DataFrame with all dumped
+            parameters. To specify subset of results one can define names of pipelines/functions,
+            produced variables/outputs of them, repetitions, iterations and configs. For example,
+            we have the following research:
+
+            ```
+            grid = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
+
+            research = (Research()
+            .pipeline(train_ppl, variables='loss', name='train')
+            .pipeline(test_ppl, name='test', execute='%100', run=True, import_from='train')
+            .function(accuracy, returns='accuracy', name='test_accuracy',
+                      execute='%100', pipeline='test')
+            .grid(grid))
+
+            research.run(n_reps=2, n_iters=10000)
+            ```
+            The code
+            ```
+            Results(research=research).load(repetitions=0, iterations=np.arange(5000, 10000),
+                                            variables='accuracy', names='test_accuracy',
+                                            configs=Option('layout', ['cna', 'can']))
+            ```
+            will load output of ``accuracy`` function at the first repetitions for configs
+            that contain layout 'cna' or 'can' for iterations starting with 5000.
+            The resulting dataframe will have columns 'repetition', 'iteration', 'name',
+            'accuracy', 'layout', 'model'. One can get the same in the follwing way:
+            ```
+            results = Results(research=research).load()
+            results = results[(results.repetition == 0) & (results.iterations >= 5000) &
+                              (results.name == 'test_accuracy') & results.layout.isin(['cna', 'can'])]
+            ```
         """
         self.configs = self.research.grid_config
-        transform = lambda x: pd.DataFrame(x) if as_dataframe else x
         if configs is None and aliases is None:
             self.configs = list(self.configs.gen_configs())
         elif configs is not None:
@@ -767,31 +797,23 @@ class Results():
                             with open(filename, 'rb') as file:
                                 res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
                         res = self._concat(res, self.variables)
-                        max_len = self._fix_length(res)
+                        self._fix_length(res)
                         if use_alias:
                             all_results.append(
-                                {
-                                    'config': [alias_str] * max_len,
-                                    'repetition': [repetition] * max_len,
-                                    'name': [unit] * max_len,
+                                pd.DataFrame({
+                                    'config': alias_str,
+                                    'repetition': repetition,
+                                    'name': unit,
                                     **res
-                                }
+                                })
                                 )
                         else:
-                            _alias = {key: [value] * max_len for key, value in alias.items()}
                             all_results.append(
-                                {
-                                    **_alias,
-                                    'repetition': [repetition] * max_len,
-                                    'name': [unit] * max_len,
+                                pd.DataFrame({
+                                    **alias,
+                                    'repetition': repetition,
+                                    'name': unit,
                                     **res
-                                }
+                                })
                                 )
-        if len(all_results) > 0:
-            concat_results = {key: [] for key in all_results[0]}
-            for key in concat_results:
-                for result in all_results:
-                    concat_results[key] += result[key]
-        else:
-            concat_results = None
-        return transform(concat_results)
+        return pd.concat(all_results) if len(all_results) > 0 else pd.DataFrame(None)

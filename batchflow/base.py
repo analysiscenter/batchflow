@@ -38,6 +38,11 @@ class Baseset:
         return len(self.indices)
 
     @property
+    def size(self):
+        """: int - number of items in the set """
+        return len(self)
+
+    @property
     def is_split(self):
         """bool : True if dataset has been split into train / test / validation subsets """
         return self.train is not None or self.test is not None or self.validation is not None

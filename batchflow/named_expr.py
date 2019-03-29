@@ -85,9 +85,9 @@ class W(NamedExpression):
     --------
     ::
 
-        N(V('variable'))
-        N(B(copy=True))
-        N(R('normal', 0, 1, size=B('size')))
+        W(V('variable'))
+        W(B(copy=True))
+        W(R('normal', 0, 1, size=B('size')))
     """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a wrapped named expression """
@@ -153,7 +153,7 @@ class B(NamedExpression):
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
         if name is None:
-            return batch.deepcopy() if self.copy else batch
+            return batch.copy() if self.copy else batch
         return getattr(batch, name)
 
     def assign(self, value, batch=None, pipeline=None, model=None):
@@ -178,11 +178,11 @@ class C(NamedExpression):
         name = super().get(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
-
-        recursive_names = name.split('/')
-        for n in recursive_names:
-            config = config.get(n)
-        return config
+        try:
+            value = config[name]
+        except KeyError:
+            raise KeyError("Name is not found in the config", name) from None
+        return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """
@@ -258,6 +258,39 @@ class V(NamedExpression):
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.assign_variable(name, value, batch=batch)
 
+class D(NamedExpression):
+    """ Dataset attribute
+
+    Examples
+    --------
+    ::
+
+        D('classes')
+        D('organization')
+    """
+    def _get_name_dataset(self, batch=None, pipeline=None, model=None):
+        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        pipeline = batch.pipeline or pipeline
+        dataset = pipeline.dataset if pipeline is not None else None
+        dataset = dataset or batch.dataset
+        if dataset is None:
+            raise ValueError("Dataset is not set", self)
+        return name, dataset
+
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a value of a dataset attribute """
+        name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        if hasattr(dataset, name):
+            value = getattr(dataset, name)
+        else:
+            raise KeyError("Attribute does not exist in the dataset", name)
+        return value
+
+    def assign(self, value, batch=None, pipeline=None, model=None):
+        """ Assign a value to a dataset attribute """
+        name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        setattr(dataset, name, value)
+
 
 class R(NamedExpression):
     """ A random value
@@ -309,15 +342,12 @@ class R(NamedExpression):
         raise NotImplementedError("Assigning a value to a random variable is not supported")
 
     def __repr__(self):
-        return 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs) + ')'
+        repr_str = 'R(' + str(self.name) + ', ' + str(self.args) + ', ' + str(self.kwargs)
+        return repr_str + ', size=' + str(self.size) + ')' if self.size else ')'
 
 
 class P(W):
     """ A wrapper for parallel actions
-
-    Notes
-    -----
-    For ``R``-expressions the default ``size`` will be ``B('size')``.
 
     Examples
     --------
@@ -332,17 +362,26 @@ class P(W):
         pipeline
             .rotate(angle=R('normal', 0, 1))
 
-    Generate 10 categorical random samples::
+    Generate 3 categorical random samples for each batch item::
 
         pipeline
-            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=10))
+            .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3))
 
-    If a batch size is greater than 10, than an exception will be raised as there is not enough
-    values for each parallel invocations of an action.
+    Notes
+    -----
+    As P-wrapper is often used for ``R``-expressions, ``R`` can be omitted for brevity.
+    So ``P('normal', 0, 1))`` is equivalent to ``P(R('normal', 0, 1)))``, but a bit shorter.
     """
-    def __init__(self, name=None):
+    def __init__(self, name=None, *args, **kwargs):
+        if not isinstance(name, NamedExpression):
+            name = R(name, *args, **kwargs)
         if isinstance(name, R):
-            name.size = name.size if name.size is not None else B('size')
+            if name.size is None:
+                name.size = B('size')
+            elif isinstance(name.size, int):
+                name.size = B('size'), name.size
+            else:
+                name.size = (B('size'),) + tuple(name.size)
         super().__init__(name)
 
     def get(self, batch=None, pipeline=None, model=None, parallel=False):   # pylint:disable=arguments-differ

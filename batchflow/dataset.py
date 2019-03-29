@@ -1,5 +1,5 @@
 """ Dataset """
-
+import copy as deepcopy
 import numpy as np
 from .base import Baseset
 from .batch import Batch
@@ -55,12 +55,21 @@ class Dataset(Baseset):
                 For smaller dataset it might be convenient to preload all data at once
                 As a result, all created batches will contain a portion of some_data.
         """
-        super().__init__(index, *args, **kwargs)
+        if batch_class is not Batch and not issubclass(batch_class, Batch):
+            raise TypeError("batch_class should be inherited from Batch", batch_class)
+
+        super().__init__(index, *args)
         self.batch_class = batch_class
         self.preloaded = preloaded
+        self.create_attrs(**kwargs)
+
+    def create_attrs(self, **kwargs):
+        """ Create attributes from kwargs """
+        for attr, value in kwargs.items():
+            setattr(self, attr, value)
 
     @classmethod
-    def from_dataset(cls, dataset, index, batch_class=None):
+    def from_dataset(cls, dataset, index, batch_class=None, copy=False):
         """ Create Dataset object from another dataset with a new index
             (usually a subset of the source dataset index)
 
@@ -72,22 +81,33 @@ class Dataset(Baseset):
             index : DatasetIndex
                 Set of items from source dataset which should be in the new Dataset
 
-            batch_class : Batch
-                type of Batch for the new Dataset
+            batch_class : type
+                a subclass of Batch class
+
+            copy : bool
+                whether to copy the dataset or use it wherever possible
 
             Returns
             -------
             Dataset
         """
         if (batch_class is None or (batch_class == dataset.batch_class)) and cls._is_same_index(index, dataset.index):
-            return dataset
+            if not copy:
+                return dataset
         bcl = batch_class if batch_class is not None else dataset.batch_class
         return cls(index, batch_class=bcl, preloaded=dataset.preloaded)
 
+    def __copy__(self):
+        return self.from_dataset(self, self.index, copy=True)
+
+    def __getattr__(self, name):
+        if name[:2] == 'cv' and name[2:].isdigit():
+            raise AttributeError("To access cross-validation call cv_split() first.")
+
     @staticmethod
-    def build_index(index):
+    def build_index(index, *args, **kwargs):
         """ Check if instance of the index is DatasetIndex
-            if it is not - create DatasetIndex from input index
+            if it is not - create DatasetIndex from inputs
 
             Parameters
             ----------
@@ -99,7 +119,7 @@ class Dataset(Baseset):
         """
         if isinstance(index, DatasetIndex):
             return index
-        return DatasetIndex(index)
+        return DatasetIndex(index, *args, **kwargs)
 
     @staticmethod
     def _is_same_index(index1, index2):
@@ -140,7 +160,7 @@ class Dataset(Baseset):
         """
         if not np.isin(index.indices, self.indices).all():
             raise IndexError
-        return type(self).from_dataset(self, index)
+        return type(self).from_dataset(self, self.index.create_subset(index))
 
     def create_batch(self, index, pos=False, *args, **kwargs):
         """ Create a batch from given indices.
@@ -165,7 +185,7 @@ class Dataset(Baseset):
         """
         if not isinstance(index, DatasetIndex):
             index = self.index.create_batch(index, pos, *args, **kwargs)
-        return self.batch_class(index, preloaded=self.preloaded, **kwargs)
+        return self.batch_class(index, preloaded=self.preloaded, dataset=self, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow
@@ -206,3 +226,70 @@ class Dataset(Baseset):
         if not isinstance(other, Pipeline):
             raise TypeError("Pipeline is expected, but got %s. Use as dataset >> pipeline" % type(other))
         return other << self
+
+    def cv_split(self, method='kfold', n_splits=5, shuffle=False):
+        """ Create datasets for cross-validation
+
+        Datasets are available as `cv0`, `cv1` and so on.
+        They are already split into train and test parts.
+
+        Parameters
+        ----------
+        method : {'kfold'}
+            a splitting method (only `kfold` is supported)
+
+        n_splits : int
+            a number of folds
+
+        shuffle : bool, int, class:`numpy.random.RandomState` or callable
+            specifies the order of items, could be:
+
+            - bool - if `False`, items go sequentionally, one after another as they appear in the index.
+                if `True`, items are shuffled randomly before each epoch.
+
+            - int - a seed number for a random shuffle.
+
+            - :class:`numpy.random.RandomState` instance.
+
+            - callable - a function which takes an array of item indices in the initial order
+                (as they appear in the index) and returns the order of items.
+
+        Examples
+        --------
+
+        ::
+
+            dataset = Dataset(10)
+            dataset.cv_split(n_splits=3)
+            print(dataset.cv0.test.indices) # [0, 1, 2, 3]
+            print(dataset.cv1.test.indices) # [4, 5, 6]
+            print(dataset.cv2.test.indices) # [7, 8, 9]
+        """
+        order = self.index.shuffle(shuffle)
+
+        if method == 'kfold':
+            splits = self._split_kfold(n_splits, order)
+        else:
+            raise ValueError("Unknown split method:", method)
+
+        for i in range(n_splits):
+            test_indices = splits[i]
+            train_splits = list(set(range(n_splits)) - {i})
+            train_indices = np.concatenate(np.asarray(splits)[train_splits])
+
+            setattr(self, 'cv'+str(i), deepcopy.copy(self))
+            cv_dataset = getattr(self, 'cv'+str(i))
+            cv_dataset.train = self.create_subset(train_indices)
+            cv_dataset.test = self.create_subset(test_indices)
+
+
+    def _split_kfold(self, n_splits, order):
+        split_sizes = np.full(n_splits, len(order) // n_splits, dtype=np.int)
+        split_sizes[:len(order) % n_splits] += 1
+        current = 0
+        splits = []
+        for split_size in split_sizes:
+            start, stop = current, current + split_size
+            splits.append(self.indices[order[start:stop]])
+            current = stop
+        return splits

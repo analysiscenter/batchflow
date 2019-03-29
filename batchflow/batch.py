@@ -35,7 +35,7 @@ class Batch:
     components = None
 
     def __init__(self, index, preloaded=None, *args, **kwargs):
-        _ = args, kwargs
+        _ = args
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
         self.index = index
@@ -45,6 +45,12 @@ class Batch:
         self._preloaded = preloaded
         self._local = None
         self._pipeline = None
+        self.create_attrs(**kwargs)
+
+    def create_attrs(self, **kwargs):
+        """ Create attributes from kwargs """
+        for attr, value in kwargs.items():
+            setattr(self, attr, value)
 
     @property
     def pipeline(self):
@@ -64,6 +70,15 @@ class Batch:
             self._local.pipeline = val
         self._pipeline = val
 
+    def __copy__(self):
+        pipeline = self.pipeline
+        self.pipeline = None
+        dump_batch = dill.dumps(self)
+        self.pipeline = pipeline
+
+        restored_batch = dill.loads(dump_batch)
+        restored_batch.pipeline = pipeline
+        return restored_batch
 
     def deepcopy(self):
         """ Return a deep copy of the batch.
@@ -76,14 +91,7 @@ class Batch:
         -------
         Batch
         """
-        pipeline = self.pipeline
-        self.pipeline = None
-        dump_batch = dill.dumps(self)
-        self.pipeline = pipeline
-
-        restored_batch = dill.loads(dump_batch)
-        restored_batch.pipeline = pipeline
-        return restored_batch
+        return self.copy()
 
     @classmethod
     def from_data(cls, index, data):
@@ -184,7 +192,7 @@ class Batch:
         """
         if dataset is None:
             raise ValueError('dataset can be an instance of Dataset (sub)class or the class itself, but not None')
-        elif isinstance(dataset, type):
+        if isinstance(dataset, type):
             dataset_class = dataset
         else:
             dataset_class = dataset.__class__
@@ -203,7 +211,7 @@ class Batch:
     @property
     def size(self):
         """: int - number of items in the batch """
-        return len(self.index)
+        return len(self)
 
     @property
     def data(self):
@@ -646,31 +654,31 @@ class Batch:
         _get_file_name(ix, src=index_labels) to reach corresponding files in the second path.
 
         """
-        if isinstance(self.index, FilesIndex):
-            if isinstance(src, str):
-                if self.index.dirs:
-                    fullpath = self.index.get_fullpath(ix)
-                    file_name = os.path.join(fullpath, src)
+        if not isinstance(self.index, FilesIndex):
+            raise ValueError("File locations must be specified to dump/load data")
 
-                else:
-                    file_name = os.path.basename(self.index.get_fullpath(ix))
-                    file_name = os.path.join(os.path.abspath(src), file_name)
-
-            elif isinstance(src, FilesIndex):
-                try:
-                    file_name = src.get_fullpath(ix)
-                except KeyError:
-                    raise KeyError("File {} is not indexed in the received index".format(ix))
-
-            elif src is None:
-                file_name = self.index.get_fullpath(ix)
+        if isinstance(src, str):
+            if self.index.dirs:
+                fullpath = self.index.get_fullpath(ix)
+                file_name = os.path.join(fullpath, src)
 
             else:
-                raise ValueError("Src must be either str, FilesIndex or None")
+                file_name = os.path.basename(self.index.get_fullpath(ix))
+                file_name = os.path.join(os.path.abspath(src), file_name)
 
-            return file_name
+        elif isinstance(src, FilesIndex):
+            try:
+                file_name = src.get_fullpath(ix)
+            except KeyError:
+                raise KeyError("File {} is not indexed in the received index".format(ix))
+
+        elif src is None:
+            file_name = self.index.get_fullpath(ix)
+
         else:
-            raise ValueError("File locations must be specified to dump/load data")
+            raise ValueError("Src must be either str, FilesIndex or None")
+
+        return file_name
 
     def _assemble_component(self, result, *args, component, **kwargs):
         """ Assemble one component after parallel execution.
