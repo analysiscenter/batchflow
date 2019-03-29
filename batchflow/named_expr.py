@@ -20,9 +20,10 @@ class NamedExpression:
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
         return self.name
 
-    def set(self, value, batch=None, pipeline=None, model=None, mode='w'):
+    def set(self, value, batch=None, pipeline=None, model=None, mode='w', eval=True):
         """ Set a value to a named expression """
-        value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
+        if eval:
+            value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
         if mode in ['a', 'append']:
             self.append(value, batch=batch, pipeline=pipeline, model=model)
         elif mode in ['e', 'extend']:
