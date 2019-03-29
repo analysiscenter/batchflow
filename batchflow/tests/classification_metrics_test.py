@@ -1,5 +1,6 @@
 """File contains various tests for classification metrics in batchflow"""
 # pylint: disable=import-error, no-name-in-module
+# pylint: disable=redefined-outer-name
 import pytest
 import numpy as np
 
