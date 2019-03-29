@@ -103,6 +103,7 @@ class Dataset(Baseset):
     def __getattr__(self, name):
         if name[:2] == 'cv' and name[2:].isdigit():
             raise AttributeError("To access cross-validation call cv_split() first.")
+        raise AttributeError()
 
     @staticmethod
     def build_index(index, *args, **kwargs):
