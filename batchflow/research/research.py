@@ -13,7 +13,7 @@ import pandas as pd
 from .. import Config, Pipeline
 from .distributor import Distributor
 from .workers import PipelineWorker
-from .grid import Grid
+from .grid import Grid, Option
 from .job import Job
 
 class Research:
@@ -232,6 +232,11 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
+    def _cv_split(self, n_splits):
+        for unit in self.executables:
+            if getattr(self.executables[unit], 'dataset', None):
+                self.executables[unit].dataset.cv_split(n_splits=5)
+
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, cv=None, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
         """ Run research.
@@ -299,6 +304,12 @@ class Research:
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
 
+        if cv is not None:
+            self._cv_split(cv)
+
+        if self.grid_config is None:
+            self.grid_config = Grid(Option('dummy', [None]))
+        
         if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
             raise ValueError("Number of gpus must be 1 or be divisible \
                              by the number of workers but {} was given".format(len(self.gpu)))
