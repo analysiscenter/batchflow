@@ -206,7 +206,7 @@ class TFModel(BaseModel):
         self.is_training = None
         self.global_step = None
         self.loss = None
-        self.train_step = None
+        self.train_steps = None
         self._train_lock = threading.Lock()
         self._attrs = []
         self._saver = None
@@ -248,19 +248,14 @@ class TFModel(BaseModel):
                 config = self.build_config()
                 self._build(config)
 
-                if self.train_step is None:
+                if self.train_steps is None:
                     self._make_loss(config)
                     self.store_to_attr('loss', tf.losses.get_total_loss())
 
-                    optimizer = self._make_optimizer(config)
-
-                    if optimizer:
-                        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-                        with tf.control_dependencies(update_ops):
-                            train_step = optimizer.minimize(self.loss, global_step=self.global_step)
-                            self.store_to_attr('train_step', train_step)
+                    train_steps = self._make_train_steps(config)
+                    self.store_to_attr('train_steps', train_steps)
                 else:
-                    self.store_to_attr('train_step', self.train_step)
+                    self.store_to_attr('train_steps', self.train_steps)
 
             if self.session is None:
                 self.create_session(config)
@@ -556,21 +551,58 @@ class TFModel(BaseModel):
                 else:
                     tf.losses.add_loss(tensor_loss)
 
-    def _make_decay(self, config):
-        decay_name, decay_args = unpack_fn_from_config('decay', config)
+    def _make_train_steps(self, config):
+        """ Create different train steps """
+        if config.get('train_modes') is None:
+            config['train_modes'] = {}
 
-        if decay_name is None:
-            pass
-        elif callable(decay_name):
-            pass
-        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
-            decay_name = getattr(tf.train, decay_name)
-        elif decay_name in DECAYS:
-            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
-        else:
-            raise ValueError("Unknown learning rate decay method", decay_name)
+        _optimizer = config.get('optimizer')
+        _scope = config.get('scope')
+        _decay = config.get('decay')
+        if _optimizer is not None:
+            config['train_modes'].update({'': {'optimizer': _optimizer,
+                                               'scope': _scope,
+                                               'decay': _decay}})
 
-        return decay_name, decay_args
+        for key, subconfig in config.get('train_modes').items():
+            if subconfig.get('optimizer') is None:
+                subconfig.update({'optimizer': _optimizer})
+            if subconfig.get('scope') is None:
+                subconfig.update({'scope': _scope})
+            if subconfig.get('decay') is None:
+                subconfig.update({'decay': _decay})
+
+        train_steps = {}
+        for key, subconfig in config['train_modes'].items():
+            optimizer_ = self._make_optimizer(subconfig)
+            print('\n\n\nCURRENT KEY: ', key)
+            print('SUBCONFIG: ', subconfig)
+            print('OPTIMIZER_: ', optimizer_, '\n')
+
+            if optimizer_:
+                update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                with tf.control_dependencies(update_ops):
+                    scope = subconfig.get('scope')
+                    scope_postfix = self.__class__.__name__ + '/'
+                    if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
+                        scope_postfix += scope[1:]
+                    else:
+                        scope_postfix += scope
+
+                    scope_collection = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                                         scope_postfix)
+                    if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
+                        scope_collection = [item for item in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+                                            if item not in scope_collection]
+
+                    print('SCOPE COLLECTION')
+                    _ = [print(item) for item in scope_collection]
+
+                    train_step = optimizer_.minimize(self.loss,
+                                                     global_step=self.global_step,
+                                                     var_list=scope_collection)
+                    train_steps.update({key: train_step})
+        return train_steps
 
     def _make_optimizer(self, config):
         optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
@@ -594,6 +626,22 @@ class TFModel(BaseModel):
             optimizer = None
 
         return optimizer
+
+    def _make_decay(self, config):
+        decay_name, decay_args = unpack_fn_from_config('decay', config)
+
+        if decay_name is None:
+            pass
+        elif callable(decay_name):
+            pass
+        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
+            decay_name = getattr(tf.train, decay_name)
+        elif decay_name in DECAYS:
+            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
+        else:
+            raise ValueError("Unknown learning rate decay method", decay_name)
+
+        return decay_name, decay_args
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
@@ -721,7 +769,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None, use_lock=False, **kwargs):
+    def train(self, fetches=None, feed_dict=None, use_lock=False, train_mode='', **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -756,6 +804,7 @@ class TFModel(BaseModel):
 
             model.train(fetches='loss', images=B('images'), labels=B('labels'))
         """
+        print(kwargs)
         with self.graph.as_default():
             feed_dict = {} if feed_dict is None else feed_dict
             feed_dict = {**feed_dict, **kwargs}
@@ -769,8 +818,8 @@ class TFModel(BaseModel):
                 self._train_lock.acquire()
 
             _all_fetches = []
-            if self.train_step:
-                _all_fetches += [self.train_step]
+            if self.train_steps:
+                _all_fetches += [self.train_steps[train_mode]]
             if _fetches is not None:
                 _all_fetches += [_fetches]
             if len(_all_fetches) > 0:
@@ -1214,6 +1263,8 @@ class TFModel(BaseModel):
         config['predictions'] = None
         config['output'] = None
         config['optimizer'] = ('Adam', dict())
+        config['decay'] = (None, dict())
+        config['scope'] = ''
         config['common'] = {'batch_norm': {'momentum': .1}}
 
         return config
