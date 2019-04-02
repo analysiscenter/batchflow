@@ -6,7 +6,9 @@ Pipeline
 Introduction
 ============
 
-Quite often you can't just use the data itself, as it needs some specific preprocessing beforehand. And not too rarely you end up with several processing workflows which you have to use simultaneously. That is the situation when pipelines might come in handy.
+Quite often you can't just use the data itself, as it needs some specific preprocessing beforehand. And not too rarely
+you end up with several processing workflows which you have to use simultaneously.
+That is the situation when pipelines might come in handy.
 
 Firstly, you create a batch class with all necessary actions::
 

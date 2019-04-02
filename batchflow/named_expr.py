@@ -15,13 +15,43 @@ class NamedExpression:
         self.copy = copy
 
     def get(self, batch=None, pipeline=None, model=None):
-        """ Return a value of a named expression """
+        """ Return a value of a named expression
+
+        Parameters
+        ----------
+        batch
+            a batch which should be used to calculate a value
+        pipeline
+            a pipeline which should be used to calculate a value
+            (might be omitted if batch is passed)
+        model
+            a model which should be used to calculate a value
+            (usually omitted, but might be useful for F- and L-expressions)
+        """
         if isinstance(self.name, NamedExpression):
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
         return self.name
 
     def set(self, value, batch=None, pipeline=None, model=None, mode='w', eval=True):
-        """ Set a value to a named expression """
+        """ Set a value to a named expression
+
+        Parameters
+        ----------
+        batch
+            a batch which should be used to calculate a value
+        pipeline
+            a pipeline which should be used to calculate a value
+            (might be omitted if batch is passed)
+        model
+            a model which should be used to calculate a value
+            (usually omitted, but might be useful for F- and L-expressions)
+        mode : str
+            an assignment method: write, append, extend, update
+        eval : bool
+            whether to evaluate value before assigning it to the expression
+            (as value might contain other named expressions,
+            so it should be processed recursively)
+        """
         if eval:
             value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
         if mode in ['a', 'append']:

@@ -33,7 +33,7 @@ As a result, all created batches will contain a portion of `some_data`.
 
 Adding custom data
 ------------------
-To store dataset-specific data which can be later accessed withi pipelines or batches, just pass it as keyword-parameters
+To store dataset-specific data which can be later accessed within pipelines or batches, just pass it as keyword-parameters
 when instantiating a dataset.
 
 .. code-block:: python

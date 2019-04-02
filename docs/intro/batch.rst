@@ -74,6 +74,7 @@ but the dataset reference does not change.
 
 Another way to access dataset attributes is to use :class:`~.batchflow.D`-expression.
 
+.. _actions:
 
 Action methods
 ==============
