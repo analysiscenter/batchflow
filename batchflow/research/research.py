@@ -235,7 +235,7 @@ class Research:
     def _cv_split(self, n_splits):
         for unit in self.executables:
             if getattr(self.executables[unit], 'dataset', None):
-                self.executables[unit].dataset.cv_split(n_splits=5)
+                self.executables[unit].dataset.cv_split(n_splits)
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, cv=None, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
@@ -523,11 +523,11 @@ class Executable:
         new_unit.variables = copy(new_unit.variables)
         return new_unit
 
-    def concat_dataset(self, cv):
+    def concat_dataset(self):
         """ Add dataset to root if root exists or create root pipeline on the base of dataset. """
-        if self.dataset:
-            fold = getattr(self.dataset, 'cv'+str(cv)) if self.fold else self.dataset
-            dataset = getattr(fold, self.fold) if cv else fold
+        if self.dataset is not None:
+            fold = getattr(self.dataset, 'cv'+str(self.cv)) if self.cv else self.dataset
+            dataset = getattr(fold, self.fold) if self.fold else fold
             if self.root_pipeline is not None:
                 self.root_pipeline = self.root_pipeline << dataset
             else:
@@ -806,7 +806,7 @@ class Results():
             repetitions = list(range(self.research.n_reps))
 
         if cv is None:
-            cv = list(range(self.research.cv))
+            cv = list(range(self.research.cv)) if self.research.cv is not None else [None]
 
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
