@@ -474,7 +474,7 @@ class Batch:
 
             - None - in this case dst is set to be same as src
             - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
+            - tuple of list of str, e.g. ['images', 'masks']
 
             if src is a list, dst should be either list or None.
 
@@ -509,9 +509,13 @@ class Batch:
             apply_transform(apply_mask, src=('images', 'masks'), dst='images', use_self=True)
             apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
         """
-        p = 1 if p is None or np.random.binomial(1, p) else 0
-
         dst = src if dst is None else dst
+
+        if not (isinstance(dst, str) or
+               (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
+            raise TypeError("dst should be str or tuple or list of str")
+
+        p = 1 if p is None or np.random.binomial(1, p) else 0
 
         if isinstance(src, list) and len(src) > 1 and isinstance(dst, list) and len(src) == len(dst):
             return tuple([self._apply_transform(ix, func, *args, src=src_component,
@@ -632,7 +636,7 @@ class Batch:
 
         """
         if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least of of dst and src should be attribute names, not arrays")
+            raise TypeError("At least one of dst and src should be attribute names, not arrays")
 
         if src is None:
             _args = args
