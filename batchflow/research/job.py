@@ -42,7 +42,7 @@ class Job:
                 unit.cv = self.cv[index]
                 if unit.pipeline is not None:
                     import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
-                    unit.concat_dataset(unit.cv)
+                    unit.concat_dataset()
                 else:
                     import_config = dict()
                 unit.set_config(config, {**branch_config, **gpu_configs[index]}, worker_config, import_config)
