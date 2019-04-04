@@ -36,7 +36,7 @@ class Research:
         self.n_iters = None
         self.timeout = 5
 
-    def add_pipeline(self, root, branch=None, dataset=None, fold=None, variables=None,
+    def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
                      name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
@@ -94,7 +94,7 @@ class Research:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
         unit = Executable()
-        unit.add_pipeline(root, name, branch, dataset, fold, variables,
+        unit.add_pipeline(root, name, branch, dataset, part, variables,
                           execute, dump, run, logging, **kwargs)
         self.executables[name] = unit
         return self
@@ -178,7 +178,7 @@ class Research:
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
-    def _create_jobs(self, n_reps, n_iters, cv, branches, name):
+    def _create_jobs(self, n_reps, n_iters, cv_splits, branches, name):
         """ Create generator of jobs. If `branches=1` or `len(branches)=1` then each job is one repetition
         for each config from grid_config. Else each job contains several pairs `(repetition, config)`.
 
@@ -201,12 +201,12 @@ class Research:
         else:
             n_models = len(branches)
 
-        cv = range(cv) if isinstance(cv, int) else [None]
+        cv_splits = range(cv_splits) if isinstance(cv_splits, int) else [None]
 
-        configs_with_repetitions = [(idx, configs, fold)
+        configs_with_repetitions = [(idx, configs, cv_split)
                                     for idx in range(n_reps)
                                     for configs in self.grid_config.gen_configs()
-                                    for fold in cv]
+                                    for cv_split in cv_splits]
 
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
@@ -438,6 +438,7 @@ class Executable:
         self.logging = None
         self.additional_config = None
         self.action = None
+        self.cv_fold = None
 
     def add_function(self, function, name, execute='%1', dump=-1, returns=None,
                      on_root=False, logging=False, *args, **kwargs):
@@ -466,7 +467,7 @@ class Executable:
         self._clear_result()
         self._process_iterations()
 
-    def add_pipeline(self, root_pipeline, name, branch_pipeline=None, dataset=None, fold=None, variables=None,
+    def add_pipeline(self, root_pipeline, name, branch_pipeline=None, dataset=None, part=None, variables=None,
                      execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add pipeline as an Executable Unit """
         variables = variables or []
@@ -485,14 +486,13 @@ class Executable:
         self.pipeline = pipeline
         self.root_pipeline = root
         self.dataset = dataset
-        self.fold = fold
+        self.part = part
         self.variables = variables
         self.execute = execute
         self.dump = dump
         self.to_run = run
         self.kwargs = kwargs
         self.logging = logging
-        self.cv_fold = None
 
         self.action = {
             'type': 'pipeline',
@@ -527,7 +527,7 @@ class Executable:
         """ Add dataset to root if root exists or create root pipeline on the base of dataset. """
         if self.dataset is not None:
             fold = getattr(self.dataset, 'cv'+str(self.cv_fold)) if self.cv_fold else self.dataset
-            dataset = getattr(fold, self.fold) if self.fold else fold
+            dataset = getattr(fold, self.part) if self.part else fold
             if self.root_pipeline is not None:
                 self.root_pipeline = self.root_pipeline << dataset
             else:
@@ -805,8 +805,8 @@ class Results():
         if repetitions is None:
             repetitions = list(range(self.research.n_reps))
 
-        if cv_fold is None:
-            cv_fold = list(range(self.research.n_splits)) if self.research.n_splits is not None else [None]
+        if cv_folds is None:
+            cv_folds = list(range(self.research.n_splits)) if self.research.n_splits is not None else [None]
 
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
