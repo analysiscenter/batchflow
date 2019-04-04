@@ -52,6 +52,11 @@ class Research:
             Several copies of branch pipeline will be executed in parallel per each batch
             received from the root pipeline.
             May contain parameters that can be defined by grid.
+        dataset : Dataset or None
+            dataset that will be used with pipelines (see also `part`). If None, root or branch
+            must contain datatset.
+        part : str or None
+            part of dataset to use (for example, `train`)
         variables : str, list of str or None
             names of pipeline variables to save after each iteration into results. All of them must be
             defined in `root`
@@ -234,9 +239,13 @@ class Research:
             yield array[i:i + size]
 
     def _cv_split(self, n_splits):
+        has_dataset = False
         for unit in self.executables:
             if getattr(self.executables[unit], 'dataset', None):
+                has_dataset = True
                 self.executables[unit].dataset.cv_split(n_splits=n_splits)
+        if not has_dataset:
+            raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
@@ -262,6 +271,8 @@ class Research:
             from `root`.
 
             If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
+        n_splits : int or None
+            number of folds for cross-validation.
         name : str or None
             name folder to save research. By default is 'research'.
         progress_bar : bool
@@ -405,6 +416,12 @@ class Executable:
         is None if `Executable` is a function
     root_pipeline : Pipeline
         is None if `Executable` is a function or pipeline is not divided into root and branch
+    dataset : Dataset or None
+        dataset for pipelines
+    part : str or None
+        part of dataset to use
+    cv_split : int or None
+        partition of dataset
     result : dict
         current results of the `Executable`. Keys are names of variables (for pipeline)
         or returns (for function) values are lists of variable values
@@ -744,6 +761,8 @@ class Results():
             names of units (pipleines and functions) to load
         repetitions : int, list or None
             numbers of repetitions to load
+        cv_splits : int, list or None
+            split of dataset
         variables : str, list or None
             names of variables to load
         iterations : int, list or None
@@ -771,11 +790,11 @@ class Results():
             grid = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
 
             research = (Research()
-            .pipeline(train_ppl, variables='loss', name='train')
-            .pipeline(test_ppl, name='test', execute='%100', run=True, import_from='train')
-            .function(accuracy, returns='accuracy', name='test_accuracy',
+            .add_pipeline(train_ppl, variables='loss', name='train')
+            .add_pipeline(test_ppl, name='test', execute='%100', run=True, import_from='train')
+            .add_function(accuracy, returns='accuracy', name='test_accuracy',
                       execute='%100', pipeline='test')
-            .grid(grid))
+            .add_grid(grid))
 
             research.run(n_reps=2, n_iters=10000)
             ```
