@@ -249,9 +249,6 @@ class TFModel(BaseModel):
                 self._build(config)
 
                 if self.train_steps is None:
-                    self._make_loss(config)
-                    self.store_to_attr('loss', tf.losses.get_total_loss())
-
                     train_steps = self._make_train_steps(config)
                     self.store_to_attr('train_steps', train_steps)
                 else:
@@ -538,8 +535,10 @@ class TFModel(BaseModel):
             if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
         else:
-            predictions = self._check_tensor('predictions')
-            targets = self._check_tensor('targets')
+            predictions_name = args.pop('predictions', 'predictions')
+            targets_name = args.pop('targets', 'targets')
+            predictions = self._check_tensor(predictions_name)
+            targets = self._check_tensor(targets_name)
 
             add_loss = args.pop('add_loss', False)
             if add_loss:
@@ -550,35 +549,38 @@ class TFModel(BaseModel):
                     tf.losses.add_loss(tensor_loss, loss_collection)
                 else:
                     tf.losses.add_loss(tensor_loss)
+        return tensor_loss
 
     def _make_train_steps(self, config):
-        """ Create different train steps """
-        if config.get('train_modes') is None:
-            config['train_modes'] = {}
+        default_config = self.__class__.default_config()
+        if ((config.get('optimizer') is None)
+                and (config.get('train_steps') is None)):
+            config['optimizer'] = default_config['default_optimizer']
 
-        _optimizer = config.get('optimizer')
-        _scope = config.get('scope')
-        _decay = config.get('decay')
-        if _optimizer is not None:
-            config['train_modes'].update({'': {'optimizer': _optimizer,
-                                               'scope': _scope,
-                                               'decay': _decay}})
+        if ((config.get('optimizer') is not None)
+                and (config.get('train_steps') is not None)):
+            raise ValueError('Config has both `optimizer` and `train_steps` options')
 
-        for key, subconfig in config.get('train_modes').items():
-            if subconfig.get('optimizer') is None:
-                subconfig.update({'optimizer': _optimizer})
-            if subconfig.get('scope') is None:
-                subconfig.update({'scope': _scope})
-            if subconfig.get('decay') is None:
-                subconfig.update({'decay': _decay})
+        if config.get('optimizer') is not None:
+            config.update({'train_steps': {'': {key: config.get(key) for key in
+                                                ('loss', 'optimizer', 'decay', 'scope')}}})
+            total = lambda loss: tf.losses.get_total_loss()
+        elif config.get('train_steps') is not None:
+            total = lambda loss: loss
 
         train_steps = {}
-        for key, subconfig in config['train_modes'].items():
-            optimizer_ = self._make_optimizer(subconfig)
-            print('\n\n\nCURRENT KEY: ', key)
-            print('SUBCONFIG: ', subconfig)
-            print('OPTIMIZER_: ', optimizer_, '\n')
+        for key, subconfig in config['train_steps'].items():
+            # Pass values from higher level
+            subconfig.update({key: subconfig.get(key) or config.get(key)
+                              for key in ('loss', 'scope')})
 
+            # Making loss and optimizer
+            loss = self._make_loss(subconfig)
+            self.store_to_attr('loss' + key, total(loss))
+
+            optimizer_ = self._make_optimizer(subconfig)
+
+            # Parsing scope and making train step with it
             if optimizer_:
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
@@ -595,10 +597,7 @@ class TFModel(BaseModel):
                         scope_collection = [item for item in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
                                             if item not in scope_collection]
 
-                    print('SCOPE COLLECTION')
-                    _ = [print(item) for item in scope_collection]
-
-                    train_step = optimizer_.minimize(self.loss,
+                    train_step = optimizer_.minimize(self._check_tensor('loss' + key),
                                                      global_step=self.global_step,
                                                      var_list=scope_collection)
                     train_steps.update({key: train_step})
@@ -804,7 +803,6 @@ class TFModel(BaseModel):
 
             model.train(fetches='loss', images=B('images'), labels=B('labels'))
         """
-        print(kwargs)
         with self.graph.as_default():
             feed_dict = {} if feed_dict is None else feed_dict
             feed_dict = {**feed_dict, **kwargs}
@@ -1262,7 +1260,7 @@ class TFModel(BaseModel):
         config['head'] = {}
         config['predictions'] = None
         config['output'] = None
-        config['optimizer'] = ('Adam', dict())
+        config['default_optimizer'] = ('Adam', dict())
         config['decay'] = (None, dict())
         config['scope'] = ''
         config['common'] = {'batch_norm': {'momentum': .1}}
@@ -1334,8 +1332,11 @@ class TFModel(BaseModel):
     def _build(self, config=None):
         inputs = config.pop('initial_block/inputs')
         x = self._add_block('initial_block', config, inputs=inputs)
+        self.store_to_attr('initial_block_tensor', x)
         x = self._add_block('body', config, inputs=x)
+        self.store_to_attr('body_tensor', x)
         output = self._add_block('head', config, inputs=x)
+        self.store_to_attr('head_tensor', output)
         self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
 
     def data_format(self, tensor, **kwargs):
