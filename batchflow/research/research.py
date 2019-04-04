@@ -634,8 +634,9 @@ class Executable:
 
     def create_folder(self, name):
         """ Create folder if it doesn't exist """
+        cv_folder = 'cv_' + str(self.cv_split) if self.cv_split is not None else ''
         self.path = os.path.join(name, 'results', self.config.alias(as_string=True),
-                                 str(self.repetition), 'cv_' + str(self.cv_split))
+                                 str(self.repetition), cv_folder)
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
@@ -829,7 +830,8 @@ class Results():
                 for cv_split in self.cv_splits:
                     for unit in self.names:
                         path = os.path.join(self.path, 'results', alias_str, str(repetition))
-                        files = glob.glob(os.path.join(glob.escape(path), 'cv_'+str(cv_split), unit + '_[0-9]*'))
+                        cv_folder = 'cv_'+str(cv_split) if cv_split is not None else ''
+                        files = glob.glob(os.path.join(glob.escape(path), cv_folder, unit + '_[0-9]*'))
                         files = self._sort_files(files, self.iterations)
                         if len(files) != 0:
                             res = []
@@ -839,23 +841,16 @@ class Results():
                             res = self._concat(res, self.variables)
                             self._fix_length(res)
                             if use_alias:
-                                all_results.append(
-                                    pd.DataFrame({
-                                        'config': alias_str,
-                                        'cv_split': cv_split,
-                                        'repetition': repetition,
-                                        'name': unit,
-                                        **res
-                                    })
-                                    )
+                                res['config'] = alias_str
                             else:
-                                all_results.append(
-                                    pd.DataFrame({
-                                        **alias,
-                                        'cv_split': cv_split,
-                                        'repetition': repetition,
-                                        'name': unit,
-                                        **res
-                                    })
-                                    )
+                                res.update(alias)
+                            if cv_split is None:
+                                res['cv_split'] = cv_split
+                            all_results.append(
+                                pd.DataFrame({
+                                    'repetition': repetition,
+                                    'name': unit,
+                                    **res
+                                })
+                                )
         return pd.concat(all_results) if len(all_results) > 0 else pd.DataFrame(None)
