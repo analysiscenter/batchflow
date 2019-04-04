@@ -36,8 +36,8 @@ class Research:
         self.n_iters = None
         self.timeout = 5
 
-    def pipeline(self, root, branch=None, dataset=None, fold=None, variables=None, name=None,
-                 execute='%1', dump=-1, run=False, logging=False, **kwargs):
+    def add_pipeline(self, root, branch=None, dataset=None, fold=None, variables=None,
+                     name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
 
@@ -99,8 +99,8 @@ class Research:
         self.executables[name] = unit
         return self
 
-    def function(self, function, returns=None, name=None, execute='%1', dump=-1,
-                 on_root=False, logging=False, *args, **kwargs):
+    def add_function(self, function, returns=None, name=None, execute='%1', dump=-1,
+                     on_root=False, logging=False, *args, **kwargs):
         """ Add function to research.
 
         Parameters
@@ -162,7 +162,7 @@ class Research:
 
         return self
 
-    def grid(self, grid_config):
+    def add_grid(self, grid_config):
         """ Add grid of pipeline parameters. Configs from that grid will be generated
         and then substitute into pipelines.
 
@@ -237,7 +237,7 @@ class Research:
             if getattr(self.executables[unit], 'dataset', None):
                 self.executables[unit].dataset.cv_split(n_splits)
 
-    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, cv=None, name=None,
+    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
         """ Run research.
 
@@ -299,13 +299,13 @@ class Research:
             self.trails = trails
             self.initial_name = name
             self.name = name
-            self.cv = cv
+            self.n_splits = n_splits
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
 
-        if cv is not None:
-            self._cv_split(cv)
+        if n_splits is not None:
+            self._cv_split(n_splits)
 
         if self.grid_config is None:
             self.grid_config = Grid(Option('dummy', [None]))
@@ -324,7 +324,7 @@ class Research:
 
         self.save()
 
-        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.cv, self.branches, self.name)
+        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
 
         distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
@@ -492,7 +492,7 @@ class Executable:
         self.to_run = run
         self.kwargs = kwargs
         self.logging = logging
-        self.cv = None
+        self.cv_fold = None
 
         self.action = {
             'type': 'pipeline',
@@ -526,7 +526,7 @@ class Executable:
     def concat_dataset(self):
         """ Add dataset to root if root exists or create root pipeline on the base of dataset. """
         if self.dataset is not None:
-            fold = getattr(self.dataset, 'cv'+str(self.cv)) if self.cv else self.dataset
+            fold = getattr(self.dataset, 'cv'+str(self.cv_fold)) if self.cv_fold else self.dataset
             dataset = getattr(fold, self.fold) if self.fold else fold
             if self.root_pipeline is not None:
                 self.root_pipeline = self.root_pipeline << dataset
@@ -635,7 +635,7 @@ class Executable:
     def create_folder(self, name):
         """ Create folder if it doesn't exist """
         self.path = os.path.join(name, 'results', self.config.alias(as_string=True),
-                                 str(self.repetition), 'cv_' + str(self.cv))
+                                 str(self.repetition), 'cv_' + str(self.cv_fold))
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
@@ -730,7 +730,7 @@ class Results():
         return result
 
 
-    def load(self, names=None, repetitions=None, cv=None, variables=None, iterations=None,
+    def load(self, names=None, repetitions=None, cv_folds=None, variables=None, iterations=None,
              configs=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
@@ -805,8 +805,8 @@ class Results():
         if repetitions is None:
             repetitions = list(range(self.research.n_reps))
 
-        if cv is None:
-            cv = list(range(self.research.cv)) if self.research.cv is not None else [None]
+        if cv_fold is None:
+            cv_fold = list(range(self.research.n_splits)) if self.research.n_splits is not None else [None]
 
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
@@ -818,7 +818,7 @@ class Results():
         self.repetitions = self._get_list(repetitions)
         self.variables = self._get_list(variables)
         self.iterations = self._get_list(iterations)
-        self.cv = self._get_list(cv)
+        self.cv_folds = self._get_list(cv_folds)
 
         all_results = []
 
@@ -826,10 +826,10 @@ class Results():
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
             for repetition in self.repetitions:
-                for cv in self.cv:
+                for cv_fold in self.cv_folds:
                     for unit in self.names:
                         path = os.path.join(self.path, 'results', alias_str, str(repetition))
-                        files = glob.glob(os.path.join(glob.escape(path), 'cv_'+str(cv), unit + '_[0-9]*'))
+                        files = glob.glob(os.path.join(glob.escape(path), 'cv_'+str(cv_fold), unit + '_[0-9]*'))
                         files = self._sort_files(files, self.iterations)
                         if len(files) != 0:
                             res = []
@@ -842,7 +842,7 @@ class Results():
                                 all_results.append(
                                     pd.DataFrame({
                                         'config': alias_str,
-                                        'cv': cv,
+                                        'cv_fold': cv_fold,
                                         'repetition': repetition,
                                         'name': unit,
                                         **res
@@ -852,7 +852,7 @@ class Results():
                                 all_results.append(
                                     pd.DataFrame({
                                         **alias,
-                                        'cv': cv,
+                                        'cv_fold': cv_fold,
                                         'repetition': repetition,
                                         'name': unit,
                                         **res
