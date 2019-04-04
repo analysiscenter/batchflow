@@ -512,7 +512,7 @@ class Batch:
         dst = src if dst is None else dst
 
         if not (isinstance(dst, str) or
-               (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
+                (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
             raise TypeError("dst should be str or tuple or list of str")
 
         p = 1 if p is None or np.random.binomial(1, p) else 0
