@@ -178,7 +178,7 @@ class Research:
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
-    def _create_jobs(self, n_reps, n_iters, cv_splits, branches, name):
+    def _create_jobs(self, n_reps, n_iters, cv_folds, branches, name):
         """ Create generator of jobs. If `branches=1` or `len(branches)=1` then each job is one repetition
         for each config from grid_config. Else each job contains several pairs `(repetition, config)`.
 
@@ -201,12 +201,12 @@ class Research:
         else:
             n_models = len(branches)
 
-        cv_splits = range(cv_splits) if isinstance(cv_splits, int) else [None]
+        cv_folds = range(cv_folds) if isinstance(cv_folds, int) else [None]
 
-        configs_with_repetitions = [(idx, configs, cv_split)
+        configs_with_repetitions = [(idx, configs, cv_fold)
                                     for idx in range(n_reps)
                                     for configs in self.grid_config.gen_configs()
-                                    for cv_split in cv_splits]
+                                    for cv_fold in cv_folds]
 
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
