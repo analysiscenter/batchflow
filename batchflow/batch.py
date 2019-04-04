@@ -266,7 +266,7 @@ class Batch:
         self.components = self.components + components
 
         self.make_item_class(local=True)
-        if data:
+        if data is not None:
             self._data = data + init
 
         return self
