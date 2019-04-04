@@ -308,7 +308,7 @@ class Research:
             self._cv_split(n_splits)
 
         if self.grid_config is None:
-            self.grid_config = Grid(Option('dummy', [None]))
+            self.grid_config = Grid(Option('_dummy', [None]))
         
         if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
             raise ValueError("Number of gpus must be 1 or be divisible \
@@ -840,11 +840,12 @@ class Results():
                                     res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
                             res = self._concat(res, self.variables)
                             self._fix_length(res)
-                            if use_alias:
-                                res['config'] = alias_str
-                            else:
-                                res.update(alias)
-                            if cv_split is None:
+                            if '_dummy' not in alias:
+                                if use_alias:
+                                    res['config'] = alias_str
+                                else:
+                                    res.update(alias)
+                            if cv_split is not None:
                                 res['cv_split'] = cv_split
                             all_results.append(
                                 pd.DataFrame({
