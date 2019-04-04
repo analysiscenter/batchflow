@@ -235,7 +235,7 @@ class Research:
     def _cv_split(self, n_splits):
         for unit in self.executables:
             if getattr(self.executables[unit], 'dataset', None):
-                self.executables[unit].dataset.cv_split(n_splits)
+                self.executables[unit].dataset.cv_split(n_splits=n_splits)
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
