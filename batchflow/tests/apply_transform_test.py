@@ -12,11 +12,11 @@ from batchflow import Batch, Dataset, P, R
 BATCH_SIZE = 2
 DATA = np.arange(3*BATCH_SIZE).reshape(BATCH_SIZE, -1)
 
-SINGLE_CASE = ['comp1', ['comp1'], ('comp1'), DATA]
+SINGLE_CASE = ['comp1', ['comp1'], DATA, ('comp1')]
 MULTI_CASE = [['comp1', 'comp2'], ('comp1', 'comp2'),
-              ['comp1', 'comp3'], ('comp1', DATA)]
+              ('comp1', DATA), ['comp1', 'comp3']]
 EXPECTATION = [does_not_raise(), does_not_raise(),
-               does_not_raise(), pytest.raises(RuntimeError)]
+               pytest.raises(RuntimeError), does_not_raise()]
 
 def return_single_value(arr, arg1, arg2=0):
     """ Simple function that returns single value.
@@ -65,26 +65,32 @@ def test_many_to_one(src, dst, expectation, batch):
         assert np.all(np.equal(batch.comp1, DATA * DATA + 1))
         assert np.all(np.equal(batch.comp2, DATA))
 
-# TODO: work through this case
-# @pytest.mark.parametrize('src', MULTI_CASE[:2])
-# @pytest.mark.parametrize('dst,expectation', list(zip(SINGLE_CASE, EXPECTATION)))
-# def test_many_to_one_two_values(src, dst, expectation, batch):
-#     with expectation:
-#         batch.apply_transform(return_two_values, arg2=1, src=src, dst=dst)
-#         print(batch.comp1)
-#         assert np.all(np.equal(batch.comp1, (DATA * 2, DATA * DATA + 1)))
-#         assert np.all(np.equal(batch.comp2, DATA))
+@pytest.mark.parametrize('src', MULTI_CASE[:2])
+@pytest.mark.parametrize('dst,expectation', list(zip(SINGLE_CASE, EXPECTATION)))
+def test_many_to_one_two_values(src, dst, expectation, batch):
+    with expectation:
+        batch.apply_transform(return_two_values, arg2=1, src=src, dst=dst)
+        assert np.all(np.equal(batch.comp1, np.array(list(zip(DATA * 2, DATA * DATA + 1)))))
+        assert np.all(np.equal(batch.comp1.shape, (len(src), BATCH_SIZE, 3)))
 
-def test_many_to_many(batch):
+@pytest.mark.parametrize('dst', [MULTI_CASE[0], None])
+def test_many_to_many(dst, batch):
     batch.apply_transform(return_single_value, 30000, arg2=P(R('uniform', 0, 1)),
-                          src=MULTI_CASE[0], dst=MULTI_CASE[0])
+                          src=MULTI_CASE[0], dst=dst)
     assert np.all(np.allclose(batch.comp1, DATA * 30000, atol=1.))
     assert np.all(np.allclose(batch.comp2, DATA * 30000, atol=1.))
     assert np.all(batch.comp1 - DATA * 30000 == batch.comp2 - DATA * 30000)
 
-# TODO: work through this case
-# def test_many_to_many_two_values(batch):
-#     batch.apply_transform(return_two_values, 3, arg2=1,
-#                           src=MULTI_CASE[0], dst=MULTI_CASE[0])
-#     print(batch.comp1)
-#     assert np.all(np.equal(batch.comp1, (DATA * 2, DATA * 3 + 1)))
+def test_many_to_many_two_values(batch):
+    batch.apply_transform(return_two_values, 3, arg2=1,
+                          src=MULTI_CASE[0], dst=MULTI_CASE[0])
+    assert np.all(np.equal(batch.comp1, batch.comp2))
+    assert np.all(np.equal(batch.comp1, np.array(list(zip(DATA * 2, DATA * 3 + 1)))))
+    assert np.all(np.equal(batch.comp1.shape, (len(MULTI_CASE[0]), 2, 3)))
+
+@pytest.mark.parametrize('src,expectation', list(zip(SINGLE_CASE, EXPECTATION)))
+def test_one_to_one_with_default(src, expectation, batch):
+    with expectation:
+        batch.apply_transform(return_single_value, 3, arg2=1, src=src, dst=None)
+        assert np.all(np.equal(batch.comp1, DATA * 3 + 1))
+        assert np.all(np.equal(batch.comp2, DATA))
