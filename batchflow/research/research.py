@@ -35,6 +35,7 @@ class Research:
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
+        self.n_splits = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
                      name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
@@ -309,7 +310,7 @@ class Research:
 
         if self.grid_config is None:
             self.grid_config = Grid(Option('_dummy', [None]))
-        
+
         if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
             raise ValueError("Number of gpus must be 1 or be divisible \
                              by the number of workers but {} was given".format(len(self.gpu)))
@@ -439,6 +440,8 @@ class Executable:
         self.additional_config = None
         self.action = None
         self.cv_split = None
+        self.dataset = None
+        self.part = None
 
     def add_function(self, function, name, execute='%1', dump=-1, returns=None,
                      on_root=False, logging=False, *args, **kwargs):
