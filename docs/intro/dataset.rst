@@ -1,10 +1,9 @@
-
+=======
 Dataset
 =======
 
 Creating a dataset
 ------------------
-
 The `Dataset` holds an index of all data items (e.g. customers, transactions, etc) and a specific action class
 to process a small subset of data (batch).
 
@@ -13,7 +12,12 @@ to process a small subset of data (batch).
    from batchflow import DatasetIndex, Dataset, Batch
 
    client_index = DatasetIndex(client_ids_list)
-   client_dataset = Dataset(client_index, batch_class=Batch)
+   client_dataset = Dataset(client_index)
+
+By default a dataset will generate batches of :class:`~batchflow.Batch` class.
+A custom :doc:`batch class <batch>` may also be provided::
+
+   client_dataset = Dataset(client_index, batch_class=MyBatch)
 
 
 Preloading data
@@ -25,6 +29,18 @@ For smaller dataset it might be convenient to preload all data at once:
    client_dataset = Dataset(client_index, batch_class=Batch, preloaded=some_data)
 
 As a result, all created batches will contain a portion of `some_data`.
+
+
+Adding custom data
+------------------
+To store dataset-specific data which can be later accessed within pipelines or batches, just pass it as keyword-parameters
+when instantiating a dataset.
+
+.. code-block:: python
+
+   client_dataset = Dataset(client_index, locations=loc_data, products=product_list)
+
+Custom data is available as dataset attributes, e.g. `client_dataset.locations` and `client_dataset.products`.
 
 
 Splitting a dataset
@@ -125,14 +141,11 @@ You can also define a new :doc:`batch class <batch>` with custom action methods 
         def another_custom_action(self):
             ...
 
-And then create a dataset with a new batch class:
-
-.. code-block:: python
+And then create a dataset with a new batch class::
 
    client_dataset = Dataset(client_index, batch_class=MyBatch)
 
 
 API
 ---
-
 See :doc:`Dataset API <../api/batchflow.dataset>`.
