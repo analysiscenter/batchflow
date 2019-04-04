@@ -526,7 +526,7 @@ class Executable:
     def concat_dataset(self):
         """ Add dataset to root if root exists or create root pipeline on the base of dataset. """
         if self.dataset is not None:
-            fold = getattr(self.dataset, 'cv'+str(self.cv_fold)) if self.cv_fold else self.dataset
+            fold = getattr(self.dataset, 'cv'+str(self.cv_fold)) if self.cv_fold is not None else self.dataset
             dataset = getattr(fold, self.part) if self.part else fold
             if self.root_pipeline is not None:
                 self.root_pipeline = self.root_pipeline << dataset
