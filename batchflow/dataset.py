@@ -105,12 +105,6 @@ class Dataset(Baseset):
             raise AttributeError("To access cross-validation call cv_split() first.")
         raise AttributeError()
 
-    def __getstate__(self):
-        return self.__dict__
-
-    def __setstate__(self, d):
-        self.__dict__.update(d)
-
     @staticmethod
     def build_index(index, *args, **kwargs):
         """ Check if instance of the index is DatasetIndex
@@ -285,7 +279,7 @@ class Dataset(Baseset):
             train_splits = list(set(range(n_splits)) - {i})
             train_indices = np.concatenate(np.asarray(splits)[train_splits])
 
-            setattr(self, 'cv'+str(i), deepcopy.copy(self))
+            setattr(self, 'cv'+str(i), self.copy())
             cv_dataset = getattr(self, 'cv'+str(i))
             cv_dataset.train = self.create_subset(train_indices)
             cv_dataset.test = self.create_subset(test_indices)
