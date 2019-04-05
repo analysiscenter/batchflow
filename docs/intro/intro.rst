@@ -115,17 +115,6 @@ See :doc:`Working with models <models>` to understand what a model is and how to
 There is a bunch of :doc:`predefined models <model_zoo>` which you can use out of the box.
 
 
-Best practices
-==============
-
-Machine learning models often imply numerous hyperparameters which impact model performance and training.
-These are include optimization algorithms, layer layouts, batch norm momentum and other parameters.
-
-After training thousands of models we find out that some values of those parameters work better than others.
-That is why we gathered them into :doc:`best practice <best_practice>` module.
-Though it does not fit all the situations and sometimes can even lead to average results, most of the time it works well.
-
-
 Research
 ========
 To perform multiple experiments with different parameters you can use `Research` class:
