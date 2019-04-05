@@ -158,7 +158,8 @@ class Dataset(Baseset):
                 If the index lies out of the source dataset index's range, the IndexError raises.
 
         """
-        if not np.isin(index.indices, self.indices).all():
+        indices = index.indices if isinstance(index, DatasetIndex) else index
+        if not np.isin(indices, self.indices).all():
             raise IndexError
         return type(self).from_dataset(self, self.index.create_subset(index))
 
@@ -279,8 +280,8 @@ class Dataset(Baseset):
 
             setattr(self, 'cv'+str(i), deepcopy.copy(self))
             cv_dataset = getattr(self, 'cv'+str(i))
-            cv_dataset.train = self.create_subset(DatasetIndex(train_indices))
-            cv_dataset.test = self.create_subset(DatasetIndex(test_indices))
+            cv_dataset.train = self.create_subset(train_indices)
+            cv_dataset.test = self.create_subset(test_indices)
 
 
     def _split_kfold(self, n_splits, order):
