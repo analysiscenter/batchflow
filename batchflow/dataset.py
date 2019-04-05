@@ -105,12 +105,6 @@ class Dataset(Baseset):
             raise AttributeError("To access cross-validation call cv_split() first.")
         raise AttributeError()
 
-    def __getstate__(self):
-        return self.__dict__
-
-    def __setstate__(self, d):
-        self.__dict__.update(d)
-
     @staticmethod
     def build_index(index, *args, **kwargs):
         """ Check if instance of the index is DatasetIndex
