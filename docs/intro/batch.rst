@@ -66,6 +66,16 @@ For instance, you can load components from different sources, or save components
 (like resizing, zooming or rotating).
 
 
+Dataset
+=======
+
+Each batch also refers to a dataset which it was created from - `batch.dataset`. However, note that while a batch travels through a pipeline it might be transformed beyond recognition,
+but the dataset reference does not change.
+
+Another way to access dataset attributes is to use :class:`~.batchflow.D`-expression.
+
+.. _actions:
+
 Action methods
 ==============
 
