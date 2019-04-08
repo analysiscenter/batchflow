@@ -15,7 +15,7 @@ class PipelineWorker(Worker):
         if self.framework == 'tf':
             prefix = '/device:GPU'
         elif self.framework == 'torch':
-            prefix = 'device'
+            prefix = 'cuda:'
         else:
             raise ValueError('Unknown framework: {}'.format(self.framework))
 
