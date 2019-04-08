@@ -553,12 +553,11 @@ class TFModel(BaseModel):
 
     def _make_train_steps(self, config):
 
-        if ((config.get('optimizer') is not None)
-                and (config.get('train_steps') is None)):
+        if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
                                                 ('loss', 'optimizer', 'decay', 'scope')}}})
             total = lambda loss: tf.losses.get_total_loss()
-        elif config.get('train_steps') is not None:
+        else:
             total = lambda loss: loss
 
         train_steps = {}
