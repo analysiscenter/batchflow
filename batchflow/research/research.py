@@ -35,11 +35,8 @@ class Research:
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
-<<<<<<< HEAD
         self.n_splits = None
-=======
         self.framework = None
->>>>>>> 82280cb... Add device for torch
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
                      name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
@@ -242,7 +239,6 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-<<<<<<< HEAD
     def _cv_split(self, n_splits):
         has_dataset = False
         for unit in self.executables:
@@ -253,11 +249,8 @@ class Research:
             raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, name=None,
-            progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
-=======
-    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
->>>>>>> 82280cb... Add device for torch
+
         """ Run research.
 
         Parameters
@@ -320,11 +313,9 @@ class Research:
             self.trails = trails
             self.initial_name = name
             self.name = name
-<<<<<<< HEAD
+
             self.n_splits = n_splits
-=======
             self.framework = framework
->>>>>>> 82280cb... Add device for torch
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
