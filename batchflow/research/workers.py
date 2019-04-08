@@ -24,8 +24,6 @@ class PipelineWorker(Worker):
         else:
             self.gpu_configs = [dict(device=prefix+str(i)) for i in range(n_branches)]
 
-        print(self.gpu_configs)
-
         job.init(self.worker_config, self.gpu_configs)
 
         description = job.get_description()
