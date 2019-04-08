@@ -552,16 +552,9 @@ class TFModel(BaseModel):
         return tensor_loss
 
     def _make_train_steps(self, config):
-        default_config = self.__class__.default_config()
-        if ((config.get('optimizer') is None)
-                and (config.get('train_steps') is None)):
-            config['optimizer'] = default_config['default_optimizer']
 
         if ((config.get('optimizer') is not None)
-                and (config.get('train_steps') is not None)):
-            raise ValueError('Config has both `optimizer` and `train_steps` options')
-
-        if config.get('optimizer') is not None:
+                and (config.get('train_steps') is None)):
             config.update({'train_steps': {'': {key: config.get(key) for key in
                                                 ('loss', 'optimizer', 'decay', 'scope')}}})
             total = lambda loss: tf.losses.get_total_loss()
@@ -572,12 +565,11 @@ class TFModel(BaseModel):
         for key, subconfig in config['train_steps'].items():
             # Pass values from higher level
             subconfig.update({key: subconfig.get(key) or config.get(key)
-                              for key in ('loss', 'scope')})
+                              for key in ('optimizer', 'loss', 'scope')})
 
             # Making loss and optimizer
             loss = self._make_loss(subconfig)
             self.store_to_attr('loss' + key, total(loss))
-
             optimizer_ = self._make_optimizer(subconfig)
 
             # Parsing scope and making train step with it
@@ -1260,7 +1252,7 @@ class TFModel(BaseModel):
         config['head'] = {}
         config['predictions'] = None
         config['output'] = None
-        config['default_optimizer'] = ('Adam', dict())
+        config['optimizer'] = ('Adam', dict())
         config['decay'] = (None, dict())
         config['scope'] = ''
         config['common'] = {'batch_norm': {'momentum': .1}}
