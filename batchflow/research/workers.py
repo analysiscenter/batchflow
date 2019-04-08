@@ -12,10 +12,19 @@ class PipelineWorker(Worker):
         i, job = self.job
         n_branches = len(job.configs)
 
-        if len(self.gpu) <= 1:
-            self.gpu_configs = [dict(device='/device:GPU:0') for i in range(n_branches)]
+        if self.framework == 'tf':
+            prefix = '/device:GPU'
+        elif self.framework == 'torch':
+            prefix = 'device'
         else:
-            self.gpu_configs = [dict(device='/device:GPU:{}'.format(i)) for i in range(n_branches)]
+            raise ValueError('Unknown framework: {}'.format(self.framework))
+
+        if len(self.gpu) <= 1:
+            self.gpu_configs = [dict(device=prefix+'0') for i in range(n_branches)]
+        else:
+            self.gpu_configs = [dict(device=prefix+str(i)) for i in range(n_branches)]
+
+        print(self.gpu_configs)
 
         job.init(self.worker_config, self.gpu_configs)
 
