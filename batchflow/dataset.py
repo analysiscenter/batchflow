@@ -58,9 +58,15 @@ class Dataset(Baseset):
         if batch_class is not Batch and not issubclass(batch_class, Batch):
             raise TypeError("batch_class should be inherited from Batch", batch_class)
 
-        super().__init__(index, *args, **kwargs)
+        super().__init__(index, *args)
         self.batch_class = batch_class
         self.preloaded = preloaded
+        self.create_attrs(**kwargs)
+
+    def create_attrs(self, **kwargs):
+        """ Create attributes from kwargs """
+        for attr, value in kwargs.items():
+            setattr(self, attr, value)
 
     @classmethod
     def from_dataset(cls, dataset, index, batch_class=None, copy=False):
@@ -97,17 +103,12 @@ class Dataset(Baseset):
     def __getattr__(self, name):
         if name[:2] == 'cv' and name[2:].isdigit():
             raise AttributeError("To access cross-validation call cv_split() first.")
-
-    def __getstate__(self):
-        return self.__dict__
-
-    def __setstate__(self, d):
-        self.__dict__.update(d)
+        raise AttributeError()
 
     @staticmethod
-    def build_index(index):
+    def build_index(index, *args, **kwargs):
         """ Check if instance of the index is DatasetIndex
-            if it is not - create DatasetIndex from input index
+            if it is not - create DatasetIndex from inputs
 
             Parameters
             ----------
@@ -119,7 +120,7 @@ class Dataset(Baseset):
         """
         if isinstance(index, DatasetIndex):
             return index
-        return DatasetIndex(index)
+        return DatasetIndex(index, *args, **kwargs)
 
     @staticmethod
     def _is_same_index(index1, index2):
@@ -158,7 +159,8 @@ class Dataset(Baseset):
                 If the index lies out of the source dataset index's range, the IndexError raises.
 
         """
-        if not np.isin(index.indices, self.indices).all():
+        indices = index.indices if isinstance(index, DatasetIndex) else index
+        if not np.isin(indices, self.indices).all():
             raise IndexError
         return type(self).from_dataset(self, self.index.create_subset(index))
 
@@ -185,7 +187,7 @@ class Dataset(Baseset):
         """
         if not isinstance(index, DatasetIndex):
             index = self.index.create_batch(index, pos, *args, **kwargs)
-        return self.batch_class(index, preloaded=self.preloaded, **kwargs)
+        return self.batch_class(index, preloaded=self.preloaded, dataset=self, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow
@@ -279,8 +281,8 @@ class Dataset(Baseset):
 
             setattr(self, 'cv'+str(i), deepcopy.copy(self))
             cv_dataset = getattr(self, 'cv'+str(i))
-            cv_dataset.train = self.create_subset(DatasetIndex(train_indices))
-            cv_dataset.test = self.create_subset(DatasetIndex(test_indices))
+            cv_dataset.train = self.create_subset(train_indices)
+            cv_dataset.test = self.create_subset(test_indices)
 
 
     def _split_kfold(self, n_splits, order):
