@@ -60,10 +60,8 @@ class Research:
             part of dataset to use (for example, `train`)
         variables : str, list of str or None
             names of pipeline variables to save after each iteration into results. All of them must be
-            defined in `root`
-
-            If `branch` is None or be defined in `branch` if `branch` is not None.
-            If None, pipeline will be executed without any dumping
+            defined in `root` if `branch` is None or be defined in `branch` if `branch` is not None.
+            If None, pipeline will be executed without any dumping.
         name : str
             pipeline name. If None, pipeline will have name `pipeline_{index}`
         execute : int, str or list of int or str
@@ -72,11 +70,11 @@ class Research:
 
             If positive int, pipeline will be excuted for that iteration
 
-            If str, must be `'%{step}'` where step is int
+            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
 
             If list, must be list of int or str descibed above
         dump : int, str or list of int or str
-            iteration when results will be dumped and cleared. Similar to execute
+            iteration when results will be dumped and cleared. Similar to `execute`
         run : bool
             if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset_iter()`.
         kwargs :
@@ -84,7 +82,7 @@ class Research:
 
             For example,
             if test pipeline imports model from the other pipeline with name `'train'` in Research,
-            corresponding parameter in import_model must be `C('import_from')` and add_pipeline
+            corresponding parameter in `import_model` must be `C('import_from')` and `add_pipeline`
             must be called with parameter `import_from='train'`.
         logging : bool
             include execution information to log file or not
@@ -130,7 +128,7 @@ class Research:
 
             If positive int, function will be excuted for that iteration
 
-            If str, must be `'%{step}'` where step is int
+            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
 
             If list, must be list of int or str descibed above
         dump : int, str or list of int or str
@@ -210,15 +208,18 @@ class Research:
 
         cv_splits = range(cv_splits) if isinstance(cv_splits, int) else [None]
 
+        # Create all combinations of possible paramaters, cv partitions and indices of repetitions
         configs_with_repetitions = [(idx, configs, cv_split)
                                     for idx in range(n_reps)
                                     for configs in self.grid_config.gen_configs()
                                     for cv_split in cv_splits]
 
+        # Split all combinations into chunks that will use the same roots
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
         jobs = (Job(self.executables, n_iters,
-                    list(zip(*chunk))[0], list(zip(*chunk))[1], list(zip(*chunk))[2], branches, name)
+                    list(zip(*chunk))[0], list(zip(*chunk))[1], list(zip(*chunk))[2],
+                    branches, name)
                 for chunk in configs_chunks
                )
 
@@ -258,7 +259,8 @@ class Research:
         n_reps : int
             number of repetitions with each combination of parameters from `grid_config`
         n_iters: int or None
-            number of iterations for each configurations. If None, wait StopIteration exception.
+            number of iterations for each configurations. If None, wait StopIteration exception for at least
+            one pipeline.
         workers : int or list of dicts (Configs)
             If int - number of workers to run pipelines or workers that will run them, `PipelineWorker` will be used.
 
@@ -295,6 +297,8 @@ class Research:
             each job will be killed if it doesn't answer more then that time in minutes
         trails : int
             trails to execute job
+        framework : 'tf' or 'torch'
+            depends on the format of `C('device')`: `'/device:GPU:i'` for `'tf'` and `'cuda:i'` for `'torch'`.
 
 
         **How does it work**
