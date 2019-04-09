@@ -540,9 +540,6 @@ class Batch:
         func : callable
             a function to apply to each item from the source
 
-        to_act: bool
-            indicates whether to apply function or return item as is
-
         src : str, sequence, list of str
             the source to get data from, can be:
 
