@@ -274,6 +274,8 @@ class Dataset(Baseset):
         else:
             raise ValueError("Unknown split method:", method)
 
+        self.train = self.copy()
+        self.test = self.copy()
         for i in range(n_splits):
             test_indices = splits[i]
             train_splits = list(set(range(n_splits)) - {i})
@@ -283,6 +285,8 @@ class Dataset(Baseset):
             cv_dataset = getattr(self, 'cv'+str(i))
             cv_dataset.train = self.create_subset(train_indices)
             cv_dataset.test = self.create_subset(test_indices)
+            setattr(self.train, 'cv'+str(i), cv_dataset.train)
+            setattr(self.test, 'cv'+str(i), cv_dataset.test)
 
 
     def _split_kfold(self, n_splits, order):
