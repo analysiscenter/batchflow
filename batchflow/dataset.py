@@ -1,6 +1,6 @@
 """ Dataset """
-import copy as deepcopy
 import numpy as np
+
 from .base import Baseset
 from .batch import Batch
 from .dsindex import DatasetIndex
