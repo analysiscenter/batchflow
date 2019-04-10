@@ -1,6 +1,7 @@
 """ Tests for Batch apply_transform method. """
 # pylint: disable=import-error, no-name-in-module
 # pylint: disable=missing-docstring, redefined-outer-name
+from itertools import product
 from contextlib import ExitStack as does_not_raise
 
 import numpy as np
@@ -10,24 +11,52 @@ from batchflow import Batch, Dataset, P, R
 
 
 BATCH_SIZE = 2
-DATA = np.arange(3*BATCH_SIZE).reshape(BATCH_SIZE, -1)
+DATA = np.arange(3*BATCH_SIZE).reshape(BATCH_SIZE, -1) + 1
 
-SINGLE_CASE = ['comp1', ['comp1'], DATA, ('comp1')]
-MULTI_CASE = [['comp1', 'comp2'], ('comp1', 'comp2'),
-              ('comp1', DATA), ['comp1', 'comp3']]
-EXPECTATION = [does_not_raise(), does_not_raise(),
-               pytest.raises(RuntimeError), does_not_raise()]
+# Testing all possible combinations of SRC_COMPS and DST_COMPS
+SRC_OPTS = [DATA, 'comp1', ['comp1'], ('comp1'), ('comp1', 'comp2'), ['comp1', 'comp2']]
+DST_OPTS = [DATA, None, 'comp1', ['comp3'], ('comp2'), ('comp2', 'comp3'), ['comp1', 'comp3']]
 
-def return_single_value(arr, arg1, arg2=0):
-    """ Simple function that returns single value.
+SRC_COMPS, DST_COMPS = list(zip(*list(product(SRC_OPTS, DST_OPTS))))
+
+# Test is expected to fail when dst=DATA or src=DATA and dst=None 
+EXPECTATION = [pytest.raises(RuntimeError), does_not_raise(), does_not_raise(),
+               does_not_raise(), does_not_raise(), does_not_raise(), does_not_raise()] * 6
+EXPECTATION[1] = pytest.raises(RuntimeError)
+
+def one2one(arr1, *args, **kwargs):
+    """ Simple function.
     """
-    return arr * arg1 + arg2
+    addendum = kwargs.get('addendum', 0)
+    result = arr1 + addendum
+    return result
 
-def return_two_values(arr, arg1, arg2=0):
-    """ Simple function that returns two values.
+def two2one(arr1, arr2, **kwargs):
+    """ Simple function.
     """
-    return arr * 2, arr * arg1 + arg2
+    addendum = kwargs.get('addendum', 0)
+    result = arr1 * arr2 + addendum
+    return result
 
+def one2two(arr1, **kwargs):
+    """ Simple function.
+    """
+    addendum = kwargs.get('addendum', 0)
+    result = arr1 + addendum
+    return result, result
+
+def two2two(arr1, arr2, **kwargs):
+    """ Simple function.
+    """
+    addendum = kwargs.get('addendum', 0)
+    result = arr1 * arr2 + addendum
+    return result, result
+
+# Functions used are defined by src and dst. 
+# Last one is one2one because it used to test same transform of each src
+FUNCTIONS = ([one2one] * 5 + [one2two] * 2) * 4 + ([two2one] * 5 + [two2two] * 2) * 2
+FUNCTIONS[-1] = one2one
+FUNCTIONS[-6] = one2one
 
 @pytest.fixture
 def batch():
@@ -41,56 +70,17 @@ def batch():
     return batch
 
 
-@pytest.mark.parametrize('src', SINGLE_CASE)
-@pytest.mark.parametrize('dst,expectation', list(zip(SINGLE_CASE, EXPECTATION)))
-def test_one_to_one(src, dst, expectation, batch):
+@pytest.mark.parametrize('src,dst,expectation,func', list(zip(SRC_COMPS, DST_COMPS, EXPECTATION, FUNCTIONS)))
+def test_all(src, dst, expectation, func, batch):
     with expectation:
-        batch.apply_transform(return_single_value, 3, arg2=1, src=src, dst=dst)
-        assert np.all(np.equal(batch.comp1, DATA * 3 + 1))
-        assert np.all(np.equal(batch.comp2, DATA))
+        batch.apply_transform(func, addendum=P(R('uniform', 0, 1)), src=src, dst=dst)
 
-@pytest.mark.parametrize('src', SINGLE_CASE)
-@pytest.mark.parametrize('dst,expectation', list(zip(MULTI_CASE, EXPECTATION)))
-def test_one_to_many(src, dst, expectation, batch):
-    with expectation:
-        batch.apply_transform(return_two_values, 3, arg2=1, src=src, dst=dst)
-        assert np.all(np.equal(getattr(batch, dst[0]), DATA * 2))
-        assert np.all(np.equal(getattr(batch, dst[1]), DATA * 3 + 1))
-
-@pytest.mark.parametrize('src', MULTI_CASE[:2])
-@pytest.mark.parametrize('dst,expectation', list(zip(SINGLE_CASE, EXPECTATION)))
-def test_many_to_one(src, dst, expectation, batch):
-    with expectation:
-        batch.apply_transform(return_single_value, arg2=1, src=src, dst=dst)
-        assert np.all(np.equal(batch.comp1, DATA * DATA + 1))
-        assert np.all(np.equal(batch.comp2, DATA))
-
-@pytest.mark.parametrize('src', MULTI_CASE[:2])
-@pytest.mark.parametrize('dst,expectation', list(zip(SINGLE_CASE, EXPECTATION)))
-def test_many_to_one_two_values(src, dst, expectation, batch):
-    with expectation:
-        batch.apply_transform(return_two_values, arg2=1, src=src, dst=dst)
-        assert np.all(np.equal(batch.comp1, np.array(list(zip(DATA * 2, DATA * DATA + 1)))))
-        assert np.all(np.equal(batch.comp1.shape, (len(src), BATCH_SIZE, 3)))
-
-@pytest.mark.parametrize('dst', [MULTI_CASE[0], None])
-def test_many_to_many(dst, batch):
-    batch.apply_transform(return_single_value, 30000, arg2=P(R('uniform', 0, 1)),
-                          src=MULTI_CASE[0], dst=dst)
-    assert np.all(np.allclose(batch.comp1, DATA * 30000, atol=1.))
-    assert np.all(np.allclose(batch.comp2, DATA * 30000, atol=1.))
-    assert np.all(batch.comp1 - DATA * 30000 == batch.comp2 - DATA * 30000)
-
-def test_many_to_many_two_values(batch):
-    batch.apply_transform(return_two_values, 3, arg2=1,
-                          src=MULTI_CASE[0], dst=MULTI_CASE[0])
-    assert np.all(np.equal(batch.comp1, batch.comp2))
-    assert np.all(np.equal(batch.comp1, np.array(list(zip(DATA * 2, DATA * 3 + 1)))))
-    assert np.all(np.equal(batch.comp1.shape, (len(MULTI_CASE[0]), 2, 3)))
-
-@pytest.mark.parametrize('src,expectation', list(zip(SINGLE_CASE, EXPECTATION)))
-def test_one_to_one_with_default(src, expectation, batch):
-    with expectation:
-        batch.apply_transform(return_single_value, 3, arg2=1, src=src, dst=None)
-        assert np.all(np.equal(batch.comp1, DATA * 3 + 1))
-        assert np.all(np.equal(batch.comp2, DATA))
+        if not isinstance(src, (list, tuple)):
+            src = [src]
+        if dst is None:
+            dst = src
+        if not isinstance(dst, (list, tuple)):
+            dst = [dst]
+        for dst_comp in dst:
+            result = getattr(batch, dst_comp)
+            assert np.all((result - func(*[getattr(batch, src_comp) if isinstance(src_comp, str) else src_comp for src_comp in src])) < 1)
