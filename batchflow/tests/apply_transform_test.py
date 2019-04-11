@@ -58,8 +58,7 @@ EXPECTATION = [pytest.raises(RuntimeError), does_not_raise(), does_not_raise(),
 EXPECTATION[1] = pytest.raises(RuntimeError)
 ADDENDUM = [7, P(R('uniform', seed=SEED))]
 
-# Functions used are defined by src and dst.
-# Last one is one2one because it used to test same transform of each src
+# Functions used are defined by src and dst
 FUNCTIONS = ([one2one] * 5 + [one2two] * 2) * 4 + ([two2one] * 5 + [two2two] * 2) * 2
 FUNCTIONS[29] = two2two
 FUNCTIONS[36] = one2one
@@ -81,7 +80,16 @@ def batch():
 @pytest.mark.parametrize('addendum', ADDENDUM)
 @pytest.mark.parametrize('src,dst,expectation,func', list(zip(SRC_COMPS, DST_COMPS, EXPECTATION, FUNCTIONS)))
 def test_apply_transform(src, dst, expectation, func, addendum, batch,):
-    """ Test checks for different types and shapes of `src` and `dst`
+    """ Test checks for different types and shapes of `src` and `dst`.
+    
+    expectation
+        Test is expected to fail when `dst` is an array-like, these cases are captured by `expectation`
+        parameter.
+    func
+        Different forms of `src` and `dst` are tested with one of four types of functions: that takes one 
+        argument and returns one, takes one and return two, takes two - returns one and takes two returns two.
+    addendum
+        addendum parameter verifies that `apply_transform` correctly hanles keyword arguments and NamedExpressions.
     """
     # Arrange
     if isinstance(addendum, P):
