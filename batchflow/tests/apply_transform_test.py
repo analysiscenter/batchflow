@@ -81,12 +81,12 @@ def batch():
 @pytest.mark.parametrize('src,dst,expectation,func', list(zip(SRC_COMPS, DST_COMPS, EXPECTATION, FUNCTIONS)))
 def test_apply_transform(src, dst, expectation, func, addendum, batch,):
     """ Test checks for different types and shapes of `src` and `dst`.
-    
+
     expectation
         Test is expected to fail when `dst` is an array-like, these cases are captured by `expectation`
         parameter.
     func
-        Different forms of `src` and `dst` are tested with one of four types of functions: that takes one 
+        Different forms of `src` and `dst` are tested with one of four types of functions: that takes one
         argument and returns one, takes one and return two, takes two - returns one and takes two returns two.
     addendum
         addendum parameter verifies that `apply_transform` correctly hanles keyword arguments and NamedExpressions.
