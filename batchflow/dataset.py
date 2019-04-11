@@ -1,4 +1,5 @@
 """ Dataset """
+import copy as cp
 import numpy as np
 
 from .base import Baseset
@@ -70,7 +71,7 @@ class Dataset(Baseset):
 
     @classmethod
     def from_dataset(cls, dataset, index, batch_class=None, copy=False):
-        """ Create Dataset object from another dataset with a new index
+        """ Create a Dataset object from another dataset with a new index
             (usually a subset of the source dataset index)
 
             Parameters
@@ -94,11 +95,17 @@ class Dataset(Baseset):
         if (batch_class is None or (batch_class == dataset.batch_class)) and cls._is_same_index(index, dataset.index):
             if not copy:
                 return dataset
+        if copy:
+            index = cp.copy(index)
         bcl = batch_class if batch_class is not None else dataset.batch_class
         return cls(index, batch_class=bcl, preloaded=dataset.preloaded)
 
     def __copy__(self):
         return self.from_dataset(self, self.index, copy=True)
+
+    def copy(self):
+        """ Make a shallow copy of the dataset object """
+        return cp.copy(self)
 
     def __getattr__(self, name):
         if name[:2] == 'cv' and name[2:].isdigit():
@@ -232,8 +239,12 @@ class Dataset(Baseset):
     def cv_split(self, method='kfold', n_splits=5, shuffle=False):
         """ Create datasets for cross-validation
 
-        Datasets are available as `cv0`, `cv1` and so on.
-        They are already split into train and test parts.
+        Datasets are available as `cv0`, `cv1` and so on. And they are already split into train and test parts.
+
+        Another way to access these splits is `train.cv0`, `train.cv1`, ..., `test.cv0`, `test.cv1`, ...
+
+        Note that each pair (e.g. `cv0.train` and `train.cv0`) refers to the very same instance of a dataset,
+        i.e. if you change `train.cv0`, `cv0.train` will also change.
 
         Parameters
         ----------
@@ -266,6 +277,9 @@ class Dataset(Baseset):
             print(dataset.cv0.test.indices) # [0, 1, 2, 3]
             print(dataset.cv1.test.indices) # [4, 5, 6]
             print(dataset.cv2.test.indices) # [7, 8, 9]
+            print(dataset.test.cv0.indices) # [0, 1, 2, 3]
+            print(dataset.test.cv1.indices) # [4, 5, 6]
+            print(dataset.test.cv2.indices) # [7, 8, 9]
         """
         order = self.index.shuffle(shuffle)
 
