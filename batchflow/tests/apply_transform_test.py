@@ -12,21 +12,14 @@ from batchflow import Batch, Dataset, P, R
 
 BATCH_SIZE = 2
 DATA = np.arange(3*BATCH_SIZE).reshape(BATCH_SIZE, -1) + 1
+SEED = 42
 
-# Testing all possible combinations of SRC_COMPS and DST_COMPS
-SRC_OPTS = [DATA, 'comp1', ['comp1'], ('comp1'), ('comp1', 'comp2'), ['comp1', 'comp2']]
-DST_OPTS = [DATA, None, 'comp1', ['comp3'], ('comp2'), ('comp2', 'comp3'), ['comp1', 'comp3']]
 
-SRC_COMPS, DST_COMPS = list(zip(*list(product(SRC_OPTS, DST_OPTS))))
-
-# Test is expected to fail when dst=DATA or src=DATA and dst=None 
-EXPECTATION = [pytest.raises(RuntimeError), does_not_raise(), does_not_raise(),
-               does_not_raise(), does_not_raise(), does_not_raise(), does_not_raise()] * 6
-EXPECTATION[1] = pytest.raises(RuntimeError)
-
+# Functions to apply in tests
 def one2one(arr1, *args, **kwargs):
     """ Simple function.
     """
+    _ = args
     addendum = kwargs.get('addendum', 0)
     result = arr1 + addendum
     return result
@@ -52,11 +45,26 @@ def two2two(arr1, arr2, **kwargs):
     result = arr1 * arr2 + addendum
     return result, result
 
-# Functions used are defined by src and dst. 
+
+# Testing all possible combinations of SRC_COMPS and DST_COMPS
+SRC_OPTS = [DATA, 'comp1', ['comp1'], ('comp1'), ('comp1', 'comp2'), ['comp1', 'comp2']]
+DST_OPTS = [DATA, None, 'comp1', ['comp3'], ('comp2'), ('comp2', 'comp3'), ['comp1', 'comp3']]
+
+SRC_COMPS, DST_COMPS = list(zip(*list(product(SRC_OPTS, DST_OPTS))))
+
+# Test is expected to fail when dst=DATA or src=DATA and dst=None
+EXPECTATION = [pytest.raises(RuntimeError), does_not_raise(), does_not_raise(),
+               does_not_raise(), does_not_raise(), does_not_raise(), does_not_raise()] * 6
+EXPECTATION[1] = pytest.raises(RuntimeError)
+ADDENDUM = [7, P(R('uniform', seed=SEED))]
+
+# Functions used are defined by src and dst.
 # Last one is one2one because it used to test same transform of each src
 FUNCTIONS = ([one2one] * 5 + [one2two] * 2) * 4 + ([two2one] * 5 + [two2two] * 2) * 2
-FUNCTIONS[-1] = one2one
-FUNCTIONS[-6] = one2one
+FUNCTIONS[29] = two2two
+FUNCTIONS[36] = one2one
+FUNCTIONS[41] = one2one
+
 
 @pytest.fixture
 def batch():
@@ -70,11 +78,18 @@ def batch():
     return batch
 
 
+@pytest.mark.parametrize('addendum', ADDENDUM)
 @pytest.mark.parametrize('src,dst,expectation,func', list(zip(SRC_COMPS, DST_COMPS, EXPECTATION, FUNCTIONS)))
-def test_all(src, dst, expectation, func, batch):
+def test_apply_transform(src, dst, expectation, func, addendum, batch,):
+    """ Test checks for different types and shapes of `src` and `dst`
+    """
+    # Arrange
+    if isinstance(addendum, P):
+        addendum.name.random_state.seed(seed=SEED)
+    # Act
     with expectation:
-        batch.apply_transform(func, addendum=P(R('uniform', 0, 1)), src=src, dst=dst)
-
+        batch.apply_transform(func, addendum=addendum, src=src, dst=dst)
+    # Assert
         if not isinstance(src, (list, tuple)):
             src = [src]
         if dst is None:
@@ -83,4 +98,8 @@ def test_all(src, dst, expectation, func, batch):
             dst = [dst]
         for dst_comp in dst:
             result = getattr(batch, dst_comp)
-            assert np.all((result - func(*[getattr(batch, src_comp) if isinstance(src_comp, str) else src_comp for src_comp in src])) < 1)
+            func_args = [DATA for src_comp in src]
+            if isinstance(addendum, P):
+                addendum.name.random_state.seed(seed=SEED)
+                addendum = addendum.name.get(batch).reshape(-1, 1)
+            assert np.all(np.equal(result, func(*func_args, addendum=addendum)))
