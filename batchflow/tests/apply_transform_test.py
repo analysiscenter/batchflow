@@ -1,4 +1,16 @@
-""" Tests for Batch apply_transform method. """
+""" Tests for Batch apply_transform method. 
+
+Options for `src` and `dst` are listed in SRC_OPTS and DST_OPTS. All possible
+combinations of these options form two lists of length 42 - SRC_COMP and DST_COMP.
+Some of the combinations are expected to fail, so a list EXPECTATION of length 42
+is responsible for handling of these cases.
+Combinations of `src` and `dst` assume different number of input arguments and outputs,
+thus there is a list FUNCTIONS, also of length 42, which consists of four types of
+functions applied in different cases. All parameters listed above form 42 test cases.
+There is also ADDENDUM list with two options for function keyword argument: one tests
+for proper handling of kwargs in general, other - for hadling NamedExp in kwargs.
+Overall number of test cases is 84.
+"""
 # pylint: disable=import-error, no-name-in-module
 # pylint: disable=missing-docstring, redefined-outer-name
 from itertools import product
