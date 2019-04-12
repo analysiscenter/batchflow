@@ -1,4 +1,4 @@
-""" Tests for Batch apply_transform method. 
+""" Tests for Batch apply_transform method.
 
 Options for `src` and `dst` are listed in SRC_OPTS and DST_OPTS. All possible
 combinations of these options form two lists of length 42 - SRC_COMP and DST_COMP.
