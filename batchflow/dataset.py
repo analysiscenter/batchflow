@@ -1,6 +1,7 @@
 """ Dataset """
-import copy as deepcopy
+import copy as cp
 import numpy as np
+
 from .base import Baseset
 from .batch import Batch
 from .dsindex import DatasetIndex
@@ -70,7 +71,7 @@ class Dataset(Baseset):
 
     @classmethod
     def from_dataset(cls, dataset, index, batch_class=None, copy=False):
-        """ Create Dataset object from another dataset with a new index
+        """ Create a Dataset object from another dataset with a new index
             (usually a subset of the source dataset index)
 
             Parameters
@@ -94,11 +95,17 @@ class Dataset(Baseset):
         if (batch_class is None or (batch_class == dataset.batch_class)) and cls._is_same_index(index, dataset.index):
             if not copy:
                 return dataset
+        if copy:
+            index = cp.copy(index)
         bcl = batch_class if batch_class is not None else dataset.batch_class
         return cls(index, batch_class=bcl, preloaded=dataset.preloaded)
 
     def __copy__(self):
         return self.from_dataset(self, self.index, copy=True)
+
+    def copy(self):
+        """ Make a shallow copy of the dataset object """
+        return cp.copy(self)
 
     def __getattr__(self, name):
         if name[:2] == 'cv' and name[2:].isdigit():
@@ -159,7 +166,8 @@ class Dataset(Baseset):
                 If the index lies out of the source dataset index's range, the IndexError raises.
 
         """
-        if not np.isin(index.indices, self.indices).all():
+        indices = index.indices if isinstance(index, DatasetIndex) else index
+        if not np.isin(indices, self.indices).all():
             raise IndexError
         return type(self).from_dataset(self, self.index.create_subset(index))
 
@@ -231,8 +239,12 @@ class Dataset(Baseset):
     def cv_split(self, method='kfold', n_splits=5, shuffle=False):
         """ Create datasets for cross-validation
 
-        Datasets are available as `cv0`, `cv1` and so on.
-        They are already split into train and test parts.
+        Datasets are available as `cv0`, `cv1` and so on. And they are already split into train and test parts.
+
+        Another way to access these splits is `train.cv0`, `train.cv1`, ..., `test.cv0`, `test.cv1`, ...
+
+        Note that each pair (e.g. `cv0.train` and `train.cv0`) refers to the very same instance of a dataset,
+        i.e. if you change `train.cv0`, `cv0.train` will also change.
 
         Parameters
         ----------
@@ -265,6 +277,9 @@ class Dataset(Baseset):
             print(dataset.cv0.test.indices) # [0, 1, 2, 3]
             print(dataset.cv1.test.indices) # [4, 5, 6]
             print(dataset.cv2.test.indices) # [7, 8, 9]
+            print(dataset.test.cv0.indices) # [0, 1, 2, 3]
+            print(dataset.test.cv1.indices) # [4, 5, 6]
+            print(dataset.test.cv2.indices) # [7, 8, 9]
         """
         order = self.index.shuffle(shuffle)
 
@@ -273,15 +288,19 @@ class Dataset(Baseset):
         else:
             raise ValueError("Unknown split method:", method)
 
+        self.train = self.copy()
+        self.test = self.copy()
         for i in range(n_splits):
             test_indices = splits[i]
             train_splits = list(set(range(n_splits)) - {i})
             train_indices = np.concatenate(np.asarray(splits)[train_splits])
 
-            setattr(self, 'cv'+str(i), deepcopy.copy(self))
+            setattr(self, 'cv'+str(i), self.copy())
             cv_dataset = getattr(self, 'cv'+str(i))
             cv_dataset.train = self.create_subset(train_indices)
             cv_dataset.test = self.create_subset(test_indices)
+            setattr(self.train, 'cv'+str(i), cv_dataset.train)
+            setattr(self.test, 'cv'+str(i), cv_dataset.test)
 
 
     def _split_kfold(self, n_splits, order):
