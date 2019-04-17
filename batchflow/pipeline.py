@@ -1122,8 +1122,11 @@ class Pipeline:
             - callable - a function which takes an array of item indices in the initial order
                 (as they appear in the index) and returns the order of items.
 
+        n_iters : int
+            Number of iterations to make (only one of `n_iters` and `n_epochs` should be specified).
+
         n_epochs : int
-            the number of epochs required.
+            Number of epochs required (only one of `n_iters` and `n_epochs` should be specified).
 
         drop_last : bool
             if `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
