@@ -1144,7 +1144,7 @@ class Pipeline:
             a number of batches to process in advance (default=0)
 
         target : 'threads' or 'mpc'
-            batch parallization engine used for prefetching (default='threads').
+            batch parallelization engine used for prefetching (default='threads').
             'mpc' rarely works well due to complicated and slow python's inter-process communications.
 
         Yields
