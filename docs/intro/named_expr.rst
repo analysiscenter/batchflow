@@ -21,6 +21,29 @@ There are several types of named expressions:
 * P(...) - a wrapper for parallel actions
 
 
+Using in pipelines
+==================
+Named expressions can be used in pipelines as variables to get data from and to store data into them.
+
+::
+
+    pipeline
+        ...
+        .train_model(C('model_name'), feed_dict={'features': B('features'), 'labels': B('labels')},
+                     fetches='predictions', save_to=V('predictions'))
+        ...
+
+Each named expression is calculated on each iteration and then its current value will be passed into action.
+Therefore, :ref:`actions <actions>` get usual parameter values, not named expressions.
+
+
+Using outside of pipelines
+==========================
+You may also use :doc:`named expressions <../api/batchflow.named_expressions>` in your custom methods.
+
+There are two main methods: :meth:`~batchflow.named_expr.NamedExpression.get` and :func:`~batchflow.named_expr.NamedExpression.set`.
+
+
 B - batch component
 ===================
 ::
