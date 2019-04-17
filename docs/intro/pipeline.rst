@@ -185,7 +185,7 @@ next_batch function
 .. code-block:: python
 
    for i in range(MAX_ITER):
-       batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_epochs=None, drop_last=True)
+       batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_iters=1000, drop_last=True)
        # do whatever you want
 
 Run
@@ -204,7 +204,7 @@ Some people prefer a slightly longer, but a bit more certain name `run_now`.
 
 Usually `run` is used to execute the pipeline from scratch. But you might continue the pipeline which was run before::
 
-    my_pipeline.run_now(BATCH_SIZE, n_epochs=3, init_vars=False)
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, init_vars=False)
 
 In this case the pipeline variables aren't reinitialized and keep their values from the previous run.
 
