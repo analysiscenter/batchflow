@@ -141,6 +141,7 @@ class Config:
         variable = variable.strip('/')
         if '/' in variable:
             var = variable.split('/')
+            var = list(filter(('').__ne__, var)) #remove empty keys
             prefix = var[:-1]
             var_name = var[-1]
         else:
