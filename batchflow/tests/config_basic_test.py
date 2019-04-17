@@ -12,7 +12,7 @@ from batchflow import Config
 def test_dict_init():
     """
     Tests Config.__init__() using input of dictionary type.
-    For inner structure check Config.flatten() is used. 
+    For inner structure check Config.flatten() is used.
     """
 
     #Slashed-structured dictionary initialization
@@ -41,7 +41,7 @@ def test_dict_init():
 
 def test_dict_init_bad():
     """
-    Tests Config.__init__() using BAD input of dictionary type. 
+    Tests Config.__init__() using BAD input of dictionary type.
     """
 
     #Int-keyed dictionary initialization
@@ -57,7 +57,7 @@ def test_dict_init_bad():
 def test_list_init():
     """
     Tests Config.__init__() using input of list type.
-    For inner structure check Config.flatten() is used. 
+    For inner structure check Config.flatten() is used.
     """
 
     #Slashed-structured list initialization
@@ -86,7 +86,7 @@ def test_list_init():
 
 def test_list_init_bad():
     """
-    Tests Config.__init__() using BAD input of list type. 
+    Tests Config.__init__() using BAD input of list type.
     """
 
     #Int-keyed list initialization
@@ -107,7 +107,7 @@ def test_list_init_bad():
 def test_config_init():
     """
     Tests Config.__init__() using input of Config type.
-    For inner structure check Config.flatten() is used. 
+    For inner structure check Config.flatten() is used.
     """
 
     #Basically, there nothing to test here,
@@ -120,7 +120,7 @@ def test_config_init():
 def test_pop():
     """
     Tests Config.pop(), comparing the return value with expected one.
-    For inner structure check Config.flatten() is used. 
+    For inner structure check Config.flatten() is used.
     """
 
     #Pop scalar value by slashed-structured key
@@ -142,7 +142,7 @@ def test_pop():
 def test_get():
     """
     Tests Config.get(), comparing the return value with expected one.
-    For inner structure check Config.flatten() is used. 
+    For inner structure check Config.flatten() is used.
     """
     #Get scalar value by slashed-structured key
     config = Config({'a' : {'b' : 1}})
@@ -163,7 +163,7 @@ def test_get():
 def test_put():
     """
     Tests Config.put(), placing value by key in Config instance.
-    For inner structure check Config.flatten() is used. 
+    For inner structure check Config.flatten() is used.
     """
 
     #Put scalar value by simple key
@@ -216,7 +216,7 @@ def test_flatten():
 def test_add():
     """
     Tests Config.add(), adding up two Config instances.
-    For result inner structure check Config.flatten() is used. 
+    For result inner structure check Config.flatten() is used.
     """
 
     #Simple summands with non-empty intersection
@@ -324,7 +324,7 @@ def test_values():
 def test_update():
     """
     Tests Config.update()
-    For inner structure check Config.flatten() is used. 
+    For inner structure check Config.flatten() is used.
     """
 
     #Value replacement by slashed-structured key
