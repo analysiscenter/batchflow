@@ -4,8 +4,9 @@ import sys
 import math
 import glob
 from collections.abc import Iterable
-import numpy as np
 import tqdm
+import numpy as np
+
 from .base import Baseset
 
 
@@ -236,7 +237,6 @@ class DatasetIndex(Baseset):
             train_pos = order[valid_share + test_share:]
             self.train = self.create_subset(self.subset_by_pos(train_pos))
 
-
     def shuffle(self, shuffle, iter_params=None):
         """ Permute indices
 
@@ -285,8 +285,7 @@ class DatasetIndex(Baseset):
             raise ValueError("shuffle could be bool, int, numpy.random.RandomState or callable")
         return order
 
-
-    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, iter_params=None):
+    def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, iter_params=None):
         """ Return the next batch
 
         Parameters
@@ -311,8 +310,11 @@ class DatasetIndex(Baseset):
                 A function which takes an array of item indices in the initial order
                 (as they appear in the index) and returns the order of items.
 
+        n_iters : int
+            Number of iterations to make (only one of `n_iters` and `n_epochs` should be specified).
+
         n_epochs : int
-            Number of epochs required.
+            Number of epochs required (only one of `n_iters` and `n_epochs` should be specified).
 
         drop_last : bool
             If `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
@@ -335,17 +337,25 @@ class DatasetIndex(Baseset):
         StopIteration
             When `n_epochs` has been reached and there is no batches left in the dataset.
 
+        ValueError
+            When `n_epochs` and `n_iters` have been passed at the same time.
+
         Examples
         --------
-        .. code-block:: python
+
+        ::
 
             for i in range(MAX_ITER):
                 index_batch = index.next_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
+        if n_iters is not None and n_epochs is not None:
+            raise ValueError("Only one of n_iters and n_epochs should be specified.")
+
         if iter_params is None:
             iter_params = self._iter_params
 
+        # The previous iteration was the last one to perform, so stop iterating
         if iter_params['_stop_iter']:
             if 'bar' in iter_params:
                 iter_params['bar'].close()
@@ -370,25 +380,26 @@ class DatasetIndex(Baseset):
             rest_of_batch = batch_size
 
         new_items = iter_params['_order'][iter_params['_start_index'] : iter_params['_start_index'] + rest_of_batch]
-        # TODO: concat not only numpy arrays
         if rest_items is None:
             batch_items = new_items
         else:
             batch_items = np.concatenate((rest_items, new_items))
 
-        if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs: # and rest_items is not None:
+        if n_iters is not None and iter_params['_n_iters'] >= n_iters or \
+           n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
             if 'bar' in iter_params:
                 iter_params['bar'].close()
-            if drop_last and (rest_items is None or len(rest_items) < batch_size):
+            if n_iters is not None or drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             iter_params['_stop_iter'] = True
             return self.create_batch(rest_items, pos=True)
 
+        iter_params['_n_iters'] += 1
         iter_params['_start_index'] += rest_of_batch
         return self.create_batch(batch_items, pos=True)
 
 
-    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, bar=False):
+    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, bar=False):
         """ Generate batches
 
         Parameters
@@ -413,8 +424,11 @@ class DatasetIndex(Baseset):
                 A function which takes an array of item indices in the initial order
                 (as they appear in the index) and returns the order of items.
 
+        n_iters : int
+            Number of iterations to make (only one of `n_iters` and `n_epochs` should be specified).
+
         n_epochs : int
-            Number of epochs required.
+            Number of epochs required (only one of `n_iters` and `n_epochs` should be specified).
 
         drop_last : bool
             If `True`, drops the last batch (in each epoch) if it contains fewer than `batch_size` items.
@@ -440,17 +454,24 @@ class DatasetIndex(Baseset):
         ------
         An instance of the same class with a subset of indices
 
+        Raises
+        ------
+        ValueError
+            When `n_epochs` and `n_iters` have been passed at the same time.
+
         Examples
         --------
 
-        .. code-block:: python
+        ::
 
             for index_batch in index.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
         iter_params = self.get_default_iter_params()
         if bar:
-            if n_epochs is None:
+            if n_iters is not None:
+                total = n_iters
+            elif n_epochs is None:
                 total = sys.maxsize
             elif drop_last:
                 total = len(self) // batch_size * n_epochs
@@ -466,7 +487,7 @@ class DatasetIndex(Baseset):
             if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
                 return
             try:
-                batch = self.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
+                batch = self.next_batch(batch_size, shuffle, n_iters, n_epochs, drop_last, iter_params)
             except StopIteration:
                 return
             if 'bar' in iter_params:
@@ -489,10 +510,10 @@ class DatasetIndex(Baseset):
             (so expected batch is just the very same index).
 
         pos : bool
-            Flag that determines how function works.
+            Whether to return indices or positions
 
         as_array : bool
-            Flag that determines type of returned value
+            Whether to return array or an instance of DatasetIndex
 
         Returns
         -------
