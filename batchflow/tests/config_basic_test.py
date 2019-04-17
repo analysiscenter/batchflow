@@ -257,15 +257,15 @@ def test_items():
     config = Config({'a' : {'b' : 1, 'c' : 2}})
     exp_full = [('a', {'b' : 1, 'c' : 2})]
     exp_flat = [('a/b', 1), ('a/c', 2)]
-    assert list(config.items(flatten=False)) == exp_full
-    assert list(config.items(flatten=True)) == exp_flat
+    assert list(config.items(flatten=False)).sort() == exp_full.sort()
+    assert list(config.items(flatten=True)).sort() == exp_flat.sort()
 
     #Deeply nested
     config = Config({'a' : {'b' : 1, 'c' : {'d' : 2}}})
     exp_full = [('a', {'b' : 1, 'c' : {'d' : 2}})]
     exp_flat = [('a/b', 1), ('a/c/d', 2)]
-    assert list(config.items(flatten=False)) == exp_full
-    assert list(config.items(flatten=True)) == exp_flat
+    assert list(config.items(flatten=False)).sort() == exp_full.sort()
+    assert list(config.items(flatten=True)).sort() == exp_flat.sort()
 
 def test_keys():
     """
@@ -277,22 +277,22 @@ def test_keys():
     config = Config({'a' : 1})
     exp_full = ['a']
     exp_flat = ['a']
-    assert list(config.keys(flatten=False)) == exp_full
-    assert list(config.keys(flatten=True)) == exp_flat
+    assert list(config.keys(flatten=False)).sort() == exp_full.sort()
+    assert list(config.keys(flatten=True)).sort() == exp_flat.sort()
 
     #Nested
     config = Config({'a' : {'b' : 1, 'c' : 2}})
     exp_full = ['a']
     exp_flat = ['a/b', 'a/c']
-    assert list(config.keys(flatten=False)) == exp_full
-    assert list(config.keys(flatten=True)) == exp_flat
+    assert list(config.keys(flatten=False)).sort() == exp_full.sort()
+    assert list(config.keys(flatten=True)).sort() == exp_flat.sort()
 
     #Deeply nested
     config = Config({'a' : {'b' : 1, 'c' : {'d' : 2}}})
     exp_full = ['a']
     exp_flat = ['a/b', 'a/c/d']
-    assert list(config.keys(flatten=False)) == exp_full
-    assert list(config.keys(flatten=True)) == exp_flat
+    assert list(config.keys(flatten=False)).sort() == exp_full.sort()
+    assert list(config.keys(flatten=True)).sort() == exp_flat.sort()
 
 def test_values():
     """
@@ -304,22 +304,22 @@ def test_values():
     config = Config({'a' : 1})
     exp_full = [1]
     exp_flat = [1]
-    assert list(config.values(flatten=False)) == exp_full
-    assert list(config.values(flatten=True)) == exp_flat
+    assert list(config.values(flatten=False)).sort() == exp_full.sort()
+    assert list(config.values(flatten=True)).sort() == exp_flat.sort()
 
     #Nested
     config = Config({'a' : {'b' : 1, 'c' : 2}})
     exp_full = [{'b' : 1, 'c' : 2}]
     exp_flat = [1, 2]
-    assert list(config.values(flatten=False)) == exp_full
-    assert list(config.values(flatten=True)) == exp_flat
+    assert list(config.values(flatten=False)).sort() == exp_full.sort()
+    assert list(config.values(flatten=True)).sort() == exp_flat.sort()
 
     #Deeply nested
     config = Config({'a' : {'b' : 1, 'c' : {'d' : 2}}})
     exp_full = [{'b' : 1, 'c' : {'d' : 2}}]
     exp_flat = [1, 2]
-    assert list(config.values(flatten=False)) == exp_full
-    assert list(config.values(flatten=True)) == exp_flat
+    assert list(config.values(flatten=False)).sort() == exp_full.sort()
+    assert list(config.values(flatten=True)).sort() == exp_flat.sort()
 
 def test_update():
     """
