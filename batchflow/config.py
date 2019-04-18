@@ -1,4 +1,5 @@
 """ Config class"""
+import re
 
 class Config:
     """ Class for configs that can be represented as nested dicts with easy indexing by slashes """
@@ -141,7 +142,6 @@ class Config:
         variable = variable.strip('/')
         if '/' in variable:
             var = variable.split('/')
-            var = list(filter(('').__ne__, var)) #remove empty keys
             prefix = var[:-1]
             var_name = var[-1]
         else:
@@ -190,6 +190,7 @@ class Config:
         for key, value in items:
             if isinstance(value, dict):
                 value = self.parse(value)
+            key = re.sub('/{2,}', '/', key) #merge multiple consecutive slashes '/' to one
             self.put(key, value, new_config)
         return new_config
 
