@@ -46,12 +46,12 @@ def test_dict_init_bad():
 
     #Int-keyed dictionary initialization
     init_dict = {0 : 1}
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         Config(init_dict)
 
     #Bool-keyed dictionary initialization
     init_dict = {False : True}
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         Config(init_dict)
 
 def test_list_init():
@@ -91,17 +91,17 @@ def test_list_init_bad():
 
     #Int-keyed list initialization
     init_list = [(0, 1)]
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         Config(init_list)
 
     #Bool-keyed list initialization
     init_list = [(False, True)]
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         Config(init_list)
 
     #Bad-shaped list initialization
     init_list = [('a', 0, 1)]
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         Config(init_list)
 
 def test_config_init():
@@ -124,18 +124,18 @@ def test_pop():
     """
 
     #Pop scalar value by slashed-structured key
-    config = Config({'a' : {'b' : 1}})
+    config = Config({'a' : {'b' : 1, 'c' : 2}, 'd' : 3})
     pop_key = 'a/b'
     exp_ret = 1
-    exp_flat = {'a' : {}}
+    exp_flat = {'a/c' : 2, 'd' : 3}
     assert config.pop(pop_key) == exp_ret
     assert config.flatten() == exp_flat
 
     #Pop dict value by simple key
-    config = Config({'a' : {'b' : 1}})
+    config = Config({'a' : {'b' : 1, 'c' : 2}, 'd' : 3})
     pop_key = 'a'
-    exp_ret = {'b' : 1}
-    exp_flat = {}
+    exp_ret = {'b' : 1, 'c' : 2}
+    exp_flat = {'d' : 3}
     assert config.pop(pop_key) == exp_ret
     assert config.flatten() == exp_flat
 
@@ -167,24 +167,26 @@ def test_put():
     """
 
     #Put scalar value by simple key
-    config = Config({})
-    put_key = 'a'
-    put_val = 1
-    exp_flat = {'a' : 1}
+    config = Config({'a' : 1})
+    put_key = 'b'
+    put_val = 2
+    exp_flat = {'a' : 1, 'b' : 2}
     config.put(put_key, put_val)
     assert config.flatten() == exp_flat
 
     #Put scalar value by slashed-structured key
-    put_key = 'b/c'
+    config = Config({'a/b' : 1})
+    put_key = 'a/c'
     put_val = 2
-    exp_flat = {'a' : 1, 'b/c' : 2}
+    exp_flat = {'a/b' : 1, 'a/c' : 2}
     config.put(put_key, put_val)
     assert config.flatten() == exp_flat
 
     #Put dict value by simple key
-    put_key = 'b'
-    put_val = {'d' : 3}
-    exp_flat = {'a' : 1, 'b/c' : 2, 'b/d' : 3}
+    config = Config({'a/b' : 1})
+    put_key = 'a'
+    put_val = {'c' : 2}
+    exp_flat = {'a/b' : 1, 'a/c' : 2}
     config.put(put_key, put_val)
     assert config.flatten() == exp_flat
 
