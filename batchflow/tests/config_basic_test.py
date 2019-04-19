@@ -124,18 +124,18 @@ def test_pop():
     """
 
     #Pop scalar value by slashed-structured key
-    config = Config({'a' : {'b' : 1, 'c' : 2}, 'd' : 3})
-    pop_key = 'a/b'
-    exp_ret = 1
-    exp_flat = {'a/c' : 2, 'd' : 3}
+    config = Config({'a' : 1, 'b/c' : 2, 'b/d' : 3})
+    pop_key = 'b/c'
+    exp_ret = 2
+    exp_flat = {'a' : 1, 'b/d' : 3}
     assert config.pop(pop_key) == exp_ret
     assert config.flatten() == exp_flat
 
     #Pop dict value by simple key
-    config = Config({'a' : {'b' : 1, 'c' : 2}, 'd' : 3})
-    pop_key = 'a'
-    exp_ret = {'b' : 1, 'c' : 2}
-    exp_flat = {'d' : 3}
+    config = Config({'a' : 1, 'b/c' : 2, 'b/d' : 3})
+    pop_key = 'b'
+    exp_ret = {'c' : 2, 'd' : 3}
+    exp_flat = {'a' : 1}
     assert config.pop(pop_key) == exp_ret
     assert config.flatten() == exp_flat
 
