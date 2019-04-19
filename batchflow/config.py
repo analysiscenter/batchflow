@@ -186,7 +186,8 @@ class Config:
         elif isinstance(config, list):
             items = config
             if np.any([len(item) != 2 for item in items]):
-                raise ValueError('tuples in list should represent pairs key-value, and therefore they must be always the length of 2')
+                raise ValueError('tuples in list should represent pairs key-value'
+                                 ', and therefore must be always the length of 2')
         else:
             raise ValueError('config must be dict, Config or list but {} was given'.format(type(config)))
         new_config = dict()
