@@ -156,7 +156,7 @@ class Baseset:
 
     def get_default_iter_params(self):
         """ Return iteration params with default values to start iteration from scratch """
-        return dict(_stop_iter=False, _start_index=0, _order=None, _n_epochs=0, _random_state=None)
+        return dict(_stop_iter=False, _start_index=0, _order=None, _n_iters=0, _n_epochs=0, _random_state=None)
 
     def reset_iter(self):
         """ Clear all iteration metadata in order to start iterating from scratch """
@@ -164,15 +164,17 @@ class Baseset:
         if isinstance(self.index, Baseset):
             self.index.reset_iter()
 
-    def gen_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, bar=False, *args, **kwargs):
+    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, bar=False,
+                  *args, **kwargs):
         """ Generate batches """
-        for ix_batch in self.index.gen_batch(batch_size, shuffle, n_epochs, drop_last, bar):
+        for ix_batch in self.index.gen_batch(batch_size, shuffle, n_iters, n_epochs, drop_last, bar):
             batch = self.create_batch(ix_batch, *args, **kwargs)
             yield batch
 
-    def next_batch(self, batch_size, shuffle=False, n_epochs=1, drop_last=False, iter_params=None, *args, **kwargs):
+    def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
+                   iter_params=None, *args, **kwargs):
         """ Return a batch """
-        batch_index = self.index.next_batch(batch_size, shuffle, n_epochs, drop_last, iter_params)
+        batch_index = self.index.next_batch(batch_size, shuffle, n_iters, n_epochs, drop_last, iter_params)
         batch = self.create_batch(batch_index, *args, **kwargs)
         return batch
 

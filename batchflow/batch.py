@@ -266,7 +266,7 @@ class Batch:
         self.components = self.components + components
 
         self.make_item_class(local=True)
-        if data:
+        if data is not None:
             self._data = data + init
 
         return self
@@ -368,7 +368,7 @@ class Batch:
         else:
             super().__setattr__(name, value)
 
-    def put_into_data(self, data, components=None):
+    def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
         if self.components is None:
             _src = data
@@ -376,10 +376,10 @@ class Batch:
             _src = data if isinstance(data, tuple) or data is None else tuple([data])
         _src = self.get_items(self.indices, _src)
 
-        if components is None:
+        if dst is None:
             self._data = _src
         else:
-            components = [components] if isinstance(components, str) else components
+            components = [dst] if isinstance(dst, str) else dst
             for i, comp in enumerate(components):
                 if isinstance(_src, dict):
                     comp_src = _src[comp]
@@ -462,7 +462,7 @@ class Batch:
     @action
     @inbatch_parallel(init='indices', post='_assemble')
     def apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
-        """ Apply a function to each item in the batch
+        """ Apply a function to each item in the batch.
 
         Parameters
         ----------
@@ -475,14 +475,17 @@ class Batch:
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - sequence - a numpy-array, list, etc
-            - list of str - get data from several components
+            - tuple of str - get data from several components
+            - list of str, sequences or tuples - apply same transform to each item in list
 
         dst : str or array
             the destination to put the result in, can be:
 
-            - None
+            - None - in this case dst is set to be same as src
             - str - a component name, e.g. 'images' or 'masks'
-            - array-like - a numpy-array, list, etc
+            - tuple of list of str, e.g. ['images', 'masks']
+
+            if src is a list, dst should be either list or None.
 
         p : float or None
             probability of applying transform to an element in the batch
@@ -502,22 +505,76 @@ class Batch:
 
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
-        """
 
+        If `src` is a list with two or more elements, `dst` should be list or
+        tuple of the same lenght.
+
+        Examples
+        --------
+
+        ::
+
+            apply_transform(make_masks_fn, src='images', dst='masks')
+            apply_transform(apply_mask, src=('images', 'masks'), dst='images', use_self=True)
+            apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
+        """
+        dst = src if dst is None else dst
+
+        if not (isinstance(dst, str) or
+                (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
+            raise TypeError("dst should be str or tuple or list of str")
+
+        p = 1 if p is None or np.random.binomial(1, p) else 0
+
+        if isinstance(src, list) and len(src) > 1 and isinstance(dst, list) and len(src) == len(dst):
+            return tuple([self._apply_transform(ix, func, *args, src=src_component,
+                                                dst=dst_component, p=p, use_self=use_self, **kwargs)
+                          for src_component, dst_component in zip(src, dst)])
+        return self._apply_transform(ix, func, *args, src=src, dst=dst, p=p, use_self=use_self, **kwargs)
+
+    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+        """ Apply a function to each item in the batch.
+
+        Parameters
+        ----------
+        func : callable
+            a function to apply to each item from the source
+
+        src : str, sequence, list of str
+            the source to get data from, can be:
+
+            - None
+            - str - a component name, e.g. 'images' or 'masks'
+            - sequence - a numpy-array, list, etc
+            - tuple of str - get data from several components
+
+        dst : str or array
+            the destination to put the result in, can be:
+
+            - None
+            - str - a component name, e.g. 'images' or 'masks'
+            - array-like - a numpy-array, list, etc
+
+        use_self : bool
+            whether to pass ``self`` to ``func``
+
+        args, kwargs
+            other parameters passed to ``func``
+        """
         if src is None:
             _args = args
         else:
             if isinstance(src, str):
                 pos = self.get_pos(None, src, ix)
                 src_attr = (getattr(self, src)[pos],)
-            elif isinstance(src, list) and np.all([isinstance(component, str) for component in src]):
+            elif isinstance(src, (tuple, list)) and np.all([isinstance(component, str) for component in src]):
                 src_attr = [getattr(self, component)[self.get_pos(None, component, ix)] for component in src]
             else:
                 pos = self.get_pos(None, dst, ix)
                 src_attr = (src[pos],)
             _args = tuple([*src_attr, *args])
 
-        if p is None or np.random.binomial(1, p):
+        if p:
             if use_self:
                 return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
@@ -585,7 +642,7 @@ class Batch:
 
         """
         if not isinstance(dst, str) and not isinstance(src, str):
-            raise TypeError("At least of of dst and src should be attribute names, not arrays")
+            raise TypeError("At least one of dst and src should be attribute names, not arrays")
 
         if src is None:
             _args = args
@@ -726,7 +783,12 @@ class Batch:
             traceback.print_tb(all_errors[0].__traceback__)
             raise RuntimeError("Could not assemble the batch")
         if dst is None:
-            dst = kwargs.get('components', self.components)
+            dst_default = kwargs.get('dst_default', 'src')
+            if dst_default == 'src':
+                dst = kwargs.get('src')
+            elif dst_default == 'components':
+                dst = self.components
+
         if not isinstance(dst, (list, tuple, np.ndarray)):
             dst = [dst]
 
@@ -739,13 +801,13 @@ class Batch:
             self._assemble_component(result, component=component, **kwargs)
         return self
 
-    @inbatch_parallel('indices', post='_assemble', target='f')
-    def _load_blosc(self, ix, src=None, components=None):
+    @inbatch_parallel('indices', post='_assemble', target='f', dst_default='components')
+    def _load_blosc(self, ix, src=None, dst=None):
         """ Load data from a blosc packed file """
         file_name = self._get_file_name(ix, src)
         with open(file_name, 'rb') as f:
             data = dill.loads(blosc.decompress(f.read()))
-            components = tuple(components or self.components)
+            components = tuple(dst or self.components)
             try:
                 item = tuple(data[i] for i in components)
             except Exception as e:
@@ -766,7 +828,7 @@ class Batch:
             data = dict(zip(components, item))
             f.write(blosc.compress(dill.dumps(data)))
 
-    def _load_table(self, src, fmt, components=None, post=None, *args, **kwargs):
+    def _load_table(self, src, fmt, dst=None, post=None, *args, **kwargs):
         """ Load a data frame from table formats: csv, hdf5, feather """
         if fmt == 'csv':
             if 'index_col' in kwargs:
@@ -787,9 +849,9 @@ class Batch:
             _data = _data.loc[list(self.indices)].compute()
 
         if callable(post):
-            _data = post(_data, src=src, fmt=fmt, components=components, **kwargs)
+            _data = post(_data, src=src, fmt=fmt, dst=dst, **kwargs)
         else:
-            components = tuple(components or self.components)
+            components = tuple(dst or self.components)
             _new_data = dict()
             for i, comp in enumerate(components):
                 _new_data[comp] = _data.iloc[:, i].values
@@ -839,7 +901,7 @@ class Batch:
         return self
 
     @action
-    def load(self, *args, src=None, fmt=None, components=None, **kwargs):
+    def load(self, *args, src=None, fmt=None, dst=None, **kwargs):
         """ Load data from another array or a file.
 
         Parameters
@@ -850,23 +912,23 @@ class Batch:
         fmt : str
             a source format, one of None, 'blosc', 'csv', 'hdf5', 'feather'
 
-        components : None or str or tuple of str
+        dst : None or str or tuple of str
             components to load
 
         **kwargs :
             other parameters to pass to format-specific loaders
         """
         _ = args
-        components = [components] if isinstance(components, str) else components
+        components = [dst] if isinstance(dst, str) else dst
         if components is not None:
             self.add_components(np.setdiff1d(components, self.components).tolist())
 
         if fmt is None:
             self.put_into_data(src, components)
         elif fmt == 'blosc':
-            self._load_blosc(src=src, components=components, **kwargs)
+            self._load_blosc(src=src, dst=components, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:
-            self._load_table(src=src, fmt=fmt, components=components, **kwargs)
+            self._load_table(src=src, fmt=fmt, dst=components, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
         return self

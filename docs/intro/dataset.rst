@@ -91,7 +91,7 @@ Iterating over a dataset
 And now you can conveniently iterate over the dataset::
 
     BATCH_SIZE = 200
-    for client_batch in client_dataset.gen_batch(BATCH_SIZE, shuffle=False, n_epochs=1):
+    for client_batch in client_dataset.gen_batch(BATCH_SIZE, shuffle=False, n_iters=3):
         # client_batch is an instance of Batch class which holds an index of the subset of the original dataset
         # so you can do anything you want with that batch
         # for instance, load some data, as the batch is empty when initialized
@@ -119,7 +119,11 @@ Parameters
 * `int` - a random seed number which will be used internally to create a :class:`numpy.random.RandomState` object.
 * `sample function` - any callable which gets an order and returns a shuffled order.
 
-`n_epochs` - number of iterations around the whole dataset. If `None`\ , then you will get an infinite sequence of batches. Default value - 1.
+`n_iters` - number of iterations (i.e. number of batches created).
+
+`n_epochs` - number of complete passes through the whole dataset.
+
+Only one of `n_iters` and `n_epochs` should be defined. If both are None, then you will get an infinite sequence of batches.
 
 `drop_last` - whether to skip the last batch if it has fewer items (for instance, if a dataset contains 10 items and the batch size is 3, then there will 3 batches of 3 items and the 4th batch with just 1 item. The last batch will be skipped if `drop_last=True`). See :meth:`API for more details <dataset.DatasetIndex.next_batch>`.
 
