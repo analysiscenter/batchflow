@@ -1,5 +1,6 @@
 """ Config class"""
 import re
+import numpy as np
 
 class Config:
     """ Class for configs that can be represented as nested dicts with easy indexing by slashes """
@@ -184,12 +185,16 @@ class Config:
             items = config.items()
         elif isinstance(config, list):
             items = config
+            if np.any([len(item) != 2 for item in items]):
+                raise ValueError('tuples in list should represent pairs key-value, and therefore they must be always the length of 2')
         else:
             raise ValueError('config must be dict, Config or list but {} was given'.format(type(config)))
         new_config = dict()
         for key, value in items:
             if isinstance(value, dict):
                 value = self.parse(value)
+            if not isinstance(key, str):
+                raise TypeError('only str keys are supported, "{}" is of {} type'.format(str(key), type(key)))
             key = re.sub('/{2,}', '/', key) #merge multiple consecutive slashes '/' to one
             self.put(key, value, new_config)
         return new_config
