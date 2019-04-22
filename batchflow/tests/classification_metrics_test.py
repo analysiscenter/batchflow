@@ -118,7 +118,7 @@ def test_f1_calculation_multiclass():
     (np.array([1, 1, 0, 0]), np.array([1, 1, 1, 0]), 1.0)
 ])
 def test_tpr_calculation(y_true, y_pred, tpr):
-    """True positive rate calculation in multiclass case"""
+    """True positive rate calculation"""
     assert tpr == cm(y_true, y_pred, fmt='labels', num_classes=2).true_positive_rate()
 
 def test_tpr_calculation_multiclass():
