@@ -11,6 +11,7 @@ from .batch_image import ImagesBatch
 from .config import Config
 from .dataset import Dataset
 from .pipeline import Pipeline
+from .ns_pipeline import NamespacePipeline
 from .named_expr import NamedExpression, B, C, F, L, V, D, R, W, P
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit
