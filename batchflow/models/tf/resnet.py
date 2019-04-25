@@ -423,7 +423,7 @@ class ResNet(TFModel):
         -------
         tf.Tensor
         """
-        num_blocks = cls.get('num_blocks', cls.fill_params('body', **kwargs))
+        num_blocks = cls.get('num_blocks', config=cls.fill_params('body', **kwargs))
 
         with tf.variable_scope(name):
             x = cls.body(inputs, name='body', **kwargs)
