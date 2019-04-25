@@ -48,6 +48,7 @@ class NamespacePipeline:
         for namespace in self._all_namespaces:
             if hasattr(namespace, name):
                 return getattr(namespace, name)
+        return None
 
     def _add_action(self, name, *args, save_to=None, **kwargs):
         self._actions.append({'name': name, 'args': args, 'kwargs': kwargs, 'save_to': save_to})
