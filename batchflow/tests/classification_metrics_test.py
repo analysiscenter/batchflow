@@ -6,77 +6,104 @@ import pytest
 from batchflow.models.metrics import ClassificationMetrics as cm
 
 @pytest.mark.parametrize('metrics', [
-    ('accuracy'),
-    ('f1_score'),
-    ('true_positive_rate'),
-    ('false_positive_rate')
+    'accuracy',
+    'f1_score',
+    'true_positive_rate',
+    'false_positive_rate',
+    'false_negative_rate',
+    'true_negative_rate',
+    'positive_predictive_value',
+    'false_discovery_rate',
+    'false_omission_rate',
+    'negative_predictive_value',
+    'dice',
+    'jaccard'
 ])
 class TestParametrizedShapes:
     """ Equality of target and prediction shape.
     Equality of input shape and shape of metrics calculation.
     Mandatory choice of axis in multiclass case.
     """
-    def test_diff_shapes_two_classes_acc(self, metrics):
-        y_true_1, y_pred_1 = np.random.choice((0, 1), size=(2,)), np.random.choice((0, 1), size=())
-        y_true_2, y_pred_2 = np.random.choice((0, 1), size=(2, 2)), np.random.choice((0, 1), size=(2, ))
-        y_true_3, y_pred_3 = np.random.choice((0, 1), size=(2, 2, 2)), np.random.choice((0, 1), size=(2, 2))
+    @pytest.mark.parametrize('y_true, y_pred, fmt', [
+        (np.array([0, 1]), np.array(1), 'labels'),
+        (np.array([[0, 1], [1, 0]]), np.array([0, 1]), 'labels'),
+        (np.array([[[0, 1], [1, 0]], [[1, 1], [0, 0]]]), np.array([[0, 1], [1, 0]]), 'labels'),
+        (np.array([0, 1]), np.array(1), 'proba'),
+        (np.array([[0, 1], [1, 0]]), np.array([0, 1]), 'proba'),
+        (np.array([[[0, 1], [1, 0]], [[1, 1], [0, 0]]]), np.array([[0, 1], [1, 0]]), 'proba')
+        ])
+    def test_diff_shapes_two_classes(self, y_true, y_pred, fmt, metrics):
         with pytest.raises(ValueError):
-            getattr(cm(y_true_1, y_pred_1, fmt='labels', num_classes=2), metrics)()
-        with pytest.raises(ValueError):
-            getattr(cm(y_true_2, y_pred_2, fmt='labels', num_classes=2), metrics)()
-        with pytest.raises(ValueError):
-            getattr(cm(y_true_3, y_pred_3, fmt='labels', num_classes=2), metrics)()
+            getattr(cm(y_true, y_pred, fmt=fmt, num_classes=2), metrics)()
 
-    def test_diff_shapes_multiclass_acc(self, metrics):
-        y_true_1, y_pred_1 = np.random.choice((0, 2), size=()), np.random.uniform(0, 1, size=(2, 3))
-        y_true_2, y_pred_2 = np.random.choice((0, 1), size=(2, 4, 3)), np.random.uniform(0, 1, size=(4, 3))
+    @pytest.mark.parametrize('y_true, y_pred, fmt, axis', [
+        (np.array(2), np.array([[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]]), 'proba', 0),
+        (np.array(2), np.array([[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]]), 'proba', 1),
+        (np.array([[[0, 1, 0], [0, 1, 0]], [[1, 0, 0], [0, 0, 1]]]),
+         np.array([[0.1, 0.8, 0.1], [0.1, 0.8, 0.1]]), 'proba', 0),
+        (np.array([[[0, 1, 0], [0, 1, 0]], [[1, 0, 0], [0, 0, 1]]]),
+         np.array([[0.1, 0.8, 0.1], [0.1, 0.8, 0.1]]), 'proba', 1),
+        (np.array(2), np.array(([2], [0])), 'labels', 0),
+        (np.array(2), np.array(([2], [0])), 'labels', 1),
+        (np.array([[[0, 1, 0], [0, 1, 0]], [[1, 0, 0], [0, 0, 1]]]), np.array([[0, 2]]), 'proba', 0),
+        (np.array([[[0, 1, 0], [0, 1, 0]], [[1, 0, 0], [0, 0, 1]]]), np.array([[0, 2]]), 'proba', 1)
+        ])
+    def test_diff_shapes_multiclass(self, y_true, y_pred, fmt, axis, metrics):
         with pytest.raises(ValueError):
-            getattr(cm(y_true_1, y_pred_1, fmt='proba', axis=1, num_classes=3), metrics)()
-        with pytest.raises(ValueError):
-            getattr(cm(y_true_2, y_pred_2, fmt='proba', axis=1, num_classes=3), metrics)()
+            getattr(cm(y_true, y_pred, fmt=fmt, axis=axis, num_classes=3), metrics)()
 
     def test_single_value_two_class(self, metrics):
-        y_true, y_pred = np.random.choice([0, 1], size=(5,)), np.random.choice([0, 1], size=(5,))
-        metrics_shape = (1, 1)
-        test_shape = getattr(cm(y_true, y_pred, fmt='labels', num_classes=2), metrics)().reshape(1, 1).shape
-        assert test_shape == metrics_shape
+        y_true, y_pred = np.array([0, 1, 0, 1, 1]), np.array([0, 1, 0, 1, 0])
+        metrics_shape = getattr(cm(y_true, y_pred, fmt='labels', num_classes=2), metrics)().reshape(1, 1).shape
+        assert metrics_shape == (1, 1)
 
     def test_vector_multiclass(self, metrics):
-        y_true, y_pred = np.random.choice((0, 2), size=(2, )), np.random.uniform(0, 1, size=(2, 3))
-        metrics_shape = (1, 1)
-        test_shape = getattr(cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3), metrics)().reshape(1, 1).shape
-        assert test_shape == metrics_shape
+        y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
+        metrics_shape = getattr(cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3), metrics)().reshape(1, 1).shape
+        assert metrics_shape == (1, 1)
 
     def test_vector_batches_two_class(self, metrics):
-        y_true, y_pred = np.random.choice([0, 1], size=(3, 2, 2)), np.random.choice([0, 1], size=(3, 2, 2))
-        metrics_shape = (3, 1)
-        test_shape = getattr(cm(y_true, y_pred, fmt='labels', num_classes=2), metrics)().reshape(3, 1).shape
-        assert test_shape == metrics_shape
+        y_true = np.array([[[1, 1], [0, 1]], [[0, 1], [1, 1]], [[1, 0], [1, 1]]])
+        y_pred = np.array([[[0, 1], [1, 1]], [[1, 0], [0, 0]], [[0, 0], [0, 1]]])
+        metrics_shape = getattr(cm(y_true, y_pred, fmt='labels', num_classes=2), metrics)().reshape(3, 1).shape
+        assert metrics_shape == (3, 1)
 
     def test_vector_batches_multiclass(self, metrics):
-        y_true, y_pred = np.random.choice([0, 1], size=(2, 2, 3)), np.random.uniform(0, 1, size=(2, 2, 3))
-        metrics_shape = (2, 1)
-        test_shape = getattr(cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3), metrics)().reshape((2, 1)).shape
-        assert test_shape == metrics_shape
+        y_true = np.array([[[0, 1, 0], [1, 0, 0]], [[1, 0, 0], [0, 0, 1]]])
+        y_pred = np.array([[[0.1, 0.8, 0.1], [0.8, 0.1, 0.1]], [[0.8, 0.1, 0.1], [0.1, 0.1, 0.8]]])
+        metrics_shape = getattr(cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3), metrics)().reshape((2, 1)).shape
+        assert metrics_shape == (2, 1)
 
     def test_axis_for_multiclass(self, metrics):
-        y_true, y_pred = np.random.choice((0, 2), size=(2, )), np.random.uniform(0, 1, size=(2, 3))
+        y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
         with pytest.raises(ValueError):
             getattr(cm(y_true, y_pred, fmt='proba', axis=None, num_classes=3), metrics)()
 
 # tests for confusion matrix
-def test_confusion_matrix():
+@pytest.mark.parametrize('fmt', [
+    'proba',
+    'labels'
+])
+def test_confusion_matrix(fmt):
     """Confusion matrix calculation"""
     y_true, y_pred = np.array([1, 1, 0, 1, 0, 0]), np.array([0, 0, 1, 0, 0, 0])
     conf_matrix = np.array([[2, 3], [1, 0]])
-    conf_matrix_calc = cm(y_true, y_pred, fmt='labels', num_classes=2)._confusion_matrix  #pylint:disable=protected-access
+    conf_matrix_calc = cm(y_true, y_pred, fmt=fmt, num_classes=2)._confusion_matrix  #pylint:disable=protected-access
     assert (conf_matrix_calc == conf_matrix).all()
 
-def test_confusion_matrix_multiclass():
+@pytest.mark.parametrize('y_true, y_pred, conf_matrix, fmt, axis', [
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 2], [0, 1]]),
+     np.array([[[0, 0], [0, 0]], [[1, 1], [0, 1]]]), 'labels', 0),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 2], [0, 1]]),
+     np.array([[[0, 0], [0, 0]], [[1, 1], [0, 1]]]), 'labels', 1),
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]),
+     np.array([[[0, 0], [0, 1]]]), 'proba', 0),
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]),
+     np.array([[[0, 0, 0], [0, 1, 0], [0, 0, 1]]]), 'proba', 1),
+])
+def test_confusion_matrix_multiclass(y_true, y_pred, conf_matrix, fmt, axis):
     """Confusion matrix calculation in multiclass case"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    conf_matrix = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 1]])
-    conf_matrix_calc = cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3)._confusion_matrix  #pylint:disable=protected-access
+    conf_matrix_calc = cm(y_true, y_pred, fmt=fmt, axis=axis, num_classes=3)._confusion_matrix  #pylint:disable=protected-access
     assert (conf_matrix_calc == conf_matrix).all()
 
 #accuracy tests
