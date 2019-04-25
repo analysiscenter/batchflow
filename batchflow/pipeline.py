@@ -1,4 +1,5 @@
 """ Contains pipeline class """
+import sys
 from functools import partial
 import traceback
 import concurrent.futures as cf
@@ -30,7 +31,7 @@ INC_VARIABLE_ID = '#_inc_variable'
 UPDATE_VARIABLE_ID = '#_update_variable'
 CALL_ID = '#_call'
 PRINT_ID = '#_print'
-CALL_FROM_NS = '#_from_ns'
+CALL_FROM_NS_ID = '#_from_ns'
 
 _ACTIONS = {
     IMPORT_MODEL_ID: '_exec_import_model',
@@ -41,7 +42,7 @@ _ACTIONS = {
     UPDATE_VARIABLE_ID: '_exec_update_variable',
     CALL_ID: '_exec_call',
     PRINT_ID: '_exec_print',
-    CALL_FROM_NS: '_exec_from_ns',
+    CALL_FROM_NS_ID: '_exec_from_ns',
 }
 
 
@@ -80,8 +81,8 @@ class Pipeline:
             self._lazy_run = None
             self.models = ModelDirectory()
             self.variables = VariableDirectory()
-            self._before = None
-            self._after = None
+            self.before = NamespacePipeline(self)
+            self.after = NamespacePipeline(self)
             self._namespaces = []
         else:
             self.dataset = pipeline.dataset
@@ -89,8 +90,6 @@ class Pipeline:
             _config = pipeline.config or {}
             self.config = {**config, **_config}
             self._actions = actions or pipeline._actions[:]
-            self.variables = VariableDirectory()
-            self.variables.create_many(pipeline.variables, pipeline=self)
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
@@ -99,14 +98,13 @@ class Pipeline:
                     if self.get_last_action_proba() is None:
                         self._actions[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
             self._lazy_run = pipeline._lazy_run
+            self.variables = pipeline.variables.copy()
             self.models = pipeline.models.copy()
             self._namespaces = pipeline._namespaces
-            self._before = pipeline._before
-            if self._before:
-                self._before.pipeline = self
-            self._after = pipeline._after
-            if self._after:
-                self._after.pipeline = self
+            self.before = pipeline.before
+            self.before.pipeline = self
+            self.after = pipeline.after
+            self.after.pipeline = self
 
         self.config = Config(self.config)
         self._stop_flag = False
@@ -118,27 +116,12 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
 
-
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
         return type(self)()
 
     def __exit__(self, exc_type, exc_value, trback):
         pass
-
-    @property
-    def before(self):
-        """ Return the pre-pipeline which is run just once before the main pipeline cycle """
-        if self._before is None:
-            self._before = NamespacePipeline(self)
-        return self._before
-
-    @property
-    def after(self):
-        """ Return the post-pipeline which is run just once after the main pipeline cycle """
-        if self._after is None:
-            self._after = NamespacePipeline(self)
-        return self._after
 
     @classmethod
     def from_pipeline(cls, pipeline, actions=None, proba=None, repeat=None):
@@ -174,8 +157,8 @@ class Pipeline:
         new_p1.models += pipe2.models
         new_p1.dataset = new_p1.dataset or pipe2.dataset
         new_p1._lazy_run = new_p1._lazy_run or pipe2._lazy_run
-        new_p1._before = new_p1._before or pipe2._before
-        new_p1._after = new_p1._after or pipe2._after
+        new_p1.before = pipe1.before.concat(pipe1.before, pipe2.before)
+        new_p1.after = pipe1.after.concat(pipe1.after, pipe2.after)
         return new_p1
 
     def get_last_action_proba(self):
@@ -228,14 +211,19 @@ class Pipeline:
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
 
+    @property
+    def _all_namespaces(self):
+        return [sys.modules["__main__"]] + self._namespaces
+
     def is_method_from_ns(self, name):
-        return any(hasattr(namespace, name) for namespace in self._namespaces)
+        return any(hasattr(namespace, name) for namespace in self._all_namespaces)
 
     def get_method(self, name):
         """ Return a method by the name """
-        for namespace in self._namespaces:
+        for namespace in self._all_namespaces:
             if hasattr(namespace, name):
                 return getattr(namespace, name)
+        return None
 
     def __getattr__(self, name):
         """ Check if an unknown attr is an action from some batch class """
@@ -243,8 +231,7 @@ class Pipeline:
             # if a magic method is not defined, throw an error
             raise AttributeError('Unknown magic method: %s' % name)
         if self.is_method_from_ns(name):
-            method = self.get_method(name)
-            return partial(self.append_action, CALL_FROM_NS, _method=method)
+            return partial(self.append_action, CALL_FROM_NS_ID, _name=name)
         if self._is_batch_method(name):
             return partial(self.append_action, name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
@@ -254,16 +241,18 @@ class Pipeline:
         """ Return index length """
         return len(self._actions)
 
-    def append_action(self, name, *args, _method=None, **kwargs):
+    def append_action(self, name, *args, _name=None, **kwargs):
         """ Add new action to the log of future actions """
         actions = self._actions.copy()
-        if _method:
+        if name == CALL_FROM_NS_ID:
+            method = self.get_method(_name)
             save_to = kwargs.pop('save_to', None)
+            actions.append({'name': name, 'args': args, 'kwargs': kwargs,
+                            'method': method, 'save_to': save_to,
+                            'proba': None, 'repeat': None})
         else:
-            save_to = None
-        actions.append({'name': name, 'args': args, 'kwargs': kwargs,
-                        'method': _method, 'save_to': save_to,
-                        'proba': None, 'repeat': None})
+            actions.append({'name': name, 'args': args, 'kwargs': kwargs,
+                            'proba': None, 'repeat': None})
         new_p = self.from_pipeline(self, actions=actions)
         return new_p
 
@@ -1328,11 +1317,11 @@ class Pipeline:
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
 
-            if self._before:
+            if self.before:
                 self.before.run()
             for _ in self.gen_batch(*args, **kwargs):
                 pass
-            if self._after:
+            if self.after:
                 self.after.run()
         return self
 

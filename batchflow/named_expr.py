@@ -224,7 +224,7 @@ class C(NamedExpression):
         try:
             value = config[name]
         except KeyError:
-            raise KeyError("Name is not found in the config", name) from None
+            raise KeyError("Name is not found in the config: %s" % name) from None
         return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):
