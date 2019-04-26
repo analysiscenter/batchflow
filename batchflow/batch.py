@@ -151,10 +151,10 @@ class Batch:
         new_data = list(None for _ in components)
         rest_data = list(None for _ in components)
         for i, comp in enumerate(components):
-            none_components_in_bathces = [b.get(component=comp) is None for b in batches]
-            if np.all(none_components_in_bathces):
+            none_components_in_batches = [b.get(component=comp) is None for b in batches]
+            if np.all(none_components_in_batches):
                 continue
-            elif: np.any(none_components_in_bathces):
+            elif np.any(none_components_in_batches):
                 raise ValueError('Component {} is None in some batches'.format(comp))
 
             if batch_size is None:
