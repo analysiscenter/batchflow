@@ -106,66 +106,91 @@ def test_confusion_matrix_multiclass(y_true, y_pred, conf_matrix, fmt, axis):
     conf_matrix_calc = cm(y_true, y_pred, fmt=fmt, axis=axis, num_classes=3)._confusion_matrix  #pylint:disable=protected-access
     assert (conf_matrix_calc == conf_matrix).all()
 
-#accuracy tests
-@pytest.mark.parametrize('y_true,y_pred,acc', [
-    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 0.0),
-    (np.array([1, 1, 0, 1]), np.array([1, 1, 1, 0]), 0.5),
-    (np.array([1, 1, 0, 1]), np.array([1, 1, 0, 1]), 1.0)
+@pytest.mark.parametrize('y_true,y_pred, fmt, acc', [
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 'labels', 0.0),
+    (np.array([1, 1, 0, 1]), np.array([1, 1, 1, 0]), 'labels', 0.5),
+    (np.array([1, 1, 0, 1]), np.array([1, 1, 0, 1]), 'labels', 1.0),
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 'proba', 0.0),
+    (np.array([1, 1, 0, 1]), np.array([1, 1, 1, 0]), 'proba', 0.5),
+    (np.array([1, 1, 0, 1]), np.array([1, 1, 0, 1]), 'proba', 1.0),
 ])
-def test_accuracy_calculation(y_true, y_pred, acc):
-    """Accuracy calculation"""
-    assert acc == cm(y_true, y_pred, fmt='labels', num_classes=2).accuracy()
+def test_accuracy_calculation(y_true, y_pred, fmt, acc):
+    """Test on correctness of accuracy calculation"""
+    assert acc == cm(y_true, y_pred, fmt=fmt, num_classes=2).accuracy()
 
-def test_accuracy_calculation_multiclass():
-    """Accuracy calculation in multiclass case"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    accuracy = 1.0
-    assert accuracy == cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).accuracy()
-
-# f1 score tests
-@pytest.mark.parametrize('y_true, y_pred, f1_score', [
-    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 0.0),
-    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 0.5),
-    (np.array([1, 1, 1, 0]), np.array([1, 1, 1, 0]), 1.0)
+@pytest.mark.parametrize('y_true, y_pred, fmt, f1_score', [
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 'labels', 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 'labels', 0.5),
+    (np.array([1, 1, 1, 0]), np.array([1, 1, 1, 0]), 'labels', 1.0),
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 'proba', 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 'proba', 0.5),
+    (np.array([1, 1, 1, 0]), np.array([1, 1, 1, 0]), 'proba', 1.0)
 ])
-def test_f1_calculation(y_true, y_pred, f1_score):
-    """F1 score calculation"""
-    assert f1_score == cm(y_true, y_pred, fmt='labels', num_classes=2).f1_score()
+def test_f1_calculation(y_true, y_pred, fmt, f1_score):
+    """Test on correctness of f1_score calculation"""
+    assert f1_score == cm(y_true, y_pred, fmt=fmt, num_classes=2).f1_score()
 
-def test_f1_calculation_multiclass():
-    """F1 score calculation in multiclass case"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    f_1 = 1.0
-    assert f_1 == cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).f1_score()
-
-# true positive rate tests
-@pytest.mark.parametrize('y_true, y_pred, tpr', [
-    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 0.0),
-    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 0.5),
-    (np.array([1, 1, 0, 0]), np.array([1, 1, 1, 0]), 1.0)
+@pytest.mark.parametrize('y_true, y_pred, fmt, tpr', [
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 'labels', 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 'labels', 0.5),
+    (np.array([1, 1, 0, 0]), np.array([1, 1, 1, 0]), 'labels', 1.0),
+    (np.array([1, 1, 0, 1]), np.array([0, 0, 1, 0]), 'proba', 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 'proba', 0.5),
+    (np.array([1, 1, 0, 0]), np.array([1, 1, 1, 0]), 'proba', 1.0),
 ])
-def test_tpr_calculation(y_true, y_pred, tpr):
-    """True positive rate calculation"""
-    assert tpr == cm(y_true, y_pred, fmt='labels', num_classes=2).true_positive_rate()
+def test_tpr_calculation(y_true, y_pred, fmt, tpr):
+    """Test on correctness of true positive rate calculation"""
+    assert tpr == cm(y_true, y_pred, fmt=fmt, num_classes=2).true_positive_rate()
 
-def test_tpr_calculation_multiclass():
-    """True positive rate calculation in multiclass case"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    tpr = 1.0
-    assert tpr == cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).true_positive_rate()
-
-# false positive rate tests
-@pytest.mark.parametrize('y_true, y_pred, fpr', [
-    (np.array([0, 0, 0, 1]), np.array([0, 0, 0, 0]), 0.0),
-    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 0.5),
-    (np.array([0, 0, 0, 1]), np.array([1, 1, 1, 1]), 1.0)
+@pytest.mark.parametrize('y_true, y_pred, fmt, fpr', [
+    (np.array([0, 0, 0, 1]), np.array([0, 0, 0, 0]), 'labels', 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 'labels', 0.5),
+    (np.array([0, 0, 0, 1]), np.array([1, 1, 1, 1]), 'labels', 1.0),
+    (np.array([0, 0, 0, 1]), np.array([0, 0, 0, 0]), 'proba', 0.0),
+    (np.array([1, 1, 0, 0]), np.array([0, 1, 1, 0]), 'proba', 0.5),
+    (np.array([0, 0, 0, 1]), np.array([1, 1, 1, 1]), 'proba', 1.0),
 ])
-def test_fpr_calculation(y_true, y_pred, fpr):
-    """False positive rate calculation"""
-    assert fpr == cm(y_true, y_pred, fmt='labels', num_classes=2).false_positive_rate()
+def test_fpr_calculation(y_true, y_pred, fmt, fpr):
+    """Test on correctness of false positive rate calculation"""
+    assert fpr == cm(y_true, y_pred, fmt=fmt, num_classes=2).false_positive_rate()
 
-def test_fpr_calculation_multiclass():
-    """False positive rate calculation in multiclass case"""
-    y_true, y_pred = np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]])
-    fpr = 0.0
-    assert fpr == cm(y_true, y_pred, fmt='proba', axis=1, num_classes=3).false_positive_rate()
+
+@pytest.mark.parametrize('y_true, y_pred, fmt, axis, acc', [
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]), 'proba', 0, 1.0),
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]), 'proba', 1, 1.0),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 1], [1, 1]]), 'labels', 0, np.array([1., 0.5])),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 1], [1, 1]]), 'labels', 1, np.array([1., 0.5]))
+])
+def test_accuracy_calculation_multiclass(y_true, y_pred, fmt, axis, acc):
+    """Test on correctness of accuracy calculation"""
+    assert (acc == cm(y_true, y_pred, fmt=fmt, axis=axis, num_classes=3).accuracy()).all()
+
+@pytest.mark.parametrize('y_true, y_pred, fmt, axis, f1_score', [
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]), 'proba', 0, 1.0),
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]), 'proba', 1, 1.0),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 1], [0, 1]]), 'labels', 0, np.array([1., 1.])),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 1], [0, 1]]), 'labels', 1, np.array([1., 1.]))
+])
+def test_f1_calculation_multiclass(y_true, y_pred, fmt, axis, f1_score):
+    """Test on correctness of f1 score"""
+    assert (f1_score == cm(y_true, y_pred, fmt=fmt, axis=axis, num_classes=3).f1_score()).all
+
+@pytest.mark.parametrize('y_true, y_pred, fmt, axis, tpr', [
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]), 'proba', 0, 1.0),
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]), 'proba', 1, 1.0),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 1], [0, 1]]), 'labels', 0, np.array([1., 1.])),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 1], [0, 1]]), 'labels', 1, np.array([1., 1.]))
+])
+def test_tpr_calculation_multiclass(y_true, y_pred, fmt, axis, tpr):
+    """Test on correctness of true positive rate calculation"""
+    assert (tpr == cm(y_true, y_pred, fmt=fmt, axis=axis, num_classes=3).true_positive_rate()).all
+
+@pytest.mark.parametrize('y_true, y_pred, fmt, axis, fpr', [
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]), 'proba', 0, 0.0),
+    (np.array([2, 1]), np.array([[0.1, 0.1, 0.8], [0.1, 0.8, 0.1]]), 'proba', 1, 0.0),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 1], [0, 1]]), 'labels', 0, np.array([0., 0.])),
+    (np.array([[2, 1], [0, 1]]), np.array([[0, 1], [0, 1]]), 'labels', 1, np.array([0., 0.]))
+])
+def test_fpr_calculation_multiclass(y_true, y_pred, fmt, axis, fpr):
+    """Test on correctness of false positive rate calculation multiclass"""
+    assert (fpr == cm(y_true, y_pred, fmt=fmt, axis=axis, num_classes=3).false_positive_rate()).all
