@@ -5,6 +5,7 @@ Sirignano J., Spiliopoulos K. "`DGM: A deep learning algorithm for solving parti
 
 import numpy as np
 import tensorflow as tf
+from tqdm import tqdm_notebook, tqdm
 
 from . import TFModel
 
@@ -439,3 +440,82 @@ class DeepGalerkin(TFModel):
         """
         fetches = 'solution' if fetches is None else fetches
         return super().predict(fetches, feed_dict, **kwargs)
+
+
+class DGSolver():
+    """ Wrapper around `DeepGalerkin` to surpass BatchFlow's syntax sugar.
+
+    Parameters
+    ----------
+    model_config : dict
+        Configuration of model. Supports all of the options from `DeepGalerkin`.
+    """
+
+    def __init__(self, model_config, dg_class=DeepGalerkin):
+        self.model = dg_class(model_config)
+
+
+    def fit(self, sampler, batch_size, n_iters, fetches=None, bar='notebook'):
+        """ Train model on batches of sampled points.
+
+        Parameters
+        ----------
+        sampler : Sampler
+            Generator of training points. Must provide points from the same
+            dimension, as PDE.
+
+        batch_size : int
+            Number of points in each training batch.
+
+        n_iters : int
+            Number of times to generate data and train on it.
+
+        fetches : str or sequence of str
+            `tf.Operation`s and/or `tf.Tensor`s to calculate.
+
+        bar : str
+            Whether to show progress bar during training.
+
+        Returns
+        -------
+        list
+            Loss history for initialized model. Calculated across all of
+            the `fit` calls.
+        """
+        #TODO: `train_step` arg
+        fetches = fetches or 'loss'
+        fetches = [fetches] if isinstance(fetches, str) else fetches
+        if 'loss' not in fetches:
+            fetches.append('loss')
+
+        for name in fetches:
+            if not hasattr(self, name):
+                setattr(self, name, [])
+
+        bar = tqdm_notebook if bar == 'notebook' else tqdm
+
+        for _ in bar(range(n_iters)):
+            points = sampler.sample(batch_size)
+            tensors = self.model.train(fetches=fetches, feed_dict={'points': points})
+            for tensor, name in zip(tensors, fetches):
+                getattr(self, name).append(tensor)
+        return self.loss
+
+
+    def solve(self, points, fetches=None):
+        """ Predict values of function on array of points.
+        For more info, check :class:`TFModel.predict` docstring.
+
+        Parameters
+        ----------
+        points : array-like
+            Points to give solution approximation on.
+
+        fetches : str or sequence of str
+            `tf.Operation`s and/or `tf.Tensor`s to calculate.
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same order and structure.
+        """
+        return self.model.predict(fetches=fetches, feed_dict={'points': points})
