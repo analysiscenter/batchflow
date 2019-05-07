@@ -263,6 +263,11 @@ class Batch:
             self.components = tuple()
             data = tuple()
             warnings.warn("All batch data is erased")
+
+        exists_component = set(components) & set(self.components)
+        if exists_component:
+            raise ValueError("Component(s) with name(s) '{}' already exists".format("', '".join(exists_component)))
+
         self.components = self.components + components
 
         self.make_item_class(local=True)
