@@ -425,6 +425,13 @@ class ResNet(TFModel):
         """
         num_blocks = cls.get('num_blocks', config=cls.fill_params('body', **kwargs))
 
+        if kwargs.get('filters') is None:
+            raise ValueError('Specify number of filters')
+
+        if len(num_blocks) != len(kwargs.get('filters')):
+            msg = '{} encoder requires {} filters instead of {}'
+            raise ValueError(msg.format(cls.__name__, len(num_blocks), len(kwargs.get('filters'))))
+
         with tf.variable_scope(name):
             x = cls.body(inputs, name='body', **kwargs)
 
