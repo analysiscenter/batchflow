@@ -83,7 +83,7 @@ class DenseNetFC(TFModel):
                 x = DenseNet.block(x, num_layers=n_layers, name='encoder-%d' % i, **block)
                 encoder_outputs.append(x)
                 x = cls.transition_down(x, name='transition_down-%d' % i, **trans_down)
-            x = DenseNet.block(x, num_layers=num_layers[-1], name='encoder-%d' % num_layers[-1], **block)
+            x = DenseNet.block(x, num_layers=num_layers[-1], name='encoder-%d' % len(num_layers), **block)
 
             axis = cls.channels_axis(kwargs.get('data_format'))
             for i, n_layers in enumerate(num_layers[-2::-1]):
