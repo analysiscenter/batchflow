@@ -122,6 +122,11 @@ class Batch:
         Returns
         -------
         batch, rest : tuple of two batches
+
+        Raises
+        ------
+        ValueError
+            If component is `None` in some batches and not `None` in others.
         """
         def _make_index(data):
             return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
