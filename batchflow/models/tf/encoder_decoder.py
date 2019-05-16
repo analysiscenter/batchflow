@@ -236,8 +236,11 @@ class EncoderDecoder(TFModel):
         name : str
             Scope name.
 
+        base : callable
+            Tensor processing function. Default is :func:`~.layers.conv_block`.
+
         kwargs : dict
-            Parameters for :func:`~.tf.layers.conv_block`.
+            Parameters for `base` block.
 
         Returns
         -------
@@ -326,3 +329,58 @@ class EncoderDecoder(TFModel):
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
                         x = tf.concat((x, inputs[-i-3]), axis=axis, name='skip-concat')
         return x
+
+
+class AutoEncoder(EncoderDecoder):
+    """ Model without skip-connections between corresponding stages of encoder and decoder. """
+    @classmethod
+    def default_config(cls):
+        config = EncoderDecoder.default_config()
+        config['body/decoder'] = dict(skip=False)
+        return config
+
+
+class VariationalAutoEncoder(AutoEncoder):
+    """ Autoencoder that maps input into distribution. Based on
+    Kingma, Diederik P; Welling, Max "`Auto-Encoding Variational Bayes
+    <https://arxiv.org/abs/1312.6114>`_"
+
+    Notes
+    -----
+    Distribution that is learned is always normal.
+    """
+    @classmethod
+    def embedding(cls, inputs, name='embedding', **kwargs):
+        """ Create embedding from inputs tensor.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            Input tensor.
+
+        name : str
+            Scope name.
+
+        base : callable
+            Tensor processing function. Default is :func:`~.layers.conv_block`.
+
+        kwargs : dict
+            Parameters for `base` block.
+
+        Returns
+        -------
+        tf.Tensor
+
+        Raises
+        ------
+        ValueError
+            If neither `layout` nor `base` key is provided.
+        """
+        if (kwargs.get('layout') is not None) or (kwargs.get('base') is not None):
+            base_block = kwargs.get('base') or conv_block
+
+            mean = base_block(inputs, name='mean', **kwargs)
+            std = base_block(inputs, name='std', **kwargs)
+            eps = tf.random.normal(shape=tf.shape(mean))
+            return mean + eps*std
+        raise ValueError('Either `layout` or `base` key should be specified. ')
