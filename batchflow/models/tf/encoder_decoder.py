@@ -17,7 +17,7 @@ class EncoderDecoder(TFModel):
 
     body : dict
         encoder : dict
-            base_class : TFModel
+            base : TFModel
                 Model implementing ``make_encoder`` method which returns tensors
                 with encoded representation of the inputs.
 
@@ -52,7 +52,7 @@ class EncoderDecoder(TFModel):
                 If int, the total upsampling factor for all stages combined.
                 If list, upsampling factors for each stage.
 
-            bridges : bool
+            skip : bool
                 Whether to concatenate upsampled tensor with stored pre-downsample encoding.
             upsample : dict
                 Parameters for upsampling (see :func:`~.layers.upsample`).
@@ -74,7 +74,7 @@ class EncoderDecoder(TFModel):
             'inputs': dict(images={'shape': B('image_shape')},
                            masks={'name': 'targets', 'shape': B('mask_shape')}),
             'initial_block/inputs': 'images',
-            'body/encoder': {'base_class': ResNet,
+            'body/encoder': {'base': ResNet,
                              'num_blocks': [2, 3, 4]
                              'filters': [16, 32, 128]},
             'body/embedding': {'layout': 'cna', 'filters': 256},
@@ -104,18 +104,18 @@ class EncoderDecoder(TFModel):
 
     Notes
     -----
-    When `base_class` is used for decoder creation, downsampling is done one less time than
+    When `base` is used for decoder creation, downsampling is done one less time than
     the length of `filters` (or other size-defining parameter) list in the `encoder` configuration.
     That is due to the fact that the first block is used as preprocessing of input tensors.
     """
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['body']['encoder'] = dict(base_class=None, num_stages=None, blocks=None)
-        config['body']['encoder']['downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
-        config['body']['embedding'] = dict(base=None)
-        config['body']['decoder'] = dict(bridges=True, num_stages=None, factor=None, blocks=None)
-        config['body']['decoder']['upsample'] = dict(layout='tna')
+        config['body/encoder'] = dict(base=None, num_stages=None, blocks=None)
+        config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
+        config['body/embedding'] = dict(base=None)
+        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None, blocks=None)
+        config['body/decoder/upsample'] = dict(layout='tna')
         config['head'] = dict(layout='c', kernel_size=1)
         return config
 
@@ -149,7 +149,7 @@ class EncoderDecoder(TFModel):
 
     @classmethod
     def head(cls, inputs, targets, name='head', **kwargs):
-        """ Linear convolutions with kernel size of 1. """
+        """ Linear convolutions. """
         kwargs = cls.fill_params('head', **kwargs)
         with tf.variable_scope(name):
             x = cls.crop(inputs, targets, kwargs['data_format'])
@@ -160,14 +160,15 @@ class EncoderDecoder(TFModel):
 
     @classmethod
     def encoder(cls, inputs, name='encoder', **kwargs):
-        """ Create encoder from a `base_class` model
+        """ Create encoder either by using ``make_encoder`` of passed `base` model,
+        or by combining building blocks, specified in `blocks/base`.
 
         Parameters
         ----------
         inputs : tf.Tensor
             Input tensor.
 
-        base_class : TFModel
+        base : TFModel
             Model class. Should implement ``make_encoder`` method.
 
         name : str
@@ -188,8 +189,13 @@ class EncoderDecoder(TFModel):
         Returns
         -------
         list of tf.Tensors
+
+        Raises
+        ------
+        ValueError
+            If neither `base` nor `blocks` key is provided.
         """
-        base_class = kwargs.pop('base_class')
+        base_class = kwargs.pop('base')
         steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
 
         if base_class is not None:
@@ -215,7 +221,7 @@ class EncoderDecoder(TFModel):
                         encoder_outputs.append(x)
             return encoder_outputs
 
-        raise ValueError('Either `base_class` or `blocks` must be provided in encoder config. ')
+        raise ValueError('Either `base` or `blocks` must be provided in encoder config. ')
 
 
     @classmethod
@@ -264,7 +270,7 @@ class EncoderDecoder(TFModel):
             If int, the total upsampling factor for all stages combined.
             If list, upsampling factors for each stage.s, then each entry is increase of size on i-th upsampling stage.
 
-        bridges : bool
+        skip : bool
             Whether to concatenate upsampled tensor with stored pre-downsample encoding.
 
         upsample : dict
@@ -279,10 +285,15 @@ class EncoderDecoder(TFModel):
         Returns
         -------
         tf.Tensor
+
+        Raises
+        ------
+        TypeError
+            If passed `factor` is not integer or list.
         """
         steps = kwargs.pop('num_stages') or len(inputs)-2
         factor = kwargs.pop('factor') or [2]*steps
-        bridges, upsample, block_args = cls.pop(['bridges', 'upsample', 'blocks'], kwargs)
+        skip, upsample, block_args = cls.pop(['skip', 'upsample', 'blocks'], kwargs)
 
         if block_args is not None:
             base_block = block_args.get('base') or conv_block
@@ -311,7 +322,7 @@ class EncoderDecoder(TFModel):
                         x = base_block(x, name='post', **args)
 
                     # Concatenate it with stored encoding of the ~same shape
-                    if bridges and (i < len(inputs)-2):
+                    if skip and (i < len(inputs)-2):
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
-                        x = tf.concat((x, inputs[-i-3]), axis=axis, name='bridges-concat')
+                        x = tf.concat((x, inputs[-i-3]), axis=axis, name='skip-concat')
         return x

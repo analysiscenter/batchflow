@@ -11,8 +11,8 @@ from batchflow.models.tf import EncoderDecoder, ResNet, MobileNet, DenseNet
 
 
 ENCODERS = [
-    {'base_class': ResNet, 'num_blocks': [2]*3, 'filters': [13]*3},
-    {'base_class': DenseNet, 'num_layers': [2]*3, 'growth_rate': 13},
+    {'base': ResNet, 'num_blocks': [2]*3, 'filters': [13]*3},
+    {'base': DenseNet, 'num_layers': [2]*3, 'growth_rate': 13},
     {'num_stages': 2, 'downsample': {'layout': 'v'}, 'blocks': {'layout':'cna', 'filters':[32]*2}},
     {'num_stages': 2, 'blocks': {'base': ResNet.block, 'filters':[13]*2}},
 ]
@@ -25,7 +25,7 @@ EMBEDDINGS = [
 
 
 DECODERS = [
-    {'num_stages': 2, 'factor': 9, 'bridges': False, 'upsample': {'layout': 'X'}},
+    {'num_stages': 2, 'factor': 9, 'skip': False, 'upsample': {'layout': 'X'}},
     {'num_stages': 4, 'blocks': {'layout': 'cna', 'filters': [23]*4}},
     {'num_stages': 4, 'blocks': {'base': DenseNet.block, 'num_layers': [2]*4, 'growth_rate': 23}},
 ]

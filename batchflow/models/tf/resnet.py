@@ -422,6 +422,11 @@ class ResNet(TFModel):
         Returns
         -------
         tf.Tensor
+
+        Raises
+        ------
+        ValueError
+            If `filters` is not specified or number of `num_blocks` not equal to number of `filters` provided.
         """
         num_blocks = cls.get('num_blocks', config=cls.fill_params('body', **kwargs))
 
