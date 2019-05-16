@@ -4,7 +4,6 @@ import tensorflow as tf
 
 from .layers import conv_block
 from . import TFModel
-from .resnet import ResNet18
 
 
 class EncoderDecoder(TFModel):
@@ -20,78 +19,103 @@ class EncoderDecoder(TFModel):
         encoder : dict
             base_class : TFModel
                 Model implementing ``make_encoder`` method which returns tensors
-                with encoded representation of the inputs. Defaults to ResNet18.
-            other args
-                Parameters for base class ``make_encoder`` method.
+                with encoded representation of the inputs.
+
+            num_stages : int
+                Number of downsampling stages.
+
+            downsample : dict
+                Parameters for downsampling (see :func:`~.layers.conv_block`)
+
+            blocks : dict
+                Parameters for pre-processing blocks:
+
+                base : callable
+                    Tensor processing function. Default is :func:`~.layers.conv_block`.
+                other args : dict
+                    Parameters for the base block.
+
+            other args : dict
+                Parameters for ``make_encoder`` method.
 
         embedding : dict
-            :func:`~.layers.conv_block` parameters for the bottom block.
+            base : callable
+                Tensor processing function. Default is :func:`~.layers.conv_block`.
+            other args
+                Parameters for the base block.
 
         decoder : dict
             num_stages : int
                 Number of upsampling blocks.
+
             factor : int or list of int
-                If int, the total upsampling factor for all blocks combined.
+                If int, the total upsampling factor for all stages combined.
                 If list, upsampling factors for each stage.
+
             bridges : bool
                 Whether to concatenate upsampled tensor with stored pre-downsample encoding.
-            use_post : bool
-                Whether to post-process tensors after upsampling.
-            layout : str
-                Upsampling method (see :func:`~.layers.upsample`).
-            block : dict
-                Parameters for post-processing blocks.
-            other args
-                Parameters for :func:`~.layers.upsample`.
+            upsample : dict
+                Parameters for upsampling (see :func:`~.layers.upsample`).
+
+            blocks : dict
+                Parameters for post-processing blocks:
+
+                base : callable
+                    Tensor processing function. Default is :func:`~.layers.conv_block`.
+                other args : dict
+                    Parameters for the base block.
 
     Examples
     --------
-    Use ResNet18 as an encoder (which by default downsamples the image with a factor of 8),
-    create an embedding that contains 16 channels,
-    and build a decoder with 3 upsampling stages to scale the embedding 8 times with transposed convolutions::
-
-    >>> config = {
-            'inputs': dict(images={'shape': B('image_shape'), 'name': 'targets'}),
-            'initial_block/inputs': 'images',
-            'encoder/base_class': ResNet18,
-            'embedding/filters': 16,
-            'decoder': dict(num_stages=3, factor=8, layout='tna')
-        }
-
-
-    Preprocess input image with 7x7 convolutions, use DenseNet as encoder to downsample the image
-    with a factor of 16 with every DenseBlock concatenating its input to the output, don't change
-    shape of resulted tensor in embedding, decode compressed image to initial shape by alternating
-    ResNeXt and DenseNet blocks with desired parameters:
+    Use ResNet as an encoder with desired number of blocks and filters in them (total downsampling factor is 4),
+    create an embedding that contains 256 channels, then upsample it to get 8 times the size of initial image.
 
     >>> config = {
             'inputs': dict(images={'shape': B('image_shape')},
-                           masks={'name': 'targets', 'shape': B('image_shape')}),
+                           masks={'name': 'targets', 'shape': B('mask_shape')}),
+            'initial_block/inputs': 'images',
+            'body/encoder': {'base_class': ResNet,
+                             'num_blocks': [2, 3, 4]
+                             'filters': [16, 32, 128]},
+            'body/embedding': {'layout': 'cna', 'filters': 256},
+            'body/decoder': {'num_stages': 5, 'factor': 32},
+        }
+
+    Preprocess input image with 7x7 convolutions, downsample it 5 times with DenseNet blocks in between,
+    use MobileNet block in the bottom, then restore original image size with subpixel convolutions and
+    ResNeXt blocks in between:
+
+    >>> config = {
+            'inputs': dict(images={'shape': B('image_shape')},
+                           masks={'name': 'targets', 'shape': B('mask_shape')}),
             'initial_block': {'inputs': 'images',
                               'layout': 'cna', 'filters': 4, 'kernel_size': 7},
-            'body/encoder': {'base_class': DenseNet,
-                             'num_layers': [2, 2, 3, 3, 4],
-                             'block/growth_rate': 6, 'block/skip': True},
-            'body/decoder': {'num_stages': 4, 'factor': 16,
-                             'bridges': True,
-                             'block': {'base_block':[ResNet.block, DenseNet.block, ResNet.block, DenseNet.block],
-                                       'layout': ['cnacna', 'nacd', 'cnacna', 'nacd']
-                                       'filters': [256, None, 64, None], 'resnext': True,
-                                       'num_layers': [None, 4, None, 2], 'growth_rate': 6, 'skip': False}},
+            'body/encoder': {'num_stages': 5,
+                             'blocks': {'base': DenseNet.block,
+                                        'num_layers': [2, 2, 3, 4, 5],
+                                        'growth_rate': 6, 'skip': True}},
+            'body/embedding': {'base': MobileNet.block,
+                               'width_factor': 2},
+            'body/decoder': {'upsample': {'layout': 'X'},
+                             'blocks': {'base': ResNet.block,
+                                        'filters': [256, 128, 64, 32, 16],
+                                        'resnext': True}},
         }
 
     Notes
     -----
-    Downsampling is done one less time than the length of `filters` (or other size-defining parameter) list in the
-    `encoder` configuration. That is due to the fact that the first block is used as preprocessing of input tensors.
+    When `base_class` is used for decoder creation, downsampling is done one less time than
+    the length of `filters` (or other size-defining parameter) list in the `encoder` configuration.
+    That is due to the fact that the first block is used as preprocessing of input tensors.
     """
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['body']['encoder'] = dict(base_class=ResNet18)
-        config['body']['embedding'] = dict(layout='cna', kernel_size=1)
-        config['body']['decoder'] = dict(layout='tna', factor=8, num_stages=3, bridges=False, use_post=False)
-        config['body']['decoder']['block'] = dict(base_block=conv_block, layout='cna', activation=tf.nn.relu)
+        config['body']['encoder'] = dict(base_class=None, num_stages=None, blocks=None)
+        config['body']['encoder']['downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
+        config['body']['embedding'] = dict(base=None)
+        config['body']['decoder'] = dict(bridges=True, num_stages=None, factor=None, blocks=None)
+        config['body']['decoder']['upsample'] = dict(layout='tna')
         config['head'] = dict(layout='c', kernel_size=1)
         return config
 
@@ -107,8 +131,8 @@ class EncoderDecoder(TFModel):
         """ Create encoder, embedding and decoder. """
         kwargs = cls.fill_params('body', **kwargs)
         encoder = kwargs.pop('encoder')
-        decoder = kwargs.pop('decoder')
         embedding = kwargs.pop('embedding')
+        decoder = kwargs.pop('decoder')
 
         with tf.variable_scope(name):
             # Encoder: transition down
@@ -144,10 +168,19 @@ class EncoderDecoder(TFModel):
             Input tensor.
 
         base_class : TFModel
-            Model class (default is ResNet18). Should implement ``make_encoder`` method.
+            Model class. Should implement ``make_encoder`` method.
 
         name : str
             Scope name.
+
+        num_stages : int
+            Number of downsampling stages.
+
+        blocks : dict
+            Parameters for tensor processing before downsampling.
+
+        downsample : dict
+            Parameters for downsampling.
 
         kwargs : dict
             Parameters for ``make_encoder`` method.
@@ -157,8 +190,32 @@ class EncoderDecoder(TFModel):
         list of tf.Tensors
         """
         base_class = kwargs.pop('base_class')
-        x = base_class.make_encoder(inputs, name=name, **kwargs)
-        return x
+        steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
+
+        if base_class is not None:
+            return base_class.make_encoder(inputs, name=name, **kwargs)
+
+        if block_args is not None:
+            base_block = block_args.get('base') or conv_block
+
+            with tf.variable_scope(name):
+                x = inputs
+                encoder_outputs = [x]
+
+                for i in range(steps):
+                    with tf.variable_scope('encoder-'+str(i)):
+                        # Preprocess tensor with given block
+                        args = {key: value[i] for key, value in block_args.items()
+                                if isinstance(value, list)}
+                        args = {**kwargs, **block_args, **args} # enforce priority of keys
+                        x = base_block(x, name='pre', **args)
+
+                        # Downsampling
+                        x = conv_block(x, **{**kwargs, **downsample})
+                        encoder_outputs.append(x)
+            return encoder_outputs
+
+        raise ValueError('Either `base_class` or `blocks` must be provided in encoder config. ')
 
 
     @classmethod
@@ -180,11 +237,11 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
-        kwargs['filters'] = kwargs.get('filters') or cls.num_channels(inputs)
-        if kwargs.get('layout') is not None:
-            x = conv_block(inputs, name=name, **kwargs)
+        if (kwargs.get('layout') is not None) or (kwargs.get('base') is not None):
+            base_block = kwargs.get('base') or conv_block
+            x = base_block(inputs, name=name, **kwargs)
         else:
-            x = inputs
+            x = tf.identity(inputs, name=name)
         return x
 
 
@@ -200,13 +257,20 @@ class EncoderDecoder(TFModel):
         name : str
             Scope name.
 
+        steps : int
+            Number of upsampling stages. Defaults to the number of downsamplings.
+
+        factor : int or list of ints
+            If int, the total upsampling factor for all stages combined.
+            If list, upsampling factors for each stage.s, then each entry is increase of size on i-th upsampling stage.
+
         bridges : bool
             Whether to concatenate upsampled tensor with stored pre-downsample encoding.
 
-        use_post : bool
-            Whether to post-process tensors after upsampling.
+        upsample : dict
+            Parameters for upsampling.
 
-        block : dict
+        blocks : dict
             Parameters for post-processing blocks.
 
         kwargs : dict
@@ -216,10 +280,12 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
-        steps = kwargs.pop('num_stages', len(inputs)-2)
-        factor, bridges, use_post = cls.pop(['factor', 'bridges', 'use_post'], kwargs)
+        steps = kwargs.pop('num_stages') or len(inputs)-2
+        factor = kwargs.pop('factor') or [2]*steps
+        bridges, upsample, block_args = cls.pop(['bridges', 'upsample', 'blocks'], kwargs)
 
-        block_args = kwargs.pop('block') if use_post else None
+        if block_args is not None:
+            base_block = block_args.get('base') or conv_block
 
         if isinstance(factor, int):
             factor = int(factor ** (1/steps))
@@ -234,7 +300,7 @@ class EncoderDecoder(TFModel):
             for i in range(steps):
                 with tf.variable_scope('decoder-'+str(i)):
                     # Upsample by a desired factor
-                    x = cls.upsample(x, factor=factor[i], name='upsample', **kwargs)
+                    x = cls.upsample(x, factor=factor[i], name='upsample', **{**kwargs, **upsample})
 
                     # Post-process resulting tensor
                     if block_args is not None:
@@ -242,11 +308,10 @@ class EncoderDecoder(TFModel):
                                 if isinstance(value, list)}
                         args = {**kwargs, **block_args, **args} # enforce priority of subkeys
                         args = {key: value for key, value in args.items() if value is not None}
-                        base_block = args.get('base_block')
                         x = base_block(x, name='post', **args)
 
                     # Concatenate it with stored encoding of the ~same shape
-                    if bridges and (i < len(inputs)-3):
+                    if bridges and (i < len(inputs)-2):
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
                         x = tf.concat((x, inputs[-i-3]), axis=axis, name='bridges-concat')
         return x
