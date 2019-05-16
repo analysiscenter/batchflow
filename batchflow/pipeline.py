@@ -355,7 +355,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        self.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
+        self.before.init_variable(name, default, lock, **kwargs)
         return self
 
     def init_variables(self, variables):
@@ -718,7 +718,7 @@ class Pipeline:
         >>> pipeline
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self.models.init_model(mode, model_class, name, config=config)
+        self.before.init_model(mode, model_class, name, config)
         return self
 
     def import_model(self, model, pipeline=None, name=None):
@@ -940,6 +940,7 @@ class Pipeline:
         """ Save a model """
         model = self.get_model_by_name(name)
         model.save(*args, **kwargs)
+        return self
 
     def gather_metrics(self, metrics_class, *args, save_to=None, mode='w', **kwargs):
         """ Collect metrics for a model

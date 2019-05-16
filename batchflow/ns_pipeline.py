@@ -83,3 +83,68 @@ class NamespacePipeline:
         for action in self._actions:
             self._exec_action(action)
         return self
+
+    def init_variable(self, name, default=None, lock=True, **kwargs):
+        """ Create a variable if not exists.
+        If the variable exists, does nothing.
+
+        Parameters
+        ----------
+        name : string
+            a name of the variable
+        default
+            an initial value for the variable set when pipeline is created
+        init_on_each_run
+            an initial value for the variable to set before each run
+        lock : bool
+            whether to lock a variable before each update (default: True)
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Examples
+        --------
+        >>> pp = dataset.p.before
+                    .init_variable("iterations", default=0)
+                    .init_variable("accuracy", init_on_each_run=0)
+                    .init_variable("loss_history", init_on_each_run=list)
+        """
+        self.pipeline.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
+        return self
+
+    def init_model(self, mode, model_class=None, name=None, config=None):
+        """ Initialize a static or dynamic model
+
+        Parameters
+        ----------
+        mode : {'static', 'dynamic'}
+        model_class : class
+            a model class
+        name : str
+            a name for the model. Default - a model class name.
+        config : dict
+            model configurations parameters, where each key and value could be named expressions.
+
+        Examples
+        --------
+        >>> pipeline.before.init_model('static', MyModel)
+
+        >>> pipeline.before
+              .init_variable('images_shape', [256, 256])
+              .init_model('static', MyModel, config={'input_shape': V('images_shape')})
+
+        >>> pipeline.before
+              .init_variable('shape_name', 'images_shape')
+              .init_model('dynamic', C('model'), config={V('shape_name)': B('images_shape')})
+
+        >>> pipeline.before
+              .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
+        """
+        self.pipeline.models.init_model(mode, model_class, name, config=config)
+        return self
+
+    def save_model(self, name, *args, **kwargs):
+        """ Save a model """
+        self.pipeline.save_model(name, *args, **kwargs)
+        return self
