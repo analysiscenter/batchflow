@@ -247,6 +247,11 @@ class Batch:
             new component names
         init : array-like
             initial component data
+
+        Raises
+        ------
+        ValueError
+            If the component with the given name already exists
         """
         if isinstance(components, str):
             components = (components,)
