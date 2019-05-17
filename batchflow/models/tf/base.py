@@ -106,6 +106,18 @@ class TFModel(BaseModel):
         - ``{'decay': ('polynomial_decay', {'decay_steps': 10000})}``
         - ``{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}``
 
+    scope - subset of variables to optimize during training.
+        Value `''` is reserved for optimizing all trainable variables.
+        Putting `-` sign before name stands for complement: optimize everything but
+        the passed scope.
+
+        Examples:
+
+        - ``{'scope': ''}``
+        - ``{'scope': 'initial_block'}``
+        - ``{'scope': 'body/custom_layer'}``
+        - ``{'scope': '-body/custom_layer'}``
+
     optimizer - an optimizer might be defined in one of three formats:
             - name
             - tuple (name, args)
@@ -126,6 +138,18 @@ class TFModel(BaseModel):
         - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
         - ``{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}``
         - ``{'optimizer': some_optimizer_fn}``
+
+    train_steps - configuration of different training procedures.
+        Must be a mapping from string names to dictionary with train parameters like
+        loss, decay, scope, optimizer. Those keys support syntax defined above.
+
+        In order to use particular train step during train, one must pass `train_mode` argument
+        to `train` method.
+
+        Examples:
+
+        - ``{'train_steps': {'all': {'loss': 'ce', 'optimizer': 'Adam', 'scope': ''},
+                             'body': {'loss': 'ce', 'optimizer': 'RMSProp', 'scope': 'body'}}}``
 
     common : dict
         default parameters for all :func:`.conv_block`
@@ -552,7 +576,6 @@ class TFModel(BaseModel):
         return tensor_loss
 
     def _make_train_steps(self, config):
-
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
                                                 ('loss', 'optimizer', 'decay', 'scope')}}})
@@ -564,7 +587,7 @@ class TFModel(BaseModel):
         for key, subconfig in config['train_steps'].items():
             # Pass values from higher level
             subconfig.update({key: subconfig.get(key) or config.get(key)
-                              for key in ('optimizer', 'loss', 'scope')})
+                              for key in ('optimizer', 'loss', 'decay', 'scope')})
 
             # Making loss and optimizer
             loss = self._make_loss(subconfig)
@@ -770,6 +793,8 @@ class TFModel(BaseModel):
             input data, where key is a placeholder name and value is a numpy value
         use_lock : bool
             if True, the whole train step is locked, thus allowing for multithreading.
+        train_mode : str
+            name of train step to optimize
 
         Returns
         -------
