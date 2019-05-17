@@ -6,27 +6,35 @@ Later every combination of encoder, embedding, decoder is combined into one mode
 # pylint: disable=redefined-outer-name
 import pytest
 
-from batchflow.models.tf import EncoderDecoder, ResNet, MobileNet, DenseNet
+from batchflow.models.tf import EncoderDecoder, VariationalAutoEncoder
+from batchflow.models.tf import ResNet, MobileNet, DenseNet
 
+
+
+MODELS = [
+    EncoderDecoder,
+    VariationalAutoEncoder
+]
 
 
 ENCODERS = [
+    {'num_stages': 2},
     {'base': ResNet, 'num_blocks': [2]*3, 'filters': [13]*3},
     {'base': DenseNet, 'num_layers': [2]*3, 'growth_rate': 13},
-    {'num_stages': 2, 'downsample': {'layout': 'v'}, 'blocks': {'layout':'cna', 'filters':[32]*2}},
     {'num_stages': 2, 'blocks': {'base': ResNet.block, 'filters':[13]*2}},
 ]
 
 
 EMBEDDINGS = [
-    {'layout': 'cna', 'filters': 17},
+    {},
     {'base': MobileNet.block, 'width_factor': 2},
 ]
 
 
 DECODERS = [
+    {},
     {'num_stages': 2, 'factor': 9, 'skip': False, 'upsample': {'layout': 'X'}},
-    {'num_stages': 4, 'blocks': {'layout': 'cna', 'filters': [23]*4}},
+    {'num_stages': 4, 'blocks': {'layout': 'cnacna', 'filters': [23]*4}},
     {'num_stages': 4, 'blocks': {'base': DenseNet.block, 'num_layers': [2]*4, 'growth_rate': 23}},
 ]
 
@@ -44,14 +52,15 @@ def base_config():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('encoder', ENCODERS)
-@pytest.mark.parametrize('embedding', EMBEDDINGS)
+@pytest.mark.parametrize('model', MODELS)
 @pytest.mark.parametrize('decoder', DECODERS)
-def test_first(base_config, encoder, embedding, decoder):
+@pytest.mark.parametrize('embedding', EMBEDDINGS)
+@pytest.mark.parametrize('encoder', ENCODERS)
+def test_first(base_config, model, encoder, embedding, decoder):
     """ Create encoder-decoder architecture from every possible combination
     of encoder, embedding, decoder, listed in global variables defined above.
     """
     base_config.update({'body/encoder': encoder,
                         'body/embedding': embedding,
                         'body/decoder': decoder})
-    _ = EncoderDecoder(base_config)
+    _ = model(base_config)

@@ -111,11 +111,13 @@ class EncoderDecoder(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['body/encoder'] = dict(base=None, num_stages=None, blocks=None)
+        config['body/encoder'] = dict(base=None, num_stages=None)
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
-        config['body/embedding'] = dict(base=None)
-        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None, blocks=None)
+        config['body/encoder/blocks'] = dict(base=cls.default_block)
+        config['body/embedding'] = dict(base=cls.default_block)
+        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
+        config['body/decoder/blocks'] = dict(base=cls.default_block)
         config['head'] = dict(layout='c', kernel_size=1)
         return config
 
@@ -142,7 +144,7 @@ class EncoderDecoder(TFModel):
             x = cls.embedding(encoder_outputs[-1], **embedding, **kwargs)
             encoder_outputs.append(x)
 
-            #Decoder: transition up
+            # Decoder: transition up
             x = cls.decoder(encoder_outputs, **decoder, **kwargs)
         return x
 
@@ -156,6 +158,16 @@ class EncoderDecoder(TFModel):
             channels = cls.num_channels(targets)
             x = conv_block(x, filters=channels, **kwargs)
         return x
+
+
+    @classmethod
+    def default_block(cls, inputs, name='default_block', **kwargs):
+        """ Default block for processing tensors. Does not change shape of tensor.
+        Does 3x3 convolution followed by batch-norm and activation.
+        """
+        layout = kwargs.pop('layout', None) or 'cna'
+        filters = kwargs.pop('filters', None) or cls.num_channels(inputs)
+        return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
 
 
     @classmethod
@@ -189,21 +201,15 @@ class EncoderDecoder(TFModel):
         Returns
         -------
         list of tf.Tensors
-
-        Raises
-        ------
-        ValueError
-            If neither `base` nor `blocks` key is provided.
         """
         base_class = kwargs.pop('base')
         steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
 
         if base_class is not None:
-            return base_class.make_encoder(inputs, name=name, **kwargs)
+            encoder_outputs = base_class.make_encoder(inputs, name=name, **kwargs)
 
-        if block_args is not None:
-            base_block = block_args.get('base') or conv_block
-
+        else:
+            base_block = block_args.get('base')
             with tf.variable_scope(name):
                 x = inputs
                 encoder_outputs = [x]
@@ -219,9 +225,7 @@ class EncoderDecoder(TFModel):
                         # Downsampling
                         x = conv_block(x, **{**kwargs, **downsample})
                         encoder_outputs.append(x)
-            return encoder_outputs
-
-        raise ValueError('Either `base` or `blocks` must be provided in encoder config. ')
+        return encoder_outputs
 
 
     @classmethod
@@ -246,12 +250,8 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
-        if (kwargs.get('layout') is not None) or (kwargs.get('base') is not None):
-            base_block = kwargs.get('base') or conv_block
-            x = base_block(inputs, name=name, **kwargs)
-        else:
-            x = tf.identity(inputs, name=name)
-        return x
+        base_block = kwargs.get('base')
+        return base_block(inputs, name=name, **kwargs)
 
 
     @classmethod
@@ -297,9 +297,7 @@ class EncoderDecoder(TFModel):
         steps = kwargs.pop('num_stages') or len(inputs)-2
         factor = kwargs.pop('factor') or [2]*steps
         skip, upsample, block_args = cls.pop(['skip', 'upsample', 'blocks'], kwargs)
-
-        if block_args is not None:
-            base_block = block_args.get('base') or conv_block
+        base_block = block_args.get('base')
 
         if isinstance(factor, int):
             factor = int(factor ** (1/steps))
@@ -317,12 +315,10 @@ class EncoderDecoder(TFModel):
                     x = cls.upsample(x, factor=factor[i], name='upsample', **{**kwargs, **upsample})
 
                     # Post-process resulting tensor
-                    if block_args is not None:
-                        args = {key: value[i] for key, value in block_args.items()
-                                if isinstance(value, list)}
-                        args = {**kwargs, **block_args, **args} # enforce priority of subkeys
-                        args = {key: value for key, value in args.items() if value is not None}
-                        x = base_block(x, name='post', **args)
+                    args = {key: value[i] for key, value in block_args.items()
+                            if isinstance(value, list)}
+                    args = {**kwargs, **block_args, **args} # enforce priority of subkeys
+                    x = base_block(x, name='post', **args)
 
                     # Concatenate it with stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
@@ -370,17 +366,10 @@ class VariationalAutoEncoder(AutoEncoder):
         Returns
         -------
         tf.Tensor
-
-        Raises
-        ------
-        ValueError
-            If neither `layout` nor `base` key is provided.
         """
-        if (kwargs.get('layout') is not None) or (kwargs.get('base') is not None):
-            base_block = kwargs.get('base') or conv_block
+        base_block = kwargs.get('base')
 
-            mean = base_block(inputs, name='mean', **kwargs)
-            std = base_block(inputs, name='std', **kwargs)
-            eps = tf.random.normal(shape=tf.shape(mean))
-            return mean + eps*std
-        raise ValueError('Either `layout` or `base` key should be specified. ')
+        mean = base_block(inputs, name='mean', **kwargs)
+        std = base_block(inputs, name='std', **kwargs)
+        eps = tf.random.normal(shape=tf.shape(mean))
+        return mean + eps*std
