@@ -36,6 +36,7 @@ class Research:
         self.n_iters = None
         self.timeout = 5
         self.n_splits = None
+        self.shuffle = None
         self.framework = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
@@ -240,16 +241,16 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def _cv_split(self, n_splits):
+    def _cv_split(self, n_splits, shuffle):
         has_dataset = False
         for unit in self.executables:
             if getattr(self.executables[unit], 'dataset', None):
                 has_dataset = True
-                self.executables[unit].dataset.cv_split(n_splits=n_splits)
+                self.executables[unit].dataset.cv_split(n_splits=n_splits, shuffle=shuffle)
         if not has_dataset:
             raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
-    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, name=None,
+    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
             progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
 
         """ Run research.
@@ -277,6 +278,8 @@ class Research:
             If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
         n_splits : int or None
             number of folds for cross-validation.
+        shuffle : bool
+            cross-validation parameter
         name : str or None
             name folder to save research. By default is 'research'.
         progress_bar : bool
@@ -319,13 +322,14 @@ class Research:
             self.name = name
 
             self.n_splits = n_splits
+            self.shuffle = shuffle
             self.framework = framework
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
 
         if n_splits is not None:
-            self._cv_split(n_splits)
+            self._cv_split(n_splits, shuffle)
 
         if self.grid_config is None:
             self.grid_config = Grid(Option('_dummy', [None]))
