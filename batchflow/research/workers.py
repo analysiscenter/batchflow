@@ -13,7 +13,7 @@ class PipelineWorker(Worker):
         n_branches = len(job.configs)
 
         if self.framework == 'tf':
-            prefix = '/device:GPU'
+            prefix = '/device:GPU:'
         elif self.framework == 'torch':
             prefix = 'cuda:'
         else:
