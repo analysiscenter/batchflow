@@ -499,7 +499,7 @@ class Executable:
         self._clear_result()
         self._process_iterations()
 
-    def add_pipeline(self, root_pipeline, name, branch_pipeline=None, dataset=None, part=None, variables=None,
+    def add_pipeline(self, root, name, branch=None, dataset=None, part=None, variables=None,
                      execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add pipeline as an Executable Unit """
         variables = variables or []
@@ -507,16 +507,15 @@ class Executable:
         if not isinstance(variables, list):
             variables = [variables]
 
-        if branch_pipeline is None:
-            pipeline = root_pipeline
-            root = None
+        if branch is None:
+            pipeline = root
+            root_pipeline = None
         else:
-            pipeline = branch_pipeline
-            root = root_pipeline
+            pipeline = branch
 
         self.name = name
         self.pipeline = pipeline
-        self.root_pipeline = root
+        self.root_pipeline = root_pipeline
         self.dataset = dataset
         self.part = part
         self.variables = variables
@@ -555,7 +554,7 @@ class Executable:
         new_unit.variables = copy(new_unit.variables)
         return new_unit
 
-    def concat_dataset(self):
+    def set_dataset(self):
         """ Add dataset to root if root exists or create root pipeline on the base of dataset. """
         if self.dataset is not None:
             fold = getattr(self.dataset, 'cv'+str(self.cv_split)) if self.cv_split is not None else self.dataset
