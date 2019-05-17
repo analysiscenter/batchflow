@@ -512,6 +512,7 @@ class Executable:
             root_pipeline = None
         else:
             pipeline = branch
+            root_pipeline = root
 
         self.name = name
         self.pipeline = pipeline
