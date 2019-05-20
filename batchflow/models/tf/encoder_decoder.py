@@ -113,11 +113,11 @@ class EncoderDecoder(TFModel):
         config = TFModel.default_config()
         config['body/encoder'] = dict(base=None, num_stages=None)
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
-        config['body/encoder/blocks'] = dict(base=cls.default_block)
-        config['body/embedding'] = dict(base=cls.default_block)
+        config['body/encoder/blocks'] = dict(base=cls.block)
+        config['body/embedding'] = dict(base=cls.block)
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=cls.default_block)
+        config['body/decoder/blocks'] = dict(base=cls.block)
         config['head'] = dict(layout='c', kernel_size=1)
         return config
 
@@ -161,7 +161,7 @@ class EncoderDecoder(TFModel):
 
 
     @classmethod
-    def default_block(cls, inputs, name='default_block', **kwargs):
+    def block(cls, inputs, name='default_block', **kwargs):
         """ Default block for processing tensors. Does not change shape of tensor.
         Does 3x3 convolution followed by batch-norm and activation.
         """
