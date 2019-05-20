@@ -6,7 +6,7 @@ from .. import inbatch_parallel
 
 class Job:
     """ Contains one job. """
-    def __init__(self, executable_units, n_iters, repetition, configs, cv_splits, branches, name):
+    def __init__(self, executable_units, n_iters, repetition, configs, folds, branches, name):
         """
         Parameters
         ----------
@@ -18,7 +18,7 @@ class Job:
         self.n_iters = n_iters
         self.configs = configs
         self.repetition = repetition
-        self.cv_splits = cv_splits
+        self.folds = folds
         self.branches = branches
         self.name = name
         self.worker_config = {}
@@ -39,7 +39,7 @@ class Job:
             for name, unit in self.executable_units.items():
                 unit = unit.get_copy()
                 unit.reset_iter()
-                unit.cv_split = self.cv_splits[index]
+                unit.cv_split = self.folds[index]
                 if unit.pipeline is not None:
                     import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
                     unit.set_dataset()

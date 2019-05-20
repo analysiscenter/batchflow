@@ -184,7 +184,7 @@ class Research:
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
-    def _create_jobs(self, n_reps, n_iters, cv_splits, branches, name):
+    def _create_jobs(self, n_reps, n_iters, folds, branches, name):
         """ Create generator of jobs. If `branches=1` or `len(branches)=1` then each job is one repetition
         for each config from grid_config. Else each job contains several pairs `(repetition, config)`.
 
@@ -207,13 +207,13 @@ class Research:
         else:
             n_models = len(branches)
 
-        cv_splits = range(cv_splits) if isinstance(cv_splits, int) else [None]
+        folds = range(folds) if isinstance(folds, int) else [None]
 
         # Create all combinations of possible paramaters, cv partitions and indices of repetitions
         configs_with_repetitions = [(idx, configs, cv_split)
                                     for idx in range(n_reps)
                                     for configs in self.grid_config.gen_configs()
-                                    for cv_split in cv_splits]
+                                    for cv_split in folds]
 
         # Split all combinations into chunks that will use the same roots
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
@@ -763,7 +763,7 @@ class Results():
         return result
 
 
-    def load(self, names=None, repetitions=None, cv_splits=None, variables=None, iterations=None,
+    def load(self, names=None, repetitions=None, folds=None, variables=None, iterations=None,
              configs=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
@@ -773,7 +773,7 @@ class Results():
             names of units (pipleines and functions) to load
         repetitions : int, list or None
             numbers of repetitions to load
-        cv_splits : int, list or None
+        folds : int, list or None
             split of dataset
         variables : str, list or None
             names of variables to load
@@ -840,8 +840,8 @@ class Results():
         if repetitions is None:
             repetitions = list(range(self.research.n_reps))
 
-        if cv_splits is None:
-            cv_splits = list(range(self.research.n_splits)) if self.research.n_splits is not None else [None]
+        if folds is None:
+            folds = list(range(self.research.n_splits)) if self.research.n_splits is not None else [None]
 
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
@@ -853,7 +853,7 @@ class Results():
         self.repetitions = self._get_list(repetitions)
         self.variables = self._get_list(variables)
         self.iterations = self._get_list(iterations)
-        self.cv_splits = self._get_list(cv_splits)
+        self.folds = self._get_list(folds)
 
         all_results = []
 
@@ -861,7 +861,7 @@ class Results():
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
             for repetition in self.repetitions:
-                for cv_split in self.cv_splits:
+                for cv_split in self.folds:
                     for unit in self.names:
                         path = os.path.join(self.path, 'results', alias_str, str(repetition))
                         cv_folder = 'cv_'+str(cv_split) if cv_split is not None else ''
