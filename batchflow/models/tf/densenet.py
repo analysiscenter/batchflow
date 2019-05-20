@@ -88,9 +88,11 @@ class DenseNet(TFModel):
         with tf.variable_scope(name):
             x, inputs = inputs, None
             for i, n_layers in enumerate(num_layers):
-                x = cls.block(x, num_layers=n_layers, name='block-%d' % i, **block)
-                if i < len(num_layers) - 1:
-                    x = cls.transition_layer(x, name='transition-%d' % i, **transition)
+                with tf.variable_scope('group-%d' % i):
+                    x = cls.block(x, num_layers=n_layers, name='block-%d' % i, **block)
+                    if 0 < i < len(num_layers):
+                        x = cls.transition_layer(x, name='transition-%d' % i, **transition)
+                    x = tf.identity(x, name='output')
         return x
 
     @classmethod
@@ -152,6 +154,38 @@ class DenseNet(TFModel):
         reduction_factor = cls.get('reduction_factor', config=kwargs)
         num_filters = cls.num_channels(inputs, kwargs.get('data_format'))
         return conv_block(inputs, filters=num_filters * reduction_factor, name=name, **kwargs)
+
+
+    @classmethod
+    def make_encoder(cls, inputs, name='encoder', **kwargs):
+        """ Build the body and return encoder tensors
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+        kwargs : dict
+            body params
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        num_layers = cls.get('num_layers', config=cls.fill_params('body', **kwargs))
+
+        with tf.variable_scope(name):
+            x = cls.body(inputs, name='body', **kwargs)
+
+            scope = tf.get_default_graph().get_name_scope()
+            encoder_tensors = []
+            for i, _ in enumerate(num_layers):
+                tensor_name = scope + '/body/group-%d'%i + '/output:0'
+                x = tf.get_default_graph().get_tensor_by_name(tensor_name)
+                encoder_tensors.append(x)
+        return encoder_tensors
+
 
 
 class DenseNet121(DenseNet):
