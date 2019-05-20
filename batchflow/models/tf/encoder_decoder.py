@@ -161,9 +161,10 @@ class EncoderDecoder(TFModel):
 
 
     @classmethod
-    def block(cls, inputs, name='default_block', **kwargs):
-        """ Default block for processing tensors. Does not change shape of tensor.
-        Does 3x3 convolution followed by batch-norm and activation.
+    def block(cls, inputs, name='block', **kwargs):
+        """ Default conv block for processing tensors in encoder and decoder.
+        By default makes 3x3 convolutions followed by batch-norm and activation.
+        Does not change tensor shapes.
         """
         layout = kwargs.pop('layout', None) or 'cna'
         filters = kwargs.pop('filters', None) or cls.num_channels(inputs)
