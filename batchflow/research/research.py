@@ -13,7 +13,7 @@ import pandas as pd
 from .. import Config, Pipeline
 from .distributor import Distributor
 from .workers import PipelineWorker
-from .grid import Grid
+from .grid import Grid, Option
 from .job import Job
 
 class Research:
@@ -35,9 +35,12 @@ class Research:
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
+        self.n_splits = None
+        self.shuffle = None
+        self.framework = None
 
-    def pipeline(self, root, branch=None, variables=None, name=None,
-                 execute='%1', dump=-1, run=False, logging=False, **kwargs):
+    def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
+                     name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
 
@@ -51,12 +54,15 @@ class Research:
             Several copies of branch pipeline will be executed in parallel per each batch
             received from the root pipeline.
             May contain parameters that can be defined by grid.
+        dataset : Dataset or None
+            dataset that will be used with pipelines (see also `part`). If None, root or branch
+            must contain datatset.
+        part : str or None
+            part of dataset to use (for example, `train`)
         variables : str, list of str or None
             names of pipeline variables to save after each iteration into results. All of them must be
-            defined in `root`
-
-            If `branch` is None or be defined in `branch` if `branch` is not None.
-            If None, pipeline will be executed without any dumping
+            defined in `root` if `branch` is None or be defined in `branch` if `branch` is not None.
+            If None, pipeline will be executed without any dumping.
         name : str
             pipeline name. If None, pipeline will have name `pipeline_{index}`
         execute : int, str or list of int or str
@@ -65,11 +71,11 @@ class Research:
 
             If positive int, pipeline will be excuted for that iteration
 
-            If str, must be `'%{step}'` where step is int
+            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
 
             If list, must be list of int or str descibed above
         dump : int, str or list of int or str
-            iteration when results will be dumped and cleared. Similar to execute
+            iteration when results will be dumped and cleared. Similar to `execute`
         run : bool
             if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset_iter()`.
         kwargs :
@@ -77,7 +83,7 @@ class Research:
 
             For example,
             if test pipeline imports model from the other pipeline with name `'train'` in Research,
-            corresponding parameter in import_model must be `C('import_from')` and add_pipeline
+            corresponding parameter in `import_model` must be `C('import_from')` and `add_pipeline`
             must be called with parameter `import_from='train'`.
         logging : bool
             include execution information to log file or not
@@ -94,13 +100,13 @@ class Research:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
         unit = Executable()
-        unit.add_pipeline(root, name, branch, variables,
+        unit.add_pipeline(root, name, branch, dataset, part, variables,
                           execute, dump, run, logging, **kwargs)
         self.executables[name] = unit
         return self
 
-    def function(self, function, returns=None, name=None, execute='%1', dump=-1,
-                 on_root=False, logging=False, *args, **kwargs):
+    def add_function(self, function, returns=None, name=None, execute='%1', dump=-1,
+                     on_root=False, logging=False, *args, **kwargs):
         """ Add function to research.
 
         Parameters
@@ -123,7 +129,7 @@ class Research:
 
             If positive int, function will be excuted for that iteration
 
-            If str, must be `'%{step}'` where step is int
+            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
 
             If list, must be list of int or str descibed above
         dump : int, str or list of int or str
@@ -162,7 +168,7 @@ class Research:
 
         return self
 
-    def grid(self, grid_config):
+    def add_grid(self, grid_config):
         """ Add grid of pipeline parameters. Configs from that grid will be generated
         and then substitute into pipelines.
 
@@ -178,7 +184,7 @@ class Research:
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
-    def _create_jobs(self, n_reps, n_iters, branches, name):
+    def _create_jobs(self, n_reps, n_iters, folds, branches, name):
         """ Create generator of jobs. If `branches=1` or `len(branches)=1` then each job is one repetition
         for each config from grid_config. Else each job contains several pairs `(repetition, config)`.
 
@@ -201,14 +207,20 @@ class Research:
         else:
             n_models = len(branches)
 
-        configs_with_repetitions = [(idx, configs)
-                                    for idx in range(n_reps)
-                                    for configs in self.grid_config.gen_configs()]
+        folds = range(folds) if isinstance(folds, int) else [None]
 
+        # Create all combinations of possible paramaters, cv partitions and indices of repetitions
+        configs_with_repetitions = [(idx, configs, cv_split)
+                                    for idx in range(n_reps)
+                                    for configs in self.grid_config.gen_configs()
+                                    for cv_split in folds]
+
+        # Split all combinations into chunks that will use the same roots
         configs_chunks = self._chunks(configs_with_repetitions, n_models)
 
         jobs = (Job(self.executables, n_iters,
-                    list(zip(*chunk))[0], list(zip(*chunk))[1], branches, name)
+                    list(zip(*chunk))[0], list(zip(*chunk))[1], list(zip(*chunk))[2],
+                    branches, name)
                 for chunk in configs_chunks
                )
 
@@ -229,8 +241,18 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, name=None,
-            progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
+    def _cv_split(self, n_splits, shuffle):
+        has_dataset = False
+        for unit in self.executables:
+            if getattr(self.executables[unit], 'dataset', None):
+                has_dataset = True
+                self.executables[unit].dataset.cv_split(n_splits=n_splits, shuffle=shuffle)
+        if not has_dataset:
+            raise ValueError('At least one pipeline must have dataset to perform cross-validation')
+
+    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
+            progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
+
         """ Run research.
 
         Parameters
@@ -238,7 +260,8 @@ class Research:
         n_reps : int
             number of repetitions with each combination of parameters from `grid_config`
         n_iters: int or None
-            number of iterations for each configurations. If None, wait StopIteration exception.
+            number of iterations for each configurations. If None, wait StopIteration exception for at least
+            one pipeline.
         workers : int or list of dicts (Configs)
             If int - number of workers to run pipelines or workers that will run them, `PipelineWorker` will be used.
 
@@ -253,6 +276,10 @@ class Research:
             from `root`.
 
             If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
+        n_splits : int or None
+            number of folds for cross-validation.
+        shuffle : bool
+            cross-validation parameter
         name : str or None
             name folder to save research. By default is 'research'.
         progress_bar : bool
@@ -273,6 +300,8 @@ class Research:
             each job will be killed if it doesn't answer more then that time in minutes
         trails : int
             trails to execute job
+        framework : 'tf' or 'torch'
+            depends on the format of `C('device')`: `'/device:GPU:i'` for `'tf'` and `'cuda:i'` for `'torch'`.
 
 
         **How does it work**
@@ -292,8 +321,18 @@ class Research:
             self.initial_name = name
             self.name = name
 
+            self.n_splits = n_splits
+            self.shuffle = shuffle
+            self.framework = framework
+
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
+
+        if n_splits is not None:
+            self._cv_split(n_splits, shuffle)
+
+        if self.grid_config is None:
+            self.grid_config = Grid(Option('_dummy', [None]))
 
         if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
             raise ValueError("Number of gpus must be 1 or be divisible \
@@ -309,12 +348,18 @@ class Research:
 
         self.save()
 
-        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.branches, self.name)
+        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
 
         distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
-                  n_iters=self.n_iters, progress_bar=self.progress_bar)
+                  n_iters=self.n_iters, progress_bar=self.progress_bar, framework=self.framework)
         return self
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
     def _get_gpu_list(self, gpu):
         if gpu is None:
@@ -383,6 +428,12 @@ class Executable:
         is None if `Executable` is a function
     root_pipeline : Pipeline
         is None if `Executable` is a function or pipeline is not divided into root and branch
+    dataset : Dataset or None
+        dataset for pipelines
+    part : str or None
+        part of dataset to use
+    cv_split : int or None
+        partition of dataset
     result : dict
         current results of the `Executable`. Keys are names of variables (for pipeline)
         or returns (for function) values are lists of variable values
@@ -417,6 +468,9 @@ class Executable:
         self.logging = None
         self.additional_config = None
         self.action = None
+        self.cv_split = None
+        self.dataset = None
+        self.part = None
 
     def add_function(self, function, name, execute='%1', dump=-1, returns=None,
                      on_root=False, logging=False, *args, **kwargs):
@@ -445,7 +499,7 @@ class Executable:
         self._clear_result()
         self._process_iterations()
 
-    def add_pipeline(self, root_pipeline, name, branch_pipeline=None, variables=None,
+    def add_pipeline(self, root, name, branch=None, dataset=None, part=None, variables=None,
                      execute='%1', dump=-1, run=False, logging=False, **kwargs):
         """ Add pipeline as an Executable Unit """
         variables = variables or []
@@ -453,16 +507,18 @@ class Executable:
         if not isinstance(variables, list):
             variables = [variables]
 
-        if branch_pipeline is None:
-            pipeline = root_pipeline
-            root = None
+        if branch is None:
+            pipeline = root
+            root_pipeline = None
         else:
-            pipeline = branch_pipeline
-            root = root_pipeline
+            pipeline = branch
+            root_pipeline = root
 
         self.name = name
         self.pipeline = pipeline
-        self.root_pipeline = root
+        self.root_pipeline = root_pipeline
+        self.dataset = dataset
+        self.part = part
         self.variables = variables
         self.execute = execute
         self.dump = dump
@@ -498,6 +554,16 @@ class Executable:
         new_unit.result = deepcopy(new_unit.result)
         new_unit.variables = copy(new_unit.variables)
         return new_unit
+
+    def set_dataset(self):
+        """ Add dataset to root if root exists or create root pipeline on the base of dataset. """
+        if self.dataset is not None:
+            fold = getattr(self.dataset, 'cv'+str(self.cv_split)) if self.cv_split is not None else self.dataset
+            dataset = getattr(fold, self.part) if self.part else fold
+            if self.root_pipeline is not None:
+                self.root_pipeline = self.root_pipeline << dataset
+            else:
+                self.pipeline = self.pipeline << dataset
 
     def reset_iter(self):
         """ Reset iterators in pipelines """
@@ -600,7 +666,9 @@ class Executable:
 
     def create_folder(self, name):
         """ Create folder if it doesn't exist """
-        self.path = os.path.join(name, 'results', self.config.alias(as_string=True), str(self.repetition))
+        cv_folder = 'cv_' + str(self.cv_split) if self.cv_split is not None else ''
+        self.path = os.path.join(name, 'results', self.config.alias(as_string=True),
+                                 str(self.repetition), cv_folder)
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
@@ -695,7 +763,7 @@ class Results():
         return result
 
 
-    def load(self, names=None, repetitions=None, variables=None, iterations=None,
+    def load(self, names=None, repetitions=None, folds=None, variables=None, iterations=None,
              configs=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
@@ -705,6 +773,8 @@ class Results():
             names of units (pipleines and functions) to load
         repetitions : int, list or None
             numbers of repetitions to load
+        folds : int, list or None
+            split of dataset
         variables : str, list or None
             names of variables to load
         iterations : int, list or None
@@ -732,11 +802,11 @@ class Results():
             grid = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
 
             research = (Research()
-            .pipeline(train_ppl, variables='loss', name='train')
-            .pipeline(test_ppl, name='test', execute='%100', run=True, import_from='train')
-            .function(accuracy, returns='accuracy', name='test_accuracy',
+            .add_pipeline(train_ppl, variables='loss', name='train')
+            .add_pipeline(test_ppl, name='test', execute='%100', run=True, import_from='train')
+            .add_function(accuracy, returns='accuracy', name='test_accuracy',
                       execute='%100', pipeline='test')
-            .grid(grid))
+            .add_grid(grid))
 
             research.run(n_reps=2, n_iters=10000)
             ```
@@ -770,6 +840,9 @@ class Results():
         if repetitions is None:
             repetitions = list(range(self.research.n_reps))
 
+        if folds is None:
+            folds = list(range(self.research.n_splits)) if self.research.n_splits is not None else [None]
+
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
 
@@ -780,6 +853,7 @@ class Results():
         self.repetitions = self._get_list(repetitions)
         self.variables = self._get_list(variables)
         self.iterations = self._get_list(iterations)
+        self.folds = self._get_list(folds)
 
         all_results = []
 
@@ -787,30 +861,28 @@ class Results():
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
             for repetition in self.repetitions:
-                for unit in self.names:
-                    path = os.path.join(self.path, 'results', alias_str, str(repetition))
-                    files = glob.glob(os.path.join(glob.escape(path), unit + '_[0-9]*'))
-                    files = self._sort_files(files, self.iterations)
-                    if len(files) != 0:
-                        res = []
-                        for filename, iterations_to_load in files.items():
-                            with open(filename, 'rb') as file:
-                                res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
-                        res = self._concat(res, self.variables)
-                        self._fix_length(res)
-                        if use_alias:
+                for cv_split in self.folds:
+                    for unit in self.names:
+                        path = os.path.join(self.path, 'results', alias_str, str(repetition))
+                        cv_folder = 'cv_'+str(cv_split) if cv_split is not None else ''
+                        files = glob.glob(os.path.join(glob.escape(path), cv_folder, unit + '_[0-9]*'))
+                        files = self._sort_files(files, self.iterations)
+                        if len(files) != 0:
+                            res = []
+                            for filename, iterations_to_load in files.items():
+                                with open(filename, 'rb') as file:
+                                    res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
+                            res = self._concat(res, self.variables)
+                            self._fix_length(res)
+                            if '_dummy' not in alias:
+                                if use_alias:
+                                    res['config'] = alias_str
+                                else:
+                                    res.update(alias)
+                            if cv_split is not None:
+                                res['cv_split'] = cv_split
                             all_results.append(
                                 pd.DataFrame({
-                                    'config': alias_str,
-                                    'repetition': repetition,
-                                    'name': unit,
-                                    **res
-                                })
-                                )
-                        else:
-                            all_results.append(
-                                pd.DataFrame({
-                                    **alias,
                                     'repetition': repetition,
                                     'name': unit,
                                     **res

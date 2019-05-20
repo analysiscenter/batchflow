@@ -152,7 +152,7 @@ class Dataset(Baseset):
 
             Parameters
             ----------
-            index : DatasetIndex
+            index : DatasetIndex or np.array
 
             Returns
             -------
