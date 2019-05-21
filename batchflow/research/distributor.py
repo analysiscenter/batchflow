@@ -80,6 +80,8 @@ class Distributor:
             will be used in worker
         """
         self.framework = framework
+        if isinstance(progress_bar, bool):
+            self.progress_bar = tqdm if progress_bar else None
 
         self.logfile = logfile or 'research.log'
         self.errorfile = errorfile or 'errors.log'
@@ -132,11 +134,11 @@ class Distributor:
             self.finished_jobs = []
 
 
-            if progress_bar:
+            if progress_bar is not None:
                 if n_iters is not None:
                     print("Distributor has {} jobs with {} iterations. Totally: {}"
                           .format(n_jobs, n_iters, n_jobs*n_iters))
-                    with tqdm(total=n_jobs*n_iters) as progress:
+                    with progress_bar(total=n_jobs*n_iters) as progress:
                         while True:
                             position = self._get_position()
                             progress.n = position
@@ -146,7 +148,7 @@ class Distributor:
                 else:
                     print("Distributor has {} jobs"
                           .format(n_jobs))
-                    with tqdm(total=n_jobs) as progress:
+                    with progress_bar(total=n_jobs) as progress:
                         while True:
                             answer = self.results.get()
                             if answer.done:
