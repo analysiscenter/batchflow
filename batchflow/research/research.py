@@ -283,7 +283,8 @@ class Research:
         name : str or None
             name folder to save research. By default is 'research'.
         bar : bool or callable
-            add progress bar or not. If not a bool value, it must have the same signature as `tqdm` progress bar.
+            Whether to show a progress bar.
+            If callable, it must have the same signature as `tqdm`.
         gpu : str, list or None
             all gpu devices available for the research.
 
