@@ -13,7 +13,7 @@ from .base import Baseset
 from .config import Config
 from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
-from .ns_pipeline import NamespacePipeline
+from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
@@ -81,8 +81,8 @@ class Pipeline:
             self._lazy_run = None
             self.models = ModelDirectory()
             self.variables = VariableDirectory()
-            self.before = NamespacePipeline(self)
-            self.after = NamespacePipeline(self)
+            self.before = OncePipeline(self)
+            self.after = OncePipeline(self)
             self._namespaces = []
         else:
             self.dataset = pipeline.dataset
@@ -170,7 +170,7 @@ class Pipeline:
         return self._actions[-1]['repeat']
 
     def __add__(self, other):
-        if isinstance(other, NamespacePipeline):
+        if isinstance(other, OncePipeline):
             other = other.pipeline
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
@@ -231,9 +231,9 @@ class Pipeline:
             # if a magic method is not defined, throw an error
             raise AttributeError('Unknown magic method: %s' % name)
         if self.is_method_from_ns(name):
-            return partial(self.append_action, CALL_FROM_NS_ID, _name=name)
+            return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         if self._is_batch_method(name):
-            return partial(self.append_action, name)
+            return partial(self._add_action, name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @property
@@ -241,7 +241,7 @@ class Pipeline:
         """ Return index length """
         return len(self._actions)
 
-    def append_action(self, name, *args, _name=None, **kwargs):
+    def _add_action(self, name, *args, _name=None, **kwargs):
         """ Add new action to the log of future actions """
         actions = self._actions.copy()
         if name == CALL_FROM_NS_ID:
@@ -458,7 +458,7 @@ class Pipeline:
 
     def inc_variable(self, name):
         """ Increment a value of a given variable during pipeline execution """
-        return self.append_action(INC_VARIABLE_ID, var_name=name)
+        return self._add_action(INC_VARIABLE_ID, var_name=name)
 
     def _exec_inc_variable(self, _, action):
         if self.has_variable(action['var_name']):
@@ -498,7 +498,7 @@ class Pipeline:
         until the pipeline is run. So it should be used in pipeline definition chains only.
         ``set_variable`` is imperative and may be used to change variable value within actions.
         """
-        return self.append_action(UPDATE_VARIABLE_ID, var_name=name, value=value, mode=mode)
+        return self._add_action(UPDATE_VARIABLE_ID, var_name=name, value=value, mode=mode)
 
     def save_to_variable(self, name, *args, **kwargs):
         """ Save a value to a given variable during pipeline execution """
@@ -509,7 +509,7 @@ class Pipeline:
 
     def print(self, *args, **kwargs):
         """ Print a value during pipeline execution """
-        return self.append_action(PRINT_ID, *args, **kwargs)
+        return self._add_action(PRINT_ID, *args, **kwargs)
 
     def _exec_print(self, batch, action):
         args_value = self._eval_expr(action['args'], batch=batch)
@@ -544,7 +544,7 @@ class Pipeline:
 
         mode : str {'w', 'a', 'e', 'u'}
         """
-        return self.append_action(CALL_ID, *args, fn=fn, save_to=save_to, mode=mode, **kwargs)
+        return self._add_action(CALL_ID, *args, fn=fn, save_to=save_to, mode=mode, **kwargs)
 
     def _exec_call(self, batch, action):
         fn = self._eval_expr(action['fn'], batch)
@@ -733,7 +733,7 @@ class Pipeline:
         name : str
             a name with which the model is stored in this pipeline
         """
-        return self.append_action(IMPORT_MODEL_ID, source=model, pipeline=pipeline, model_name=name)
+        return self._add_action(IMPORT_MODEL_ID, source=model, pipeline=pipeline, model_name=name)
 
     def _exec_import_model(self, batch, action):
         model_name = self._eval_expr(action['model_name'], batch=batch)
@@ -805,8 +805,8 @@ class Pipeline:
             train_data = batch.make_resnet_data(resnet_model)
             resnet_model.train(**train_data)
         """
-        return self.append_action(TRAIN_MODEL_ID, *args, model_name=name, make_data=make_data,
-                                  save_to=save_to, mode=mode, **kwargs)
+        return self._add_action(TRAIN_MODEL_ID, *args, model_name=name, make_data=make_data,
+                                save_to=save_to, mode=mode, **kwargs)
 
     def predict_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
         """ Predict using a model
@@ -875,8 +875,8 @@ class Pipeline:
             predict_data = batch.make_deepnet_data(model=deepnet_model)
             deepnet_model.predict(**predict_data)
         """
-        return self.append_action(PREDICT_MODEL_ID, *args, model_name=name, make_data=make_data,
-                                  save_to=save_to, mode=mode, **kwargs)
+        return self._add_action(PREDICT_MODEL_ID, *args, model_name=name, make_data=make_data,
+                                save_to=save_to, mode=mode, **kwargs)
 
     def _make_model_args(self, batch, action, model):
         make_data = action['make_data'] or {}
@@ -998,8 +998,8 @@ class Pipeline:
             metrics = pipeline.get_variable('metrics')
             metrics.evaluate(['sensitivity', 'specificity'])
         """
-        return self.append_action(GATHER_METRICS_ID, *args, metrics_class=metrics_class,
-                                  save_to=save_to, mode=mode, **kwargs)
+        return self._add_action(GATHER_METRICS_ID, *args, metrics_class=metrics_class,
+                                save_to=save_to, mode=mode, **kwargs)
 
     def _exec_gather_metrics(self, batch, action):
         metrics_class = self._eval_expr(action['metrics_class'], batch)
@@ -1018,16 +1018,17 @@ class Pipeline:
 
     def join(self, *pipelines):
         """ Join one or several pipelines """
-        return self.append_action(JOIN_ID, pipelines=pipelines, mode='i')
+        return self._add_action(JOIN_ID, pipelines=pipelines, mode='i')
 
     def merge(self, *pipelines, merge_fn=None):
         """ Merge pipelines """
-        return self.append_action(MERGE_ID, pipelines=pipelines, mode='n', merge_fn=merge_fn)
+        return self._add_action(MERGE_ID, pipelines=pipelines, mode='n', merge_fn=merge_fn)
 
     def rebatch(self, batch_size, merge_fn=None):
         """ Set the output batch size """
         new_p = type(self)(self.dataset)
-        return new_p.append_action(REBATCH_ID, batch_size=batch_size, pipeline=self, merge_fn=merge_fn)
+        return new_p._add_action(REBATCH_ID, batch_size=batch_size,    # pylint:disable=protected-access
+                                 pipeline=self, merge_fn=merge_fn)
 
     def _put_batches_into_queue(self, gen_batch):
         while not self._stop_flag:

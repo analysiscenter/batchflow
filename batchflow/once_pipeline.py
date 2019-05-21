@@ -1,4 +1,4 @@
-""" Namespace pipeline """
+""" Once pipeline """
 import sys
 from functools import partial
 import numpy as np
@@ -6,8 +6,8 @@ import numpy as np
 from .named_expr import NamedExpression, eval_expr
 
 
-class NamespacePipeline:
-    """ Namespace pipeline allows declarative chains of methods from namespaces given """
+class OncePipeline:
+    """ Pipeline that runs only once before or after the main pipeline """
     def __init__(self, pipeline=None, *namespaces):
         self.pipeline = pipeline
         self._namespaces = list(namespaces)
@@ -17,7 +17,7 @@ class NamespacePipeline:
     def concat(cls, pipe1, pipe2):
         """ Concatenate two pipelines """
         # pylint: disable=protected-access
-        new_p = NamespacePipeline(pipe1.pipeline)
+        new_p = OncePipeline(pipe1.pipeline)
         new_p._actions = pipe1._actions + pipe2._actions
         new_p._namespaces = pipe1._namespaces + [a for a in pipe2._namespaces if a not in pipe1._namespaces]
         return new_p
@@ -32,7 +32,7 @@ class NamespacePipeline:
         self.pipeline = state['pipeline']
 
     def __add__(self, other):
-        if isinstance(other, NamespacePipeline):
+        if isinstance(other, OncePipeline):
             return self.pipeline + other
         return other + self
 

@@ -65,6 +65,52 @@ And again, no action is executed until its result is needed.::
        # only now the actions are fired and data is changed with the workflow defined earlier
 
 
+Actions
+=======
+Pipeline actions might come from 3 sources:
+- Pipeline API
+- batch class actions
+- arbitrary namespaces.
+
+:doc:`Pipeline API <../api/batchflow.pipeline>` contains operations with variables and models.
+
+:doc:`Batch class <batch>` comprises data loading operations, preprocessing methods and augmentations.
+A batch class method marked with :ref:`action <actions>` decorator might be used in a pipeline workflow.
+
+
+Besides, pipeline actions chains might include arbitrary functions. Just add a namespace (e.g. a class, a module) with the functions needed to a pipeline.
+
+::
+
+   pipeline = (dataset.pipeline()
+                .add_namespace(numpy, mymodule)    # numpy and mymodule methods are now accessible within the pipeline
+                .init_variable("var")              # Pipeline API
+                .init_model("dynamic", ResNet18)   # Pipeline API
+                .resize((128, 128))                # batch class API, namely ImagesBatch
+                .my_func(10, save_to=V("var"))     # call a function from mymodule and store its result into a pipeline variable
+                .print(V("var"))                   # Pipeline API again
+
+
+
+Before and after pipelines
+==========================
+More complicated pipelines include setup and tear down actions. That's exactly what `before` and `after` pipelines are supposed to do.
+
+::
+
+    pipeline.before
+        .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
+        .init_variable("var")              # Pipeline API
+        .init_model("dynamic", ResNet18)   # Pipeline API
+        .connect_to_mydb(USER, PASSWORD)   # a method from mymodule
+
+    pipeline.after
+        .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
+        .save_model("ResNet18", path='/some/path')     #Pipeline API
+        .disconnect_from_mydb()            # a method from mymodule
+
+
+
 Algebra of pipelines
 ====================
 
@@ -227,12 +273,12 @@ then call `run()` or `next_batch()` without arguments at all::
         # do whatever you want
 
 
-
 Single execution
 ^^^^^^^^^^^^^^^^
 A pipeline might be run for one batch only with :meth:`~.Pipeline.execute_for`::
 
     res_batch = my_pipeline.execute_for(batch)
+
 
 
 Pipeline variables
