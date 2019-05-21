@@ -1,5 +1,5 @@
 Once pipeline
---------
+-------------
 
 .. toctree::
    :maxdepth: 2
