@@ -60,7 +60,7 @@ class Distributor:
             gpu = self.gpu[start:end]
         return gpu
 
-    def run(self, jobs, dirname, n_jobs, n_iters, logfile=None, errorfile=None, progress_bar=False,
+    def run(self, jobs, dirname, n_jobs, n_iters, logfile=None, errorfile=None, bar=False,
             framework='tf', *args, **kwargs):
         """ Run disributor and workers.
 
@@ -74,14 +74,14 @@ class Distributor:
 
         errorfile : str (default: 'errors.log')
 
-        progress_bar : bool
+        bar : bool or callable
 
         args, kwargs
             will be used in worker
         """
         self.framework = framework
-        if isinstance(progress_bar, bool):
-            self.progress_bar = tqdm if progress_bar else None
+        if isinstance(bar, bool):
+            bar = tqdm if bar else None
 
         self.logfile = logfile or 'research.log'
         self.errorfile = errorfile or 'errors.log'
@@ -134,11 +134,11 @@ class Distributor:
             self.finished_jobs = []
 
 
-            if progress_bar is not None:
+            if bar is not None:
                 if n_iters is not None:
                     print("Distributor has {} jobs with {} iterations. Totally: {}"
                           .format(n_jobs, n_iters, n_jobs*n_iters))
-                    with progress_bar(total=n_jobs*n_iters) as progress:
+                    with bar(total=n_jobs*n_iters) as progress:
                         while True:
                             position = self._get_position()
                             progress.n = position
@@ -148,7 +148,7 @@ class Distributor:
                 else:
                     print("Distributor has {} jobs"
                           .format(n_jobs))
-                    with progress_bar(total=n_jobs) as progress:
+                    with bar(total=n_jobs) as progress:
                         while True:
                             answer = self.results.get()
                             if answer.done:

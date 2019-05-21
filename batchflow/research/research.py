@@ -24,7 +24,7 @@ class Research:
         self.branches = 1
         self.trails = 3
         self.workers = 1
-        self.progress_bar = False
+        self.bar = False
         self.initial_name = 'research'
         self.n_reps = 1
         self.name = 'research'
@@ -251,7 +251,7 @@ class Research:
             raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
-            progress_bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
+            bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
 
         """ Run research.
 
@@ -282,7 +282,7 @@ class Research:
             cross-validation parameter
         name : str or None
             name folder to save research. By default is 'research'.
-        progress_bar : bool
+        bar : bool
             add tqdm progress bar
         gpu : str, list or None
             all gpu devices available for the research.
@@ -313,7 +313,7 @@ class Research:
             self.n_iters = n_iters
             self.workers = workers
             self.branches = branches
-            self.progress_bar = progress_bar
+            self.bar = bar
             self.gpu = self._get_gpu_list(gpu)
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
@@ -352,7 +352,7 @@ class Research:
 
         distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
-                  n_iters=self.n_iters, progress_bar=self.progress_bar, framework=self.framework)
+                  n_iters=self.n_iters, bar=self.bar, framework=self.framework)
         return self
 
     def __getstate__(self):
