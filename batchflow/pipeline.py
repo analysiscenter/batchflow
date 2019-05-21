@@ -1136,9 +1136,9 @@ class Pipeline:
 
             See :meth:`DatasetIndex.gen_batch` for details.
 
-        bar : bool or 'n'
-            whether to show a `tqdm` progress bar.
-            If 'n', than uses `tqdm_notebook`.
+        bar : bool, 'n' or callable
+            Whether to show a progress bar.
+            If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
         prefetch : int
             a number of batches to process in advance (default=0)
