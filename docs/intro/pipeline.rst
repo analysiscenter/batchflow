@@ -109,6 +109,7 @@ More complicated pipelines include setup and tear down actions. That's exactly w
         .save_model("ResNet18", path='/some/path')     #Pipeline API
         .disconnect_from_mydb()            # a method from mymodule
 
+See :doc:`API <../api/batchflow.once_pipeline>` for methods available in `before` and `after` pipelines.
 
 
 Algebra of pipelines
