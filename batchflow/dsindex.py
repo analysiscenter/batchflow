@@ -446,8 +446,9 @@ class DatasetIndex(Baseset):
             However, there is nothing to worry about if you don't iterate over batch items explicitly
             (i.e. `for item in batch`) or implicitly (through `batch[ix]`).
 
-         bar : bool or callable
-            whether to show a progress bar. If not a bool value, it must be a callable with the same signature.
+         bar : bool, str or callable
+            Whether to show a progress bar.
+            If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
         Yields
         ------
@@ -479,7 +480,7 @@ class DatasetIndex(Baseset):
 
             if callable(bar):
                 iter_params['bar'] = bar(total=total)
-            elif bar == '\n':
+            elif bar == 'n':
                 iter_params['bar'] = tqdm.tqdm_notebook(total=total)
             else:
                 iter_params['bar'] = tqdm.tqdm(total=total)
