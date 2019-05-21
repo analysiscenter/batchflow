@@ -106,7 +106,7 @@ class TFModel(BaseModel):
         - ``{'decay': ('polynomial_decay', {'decay_steps': 10000})}``
         - ``{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}``
 
-    scope - subset of variables to optimize during training.
+    scope - subset of variables to optimize during training. Can be either string or sequence of strings.
         Value `''` is reserved for optimizing all trainable variables.
         Putting `-` sign before name stands for complement: optimize everything but
         the passed scope.
@@ -114,9 +114,9 @@ class TFModel(BaseModel):
         Examples:
 
         - ``{'scope': ''}``
-        - ``{'scope': 'initial_block'}``
         - ``{'scope': 'body/custom_layer'}``
         - ``{'scope': '-body/custom_layer'}``
+        - ``{'scope': ['body/custom_layer_1', 'head/custom_layer_2']}``
 
     optimizer - an optimizer might be defined in one of three formats:
             - name
@@ -591,7 +591,8 @@ class TFModel(BaseModel):
 
             # Making loss and optimizer
             loss = self._make_loss(subconfig)
-            self.store_to_attr('loss' + key, total(loss))
+            loss_name = 'loss' if len(key) == 0 else 'loss_' + key
+            self.store_to_attr(loss_name, total(loss))
             optimizer_ = self._make_optimizer(subconfig)
 
             # Parsing scope and making train step with it
@@ -599,19 +600,8 @@ class TFModel(BaseModel):
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
                     scope = subconfig.get('scope')
-                    scope_postfix = self.__class__.__name__ + '/'
-                    if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
-                        scope_postfix += scope[1:]
-                    else:
-                        scope_postfix += scope
-
-                    scope_collection = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                                         scope_postfix)
-                    if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
-                        scope_collection = [item for item in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-                                            if item not in scope_collection]
-
-                    train_step = optimizer_.minimize(self._check_tensor('loss' + key),
+                    scope_collection = self._parse_scope(scope)
+                    train_step = optimizer_.minimize(self._check_tensor(loss_name),
                                                      global_step=self.global_step,
                                                      var_list=scope_collection)
                     train_steps.update({key: train_step})
@@ -655,6 +645,27 @@ class TFModel(BaseModel):
             raise ValueError("Unknown learning rate decay method", decay_name)
 
         return decay_name, decay_args
+
+    def _parse_scope(self, scopes):
+        scopes = [scopes] if isinstance(scopes, str) else scopes
+        if not isinstance(scopes, (list, tuple)):
+            raise ValueError('Scopes key should be either string or sequence of strings.')
+
+        total = []
+        for scope in scopes:
+            scope_postfix = self.__class__.__name__ + '/'
+            if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
+                scope_postfix += scope[1:]
+            else:
+                scope_postfix += scope
+
+            scope_collection = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                                 scope_postfix)
+            if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
+                scope_collection = [item for item in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+                                    if item not in scope_collection]
+            total.extend(scope_collection)
+        return total
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
