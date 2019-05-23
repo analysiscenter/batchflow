@@ -73,7 +73,7 @@ class TFModel(BaseModel):
             - callable
 
         It is possible to compute loss not only with network output and ground truth, but with
-        and named Tensors in model by passing `'predictions'` and `'targets'` keywords.
+        any named Tensors in model by passing `'predictions'` and `'targets'` keywords.
 
         If loss is a callable, then it should add the result to a loss collection.
         Otherwise, ``add_loss`` should be set to True. An optional collection might also be specified through
@@ -556,7 +556,7 @@ class TFModel(BaseModel):
     def _make_train_steps(self, config):
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
-                                                ('loss', 'optimizer', 'decay', 'scope')}}})
+                                                ('loss', 'decay', 'optimizer', 'scope')}}})
             total = lambda loss: tf.losses.get_total_loss()
         else:
             total = lambda loss: loss
@@ -565,7 +565,7 @@ class TFModel(BaseModel):
         for key, subconfig in config['train_steps'].items():
             # Pass values from higher level
             subconfig.update({key: subconfig.get(key) or config.get(key)
-                              for key in ('optimizer', 'loss', 'decay', 'scope')})
+                              for key in ('loss', 'decay', 'optimizer', 'scope')})
 
             # Making loss and optimizer
             loss = self._make_loss(subconfig)
@@ -578,7 +578,7 @@ class TFModel(BaseModel):
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
                     scope = subconfig.get('scope')
-                    scope_collection = self._parse_scope(scope)
+                    scope_collection = self._make_scope(scope)
                     train_step = optimizer_.minimize(self._check_tensor(loss_name),
                                                      global_step=self.global_step,
                                                      var_list=scope_collection)
@@ -620,6 +620,22 @@ class TFModel(BaseModel):
                     tf.losses.add_loss(tensor_loss)
         return tensor_loss
 
+    def _make_decay(self, config):
+        decay_name, decay_args = unpack_fn_from_config('decay', config)
+
+        if decay_name is None:
+            pass
+        elif callable(decay_name):
+            pass
+        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
+            decay_name = getattr(tf.train, decay_name)
+        elif decay_name in DECAYS:
+            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
+        else:
+            raise ValueError("Unknown learning rate decay method", decay_name)
+
+        return decay_name, decay_args
+
     def _make_optimizer(self, config):
         optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
 
@@ -643,23 +659,7 @@ class TFModel(BaseModel):
 
         return optimizer
 
-    def _make_decay(self, config):
-        decay_name, decay_args = unpack_fn_from_config('decay', config)
-
-        if decay_name is None:
-            pass
-        elif callable(decay_name):
-            pass
-        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
-            decay_name = getattr(tf.train, decay_name)
-        elif decay_name in DECAYS:
-            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
-        else:
-            raise ValueError("Unknown learning rate decay method", decay_name)
-
-        return decay_name, decay_args
-
-    def _parse_scope(self, scopes):
+    def _make_scope(self, scopes):
         scopes = [scopes] if isinstance(scopes, str) else scopes
         if not isinstance(scopes, (list, tuple)):
             raise ValueError("'Scope' key should be either string or sequence of strings.")
