@@ -141,6 +141,7 @@ class DeepGalerkin(TFModel):
         config = self._make_ops(config)
         return config
 
+
     def _make_ops(self, config):
         """ Stores necessary operations in 'config'. """
         # retrieving variables
@@ -166,19 +167,22 @@ class DeepGalerkin(TFModel):
         # for example, 'dt' is transformed to {'d1': (0, ..., 0, 1)}
         for i, op in enumerate(_ops[prefix]):
             form = self._parse_op(op, n_dims)
-            _compute_op = self._make_form_calculator(form, coordinates, name=op)
+            _compute_op = self._make_form_calculator({'form': form}, coordinates, name=op)
             _ops[prefix][i] = _compute_op
 
         # additional expressions to track
         if track is not None:
             for op in track.keys():
-                _compute_op = self._make_form_calculator(track[op], coordinates, name=op)
+                _compute_op = self._make_form_calculator({'form': track[op]}, coordinates, name=op)
                 _ops[prefix].append(_compute_op)
 
         config['output'] = _ops
-        config['predictions'] = self._make_form_calculator(config.get("common/form"), coordinates,
+
+        subconfig = config.get('common')
+        config['predictions'] = self._make_form_calculator(subconfig, coordinates,
                                                            name='predictions')
         return config
+
 
     @classmethod
     def _parse_op(cls, op, n_dims):
@@ -253,14 +257,15 @@ class DeepGalerkin(TFModel):
         return placeholders_, tensors_
 
     @classmethod
-    def _make_form_calculator(cls, form, coordinates, name='_callable'):
+    def _make_form_calculator(cls, subconfig, coordinates, name='_callable'):
         """ Get callable that computes differential form of a tf.Tensor
         with respect to coordinates.
         """
         n_dims = len(coordinates)
-        d0_coeff = form.get("d0", 0)
-        d1_coeffs = np.array(form.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
-        d2_coeffs = np.array(form.get("d2", np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
+        form = subconfig.pop('form')
+        d0_coeff = form.get('d0', 0)
+        d1_coeffs = np.array(form.get('d1', np.zeros(shape=(n_dims, )))).reshape(-1)
+        d2_coeffs = np.array(form.get('d2', np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
         points = tf.concat(coordinates, axis=1, name='_points')
 
         if ((d0_coeff == 0) and np.all(d1_coeffs == 0) and np.all(d2_coeffs == 0)):
@@ -455,7 +460,7 @@ class DGSolver():
         self.model = dg_class(model_config)
 
 
-    def fit(self, sampler, batch_size, n_iters, fetches=None, bar='notebook'):
+    def fit(self, sampler, batch_size, n_iters, train_mode='', fetches=None, bar=False):
         """ Train model on batches of sampled points.
 
         Parameters
@@ -473,6 +478,9 @@ class DGSolver():
         fetches : str or sequence of str
             `tf.Operation`s and/or `tf.Tensor`s to calculate.
 
+        train_mode : str
+            Name of train step to optimize.
+
         bar : str
             Whether to show progress bar during training.
 
@@ -482,24 +490,26 @@ class DGSolver():
             Loss history for initialized model. Calculated across all of
             the `fit` calls.
         """
-        #TODO: `train_step` arg
         fetches = fetches or 'loss'
         fetches = [fetches] if isinstance(fetches, str) else fetches
-        if 'loss' not in fetches:
-            fetches.append('loss')
 
         for name in fetches:
             if not hasattr(self, name):
                 setattr(self, name, [])
 
-        bar = tqdm_notebook if bar == 'notebook' else tqdm
+        iterator = range(n_iters)
+        bars = {'notebook': tqdm_notebook,
+                'tqdm': tqdm,
+                True: tqdm,
+                False: lambda x: x,
+                None: lambda x: x}
+        iterator = bars[bar](iterator)
 
-        for _ in bar(range(n_iters)):
+        for _ in iterator:
             points = sampler.sample(batch_size)
-            tensors = self.model.train(fetches=fetches, feed_dict={'points': points})
+            tensors = self.model.train(fetches=fetches, feed_dict={'points': points}, train_mode=train_mode)
             for tensor, name in zip(tensors, fetches):
                 getattr(self, name).append(tensor)
-        return self.loss
 
 
     def solve(self, points, fetches=None):
