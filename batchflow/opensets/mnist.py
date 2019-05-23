@@ -1,15 +1,21 @@
 """ Contains MNIST dataset """
-
 import os
+import logging
 import tempfile
 import urllib.request
 import gzip
-import numpy as np
+
 import PIL
+import tqdm
+import numpy as np
+
 
 from . import ImagesOpenset
 from .. import DatasetIndex
 from .. import parallel, any_action_failed
+
+
+logger = logging.getLogger('mnist')
 
 
 class MNIST(ImagesOpenset):
@@ -17,13 +23,18 @@ class MNIST(ImagesOpenset):
 
     Examples
     --------
-    .. code-block:: python
+
+    ::
 
         # download MNIST data, split into train/test and create dataset instances
         mnist = MNIST()
         # iterate over the dataset
         for batch in mnist.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
             # do something with a batch
+
+
+        # download MNIST data and show progress bar
+        mnist = MNIST(bar=True)
     """
 
     TRAIN_IMAGES_URL = "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
@@ -32,7 +43,8 @@ class MNIST(ImagesOpenset):
     TEST_LABELS_URL = "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz"
     ALL_URLS = [TRAIN_IMAGES_URL, TRAIN_LABELS_URL, TEST_IMAGES_URL, TEST_LABELS_URL]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, bar=False, **kwargs):
+        self.bar = tqdm.tqdm(total=8) if bar else None
         super().__init__(*args, train_test=True, **kwargs)
         self.split()
 
@@ -53,20 +65,24 @@ class MNIST(ImagesOpenset):
 
         return train_data, test_data
 
-    @parallel(init='_get_from_urls', post='_gather_data')
+    @parallel(init='_get_from_urls', post='_gather_data', target='t')
     def download(self, url, content, path=None):
         """ Load data from the web site """
-        print('Downloading', url)
+        logger.info('Downloading %s', url)
         if path is None:
             path = tempfile.gettempdir()
         filename = os.path.basename(url)
         localname = os.path.join(path, filename)
         if not os.path.isfile(localname):
             urllib.request.urlretrieve(url, localname)
-            print("Downloaded", filename)
+            logger.info("Downloaded %s", filename)
+        if self.bar:
+            self.bar.update(1)
 
         with open(localname, 'rb') as f:
             data = self._extract_images(f) if content == 0 else self._extract_labels(f)
+            if self.bar:
+                self.bar.update(1)
         return data
 
     #
@@ -86,7 +102,7 @@ class MNIST(ImagesOpenset):
         Raises:
           ValueError: If the bytestream does not start with 2051.
         """
-        print('Extracting', f.name)
+        logger.info('Extracting %s', f.name)
         with gzip.GzipFile(fileobj=f) as bytestream:
             magic = self._read32(bytestream)
             if magic != 2051:
@@ -108,7 +124,7 @@ class MNIST(ImagesOpenset):
         Raises:
           ValueError: If the bystream doesn't start with 2049.
         """
-        print('Extracting', f.name)
+        logger.info('Extracting %s', f.name)
         with gzip.GzipFile(fileobj=f) as bytestream:
             magic = self._read32(bytestream)
             if magic != 2049:
