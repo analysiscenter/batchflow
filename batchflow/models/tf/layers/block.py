@@ -199,6 +199,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
 
                 with tf.variable_scope('layer-%d' % i):
                     tensor = layer_fn(tensor, **args)
+    tensor = tf.identity(tensor, name='_conv_block_output')
 
     if context is not None:
         context.__exit__(None, None, None)
