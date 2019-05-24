@@ -8,6 +8,7 @@ import tensorflow as tf
 from tqdm import tqdm_notebook, tqdm
 
 from . import TFModel
+from .layers import conv_block
 
 class DeepGalerkin(TFModel):
     r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
@@ -27,7 +28,7 @@ class DeepGalerkin(TFModel):
     pde : dict
         dictionary of parameters of PDE. Must contain keys
         - form : dict
-            may contain keys 'd1' and 'd2', which define the coefficients before differentials
+            may contain keys 'd0', d1' and 'd2', which define the coefficients before differentials
             of first two orders in lhs of the equation.
         - rhs : callable or const
             right-hand-side of the equation. If callable, must accept and return tf.Tensor.
@@ -84,6 +85,8 @@ class DeepGalerkin(TFModel):
         config['ansatz'] = {}
         config['common/time_multiplier'] = 'sigmoid'
         config['common/bind_bc_ic'] = True
+        config['common/noise_block'] = dict(distribution='normal')
+        config['common/addendum_block'] = dict()
         return config
 
     def build_config(self, names=None):
@@ -134,7 +137,7 @@ class DeepGalerkin(TFModel):
         elif not callable(bound_cond):
             raise ValueError("Cannot parse boundary condition of the equation")
 
-        # 'common' is updated with PDE-problem
+        # 'common' is updated with PDE-problem to transport it all around the class
         config = super().build_config(names)
         config['common'].update(self.config['pde'])
 
@@ -146,7 +149,7 @@ class DeepGalerkin(TFModel):
         """ Stores necessary operations in 'config'. """
         # retrieving variables
         ops = config.get('output')
-        track = config.get('track')
+        additional_lhs = config.get('pde/additional_lhs')
         n_dims = config['common/n_dims']
         inputs = config.get('initial_block/inputs', config)
         coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/inputs/coordinates:' + str(i))
@@ -170,12 +173,14 @@ class DeepGalerkin(TFModel):
             _compute_op = self._make_form_calculator({'form': form}, coordinates, name=op)
             _ops[prefix][i] = _compute_op
 
-        # additional expressions to track
-        if track is not None:
-            for op in track.keys():
-                _compute_op = self._make_form_calculator({'form': track[op]}, coordinates, name=op)
-                _ops[prefix].append(_compute_op)
-
+        # additional expressions of network to track
+        if additional_lhs is not None:
+            for name, subconfig in additional_lhs.items():
+                if subconfig.get('form') is not None:
+                    subconfig.update({'noise_block': config['common/noise_block'],
+                                      'addendum_block': config['common/addendum_block']})
+                    _compute_op = self._make_form_calculator(subconfig, coordinates, name=name)
+                    _ops[prefix].append(_compute_op)
         config['output'] = _ops
 
         subconfig = config.get('common')
@@ -241,6 +246,130 @@ class DeepGalerkin(TFModel):
                 raise ValueError("Cannot parse coordinate numbers from " + op)
         return form
 
+
+    @classmethod
+    def _make_form_calculator(cls, subconfig, coordinates, name='_callable'):
+        """ Get callable that computes differential form of a tf.Tensor
+        with respect to coordinates.
+        """
+        n_dims = len(coordinates)
+        points = tf.concat(coordinates, axis=1, name='_points')
+
+        form = subconfig.get('form')
+        d0_coeff = form.get("d0", 0)
+        d1_coeffs = np.array(form.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
+        d2_coeffs = np.array(form.get("d2", np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
+
+        form_noise = subconfig.get('form_noise', {})
+        rhs_coeff_noise = form_noise.get('rhs', 0)
+        d0_coeff_noise = form_noise.get("d0", 0)
+        d1_coeffs_noise = np.array(form_noise.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
+        d2_coeffs_noise = np.array(form_noise.get("d2", np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
+
+
+        form_add = subconfig.get('form_add', {})
+        rhs_coeff_add = form_add.get('rhs', 0)
+        d0_coeff_add = form_add.get("d0", 0)
+        d1_coeffs_add = np.array(form_add.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
+        d2_coeffs_add = np.array(form_add.get("d2", np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
+
+
+
+        if ((d0_coeff == 0) and np.all(d1_coeffs == 0) and np.all(d2_coeffs == 0)):
+            raise ValueError('Nothing to compute. Some of the coefficients in "pde/form" must be non-zero')
+
+        def _callable(net):
+            """ Computes differential form. """
+            result = 0
+
+            # function itself
+            coeff = cls._make_coeff(points, d0_coeff, d0_coeff_noise, d0_coeff_add, name='d0', **subconfig)
+            if coeff != 0:
+                result += coeff * net
+
+            # derivatives of the first order
+            for i in range(n_dims):
+                coeff = cls._make_coeff(points, d1_coeffs[i], d1_coeffs_noise[i],
+                                        d1_coeffs_add[i], name='d1_{}'.format(i), **subconfig)
+                if coeff != 0:
+                    result += tf.multiply(tf.gradients(net, coordinates[i])[0], coeff)
+
+            # derivatives of the second order
+            for i in range(n_dims):
+                d1_ = tf.gradients(net, coordinates[i])[0]
+                for j in range(n_dims):
+                    coeff = cls._make_coeff(points, d2_coeffs[i, j], d2_coeffs_noise[i, j],
+                                            d2_coeffs_add[i, j], name='d2_{}_{}'.format(i, j), **subconfig)
+                    if coeff != 0:
+                        result += coeff * tf.gradients(d1_, coordinates[j])[0]
+
+            # change in right hand side
+            coeff = cls._make_coeff(points, 0, rhs_coeff_noise,
+                                    rhs_coeff_add, name='rhs', **subconfig)
+            result -= coeff
+            return result
+
+        setattr(_callable, '__name__', name)
+        return _callable
+
+
+    @classmethod
+    def _make_coeff(cls, points, coeff, coeff_noise, coeff_add, name, **kwargs):
+        noise = kwargs.get('noise_block')
+        addendum = kwargs.get('addendum_block')
+
+        if callable(coeff):
+            coeff = tf.reshape(coeff(points), shape=(-1, 1))
+        if coeff_noise != 0:
+            coeff += cls.noise_block(points, coeff_noise, name='noise/{}'.format(name), **noise)
+        if coeff_add != 0:
+            coeff += cls.addendum_block(points, coeff_add, name='addendums/{}'.format(name), **addendum)
+        return coeff
+
+
+    @classmethod
+    def noise_block(cls, inputs, scale, name='noise', **kwargs):
+        """ Add noise to coefficient/right hand side in order to simulate uncertainty in PDE.
+        Used to make solution robust.
+
+        Parameters
+        ----------
+        distribution : one of 'normal', 'uniform'
+            Distribution to draw noise from.
+
+        scale : float
+            Variation of drawed points.
+        """
+        distribution = kwargs.pop('distribution')
+        with tf.variable_scope(name):
+            if distribution == 'normal':
+                return tf.random.normal(shape=tf.shape(inputs), stddev=scale)
+            if distribution == 'uniform':
+                return tf.random.uniform(shape=tf.shape(inputs), minval=-scale, maxval=scale)
+
+
+    @classmethod
+    def addendum_block(cls, inputs, arg, name='addendum', **kwargs):
+        """ Trainable additions to coefficients/right hand side.
+        Used to slightly modify PDE in order to reflect additional constraints. For example,
+        one can train NN long enough to approximate the solution of the initial PDE-problem,
+        then alter NN in order to satisfy additional conditions,
+        then change PDE-problem to incorporate new information at hand.
+
+        Parameters
+        ----------
+        arg : int or dict
+            Parameters for :func:`~.layers.conv_block`.
+        """
+        if isinstance(arg, dict):
+            kwargs = {**kwargs, **arg}
+        with tf.variable_scope(name):
+            if kwargs.get('layout') is None:
+                return tf.Variable(0.0, dtype=tf.float32, name='addendum-multiplier')
+            return (tf.Variable(0.0, dtype=tf.float32, name='addendum-multiplier')
+                    * conv_block(inputs, **kwargs, name='addendum-conv'))
+
+
     def _make_inputs(self, names=None, config=None):
         """ Create necessary placeholders. """
         placeholders_, tensors_ = super()._make_inputs(names, config)
@@ -254,55 +383,15 @@ class DeepGalerkin(TFModel):
         points = getattr(self, 'inputs').get('points')
         rhs = config['pde/rhs']
         self.store_to_attr('targets', rhs(points))
+
+        # add additional targets
+        additional_rhs = config.get('pde/additional_rhs')
+
+        if additional_rhs is not None:
+            for name, rhs in additional_rhs.items():
+                self.store_to_attr(name, rhs(points))
         return placeholders_, tensors_
 
-    @classmethod
-    def _make_form_calculator(cls, subconfig, coordinates, name='_callable'):
-        """ Get callable that computes differential form of a tf.Tensor
-        with respect to coordinates.
-        """
-        n_dims = len(coordinates)
-        form = subconfig.pop('form')
-        d0_coeff = form.get('d0', 0)
-        d1_coeffs = np.array(form.get('d1', np.zeros(shape=(n_dims, )))).reshape(-1)
-        d2_coeffs = np.array(form.get('d2', np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
-        points = tf.concat(coordinates, axis=1, name='_points')
-
-        if ((d0_coeff == 0) and np.all(d1_coeffs == 0) and np.all(d2_coeffs == 0)):
-            raise ValueError('Nothing to compute. Some of the coefficients in "pde/form" must be non-zero')
-
-        def _callable(net):
-            """ Computes differential form. """
-            result = 0
-
-            # function itself
-            coeff = d0_coeff
-            if callable(coeff):
-                coeff = tf.reshape(coeff(points), shape=(-1, 1))
-            if coeff != 0:
-                result += coeff * net
-
-            # derivatives of the first order
-            for i, coeff in enumerate(d1_coeffs):
-                if callable(coeff):
-                    coeff = tf.reshape(coeff(points), shape=(-1, 1))
-                if coeff != 0:
-                    result += tf.multiply(tf.gradients(net, coordinates[i])[0], coeff)
-
-            # derivatives of the second order
-            for i in range(n_dims):
-                if np.any(d2_coeffs != 0):
-                    d1_ = tf.gradients(net, coordinates[i])[0]
-                    for j, coeff in enumerate(d2_coeffs[i, :]):
-                        if callable(coeff):
-                            coeff = tf.reshape(coeff(points), shape=(-1, 1))
-                        if coeff != 0:
-                            result += tf.multiply(tf.gradients(d1_, coordinates[j])[0], coeff)
-
-            return result
-
-        setattr(_callable, '__name__', name)
-        return _callable
 
     def _build(self, config=None):
         """ Overloads :meth:`.TFModel._build`: adds ansatz-block for binding
@@ -315,6 +404,7 @@ class DeepGalerkin(TFModel):
         output = self._add_block('ansatz', config, inputs=x)
         self.store_to_attr('solution', output)
         self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
+
 
     @classmethod
     def ansatz(cls, inputs, **kwargs):
@@ -439,12 +529,14 @@ class DeepGalerkin(TFModel):
 
         return _callable
 
+
     def predict(self, fetches=None, feed_dict=None, **kwargs):
         """ Get network-approximation of PDE-solution on a set of points. Overloads :meth:`.TFModel.predict` :
         `solution`-tensor is now considered to be the main model-output.
         """
         fetches = 'solution' if fetches is None else fetches
         return super().predict(fetches, feed_dict, **kwargs)
+
 
 
 class DGSolver():
