@@ -241,7 +241,7 @@ class Pipeline:
         """ Return index length """
         return len(self._actions)
 
-    def _add_action(self, name, *args, _name=None, **kwargs):
+    def _add_action(self, name, *args, _name=None, _args=None, **kwargs):
         """ Add new action to the log of future actions """
         actions = self._actions.copy()
         if name == CALL_FROM_NS_ID:
@@ -251,8 +251,10 @@ class Pipeline:
                             'method': method, 'save_to': save_to,
                             'proba': None, 'repeat': None})
         else:
-            actions.append({'name': name, 'args': args, 'kwargs': kwargs,
-                            'proba': None, 'repeat': None})
+            action = {'name': name, 'args': args, 'kwargs': kwargs, 'proba': None, 'repeat': None}
+            if _args:
+                action.update(**_args)
+            actions.append(action)
         new_p = self.from_pipeline(self, actions=actions)
         return new_p
 
@@ -458,7 +460,7 @@ class Pipeline:
 
     def inc_variable(self, name):
         """ Increment a value of a given variable during pipeline execution """
-        return self._add_action(INC_VARIABLE_ID, var_name=name)
+        return self._add_action(INC_VARIABLE_ID, _args=dict(var_name=name))
 
     def _exec_inc_variable(self, _, action):
         if self.has_variable(action['var_name']):
@@ -498,7 +500,7 @@ class Pipeline:
         until the pipeline is run. So it should be used in pipeline definition chains only.
         ``set_variable`` is imperative and may be used to change variable value within actions.
         """
-        return self._add_action(UPDATE_VARIABLE_ID, var_name=name, value=value, mode=mode)
+        return self._add_action(UPDATE_VARIABLE_ID, _args=dict(var_name=name, value=value, mode=mode))
 
     def save_to_variable(self, name, *args, **kwargs):
         """ Save a value to a given variable during pipeline execution """
@@ -544,7 +546,7 @@ class Pipeline:
 
         mode : str {'w', 'a', 'e', 'u'}
         """
-        return self._add_action(CALL_ID, *args, fn=fn, save_to=save_to, mode=mode, **kwargs)
+        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, mode=mode, **kwargs))
 
     def _exec_call(self, batch, action):
         fn = self._eval_expr(action['fn'], batch)
@@ -631,10 +633,10 @@ class Pipeline:
                     join_batches.append(jbatch)
 
                 if _action['name'] == MERGE_ID:
-                    if _action['merge_fn'] is None:
+                    if _action['fn'] is None:
                         batch, _ = batch.merge([batch] + join_batches)
                     else:
-                        batch, _ = _action['merge_fn']([batch] + join_batches)
+                        batch, _ = _action['fn']([batch] + join_batches)
                     join_batches = None
             elif _action['name'] == REBATCH_ID:
                 pass
@@ -733,7 +735,7 @@ class Pipeline:
         name : str
             a name with which the model is stored in this pipeline
         """
-        return self._add_action(IMPORT_MODEL_ID, source=model, pipeline=pipeline, model_name=name)
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, pipeline=pipeline, model_name=name))
 
     def _exec_import_model(self, batch, action):
         model_name = self._eval_expr(action['model_name'], batch=batch)
@@ -805,8 +807,8 @@ class Pipeline:
             train_data = batch.make_resnet_data(resnet_model)
             resnet_model.train(**train_data)
         """
-        return self._add_action(TRAIN_MODEL_ID, *args, model_name=name, make_data=make_data,
-                                save_to=save_to, mode=mode, **kwargs)
+        return self._add_action(TRAIN_MODEL_ID, *args, _args=dict(model_name=name, make_data=make_data,
+                                save_to=save_to, mode=mode), **kwargs)
 
     def predict_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
         """ Predict using a model
@@ -875,8 +877,8 @@ class Pipeline:
             predict_data = batch.make_deepnet_data(model=deepnet_model)
             deepnet_model.predict(**predict_data)
         """
-        return self._add_action(PREDICT_MODEL_ID, *args, model_name=name, make_data=make_data,
-                                save_to=save_to, mode=mode, **kwargs)
+        return self._add_action(PREDICT_MODEL_ID, *args, _args=dict(model_name=name, make_data=make_data,
+                                save_to=save_to, mode=mode), **kwargs)
 
     def _make_model_args(self, batch, action, model):
         make_data = action['make_data'] or {}
@@ -998,8 +1000,8 @@ class Pipeline:
             metrics = pipeline.get_variable('metrics')
             metrics.evaluate(['sensitivity', 'specificity'])
         """
-        return self._add_action(GATHER_METRICS_ID, *args, metrics_class=metrics_class,
-                                save_to=save_to, mode=mode, **kwargs)
+        return self._add_action(GATHER_METRICS_ID, *args, _args=dict(metrics_class=metrics_class,
+                                save_to=save_to, mode=mode), **kwargs)
 
     def _exec_gather_metrics(self, batch, action):
         metrics_class = self._eval_expr(action['metrics_class'], batch)
@@ -1018,17 +1020,17 @@ class Pipeline:
 
     def join(self, *pipelines):
         """ Join one or several pipelines """
-        return self._add_action(JOIN_ID, pipelines=pipelines, mode='i')
+        return self._add_action(JOIN_ID, _args=dict(pipelines=pipelines, mode='i'))
 
-    def merge(self, *pipelines, merge_fn=None):
+    def merge(self, *pipelines, fn=None):
         """ Merge pipelines """
-        return self._add_action(MERGE_ID, pipelines=pipelines, mode='n', merge_fn=merge_fn)
+        return self._add_action(MERGE_ID, _args=dict(pipelines=pipelines, mode='n', fn=fn))
 
-    def rebatch(self, batch_size, merge_fn=None):
+    def rebatch(self, batch_size, fn=None):
         """ Set the output batch size """
         new_p = type(self)(self.dataset)
-        return new_p._add_action(REBATCH_ID, batch_size=batch_size,    # pylint:disable=protected-access
-                                 pipeline=self, merge_fn=merge_fn)
+        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size,    # pylint:disable=protected-access
+                                 pipeline=self, fn=fn))
 
     def _put_batches_into_queue(self, gen_batch):
         while not self._stop_flag:
@@ -1130,10 +1132,10 @@ class Pipeline:
             if len(batches) == 0:
                 break
             else:
-                if _action['merge_fn'] is None:
+                if _action['fn'] is None:
                     batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
                 else:
-                    batch, self._rest_batch = _action['merge_fn'](batches, batch_size=_action['batch_size'])
+                    batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'])
                 yield batch
 
 

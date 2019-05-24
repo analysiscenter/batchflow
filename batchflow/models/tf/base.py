@@ -757,7 +757,7 @@ class TFModel(BaseModel):
             model.train(fetches='loss', images=B('images'), labels=B('labels'))
         """
         with self.graph.as_default():
-            feed_dict = {} if feed_dict is None else feed_dict
+            feed_dict = feed_dict or {}
             feed_dict = {**feed_dict, **kwargs}
             _feed_dict = self._fill_feed_dict(feed_dict, is_training=True)
             if fetches is None:
