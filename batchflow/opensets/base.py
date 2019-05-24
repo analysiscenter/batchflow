@@ -36,5 +36,5 @@ class Openset(Dataset):
 
 class ImagesOpenset(Openset):
     """ The base class for open datasets with images """
-    def __init__(self, index=None, batch_class=ImagesBatch, train_test=False, path=None):
-        super().__init__(index, batch_class, train_test, path)
+    def __init__(self, index=None, batch_class=ImagesBatch, *args, **kwargs):
+        super().__init__(index, batch_class, *args, **kwargs)
