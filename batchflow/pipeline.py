@@ -807,8 +807,9 @@ class Pipeline:
             train_data = batch.make_resnet_data(resnet_model)
             resnet_model.train(**train_data)
         """
-        return self._add_action(TRAIN_MODEL_ID, *args, _args=dict(model_name=name, make_data=make_data,
-                                save_to=save_to, mode=mode), **kwargs)
+        return self._add_action(TRAIN_MODEL_ID, *args,
+                                _args=dict(model_name=name, make_data=make_data, save_to=save_to, mode=mode),
+                                **kwargs)
 
     def predict_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
         """ Predict using a model
@@ -877,8 +878,9 @@ class Pipeline:
             predict_data = batch.make_deepnet_data(model=deepnet_model)
             deepnet_model.predict(**predict_data)
         """
-        return self._add_action(PREDICT_MODEL_ID, *args, _args=dict(model_name=name, make_data=make_data,
-                                save_to=save_to, mode=mode), **kwargs)
+        return self._add_action(PREDICT_MODEL_ID, *args,
+                                _args=dict(model_name=name, make_data=make_data, save_to=save_to, mode=mode),
+                                **kwargs)
 
     def _make_model_args(self, batch, action, model):
         make_data = action['make_data'] or {}
@@ -1000,8 +1002,9 @@ class Pipeline:
             metrics = pipeline.get_variable('metrics')
             metrics.evaluate(['sensitivity', 'specificity'])
         """
-        return self._add_action(GATHER_METRICS_ID, *args, _args=dict(metrics_class=metrics_class,
-                                save_to=save_to, mode=mode), **kwargs)
+        return self._add_action(GATHER_METRICS_ID, *args,
+                                _args=dict(metrics_class=metrics_class, save_to=save_to, mode=mode),
+                                **kwargs)
 
     def _exec_gather_metrics(self, batch, action):
         metrics_class = self._eval_expr(action['metrics_class'], batch)
@@ -1029,8 +1032,7 @@ class Pipeline:
     def rebatch(self, batch_size, fn=None):
         """ Set the output batch size """
         new_p = type(self)(self.dataset)
-        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size,    # pylint:disable=protected-access
-                                 pipeline=self, fn=fn))
+        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn))    # pylint:disable=protected-access
 
     def _put_batches_into_queue(self, gen_batch):
         while not self._stop_flag:
