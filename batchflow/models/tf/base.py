@@ -540,24 +540,25 @@ class TFModel(BaseModel):
         return tensor
 
     def _check_tensor(self, name):
-        valid = [item for item in self.graph.get_operations() if name in item.name]
-        if len(valid) == 1:
-            return valid[0].values()[0]
-
-        valid_output = [item for item in valid if item.name.endswith('_conv_block_output')]
-        if len(valid_output) == 1:
-            return valid_output[0].values()[0]
-
         if hasattr(self, name):
             return getattr(self, name)
 
+        valid = [item for item in self.graph.get_operations() if name in item.name]
+        if len(valid) != 1:
+            valid = [item for item in valid if item.name.endswith('_output')]
+
+        if len(valid) == 1:
+            return valid[0].values()[0]
+
+        if len(valid) > 1:
+            raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
         raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
 
     def _make_train_steps(self, config):
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
                                                 ('loss', 'decay', 'optimizer', 'scope')}}})
-            total = lambda loss: tf.losses.get_total_loss()
+            total = lambda _: tf.losses.get_total_loss()
         else:
             total = lambda loss: loss
 
@@ -817,8 +818,8 @@ class TFModel(BaseModel):
             input data, where key is a placeholder name and value is a numpy value
         use_lock : bool
             if True, the whole train step is locked, thus allowing for multithreading.
-        train_mode : str
-            name of train step to optimize
+        train_mode : str or sequence of str
+            name(s) of train step to optimize. Regular expressions are allowed.
 
         Returns
         -------
@@ -855,13 +856,21 @@ class TFModel(BaseModel):
             if use_lock:
                 self._train_lock.acquire()
 
+            if not isinstance(train_mode, (tuple, list)):
+                train_mode = [train_mode]
+
             _all_fetches = []
             if self.train_steps:
-                _all_fetches += [self.train_steps[train_mode]]
+                for mode in train_mode:
+                    if mode in self.train_steps.keys():
+                        _all_fetches += [self.train_steps[mode]]
+                    else:
+                        _all_fetches += [train_step for name, train_step in self.train_steps.items()
+                                         if re.search(mode, name) is not None]
             if _fetches is not None:
                 _all_fetches += [_fetches]
             if len(_all_fetches) > 0:
-                _, output = self.session.run(_all_fetches, feed_dict=_feed_dict)
+                *_, output = self.session.run(_all_fetches, feed_dict=_feed_dict)
             else:
                 output = None
 
