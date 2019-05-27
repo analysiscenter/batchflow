@@ -37,7 +37,6 @@ class Research:
         self.timeout = 5
         self.n_splits = None
         self.shuffle = None
-        self.framework = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
                      name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
@@ -251,7 +250,7 @@ class Research:
             raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
-            bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
+            bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
 
         """ Run research.
 
@@ -301,9 +300,6 @@ class Research:
             each job will be killed if it doesn't answer more then that time in minutes
         trails : int
             trails to execute job
-        framework : 'tf' or 'torch'
-            depends on the format of `C('device')`: `'/device:GPU:i'` for `'tf'` and `'cuda:i'` for `'torch'`.
-
 
         **How does it work**
 
@@ -324,7 +320,6 @@ class Research:
 
             self.n_splits = n_splits
             self.shuffle = shuffle
-            self.framework = framework
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
@@ -353,7 +348,7 @@ class Research:
 
         distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
-                  n_iters=self.n_iters, bar=self.bar, framework=self.framework)
+                  n_iters=self.n_iters, bar=self.bar)
         return self
 
     def __getstate__(self):

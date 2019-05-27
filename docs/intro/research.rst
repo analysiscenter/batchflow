@@ -358,7 +358,7 @@ Then run research with additional parameter `n_splits`:
 
 .. code-block:: python
 
-    research.run(workers=4, n_iters=5000, gpu=[4,5,6,7], n_splits=5, name='my_research', bar=True, framework='torch')
+    research.run(workers=4, n_iters=5000, gpu=[4,5,6,7], n_splits=5, name='my_research', bar=True)
 
 In the folder with results will be added additional subfolder and
 the full path is
