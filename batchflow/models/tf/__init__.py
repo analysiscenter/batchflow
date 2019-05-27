@@ -19,7 +19,7 @@ from .resattention import ResNetAttention, ResNetAttention56, ResNetAttention92
 from .densenet_fc import DenseNetFC, DenseNetFC56, DenseNetFC67, DenseNetFC103
 from .refinenet import RefineNet
 from .gcn import GlobalConvolutionNetwork as GCN
-from .encoder_decoder import EncoderDecoder
+from .encoder_decoder import EncoderDecoder, AutoEncoder, VariationalAutoEncoder
 from .pyramidnet import PyramidNet, PyramidNet18, PyramidNet34, PyramidNet50, PyramidNet101, PyramidNet152
 from .tf_sampler import TfSampler
 from .deep_galerkin import DeepGalerkin

@@ -122,6 +122,11 @@ class Batch:
         Returns
         -------
         batch, rest : tuple of two batches
+
+        Raises
+        ------
+        ValueError
+            If component is `None` in some batches and not `None` in others.
         """
         def _make_index(data):
             return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
@@ -151,6 +156,12 @@ class Batch:
         new_data = list(None for _ in components)
         rest_data = list(None for _ in components)
         for i, comp in enumerate(components):
+            none_components_in_batches = [b.get(component=comp) is None for b in batches]
+            if np.all(none_components_in_batches):
+                continue
+            elif np.any(none_components_in_batches):
+                raise ValueError('Component {} is None in some batches'.format(comp))
+
             if batch_size is None:
                 new_comp = [b.get(component=comp) for b in batches[:break_point]]
             else:
@@ -247,6 +258,11 @@ class Batch:
             new component names
         init : array-like
             initial component data
+
+        Raises
+        ------
+        ValueError
+            If the component with the given name already exists
         """
         if isinstance(components, str):
             components = (components,)
@@ -263,6 +279,11 @@ class Batch:
             self.components = tuple()
             data = tuple()
             warnings.warn("All batch data is erased")
+
+        exists_component = set(components) & set(self.components)
+        if exists_component:
+            raise ValueError("Component(s) with name(s) '{}' already exists".format("', '".join(exists_component)))
+
         self.components = self.components + components
 
         self.make_item_class(local=True)

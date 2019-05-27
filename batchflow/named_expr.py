@@ -9,10 +9,19 @@ class _DummyBatch:
 
 
 class NamedExpression:
-    """ Base class for a named expression """
-    def __init__(self, name, copy=False):
+    """ Base class for a named expression
+
+    Attributes
+    ----------
+    name : str
+        a name
+    mode : str
+        a default assignment method: write, append, extend, update.
+        Can be shrotened to jiust the first letter: w, a, e, u.
+    """
+    def __init__(self, name, mode='w'):
         self.name = name
-        self.copy = copy
+        self.mode = mode
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression
@@ -32,7 +41,7 @@ class NamedExpression:
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
         return self.name
 
-    def set(self, value, batch=None, pipeline=None, model=None, mode='w', eval=True):
+    def set(self, value, batch=None, pipeline=None, model=None, mode=None, eval=True):
         """ Set a value to a named expression
 
         Parameters
@@ -46,12 +55,14 @@ class NamedExpression:
             a model which should be used to calculate a value
             (usually omitted, but might be useful for F- and L-expressions)
         mode : str
-            an assignment method: write, append, extend, update
+            an assignment method: write, append, extend, update.
+            A default mode may be specified when instantiating an expression.
         eval : bool
             whether to evaluate value before assigning it to the expression
             (as value might contain other named expressions,
             so it should be processed recursively)
         """
+        mode = mode or self.mode
         if eval:
             value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
         if mode in ['a', 'append']:
@@ -175,8 +186,9 @@ class B(NamedExpression):
         B('images_shape')
         B(copy=True)
     """
-    def __init__(self, name=None, copy=True):
-        super().__init__(name, copy)
+    def __init__(self, name, mode='w', copy=False):
+        super().__init__(name, mode)
+        self.copy = copy
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a batch component """
@@ -212,7 +224,7 @@ class C(NamedExpression):
         try:
             value = config[name]
         except KeyError:
-            raise KeyError("Name is not found in the config", name) from None
+            raise KeyError("Name is not found in the config: %s" % name) from None
         return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):
@@ -233,8 +245,8 @@ class F(NamedExpression):
         F(MyBatch.rotate, angle=30)
         F(prepare_data, 115, item=10)
     """
-    def __init__(self, name=None, *args, _pass=True, **kwargs):
-        super().__init__(name)
+    def __init__(self, name, mode='w', *args, _pass=True, **kwargs):
+        super().__init__(name, mode)
         self.args = args
         self.kwargs = kwargs
         self._pass = _pass
@@ -262,8 +274,8 @@ class F(NamedExpression):
 
 class L(F):
     """ A function, method or any other callable """
-    def __init__(self, name=None, *args, **kwargs):
-        super().__init__(name, _pass=False, *args, **kwargs)
+    def __init__(self, name, mode='w', *args, **kwargs):
+        super().__init__(name, mode, _pass=False, *args, **kwargs)
 
 
 class V(NamedExpression):
@@ -338,7 +350,7 @@ class R(NamedExpression):
         R('poisson', lam=5.5, seed=42, size=3)
         R(['metro', 'taxi', 'bike'], p=[.6, .1, .3], size=10)
     """
-    def __init__(self, name=None, *args, state=None, seed=None, size=None, **kwargs):
+    def __init__(self, name, *args, state=None, seed=None, size=None, **kwargs):
         if not (callable(name) or isinstance(name, (str, NamedExpression))):
             args = (name,) + args
             name = 'choice'
@@ -403,7 +415,7 @@ class P(W):
     As P-wrapper is often used for ``R``-expressions, ``R`` can be omitted for brevity.
     So ``P('normal', 0, 1))`` is equivalent to ``P(R('normal', 0, 1)))``, but a bit shorter.
     """
-    def __init__(self, name=None, *args, **kwargs):
+    def __init__(self, name, *args, **kwargs):
         if not isinstance(name, NamedExpression):
             name = R(name, *args, **kwargs)
         if isinstance(name, R):

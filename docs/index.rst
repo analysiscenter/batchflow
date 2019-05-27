@@ -14,8 +14,8 @@ Main features:
 * within batch parallelism
 * batch prefetching
 * ready to use ML models and proven NN architectures
-* convenient layers and helper functions to build custom models.
-
+* convenient layers and helper functions to build custom models
+* a powerful research engine with parallel model training and extended experiment logging.
 
 Contents
 ========

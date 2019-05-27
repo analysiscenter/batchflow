@@ -32,7 +32,7 @@ as ``C('parameter_name')``:
         'input_block/inputs': 'images',
         'body/block/layout': C('layout'),
         'output/ops': 'accuracy',
-        'device': C('device') # it's technical parameter for TFModel
+        'device': C('tf_device') # it's technical parameter for TFModel
     }
 
 Strictly saying, the whole ``model_config`` with different
@@ -182,7 +182,7 @@ Method ``run`` starts computations:
 
 .. code-block:: python
 
-    research.run(n_reps=10, n_iters=1000, name='my_research', progress_bar=True)
+    research.run(n_reps=10, n_iters=1000, name='my_research', bar=True)
 
 All results will be saved as
 ``{research_name}/results/{config_alias}/{repetition_index}/{unitname}_{iteration}``
@@ -202,7 +202,7 @@ In that case you can run 4 jobs in parallel!
 
 .. code-block:: python
 
-    research.run(n_reps=10, n_iters=1000, workers=4, gpu=[0,1,2,3], name='my_research', progress_bar=True)
+    research.run(n_reps=10, n_iters=1000, workers=4, gpu=[0,1,2,3], name='my_research', bar=True)
 
 In that case, two workers will execute tasks in different processes
 on different GPU. If you use `TorchModel`, add parameter `framework='torch'` to `run`.
@@ -245,7 +245,7 @@ And now you can define the number of branches in each worker:
 
 .. code-block:: python
 
-    research.run(n_reps=2, n_iters=1000, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', progress_bar=True)
+    research.run(n_reps=2, n_iters=1000, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', bar=True)
 
 
 Dumping of results and logging
@@ -269,7 +269,7 @@ unit execution and dumping into log, define ``logging=True``.
         .add_function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
     )
 
-    research.run(n_reps=2, n_iters=1000, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', progress_bar=True)
+    research.run(n_reps=2, n_iters=1000, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', bar=True)
 
 First worker will execute two branches on GPU 0 and 1
 and the second on the 2 and 3.
@@ -303,7 +303,7 @@ and will be executed one time for all branches in task.
 
 .. code-block:: python
 
-    research.run(n_reps=1, n_iters=100, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', progress_bar=True)
+    research.run(n_reps=1, n_iters=100, workers=2, branches=2, gpu=[0,1,2,3], name='my_research', bar=True)
 
 Logfile:
 
@@ -358,7 +358,7 @@ Then run research with additional parameter `n_splits`:
 
 .. code-block:: python
 
-    research.run(workers=4, n_iters=5000, gpu=[4,5,6,7], n_splits=5, name='my_research', progress_bar=True, framework='torch')
+    research.run(workers=4, n_iters=5000, gpu=[4,5,6,7], n_splits=5, name='my_research', bar=True)
 
 In the folder with results will be added additional subfolder and
 the full path is

@@ -1,4 +1,6 @@
 """ Contains pipeline class """
+import sys
+from functools import partial
 import traceback
 import concurrent.futures as cf
 import asyncio
@@ -11,6 +13,7 @@ from .base import Baseset
 from .config import Config
 from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
+from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
@@ -28,6 +31,7 @@ INC_VARIABLE_ID = '#_inc_variable'
 UPDATE_VARIABLE_ID = '#_update_variable'
 CALL_ID = '#_call'
 PRINT_ID = '#_print'
+CALL_FROM_NS_ID = '#_from_ns'
 
 _ACTIONS = {
     IMPORT_MODEL_ID: '_exec_import_model',
@@ -38,6 +42,7 @@ _ACTIONS = {
     UPDATE_VARIABLE_ID: '_exec_update_variable',
     CALL_ID: '_exec_call',
     PRINT_ID: '_exec_print',
+    CALL_FROM_NS_ID: '_exec_from_ns',
 }
 
 
@@ -66,32 +71,40 @@ def hashable(x):
 
 class Pipeline:
     """ Pipeline """
-    def __init__(self, dataset=None, config=None, pipeline=None, proba=None, repeat=None):
+    def __init__(self, dataset=None, config=None, pipeline=None, actions=None, proba=None, repeat=None):
+        # pylint: disable=protected-access
 
         if pipeline is None:
             self.dataset = dataset
             self.config = config or {}
-            self._action_list = []
+            self._actions = actions or []
             self._lazy_run = None
             self.models = ModelDirectory()
             self.variables = VariableDirectory()
+            self.before = OncePipeline(self)
+            self.after = OncePipeline(self)
+            self._namespaces = []
         else:
             self.dataset = pipeline.dataset
             config = config or {}
             _config = pipeline.config or {}
             self.config = {**config, **_config}
-            self._action_list = pipeline._action_list[:]  # pylint: disable=protected-access
-            self.variables = VariableDirectory()
-            self.variables.create_many(pipeline.variables, pipeline=self)
+            self._actions = actions or pipeline._actions[:]
             if self.num_actions == 1:
                 if proba is not None:
                     if self.get_last_action_repeat() is None:
-                        self._action_list[-1]['proba'] = mult_option(proba, self.get_last_action_proba())
+                        self._actions[-1]['proba'] = mult_option(proba, self.get_last_action_proba())
                 elif repeat is not None:
                     if self.get_last_action_proba() is None:
-                        self._action_list[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
-            self._lazy_run = pipeline._lazy_run          # pylint: disable=protected-access
+                        self._actions[-1]['repeat'] = mult_option(repeat, self.get_last_action_repeat())
+            self._lazy_run = pipeline._lazy_run
+            self.variables = pipeline.variables.copy()
             self.models = pipeline.models.copy()
+            self._namespaces = pipeline._namespaces
+            self.before = pipeline.before
+            self.before.pipeline = self
+            self.after = pipeline.after
+            self.after.pipeline = self
 
         self.config = Config(self.config)
         self._stop_flag = False
@@ -103,7 +116,6 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
 
-
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
         return type(self)()
@@ -112,11 +124,11 @@ class Pipeline:
         pass
 
     @classmethod
-    def from_pipeline(cls, pipeline, proba=None, repeat=None):
+    def from_pipeline(cls, pipeline, actions=None, proba=None, repeat=None):
         """ Create a pipeline from another pipeline """
         if proba is None:
             if repeat is None:
-                new_p = cls(pipeline=pipeline)
+                new_p = cls(pipeline=pipeline, actions=actions)
             else:
                 if pipeline.num_actions == 1 and pipeline.get_last_action_proba() is None:
                     new_p = cls(pipeline=pipeline, repeat=repeat)
@@ -139,23 +151,27 @@ class Pipeline:
             raise ValueError("Cannot add pipelines with different datasets")
 
         new_p1 = cls.from_pipeline(pipe1)
-        new_p1._action_list += pipe2._action_list[:]
+        new_p1._actions += pipe2._actions[:]
         new_p1.config.update(pipe2.config)
         new_p1.variables += pipe2.variables
         new_p1.models += pipe2.models
         new_p1.dataset = new_p1.dataset or pipe2.dataset
         new_p1._lazy_run = new_p1._lazy_run or pipe2._lazy_run
+        new_p1.before = pipe1.before.concat(pipe1.before, pipe2.before)
+        new_p1.after = pipe1.after.concat(pipe1.after, pipe2.after)
         return new_p1
 
     def get_last_action_proba(self):
         """ Return a probability of the last action """
-        return self._action_list[-1]['proba']
+        return self._actions[-1]['proba']
 
     def get_last_action_repeat(self):
         """ Return a repeat count of the last action """
-        return self._action_list[-1]['repeat']
+        return self._actions[-1]['repeat']
 
     def __add__(self, other):
+        if isinstance(other, OncePipeline):
+            other = other.pipeline
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
         return self.concat(self, other)
@@ -186,41 +202,65 @@ class Pipeline:
         new_p.dataset = other
         return new_p
 
-    def _is_batch_method(self, name, cls=None):
-        if cls is None and self.dataset is not None:
-            cls = self.dataset.batch_class
+    def _is_batch_method(self, name, namespace=None):
+        if namespace is None and self.dataset is not None:
+            namespace = self.dataset.batch_class
         else:
             return True
-        if hasattr(cls, name) and callable(getattr(cls, name)):
+        if hasattr(namespace, name) and callable(getattr(namespace, name)):
             return True
-        return any(self._is_batch_method(name, subcls) for subcls in cls.__subclasses__())
+        return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
+
+    @property
+    def _all_namespaces(self):
+        return [sys.modules["__main__"]] + self._namespaces
+
+    def is_method_from_ns(self, name):
+        return any(hasattr(namespace, name) for namespace in self._all_namespaces)
+
+    def get_method(self, name):
+        """ Return a method by the name """
+        for namespace in self._all_namespaces:
+            if hasattr(namespace, name):
+                return getattr(namespace, name)
+        return None
 
     def __getattr__(self, name):
         """ Check if an unknown attr is an action from some batch class """
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
-            raise AttributeError()
+            raise AttributeError('Unknown magic method: %s' % name)
+        if self.is_method_from_ns(name):
+            return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         if self._is_batch_method(name):
-            self._action_list.append({'name': name})
-            return self.append_action
+            return partial(self._add_action, name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @property
     def num_actions(self):
         """ Return index length """
-        return len(self._action_list)
+        return len(self._actions)
 
-    def append_action(self, *args, **kwargs):
+    def _add_action(self, name, *args, _name=None, _args=None, **kwargs):
         """ Add new action to the log of future actions """
-        self._action_list[-1].update({'args': args, 'kwargs': kwargs, 'proba': None, 'repeat': None})
-        new_p = self.from_pipeline(self)
-        self._action_list = self._action_list[:-1]
+        actions = self._actions.copy()
+        if name == CALL_FROM_NS_ID:
+            method = self.get_method(_name)
+            save_to = kwargs.pop('save_to', None)
+            actions.append({'name': name, 'args': args, 'kwargs': kwargs,
+                            'method': method, 'save_to': save_to,
+                            'proba': None, 'repeat': None})
+        else:
+            action = {'name': name, 'args': args, 'kwargs': kwargs, 'proba': None, 'repeat': None}
+            if _args:
+                action.update(**_args)
+            actions.append(action)
+        new_p = self.from_pipeline(self, actions=actions)
         return new_p
 
     def append_pipeline(self, pipeline, proba=None, repeat=None):
         """ Add a nested pipeline to the log of future actions """
-        self._action_list.append({'name': PIPELINE_ID, 'pipeline': pipeline,
-                                  'proba': proba, 'repeat': repeat})
+        self._actions.append({'name': PIPELINE_ID, 'pipeline': pipeline, 'proba': proba, 'repeat': repeat})
 
     @property
     def index(self):
@@ -317,7 +357,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        self.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
+        self.before.init_variable(name, default, lock, **kwargs)
         return self
 
     def init_variables(self, variables):
@@ -420,8 +460,7 @@ class Pipeline:
 
     def inc_variable(self, name):
         """ Increment a value of a given variable during pipeline execution """
-        self._action_list.append({'name': INC_VARIABLE_ID, 'var_name': name})
-        return self.append_action()
+        return self._add_action(INC_VARIABLE_ID, _args=dict(var_name=name))
 
     def _exec_inc_variable(self, _, action):
         if self.has_variable(action['var_name']):
@@ -461,16 +500,18 @@ class Pipeline:
         until the pipeline is run. So it should be used in pipeline definition chains only.
         ``set_variable`` is imperative and may be used to change variable value within actions.
         """
-        self._action_list.append({'name': UPDATE_VARIABLE_ID, 'var_name': name, 'value': value, 'mode': mode})
-        return self.append_action()
+        return self._add_action(UPDATE_VARIABLE_ID, _args=dict(var_name=name, value=value, mode=mode))
+
+    def save_to_variable(self, name, *args, **kwargs):
+        """ Save a value to a given variable during pipeline execution """
+        return self.update_variable(name, *args, **kwargs)
 
     def _exec_update_variable(self, batch, action):
         self.set_variable(action['var_name'], action['value'], action['mode'], batch=batch)
 
     def print(self, *args, **kwargs):
         """ Print a value during pipeline execution """
-        self._action_list.append({'name': PRINT_ID})
-        return self.append_action(*args, **kwargs)
+        return self._add_action(PRINT_ID, *args, **kwargs)
 
     def _exec_print(self, batch, action):
         args_value = self._eval_expr(action['args'], batch=batch)
@@ -492,9 +533,41 @@ class Pipeline:
         except OSError:
             pass
 
-    def save_to_variable(self, name, *args, **kwargs):
-        """ Save a value to a given variable during pipeline execution """
-        return self.update_variable(name, *args, **kwargs)
+    def call(self, fn, save_to=None, mode='w', *args, **kwargs):
+        """ Call any function during pipeline execution
+
+        Parameters
+        ----------
+        fn : a function, method or callable to call.
+            Could be a named expression.
+
+        save_to : a named expression or a sequence of named expressions
+            A location where function output will be saved to.
+
+        mode : str {'w', 'a', 'e', 'u'}
+        """
+        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, mode=mode, **kwargs))
+
+    def _exec_call(self, batch, action):
+        fn = self._eval_expr(action['fn'], batch)
+        if callable(fn):
+            output = fn(batch, *action['args'], **action['kwargs'])
+        else:
+            raise TypeError("Callable is expected, but got {}".format(type(fn)))
+        if action['save_to'] is not None:
+            self._save_output(batch, None, output, action['save_to'], action['mode'])
+
+    def add_namespace(self, *namespaces):
+        self._namespaces.extend(namespaces)
+        return self
+
+    def _exec_from_ns(self, batch, action):
+        res = action['method'](*action['args'], **action['kwargs'])
+
+        if isinstance(action['save_to'], NamedExpression):
+            action['save_to'].set(res, batch=batch)
+        elif isinstance(action['save_to'], np.ndarray):
+            action['save_to'][:] = res
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -535,13 +608,13 @@ class Pipeline:
         if self._needs_exec(batch, action):
             repeat = self._eval_expr(action['repeat'], batch=batch) or 1
             for _ in range(repeat):
-                batch = self._exec_all_actions(batch, action['pipeline']._action_list)  # pylint: disable=protected-access
+                batch = self._exec_all_actions(batch, action['pipeline']._actions)  # pylint: disable=protected-access
         return batch
 
-    def _exec_all_actions(self, batch, action_list=None):
+    def _exec_all_actions(self, batch, actions=None):
         join_batches = None
-        action_list = action_list or self._action_list
-        for action in action_list:
+        actions = actions or self._actions
+        for action in actions:
             _action = action.copy()
             if 'args' in action:
                 _action['args'] = self._eval_expr(action['args'], batch=batch)
@@ -560,10 +633,10 @@ class Pipeline:
                     join_batches.append(jbatch)
 
                 if _action['name'] == MERGE_ID:
-                    if _action['merge_fn'] is None:
+                    if _action['fn'] is None:
                         batch, _ = batch.merge([batch] + join_batches)
                     else:
-                        batch, _ = _action['merge_fn']([batch] + join_batches)
+                        batch, _ = _action['fn']([batch] + join_batches)
                     join_batches = None
             elif _action['name'] == REBATCH_ID:
                 pass
@@ -614,31 +687,6 @@ class Pipeline:
     def _eval_expr(self, expr, batch=None, model=None):
         return eval_expr(expr, batch=batch, pipeline=self, model=model)
 
-    def call(self, fn, save_to=None, mode='w', *args, **kwargs):
-        """ Call any function during pipeline execution
-
-        Parameters
-        ----------
-        fn : a function, method or callable to call.
-            Could be a named expression.
-
-        save_to : a named expression or a sequence of named expressions
-            A location where function output will be saved to.
-
-        mode : str {'w', 'a', 'e', 'u'}
-        """
-        self._action_list.append({'name': CALL_ID, 'fn': fn, 'save_to': save_to, 'mode': mode})
-        return self.append_action(*args, **kwargs)
-
-    def _exec_call(self, batch, action):
-        fn = self._eval_expr(action['fn'], batch)
-        if callable(fn):
-            output = fn(batch, *action['args'], **action['kwargs'])
-        else:
-            raise TypeError("Callable is expected, but got {}".format(type(fn)))
-        if action['save_to'] is not None:
-            self._save_output(batch, None, output, action['save_to'], action['mode'])
-
     def get_model_by_name(self, name, batch=None):
         """ Retrieve a model by its name """
         name = self._eval_expr(name, batch=batch)
@@ -672,7 +720,7 @@ class Pipeline:
         >>> pipeline
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self.models.init_model(mode, model_class, name, config=config)
+        self.before.init_model(mode, model_class, name, config)
         return self
 
     def import_model(self, model, pipeline=None, name=None):
@@ -687,9 +735,7 @@ class Pipeline:
         name : str
             a name with which the model is stored in this pipeline
         """
-        self._action_list.append({'name': IMPORT_MODEL_ID, 'source': model, 'pipeline': pipeline,
-                                  'model_name': name})
-        return self.append_action()
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, pipeline=pipeline, model_name=name))
 
     def _exec_import_model(self, batch, action):
         model_name = self._eval_expr(action['model_name'], batch=batch)
@@ -761,9 +807,9 @@ class Pipeline:
             train_data = batch.make_resnet_data(resnet_model)
             resnet_model.train(**train_data)
         """
-        self._action_list.append({'name': TRAIN_MODEL_ID, 'model_name': name, 'make_data': make_data,
-                                  'save_to': save_to, 'mode': mode})
-        return self.append_action(*args, **kwargs)
+        return self._add_action(TRAIN_MODEL_ID, *args,
+                                _args=dict(model_name=name, make_data=make_data, save_to=save_to, mode=mode),
+                                **kwargs)
 
     def predict_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
         """ Predict using a model
@@ -832,9 +878,9 @@ class Pipeline:
             predict_data = batch.make_deepnet_data(model=deepnet_model)
             deepnet_model.predict(**predict_data)
         """
-        self._action_list.append({'name': PREDICT_MODEL_ID, 'model_name': name, 'make_data': make_data,
-                                  'save_to': save_to, 'mode': mode})
-        return self.append_action(*args, **kwargs)
+        return self._add_action(PREDICT_MODEL_ID, *args,
+                                _args=dict(model_name=name, make_data=make_data, save_to=save_to, mode=mode),
+                                **kwargs)
 
     def _make_model_args(self, batch, action, model):
         make_data = action['make_data'] or {}
@@ -894,11 +940,11 @@ class Pipeline:
         predictions = model.predict(*args, **kwargs)
         self._save_output(batch, model, predictions, action['save_to'], action['mode'])
 
-
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
         model = self.get_model_by_name(name)
         model.save(*args, **kwargs)
+        return self
 
     def gather_metrics(self, metrics_class, *args, save_to=None, mode='w', **kwargs):
         """ Collect metrics for a model
@@ -956,9 +1002,9 @@ class Pipeline:
             metrics = pipeline.get_variable('metrics')
             metrics.evaluate(['sensitivity', 'specificity'])
         """
-        self._action_list.append({'name': GATHER_METRICS_ID, 'metrics_class': metrics_class,
-                                  'save_to': save_to, 'mode': mode})
-        return self.append_action(*args, **kwargs)
+        return self._add_action(GATHER_METRICS_ID, *args,
+                                _args=dict(metrics_class=metrics_class, save_to=save_to, mode=mode),
+                                **kwargs)
 
     def _exec_gather_metrics(self, batch, action):
         metrics_class = self._eval_expr(action['metrics_class'], batch)
@@ -977,22 +1023,16 @@ class Pipeline:
 
     def join(self, *pipelines):
         """ Join one or several pipelines """
-        self._action_list.append({'name': JOIN_ID, 'pipelines': pipelines, 'mode': 'i'})
-        return self.append_action()
+        return self._add_action(JOIN_ID, _args=dict(pipelines=pipelines, mode='i'))
 
-    def merge(self, *pipelines, merge_fn=None):
+    def merge(self, *pipelines, fn=None):
         """ Merge pipelines """
-        self._action_list.append({'name': MERGE_ID, 'pipelines': pipelines,    # pylint: disable=protected-access
-                                  'mode': 'n', 'merge_fn': merge_fn})
-        return self.append_action()
+        return self._add_action(MERGE_ID, _args=dict(pipelines=pipelines, mode='n', fn=fn))
 
-    def rebatch(self, batch_size, merge_fn=None):
+    def rebatch(self, batch_size, fn=None):
         """ Set the output batch size """
         new_p = type(self)(self.dataset)
-        new_p._action_list.append({'name': REBATCH_ID, 'batch_size': batch_size,  # pylint: disable=protected-access
-                                   'pipeline': self, 'merge_fn': merge_fn})
-        return new_p.append_action()
-
+        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn))    # pylint:disable=protected-access
 
     def _put_batches_into_queue(self, gen_batch):
         while not self._stop_flag:
@@ -1067,7 +1107,7 @@ class Pipeline:
 
     def gen_rebatch(self, *args, **kwargs):
         """ Generate batches for rebatch operation """
-        _action = self._action_list[0]
+        _action = self._actions[0]
 
         if _action['pipeline'].dataset is None:
             pipeline = _action['pipeline'] << self.dataset
@@ -1094,10 +1134,10 @@ class Pipeline:
             if len(batches) == 0:
                 break
             else:
-                if _action['merge_fn'] is None:
+                if _action['fn'] is None:
                     batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
                 else:
-                    batch, self._rest_batch = _action['merge_fn'](batches, batch_size=_action['batch_size'])
+                    batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'])
                 yield batch
 
 
@@ -1136,15 +1176,15 @@ class Pipeline:
 
             See :meth:`DatasetIndex.gen_batch` for details.
 
-        bar : bool or 'n'
-            whether to show a `tqdm` progress bar.
-            If 'n', than uses `tqdm_notebook`.
+        bar : bool, 'n' or callable
+            Whether to show a progress bar.
+            If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
         prefetch : int
             a number of batches to process in advance (default=0)
 
         target : 'threads' or 'mpc'
-            batch parallization engine used for prefetching (default='threads').
+            batch parallelization engine used for prefetching (default='threads').
             'mpc' rarely works well due to complicated and slow python's inter-process communications.
 
         Yields
@@ -1176,7 +1216,7 @@ class Pipeline:
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
 
-        if len(self._action_list) > 0 and self._action_list[0]['name'] == REBATCH_ID:
+        if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
             prefetch = 0
         else:
@@ -1283,8 +1323,12 @@ class Pipeline:
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
 
+            if self.before:
+                self.before.run()
             for _ in self.gen_batch(*args, **kwargs):
                 pass
+            if self.after:
+                self.after.run()
         return self
 
     def run_now(self, *args, **kwargs):

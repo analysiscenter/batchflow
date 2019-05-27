@@ -362,7 +362,7 @@ def mjit(*args, nopython=True, nogil=True, **kwargs):
     def _jit(method):
         source = inspect.getsource(method).split('\n')
         indent = len(source[0]) - len(source[0].lstrip())
-        source = [s[indent:] for s in source if len(s) >= indent and s[indent] != '@']
+        source = [s[indent:] for s in source if len(s) > indent and s[indent] != '@']
         source = '\n'.join(source)
         globs = method.__globals__.copy()
         exec(source, globs)  # pylint: disable=exec-used

@@ -28,7 +28,6 @@ class Distributor:
         self.finished_jobs = None
         self.answers = None
         self.queue = None
-        self.framework = 'tf'
 
     def _jobs_to_queue(self, jobs):
         queue = mp.JoinableQueue()
@@ -60,8 +59,7 @@ class Distributor:
             gpu = self.gpu[start:end]
         return gpu
 
-    def run(self, jobs, dirname, n_jobs, n_iters, logfile=None, errorfile=None, progress_bar=False,
-            framework='tf', *args, **kwargs):
+    def run(self, jobs, dirname, n_jobs, n_iters, logfile=None, errorfile=None, bar=False, *args, **kwargs):
         """ Run disributor and workers.
 
         Parameters
@@ -74,12 +72,13 @@ class Distributor:
 
         errorfile : str (default: 'errors.log')
 
-        progress_bar : bool
+        bar : bool or callable
 
         args, kwargs
             will be used in worker
         """
-        self.framework = framework
+        if isinstance(bar, bool):
+            bar = tqdm if bar else None
 
         self.logfile = logfile or 'research.log'
         self.errorfile = errorfile or 'errors.log'
@@ -98,14 +97,13 @@ class Distributor:
                 worker_name=i,
                 timeout=self.timeout,
                 trials=self.trials,
-                framework=self.framework,
                 *args, **kwargs
                 )
                        for i in range(self.workers)]
         else:
             workers = [
                 self.worker_class(gpu=self._get_worker_gpu(len(self.workers), i), worker_name=i, config=config,
-                                  timeout=self.timeout, trials=self.trials, framework=self.framework, *args, **kwargs)
+                                  timeout=self.timeout, trials=self.trials, *args, **kwargs)
                 for i, config in enumerate(self.workers)
             ]
         try:
@@ -132,11 +130,11 @@ class Distributor:
             self.finished_jobs = []
 
 
-            if progress_bar:
+            if bar is not None:
                 if n_iters is not None:
                     print("Distributor has {} jobs with {} iterations. Totally: {}"
                           .format(n_jobs, n_iters, n_jobs*n_iters))
-                    with tqdm(total=n_jobs*n_iters) as progress:
+                    with bar(total=n_jobs*n_iters) as progress:
                         while True:
                             position = self._get_position()
                             progress.n = position
@@ -146,7 +144,7 @@ class Distributor:
                 else:
                     print("Distributor has {} jobs"
                           .format(n_jobs))
-                    with tqdm(total=n_jobs) as progress:
+                    with bar(total=n_jobs) as progress:
                         while True:
                             answer = self.results.get()
                             if answer.done:
@@ -183,7 +181,7 @@ class Worker:
     call init, run_job and post class methods.
     """
     def __init__(self, gpu, worker_name=None, logfile=None, errorfile=None,
-                 config=None, timeout=5, trials=2, framework='tf', *args, **kwargs):
+                 config=None, timeout=5, trials=2, *args, **kwargs):
         """
         Parameters
         ----------
@@ -211,7 +209,6 @@ class Worker:
         self.feedback_queue = None
         self.trial = 3
         self.worker = None
-        self.framework = framework
 
         if isinstance(worker_name, int):
             self.name = "Worker " + str(worker_name)
