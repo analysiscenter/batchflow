@@ -32,7 +32,7 @@ as ``C('parameter_name')``:
         'input_block/inputs': 'images',
         'body/block/layout': C('layout'),
         'output/ops': 'accuracy',
-        'device': C('device') # it's technical parameter for TFModel
+        'device': C('tf_device') # it's technical parameter for TFModel
     }
 
 Strictly saying, the whole ``model_config`` with different
