@@ -240,6 +240,7 @@ class TFModel(BaseModel):
         self.is_training = None
         self.global_step = None
         self.loss = None
+        self.microbatch = None
         self.train_steps = None
         self.optimizers = {}
         self._train_lock = threading.Lock()
@@ -282,6 +283,8 @@ class TFModel(BaseModel):
 
                 config = self.build_config()
                 self._build(config)
+
+                self.microbatch = config.get('microbatch')
 
                 if self.train_steps is None:
                     train_steps = self._make_train_steps(config)
