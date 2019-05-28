@@ -176,6 +176,7 @@ class TorchModel(BaseModel):
         self._inputs = dict()
         self.predictions = None
         self.loss = None
+        self.microbatch = None
 
         super().__init__(*args, **kwargs)
 
@@ -192,6 +193,9 @@ class TorchModel(BaseModel):
             self._make_loss(config)
         if self.optimizer is None:
             self._make_optimizer(config)
+
+        self.microbatch = config.get('microbatch', None)
+
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
@@ -418,6 +422,7 @@ class TorchModel(BaseModel):
         config['predictions'] = None
         config['output'] = None
         config['optimizer'] = ('Adam', dict())
+        config['microbatch'] = None
 
         return config
 
@@ -713,13 +718,34 @@ class TorchModel(BaseModel):
 
         if self.lr_decay:
             self.lr_decay()
-        self.optimizer.zero_grad()
 
-        self.predictions = self.model(inputs)
-        self.loss = self.loss_fn(self.predictions, targets)
+        if self.microbatch:
+            if len(inputs) % self.microbatch != 0:
+                raise ValueError("Inputs size should match microbatch size: %d and %d" %
+                                 (len(inputs), self.microbatch))
 
-        self.loss.backward()
-        self.optimizer.step()
+            self.optimizer.zero_grad()
+
+            steps = len(inputs) // self.microbatch
+            predictions = []
+            for i in range(0, len(inputs), self.microbatch):
+                inputs_ = inputs[i: i + self.microbatch]
+                targets_ = targets[i: i + self.microbatch]
+                predictions.append(self.model(inputs_))
+                self.loss = self.loss_fn(predictions[-1], targets_)
+                self.loss.backward()
+
+            self.optimizer.step()
+            self.predictions = torch.cat(predictions)
+            self.loss = self.loss / steps
+        else:
+            self.optimizer.zero_grad()
+
+            self.predictions = self.model(inputs)
+            self.loss = self.loss_fn(self.predictions, targets)
+
+            self.loss.backward()
+            self.optimizer.step()
 
         if use_lock:
             self._train_lock.release()
