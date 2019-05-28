@@ -725,7 +725,7 @@ class TorchModel(BaseModel):
 
         if self.microbatch:
             if len(inputs) % self.microbatch != 0:
-                raise ValueError("Inputs size should match microbatch size: %d and %d" %
+                raise ValueError("Inputs size should be evenly divisible by microbatch size: %d and %d" %
                                  (len(inputs), self.microbatch))
 
             self.optimizer.zero_grad()
