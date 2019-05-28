@@ -237,6 +237,7 @@ class TFModel(BaseModel):
         self.global_step = None
         self.loss = None
         self.train_steps = None
+        self.optimizers = {}
         self._train_lock = threading.Lock()
         self._attrs = []
         self._saver = None
@@ -557,7 +558,7 @@ class TFModel(BaseModel):
     def _make_train_steps(self, config):
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
-                                                ('loss', 'decay', 'optimizer', 'scope')}}})
+                                                ('loss', 'optimizer', 'decay', 'scope')}}})
             total = lambda _: tf.losses.get_total_loss()
         else:
             total = lambda loss: loss
@@ -566,20 +567,25 @@ class TFModel(BaseModel):
         for key, subconfig in config['train_steps'].items():
             # Pass values from higher level
             subconfig.update({key: subconfig.get(key) or config.get(key)
-                              for key in ('loss', 'decay', 'optimizer', 'scope')})
+                              for key in ('loss', 'optimizer', 'decay', 'scope')})
 
-            # Making loss and optimizer
+            # Make loss
             loss = self._make_loss(subconfig)
             loss_name = 'loss' if len(key) == 0 else 'loss_' + key
             self.store_to_attr(loss_name, total(loss))
-            optimizer_ = self._make_optimizer(subconfig)
+
+            # Create new optimizer or use one of the existing
+            if subconfig.get('reuse') is not None:
+                optimizer_ = self.optimizers[subconfig.get('reuse')]
+            else:
+                optimizer_ = self._make_optimizer(subconfig)
+            self.optimizers[key] = optimizer_
 
             # Parsing scope and making train step with it
             if optimizer_:
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
-                    scope = subconfig.get('scope')
-                    scope_collection = self._make_scope(scope)
+                    scope_collection = self._make_scope(subconfig)
                     train_step = optimizer_.minimize(self._check_tensor(loss_name),
                                                      global_step=self.global_step,
                                                      var_list=scope_collection)
@@ -621,22 +627,6 @@ class TFModel(BaseModel):
                     tf.losses.add_loss(tensor_loss)
         return tensor_loss
 
-    def _make_decay(self, config):
-        decay_name, decay_args = unpack_fn_from_config('decay', config)
-
-        if decay_name is None:
-            pass
-        elif callable(decay_name):
-            pass
-        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
-            decay_name = getattr(tf.train, decay_name)
-        elif decay_name in DECAYS:
-            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
-        else:
-            raise ValueError("Unknown learning rate decay method", decay_name)
-
-        return decay_name, decay_args
-
     def _make_optimizer(self, config):
         optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
 
@@ -660,7 +650,24 @@ class TFModel(BaseModel):
 
         return optimizer
 
-    def _make_scope(self, scopes):
+    def _make_decay(self, config):
+        decay_name, decay_args = unpack_fn_from_config('decay', config)
+
+        if decay_name is None:
+            pass
+        elif callable(decay_name):
+            pass
+        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
+            decay_name = getattr(tf.train, decay_name)
+        elif decay_name in DECAYS:
+            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
+        else:
+            raise ValueError("Unknown learning rate decay method", decay_name)
+
+        return decay_name, decay_args
+
+    def _make_scope(self, config):
+        scopes = config.get('scope')
         scopes = [scopes] if isinstance(scopes, str) else scopes
         if not isinstance(scopes, (list, tuple)):
             raise ValueError("'Scope' key should be either string or sequence of strings.")
