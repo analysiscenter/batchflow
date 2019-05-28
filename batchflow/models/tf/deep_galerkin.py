@@ -10,6 +10,7 @@ from tqdm import tqdm_notebook, tqdm
 from . import TFModel
 from .layers import conv_block
 
+
 class DeepGalerkin(TFModel):
     r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
     with constant or functional coefficients on rectangular domains using neural networks. Inspired by
@@ -266,14 +267,11 @@ class DeepGalerkin(TFModel):
         d1_coeffs_noise = np.array(form_noise.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
         d2_coeffs_noise = np.array(form_noise.get("d2", np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
 
-
         form_add = subconfig.get('form_add', {})
         rhs_coeff_add = form_add.get('rhs', 0)
         d0_coeff_add = form_add.get("d0", 0)
         d1_coeffs_add = np.array(form_add.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
         d2_coeffs_add = np.array(form_add.get("d2", np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
-
-
 
         if ((d0_coeff == 0) and np.all(d1_coeffs == 0) and np.all(d2_coeffs == 0)):
             raise ValueError('Nothing to compute. Some of the coefficients in "pde/form" must be non-zero')
@@ -343,9 +341,10 @@ class DeepGalerkin(TFModel):
         distribution = kwargs.pop('distribution')
         with tf.variable_scope(name):
             if distribution == 'normal':
-                return tf.random.normal(shape=tf.shape(inputs), stddev=scale)
+                noise = tf.random.normal(shape=tf.shape(inputs), stddev=scale)
             if distribution == 'uniform':
-                return tf.random.uniform(shape=tf.shape(inputs), minval=-scale, maxval=scale)
+                noise = tf.random.uniform(shape=tf.shape(inputs), minval=-scale, maxval=scale)
+        return noise
 
 
     @classmethod
@@ -366,8 +365,8 @@ class DeepGalerkin(TFModel):
         with tf.variable_scope(name):
             if kwargs.get('layout') is None:
                 return tf.Variable(0.0, dtype=tf.float32, name='addendum-multiplier')
-            return (tf.Variable(0.0, dtype=tf.float32, name='addendum-multiplier')
-                    * conv_block(inputs, **kwargs, name='addendum-conv'))
+            return (tf.Variable(0.0, dtype=tf.float32, name='addendum-multiplier') *
+                    conv_block(inputs, **kwargs, name='addendum-conv'))
 
 
     def _make_inputs(self, names=None, config=None):
