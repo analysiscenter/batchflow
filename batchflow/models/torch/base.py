@@ -105,6 +105,10 @@ class TorchModel(BaseModel):
         - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
         - ``{'optimizer': {'name': MyCustomOptimizer, momentum=0.95}}``
 
+    microbatch : int
+        make forward/backward pass with microbatches of a given size, but apply gradients after the whole batch.
+        Batch size should be evenly divisible by microbatch size.
+
     common : dict
         default parameters for all blocks (see :class:`.ConvBlock`)
 
