@@ -29,6 +29,8 @@ class BaseCIFAR(ImagesOpenset):
         self.bar = tqdm.tqdm(total=6) if bar else None
         super().__init__(*args, train_test=True, **kwargs)
         self.split()
+        if self.bar:
+            self.bar.close()
 
     def download(self, path=None):
         """ Load data from a web site and extract into numpy arrays """
