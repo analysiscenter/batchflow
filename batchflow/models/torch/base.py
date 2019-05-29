@@ -1,4 +1,5 @@
 """ Cotains base class for Torch models """
+import os
 import re
 import threading
 from functools import partial
@@ -688,10 +689,11 @@ class TorchModel(BaseModel):
             inputs = self._fill_value(inputs)
         return inputs
 
-    def _fill_input(self, inputs, targets):
-        inputs = self._fill_param(inputs)
-        targets = self._fill_param(targets)
-        return inputs, targets
+    def _fill_input(self, *args):
+        inputs = []
+        for arg in args:
+            inputs.append(self._fill_param(arg))
+        return tuple(inputs)
 
     def _fill_output(self, fetches):
         _fetches = [fetches] if isinstance(fetches, str) else fetches
@@ -710,13 +712,13 @@ class TorchModel(BaseModel):
 
         return output
 
-    def train(self, inputs, targets, fetches=None, use_lock=False):    # pylint: disable=arguments-differ
+    def train(self, *args, fetches=None, use_lock=False):    # pylint: disable=arguments-differ
         """ Train the model with the data provided
         """
         if use_lock:
             self._train_lock.acquire()
 
-        inputs, targets = self._fill_input(inputs, targets)
+        *inputs, targets = self._fill_input(*args)
 
         self.model.train()
 
@@ -724,18 +726,19 @@ class TorchModel(BaseModel):
             self.lr_decay()
 
         if self.microbatch:
-            if len(inputs) % self.microbatch != 0:
+            if len(inputs[0]) % self.microbatch != 0:
                 raise ValueError("Inputs size should be evenly divisible by microbatch size: %d and %d" %
                                  (len(inputs), self.microbatch))
 
             self.optimizer.zero_grad()
 
-            steps = len(inputs) // self.microbatch
+            steps = len(inputs[0]) // self.microbatch
             predictions = []
-            for i in range(0, len(inputs), self.microbatch):
-                inputs_ = inputs[i: i + self.microbatch]
+            for i in range(0, len(inputs[0]), self.microbatch):
+                inputs_ = [data[i: i + self.microbatch] for data in inputs]
                 targets_ = targets[i: i + self.microbatch]
-                predictions.append(self.model(inputs_))
+
+                predictions.append(self.model(*inputs_))
                 self.loss = self.loss_fn(predictions[-1], targets_)
                 self.loss.backward()
 
@@ -744,10 +747,8 @@ class TorchModel(BaseModel):
             self.loss = self.loss / steps
         else:
             self.optimizer.zero_grad()
-
-            self.predictions = self.model(inputs)
+            self.predictions = self.model(*inputs)
             self.loss = self.loss_fn(self.predictions, targets)
-
             self.loss.backward()
             self.optimizer.step()
 
@@ -761,14 +762,14 @@ class TorchModel(BaseModel):
 
         return output
 
-    def predict(self, inputs, targets=None, fetches=None):    # pylint: disable=arguments-differ
+    def predict(self, *args, fetches=None):    # pylint: disable=arguments-differ
         """ Get predictions on the data provided
         """
-        inputs, targets = self._fill_input(inputs, targets)
+        *inputs, targets = self._fill_input(*args)
         self.model.eval()
 
         with torch.no_grad():
-            self.predictions = self.model(inputs)
+            self.predictions = self.model(*inputs)
             if targets is None:
                 self.loss = None
             else:
@@ -799,6 +800,8 @@ class TorchModel(BaseModel):
         The model will be saved to /path/to/models/resnet34
         """
         _ = args, kwargs
+        if not os.path.exists(path):
+            os.mkdir(path)
         torch.save({
             'model_state_dict': self.model,
             'optimizer_state_dict': self.optimizer,
