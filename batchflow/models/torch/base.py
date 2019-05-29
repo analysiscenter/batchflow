@@ -182,12 +182,14 @@ class TorchModel(BaseModel):
         self.predictions = None
         self.loss = None
         self.microbatch = None
+        self._full_config = None
 
         super().__init__(*args, **kwargs)
 
     def build(self, *args, **kwargs):
         """ Build the model """
         config = self.build_config()
+        self._full_config = config
 
         if 'device' in config:
             self.device = torch.device(config['device'])
@@ -755,7 +757,7 @@ class TorchModel(BaseModel):
         if use_lock:
             self._train_lock.release()
 
-        config = self.build_config()
+        config = self._full_config
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
@@ -775,7 +777,7 @@ class TorchModel(BaseModel):
             else:
                 self.loss = self.loss_fn(self.predictions, targets)
 
-        config = self.build_config()
+        config = self._full_config
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
