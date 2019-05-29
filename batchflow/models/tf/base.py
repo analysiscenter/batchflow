@@ -148,6 +148,9 @@ class TFModel(BaseModel):
         loss, decay, scope, optimizer. Those keys support syntax defined above.
         If any of loss, decay, scope, optimizer is defined in config, it serves as default
         value for every train step.
+        Optimizer and decay, created at one train step, can be used in another. To do so, one can
+        pass 'use' key with value corresponding to the name of train step from which you want to borrow optimizer.
+        Note that in this case you are still free to change loss-function or scope.
 
         In order to use particular train step during train, one must pass `train_mode` argument
         to `train` method.
@@ -155,7 +158,8 @@ class TFModel(BaseModel):
         Examples:
 
         - ``{'train_steps': {'all': {'loss': 'ce', 'optimizer': 'Adam', 'scope': ''},
-                             'body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}}}``
+                             'body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}}
+                             'custom': {'use': 'body', 'loss': 'ce', 'scope': 'head'}}``
 
     common : dict
         default parameters for all :func:`.conv_block`
@@ -237,6 +241,7 @@ class TFModel(BaseModel):
         self.global_step = None
         self.loss = None
         self.train_steps = None
+        self.optimizers = {}
         self._train_lock = threading.Lock()
         self._attrs = []
         self._saver = None
@@ -557,29 +562,33 @@ class TFModel(BaseModel):
     def _make_train_steps(self, config):
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
-                                                ('loss', 'decay', 'optimizer', 'scope')}}})
+                                                ('optimizer', 'decay', 'loss', 'scope')}}})
             total = lambda _: tf.losses.get_total_loss()
         else:
             total = lambda loss: loss
 
+        # First pass through the config: pass values from higher level, create all of the optimizers
+        for key, subconfig in config['train_steps'].items():
+            subconfig.update({key: subconfig.get(key) or config.get(key)
+                              for key in ('optimizer', 'decay', 'loss', 'scope')})
+
+            if subconfig.get('optimizer') is not None:
+                optimizer = self._make_optimizer(subconfig)
+                self.optimizers[key] = optimizer
+
+        # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
         train_steps = {}
         for key, subconfig in config['train_steps'].items():
-            # Pass values from higher level
-            subconfig.update({key: subconfig.get(key) or config.get(key)
-                              for key in ('loss', 'decay', 'optimizer', 'scope')})
-
-            # Making loss and optimizer
             loss = self._make_loss(subconfig)
             loss_name = 'loss' if len(key) == 0 else 'loss_' + key
             self.store_to_attr(loss_name, total(loss))
-            optimizer_ = self._make_optimizer(subconfig)
 
-            # Parsing scope and making train step with it
+            optimizer_ = self.optimizers.get(subconfig.get('use')) or self.optimizers.get(key)
+
             if optimizer_:
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
-                    scope = subconfig.get('scope')
-                    scope_collection = self._make_scope(scope)
+                    scope_collection = self._make_scope(subconfig)
                     train_step = optimizer_.minimize(self._check_tensor(loss_name),
                                                      global_step=self.global_step,
                                                      var_list=scope_collection)
@@ -621,22 +630,6 @@ class TFModel(BaseModel):
                     tf.losses.add_loss(tensor_loss)
         return tensor_loss
 
-    def _make_decay(self, config):
-        decay_name, decay_args = unpack_fn_from_config('decay', config)
-
-        if decay_name is None:
-            pass
-        elif callable(decay_name):
-            pass
-        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
-            decay_name = getattr(tf.train, decay_name)
-        elif decay_name in DECAYS:
-            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
-        else:
-            raise ValueError("Unknown learning rate decay method", decay_name)
-
-        return decay_name, decay_args
-
     def _make_optimizer(self, config):
         optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
 
@@ -660,7 +653,24 @@ class TFModel(BaseModel):
 
         return optimizer
 
-    def _make_scope(self, scopes):
+    def _make_decay(self, config):
+        decay_name, decay_args = unpack_fn_from_config('decay', config)
+
+        if decay_name is None:
+            pass
+        elif callable(decay_name):
+            pass
+        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
+            decay_name = getattr(tf.train, decay_name)
+        elif decay_name in DECAYS:
+            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
+        else:
+            raise ValueError("Unknown learning rate decay method", decay_name)
+
+        return decay_name, decay_args
+
+    def _make_scope(self, config):
+        scopes = config.get('scope')
         scopes = [scopes] if isinstance(scopes, str) else scopes
         if not isinstance(scopes, (list, tuple)):
             raise ValueError("'Scope' key should be either string or sequence of strings.")
