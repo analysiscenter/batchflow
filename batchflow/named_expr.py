@@ -245,7 +245,7 @@ class F(NamedExpression):
         F(MyBatch.rotate, angle=30)
         F(prepare_data, 115, item=10)
     """
-    def __init__(self, name, mode='w', *args, _pass=True, **kwargs):
+    def __init__(self, name, *args, mode='w', _pass=True, **kwargs):
         super().__init__(name, mode)
         self.args = args
         self.kwargs = kwargs
@@ -274,8 +274,8 @@ class F(NamedExpression):
 
 class L(F):
     """ A function, method or any other callable """
-    def __init__(self, name, mode='w', *args, **kwargs):
-        super().__init__(name, mode, _pass=False, *args, **kwargs)
+    def __init__(self, name, *args, mode='w', **kwargs):
+        super().__init__(name, *args, mode=mode, _pass=False, **kwargs)
 
 
 class V(NamedExpression):
