@@ -146,5 +146,9 @@ class OncePipeline:
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
-        self.pipeline.save_model(name, *args, **kwargs)
+        self.pipeline.models.save_model(name, *args, **kwargs)
         return self
+
+    def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
+        """ Load a model """
+        self.pipeline.models.load_model(name, mode, model_class, name, *args, **kwargs)
