@@ -244,6 +244,7 @@ class TFModel(BaseModel):
         self.train_steps = None
         self.optimizers = {}
         self._train_lock = threading.Lock()
+        self._full_config = {}
         self._attrs = []
         self._saver = None
         self._to_classes = {}
@@ -282,8 +283,8 @@ class TFModel(BaseModel):
                         self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
                 config = self.build_config()
+                self._full_config = config
                 self._build(config)
-
                 self.microbatch = config.get('microbatch')
 
                 if self.session is None:
@@ -291,8 +292,7 @@ class TFModel(BaseModel):
                     self.reset()
 
                 if self.train_steps is None:
-                    train_steps = self._make_train_steps(config)
-                    self.store_to_attr('train_steps', train_steps)
+                    self._make_train_steps(config)
                 else:
                     self.store_to_attr('train_steps', self.train_steps)
 
@@ -561,7 +561,7 @@ class TFModel(BaseModel):
             raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
         raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
 
-    def _make_train_steps(self, config):
+    def _make_train_steps(self, config, init=True):
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
                                                 ('optimizer', 'decay', 'loss', 'scope')}}})
@@ -575,8 +575,8 @@ class TFModel(BaseModel):
                               for key in ('optimizer', 'decay', 'loss', 'scope')})
 
             if subconfig.get('optimizer') is not None:
-                optimizer = self._make_optimizer(subconfig)
-                self.optimizers[key] = optimizer
+                if self.optimizers.get(key) is None:
+                    self.optimizers[key] = self._make_optimizer(subconfig)
 
         # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
         train_steps = {}
@@ -591,19 +591,20 @@ class TFModel(BaseModel):
             with tf.control_dependencies(update_ops):
                 scope_collection = self._make_scope(subconfig)
 
-                if self.microbatch is None:
-                    train_step = optimizer.minimize(self._check_tensor(loss_name),
-                                                    global_step=self.global_step,
-                                                    var_list=scope_collection)
-                    train_steps.update({key: train_step})
-                else:
-                    zero_op, update_op, train_op = self._make_microbatch_ops(self._check_tensor(loss_name),
+                ops = []
+                minimize_op = optimizer.minimize(self._check_tensor(loss_name),
+                                                 global_step=self.global_step,
+                                                 var_list=scope_collection)
+                ops.append(minimize_op)
+                if self.microbatch:
+                    zero_op, update_op, apply_op = self._make_microbatch_ops(self._check_tensor(loss_name),
                                                                              optimizer,
                                                                              var_list=scope_collection)
-                    train_steps.update({key: (zero_op, update_op, train_op)})
-
-            self.session.run(tf.variables_initializer(optimizer.variables()))
-        return train_steps
+                    ops.extend([zero_op, update_op, apply_op])
+                train_steps.update({key: ops})
+            if init:
+                self.session.run(tf.variables_initializer(optimizer.variables()))
+        self.store_to_attr('train_steps', train_steps)
 
     def _make_loss(self, config):
         loss, args = unpack_fn_from_config('loss', config)
@@ -702,24 +703,27 @@ class TFModel(BaseModel):
         return total
 
     def _make_microbatch_ops(self, loss, optimizer, var_list):
-        with tf.variable_scope('microbatch_container'):
+        with tf.variable_scope('microbatch'):
             count = tf.Variable(0.0, dtype=tf.float32, trainable=False, name='count')
-            grad_accum = [tf.Variable(tf.zeros(var.shape), trainable=False)
+            grad_accum = [tf.Variable(np.empty(var.shape, dtype=np.float32), trainable=False)
                           for var in var_list]
 
-            zero_grad_ops = [var.assign(tf.zeros(var.shape)) for var in grad_accum]
-            zero_count_op = count.assign(tf.zeros(shape=(), dtype=tf.float32))
-            zero_op = zero_grad_ops + [zero_count_op]
+            with tf.variable_scope('zero_grad_accum'):
+                zero_grad_ops = [var.assign(tf.zeros(var.shape)) for var in grad_accum]
+                zero_count_op = count.assign(tf.zeros(shape=(), dtype=tf.float32))
+                zero_op = zero_grad_ops + [zero_count_op]
 
-            grad_and_vars = optimizer.compute_gradients(loss, var_list)
-            update_grad_ops = [grad_accum[i].assign_add(g) for i, (g, _) in enumerate(grad_and_vars)]
-            update_count_op = count.assign_add(tf.constant(1.0, dtype=tf.float32))
-            update_op = update_grad_ops + [update_count_op]
+            with tf.variable_scope('update_grad_accum'):
+                grad_and_vars = optimizer.compute_gradients(loss, var_list)
+                update_grad_ops = [grad_accum[i].assign_add(g) for i, (g, _) in enumerate(grad_and_vars)
+                                   if g is not None]
+                update_count_op = count.assign_add(tf.constant(1.0, dtype=tf.float32))
+                update_op = update_grad_ops + [update_count_op]
 
-            grad_and_vars = [(grad_accum[i] / count, v) for i, (_, v) in enumerate(grad_and_vars)]
-            train_op = optimizer.apply_gradients(grad_and_vars)
-        return zero_op, update_op, train_op
-
+            with tf.variable_scope('apply_grad_accum'):
+                grad_and_vars = [(grad_accum[i] / count, v) for i, (_, v) in enumerate(grad_and_vars)]
+                apply_op = optimizer.apply_gradients(grad_and_vars)
+        return zero_op, update_op, apply_op
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
@@ -846,7 +850,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None, use_lock=False, train_mode='', **kwargs):
+    def train(self, fetches=None, feed_dict=None, use_lock=False, train_mode='', microbatch=None, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -884,25 +888,37 @@ class TFModel(BaseModel):
             model.train(fetches='loss', images=B('images'), labels=B('labels'))
         """
         with self.graph.as_default():
+            # Use microbatch size from either args or config, and if
+            # necessary ops for microbatch-training are absent, create them
+            if microbatch is not False:
+                microbatch = microbatch or self.microbatch
+            self.microbatch = microbatch
+
+            if (microbatch is not False) and (len(list(self.train_steps.values())[0]) == 1):
+                self._make_train_steps(self._full_config, init=False)
+            print('MIIIII', microbatch)
+            if microbatch is True: # if config option is set to True, but train option left unspectified,
+                microbatch = False # it is faster to pretend that there is no microbatching
+
             # `feed_dict` processing: updating it with all kwargs,
             # optionally splitting it for microbatch train, resulting in list of feed_dicts,
             # updating every of them with `_fill_feed_dict` so tensorflow can work with it
             feed_dict = feed_dict or {}
             feed_dict = {**feed_dict, **kwargs}
-
-            if self.microbatch is None:
+            print('MI', microbatch)
+            if not microbatch:
                 _feed_dicts = [feed_dict]
             else:
                 splitted = {}
                 for key, value in feed_dict.items():
                     if hasattr(value, '__len__'):
-                        if len(value) % self.microbatch != 0:
+                        if len(value) % microbatch != 0:
                             raise ValueError('Batch size must be a divisible by microbatch size.')
-                        micro_iter = len(value) // self.microbatch
-                        splitted[key] = np.array_split(value, micro_iter)
+                        steps = len(value) // microbatch
+                        splitted[key] = np.array_split(value, steps)
 
                 _feed_dicts = [{key: value[i] for key, value in splitted.items()}
-                               for i in range(micro_iter)]
+                               for i in range(steps)]
 
             _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in _feed_dicts]
 
@@ -926,9 +942,9 @@ class TFModel(BaseModel):
                         train_fetches = [train_step for name, train_step in self.train_steps.items()
                                          if re.search(mode, name) is not None]
 
-                    if self.microbatch is None:
+                    if not microbatch:
                         # Run bunch of `minimize` operations (one for every train step)
-                        all_fetches = train_fetches
+                        all_fetches = [op[0] for op in train_fetches]
                         if _fetches is not None:
                             all_fetches += [_fetches]
                         if len(all_fetches) > 0:
@@ -938,18 +954,18 @@ class TFModel(BaseModel):
                         # then update them with gradients, computed on each of `feed_dicts`,
                         # and finally apply accumulated values to weights
                         outputs = []
-                        for zero_op, update_op, train_op in train_fetches:
+                        for _, zero_op, update_op, apply_op in train_fetches:
                             all_fetches = [update_op]
                             if _fetches is not None:
                                 all_fetches += [_fetches]
 
                             self.session.run(zero_op, feed_dict=_feed_dicts[0])
-                            for i in range(micro_iter):
+                            for i in range(steps):
                                 _, _output = self.session.run(all_fetches, feed_dict=_feed_dicts[i])
                                 outputs += [_output]
-                            self.session.run(train_op, feed_dict=_feed_dicts[-1])
+                            self.session.run(apply_op, feed_dict=_feed_dicts[-1])
 
-                        outputs = np.asarray(outputs)
+                        outputs = np.matrix(outputs)
                         output = [np.mean([outputs[:, i]]) if 'loss' in name else outputs[-1, i]
                                   for i, name in enumerate(fetches)]
             else:
