@@ -63,4 +63,7 @@ research = (Research()
     .add_function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
 )
 
-research.run(n_reps=1, n_iters=1000, workers=4, name='my_research', gpu=[2, 4, 5, 6])
+n_workers = 1 if len(sys.argv) <= 1 else int(sys.argv[1])
+gpu_list = [2, 4, 5, 6] if len(sys.argv) <= 2 else [int(item) for item in sys.argv[2]]
+
+research.run(n_reps=1, n_iters=1000, workers=n_workers, name='my_research', gpu=gpu_list[:n_workers])
