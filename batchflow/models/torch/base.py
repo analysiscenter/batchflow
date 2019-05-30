@@ -647,17 +647,17 @@ class TorchModel(BaseModel):
 
     def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
-        proba = torch.nn.Softplus()(inputs)
+        proba = torch.nn.functional.softplus(inputs)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
-        proba = torch.nn.Sigmoid()(inputs)
+        proba = torch.nn.functional.sigmoid(inputs)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
         axis = self.channels_axis(kwargs.get('data_format'))
-        proba = torch.nn.Softmax(dim=axis)(inputs)
+        proba = torch.nn.functional.softmax(inputs, dim=axis)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
