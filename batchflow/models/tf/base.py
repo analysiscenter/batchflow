@@ -894,9 +894,9 @@ class TFModel(BaseModel):
                 microbatch = microbatch or self.microbatch
             self.microbatch = microbatch
 
-            if (microbatch is not False) and (len(list(self.train_steps.values())[0]) == 1):
+            if (microbatch) and (len(list(self.train_steps.values())[0]) == 1):
                 self._make_train_steps(self._full_config, init=False)
-            print('MIIIII', microbatch)
+
             if microbatch is True: # if config option is set to True, but train option left unspectified,
                 microbatch = False # it is faster to pretend that there is no microbatching
 
@@ -905,7 +905,7 @@ class TFModel(BaseModel):
             # updating every of them with `_fill_feed_dict` so tensorflow can work with it
             feed_dict = feed_dict or {}
             feed_dict = {**feed_dict, **kwargs}
-            print('MI', microbatch)
+
             if not microbatch:
                 _feed_dicts = [feed_dict]
             else:
@@ -926,6 +926,7 @@ class TFModel(BaseModel):
             if fetches is None:
                 _fetches = tuple()
             else:
+                fetches = [fetches] if isinstance(fetches, str) else fetches
                 _fetches = self._fill_fetches(fetches, default=None)
 
             if not isinstance(train_mode, (tuple, list)):
