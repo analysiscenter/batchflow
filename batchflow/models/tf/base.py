@@ -974,8 +974,8 @@ class TFModel(BaseModel):
                                 outputs += [_output]
                             self.session.run(apply_op, feed_dict=_feed_dicts[-1])
 
-                        outputs = np.matrix(outputs)
-                        output = [np.mean([outputs[:, i]]) if 'loss' in name else outputs[-1, i]
+                        outputs = [[item[i] for item in outputs] for i, _ in enumerate(fetches)]
+                        output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
                                   for i, name in enumerate(fetches)]
             else:
                 output = None
