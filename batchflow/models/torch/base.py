@@ -802,13 +802,14 @@ class TorchModel(BaseModel):
         The model will be saved to /path/to/models/resnet34
         """
         _ = args, kwargs
-        if not os.path.exists(path):
-            os.mkdir(path)
+        #if not os.path.exists(path):
+        #    os.mkdir(path)
         torch.save({
             'model_state_dict': self.model,
             'optimizer_state_dict': self.optimizer,
             'loss': self.loss_fn,
-            'config': self.config
+            'config': self.config,
+            'full_config': self._full_config
             }, path)
 
     def load(self, path, *args, **kwargs):
@@ -843,6 +844,7 @@ class TorchModel(BaseModel):
         self.optimizer = checkpoint['optimizer_state_dict']
         self.loss_fn = checkpoint['loss']
         self.config = self.config + checkpoint['config']
+        self._full_config = checkpoint['full_config']
 
         self.device = device
 
