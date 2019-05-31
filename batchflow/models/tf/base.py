@@ -934,8 +934,9 @@ class TFModel(BaseModel):
             if fetches is None:
                 _fetches = tuple()
             else:
-                fetches = [fetches] if isinstance(fetches, str) else fetches
-                _fetches = self._fill_fetches(fetches, default=None)
+                names = [fetches] if isinstance(fetches, str) else fetches
+                _fetches = self._fill_fetches(names, default=None)
+
 
             if not isinstance(train_mode, (tuple, list)):
                 train_mode = [train_mode]
@@ -974,9 +975,10 @@ class TFModel(BaseModel):
                                 outputs += [_output]
                             self.session.run(apply_op, feed_dict=_feed_dicts[-1])
 
-                        outputs = [[item[i] for item in outputs] for i, _ in enumerate(fetches)]
+                        outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
                         output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
-                                  for i, name in enumerate(fetches)]
+                                  for i, name in enumerate(names)]
+                        output = output[0] if isinstance(fetches, str) else output
             else:
                 output = None
 
