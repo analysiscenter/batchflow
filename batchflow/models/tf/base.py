@@ -161,6 +161,11 @@ class TFModel(BaseModel):
                              'body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}}
                              'custom': {'use': 'body', 'loss': 'ce', 'scope': 'head'}}``
 
+    microbatch : int
+        size of chunks to split every batch in. Allows to process given data sequentially, accumulating gradients
+        from microbatches and applying them once in the end. Can be changed later in the `train` method.
+        Note that the microbatch size must be a divisor of the batch size.
+
     common : dict
         default parameters for all :func:`.conv_block`
 
@@ -863,6 +868,9 @@ class TFModel(BaseModel):
             if True, the whole train step is locked, thus allowing for multithreading.
         train_mode : str or sequence of str
             name(s) of train step to optimize. Regular expressions are allowed.
+        microbatch : int
+            size of chunks to split every batch in. Note that if this option was not specified
+            in the model configuration, the first invocation of this method would create additional operations.
 
         Returns
         -------
