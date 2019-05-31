@@ -802,8 +802,9 @@ class TorchModel(BaseModel):
         The model will be saved to /path/to/models/resnet34
         """
         _ = args, kwargs
-        #if not os.path.exists(path):
-        #    os.mkdir(path)
+        dirname = os.path.dirname(path)
+        if dirname and not os.path.exists(dirname):
+            os.mkdir(dirname)
         torch.save({
             'model_state_dict': self.model,
             'optimizer_state_dict': self.optimizer,
@@ -812,13 +813,16 @@ class TorchModel(BaseModel):
             'full_config': self._full_config
             }, path)
 
-    def load(self, path, *args, **kwargs):
+    def load(self, path, *args, eval=False, **kwargs):
         """ Load a torch model from files
 
         Parameters
         ----------
         path : str
             a directory where a model is stored
+
+        eval : bool
+            whether to switch the model to eval mode
 
         Examples
         --------
@@ -850,3 +854,6 @@ class TorchModel(BaseModel):
 
         if device:
             self.model.to(device)
+
+        if eval:
+            self.model.eval()
