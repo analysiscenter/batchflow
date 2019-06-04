@@ -714,8 +714,35 @@ class TorchModel(BaseModel):
 
         return output
 
-    def train(self, *args, fetches=None, use_lock=False):    # pylint: disable=arguments-differ
+    def train(self, *args, fetches=None, use_lock=False, microbatch=None):    # pylint: disable=arguments-differ
         """ Train the model with the data provided
+
+        Parameters
+        ----------
+        args
+            arguments to be passed directly into the model
+
+        fetches : tuple, list
+            a sequence of `tf.Operation` and/or `tf.Tensor` to calculate
+
+        use_lock : bool
+            if True, the whole train step is locked, thus allowing for multithreading.
+
+        microbatch : int or None
+            make forward/backward pass with microbatches of a given size, but apply gradients after the whole batch.
+            Batch size should be evenly divisible by microbatch size.
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same structure
+
+
+        Examples
+        --------
+
+        ::
+
+            model.train(B('images'), B('labels'), fetches='loss')
         """
         if use_lock:
             self._train_lock.acquire()
@@ -727,18 +754,19 @@ class TorchModel(BaseModel):
         if self.lr_decay:
             self.lr_decay()
 
-        if self.microbatch:
-            if len(inputs[0]) % self.microbatch != 0:
+        if self.microbatch or microbatch:
+            microbatch = self.microbatch or microbatch
+            if len(inputs[0]) % microbatch != 0:
                 raise ValueError("Inputs size should be evenly divisible by microbatch size: %d and %d" %
-                                 (len(inputs), self.microbatch))
+                                 (len(inputs), microbatch))
 
             self.optimizer.zero_grad()
 
-            steps = len(inputs[0]) // self.microbatch
+            steps = len(inputs[0]) // microbatch
             predictions = []
-            for i in range(0, len(inputs[0]), self.microbatch):
-                inputs_ = [data[i: i + self.microbatch] for data in inputs]
-                targets_ = targets[i: i + self.microbatch]
+            for i in range(0, len(inputs[0]), microbatch):
+                inputs_ = [data[i: i + microbatch] for data in inputs]
+                targets_ = targets[i: i + microbatch]
 
                 predictions.append(self.model(*inputs_))
                 self.loss = self.loss_fn(predictions[-1], targets_)
