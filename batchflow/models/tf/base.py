@@ -841,7 +841,7 @@ class TFModel(BaseModel):
 
         Notes
         -----
-        ``feed_dict`` is not required as all placeholder names and their data can be passed directly.
+        ``feed_dict`` is not required as all placeholder names and their data can be passed directly as named arguments
 
         Examples
         --------
