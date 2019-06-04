@@ -391,7 +391,7 @@ class Pipeline:
         So ``set_variable`` is imperative and may be used within actions, while ``update_variable``
         is declarative and should be used in pipeline definition chains.
         """
-        V(name).set(value, batch=batch, pipeline=self, mode=mode)
+        V(name, mode=mode).set(value, batch=batch, pipeline=self)
 
     def assign_variable(self, name, value, batch=None):
         """ Assign a value to a variable """
@@ -507,7 +507,7 @@ class Pipeline:
         except OSError:
             pass
 
-    def call(self, fn, save_to=None, mode='w', *args, **kwargs):
+    def call(self, fn, save_to=None, *args, **kwargs):
         """ Call any function during pipeline execution
 
         Parameters
@@ -517,10 +517,8 @@ class Pipeline:
 
         save_to : a named expression or a sequence of named expressions
             A location where function output will be saved to.
-
-        mode : str {'w', 'a', 'e', 'u'}
         """
-        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, mode=mode, **kwargs))
+        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, **kwargs))
 
     def _exec_call(self, batch, action):
         fn = self._eval_expr(action['fn'], batch)
@@ -529,7 +527,7 @@ class Pipeline:
         else:
             raise TypeError("Callable is expected, but got {}".format(type(fn)))
         if action['save_to'] is not None:
-            self._save_output(batch, None, output, action['save_to'], action['mode'])
+            self._save_output(batch, None, output, action['save_to'])
 
     def add_namespace(self, *namespaces):
         self._namespaces.extend(namespaces)
@@ -717,7 +715,7 @@ class Pipeline:
         pipeline = self._eval_expr(action['pipeline'], batch=batch)
         self.models.import_model(source, pipeline, model_name)
 
-    def train_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
+    def train_model(self, name, *args, make_data=None, save_to=None, **kwargs):
         """ Train a model
 
         Parameters
@@ -769,10 +767,10 @@ class Pipeline:
             resnet_model.train(**train_data)
         """
         return self._add_action(TRAIN_MODEL_ID, *args,
-                                _args=dict(model_name=name, make_data=make_data, save_to=save_to, mode=mode),
+                                _args=dict(model_name=name, make_data=make_data, save_to=save_to),
                                 **kwargs)
 
-    def predict_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
+    def predict_model(self, name, *args, make_data=None, save_to=None, **kwargs):
         """ Predict using a model
 
         Parameters
@@ -828,7 +826,7 @@ class Pipeline:
             deepnet_model.predict(**predict_data)
         """
         return self._add_action(PREDICT_MODEL_ID, *args,
-                                _args=dict(model_name=name, make_data=make_data, save_to=save_to, mode=mode),
+                                _args=dict(model_name=name, make_data=make_data, save_to=save_to),
                                 **kwargs)
 
     def _make_model_args(self, batch, action, model):
@@ -849,7 +847,7 @@ class Pipeline:
 
         return args, kwargs
 
-    def _save_output(self, batch, model, output, save_to, mode='w'):
+    def _save_output(self, batch, model, output, save_to):
         if not isinstance(save_to, (tuple, list)):
             save_to = [save_to]
             if isinstance(output, (tuple, list)):
@@ -866,7 +864,7 @@ class Pipeline:
                                  % model.name)
             item = output[i]
             if isinstance(var, NamedExpression):
-                var.set(item, batch=batch, model=model, mode=mode)
+                var.set(item, batch=batch, model=model)
             else:
                 if mode in ['a', 'append']:
                     var.append(item)
@@ -881,13 +879,13 @@ class Pipeline:
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         output = model.train(*args, **kwargs)
-        self._save_output(batch, model, output, action['save_to'], action['mode'])
+        self._save_output(batch, model, output, action['save_to'])
 
     def _exec_predict_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         predictions = model.predict(*args, **kwargs)
-        self._save_output(batch, model, predictions, action['save_to'], action['mode'])
+        self._save_output(batch, model, predictions, action['save_to'])
 
     def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
         """ Load a model """
@@ -915,7 +913,7 @@ class Pipeline:
         args, kwargs = self._make_model_args(batch, action, model)
         self.models.save_model(name, *args, **kwargs)
 
-    def gather_metrics(self, metrics_class, *args, save_to=None, mode='w', **kwargs):
+    def gather_metrics(self, metrics_class, *args, save_to=None, **kwargs):
         """ Collect metrics for a model
 
         Parameters
@@ -936,21 +934,17 @@ class Pipeline:
         save_to : a named expression
             A location where metrics will be saved to.
 
-        mode : str
-            a method of storing metrics::
-            - 'w' - overwrite saved metrics with a new value. This is a default mode.
-            - 'a' - append a new value to earlier saved metrics
-            - 'u' - update earlier saved metrics with a new value
-
         Notes
         -----
         For available metrics see :class:`metrics API <.metrics.Metrics>`.
 
-        Mode 'w' saves metrics for the last batch only which is convenient for metrics evaluation during training.
+        A mode can be passed to `save_to` expression:
 
-        Mode 'u' is more suitable to calculate metrics during testing / validation.
+        - 'w' saves metrics for the last batch only which is convenient for metrics evaluation during training.
 
-        Mode 'a' collects the history of batch metrics.
+        - 'u' is more suitable to calculate metrics during testing / validation.
+
+        - 'a' collects the history of batch metrics.
 
         Examples
         --------
@@ -964,7 +958,7 @@ class Pipeline:
                 .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
                                save_to=V('inferred_masks'))
                 .gather_metrics('masks', targets=B('masks'), predictions=V('inferred_masks'),
-                                fmt='proba', axis=-1, save_to=V('metrics'), mode='u')
+                                fmt='proba', axis=-1, save_to=V('metrics', mode='u'))
                 .run(BATCH_SIZE, bar=True)
             )
 
@@ -972,7 +966,7 @@ class Pipeline:
             metrics.evaluate(['sensitivity', 'specificity'])
         """
         return self._add_action(GATHER_METRICS_ID, *args,
-                                _args=dict(metrics_class=metrics_class, save_to=save_to, mode=mode),
+                                _args=dict(metrics_class=metrics_class, save_to=save_to),
                                 **kwargs)
 
     def _exec_gather_metrics(self, batch, action):
@@ -988,7 +982,7 @@ class Pipeline:
             raise TypeError('Metrics can be a string or a class', metrics_class)
 
         metrics = metrics_class(*action['args'], **action['kwargs'])
-        self._save_output(batch, None, metrics, action['save_to'], action['mode'])
+        self._save_output(batch, None, metrics, action['save_to'])
 
     def join(self, *pipelines):
         """ Join one or several pipelines """
