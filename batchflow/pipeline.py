@@ -866,14 +866,7 @@ class Pipeline:
             if isinstance(var, NamedExpression):
                 var.set(item, batch=batch, model=model)
             else:
-                if mode in ['a', 'append']:
-                    var.append(item)
-                elif mode in ['e', 'extend']:
-                    var.extend(item)
-                elif mode in ['u', 'update']:
-                    var.update(item)
-                else:
-                    save_to[i] = item
+                save_to[i] = item
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
