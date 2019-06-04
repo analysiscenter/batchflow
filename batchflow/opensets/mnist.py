@@ -47,6 +47,8 @@ class MNIST(ImagesOpenset):
         self.bar = tqdm.tqdm(total=8) if bar else None
         super().__init__(*args, train_test=True, **kwargs)
         self.split()
+        if self.bar:
+            self.bar.close()
 
     @property
     def _get_from_urls(self):

@@ -17,33 +17,7 @@ from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
-
-
-JOIN_ID = '#_join'
-MERGE_ID = '#_merge'
-REBATCH_ID = '#_rebatch'
-PIPELINE_ID = '#_pipeline'
-IMPORT_MODEL_ID = '#_import_model'
-TRAIN_MODEL_ID = '#_train_model'
-PREDICT_MODEL_ID = '#_predict_model'
-GATHER_METRICS_ID = '#_gather_metrics'
-INC_VARIABLE_ID = '#_inc_variable'
-UPDATE_VARIABLE_ID = '#_update_variable'
-CALL_ID = '#_call'
-PRINT_ID = '#_print'
-CALL_FROM_NS_ID = '#_from_ns'
-
-_ACTIONS = {
-    IMPORT_MODEL_ID: '_exec_import_model',
-    TRAIN_MODEL_ID: '_exec_train_model',
-    PREDICT_MODEL_ID: '_exec_predict_model',
-    GATHER_METRICS_ID: '_exec_gather_metrics',
-    INC_VARIABLE_ID: '_exec_inc_variable',
-    UPDATE_VARIABLE_ID: '_exec_update_variable',
-    CALL_ID: '_exec_call',
-    PRINT_ID: '_exec_print',
-    CALL_FROM_NS_ID: '_exec_from_ns',
-}
+from ._const import *       # pylint:disable=wildcard-import
 
 
 METRICS = dict(
@@ -101,9 +75,9 @@ class Pipeline:
             self.variables = pipeline.variables.copy()
             self.models = pipeline.models.copy()
             self._namespaces = pipeline._namespaces
-            self.before = pipeline.before
+            self.before = pipeline.before.copy()
             self.before.pipeline = self
-            self.after = pipeline.after
+            self.after = pipeline.after.copy()
             self.after.pipeline = self
 
         self.config = Config(self.config)
@@ -642,8 +616,8 @@ class Pipeline:
                 pass
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
-            elif _action['name'] in _ACTIONS:
-                action_fn = getattr(self, _ACTIONS[_action['name']])
+            elif _action['name'] in ACTIONS:
+                action_fn = getattr(self, ACTIONS[_action['name']])
                 action_fn(batch, _action)
             else:
                 if join_batches is None:
@@ -755,21 +729,8 @@ class Pipeline:
             a function or method to transform batch data to train parameters.
             Should return dict - kwargs for `model.train(...)`.
 
-        save_to : a named expression or a sequence of named expressions of type B or V
+        save_to : a named expression or a sequence of named expressions.
             A location where the model output will be stored.
-            This will rewrite the previous value in the location given.
-
-        mode : str {'w', 'a', 'e', 'u'}
-            a method of storing output
-
-            - 'w' - overwrite `save_to` location with a new value. This is a default mode.
-            - 'a' - append a new value to `save_to` location
-                    (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
-            - 'e' - extend `save_to` location with a new value
-                    (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
-            - 'u' - update `save_to` location with a new value
-                    (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
-                    or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update)
 
         Notes
         -----
@@ -823,19 +784,7 @@ class Pipeline:
             Should return dict - kwargs for `model.predict(...)`.
 
         save_to : a named expression or a sequence of named expressions of type B or V
-            A location where the model output will be stored
-
-        mode : str {'w', 'a', 'e', 'u'}
-            a method of storing output
-
-            - 'w' - overwrite `save_to` location with a new value. This is a default mode.
-            - 'a' - append a new value to `save_to` location
-                    (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
-            - 'e' - extend `save_to` location with a new value
-                    (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
-            - 'u' - update `save_to` location with a new value
-                    (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
-                    or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update)
+            A location where the model output will be stored.
 
         Notes
         -----
@@ -883,7 +832,7 @@ class Pipeline:
                                 **kwargs)
 
     def _make_model_args(self, batch, action, model):
-        make_data = action['make_data'] or {}
+        make_data = action.get('make_data') or  {}
         args = action['args']
         kwargs = dict()
 
@@ -940,11 +889,31 @@ class Pipeline:
         predictions = model.predict(*args, **kwargs)
         self._save_output(batch, model, predictions, action['save_to'], action['mode'])
 
+    def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
+        """ Load a model """
+        if mode == 'static':
+            self.models.load_model(mode, model_class, name, *args, **kwargs)
+            return self
+        return self._add_action(LOAD_MODEL_ID, *args,
+                                _args=dict(mode=mode, model_class=model_class, model_name=name),
+                                **kwargs)
+
+    def _exec_load_model(self, batch, action):
+        mode = self._eval_expr(action['mode'], batch=batch)
+        name = self._eval_expr(action['model_name'], batch=batch)
+        model_class = self._eval_expr(action['model_class'], batch=batch)
+        args, kwargs = self._make_model_args(batch, action, None)
+        self.models.load_model(mode, model_class, name, *args, **kwargs)
+
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
+        return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
+
+    def _exec_save_model(self, batch, action):
+        name = self._eval_expr(action['model_name'], batch=batch)
         model = self.get_model_by_name(name)
-        model.save(*args, **kwargs)
-        return self
+        args, kwargs = self._make_model_args(batch, action, model)
+        self.models.save_model(name, *args, **kwargs)
 
     def gather_metrics(self, metrics_class, *args, save_to=None, mode='w', **kwargs):
         """ Collect metrics for a model

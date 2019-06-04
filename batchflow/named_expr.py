@@ -18,6 +18,16 @@ class NamedExpression:
     mode : str
         a default assignment method: write, append, extend, update.
         Can be shrotened to jiust the first letter: w, a, e, u.
+
+        - 'w' - overwrite with a new value. This is a default mode.
+        - 'a' - append a new value
+                (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
+        - 'e' - extend with a new value
+                (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
+        - 'u' - update with a new value
+                (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
+                or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update)
+
     """
     def __init__(self, name, mode='w'):
         self.name = name

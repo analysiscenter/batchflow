@@ -91,7 +91,6 @@ def conv1d_transpose_nn(value, filters, output_shape, strides,
     value = tf.expand_dims(value, axis=axis)
     filters = tf.expand_dims(filters, axis=0)
     output_shape = tf.concat([output_shape[:axis], (1, ), output_shape[axis:]], axis=-1)
-    data_format = 'NHWC' if data_format == 'NWC' else 'NCHW'
     strides = strides[:axis] + [1] + strides[axis:]
     x = tf.nn.conv2d_transpose(value, filters, output_shape, strides,
                                padding, data_format, name)
