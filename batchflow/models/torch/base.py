@@ -755,7 +755,7 @@ class TorchModel(BaseModel):
             self.lr_decay()
 
         if self.microbatch or microbatch:
-            microbatch = self.microbatch or microbatch
+            microbatch = microbatch or self.microbatch
             if len(inputs[0]) % microbatch != 0:
                 raise ValueError("Inputs size should be evenly divisible by microbatch size: %d and %d" %
                                  (len(inputs), microbatch))
