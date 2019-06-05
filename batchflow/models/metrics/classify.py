@@ -193,8 +193,8 @@ class ClassificationMetrics(Metrics):
         return value[0] if isinstance(value, np.ndarray) and value.shape == (1, ) else value
 
     def _all_labels(self):
-        labels = 1 if self.skip_bg else 0
-        labels = list(range(labels, self.num_classes))
+        first = 1 if self.skip_bg else 0
+        labels = list(range(first, self.num_classes))
         return labels
 
     def _count(self, f, label=None):
@@ -293,7 +293,7 @@ class ClassificationMetrics(Metrics):
         return self.true_negative_rate(*args, **kwargs)
 
     def prevalence(self, *args, **kwargs):
-        return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs)
+        return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs, when_zero=(1, 0))
 
     def accuracy(self):
         """ An accuracy of detecting all the classes combined """
@@ -315,13 +315,13 @@ class ClassificationMetrics(Metrics):
         return self._calc_agg(self.true_negative, self.prediction_negative, *args, **kwargs, when_zero=(0, 1))
 
     def positive_likelihood_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, **kwargs)
+        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, **kwargs, when_zero=(1, 0))
 
     def negative_likelihood_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs)
+        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs, when_zero=(1, 0))
 
     def diagnostics_odds_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs)
+        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs, when_zero=(1,0))
 
     def f1_score(self, *args, **kwargs):
         return 2 / (1 / self.recall(*args, **kwargs) + 1 / self.precision(*args, **kwargs))

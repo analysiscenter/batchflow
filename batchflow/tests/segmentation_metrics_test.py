@@ -52,7 +52,7 @@ class TestShape:
 # @pytest.mark.parametrize('metrics_name', ['recall'])
 class TestResult:
     """
-    Return value shape tests for both types of metrics aggregation.
+    Return value tests for both types of metrics aggregation.
     """
 
     aggregation_params = [(None, None, np.array([1. , 1. , 0. , 0.5, 1. , 1. ])),
@@ -62,7 +62,7 @@ class TestResult:
 
     @pytest.mark.parametrize('batch_agg, multi_agg, exp', aggregation_params)
     def test_recall(self, batch_agg, multi_agg, exp):
-        
+
         targets = np.array([0, 1, 2, 2, 0, 0, 1, 1]).reshape(2,2,2)
         predics = np.array([0, 1, 1, 0, 2, 0, 1, 1]).reshape(2,2,2)
         metric = SegmentationMetricsByPixels(targets, predics, 'labels', 3)
