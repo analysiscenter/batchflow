@@ -31,12 +31,11 @@ class DeepGalerkin(TFModel):
         - form : dict
             may contain keys 'd0', d1' and 'd2', which define the coefficients before differentials
             of first two orders in lhs of the equation.
+
         - rhs : callable or const
             right-hand-side of the equation. If callable, must accept and return tf.Tensor.
-        - domain : list
-            defines the rectangular domain of the equation as a sequence of coordinate-wise bounds.
-        - bind_bc_ic : bool
-            If True, modifies the network-output to bind boundary and initial conditions.
+
+        Optional keys are:
         - initial_condition : callable or const or None or list
             If supplied, defines the initial state of the system as a function of
             spatial coordinates. In that case, PDE is considered to be an evolution equation
@@ -44,10 +43,44 @@ class DeepGalerkin(TFModel):
             while the last one is the time-variable. If the lhs of PDE contains second-order
             derivative w.r.t time, initial evolution-rate of the system must also be supplied.
             In this case, the arg is a `list` with two callables (constants).
+
         - time_multiplier : str or callable
             Can be either 'sigmoid', 'polynomial' or callable. Needed if `initial_condition`
             is supplied. Defines the multipliers applied to network for binding initial conditions.
             `sigmoid` works better in problems with asymptotic steady states (heat equation, e.g.).
+
+        - bind_bc_ic : bool
+            If True, modifies the network-output to bind boundary and initial conditions.
+
+        - domain : list
+            defines the rectangular domain of the equation as a sequence of coordinate-wise bounds.
+
+        - form_noise : dict
+            allows to slightly distort PDE coefficients on each train iteration. Has the same structure,
+            as `form` key, and each coefficient determines the scale of applied noise. Besides 'd0', 'd1', 'd2' keys
+            it also may have 'rhs' key to apply noise directly to the right-hand side of the equation.
+
+        - form_add : dict
+            allows to add trainable networks to each coefficient of the PDE. Every value determines whether to add
+            trainable network to that coefficient or not. Has the same structure as form_noise.
+
+        - noise_block : dict
+            common parameters for noise, like distribution to draw points from.
+
+        - addendum_block : dict
+            common parameters for trainable additions to coefficients.
+            To learn more about, check :func:`~.layers.conv_block`.
+
+        - additional_lhs : dict
+            store additional expressions of approximator. Must be a mapping from names
+            into dictionary with parameters for expression.
+            Example:
+            - ``{'additional_lhs': {'my_expression': {'form': {'d0': 1,
+                                                               'd1': (1, 2)}}}}``
+
+        - additional_rhs : dict
+            store additional target. Must be a mapping from names to callables, that accept and return tf.Tensor's.
+
 
     `output`-dict allows for logging of differentials of the solution-approximator. Can be used for
     keeping track on the model-training process. See more details here: :meth:`.DeepGalerkin.output`.
@@ -538,7 +571,7 @@ class DeepGalerkin(TFModel):
 
 
 
-class DGSolver():
+class DGSolver:
     """ Wrapper around `DeepGalerkin` to surpass BatchFlow's syntax sugar.
 
     Parameters
@@ -547,11 +580,11 @@ class DGSolver():
         Configuration of model. Supports all of the options from `DeepGalerkin`.
     """
 
-    def __init__(self, model_config, dg_class=DeepGalerkin):
-        self.model = dg_class(model_config)
+    def __init__(self, config, model_class=DeepGalerkin):
+        self.model = model_class(config)
 
 
-    def fit(self, sampler, batch_size, n_iters, train_mode='', fetches=None, bar=False):
+    def fit(self, batch_size, sampler, n_iters, train_mode='', fetches=None, bar=False):
         """ Train model on batches of sampled points.
 
         Parameters
@@ -574,14 +607,7 @@ class DGSolver():
 
         bar : str
             Whether to show progress bar during training.
-
-        Returns
-        -------
-        list
-            Loss history for initialized model. Calculated across all of
-            the `fit` calls.
         """
-        fetches = fetches or 'loss'
         fetches = [fetches] if isinstance(fetches, str) else fetches
 
         for name in fetches:
@@ -598,8 +624,8 @@ class DGSolver():
 
         for _ in iterator:
             points = sampler.sample(batch_size)
-            tensors = self.model.train(fetches=fetches, feed_dict={'points': points}, train_mode=train_mode)
-            for tensor, name in zip(tensors, fetches):
+            fetched = self.model.train(fetches=fetches, feed_dict={'points': points}, train_mode=train_mode)
+            for tensor, name in zip(fetched, fetches):
                 getattr(self, name).append(tensor)
 
 
