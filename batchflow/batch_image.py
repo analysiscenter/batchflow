@@ -1075,10 +1075,12 @@ class ImagesBatch(BaseImagesBatch):
             return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape))[..., 0])
         return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape)))
 
-    def _assemble_patches_PIL(self, all_results, *args, dst, **kwargs):
-        """ Assemble patches and save information to make is possible to
+    def _assemble_patches_pil(self, all_results, *args, dst, **kwargs):
+        """Assemble patches and save information to make is possible to
             collect image again.
-        # """
+        """
+        _ = args, kwargs
+
         if not isinstance(dst, (list, tuple)):
             dst = [dst]
 
@@ -1086,21 +1088,24 @@ class ImagesBatch(BaseImagesBatch):
 
         comp_dict = {}
         for i, dst_comp in enumerate(dst):
-            comp_dict[dst_comp] = np.array([patch for img_patches in all_results[i] for patch in img_patches], dtype=object)
+            comp_dict[dst_comp] = np.array([patch for img_patches in all_results[i]
+                                            for patch in img_patches], dtype=object)
         comp_dict['crop_origins'] = np.array([co for img_cos in all_results[-1] for co in img_cos])
         comp_dict['original_shapes'] = np.array([os for img_oss in all_results[-2] for os in img_oss])
 
-        batch_len = len(comp_dict[dst_comp])
+        batch_len = len(comp_dict['crop_origins'])
 
         new_batch = type(self)(index=np.arange(batch_len), **comp_dict)
 
         return new_batch
 
     @action
-    @inbatch_parallel(init='indices', post='_assemble_patches_PIL')
-    def split_to_patches_PIL(self, ix, shape, src=None, dst=None):
-        """ Split PIL images to patches.
+    @inbatch_parallel(init='indices', post='_assemble_patches_pil')
+    def split_to_patches_pil(self, ix, shape, src=None, dst=None):
+        """Split PIL images to patches.
         """
+        _ = dst
+
         if not isinstance(src, (list, tuple)):
             src = [src]
 
@@ -1145,11 +1150,9 @@ class ImagesBatch(BaseImagesBatch):
     @action
     @inbatch_parallel(init='indices', post='_assembple_patches_numpy')
     def split_to_patches_numpy(self, ix, shape, strides, src=None, dst=None):
+        """Split ndarray images to patches.
         """
-        """
-
-        if (image.ndim < 2 or image.ndim > 3):
-            raise ValueError("Image should be 2D or 3D ndarray!")
+        _ = dst
 
         if not isinstance(src, (list, tuple)):
             src = [src]
@@ -1159,6 +1162,9 @@ class ImagesBatch(BaseImagesBatch):
         for src_comp in src:
 
             image = self.get(ix, src_comp)
+
+            if (image.ndim < 2 or image.ndim > 3):
+                raise ValueError("Image should be 2D or 3D ndarray!")
 
             size_x, size_y = shape
             stride_x, stride_y = strides
@@ -1174,8 +1180,8 @@ class ImagesBatch(BaseImagesBatch):
             new_shape = (x_crops, y_crops, size_x, size_y) + old_shape[2:]
 
             new_strides = (image.itemsize * stride_y * np.product(np.array(old_shape[1:]), dtype=int),
-                        image.itemsize * stride_y * np.product(np.array(old_shape[2:]), dtype=int),
-                        *old_strides)
+                           image.itemsize * stride_y * np.product(np.array(old_shape[2:]), dtype=int),
+                           *old_strides)
 
             result.append(np.lib.stride_tricks.as_strided(image, new_shape, new_strides).reshape(-1, *new_shape[2:]))
 
@@ -1198,7 +1204,7 @@ class ImagesBatch(BaseImagesBatch):
             src = [src]
 
         if np.all([isinstance(getattr(self, comp)[0], PIL.Image.Image) for comp in src]):
-            return split_to_patches_PIL(shape, strides, src, dst)
-        elif np.all([isinstance(getattr(self, comp)[0], np.ndarray) for comp in src]):
-            return split_to_patches_numpy (shape, strides, src, dst)
+            return self.split_to_patches_pil(shape, strides, src, dst)
+        if np.all([isinstance(getattr(self, comp)[0], np.ndarray) for comp in src]):
+            return self.split_to_patches_numpy(shape, strides, src, dst)
         raise ValueError('Components should be in same format')
