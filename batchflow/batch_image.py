@@ -986,69 +986,6 @@ class ImagesBatch(BaseImagesBatch):
         image.paste(PIL.Image.new('RGB', tuple(shape), tuple(color)), tuple(origin))
         return image
 
-    def _assemble_patches(self, patches, *args, dst, **kwargs):
-        """ Assembles patches after parallel execution.
-
-        Parameters
-        ----------
-        patches : sequence
-            Patches to gather. pathces.shape must be like (batch.size, patches_i, patch_height, patch_width, n_channels)
-        dst : str
-            Component to put patches in.
-        """
-        _ = args, kwargs
-        new_items = np.concatenate(patches)
-        setattr(self, dst, new_items)
-
-    @action
-    @inbatch_parallel(init='indices', post='_assemble_patches')
-    def split_to_patches(self, ix, patch_shape, stride=1, drop_last=False, src='images', dst=None):
-        """ Splits image to patches.
-
-        Small images with the same shape (``patch_shape``) are cropped from the original one with stride ``stride``.
-
-        Parameters
-        ----------
-        patch_shape : int, sequence
-            Patch's shape in the from (rows, columns). If int is given then patches have square shape.
-        stride : int, square
-            Step of the moving window from which patches are cropped. If int is given then the window has square shape.
-        drop_last : bool
-            Whether to drop patches whose window covers area out of the image.
-            If False is passed then these patches are cropped from the edge of an image. See more in tutorials.
-        src : str
-            Component to get images from. Default is 'images'.
-        dst : str
-            Component to write images to. Default is 'images'.
-        p : float
-            Probability of applying the transform. Default is 1.
-        """
-        _ = dst
-        image = self.get(ix, src)
-        image_shape = self._get_image_shape(image)
-        image = np.array(image)
-        stride = (stride, stride) if isinstance(stride, Number) else stride
-        patch_shape = (patch_shape, patch_shape) if isinstance(patch_shape, Number) else patch_shape
-        patches = []
-
-        def _iterate_columns(row_from, row_to):
-            column = 0
-            while column < image_shape[1]-patch_shape[1]+1:
-                patches.append(PIL.Image.fromarray(image[row_from:row_to, column:column+patch_shape[1]]))
-                column += stride[1]
-            if not drop_last and column + patch_shape[1] != image_shape[1]:
-                patches.append(PIL.Image.fromarray(image[row_from:row_to,
-                                                         image_shape[1]-patch_shape[1]:image_shape[1]]))
-
-        row = 0
-        while row < image_shape[0]-patch_shape[0]+1:
-            _iterate_columns(row, row+patch_shape[0])
-            row += stride[0]
-        if not drop_last and row + patch_shape[0] != image_shape[0]:
-            _iterate_columns(image_shape[0]-patch_shape[0], image_shape[0])
-
-        return np.array(patches, dtype=object)
-
     def _additive_noise_(self, image, noise, clip=False, preserve_type=False):
         """ Add additive noise to an image.
 
@@ -1137,3 +1074,131 @@ class ImagesBatch(BaseImagesBatch):
         if shape[-1] == 1:
             return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape))[..., 0])
         return PIL.Image.fromarray(np.uint8(distored_image.reshape(image.shape)))
+
+    def _assemble_patches_PIL(self, all_results, *args, dst, **kwargs):
+        """ Assemble patches and save information to make is possible to
+            collect image again.
+        # """
+        if not isinstance(dst, (list, tuple)):
+            dst = [dst]
+
+        all_results = list(zip(*all_results))
+
+        comp_dict = {}
+        for i, dst_comp in enumerate(dst):
+            comp_dict[dst_comp] = np.array([patch for img_patches in all_results[i] for patch in img_patches], dtype=object)
+        comp_dict['crop_origins'] = np.array([co for img_cos in all_results[-1] for co in img_cos])
+        comp_dict['original_shapes'] = np.array([os for img_oss in all_results[-2] for os in img_oss])
+
+        batch_len = len(comp_dict[dst_comp])
+
+        new_batch = type(self)(index=np.arange(batch_len), **comp_dict)
+
+        return new_batch
+
+    @action
+    @inbatch_parallel(init='indices', post='_assemble_patches_PIL')
+    def split_to_patches_PIL(self, ix, shape, src=None, dst=None):
+        """ Split PIL images to patches.
+        """
+        if not isinstance(src, (list, tuple)):
+            src = [src]
+
+        results = []
+
+        for src_comp in src:
+
+            patches = []
+
+            image = self.get(ix, src_comp)
+            image_shape = np.array(self._get_image_shape(image))
+
+            num_cuts = np.ceil(image_shape / shape).astype(int)
+            pad = num_cuts * shape - image_shape
+            crop_origin = - pad // 2
+
+            x_cuts = crop_origin[0] + np.cumsum(np.repeat(shape[0], num_cuts[0])) - shape[0]
+            y_cuts = crop_origin[1] + np.cumsum(np.repeat(shape[1], num_cuts[1])) - shape[1]
+
+            for y_cut in y_cuts:
+                for x_cut in x_cuts:
+                    box = x_cut, y_cut, x_cut + shape[0], y_cut + shape[1]
+                    patches.append(image.crop(box))
+            results.append(patches)
+
+        results = [np.array(patches, dtype=object) for patches in results]
+
+        try:
+            results = np.stack(results)
+        except ValueError:
+            raise ValueError("Images in each component must have same shape")
+
+        num_patches = results.size
+
+        return (*results, [image.size] * num_patches, [crop_origin] * num_patches)
+
+    def _assembple_patches_numpy(self, all_results, *args, dst, **kwargs):
+        """
+        """
+        pass
+
+    @action
+    @inbatch_parallel(init='indices', post='_assembple_patches_numpy')
+    def split_to_patches_numpy(self, ix, shape, strides, src=None, dst=None):
+        """
+        """
+
+        if (image.ndim < 2 or image.ndim > 3):
+            raise ValueError("Image should be 2D or 3D ndarray!")
+
+        if not isinstance(src, (list, tuple)):
+            src = [src]
+
+        result = []
+
+        for src_comp in src:
+
+            image = self.get(ix, src_comp)
+
+            size_x, size_y = shape
+            stride_x, stride_y = strides
+
+            old_shape = image.shape
+            old_strides = image.strides
+
+            x_crops = (old_shape[0] - size_x) // stride_x + 1
+            x_crops = x_crops if x_crops > 0 else 1
+            y_crops = (old_shape[1] - size_y) // stride_y + 1
+            y_crops = y_crops if y_crops > 0 else 1
+
+            new_shape = (x_crops, y_crops, size_x, size_y) + old_shape[2:]
+
+            new_strides = (image.itemsize * stride_y * np.product(np.array(old_shape[1:]), dtype=int),
+                        image.itemsize * stride_y * np.product(np.array(old_shape[2:]), dtype=int),
+                        *old_strides)
+
+            result.append(np.lib.stride_tricks.as_strided(image, new_shape, new_strides).reshape(-1, *new_shape[2:]))
+
+        return result
+
+    @action
+    def split_to_patches(self, ix, shape, strides=None, src=None, dst=None):
+        """Split image to pathes.
+
+        Parameters
+        ----------
+        shape
+
+        Note
+        ----
+        This method permanently loses information stored in components not listed in `src`.
+        """
+
+        if not isinstance(src, (list, tuple)):
+            src = [src]
+
+        if np.all([isinstance(getattr(self, comp)[0], PIL.Image.Image) for comp in src]):
+            return split_to_patches_PIL(shape, strides, src, dst)
+        elif np.all([isinstance(getattr(self, comp)[0], np.ndarray) for comp in src]):
+            return split_to_patches_numpy (shape, strides, src, dst)
+        raise ValueError('Components should be in same format')
