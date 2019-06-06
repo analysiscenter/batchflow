@@ -781,7 +781,7 @@ class Pipeline:
             a function or method to transform batch data to prediction parameters.
             Should return dict - kwargs for `model.predict(...)`.
 
-        save_to : a named expression or a sequence of named expressions of type B or V
+        save_to : a named expression or a sequence of named expressions.
             A location where the model output will be stored.
 
         Notes
@@ -881,7 +881,25 @@ class Pipeline:
         self._save_output(batch, model, predictions, action['save_to'])
 
     def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
-        """ Load a model """
+        """ Load a model
+
+        Parameters
+        ----------
+        mode : str
+            'static' or 'dynamic'
+
+        model_class
+            a type of a model
+
+        name : str
+            (optional) a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
         if mode == 'static':
             self.models.load_model(mode, model_class, name, *args, **kwargs)
             return self
@@ -896,8 +914,43 @@ class Pipeline:
         args, kwargs = self._make_model_args(batch, action, None)
         self.models.load_model(mode, model_class, name, *args, **kwargs)
 
+    def load_model_now(self, mode, model_class, name=None, *args, batch=None, **kwargs):
+        """ Load a model immediately
+
+        Parameters
+        ----------
+        mode : str
+            'static' or 'dynamic'
+
+        model_class
+            a type of a model
+
+        name : str
+            (optional) a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self._exec_load_model(batch, dict(mode=mode, model_class=model_class, model_name=name,
+                                          args=args, kwargs=kwargs))
+
     def save_model(self, name, *args, **kwargs):
-        """ Save a model """
+        """ Save a model
+
+        Parameters
+        ----------
+        name : str
+            a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
         return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
 
     def _exec_save_model(self, batch, action):
@@ -905,6 +958,22 @@ class Pipeline:
         model = self.get_model_by_name(name)
         args, kwargs = self._make_model_args(batch, action, model)
         self.models.save_model(name, *args, **kwargs)
+
+    def save_model_now(self, name, *args, batch=None, **kwargs):
+        """ Save a model immediately
+
+        Parameters
+        ----------
+        name : str
+            a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self._exec_save_model(batch, dict(model_name=name, args=args, kwargs=kwargs))
 
     def gather_metrics(self, metrics_class, *args, save_to=None, **kwargs):
         """ Collect metrics for a model
@@ -1178,6 +1247,9 @@ class Pipeline:
         else:
             batch_generator = self.dataset.gen_batch(*args, **kwargs)
 
+        if self.before:
+            self.before.run()
+
         if prefetch > 0:
             # pool cannot have more than 63 workers
             prefetch = min(prefetch, 62)
@@ -1218,6 +1290,10 @@ class Pipeline:
                     yield batch_res
                     if callable(on_iter):
                         on_iter(batch_res)
+
+        if self.after:
+            self.after.run()
+
 
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all lazy actions """
@@ -1279,12 +1355,9 @@ class Pipeline:
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
 
-            if self.before:
-                self.before.run()
             for _ in self.gen_batch(*args, **kwargs):
                 pass
-            if self.after:
-                self.after.run()
+
         return self
 
     def run_now(self, *args, **kwargs):
