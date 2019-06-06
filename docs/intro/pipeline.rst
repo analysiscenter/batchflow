@@ -91,6 +91,7 @@ Besides, pipeline actions chains might include arbitrary functions. Just add a n
                 .print(V("var"))                   # Pipeline API again
 
 
+.. _after_pipeline:
 
 Before and after pipelines
 ==========================
@@ -108,6 +109,13 @@ More complicated pipelines include setup and tear down actions. That's exactly w
         .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
         .save_model("ResNet18", path='/some/path')     #Pipeline API
         .disconnect_from_mydb()            # a method from mymodule
+
+`before` and `after` pipelines are executed automatically when the main pipeline is executed (specifically, before and after it).
+
+However, take into account that when you iterate over the pipeline with `gen_batch(...)` or `next_batch(...)`, `after`-pipeline
+will be executed automatically only when the iteration is fully finished.
+If you break the iteration process (e.g. when early stopping is occurred or when exception is caught),
+you should explicitly call `pipeline.after.run()`.
 
 See :doc:`API <../api/batchflow.once_pipeline>` for methods available in `before` and `after` pipelines.
 
