@@ -56,11 +56,11 @@ class TestResult:
 
     # tpr == true positive rate
     tpr_aggregation_params = [(None, None, np.array([1.0, 1.0, 0.0, 0.5, 1.0, 1.0])),
-                                 ('mean', None, np.array([0.75, 1.0, 0.5])),
-                                 (None, 'micro', np.array([0.5, 0.75])),
-                                 (None, 'macro', np.array([0.66, 0.83])),
-                                 ('mean', 'micro', [0.62]),
-                                 ('mean', 'macro', [0.75])]
+                              ('mean', None, np.array([0.75, 1.0, 0.5])),
+                              (None, 'micro', np.array([0.5, 0.75])),
+                              (None, 'macro', np.array([0.66, 0.83])),
+                              ('mean', 'micro', np.array([0.62])),
+                              ('mean', 'macro', np.array([0.75]))]
 
     @pytest.mark.parametrize('batch_agg, multi_agg, exp', tpr_aggregation_params)
     def test_tpr(self, batch_agg, multi_agg, exp):
@@ -73,17 +73,51 @@ class TestResult:
 
     # fpr == false positive rate
     fpr_aggregation_params = [(None, None, np.array([0.33, 0.33, 0.0, 0.0, 0.0, 0.25])),
-                                 ('mean', None, np.array([0.16, 0.16, 0.12])),
-                                 (None, 'micro', np.array([0.25, 0.12])),
-                                 (None, 'macro', np.array([0.22, 0.08])),
-                                 ('mean', 'micro', [0.18]),
-                                 ('mean', 'macro', [0.15])]
+                              ('mean', None, np.array([0.16, 0.16, 0.12])),
+                              (None, 'micro', np.array([0.25, 0.12])),
+                              (None, 'macro', np.array([0.22, 0.08])),
+                              ('mean', 'micro', np.array([0.18])),
+                              ('mean', 'macro', np.array([0.15]))]
 
     @pytest.mark.parametrize('batch_agg, multi_agg, exp', fpr_aggregation_params)
     def test_fpr(self, batch_agg, multi_agg, exp):
 
         metric = SegmentationMetricsByPixels(targets, predics, 'labels', num_classes)
         res = metric.evaluate('false_positive_rate', agg=batch_agg, multiclass=multi_agg)
+        res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
+
+        assert np.allclose(res, exp, 1e-01)
+
+    # tnr == true negative rate
+    tnr_aggregation_params = [(None, None, np.array([0.66, 0.66, 1.0, 1.0, 1.0, 0.75])),
+                              ('mean', None, np.array([0.83, 0.83, 0.87])),
+                              (None, 'micro', np.array([0.75, 0.87])),
+                              (None, 'macro', np.array([0.77, 0.91])),
+                              ('mean', 'micro', np.array([0.81])),
+                              ('mean', 'macro', np.array([0.84]))]
+
+    @pytest.mark.parametrize('batch_agg, multi_agg, exp', tnr_aggregation_params)
+    def test_tnr(self, batch_agg, multi_agg, exp):
+
+        metric = SegmentationMetricsByPixels(targets, predics, 'labels', num_classes)
+        res = metric.evaluate('true_negative_rate', agg=batch_agg, multiclass=multi_agg)
+        res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
+
+        assert np.allclose(res, exp, 1e-01)
+
+    # fnr == false negative rate
+    fnr_aggregation_params = [(None, None, np.array([0.0, 0.0, 1.0, 0.5, 0.0, 0.0])),
+                              ('mean', None, np.array([0.25, 0.0, 0.5])),
+                              (None, 'micro', np.array([0.5, 0.25])),
+                              (None, 'macro', np.array([0.33, 0.16])),
+                              ('mean', 'micro', np.array([0.37])),
+                              ('mean', 'macro', np.array([0.25]))]
+
+    @pytest.mark.parametrize('batch_agg, multi_agg, exp', fnr_aggregation_params)
+    def test_fnr(self, batch_agg, multi_agg, exp):
+
+        metric = SegmentationMetricsByPixels(targets, predics, 'labels', num_classes)
+        res = metric.evaluate('false_negative_rate', agg=batch_agg, multiclass=multi_agg)
         res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
 
         assert np.allclose(res, exp, 1e-01)
