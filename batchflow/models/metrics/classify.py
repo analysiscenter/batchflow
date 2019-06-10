@@ -242,26 +242,22 @@ class ClassificationMetrics(Metrics):
 
     def _calc_agg(self, numer, denom, label=None, multiclass='macro', when_zero=None):
         _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1])
-        if self.num_classes > 2:
-            labels = label if label is not None else self._all_labels()
-            labels = labels if isinstance(labels, (list, tuple)) else [labels]
-            label_value = [(numer(l, multiclass=multiclass), denom(l, multiclass=multiclass)) for l in labels]
-
-            if multiclass is None:
-                value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-                value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, self.num_classes)
-            elif multiclass == 'micro':
-                n = np.sum([l[0] for l in label_value], axis=0)
-                d = np.sum([l[1] for l in label_value], axis=0)
-                value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
-            elif multiclass in ['macro', 'mean']:
-                value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-                value = np.mean(value, axis=0).reshape(-1, 1)
-        else:
+        if self.num_classes == 2:
             label = label if label is not None else 1
-            d = denom(label)
-            n = numer(label)
+        labels = label if label is not None else self._all_labels()
+        labels = labels if isinstance(labels, (list, tuple)) else [labels]
+        label_value = [(numer(l, multiclass=multiclass), denom(l, multiclass=multiclass)) for l in labels]
+
+        if multiclass is None:
+            value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])).ravel() for l in label_value]
+            value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, self.num_classes)
+        elif multiclass == 'micro':
+            n = np.sum([l[0] for l in label_value], axis=0)
+            d = np.sum([l[1] for l in label_value], axis=0)
             value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
+        elif multiclass in ['macro', 'mean']:
+            value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
+            value = np.mean(value, axis=0).reshape(-1, 1)
 
         return value
 
