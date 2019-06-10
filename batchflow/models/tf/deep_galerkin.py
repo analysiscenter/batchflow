@@ -8,6 +8,64 @@ import tensorflow as tf
 
 from . import TFModel
 
+def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__', '__sub__', '__rsub__',
+                                     '__truediv__', '__rtruediv__', '__pow__', '__rpow__')):
+    """ Add binary-magic operators to `SyntaxTreeNode`-class.
+    """
+    for magic_name in operators:
+        def magic(self, other, magic_name=magic_name):
+            return cls((magic_name, self, other))
+        setattr(cls, magic_name, magic)
+    return cls
+
+@add_binary_magic
+class SyntaxTreeNode(tuple):
+    pass
+
+# nullary: variables (arguments fetchers)
+MAX_DIM = 10
+nullary = {**{'u': lambda *args: args[0], 'x': lambda *args: args[1],
+           'y': lambda *args: args[2], 'z': lambda *args: args[3],
+           't': lambda *args: args[-1]},
+           **{'x' + str(num): lambda *args, num=num: args[num] for num in range(MAX_DIM)}}
+
+# unary: mathematical transformations (`sin` e.g.)
+(sin, cos, exp, log, tan, acos,
+ asin, atan, sinh, cosh, tanh, asinh, acosh, atanh) = [lambda x, name=name: SyntaxTreeNode((name, x))
+                                                       for name in
+                                                       ['sin', 'cos', 'exp', 'log', 'tan',
+                                                        'acos', 'asin', 'atan', 'sinh', 'cosh',
+                                                        'tanh', 'asinh', 'acosh', 'atanh']]
+
+# binary
+D = lambda f, x: SyntaxTreeNode(('D', f, x))
+
+def tf_parse(tree):
+    """ Parse syntax-tree to tf-callable.
+    """
+    # constants
+    if isinstance(tree, (int, float)):
+        return lambda *args: tree
+
+    op = tree[0]
+    if len(tree) == 1:
+        # nullary
+        return nullary[op]
+    elif len(tree) == 2:
+        # unary
+        argument = tree[1]
+        return lambda *args: getattr(tf.math, op)(tf_parse(argument)(*args))
+    elif len(tree) == 3:
+        # binary
+        argument_first = tree[1]
+        argument_second = tree[2]
+        if op == 'D':
+            return lambda *args: tf.gradients(tf_parse(argument_first)(*args),
+                                              tf_parse(argument_second)(*args))[0]
+        else:
+            return lambda *args: getattr(tf_parse(argument_first)(*args),
+                                         op)(tf_parse(argument_second)(*args))
+
 class DeepGalerkin(TFModel):
     r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
     with constant or functional coefficients on rectangular domains using neural networks. Inspired by
@@ -94,43 +152,44 @@ class DeepGalerkin(TFModel):
         if pde is None:
             raise ValueError("The PDE-problem is not specified. Use 'pde' config to set up the problem.")
 
-        # get dimensionality
-        form = pde.get("form")
-        if form is not None:
-            n_dims = len(form.get("d1", form.get("d2", None)))
-            self.config.update({'pde/n_dims': n_dims,
-                                'initial_block/inputs': 'points',
-                                'inputs': dict(points={'shape': (n_dims, )})})
-        else:
-            raise ValueError("Left-hand side is not specified. Use 'pde/form' config to set it up.")
-
-        # default value for rhs
-        rhs = pde.get('rhs', 0)
-        if isinstance(rhs, (float, int)):
-            rhs_val = rhs
-            rhs = lambda x: rhs_val * tf.ones(shape=(tf.shape(x)[0], 1))
-            self.config.update({'pde/rhs': rhs})
-        elif not callable(rhs):
-            raise ValueError("Cannot parse right-hand-side of the equation")
+        # make sure points-tensor is created
+        n_dims = pde.get('n_dims')
+        self.config.update({'initial_block/inputs': 'points',
+                            'inputs': dict(points={'shape': (n_dims, )})})
 
         # default values for domain
         if pde.get('domain') is None:
             self.config.update({'pde/domain': [[0, 1]] * n_dims})
 
         # make sure that initial conditions are callable
-        init_cond = pde.get('initial_condition', None)
-        if init_cond is not None:
-            init_cond = init_cond if isinstance(init_cond, (tuple, list)) else [init_cond]
-            init_cond = [expression if callable(expression) else lambda *args, e=expression:
-                         e for expression in init_cond]
-            self.config.update({'pde/initial_condition': init_cond})
+        init_conds = pde.get('initial_condition', None)
+        if init_conds is not None:
+            init_conds = init_conds if isinstance(init_conds, (tuple, list)) else [init_conds]
+            parsed = []
+            for cond in init_conds:
+                if callable(cond):
+                    # assume it is a function written in dg-language
+                    n_dims_xs = n_dims - 1
+
+                    # get syntax-tree and parse it to tf-callable
+                    tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs)])
+                    parsed.append(tf_parse(tree))
+                else:
+                    parsed.append(lambda *args, value=cond: value)
+            self.config.update({'pde/initial_condition': parsed})
 
         # make sure that boundary condition is callable
         bound_cond = pde.get('boundary_condition', 0)
         if isinstance(bound_cond, (float, int)):
             bound_cond_value = bound_cond
             self.config.update({'pde/boundary_condition': lambda *args: bound_cond_value})
-        elif not callable(bound_cond):
+        elif callable(bound_cond):
+            n_dims_xs = n_dims if init_conds is None else n_dims - 1
+
+            # get syntax-tree and parse it to tf-callable
+            tree = bound_cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs)])
+            self.config.update({'pde/boundary_condition': tf_parse(tree)})
+        else:
             raise ValueError("Cannot parse boundary condition of the equation")
 
         # 'common' is updated with PDE-problem
@@ -161,80 +220,17 @@ class DeepGalerkin(TFModel):
         _ops = dict()
         _ops[prefix] = list(ops[prefix])
 
-        # transforming each op in config['output'] to form.
-        # for example, 'dt' is transformed to {'d1': (0, ..., 0, 1)}
-        for i, op in enumerate(_ops[prefix]):
-            form = self._parse_op(op, n_dims)
-            _compute_op = self._make_form_calculator(form, coordinates, name=op)
-            _ops[prefix][i] = _compute_op
-
-        # additional expressions to track
+        # forms for tracking
         if track is not None:
             for op in track.keys():
                 _compute_op = self._make_form_calculator(track[op], coordinates, name=op)
                 _ops[prefix].append(_compute_op)
 
-        config['output'] = _ops
+        # form for output-transformation
         config['predictions'] = self._make_form_calculator(config.get("common/form"), coordinates,
                                                            name='predictions')
+        config['output'] = _ops
         return config
-
-    @classmethod
-    def _parse_op(cls, op, n_dims):
-        """ Transforms string description of operation to form. """
-        _map_coords = dict(x=0, y=1, z=2, t=-1)
-        if isinstance(op, str):
-            op = op.replace(" ", "").replace("_", "")
-            if op.startswith("d"):
-                # parse order
-                prefix_len = 1
-                try: # for example, d2xy
-                    order = int(op[1])
-                    prefix_len += 1
-                except ValueError: # for example, dx
-                    order = 1
-
-                if order > 2:
-                    raise ValueError("Tracking gradients of order " + order + " is not supported.")
-
-                # parse variables
-                variables = op[prefix_len:]
-
-                if len(variables) == 1: # for example, d2x
-                    coord_number = _map_coords.get(variables)
-                    if coord_number is None: # for example, dr
-                        raise ValueError("Cannot parse coordinate number from " + op)
-                    if order == 2: # for example, d2x
-                        coord_number = [coord_number, coord_number]
-
-                elif len(variables) == 2: # for example, d2xy
-                    try: # for example, d2x0
-                        coord_number = int(variables[1:])
-                        if order == 2:
-                            coord_number = [coord_number, coord_number]
-                    except ValueError:
-                        coord_number = [_map_coords.get(variables[0]), _map_coords.get(variables[1])]
-
-                elif len(variables) == 4: # for example d2x5x8
-                    try:
-                        coord_number = [int(variables[1]), int(variables[3])]
-                    except:
-                        raise ValueError("Cannot parse coordinate numbers from " + op)
-
-                if isinstance(coord_number, list):
-                    if coord_number[0] is None or coord_number[1] is None:
-                        raise ValueError("Cannot parse coordinate numbers from " + op)
-
-                # make callable to compute required op
-                form = np.zeros((n_dims, )) if order == 1 else np.zeros((n_dims, n_dims))
-                if order == 1:
-                    form[coord_number] = 1
-                else:
-                    form[coord_number[0], coord_number[1]] = 1
-                form = {"d" + str(order): form}
-            else:
-                raise ValueError("Cannot parse coordinate numbers from " + op)
-        return form
 
     def _make_inputs(self, names=None, config=None):
         """ Create necessary placeholders. """
@@ -245,10 +241,9 @@ class DeepGalerkin(TFModel):
         tensors_['points'] = tf.split(tensors_['points'], n_dims, axis=1, name='coordinates')
         tensors_['points'] = tf.concat(tensors_['points'], axis=1)
 
-        # calculate targets-tensor using rhs of pde and created points-tensor
+        # make targets-tensor from zeros
         points = getattr(self, 'inputs').get('points')
-        rhs = config['pde/rhs']
-        self.store_to_attr('targets', rhs(points))
+        self.store_to_attr('targets', tf.zeros(shape=(tf.shape(points)[0], 1)))
         return placeholders_, tensors_
 
     @classmethod
@@ -257,44 +252,13 @@ class DeepGalerkin(TFModel):
         with respect to coordinates.
         """
         n_dims = len(coordinates)
-        d0_coeff = form.get("d0", 0)
-        d1_coeffs = np.array(form.get("d1", np.zeros(shape=(n_dims, )))).reshape(-1)
-        d2_coeffs = np.array(form.get("d2", np.zeros(shape=(n_dims, n_dims)))).reshape(n_dims, n_dims)
-        points = tf.concat(coordinates, axis=1, name='_points')
 
-        if ((d0_coeff == 0) and np.all(d1_coeffs == 0) and np.all(d2_coeffs == 0)):
-            raise ValueError('Nothing to compute. Some of the coefficients in "pde/form" must be non-zero')
+        # get tree of lhs-differential operator and parse it to tf-callable
+        tree = form(SyntaxTreeNode('u'), *[SyntaxTreeNode(('x' + str(i + 1), )) for i in range(n_dims)])
+        parsed = tf_parse(tree)
 
-        def _callable(net):
-            """ Computes differential form. """
-            result = 0
-
-            # function itself
-            coeff = d0_coeff
-            if callable(coeff):
-                coeff = tf.reshape(coeff(points), shape=(-1, 1))
-            if coeff != 0:
-                result += coeff * net
-
-            # derivatives of the first order
-            for i, coeff in enumerate(d1_coeffs):
-                if callable(coeff):
-                    coeff = tf.reshape(coeff(points), shape=(-1, 1))
-                if coeff != 0:
-                    result += tf.multiply(tf.gradients(net, coordinates[i])[0], coeff)
-
-            # derivatives of the second order
-            for i in range(n_dims):
-                if np.any(d2_coeffs != 0):
-                    d1_ = tf.gradients(net, coordinates[i])[0]
-                    for j, coeff in enumerate(d2_coeffs[i, :]):
-                        if callable(coeff):
-                            coeff = tf.reshape(coeff(points), shape=(-1, 1))
-                        if coeff != 0:
-                            result += tf.multiply(tf.gradients(d1_, coordinates[j])[0], coeff)
-
-            return result
-
+        # `_callable` should be a function of `net`-tensor only
+        _callable = lambda net: parsed(net, *coordinates)
         setattr(_callable, '__name__', name)
         return _callable
 
@@ -334,13 +298,14 @@ class DeepGalerkin(TFModel):
             init_cond = kwargs.get("initial_condition")
             bound_cond = kwargs["boundary_condition"]
             n_dims_xs = n_dims if init_cond is None else n_dims - 1
-            xs_spatial = tf.concat(coordinates[:n_dims_xs], axis=1) if n_dims_xs > 0 else None
+            xs_spatial = coordinates[:n_dims_xs] if n_dims_xs > 0 else []
+            xs_spatial_ = tf.concat(xs_spatial, axis=1)
 
             # multiplicator for binding boundary conditions
             if n_dims_xs > 0:
                 lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
                                       for bounds in (lower, upper)]
-                multiplier *= tf.reduce_prod((xs_spatial - lower_tf) * (upper_tf - xs_spatial) /
+                multiplier *= tf.reduce_prod((xs_spatial_ - lower_tf) * (upper_tf - xs_spatial_) /
                                              (upper_tf - lower_tf)**2,
                                              axis=1, name='xs_multiplier', keepdims=True)
 
@@ -349,17 +314,18 @@ class DeepGalerkin(TFModel):
                 shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                 time_mode = kwargs["time_multiplier"]
 
-                add_term += init_cond[0](xs_spatial)
+                add_term += init_cond[0](*xs_spatial)
                 multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond) == 1 else '00')(shifted)
 
                 # multiple initial conditions
                 if len(init_cond) > 1:
-                    add_term += init_cond[1](xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
+                    add_term += init_cond[1](*xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
 
             # if there are no initial conditions, boundary conditions are used (default value is 0)
             else:
-                add_term += bound_cond(xs_spatial)
+                add_term += bound_cond(*xs_spatial)
 
+            print(inputs.shape, multiplier.shape, add_term)
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
         return tf.identity(inputs, name='solution')
