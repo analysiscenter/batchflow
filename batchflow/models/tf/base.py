@@ -980,7 +980,7 @@ class TFModel(BaseModel):
                         outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
                         output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
                                   for i, name in enumerate(names)]
-                        output = output[0] if isinstance(fetches, str) else output
+                    output = output[0] if isinstance(fetches, str) else output
             else:
                 output = None
 
