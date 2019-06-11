@@ -345,9 +345,9 @@ class TFModel(BaseModel):
         ``transform`` : str or callable
             Predefined transforms are
 
-            - ``'ohe'`` - one-hot encoding
-            - ``'mip @ d'`` - maximum intensity projection :func:`~.layers.mip`
-              with depth ``d`` (should be int)
+            - ``ohe`` - one-hot encoding
+            - ``mip @ d`` - maximum intensity projection :func:`~.layers.mip` with depth ``d`` (should be int)
+            - ``downsample @ d`` - NN downsampling with a factor ``d`` (should be int)
 
         ``name`` : str
             a name for the transformed tensor.
@@ -486,23 +486,26 @@ class TFModel(BaseModel):
 
     def _make_transform(self, input_name, tensor, config):
         if config is not None:
+            transforms = {
+                'ohe': self._make_ohe,
+                'mip': self._make_mip,
+                'downsample': self._make_downsample
+            }
+
             transform_names = config.get('transform')
             if not isinstance(transform_names, list):
                 transform_names = [transform_names]
             for transform_name in transform_names:
                 if isinstance(transform_name, str):
-                    transforms = {
-                        'ohe': self._make_ohe,
-                        'mip': self._make_mip,
-                        'mask_downsampling': self._make_mask_downsampling
-                    }
-
                     kwargs = dict()
                     if transform_name.startswith('mip'):
                         parts = transform_name.split('@')
-                        transform_name = parts[0].strip()
+                        transform_name = 'mip'
                         kwargs['depth'] = int(parts[1])
-
+                    elif transform_name.startswith('downsample'):
+                        parts = transform_name.split('@')
+                        transform_name = 'downsample'
+                        kwargs['factor'] = int(parts[1])
                     tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
                 elif callable(transform_name):
                     tensor = transform_name(tensor)
@@ -520,10 +523,9 @@ class TFModel(BaseModel):
         tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
         return tensor
 
-    def _make_mask_downsampling(self, input_name, tensor, config):
-        """ Perform mask downsampling with factor from config of tensor. """
-        _ = input_name
-        factor = config.get('factor')
+    def _make_downsample(self, input_name, tensor, config, factor):
+        """ Perform downsampling with the factor given. """
+        _ = input_name, config
         size = self.shape(tensor, False)
         if None in size[1:]:
             size = self.shape(tensor, True)
@@ -534,14 +536,6 @@ class TFModel(BaseModel):
         tensor = tf.squeeze(tensor, [-1])
         return tensor
 
-    def to_classes(self, tensor, input_name, name=None):
-        """ Convert tensor with labels to classes of ``input_name`` """
-        if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
-            tensor = tf.argmax(tensor, axis=-1, name=name)
-        if self.has_classes(input_name):
-            self._to_classes.update({tensor: input_name})
-        return tensor
-
     def _make_mip(self, input_name, tensor, config, depth):
         # mip has to know shape
         if config.get('shape') is None:
@@ -549,6 +543,14 @@ class TFModel(BaseModel):
         if depth is None:
             raise ValueError("mip should be specified as mip @ depth, e.g. 'mip @ 3'")
         tensor = mip(tensor, depth=depth, data_format=self.data_format(input_name))
+        return tensor
+
+    def to_classes(self, tensor, input_name, name=None):
+        """ Convert tensor with labels to classes of ``input_name`` """
+        if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
+            tensor = tf.argmax(tensor, axis=-1, name=name)
+        if self.has_classes(input_name):
+            self._to_classes.update({tensor: input_name})
         return tensor
 
     def _check_tensor(self, name):
