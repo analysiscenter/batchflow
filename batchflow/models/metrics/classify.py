@@ -129,6 +129,10 @@ class ClassificationMetrics(Metrics):
         if calc:
             self._calc()
 
+    @property
+    def confusion_matrix(self):
+        return self._confusion_matrix
+
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
         metrics = copy(self)
