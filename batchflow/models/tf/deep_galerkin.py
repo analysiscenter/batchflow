@@ -7,64 +7,8 @@ import numpy as np
 import tensorflow as tf
 
 from . import TFModel
+from ..parser import SyntaxTreeNode, parse
 
-def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__', '__sub__', '__rsub__',
-                                     '__truediv__', '__rtruediv__', '__pow__', '__rpow__')):
-    """ Add binary-magic operators to `SyntaxTreeNode`-class.
-    """
-    for magic_name in operators:
-        def magic(self, other, magic_name=magic_name):
-            return cls((magic_name, self, other))
-        setattr(cls, magic_name, magic)
-    return cls
-
-@add_binary_magic
-class SyntaxTreeNode(tuple):
-    pass
-
-# nullary: variables (arguments fetchers)
-MAX_DIM = 10
-nullary = {**{'u': lambda *args: args[0], 'x': lambda *args: args[1],
-           'y': lambda *args: args[2], 'z': lambda *args: args[3],
-           't': lambda *args: args[-1]},
-           **{'x' + str(num): lambda *args, num=num: args[num] for num in range(MAX_DIM)}}
-
-# unary: mathematical transformations (`sin` e.g.)
-(sin, cos, exp, log, tan, acos,
- asin, atan, sinh, cosh, tanh, asinh, acosh, atanh) = [lambda x, name=name: SyntaxTreeNode((name, x))
-                                                       for name in
-                                                       ['sin', 'cos', 'exp', 'log', 'tan',
-                                                        'acos', 'asin', 'atan', 'sinh', 'cosh',
-                                                        'tanh', 'asinh', 'acosh', 'atanh']]
-
-# binary
-D = lambda f, x: SyntaxTreeNode(('D', f, x))
-
-def tf_parse(tree):
-    """ Parse syntax-tree to tf-callable.
-    """
-    # constants
-    if isinstance(tree, (int, float)):
-        return lambda *args: tree
-
-    op = tree[0]
-    if len(tree) == 1:
-        # nullary
-        return nullary[op]
-    elif len(tree) == 2:
-        # unary
-        argument = tree[1]
-        return lambda *args: getattr(tf.math, op)(tf_parse(argument)(*args))
-    elif len(tree) == 3:
-        # binary
-        argument_first = tree[1]
-        argument_second = tree[2]
-        if op == 'D':
-            return lambda *args: tf.gradients(tf_parse(argument_first)(*args),
-                                              tf_parse(argument_second)(*args))[0]
-        else:
-            return lambda *args: getattr(tf_parse(argument_first)(*args),
-                                         op)(tf_parse(argument_second)(*args))
 
 class DeepGalerkin(TFModel):
     r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
@@ -173,9 +117,10 @@ class DeepGalerkin(TFModel):
 
                     # get syntax-tree and parse it to tf-callable
                     tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs)])
-                    parsed.append(tf_parse(tree))
+                    parsed.append(parse(tree))
                 else:
                     parsed.append(lambda *args, value=cond: value)
+
             self.config.update({'pde/initial_condition': parsed})
 
         # make sure that boundary condition is callable
@@ -188,7 +133,7 @@ class DeepGalerkin(TFModel):
 
             # get syntax-tree and parse it to tf-callable
             tree = bound_cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs)])
-            self.config.update({'pde/boundary_condition': tf_parse(tree)})
+            self.config.update({'pde/boundary_condition': parse(tree)})
         else:
             raise ValueError("Cannot parse boundary condition of the equation")
 
@@ -254,8 +199,8 @@ class DeepGalerkin(TFModel):
         n_dims = len(coordinates)
 
         # get tree of lhs-differential operator and parse it to tf-callable
-        tree = form(SyntaxTreeNode('u'), *[SyntaxTreeNode(('x' + str(i + 1), )) for i in range(n_dims)])
-        parsed = tf_parse(tree)
+        tree = form(SyntaxTreeNode('u'), *[SyntaxTreeNode('x' + str(i + 1)) for i in range(n_dims)])
+        parsed = parse(tree)
 
         # `_callable` should be a function of `net`-tensor only
         _callable = lambda net: parsed(net, *coordinates)
