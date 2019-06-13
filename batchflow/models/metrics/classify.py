@@ -131,7 +131,7 @@ class ClassificationMetrics(Metrics):
 
     @property
     def confusion_matrix(self):
-        return self._confusion_matrix
+        return self._confusion_matrix.sum(axis=0)
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
