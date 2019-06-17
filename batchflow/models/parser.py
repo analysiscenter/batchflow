@@ -5,6 +5,12 @@ and tree-parser.
 import numpy as np
 import tensorflow as tf
 
+try:
+    from autograd import grad
+    import autograd.numpy as autonp
+
+except ImportError:
+    pass
 
 def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__', '__sub__', '__rsub__',
                                      '__truediv__', '__rtruediv__', '__pow__', '__rpow__')):
@@ -21,21 +27,29 @@ def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__
 class SyntaxTreeNode():
     """ Node of parse tree. Stores operation along with its arguments.
     """
-    def __init__(self, *args, name=None):
+    def __init__(self, *args, name=None, **kwargs):
         arg = args[0]
         if isinstance(arg, str):
             if len(arg) == 1:
                 nums_of_args = {'u': 0, 'x': 1, 'y': 2, 'z': 3, 't': -1}
-                self.method = lambda *args: args[nums_of_args[arg]]
+                if arg in nums_of_args:
+                    self.method = lambda *args: args[nums_of_args[arg]]
+                else:
+                    raise ValueError("Cannot parse variable-number from " + arg)
             else:
-                self.method = lambda *args: args[int(arg[1])]
+                try:
+                    var_num = int(arg[1:])
+                    self.method = lambda *args: args[var_num]
+                except ValueError:
+                    raise ValueError("Cannot parse variable-number from " + arg)
             self.name = arg
         elif callable(arg):
             self.method = arg
             self.name = name
         else:
-            raise ValueError("Cannot create a NodeTree-instance")
+            raise ValueError("Cannot create a NodeTree-instance from ", *args)
         self._args = args[1:]
+        self._kwargs = kwargs
 
     def __len__(self):
         return len(self._args)
@@ -60,39 +74,35 @@ def parse(tree):
 
 def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', 'asin', 'atan',
                                     'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'D'),
-                namespaces=None, D_func=None):
+                namespaces=None, grad_func=None):
     """ Make a collection of mathematical tokens.
     """
     # parse namespaces-arg
     if module in ['tensorflow', 'tf']:
-        namespaces = namespaces if namespaces is not None else [tf.math, tf, tf.nn]
-        D_func = lambda f, x: tf.gradients(f, x)[0]
+        namespaces = namespaces or [tf.math, tf, tf.nn]
+        grad_func = lambda f, x: tf.gradients(f, x)[0]
     elif module == 'torch':
         pass
     elif module in ['numpy', 'np']:
-        namespaces = namespaces if namespaces is not None else [np, np.math]
+        namespaces = namespaces or [np, np.math]
         if 'D' in names:
-            import autograd.numpy as autonp
-            namespaces = namespaces if namespaces is not None else [autonp, autonp.math]
-            from autograd import grad
-            D_func = lambda f, x: grad(f)(x)
+            namespaces = namespaces or [autonp, autonp.math]
+            grad_func = lambda f, x: grad(f)(x)
     else:
         if namespaces is None:
             raise ValueError('Module ' + module + ' is not supported: you should directly pass namespaces-arg!')
 
     def _fetch_method(name, modules):
         for module in modules:
-            try:
+            if hasattr(module, name):
                 return getattr(module, name)
-            except:
-                pass
         raise ValueError('Cannot find method ' + name + ' in ' + [str(module) for module in modules].join(', '))
 
     # fill up tokens-list
     tokens = []
     for name in names:
         # make the token-method
-        method = D_func if name == 'D' else _fetch_method(name, namespaces)
+        method = grad_func if name == 'D' else _fetch_method(name, namespaces)
 
         # make the token
         token = lambda *args, method=method, name=name: SyntaxTreeNode(method, *args, name=name)
