@@ -801,7 +801,6 @@ class TorchModel(BaseModel):
         """
         if len(args) == 1:
             args = args + (None, )
-        
         *inputs, targets = self._fill_input(*args)
         self.model.eval()
 
