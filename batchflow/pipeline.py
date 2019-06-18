@@ -303,6 +303,10 @@ class Pipeline:
         """
         return self.variables.get(name, *args, create=create, pipeline=self, **kwargs)
 
+    def v(self, name, *args, **kwargs):
+        """ A shorter alias for get_variable() """
+        return self.get_variable(name, *args, **kwargs)
+
     def init_variable(self, name, default=None, lock=True, **kwargs):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
