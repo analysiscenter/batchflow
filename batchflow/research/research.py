@@ -367,7 +367,7 @@ class Research:
             os.makedirs(name)
         else:
             raise ValueError(
-                "Research with name {} already exists".format(name)
+                "Research with name '{}' already exists".format(name)
             )
 
     def save(self):
