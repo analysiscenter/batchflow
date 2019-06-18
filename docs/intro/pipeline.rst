@@ -305,7 +305,7 @@ Initializing a variable
     my_pipeline = (my_dataset.p
         .init_variable("my_variable", 100)
         .init_variable("some_counter", init_on_each_run=0)
-        .init_variable("var with init function", F_(my_init_function))
+        .init_variable("var with init function", F(my_init_function))
         .init_variable("loss_history", init_on_each_run=list)
         .first_action()
         .second_action()
@@ -317,7 +317,7 @@ Variables might be initialized once in a lifetime (e.g. some global state or a c
 (like counters or history stores).
 
 Sometimes it is more convenient to initialize variables indirectly through a function. For instance, `loss_history` cannot be initialized with `[]`
-as it would make a global variable which won't be cleared on every run. What you actually need is a call to `list()` on each run.
+as it would make a global variable which won't be cleared on every run. What you actually need is to call `list()` on each run.
 
 Init functions are also a good place for some complex logic or randomization.
 
@@ -338,10 +338,13 @@ So getting an access to a variable is easy::
 If a variable does not exist, it might be created and initialized, if `create` parameter is set to `True`.
 For a flexible initialization `default`, `init` and `init_on_each_run` might also be passed to `get_variable()`.
 
-
 .. note:: An explicit variable initialization in a pipeline is a preferred way to create variables.
 
 If `create` is `False` (which is by default), then `get_variable` will raise a `KeyError` if a variable does not exist.
+
+`v()` is a shorter alias for `get_variable()`::
+    
+    pipeline.v('var_name')
 
 To change a variable value just call `set_variable` within an action::
 
@@ -362,7 +365,7 @@ Or add `update_variable` to the pipeline::
 
 The first parameter specifies a variable name, and it can be a string or :doc:`a named expression <named_expr>`,
 returning a string.
-The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`:
+The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`, e.g.:
 
 * B('name') - a batch class attribute or component name
 * V('name') - a pipeline variable name
@@ -370,7 +373,7 @@ The second parameter is an updating value and it can be a value of any type or :
 * F(name) - a callable which takes a batch (could be a batch class method or a function)
 * R('name') - a random value from a given distribution
 
-Mode could be one of:
+Note that a named expression might have a mode (e.g. `V('name', mode='a')`) which could be one of:
 
 * `'w'` or `'write'` to rewrite a variable with a new value. This is a default mode.
 * `'a'` or `'append'` to append a value to a variable (e.g. if a variable is a list).
