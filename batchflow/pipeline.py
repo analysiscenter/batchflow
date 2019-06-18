@@ -17,33 +17,7 @@ from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
-
-
-JOIN_ID = '#_join'
-MERGE_ID = '#_merge'
-REBATCH_ID = '#_rebatch'
-PIPELINE_ID = '#_pipeline'
-IMPORT_MODEL_ID = '#_import_model'
-TRAIN_MODEL_ID = '#_train_model'
-PREDICT_MODEL_ID = '#_predict_model'
-GATHER_METRICS_ID = '#_gather_metrics'
-INC_VARIABLE_ID = '#_inc_variable'
-UPDATE_VARIABLE_ID = '#_update_variable'
-CALL_ID = '#_call'
-PRINT_ID = '#_print'
-CALL_FROM_NS_ID = '#_from_ns'
-
-_ACTIONS = {
-    IMPORT_MODEL_ID: '_exec_import_model',
-    TRAIN_MODEL_ID: '_exec_train_model',
-    PREDICT_MODEL_ID: '_exec_predict_model',
-    GATHER_METRICS_ID: '_exec_gather_metrics',
-    INC_VARIABLE_ID: '_exec_inc_variable',
-    UPDATE_VARIABLE_ID: '_exec_update_variable',
-    CALL_ID: '_exec_call',
-    PRINT_ID: '_exec_print',
-    CALL_FROM_NS_ID: '_exec_from_ns',
-}
+from ._const import *       # pylint:disable=wildcard-import
 
 
 METRICS = dict(
@@ -101,9 +75,9 @@ class Pipeline:
             self.variables = pipeline.variables.copy()
             self.models = pipeline.models.copy()
             self._namespaces = pipeline._namespaces
-            self.before = pipeline.before
+            self.before = pipeline.before.copy()
             self.before.pipeline = self
-            self.after = pipeline.after
+            self.after = pipeline.after.copy()
             self.after.pipeline = self
 
         self.config = Config(self.config)
@@ -329,6 +303,10 @@ class Pipeline:
         """
         return self.variables.get(name, *args, create=create, pipeline=self, **kwargs)
 
+    def v(self, name, *args, **kwargs):
+        """ A shorter alias for get_variable() """
+        return self.get_variable(name, *args, **kwargs)
+
     def init_variable(self, name, default=None, lock=True, **kwargs):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
@@ -417,7 +395,7 @@ class Pipeline:
         So ``set_variable`` is imperative and may be used within actions, while ``update_variable``
         is declarative and should be used in pipeline definition chains.
         """
-        V(name).set(value, batch=batch, pipeline=self, mode=mode)
+        V(name, mode=mode).set(value, batch=batch, pipeline=self)
 
     def assign_variable(self, name, value, batch=None):
         """ Assign a value to a variable """
@@ -533,7 +511,7 @@ class Pipeline:
         except OSError:
             pass
 
-    def call(self, fn, save_to=None, mode='w', *args, **kwargs):
+    def call(self, fn, save_to=None, *args, **kwargs):
         """ Call any function during pipeline execution
 
         Parameters
@@ -543,10 +521,8 @@ class Pipeline:
 
         save_to : a named expression or a sequence of named expressions
             A location where function output will be saved to.
-
-        mode : str {'w', 'a', 'e', 'u'}
         """
-        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, mode=mode, **kwargs))
+        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, **kwargs))
 
     def _exec_call(self, batch, action):
         fn = self._eval_expr(action['fn'], batch)
@@ -555,7 +531,7 @@ class Pipeline:
         else:
             raise TypeError("Callable is expected, but got {}".format(type(fn)))
         if action['save_to'] is not None:
-            self._save_output(batch, None, output, action['save_to'], action['mode'])
+            self._save_output(batch, None, output, action['save_to'])
 
     def add_namespace(self, *namespaces):
         self._namespaces.extend(namespaces)
@@ -563,11 +539,8 @@ class Pipeline:
 
     def _exec_from_ns(self, batch, action):
         res = action['method'](*action['args'], **action['kwargs'])
-
-        if isinstance(action['save_to'], NamedExpression):
-            action['save_to'].set(res, batch=batch)
-        elif isinstance(action['save_to'], np.ndarray):
-            action['save_to'][:] = res
+        if action['save_to'] is not None:
+            self._save_output(batch, None, res, action['save_to'])
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -642,8 +615,8 @@ class Pipeline:
                 pass
             elif _action['name'] == PIPELINE_ID:
                 batch = self._exec_nested_pipeline(batch, _action)
-            elif _action['name'] in _ACTIONS:
-                action_fn = getattr(self, _ACTIONS[_action['name']])
+            elif _action['name'] in ACTIONS:
+                action_fn = getattr(self, ACTIONS[_action['name']])
                 action_fn(batch, _action)
             else:
                 if join_batches is None:
@@ -743,7 +716,7 @@ class Pipeline:
         pipeline = self._eval_expr(action['pipeline'], batch=batch)
         self.models.import_model(source, pipeline, model_name)
 
-    def train_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
+    def train_model(self, name, *args, make_data=None, save_to=None, **kwargs):
         """ Train a model
 
         Parameters
@@ -755,21 +728,8 @@ class Pipeline:
             a function or method to transform batch data to train parameters.
             Should return dict - kwargs for `model.train(...)`.
 
-        save_to : a named expression or a sequence of named expressions of type B or V
+        save_to : a named expression or a sequence of named expressions.
             A location where the model output will be stored.
-            This will rewrite the previous value in the location given.
-
-        mode : str {'w', 'a', 'e', 'u'}
-            a method of storing output
-
-            - 'w' - overwrite `save_to` location with a new value. This is a default mode.
-            - 'a' - append a new value to `save_to` location
-                    (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
-            - 'e' - extend `save_to` location with a new value
-                    (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
-            - 'u' - update `save_to` location with a new value
-                    (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
-                    or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update)
 
         Notes
         -----
@@ -808,10 +768,10 @@ class Pipeline:
             resnet_model.train(**train_data)
         """
         return self._add_action(TRAIN_MODEL_ID, *args,
-                                _args=dict(model_name=name, make_data=make_data, save_to=save_to, mode=mode),
+                                _args=dict(model_name=name, make_data=make_data, save_to=save_to),
                                 **kwargs)
 
-    def predict_model(self, name, *args, make_data=None, save_to=None, mode='w', **kwargs):
+    def predict_model(self, name, *args, make_data=None, save_to=None, **kwargs):
         """ Predict using a model
 
         Parameters
@@ -822,20 +782,8 @@ class Pipeline:
             a function or method to transform batch data to prediction parameters.
             Should return dict - kwargs for `model.predict(...)`.
 
-        save_to : a named expression or a sequence of named expressions of type B or V
-            A location where the model output will be stored
-
-        mode : str {'w', 'a', 'e', 'u'}
-            a method of storing output
-
-            - 'w' - overwrite `save_to` location with a new value. This is a default mode.
-            - 'a' - append a new value to `save_to` location
-                    (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
-            - 'e' - extend `save_to` location with a new value
-                    (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
-            - 'u' - update `save_to` location with a new value
-                    (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
-                    or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update)
+        save_to : a named expression or a sequence of named expressions.
+            A location where the model output will be stored.
 
         Notes
         -----
@@ -879,11 +827,11 @@ class Pipeline:
             deepnet_model.predict(**predict_data)
         """
         return self._add_action(PREDICT_MODEL_ID, *args,
-                                _args=dict(model_name=name, make_data=make_data, save_to=save_to, mode=mode),
+                                _args=dict(model_name=name, make_data=make_data, save_to=save_to),
                                 **kwargs)
 
     def _make_model_args(self, batch, action, model):
-        make_data = action['make_data'] or {}
+        make_data = action.get('make_data') or  {}
         args = action['args']
         kwargs = dict()
 
@@ -900,7 +848,7 @@ class Pipeline:
 
         return args, kwargs
 
-    def _save_output(self, batch, model, output, save_to, mode='w'):
+    def _save_output(self, batch, model, output, save_to):
         if not isinstance(save_to, (tuple, list)):
             save_to = [save_to]
             if isinstance(output, (tuple, list)):
@@ -917,36 +865,120 @@ class Pipeline:
                                  % model.name)
             item = output[i]
             if isinstance(var, NamedExpression):
-                var.set(item, batch=batch, model=model, mode=mode)
+                var.set(item, batch=batch, model=model)
+            elif isinstance(var, np.ndarray):
+                var[:] = item
             else:
-                if mode in ['a', 'append']:
-                    var.append(item)
-                elif mode in ['e', 'extend']:
-                    var.extend(item)
-                elif mode in ['u', 'update']:
-                    var.update(item)
-                else:
-                    save_to[i] = item
+                save_to[i] = item
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         output = model.train(*args, **kwargs)
-        self._save_output(batch, model, output, action['save_to'], action['mode'])
+        self._save_output(batch, model, output, action['save_to'])
 
     def _exec_predict_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, model)
         predictions = model.predict(*args, **kwargs)
-        self._save_output(batch, model, predictions, action['save_to'], action['mode'])
+        self._save_output(batch, model, predictions, action['save_to'])
+
+    def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
+        """ Load a model
+
+        Parameters
+        ----------
+        mode : str
+            'static' or 'dynamic'
+
+        model_class
+            a type of a model
+
+        name : str
+            (optional) a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        if mode == 'static':
+            self.models.load_model(mode, model_class, name, *args, **kwargs)
+            return self
+        return self._add_action(LOAD_MODEL_ID, *args,
+                                _args=dict(mode=mode, model_class=model_class, model_name=name),
+                                **kwargs)
+
+    def _exec_load_model(self, batch, action):
+        mode = self._eval_expr(action['mode'], batch=batch)
+        name = self._eval_expr(action['model_name'], batch=batch)
+        model_class = self._eval_expr(action['model_class'], batch=batch)
+        args, kwargs = self._make_model_args(batch, action, None)
+        self.models.load_model(mode, model_class, name, *args, **kwargs)
+
+    def load_model_now(self, mode, model_class, name=None, *args, batch=None, **kwargs):
+        """ Load a model immediately
+
+        Parameters
+        ----------
+        mode : str
+            'static' or 'dynamic'
+
+        model_class
+            a type of a model
+
+        name : str
+            (optional) a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self._exec_load_model(batch, dict(mode=mode, model_class=model_class, model_name=name,
+                                          args=args, kwargs=kwargs))
 
     def save_model(self, name, *args, **kwargs):
-        """ Save a model """
-        model = self.get_model_by_name(name)
-        model.save(*args, **kwargs)
-        return self
+        """ Save a model
 
-    def gather_metrics(self, metrics_class, *args, save_to=None, mode='w', **kwargs):
+        Parameters
+        ----------
+        name : str
+            a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
+
+    def _exec_save_model(self, batch, action):
+        name = self._eval_expr(action['model_name'], batch=batch)
+        model = self.get_model_by_name(name)
+        args, kwargs = self._make_model_args(batch, action, model)
+        self.models.save_model(name, *args, **kwargs)
+
+    def save_model_now(self, name, *args, batch=None, **kwargs):
+        """ Save a model immediately
+
+        Parameters
+        ----------
+        name : str
+            a model name
+
+        batch : Batch
+            (optional) a batch which might be used to evaluate named expressions in other parameters
+
+        args, kwargs
+            model-specific parameters (like paths, formats, etc)
+        """
+        self._exec_save_model(batch, dict(model_name=name, args=args, kwargs=kwargs))
+
+    def gather_metrics(self, metrics_class, *args, save_to=None, **kwargs):
         """ Collect metrics for a model
 
         Parameters
@@ -967,21 +999,17 @@ class Pipeline:
         save_to : a named expression
             A location where metrics will be saved to.
 
-        mode : str
-            a method of storing metrics::
-            - 'w' - overwrite saved metrics with a new value. This is a default mode.
-            - 'a' - append a new value to earlier saved metrics
-            - 'u' - update earlier saved metrics with a new value
-
         Notes
         -----
         For available metrics see :class:`metrics API <.metrics.Metrics>`.
 
-        Mode 'w' saves metrics for the last batch only which is convenient for metrics evaluation during training.
+        A mode can be passed to `save_to` expression:
 
-        Mode 'u' is more suitable to calculate metrics during testing / validation.
+        - 'w' saves metrics for the last batch only which is convenient for metrics evaluation during training.
 
-        Mode 'a' collects the history of batch metrics.
+        - 'u' is more suitable to calculate metrics during testing / validation.
+
+        - 'a' collects the history of batch metrics.
 
         Examples
         --------
@@ -995,7 +1023,7 @@ class Pipeline:
                 .predict_model('unet', fetches='predictions', feed_dict={'x': B('images')},
                                save_to=V('inferred_masks'))
                 .gather_metrics('masks', targets=B('masks'), predictions=V('inferred_masks'),
-                                fmt='proba', axis=-1, save_to=V('metrics'), mode='u')
+                                fmt='proba', axis=-1, save_to=V('metrics', mode='u'))
                 .run(BATCH_SIZE, bar=True)
             )
 
@@ -1003,7 +1031,7 @@ class Pipeline:
             metrics.evaluate(['sensitivity', 'specificity'])
         """
         return self._add_action(GATHER_METRICS_ID, *args,
-                                _args=dict(metrics_class=metrics_class, save_to=save_to, mode=mode),
+                                _args=dict(metrics_class=metrics_class, save_to=save_to),
                                 **kwargs)
 
     def _exec_gather_metrics(self, batch, action):
@@ -1019,7 +1047,7 @@ class Pipeline:
             raise TypeError('Metrics can be a string or a class', metrics_class)
 
         metrics = metrics_class(*action['args'], **action['kwargs'])
-        self._save_output(batch, None, metrics, action['save_to'], action['mode'])
+        self._save_output(batch, None, metrics, action['save_to'])
 
     def join(self, *pipelines):
         """ Join one or several pipelines """
@@ -1222,6 +1250,9 @@ class Pipeline:
         else:
             batch_generator = self.dataset.gen_batch(*args, **kwargs)
 
+        if self.before:
+            self.before.run()
+
         if prefetch > 0:
             # pool cannot have more than 63 workers
             prefetch = min(prefetch, 62)
@@ -1262,6 +1293,10 @@ class Pipeline:
                     yield batch_res
                     if callable(on_iter):
                         on_iter(batch_res)
+
+        if self.after:
+            self.after.run()
+
 
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all lazy actions """
@@ -1323,12 +1358,9 @@ class Pipeline:
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
 
-            if self.before:
-                self.before.run()
             for _ in self.gen_batch(*args, **kwargs):
                 pass
-            if self.after:
-                self.after.run()
+
         return self
 
     def run_now(self, *args, **kwargs):

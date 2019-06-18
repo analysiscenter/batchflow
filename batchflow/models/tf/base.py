@@ -148,6 +148,9 @@ class TFModel(BaseModel):
         loss, decay, scope, optimizer. Those keys support syntax defined above.
         If any of loss, decay, scope, optimizer is defined in config, it serves as default
         value for every train step.
+        Optimizer and decay, created at one train step, can be used in another. To do so, one can
+        pass 'use' key with value corresponding to the name of train step from which you want to borrow optimizer.
+        Note that in this case you are still free to change loss-function or scope.
 
         In order to use particular train step during train, one must pass `train_mode` argument
         to `train` method.
@@ -155,7 +158,13 @@ class TFModel(BaseModel):
         Examples:
 
         - ``{'train_steps': {'all': {'loss': 'ce', 'optimizer': 'Adam', 'scope': ''},
-                             'body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}}}``
+                             'body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}}
+                             'custom': {'use': 'body', 'loss': 'ce', 'scope': 'head'}}``
+
+    microbatch : int
+        size of chunks to split every batch in. Allows to process given data sequentially, accumulating gradients
+        from microbatches and applying them once in the end. Can be changed later in the `train` method.
+        Note that the microbatch size must be a divisor of the batch size.
 
     common : dict
         default parameters for all :func:`.conv_block`
@@ -236,8 +245,11 @@ class TFModel(BaseModel):
         self.is_training = None
         self.global_step = None
         self.loss = None
+        self.microbatch = None
         self.train_steps = None
+        self.optimizers = {}
         self._train_lock = threading.Lock()
+        self._full_config = {}
         self._attrs = []
         self._saver = None
         self._to_classes = {}
@@ -276,18 +288,18 @@ class TFModel(BaseModel):
                         self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
 
                 config = self.build_config()
+                self._full_config = config
                 self._build(config)
+                self.microbatch = config.get('microbatch')
+
+                if self.session is None:
+                    self.create_session(config)
+                    self.reset()
 
                 if self.train_steps is None:
-                    train_steps = self._make_train_steps(config)
-                    self.store_to_attr('train_steps', train_steps)
+                    self._make_train_steps(config)
                 else:
                     self.store_to_attr('train_steps', self.train_steps)
-
-            if self.session is None:
-                self.create_session(config)
-                self.reset()
-
 
     def create_session(self, config=None):
         """ Create TF session """
@@ -333,9 +345,9 @@ class TFModel(BaseModel):
         ``transform`` : str or callable
             Predefined transforms are
 
-            - ``'ohe'`` - one-hot encoding
-            - ``'mip @ d'`` - maximum intensity projection :func:`~.layers.mip`
-              with depth ``d`` (should be int)
+            - ``ohe`` - one-hot encoding
+            - ``mip @ d`` - maximum intensity projection :func:`~.layers.mip` with depth ``d`` (should be int)
+            - ``downsample @ d`` - NN downsampling with a factor ``d`` (should be int)
 
         ``name`` : str
             a name for the transformed tensor.
@@ -474,23 +486,26 @@ class TFModel(BaseModel):
 
     def _make_transform(self, input_name, tensor, config):
         if config is not None:
+            transforms = {
+                'ohe': self._make_ohe,
+                'mip': self._make_mip,
+                'downsample': self._make_downsample
+            }
+
             transform_names = config.get('transform')
             if not isinstance(transform_names, list):
                 transform_names = [transform_names]
             for transform_name in transform_names:
                 if isinstance(transform_name, str):
-                    transforms = {
-                        'ohe': self._make_ohe,
-                        'mip': self._make_mip,
-                        'mask_downsampling': self._make_mask_downsampling
-                    }
-
                     kwargs = dict()
                     if transform_name.startswith('mip'):
                         parts = transform_name.split('@')
-                        transform_name = parts[0].strip()
+                        transform_name = 'mip'
                         kwargs['depth'] = int(parts[1])
-
+                    elif transform_name.startswith('downsample'):
+                        parts = transform_name.split('@')
+                        transform_name = 'downsample'
+                        kwargs['factor'] = int(parts[1])
                     tensor = transforms[transform_name](input_name, tensor, config, **kwargs)
                 elif callable(transform_name):
                     tensor = transform_name(tensor)
@@ -508,10 +523,9 @@ class TFModel(BaseModel):
         tensor = tf.one_hot(tensor, depth=num_classes, axis=axis)
         return tensor
 
-    def _make_mask_downsampling(self, input_name, tensor, config):
-        """ Perform mask downsampling with factor from config of tensor. """
-        _ = input_name
-        factor = config.get('factor')
+    def _make_downsample(self, input_name, tensor, config, factor):
+        """ Perform downsampling with the factor given. """
+        _ = input_name, config
         size = self.shape(tensor, False)
         if None in size[1:]:
             size = self.shape(tensor, True)
@@ -522,14 +536,6 @@ class TFModel(BaseModel):
         tensor = tf.squeeze(tensor, [-1])
         return tensor
 
-    def to_classes(self, tensor, input_name, name=None):
-        """ Convert tensor with labels to classes of ``input_name`` """
-        if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
-            tensor = tf.argmax(tensor, axis=-1, name=name)
-        if self.has_classes(input_name):
-            self._to_classes.update({tensor: input_name})
-        return tensor
-
     def _make_mip(self, input_name, tensor, config, depth):
         # mip has to know shape
         if config.get('shape') is None:
@@ -537,6 +543,14 @@ class TFModel(BaseModel):
         if depth is None:
             raise ValueError("mip should be specified as mip @ depth, e.g. 'mip @ 3'")
         tensor = mip(tensor, depth=depth, data_format=self.data_format(input_name))
+        return tensor
+
+    def to_classes(self, tensor, input_name, name=None):
+        """ Convert tensor with labels to classes of ``input_name`` """
+        if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
+            tensor = tf.argmax(tensor, axis=-1, name=name)
+        if self.has_classes(input_name):
+            self._to_classes.update({tensor: input_name})
         return tensor
 
     def _check_tensor(self, name):
@@ -554,37 +568,50 @@ class TFModel(BaseModel):
             raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
         raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
 
-    def _make_train_steps(self, config):
+    def _make_train_steps(self, config, init=True):
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
-                                                ('loss', 'decay', 'optimizer', 'scope')}}})
+                                                ('optimizer', 'decay', 'loss', 'scope')}}})
             total = lambda _: tf.losses.get_total_loss()
         else:
             total = lambda loss: loss
 
+        # First pass through the config: pass values from higher level, create all of the optimizers
+        for key, subconfig in config['train_steps'].items():
+            subconfig.update({key: subconfig.get(key) or config.get(key)
+                              for key in ('optimizer', 'decay', 'loss', 'scope')})
+
+            if subconfig.get('optimizer') is not None:
+                if self.optimizers.get(key) is None:
+                    self.optimizers[key] = self._make_optimizer(subconfig)
+
+        # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
         train_steps = {}
         for key, subconfig in config['train_steps'].items():
-            # Pass values from higher level
-            subconfig.update({key: subconfig.get(key) or config.get(key)
-                              for key in ('loss', 'decay', 'optimizer', 'scope')})
-
-            # Making loss and optimizer
             loss = self._make_loss(subconfig)
             loss_name = 'loss' if len(key) == 0 else 'loss_' + key
             self.store_to_attr(loss_name, total(loss))
-            optimizer_ = self._make_optimizer(subconfig)
 
-            # Parsing scope and making train step with it
-            if optimizer_:
-                update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-                with tf.control_dependencies(update_ops):
-                    scope = subconfig.get('scope')
-                    scope_collection = self._make_scope(scope)
-                    train_step = optimizer_.minimize(self._check_tensor(loss_name),
-                                                     global_step=self.global_step,
-                                                     var_list=scope_collection)
-                    train_steps.update({key: train_step})
-        return train_steps
+            optimizer = self.optimizers.get(subconfig.get('use')) or self.optimizers.get(key)
+
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                scope_collection = self._make_scope(subconfig)
+
+                ops = []
+                minimize_op = optimizer.minimize(self._check_tensor(loss_name),
+                                                 global_step=self.global_step,
+                                                 var_list=scope_collection)
+                ops.append(minimize_op)
+                if self.microbatch:
+                    zero_op, update_op, apply_op = self._make_microbatch_ops(self._check_tensor(loss_name),
+                                                                             optimizer,
+                                                                             var_list=scope_collection)
+                    ops.extend([zero_op, update_op, apply_op])
+                train_steps.update({key: ops})
+            if init:
+                self.session.run(tf.variables_initializer(optimizer.variables()))
+        self.store_to_attr('train_steps', train_steps)
 
     def _make_loss(self, config):
         loss, args = unpack_fn_from_config('loss', config)
@@ -621,22 +648,6 @@ class TFModel(BaseModel):
                     tf.losses.add_loss(tensor_loss)
         return tensor_loss
 
-    def _make_decay(self, config):
-        decay_name, decay_args = unpack_fn_from_config('decay', config)
-
-        if decay_name is None:
-            pass
-        elif callable(decay_name):
-            pass
-        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
-            decay_name = getattr(tf.train, decay_name)
-        elif decay_name in DECAYS:
-            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
-        else:
-            raise ValueError("Unknown learning rate decay method", decay_name)
-
-        return decay_name, decay_args
-
     def _make_optimizer(self, config):
         optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
 
@@ -660,7 +671,24 @@ class TFModel(BaseModel):
 
         return optimizer
 
-    def _make_scope(self, scopes):
+    def _make_decay(self, config):
+        decay_name, decay_args = unpack_fn_from_config('decay', config)
+
+        if decay_name is None:
+            pass
+        elif callable(decay_name):
+            pass
+        elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
+            decay_name = getattr(tf.train, decay_name)
+        elif decay_name in DECAYS:
+            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
+        else:
+            raise ValueError("Unknown learning rate decay method", decay_name)
+
+        return decay_name, decay_args
+
+    def _make_scope(self, config):
+        scopes = config.get('scope')
         scopes = [scopes] if isinstance(scopes, str) else scopes
         if not isinstance(scopes, (list, tuple)):
             raise ValueError("'Scope' key should be either string or sequence of strings.")
@@ -680,6 +708,29 @@ class TFModel(BaseModel):
                                     if item not in scope_collection]
             total.extend(scope_collection)
         return total
+
+    def _make_microbatch_ops(self, loss, optimizer, var_list):
+        with tf.variable_scope('microbatch'):
+            count = tf.Variable(0.0, dtype=tf.float32, trainable=False, name='count')
+            grad_accum = [tf.Variable(np.empty(var.shape, dtype=np.float32), trainable=False)
+                          for var in var_list]
+
+            with tf.variable_scope('zero_grad_accum'):
+                zero_grad_ops = [var.assign(tf.zeros(var.shape)) for var in grad_accum]
+                zero_count_op = count.assign(tf.zeros(shape=(), dtype=tf.float32))
+                zero_op = zero_grad_ops + [zero_count_op]
+
+            with tf.variable_scope('update_grad_accum'):
+                grad_and_vars = optimizer.compute_gradients(loss, var_list)
+                update_grad_ops = [grad_accum[i].assign_add(g) for i, (g, _) in enumerate(grad_and_vars)
+                                   if g is not None]
+                update_count_op = count.assign_add(tf.constant(1.0, dtype=tf.float32))
+                update_op = update_grad_ops + [update_count_op]
+
+            with tf.variable_scope('apply_grad_accum'):
+                grad_and_vars = [(grad_accum[i] / count, v) for i, (_, v) in enumerate(grad_and_vars)]
+                apply_op = optimizer.apply_gradients(grad_and_vars)
+        return zero_op, update_op, apply_op
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
@@ -782,7 +833,6 @@ class TFModel(BaseModel):
             _fetches = fetches
         return _fetches
 
-
     def _recast_output(self, out, ix=None, fetches=None):
         if isinstance(out, np.ndarray):
             fetch = fetches[ix] if ix is not None else fetches
@@ -807,7 +857,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None, use_lock=False, train_mode='', **kwargs):
+    def train(self, fetches=None, feed_dict=None, use_lock=False, train_mode='', microbatch=None, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -820,6 +870,9 @@ class TFModel(BaseModel):
             if True, the whole train step is locked, thus allowing for multithreading.
         train_mode : str or sequence of str
             name(s) of train step to optimize. Regular expressions are allowed.
+        microbatch : int
+            size of chunks to split every batch in. Note that if this option was not specified
+            in the model configuration, the first invocation of this method would create additional operations.
 
         Returns
         -------
@@ -831,7 +884,7 @@ class TFModel(BaseModel):
 
         Notes
         -----
-        ``feed_dict`` is not required as all placeholder names and their data can be passed directly.
+        ``feed_dict`` is not required as all placeholder names and their data can be passed directly as named arguments
 
         Examples
         --------
@@ -845,32 +898,89 @@ class TFModel(BaseModel):
             model.train(fetches='loss', images=B('images'), labels=B('labels'))
         """
         with self.graph.as_default():
+            # Use microbatch size from either args or config, and if
+            # necessary ops for microbatch-training are absent, create them
+            if microbatch is not False:
+                microbatch = microbatch or self.microbatch
+            self.microbatch = microbatch
+
+            if (microbatch) and (len(list(self.train_steps.values())[0]) == 1):
+                self._make_train_steps(self._full_config, init=False)
+
+            if microbatch is True: # if config option is set to True, but train option left unspectified,
+                microbatch = False # it is faster to pretend that there is no microbatching
+
+            # `feed_dict` processing: updating it with all kwargs,
+            # optionally splitting it for microbatch train, resulting in list of feed_dicts,
+            # updating every of them with `_fill_feed_dict` so tensorflow can work with it
             feed_dict = feed_dict or {}
             feed_dict = {**feed_dict, **kwargs}
-            _feed_dict = self._fill_feed_dict(feed_dict, is_training=True)
+
+            if not microbatch:
+                _feed_dicts = [feed_dict]
+            else:
+                splitted = {}
+                for key, value in feed_dict.items():
+                    if hasattr(value, '__len__'):
+                        if len(value) % microbatch != 0:
+                            raise ValueError('Batch size must be a divisible by microbatch size.')
+                        steps = len(value) // microbatch
+                        splitted[key] = np.array_split(value, steps)
+
+                _feed_dicts = [{key: value[i] for key, value in splitted.items()}
+                               for i in range(steps)]
+
+            _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in _feed_dicts]
+
+            # `fetches` and `train_mode` processing
             if fetches is None:
                 _fetches = tuple()
             else:
-                _fetches = self._fill_fetches(fetches, default=None)
+                names = [fetches] if isinstance(fetches, str) else fetches
+                _fetches = self._fill_fetches(names, default=None)
 
-            if use_lock:
-                self._train_lock.acquire()
 
             if not isinstance(train_mode, (tuple, list)):
                 train_mode = [train_mode]
 
-            _all_fetches = []
+            if use_lock:
+                self._train_lock.acquire()
+
             if self.train_steps:
                 for mode in train_mode:
                     if mode in self.train_steps.keys():
-                        _all_fetches += [self.train_steps[mode]]
+                        train_fetches = [self.train_steps[mode]]
                     else:
-                        _all_fetches += [train_step for name, train_step in self.train_steps.items()
+                        train_fetches = [train_step for name, train_step in self.train_steps.items()
                                          if re.search(mode, name) is not None]
-            if _fetches is not None:
-                _all_fetches += [_fetches]
-            if len(_all_fetches) > 0:
-                *_, output = self.session.run(_all_fetches, feed_dict=_feed_dict)
+
+                    if not microbatch:
+                        # Run bunch of `minimize` operations (one for every train step)
+                        all_fetches = [op[0] for op in train_fetches]
+                        if _fetches is not None:
+                            all_fetches += [_fetches]
+                        if len(all_fetches) > 0:
+                            *_, output = self.session.run(all_fetches, feed_dict=_feed_dicts[0])
+                    else:
+                        # For every train step, zero out gradient accumulators,
+                        # then update them with gradients, computed on each of `feed_dicts`,
+                        # and finally apply accumulated values to weights
+                        outputs = []
+                        for _, zero_op, update_op, apply_op in train_fetches:
+                            all_fetches = [update_op]
+                            if _fetches is not None:
+                                all_fetches += [_fetches]
+
+                            self.session.run(zero_op, feed_dict=_feed_dicts[0])
+                            for i in range(steps):
+                                _, _output = self.session.run(all_fetches, feed_dict=_feed_dicts[i])
+                                outputs += [_output]
+                            self.session.run(apply_op, feed_dict=_feed_dicts[-1])
+
+                        outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
+                        output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
+                                  for i, name in enumerate(names)]
+                    output = output[0] if isinstance(fetches, str) else output
             else:
                 output = None
 

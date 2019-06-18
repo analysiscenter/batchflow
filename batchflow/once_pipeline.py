@@ -1,9 +1,11 @@
 """ Once pipeline """
 import sys
+import copy as cp
 from functools import partial
 import numpy as np
 
 from .named_expr import NamedExpression, eval_expr
+from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID
 
 
 class OncePipeline:
@@ -31,6 +33,10 @@ class OncePipeline:
         self._namespaces = state['namespaces']
         self.pipeline = state['pipeline']
 
+    def copy(self):
+        """ Make a shallow copy of the dataset object """
+        return cp.copy(self)
+
     def __add__(self, other):
         if isinstance(other, OncePipeline):
             return self.pipeline + other
@@ -50,8 +56,11 @@ class OncePipeline:
                 return getattr(namespace, name)
         return None
 
-    def _add_action(self, name, *args, save_to=None, **kwargs):
-        self._actions.append({'name': name, 'args': args, 'kwargs': kwargs, 'save_to': save_to})
+    def _add_action(self, name, *args, _args=None, save_to=None, **kwargs):
+        action = {'name': name, 'args': args, 'kwargs': kwargs, 'save_to': save_to}
+        if _args:
+            action.update(**_args)
+        self._actions.append(action)
         return self
 
     def __getattr__(self, name):
@@ -67,16 +76,20 @@ class OncePipeline:
         args_value = eval_expr(action['args'], pipeline=self.pipeline)
         kwargs_value = eval_expr(action['kwargs'], pipeline=self.pipeline)
 
-        method = self.get_method(action['name'])
-        if method is None:
-            raise ValueError("Unknown method: %s" % action['name'])
+        if action['name'] in ACTIONS:
+            method = getattr(self, ACTIONS[action['name']])
+            method(action)
+        else:
+            method = self.get_method(action['name'])
+            if method is None:
+                raise ValueError("Unknown method: %s" % action['name'])
 
-        res = method(*args_value, **kwargs_value)
+            res = method(*args_value, **kwargs_value)
 
-        if isinstance(action['save_to'], NamedExpression):
-            action['save_to'].set(res, pipeline=self.pipeline)
-        elif isinstance(action['save_to'], np.ndarray):
-            action['save_to'][:] = res
+            if isinstance(action['save_to'], NamedExpression):
+                action['save_to'].set(res, pipeline=self.pipeline)
+            elif isinstance(action['save_to'], np.ndarray):
+                action['save_to'][:] = res
 
     def run(self):
         """ Execute all actions """
@@ -146,5 +159,19 @@ class OncePipeline:
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
-        self.pipeline.save_model(name, *args, **kwargs)
-        return self
+        return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
+
+    def _exec_save_model(self, action):
+        self.pipeline._exec_save_model(None, action)        # pylint:disable=protected-access
+
+    def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
+        """ Load a model """
+        if mode == 'static':
+            self.pipeline.models.load_model(mode, model_class, name, *args, **kwargs)
+            return self
+        return self._add_action(LOAD_MODEL_ID, *args,
+                                _args=dict(mode=mode, model_class=model_class, model_name=name),
+                                **kwargs)
+
+    def _exec_load_model(self, action):
+        self.pipeline._exec_load_model(None, action)        # pylint:disable=protected-access

@@ -18,6 +18,16 @@ class NamedExpression:
     mode : str
         a default assignment method: write, append, extend, update.
         Can be shrotened to jiust the first letter: w, a, e, u.
+
+        - 'w' - overwrite with a new value. This is a default mode.
+        - 'a' - append a new value
+                (see list.append https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
+        - 'e' - extend with a new value
+                (see list.extend https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)
+        - 'u' - update with a new value
+                (see dict.update https://docs.python.org/3/library/stdtypes.html#dict.update
+                or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update)
+
     """
     def __init__(self, name, mode='w'):
         self.name = name
@@ -186,7 +196,7 @@ class B(NamedExpression):
         B('images_shape')
         B(copy=True)
     """
-    def __init__(self, name, mode='w', copy=False):
+    def __init__(self, name=None, mode='w', copy=False):
         super().__init__(name, mode)
         self.copy = copy
 
@@ -245,7 +255,7 @@ class F(NamedExpression):
         F(MyBatch.rotate, angle=30)
         F(prepare_data, 115, item=10)
     """
-    def __init__(self, name, mode='w', *args, _pass=True, **kwargs):
+    def __init__(self, name, *args, mode='w', _pass=True, **kwargs):
         super().__init__(name, mode)
         self.args = args
         self.kwargs = kwargs
@@ -274,8 +284,8 @@ class F(NamedExpression):
 
 class L(F):
     """ A function, method or any other callable """
-    def __init__(self, name, mode='w', *args, **kwargs):
-        super().__init__(name, mode, _pass=False, *args, **kwargs)
+    def __init__(self, name, *args, mode='w', **kwargs):
+        super().__init__(name, *args, mode=mode, _pass=False, **kwargs)
 
 
 class V(NamedExpression):
