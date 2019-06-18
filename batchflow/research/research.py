@@ -6,7 +6,6 @@ from copy import copy, deepcopy
 from collections import OrderedDict
 from math import ceil
 import json
-import warnings
 import dill
 import pandas as pd
 
@@ -368,7 +367,7 @@ class Research:
             os.makedirs(name)
         else:
             raise ValueError(
-                "Research with name {} already exists. That research will be renamed to {}".format(name, dirname)
+                "Research with name {} already exists".format(name)
             )
 
     def save(self):
