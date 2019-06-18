@@ -307,14 +307,11 @@ class TFModel(BaseModel):
                         scope_name = device[1:].replace(':', '_')
                         self.device_scopes[device] = scope_name
                         with tf.variable_scope(scope_name):
-                            with tf.variable_scope('always_the_same'):
-
-
-                                config = self.build_config()
-                                self._full_config = config
-                                self._build(config)
-                                self.microbatch = config.get('microbatch')
-                                tf.get_variable_scope().reuse_variables()
+                            config = self.build_config()
+                            self._full_config = config
+                            self._build(config)
+                            self.microbatch = config.get('microbatch')
+                            tf.get_variable_scope().reuse_variables()
 
                 # [print('OPERATIONS:::', item.name)
                 #  for item in self.graph.get_operations()]
@@ -325,16 +322,17 @@ class TFModel(BaseModel):
                     attrs.remove('global_step')
                     attrs.remove('is_training')
                     for name in attrs:
-                        self._attrs = [item for item in self._attrs if item != name] #self._attrs.remove(name)
-                        tensor = self._check_tensor_device(name, self.devices[0])
-                        self.store_to_attr(name, tensor)
+                        if name != 'targets':
+                            self._attrs = [item for item in self._attrs if item != name]
 
+                            tensor = self._check_tensor_device(name, self.devices[0])
+                            self.store_to_attr(name, tensor)
+                print(self._attrs)
                 if self.session is None:
                     self.create_session(config)
-                    self.reset()
 
                 self._make_train_steps(config)
-
+                self.reset()
                 # [print('OPERATIONS AFTER:::', item.name)
                 #  for item in self.graph.get_operations()]
 
