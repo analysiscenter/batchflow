@@ -25,7 +25,6 @@ class Research:
         self.trails = 3
         self.workers = 1
         self.bar = False
-        self.initial_name = 'research'
         self.n_reps = 1
         self.name = 'research'
         self.worker_class = PipelineWorker
@@ -99,8 +98,7 @@ class Research:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
         unit = Executable()
-        unit.add_pipeline(root, name, branch, dataset, part, variables,
-                          execute, dump, run, logging, **kwargs)
+        unit.add_pipeline(root, name, branch, dataset, part, variables, execute, dump, run, logging, **kwargs)
         self.executables[name] = unit
         return self
 
@@ -112,7 +110,7 @@ class Research:
         ----------
         function : callable
             callable object with following parameters:
-                experiment : `OrderedDict` of Executable
+                experiment : `OrderedDict` of Executable objects
                     all pipelines and functions that were added to Research
                 iteration : int
                     iteration when function is called
@@ -315,8 +313,7 @@ class Research:
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
             self.trails = trails
-            self.initial_name = name
-            self.name = name
+            self.name = name or self.name
 
             self.n_splits = n_splits
             self.shuffle = shuffle
@@ -338,7 +335,7 @@ class Research:
             raise ValueError("Number of gpus / n_workers must be 1 \
                              or be divisible by the number of branches but {} was given".format(len(self.gpu)))
 
-        self.name = self._folder_exists(self.initial_name)
+        self._folder_exists(self.name)
 
         print("Research {} is starting...".format(self.name))
 
@@ -367,19 +364,12 @@ class Research:
         return gpu
 
     def _folder_exists(self, name):
-        name = name or 'research'
         if not os.path.exists(name):
-            dirname = name
+            os.makedirs(name)
         else:
-            i = 1
-            while os.path.exists(name + '_' + str(i)):
-                i += 1
-            dirname = name + '_' + str(i)
-            warnings.warn(
+            raise ValueError(
                 "Research with name {} already exists. That research will be renamed to {}".format(name, dirname)
             )
-        os.makedirs(dirname)
-        return dirname
 
     def save(self):
         """ Save description of the research to folder name/description. """
