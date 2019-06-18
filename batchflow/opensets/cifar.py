@@ -25,7 +25,7 @@ class BaseCIFAR(ImagesOpenset):
     TRAIN_NAME_ID = None
     TEST_NAME_ID = None
 
-    def __init__(self, *args, bar=False,  preloaded=None, train_test=True, **kwargs):
+    def __init__(self, *args, bar=False, preloaded=None, train_test=True, **kwargs):
         self.bar = tqdm.tqdm(total=6) if bar else None
         super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
         if self.bar:
