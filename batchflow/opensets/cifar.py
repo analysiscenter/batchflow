@@ -25,10 +25,9 @@ class BaseCIFAR(ImagesOpenset):
     TRAIN_NAME_ID = None
     TEST_NAME_ID = None
 
-    def __init__(self, *args, bar=False, **kwargs):
+    def __init__(self, *args, bar=False,  preloaded=None, train_test=True, **kwargs):
         self.bar = tqdm.tqdm(total=6) if bar else None
-        super().__init__(*args, train_test=True, **kwargs)
-        self.split()
+        super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
         if self.bar:
             self.bar.close()
 
@@ -95,6 +94,7 @@ class CIFAR10(BaseCIFAR):
     LABELS_KEY = b"labels"
     TRAIN_NAME_ID = "data_batch"
     TEST_NAME_ID = "test_batch"
+    num_classes = 10
 
 
 class CIFAR100(BaseCIFAR):
@@ -115,3 +115,4 @@ class CIFAR100(BaseCIFAR):
     LABELS_KEY = b"fine_labels"
     TRAIN_NAME_ID = "train"
     TEST_NAME_ID = "test"
+    num_classes = 100
