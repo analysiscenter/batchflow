@@ -10,6 +10,7 @@ import contextlib
 
 import numpy as np
 import tensorflow as tf
+import tensorflow.python as tfp
 
 from ... import Config
 from ..utils import unpack_fn_from_config
@@ -255,6 +256,9 @@ class TFModel(BaseModel):
         self._to_classes = {}
         self._inputs = {}
         self.inputs = None
+        self.devices = []
+        self.device_scopes = {}
+        self.TEST_FLAG = True
 
         super().__init__(*args, **kwargs)
 
@@ -271,41 +275,70 @@ class TFModel(BaseModel):
         #. Create a tensorflow session
         """
 
-        def _device_context():
-            if 'device' in self.config:
-                device = self.config.get('device')
-                context = self.graph.device(device)
+        # Get list of all available devices
+        if self.config.get('device'):
+            self.devices = self.config.get('device')
+        else:
+            available_devices = tfp.client.device_lib.list_local_devices()
+            cpu_devices = [item.name for item in available_devices if ('device:CPU' in item.name)]
+            gpu_devices = [item.name for item in available_devices if ('device:GPU' in item.name)]
+            if len(gpu_devices) > 0:
+                self.devices = gpu_devices
             else:
-                context = contextlib.ExitStack()
-            return context
+                self.devices = [cpu_devices[0]]
+        print(self.devices)
 
-        with self.graph.as_default(), _device_context():
+        with self.graph.as_default():
             with tf.variable_scope(self.__class__.__name__):
                 with tf.variable_scope('globals'):
                     if self.is_training is None:
-                        self.store_to_attr('is_training', tf.placeholder(tf.bool, name='is_training'))
+                        self.store_to_attr('is_training',
+                                           tf.placeholder(tf.bool, name='is_training'))
                     if self.global_step is None:
-                        self.store_to_attr('global_step', tf.Variable(0, trainable=False, name='global_step'))
+                        self.store_to_attr('global_step',
+                                           tf.Variable(0, trainable=False, name='global_step'))
 
-                config = self.build_config()
-                self._full_config = config
-                self._build(config)
-                self.microbatch = config.get('microbatch')
+                for device in self.devices:
+                    with tf.device(device):
+                        scope_name = device[1:].replace(':', '_')
+                        self.device_scopes[device] = scope_name
+                        with tf.variable_scope(scope_name):
+
+
+                            config = self.build_config()
+                            self._full_config = config
+                            self._build(config)
+                            self.microbatch = config.get('microbatch')
+                            tf.get_variable_scope().reuse_variables()
+
+                # [print('OPERATIONS:::', item.name)
+                #  for item in self.graph.get_operations()]
+
+                # Recreate most of the attributes so they reference the first (leading) device
+                with tf.device(self.devices[0]):
+                    attrs = self._attrs
+                    attrs.remove('global_step')
+                    attrs.remove('is_training')
+                    for name in attrs:
+                        self._attrs.remove(name)
+                        tensor = self._check_tensor_device(name, self.devices[0])
+                        self.store_to_attr(name, tensor)
 
                 if self.session is None:
                     self.create_session(config)
                     self.reset()
 
-                if self.train_steps is None:
-                    self._make_train_steps(config)
-                else:
-                    self.store_to_attr('train_steps', self.train_steps)
+                self._make_train_steps(config)
+
+                # [print('OPERATIONS AFTER:::', item.name)
+                #  for item in self.graph.get_operations()]
+
 
     def create_session(self, config=None):
         """ Create TF session """
         config = config if config is not None else self.config
-        session_config = config.get('session', default={})
-        self.session = tf.Session(**session_config)
+        session_config = config.get('session', default={'allow_soft_placement': True})
+        self.session = tf.Session(config=tf.ConfigProto(**session_config))
 
     def reset(self):
         """ Reset the trained model to allow a new training from scratch """
@@ -553,6 +586,28 @@ class TFModel(BaseModel):
             self._to_classes.update({tensor: input_name})
         return tensor
 
+
+    def _check_tensor_device(self, name, device=None):
+        if device is None:
+            if hasattr(self, name):
+                return getattr(self, name)
+
+        prefix = self.__class__.__name__
+        if device is not None:
+            prefix = prefix + '/' + self.device_scopes[device]
+
+        valid = [item for item in self.graph.get_operations()
+                 if (name in item.name) and (item.name.startswith(prefix))]
+        if len(valid) != 1:
+            valid = [item for item in valid if item.name.endswith('_output')]
+
+        if len(valid) == 1:
+            return valid[0].values()[0]
+
+        if len(valid) > 1:
+            raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
+        raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
+
     def _check_tensor(self, name):
         if hasattr(self, name):
             return getattr(self, name)
@@ -581,39 +636,67 @@ class TFModel(BaseModel):
             subconfig.update({key: subconfig.get(key) or config.get(key)
                               for key in ('optimizer', 'decay', 'loss', 'scope')})
 
-            if subconfig.get('optimizer') is not None:
-                if self.optimizers.get(key) is None:
-                    self.optimizers[key] = self._make_optimizer(subconfig)
+            for device in self.devices:
+                if subconfig.get('optimizer') is not None:
+                    with tf.device(device):
+                        if self.optimizers.get((key, device)) is None:
+                            self.optimizers[(key, device)] = self._make_optimizer(subconfig)
 
         # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
         train_steps = {}
         for key, subconfig in config['train_steps'].items():
-            loss = self._make_loss(subconfig)
-            loss_name = 'loss' if len(key) == 0 else 'loss_' + key
-            self.store_to_attr(loss_name, total(loss))
 
-            optimizer = self.optimizers.get(subconfig.get('use')) or self.optimizers.get(key)
+            # Create losses for every device, then combine them into one via summation
+            device_losses = []
+            for device in self.devices:
+                with tf.device(device):
+                    loss_ = self._make_loss(subconfig, device)
+                    device_losses.append(loss_)
 
-            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            with tf.control_dependencies(update_ops):
-                scope_collection = self._make_scope(subconfig)
+            with tf.device(self.devices[0]):
+                loss_name = 'loss' if len(key) == 0 else 'loss_' + key
+                loss = tf.add_n(device_losses, name=loss_name)
+                self.store_to_attr(loss_name, loss)
 
-                ops = []
-                minimize_op = optimizer.minimize(self._check_tensor(loss_name),
-                                                 global_step=self.global_step,
-                                                 var_list=scope_collection)
-                ops.append(minimize_op)
-                if self.microbatch:
-                    zero_op, update_op, apply_op = self._make_microbatch_ops(self._check_tensor(loss_name),
-                                                                             optimizer,
-                                                                             var_list=scope_collection)
-                    ops.extend([zero_op, update_op, apply_op])
-                train_steps.update({key: ops})
+
+            optimizer = self.optimizers.get((subconfig.get('use'), device)) or self.optimizers.get((key, device))
+            device_grads = []
+            ops = {}
+            for device in self.devices:
+                with tf.device(device):
+                    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                    with tf.control_dependencies(update_ops):
+                        scope_collection = self._make_scope(subconfig, device)
+
+                        minimize_op = optimizer.minimize(self._check_tensor_device(loss_name),
+                                                         global_step=self.global_step,
+                                                         var_list=scope_collection)
+                        ops['minimize'] = minimize_op
+                        if self.microbatch:
+                            zero_op, update_op, apply_op = self._make_microbatch_ops(self._check_tensor(loss_name),
+                                                                                     optimizer,
+                                                                                     var_list=scope_collection)
+                            ops.update({'zero_grads': zero_op,
+                                        'update_grads': update_op,
+                                        'apply_grads': apply_op})
+                        train_steps.update({key: ops})
+
+                        if self.TEST_FLAG:
+                            scope_collection = self._make_scope(subconfig, device)
+                            update_op = optimizer.compute_gradients(self._check_tensor_device(loss_name),
+                                                                    var_list=scope_collection)
+                            device_grads.append(update_op)
+            # WTF
+            with tf.device(self.devices[0]):
+                averaged_gradients = self._make_multi_update_op(device_grads)
+                apply_grads = optimizer.apply_gradients(averaged_gradients,
+                                                        global_step=self.global_step)
+                ops['multi_apply_grads'] = apply_grads
             if init:
                 self.session.run(tf.variables_initializer(optimizer.variables()))
-        self.store_to_attr('train_steps', train_steps)
+        self.train_steps = train_steps
 
-    def _make_loss(self, config):
+    def _make_loss(self, config, device):
         loss, args = unpack_fn_from_config('loss', config)
 
         add_loss = False
@@ -634,8 +717,8 @@ class TFModel(BaseModel):
         else:
             predictions_name = args.pop('predictions', 'predictions')
             targets_name = args.pop('targets', 'targets')
-            predictions = self._check_tensor(predictions_name)
-            targets = self._check_tensor(targets_name)
+            predictions = self._check_tensor_device(predictions_name, device)
+            targets = self._check_tensor_device(targets_name, device)
 
             add_loss = args.pop('add_loss', False)
             if add_loss:
@@ -687,7 +770,7 @@ class TFModel(BaseModel):
 
         return decay_name, decay_args
 
-    def _make_scope(self, config):
+    def _make_scope(self, config, device=None):
         scopes = config.get('scope')
         scopes = [scopes] if isinstance(scopes, str) else scopes
         if not isinstance(scopes, (list, tuple)):
@@ -695,14 +778,14 @@ class TFModel(BaseModel):
 
         total = []
         for scope in scopes:
-            scope_postfix = self.__class__.__name__ + '/'
+            scope_prefix = self.__class__.__name__ + '/' + self.device_scopes[device]
             if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
-                scope_postfix += scope[1:]
+                scope_prefix += scope[1:]
             else:
-                scope_postfix += scope
+                scope_prefix += scope
 
             scope_collection = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                                 scope_postfix)
+                                                 scope_prefix)
             if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
                 scope_collection = [item for item in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
                                     if item not in scope_collection]
@@ -731,6 +814,19 @@ class TFModel(BaseModel):
                 grad_and_vars = [(grad_accum[i] / count, v) for i, (_, v) in enumerate(grad_and_vars)]
                 apply_op = optimizer.apply_gradients(grad_and_vars)
         return zero_op, update_op, apply_op
+
+
+    def _make_multi_update_op(self, gradients):
+        average = []
+
+        for grad_and_vars in zip(*gradients):
+            expanded = [tf.expand_dims(g, 0) for g, _ in grad_and_vars]
+            concatted = tf.concat(expanded, axis=0)
+            averaged = tf.reduce_mean(concatted, axis=0)
+            average.append((averaged, grad_and_vars[0][1]))
+        return average
+
+
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
@@ -788,21 +884,12 @@ class TFModel(BaseModel):
         config = {**config, **kwargs}
         return config
 
-    def _map_name(self, name):
+    def _map_name(self, name, device=None):
         if isinstance(name, str):
-            if hasattr(self, name):
-                return getattr(self, name)
-
-            if ':' in name:
-                return name
-
-            tensors = tf.get_collection(name)
-            if len(tensors) != 0:
-                return tensors
-            return name + ':0'
+            return self._check_tensor_device(name, device)
         return name
 
-    def _fill_feed_dict(self, feed_dict=None, is_training=True):
+    def _fill_feed_dict(self, feed_dict=None, device=None, is_training=True):
         feed_dict = feed_dict or {}
         _feed_dict = {}
         for placeholder, value in feed_dict.items():
@@ -810,8 +897,8 @@ class TFModel(BaseModel):
                 classes = self.classes(placeholder)
                 get_indices = np.vectorize(lambda c, arr=classes: np.where(c == arr)[0])
                 value = get_indices(value)
-            placeholder = self._map_name(placeholder)
-            value = self._map_name(value)
+            placeholder = self._map_name(placeholder, device)
+            value = self._map_name(value, device)
             _feed_dict.update({placeholder: value})
         if self.is_training not in _feed_dict:
             _feed_dict.update({self.is_training: is_training})
@@ -930,7 +1017,7 @@ class TFModel(BaseModel):
                 _feed_dicts = [{key: value[i] for key, value in splitted.items()}
                                for i in range(steps)]
 
-            _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in _feed_dicts]
+            # _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in _feed_dicts]
 
             # `fetches` and `train_mode` processing
             if fetches is None:
@@ -956,17 +1043,35 @@ class TFModel(BaseModel):
 
                     if not microbatch:
                         # Run bunch of `minimize` operations (one for every train step)
-                        all_fetches = [op[0] for op in train_fetches]
+                        # all_fetches = [ops['minimize'] for ops in train_fetches]
+                        all_fetches = [ops['multi_apply_grads'] for ops in train_fetches]
                         if _fetches is not None:
                             all_fetches += [_fetches]
                         if len(all_fetches) > 0:
-                            *_, output = self.session.run(all_fetches, feed_dict=_feed_dicts[0])
+                            _feed_dict = _feed_dicts[0]
+                            multi_splitted = {}
+
+                            for key, value in _feed_dict.items():
+                                if hasattr(value, '__len__'):
+                                    if len(value) % len(self.devices) != 0:
+                                        raise ValueError('Batch size must be a divisible by microbatch size.')
+                                    steps = len(value) // len(self.devices)
+                                    multi_splitted[key] = np.array_split(value, steps)
+
+                            _feed_dicts = [{key: value[i] for key, value in multi_splitted.items()}
+                                           for i in range(steps)]
+                            _fd = {}
+                            for part, device in zip(_feed_dicts, self.devices):
+                                _fd = {**_fd, **self._fill_feed_dict(part, device)}
+                            print('_FD KEYS', _fd.keys())
+                            *_, output = self.session.run(all_fetches, feed_dict=_fd)
                     else:
                         # For every train step, zero out gradient accumulators,
                         # then update them with gradients, computed on each of `feed_dicts`,
                         # and finally apply accumulated values to weights
                         outputs = []
-                        for _, zero_op, update_op, apply_op in train_fetches:
+                        for ops in train_fetches:
+                            zero_op, update_op, apply_op = ops['zero_grads'], ops['update_grads'], ops['apply_grads']
                             all_fetches = [update_op]
                             if _fetches is not None:
                                 all_fetches += [_fetches]
@@ -1486,7 +1591,7 @@ class TFModel(BaseModel):
             block = getattr(self, name)(inputs=inputs, **{**defaults, **config[name]})
         else:
             raise TypeError('block can be configured as a function or a dict with parameters')
-        self.store_to_attr(name + '_output', block)
+        # self.store_to_attr(name + '_output', block)
         return block
 
     def _build(self, config=None):
