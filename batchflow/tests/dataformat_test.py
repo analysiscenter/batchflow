@@ -46,7 +46,7 @@ def model_setup():
                           preloaded=data)
 
         model_config = {'inputs': {'images': {'shape': image_shape},
-                                   'labels': {'name': 'targets', 'classes': 10}},
+                                   'labels': {'classes': 10}},
                         'initial_block/inputs': 'images'}
         return dataset, model_config
 

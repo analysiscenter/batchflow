@@ -55,7 +55,7 @@ def single_config():
             return inputs
 
     config = {'inputs': {'images': {'shape': (10, 10, 3)},
-                         'labels': {'name': 'targets', 'classes': 2}},
+                         'labels': {'classes': 2}},
               'initial_block/inputs': 'images',
               'head': {'layout': 'f', 'units': 2},
               'loss': 'ce'}
@@ -110,7 +110,7 @@ def multi_config():
 
     config = {'inputs': {'images_1': {'shape': (10, 10, 3)},
                          'images_2': {'shape': (10, 10, 3)},
-                         'labels': {'name': 'targets', 'classes': 2}},
+                         'labels': {'classes': 2}},
               'initial_block/inputs': ['images_1', 'images_2'],
               'head': {'layout': 'f', 'units': 2},
               'loss': 'ce'}
