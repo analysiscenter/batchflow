@@ -64,6 +64,6 @@ research = (Research()
 )
 
 n_workers = 1 if len(sys.argv) <= 1 else int(sys.argv[1])
-gpu_list = [2, 4, 5, 6] if len(sys.argv) <= 2 else [int(item) for item in sys.argv[2]]
+gpu_list = [2, 4, 5, 6]
 
 research.run(n_reps=1, n_iters=1000, workers=n_workers, name='my_research', gpu=gpu_list[:n_workers])
