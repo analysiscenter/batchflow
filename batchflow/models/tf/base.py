@@ -1088,7 +1088,9 @@ class TFModel(BaseModel):
                         if len(self.devices) == 1:
                             outputs = []
                             for ops in train_fetches:
-                                zero_op, update_op, apply_op = ops['zero_grads'], ops['update_grads'], ops['apply_grads']
+                                zero_op, update_op, apply_op = ops['zero_grads'], \
+                                                               ops['update_grads'], \
+                                                               ops['apply_grads']
                                 all_fetches = [update_op]
                                 if _fetches is not None:
                                     all_fetches += [_fetches]
