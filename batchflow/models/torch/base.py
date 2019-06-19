@@ -293,7 +293,7 @@ class TorchModel(BaseModel):
             unit, index = _device if len(_device) > 1 else (device, '0')
             if unit.lower() in ['gpu', 'cpu']:
                 unit = 'cuda' if unit.lower() == 'gpu' else 'cpu'
-                _device = torch.device(unit, index)
+                _device = torch.device(unit, int(index))
             else:
                 raise ValueError('Unknown device type: ', device)
         else:
