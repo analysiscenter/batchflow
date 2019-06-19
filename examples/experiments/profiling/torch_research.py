@@ -18,7 +18,7 @@ model_config={
     },
     'initial_block/inputs': 'images',
     'body/block/layout': C('layout'),
-    'device': C('torch_device') # it's technical parameter for TFModel
+    'device': C('device') # it's technical parameter for TFModel
 }
 
 mnist = MNIST()
