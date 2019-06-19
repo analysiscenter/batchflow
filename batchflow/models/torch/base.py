@@ -811,10 +811,43 @@ class TorchModel(BaseModel):
 
         return output
 
-    def predict(self, *args, fetches=None):    # pylint: disable=arguments-differ
+    def predict(self, *args, targets=None, fetches=None):    # pylint: disable=arguments-differ
         """ Get predictions on the data provided
+
+        Parameters
+        ----------
+        args
+            arguments to be passed directly into the model
+
+        targets
+            (optional) targets to calculate loss
+
+        fetches : tuple, list
+            a sequence of tensors to fetch from the model
+
+        use_lock : bool
+            if True, the whole train step is locked, thus allowing for multithreading.
+
+        microbatch : int or None
+            make forward/backward pass with microbatches of a given size, but apply gradients after the whole batch.
+            Batch size should be evenly divisible by microbatch size.
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same structure
+
+
+        Examples
+        --------
+
+        ::
+
+            model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
-        *inputs, targets = self._fill_input(*args)
+        inputs = self._fill_input(*args)
+        if targets:
+            targets = self._fill_input(targets)
+
         self.model.eval()
 
         with torch.no_grad():
@@ -836,7 +869,7 @@ class TorchModel(BaseModel):
         Parameters
         ----------
         path : str
-            a path to a directory where all model files will be stored
+            a path to a file where the model data will be stored
 
         Examples
         --------
@@ -851,7 +884,7 @@ class TorchModel(BaseModel):
         _ = args, kwargs
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
-            os.mkdir(dirname)
+            os.makedirs(dirname)
         torch.save({
             'model_state_dict': self.model,
             'optimizer_state_dict': self.optimizer,
@@ -866,7 +899,7 @@ class TorchModel(BaseModel):
         Parameters
         ----------
         path : str
-            a directory where a model is stored
+            a file path where a model is stored
 
         eval : bool
             whether to switch the model to eval mode

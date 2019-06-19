@@ -361,8 +361,8 @@ class ImagesBatch(BaseImagesBatch):
             else:
                 image = image[None, ...]
 
-            if dtype is not None:
-                image = image.astype(dtype)
+        if dtype is not None:
+            image = image.astype(dtype)
 
         return image
 
