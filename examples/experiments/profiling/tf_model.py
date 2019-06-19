@@ -22,7 +22,7 @@ model_config={
     },
     'initial_block/inputs': 'images',
     'body/block/layout': 'cna',
-    'device': '/device:GPU:2'
+    'device': 'gpu:2'
 }
 
 mnist = MNIST()
