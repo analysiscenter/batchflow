@@ -34,7 +34,7 @@ train_template = (Pipeline()
             .train_model('conv', 
                          fetches='loss', 
                          feed_dict={'images': B('images'), 'labels': B('labels')},
-                         save_to=V('loss'), mode='w')
+                         save_to=V('loss', mode='w'))
 )
 
 test_template = (Pipeline()
@@ -47,7 +47,7 @@ test_template = (Pipeline()
                          feed_dict={'images': B('images'), 'labels': B('labels')},
                          save_to=V('predictions'))
             .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
-                                fmt='logits', axis=-1, save_to=V('metrics'), mode='a')
+                                fmt='logits', axis=-1, save_to=V('metrics', mode='a'))
 )
 
 train_ppl = train_root + train_template
