@@ -33,7 +33,7 @@ train_ppl = (mnist.train.p
     .to_array(channels='first', dtype='float32')
     .train_model('conv', B('images'), B('labels'),
                  fetches='loss',
-                 save_to=V('loss'), mode='w')
+                 save_to=V('loss', mode='w'))
     .run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True))
 
 
@@ -46,7 +46,7 @@ test_ppl = (mnist.test.p
                    fetches='predictions',
                    save_to=V('predictions'))
     .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
-                    fmt='logits', axis=-1, save_to=V('metrics'), mode='a')
+                    fmt='logits', axis=-1, save_to=V('metrics', mode='a'))
     .run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True))
 
 train_ppl.run()
