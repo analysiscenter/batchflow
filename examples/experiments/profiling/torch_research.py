@@ -4,7 +4,7 @@ import tensorflow as tf
 sys.path.append("../../..")
 from batchflow import Pipeline, B, C, V
 from batchflow.opensets import MNIST
-from batchflow.models.torch import VGG7, VGG16
+from batchflow.models.torch import VGG16
 from batchflow.research import Research, Option
 
 BATCH_SIZE=64
@@ -17,7 +17,7 @@ model_config={
         'name': 'targets'
     },
     'initial_block/inputs': 'images',
-    'body/block/layout': C('layout'),
+    'body/block/layout': 'cna',
     'device': C('device') # it's technical parameter for TFModel
 }
 
@@ -28,7 +28,7 @@ test_root = mnist.test.p.run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True)
 train_template = (Pipeline()
             .init_variable('loss', init_on_each_run=list)
             .init_variable('accuracy', init_on_each_run=list)
-            .init_model('dynamic', C('model'), 'conv', config=model_config)
+            .init_model('dynamic', VGG16, 'conv', config=model_config)
             .to_array(channels='first', dtype='float32')
             .train_model('conv', B('images'), B('labels'),
                          fetches='loss',
@@ -50,15 +50,12 @@ test_template = (Pipeline()
 train_ppl = train_root + train_template
 test_ppl = test_root + test_template
 
-grid = Option('layout', ['cna', 'can']) * Option('model', [VGG7, VGG16])
-
 def get_accuracy(iteration, experiment, pipeline):
     pipeline = experiment[pipeline].pipeline
     metrics = pipeline.get_variable('metrics')
     return metrics.evaluate('accuracy')
 
 research = (Research()
-    .add_grid(grid)
     .add_pipeline(root=train_root, branch=train_template, variables='loss', name='train')
     .add_pipeline(root=test_root, branch=test_template, name='test', run=True, execute='%100', import_from='train')
     .add_function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
@@ -67,4 +64,4 @@ research = (Research()
 n_workers = 1 if len(sys.argv) <= 1 else int(sys.argv[1])
 gpu_list = [2, 4, 5, 6]
 
-research.run(n_reps=1, n_iters=1000, workers=n_workers, name='my_research', gpu=gpu_list[:n_workers])
+research.run(n_reps=8, n_iters=1000, workers=n_workers, name='torch_research_'+str(n_workers), gpu=gpu_list[:n_workers])
