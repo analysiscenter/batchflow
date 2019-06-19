@@ -51,7 +51,7 @@ class TFModel(BaseModel):
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
 
     device : str or callable
-        if str, a device name (e.g. '/device:GPU:0').
+        if str, a device name (e.g. 'gpu:0').
         if callable, a function which takes an operation and returns a device name for it.
         See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
 
@@ -273,7 +273,7 @@ class TFModel(BaseModel):
 
         def _device_context():
             if 'device' in self.config:
-                device = self.config.get('device')
+                device = self._get_device()
                 context = self.graph.device(device)
             else:
                 context = contextlib.ExitStack()
@@ -311,6 +311,21 @@ class TFModel(BaseModel):
         """ Reset the trained model to allow a new training from scratch """
         with self.session.graph.as_default():
             self.session.run(tf.global_variables_initializer())
+
+    def _get_device(self):
+        device = self.config.get('device')
+        if callable(device) or device is None:
+            _device = device
+        elif isinstance(device, str):
+            _device = device.split(':')
+            unit, index = _device if len(_device) > 1 else (device, '0')
+            if unit.lower() in ['gpu', 'cpu']:
+                _device = '/device:'+unit.upper()+':'+index
+            else:
+                raise ValueError('Unknown device: ', device)
+        else:
+            raise TypeError('Wrong device type: ', type(device))
+        return _device
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
