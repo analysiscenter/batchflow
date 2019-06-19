@@ -10,8 +10,12 @@ from batchflow.research import Research, Option
 BATCH_SIZE=64
 
 model_config={
-    'inputs': dict(images={'shape': (1, 28, 28)},
-                   labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
+    'inputs/images/shape': (1, 28, 28),
+    'inputs/labels': {
+        'classes': 10,
+        'transform': 'ohe',
+        'name': 'targets'
+    },
     'initial_block/inputs': 'images',
     'body/block/layout': C('layout'),
     'device': C('torch_device') # it's technical parameter for TFModel
@@ -54,9 +58,9 @@ def get_accuracy(iteration, experiment, pipeline):
     return metrics.evaluate('accuracy')
 
 research = (Research()
+    .add_grid(grid)
     .add_pipeline(root=train_root, branch=train_template, variables='loss', name='train')
     .add_pipeline(root=test_root, branch=test_template, name='test', run=True, execute='%100', import_from='train')
-    .add_grid(grid)
     .add_function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
 )
 

@@ -14,8 +14,12 @@ BATCH_SIZE=64
 
 model_config={
     'session/config': tf.ConfigProto(allow_soft_placement=True),
-    'inputs': dict(images={'shape': (28, 28, 1)},
-                   labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
+    'inputs/images/shape': (28, 28, 1),
+    'inputs/labels': {
+        'classes': 10,
+        'transform': 'ohe',
+        'name': 'targets'
+    },
     'initial_block/inputs': 'images',
     'body/block/layout': 'cna',
     'device': '/device:GPU:2'

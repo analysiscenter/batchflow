@@ -13,8 +13,12 @@ from batchflow.research import Research, Option
 BATCH_SIZE=64
 
 model_config={
-    'inputs': dict(images={'shape': (1, 28, 28)},
-                   labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
+    'inputs/images/shape': (1, 28, 28),
+    'inputs/labels': {
+        'classes': 10,
+        'transform': 'ohe',
+        'name': 'targets'
+    },
     'initial_block/inputs': 'images',
     'body/block/layout': 'cna',
     'device': 'cuda:2'
