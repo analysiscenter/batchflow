@@ -42,7 +42,7 @@ test_ppl = (mnist.test.p
     .init_variable('metrics', init_on_each_run=None) 
     .import_model('conv', train_ppl)
     .to_array(channels='first', dtype='float32')
-    .predict_model('conv', B('images'), B('labels'),
+    .predict_model('conv', B('images'), targets=B('labels'),
                    fetches='predictions',
                    save_to=V('predictions'))
     .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
