@@ -52,7 +52,7 @@ class TFModel(BaseModel):
 
     device : str or sequence of str
         device name(s), e.g. '/device:GPU:0'. Regular expressions are allowed.
-        Default behaviour is to use the first available GPU or the first available CPU if no GPUs are detected.
+        Default behaviour is to use the first available GPU (or CPU if no GPUs are detected).
         See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
 
     session : dict
@@ -647,11 +647,9 @@ class TFModel(BaseModel):
         for key, subconfig in config['train_steps'].items():
             subconfig.update({key: subconfig.get(key) or config.get(key)
                               for key in ('optimizer', 'decay', 'loss', 'scope')})
-
-            for device in self.devices:
-                if subconfig.get('optimizer') is not None:
-                    if optimizers.get(key) is None:
-                        optimizers[key] = self._make_optimizer(subconfig)
+            if subconfig.get('optimizer') is not None:
+                if optimizers.get(key) is None:
+                    optimizers[key] = self._make_optimizer(subconfig)
 
         # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
         train_steps = {}
@@ -681,11 +679,12 @@ class TFModel(BaseModel):
                             # In order to use microbatches, we need to zero-out some storage, then populate it
                             # with computed gradients, and, finally, apply them to the weights at once
                             if self.microbatch:
-                                zero_op, update_op, apply_op = self._make_microbatch_ops(loss_, optimizer,
-                                                                                         var_list=scope_collection)
-                                ops.update({'zero_grads': zero_op,
-                                            'update_grads': update_op,
-                                            'apply_grads': apply_op})
+                                with tf.variable_scope(key):
+                                    zero_op, update_op, apply_op = self._make_microbatch_ops(loss_, optimizer,
+                                                                                             var_list=scope_collection)
+                                    ops.update({'zero_grads': zero_op,
+                                                'update_grads': update_op,
+                                                'apply_grads': apply_op})
 
                             # To use multiple devices, we must compute gradients for every device,
                             # combine them on leading device, and apply updates to the weights on every device
@@ -793,7 +792,7 @@ class TFModel(BaseModel):
 
         return decay_name, decay_args
 
-    def _make_scope(self, config, suffix=None):
+    def _make_scope(self, config, device=None):
         scopes = config.get('scope')
         scopes = [scopes] if isinstance(scopes, str) else scopes
         if not isinstance(scopes, (list, tuple)):
@@ -802,11 +801,8 @@ class TFModel(BaseModel):
         total = []
         for scope in scopes:
             scope_prefix = self.__class__.__name__ + '/'
-            if suffix is not None:
-                if suffix in self.device_to_scope:
-                    scope_prefix += self.device_to_scope[suffix] + '/'
-                else:
-                    scope_prefix += suffix
+            if device is not None:
+                scope_prefix += self.device_to_scope[device] + '/'
 
             if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
                 scope_prefix += scope[1:]
