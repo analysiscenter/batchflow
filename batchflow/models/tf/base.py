@@ -368,14 +368,14 @@ class TFModel(BaseModel):
     def _get_devices(self):
         # Get rid of internal `XLA` devices
         available_devices = device_lib.list_local_devices()
-        usable_devices =  [device.name for device in available_devices
-                           if 'XLA' not in device.name]
+        usable_devices = [device.name for device in available_devices
+                          if 'XLA' not in device.name]
 
         if self.config.get('device'):
             devices = self.config.get('device')
             devices = devices if isinstance(devices, list) else [devices]
             devices = [device for name in devices for device in usable_devices
-                       if (re.search(name.upper(), device.upper()) is not None)]
+                       if re.search(name.upper(), device.upper()) is not None]
             devices = sorted(list(set(devices)))
         else:
             cpu_devices = [item.name for item in available_devices
