@@ -43,11 +43,11 @@ test_template = (Pipeline()
             .import_model('conv', C('import_from'))
             .to_array()
             .predict_model('conv', 
-                         fetches='predictions', 
-                         feed_dict={'images': B('images'), 'labels': B('labels')},
-                         save_to=V('predictions'))
+                           fetches='predictions', 
+                           feed_dict={'images': B('images'), 'labels': B('labels')},
+                           save_to=V('predictions'))
             .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
-                                fmt='logits', axis=-1, save_to=V('metrics', mode='a'))
+                            fmt='logits', axis=-1, save_to=V('metrics', mode='a'))
 )
 
 train_ppl = train_root + train_template

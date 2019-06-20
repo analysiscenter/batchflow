@@ -845,8 +845,8 @@ class TorchModel(BaseModel):
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
         inputs = self._fill_input(*args)
-        if targets:
-            targets = self._fill_input(targets)
+        if targets is not None:
+            targets = self._fill_input(targets)[0]
 
         self.model.eval()
 
