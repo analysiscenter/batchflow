@@ -50,9 +50,9 @@ class TFModel(BaseModel):
 
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
 
-    device : str or callable
-        if str, a device name (e.g. '/device:GPU:0').
-        if callable, a function which takes an operation and returns a device name for it.
+    device : str or sequence of str
+        device name(s), e.g. '/device:GPU:0'. Regular expressions are allowed.
+        Default behaviour is to use the first available GPU or the first available CPU if no GPUs are detected.
         See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
 
     session : dict
@@ -220,10 +220,10 @@ class TFModel(BaseModel):
        Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
 
     #. If you make dropout, batch norm, etc by hand, you might use a predefined ``is_training`` tensor. You can get it
-       by :meth:`~.TFModel.retrieve_from_attr`.
+       by :meth:`~.TFModel.get_from_attr`.
 
     #. For decay and training control there is a predefined ``global_step`` tensor. You can get it
-       by :meth:`~.TFModel.retrieve_from_attr`.
+       by :meth:`~.TFModel.get_from_attr`.
 
     #. In many cases there is no need to write a loss function, learning rate decay and optimizer
        as they might be defined through config.
@@ -248,10 +248,9 @@ class TFModel(BaseModel):
 
         # Train configurations
         self.train_steps = None
-        self._optimizers = {}
         self._train_lock = threading.Lock()
 
-        # Parameters of batch processing: splitting batches into parts or/and using multiple devices to process data
+        # Parameters of batch processing: splitting batches into parts and/or using multiple devices to process data
         self.microbatch = None
         self.devices = []
         self.leading_device = None
@@ -263,7 +262,6 @@ class TFModel(BaseModel):
         self._saver = None
         self._to_classes = {}
         self._inputs = {}
-        self.inputs = None
 
         super().__init__(*args, **kwargs)
 
@@ -281,7 +279,7 @@ class TFModel(BaseModel):
             else:
                 self._attrs[attr][device] = graph_item
 
-    def retrieve_from_attr(self, attr, device=None):
+    def get_from_attr(self, attr, device=None):
         """ Get item from private container or directly from model graph."""
         if attr in self._attrs:
             if isinstance(self._attrs[attr], dict):
@@ -319,19 +317,7 @@ class TFModel(BaseModel):
     def build(self, *args, **kwargs):
         """ Build the model. """
         # Get list of all available devices, infer leading device and number of devices
-        if self.config.get('device'):
-            self.devices = self.config.get('device')
-        else:
-            available_devices = device_lib.list_local_devices()
-            cpu_devices = [item.name for item in available_devices
-                           if 'device:CPU' in item.name]
-            gpu_devices = [item.name for item in available_devices
-                           if 'device:GPU' in item.name]
-            if len(gpu_devices) > 0:
-                self.devices = gpu_devices
-            else:
-                self.devices = [cpu_devices[0]]
-
+        self.devices = self._get_devices()
         if len(self.devices) > 1:
             self.multi_device = len(self.devices)
         self.leading_device = self.devices[0]
@@ -367,7 +353,6 @@ class TFModel(BaseModel):
                 self._make_train_steps(config)
                 self.reset()
 
-
     def create_session(self, config=None):
         """ Create TF session """
         config = config if config is not None else self.config
@@ -379,6 +364,29 @@ class TFModel(BaseModel):
         """ Reset the trained model to allow a new training from scratch """
         with self.session.graph.as_default():
             self.session.run(tf.global_variables_initializer())
+
+    def _get_devices(self):
+        # Get rid of internal `XLA` devices
+        available_devices = device_lib.list_local_devices()
+        usable_devices =  [device.name for device in available_devices
+                           if 'XLA' not in device.name]
+
+        if self.config.get('device'):
+            devices = self.config.get('device')
+            devices = devices if isinstance(devices, list) else [devices]
+            devices = [device for name in devices for device in usable_devices
+                       if (re.search(name.upper(), device.upper()) is not None)]
+            devices = sorted(list(set(devices)))
+        else:
+            cpu_devices = [item.name for item in available_devices
+                           if 'CPU' in item.name]
+            gpu_devices = [item.name for item in available_devices
+                           if 'GPU' in item.name]
+            if gpu_devices:
+                devices = [gpu_devices[0]]
+            else:
+                devices = [cpu_devices[0]]
+        return devices
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
@@ -551,7 +559,7 @@ class TFModel(BaseModel):
                 tensor = tf.identity(tensors[input_name], name=input_name)
                 self.store_to_attr(input_name, tensors[input_name], device)
 
-        self.inputs = tensors
+        self.store_to_attr('_inputs', self._inputs)
         self.store_to_attr('inputs', tensors)
 
         return placeholders, tensors
@@ -635,14 +643,15 @@ class TFModel(BaseModel):
             total = lambda loss: loss
 
         # First pass through the config: pass values from higher level, create (and store) all of the optimizers
+        optimizers = {}
         for key, subconfig in config['train_steps'].items():
             subconfig.update({key: subconfig.get(key) or config.get(key)
                               for key in ('optimizer', 'decay', 'loss', 'scope')})
 
             for device in self.devices:
                 if subconfig.get('optimizer') is not None:
-                    if self._optimizers.get(key) is None:
-                        self._optimizers[key] = self._make_optimizer(subconfig)
+                    if optimizers.get(key) is None:
+                        optimizers[key] = self._make_optimizer(subconfig)
 
         # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
         train_steps = {}
@@ -656,7 +665,7 @@ class TFModel(BaseModel):
                         loss_ = tf.identity(loss_, name='_DEVICE_LOSS')
                         device_losses.append(loss_)
 
-                        optimizer = self._optimizers.get(subconfig.get('use')) or self._optimizers.get(key)
+                        optimizer = optimizers.get(subconfig.get('use')) or optimizers.get(key)
 
                         # It is important to control dependencies in order to work with layers like batch-normalization
                         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -665,7 +674,7 @@ class TFModel(BaseModel):
 
                             # Simplest operation for training, created always
                             minimize_op = optimizer.minimize(loss_,
-                                                             global_step=self.retrieve_from_attr('global_step'),
+                                                             global_step=self.get_from_attr('global_step'),
                                                              var_list=scope_collection)
                             ops['minimize'] = minimize_op
 
@@ -695,7 +704,7 @@ class TFModel(BaseModel):
                 if self.multi_device:
                     averaged_gradients = self._make_multi_update_op(device_grads)
                     apply_grads = optimizer.apply_gradients(averaged_gradients,
-                                                            global_step=self.retrieve_from_attr('global_step'))
+                                                            global_step=self.get_from_attr('global_step'))
                     ops['multi_apply_grads'] = apply_grads
 
             # We need to explicitly initialize variable for every optimizer in order to not
@@ -705,7 +714,9 @@ class TFModel(BaseModel):
 
             # Store all the created operations
             train_steps.update({key: ops})
+
         self.train_steps = train_steps
+        self.store_to_attr('train_steps', train_steps)
 
     def _make_loss(self, config, device):
         loss, args = unpack_fn_from_config('loss', config)
@@ -757,7 +768,7 @@ class TFModel(BaseModel):
         decay_name, decay_args = self._make_decay(config)
         if decay_name is not None:
             optimizer_args['learning_rate'] = decay_name(**decay_args,
-                                                         global_step=self.retrieve_from_attr('global_step'))
+                                                         global_step=self.get_from_attr('global_step'))
 
         if optimizer_name:
             optimizer = optimizer_name(**optimizer_args)
@@ -906,7 +917,7 @@ class TFModel(BaseModel):
 
     def _map_name(self, name, device=None):
         if isinstance(name, str):
-            return self.retrieve_from_attr(name, device)
+            return self.get_from_attr(name, device)
         return name
 
     def _fill_feed_dict(self, feed_dict=None, device=None, is_training=True):
@@ -920,8 +931,8 @@ class TFModel(BaseModel):
             placeholder = self._map_name(placeholder, device)
             value = self._map_name(value, device)
             _feed_dict.update({placeholder: value})
-        if self.retrieve_from_attr('is_training') not in _feed_dict:
-            _feed_dict.update({self.retrieve_from_attr('is_training'): is_training})
+        if self.get_from_attr('is_training') not in _feed_dict:
+            _feed_dict.update({self.get_from_attr('is_training'): is_training})
         return _feed_dict
 
     def _fill_fetches(self, fetches=None, default=None):
@@ -1078,10 +1089,8 @@ class TFModel(BaseModel):
                                     _fd = {**_fd, **self._fill_feed_dict(part, device)}
 
                                 *_, output = self.session.run(all_fetches, feed_dict=_fd)
-                    else:
-                        # For every train step, zero out gradient accumulators,
-                        # then update them with gradients, computed on each of `feed_dicts`,
-                        # and finally apply accumulated values to weights
+
+                    else: # microbatch
                         splitted = {}
                         for key, value in feed_dict.items():
                             if hasattr(value, '__len__'):
@@ -1095,6 +1104,9 @@ class TFModel(BaseModel):
                         _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in _feed_dicts]
 
                         if len(self.devices) == 1:
+                            # For every train step, zero out gradient accumulators,
+                            # then update them with gradients, computed on each of `feed_dicts`,
+                            # and finally apply accumulated values to weights
                             outputs = []
                             for ops in train_fetches:
                                 zero_op, update_op, apply_op = ops['zero_grads'], \
@@ -1123,7 +1135,6 @@ class TFModel(BaseModel):
 
             if use_lock:
                 self._train_lock.release()
-
             return self._fill_output(output, _fetches)
 
     def predict(self, fetches=None, feed_dict=None, **kwargs):
@@ -1192,7 +1203,7 @@ class TFModel(BaseModel):
             if self._saver is None:
                 self._saver = tf.train.Saver()
             self._saver.save(self.session, os.path.join(path, 'model'), *args,
-                             global_step=self.retrieve_from_attr('global_step'), **kwargs)
+                             global_step=self.get_from_attr('global_step'), **kwargs)
             with open(os.path.join(path, 'attrs.json'), 'w') as f:
                 json.dump(self._attrs, f)
 
@@ -1602,10 +1613,10 @@ class TFModel(BaseModel):
             if isinstance(inputs, str):
                 if not config.get('common/data_format'):
                     config['common/data_format'] = self.data_format(inputs)
-                config['initial_block/inputs'] = self.retrieve_from_attr('inputs')[inputs]
+                config['initial_block/inputs'] = self.get_from_attr('inputs')[inputs]
 
             elif isinstance(inputs, list):
-                config['initial_block/inputs'] = [self.retrieve_from_attr('inputs')[name]
+                config['initial_block/inputs'] = [self.get_from_attr('inputs')[name]
                                                   for name in inputs]
             else:
                 raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
@@ -1613,7 +1624,7 @@ class TFModel(BaseModel):
         return config
 
     def _add_block(self, name, config, inputs):
-        defaults = {'is_training': self.retrieve_from_attr('is_training'), **config['common']}
+        defaults = {'is_training': self.get_from_attr('is_training'), **config['common']}
         if callable(config[name]):
             block = config[name](inputs, **defaults)
         elif isinstance(config[name], dict):
