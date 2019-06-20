@@ -1,18 +1,13 @@
 import sys
-import dill
-import tensorflow as tf
-
-import matplotlib.pyplot as plt
 
 sys.path.append("../../..")
-from batchflow import Pipeline, B, C, V
+from batchflow import B, V
 from batchflow.opensets import MNIST
 from batchflow.models.torch import VGG16
-from batchflow.research import Research, Option
 
-BATCH_SIZE=64
+BATCH_SIZE = 64
 
-model_config={
+model_config = {
     'inputs/images/shape': (1, 28, 28),
     'inputs/labels': {
         'classes': 10,
@@ -38,8 +33,8 @@ train_ppl = (mnist.train.p
 
 
 test_ppl = (mnist.test.p
-    .init_variable('predictions') 
-    .init_variable('metrics', init_on_each_run=None) 
+    .init_variable('predictions')
+    .init_variable('metrics', init_on_each_run=None)
     .import_model('conv', train_ppl)
     .to_array(channels='first', dtype='float32')
     .predict_model('conv', B('images'), targets=B('labels'),
