@@ -219,9 +219,11 @@ class TFModel(BaseModel):
        as well as :func:`~.layers.global_average_pooling`, :func:`~.layers.mip`, or other predefined layers.
        Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
 
-    #. If you make dropout, batch norm, etc by hand, you might use a predefined ``self.is_training`` tensor.
+    #. If you make dropout, batch norm, etc by hand, you might use a predefined ``is_training`` tensor. You can get it
+       by :meth:`~.TFModel.retrieve_from_attr`.
 
-    #. For decay and training control there is a predefined ``self.global_step`` tensor.
+    #. For decay and training control there is a predefined ``global_step`` tensor. You can get it
+       by :meth:`~.TFModel.retrieve_from_attr`.
 
     #. In many cases there is no need to write a loss function, learning rate decay and optimizer
        as they might be defined through config.
@@ -249,18 +251,15 @@ class TFModel(BaseModel):
         self._optimizers = {}
         self._train_lock = threading.Lock()
 
-        # Parameters of batch processing: splitting bathes into parts or/and using multiple devices to process data
+        # Parameters of batch processing: splitting batches into parts or/and using multiple devices to process data
         self.microbatch = None
         self.devices = []
         self.leading_device = None
-        self.device_scopes = {}
+        self.device_to_scope = {}
         self.multi_device = False
 
         # Easy to access tensors
-        self._attrs = []
-        self.is_training = None
-        self.global_step = None
-        self.loss = None
+        self._attrs = {}
         self._saver = None
         self._to_classes = {}
         self._inputs = {}
@@ -268,9 +267,57 @@ class TFModel(BaseModel):
 
         super().__init__(*args, **kwargs)
 
+    def store_to_attr(self, attr, graph_item, device=None):
+        """ Store `graph_item` to private container."""
+        if self._attrs.get(attr) is None:
+            if device is None:
+                self._attrs[attr] = graph_item
+            else:
+                self._attrs[attr] = {device: graph_item}
+        else:
+            if device is None:
+                print('WARNING: attr is {}, device is {}'.format(attr, device))
+                self._attrs[attr] = graph_item
+            else:
+                self._attrs[attr][device] = graph_item
+
+    def retrieve_from_attr(self, attr, device=None):
+        """ Get item from private container or directly from model graph."""
+        if attr in self._attrs:
+            if isinstance(self._attrs[attr], dict):
+                device = device or self.leading_device
+                if device in self._attrs[attr]:
+                    graph_item = self._attrs[attr][device]
+                else:
+                    graph_item = self._attrs[attr]
+            else:
+                graph_item = self._attrs[attr]
+        else:
+            graph_item = self._check_tensor(attr, device)
+        return graph_item
+
+    def _check_tensor(self, name, device=None):
+        prefix = self.__class__.__name__ + '/'
+        if device is not None:
+            if device in self.device_to_scope.keys():
+                prefix += self.device_to_scope[device]
+            else:
+                prefix += device
+
+        valid = [item for item in self.graph.get_operations()
+                 if (name in item.name) and (item.name.startswith(prefix))]
+        if len(valid) != 1:
+            valid = [item for item in valid if item.name.endswith('_output')]
+
+        if len(valid) == 1:
+            return valid[0].values()[0]
+
+        if len(valid) > 1:
+            raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
+        raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
+
     def build(self, *args, **kwargs):
         """ Build the model. """
-
         # Get list of all available devices, infer leading device and number of devices
         if self.config.get('device'):
             self.devices = self.config.get('device')
@@ -289,40 +336,30 @@ class TFModel(BaseModel):
             self.multi_device = len(self.devices)
         self.leading_device = self.devices[0]
 
+        self.device_to_scope = {item: item[1:].replace(':', '_') for item in self.devices}
+        self.scope_to_device = {v: k for k, v in self.device_to_scope.items()}
+
         # Create model graph. First of all, `is_training` and `global_step` tensors are defined;
         # then, for each device, model architecture is created (with inputs placeholders and all);
         # finally, individual train steps with desired loss, optimizer, decay and scope are created
         with self.graph.as_default():
             with tf.variable_scope(self.__class__.__name__):
                 with tf.variable_scope('globals'):
-                    if self.is_training is None:
-                        self.store_to_attr('is_training',
-                                           tf.placeholder(tf.bool, name='is_training'))
-                    if self.global_step is None:
-                        self.store_to_attr('global_step',
-                                           tf.Variable(0, trainable=False, name='global_step'))
+                    is_training = tf.placeholder(tf.bool, name='is_training')
+                    self.store_to_attr('is_training', is_training)
+
+                    global_step = tf.Variable(0, trainable=False, name='global_step')
+                    self.store_to_attr('global_step', global_step)
 
                 for device in self.devices:
                     with tf.device(device):
-                        scope_name = device[1:].replace(':', '_')
-                        self.device_scopes[device] = scope_name
-                        with tf.variable_scope(scope_name):
+                        with tf.variable_scope(self.device_to_scope[device]):
                             self._inputs = {}
                             config = self.build_config()
                             self._full_config = config
                             self._build(config)
 
                 self.microbatch = config.get('microbatch')
-
-                # Recreate some of the attributes so they reference the first (leading) device
-                with tf.device(self.leading_device):
-                    attrs = self._attrs
-                    attrs.remove('global_step')
-                    attrs.remove('is_training')
-                    for name in attrs:
-                        tensor = self._check_tensor_device(name, self.leading_device)
-                        self._attrs = [item for item in self._attrs if item != name]
-                        self.store_to_attr(name, tensor)
 
                 if self.session is None:
                     self.create_session(config)
@@ -425,8 +462,8 @@ class TFModel(BaseModel):
         # pylint:disable=too-many-statements
         full_config = config
         config = full_config.get('inputs')
-#         print('INPUTS CONFIG {}'.format(config))
-#         print('SELF._INPUTS: {}'.format(self._inputs))
+
+        device = self.scope_to_device[tf.get_variable_scope().name.split('/')[1]]
 
         names = names or []
         missing_names = set(names) - set(config.keys())
@@ -479,7 +516,7 @@ class TFModel(BaseModel):
                 dtype = input_config.get('dtype', 'float')
             tensor = tf.placeholder(dtype, shape, input_name)
             placeholders[input_name] = tensor
-            self.store_to_attr(input_name, tensor)
+            self.store_to_attr(input_name, tensor, device)
 
             if 'df' in input_config and 'data_format' not in input_config:
                 input_config['data_format'] = input_config['df']
@@ -497,7 +534,7 @@ class TFModel(BaseModel):
             name = input_config.get('name')
             if name is not None:
                 tensor = tf.identity(tensor, name=name)
-                self.store_to_attr(name, tensor)
+                self.store_to_attr(name, tensor, device)
 
             tensors[input_name] = tensor
 
@@ -508,14 +545,14 @@ class TFModel(BaseModel):
         # check for aliases
         for input_name, input_config in config.items():
             if isinstance(input_config, str) and input_name not in self._inputs:
-#                 print('ALIASES are {} ->{}'.format(input_name, input_config))
                 self._inputs[input_name] = self._inputs[input_config]
                 tensors[input_name] = tensors[input_config]
                 placeholders[input_name] = placeholders[input_config]
                 tensor = tf.identity(tensors[input_name], name=input_name)
-                self.store_to_attr(input_name, tensors[input_name])
+                self.store_to_attr(input_name, tensors[input_name], device)
 
         self.inputs = tensors
+        self.store_to_attr('inputs', tensors)
 
         return placeholders, tensors
 
@@ -588,49 +625,12 @@ class TFModel(BaseModel):
             self._to_classes.update({tensor: input_name})
         return tensor
 
-
-    def _check_tensor_device(self, name, device=None):
-        if device is None:
-            if hasattr(self, name):
-                return getattr(self, name)
-
-        prefix = self.__class__.__name__
-        if device is not None:
-            prefix = prefix + '/' + self.device_scopes[device]
-
-        valid = [item for item in self.graph.get_operations()
-                 if (name in item.name) and (item.name.startswith(prefix))]
-        if len(valid) != 1:
-            valid = [item for item in valid if item.name.endswith('_output')]
-
-        if len(valid) == 1:
-            return valid[0].values()[0]
-
-        if len(valid) > 1:
-            raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
-        raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
-
-    def _check_tensor(self, name):
-        if hasattr(self, name):
-            return getattr(self, name)
-
-        valid = [item for item in self.graph.get_operations() if name in item.name]
-        if len(valid) != 1:
-            valid = [item for item in valid if item.name.endswith('_output')]
-
-        if len(valid) == 1:
-            return valid[0].values()[0]
-
-        if len(valid) > 1:
-            raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
-        raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
-
     def _make_train_steps(self, config, init=True):
         # Wrap parameters from config root as `train_steps`
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
                                                 ('optimizer', 'decay', 'loss', 'scope')}}})
-            total = lambda _: tf.losses.get_total_loss()
+            total = lambda _: tf.losses.get_total_loss(name='_TOTAL_LOSS')
         else:
             total = lambda loss: loss
 
@@ -647,14 +647,13 @@ class TFModel(BaseModel):
         # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
         train_steps = {}
         for key, subconfig in config['train_steps'].items():
-
             # Create losses for every device, then combine them into one via summation
             device_grads, device_losses, ops = [], [], {}
             for device in self.devices:
                 with tf.device(device):
-                    with tf.variable_scope(self.device_scopes[device]):
+                    with tf.variable_scope(self.device_to_scope[device]):
                         loss_ = total(self._make_loss(subconfig, device))
-                        loss_ = tf.identity(loss_, name='device_loss')
+                        loss_ = tf.identity(loss_, name='_DEVICE_LOSS')
                         device_losses.append(loss_)
 
                         optimizer = self._optimizers.get(subconfig.get('use')) or self._optimizers.get(key)
@@ -666,7 +665,7 @@ class TFModel(BaseModel):
 
                             # Simplest operation for training, created always
                             minimize_op = optimizer.minimize(loss_,
-                                                             global_step=self.global_step,
+                                                             global_step=self.retrieve_from_attr('global_step'),
                                                              var_list=scope_collection)
                             ops['minimize'] = minimize_op
 
@@ -689,13 +688,14 @@ class TFModel(BaseModel):
             # Store average loss in the attribute, make operation to apply average gradient to weights
             with tf.device(self.leading_device):
                 loss_name = 'loss' if len(key) == 0 else 'loss_' + key
-                loss = tf.reduce_mean(tf.stack(device_losses), name=loss_name)
+                loss = tf.reduce_mean(tf.stack(device_losses))
+                loss = tf.identity(loss, name=loss_name)
                 self.store_to_attr(loss_name, loss)
 
                 if self.multi_device:
                     averaged_gradients = self._make_multi_update_op(device_grads)
                     apply_grads = optimizer.apply_gradients(averaged_gradients,
-                                                            global_step=self.global_step)
+                                                            global_step=self.retrieve_from_attr('global_step'))
                     ops['multi_apply_grads'] = apply_grads
 
             # We need to explicitly initialize variable for every optimizer in order to not
@@ -728,8 +728,8 @@ class TFModel(BaseModel):
         else:
             predictions_name = args.pop('predictions', 'predictions')
             targets_name = args.pop('targets', 'targets')
-            predictions = self._check_tensor_device(predictions_name, device)
-            targets = self._check_tensor_device(targets_name, device)
+            predictions = self._check_tensor(predictions_name, device)
+            targets = self._check_tensor(targets_name, device)
 
             add_loss = args.pop('add_loss', False)
             if add_loss:
@@ -756,7 +756,8 @@ class TFModel(BaseModel):
 
         decay_name, decay_args = self._make_decay(config)
         if decay_name is not None:
-            optimizer_args['learning_rate'] = decay_name(**decay_args, global_step=self.global_step)
+            optimizer_args['learning_rate'] = decay_name(**decay_args,
+                                                         global_step=self.retrieve_from_attr('global_step'))
 
         if optimizer_name:
             optimizer = optimizer_name(**optimizer_args)
@@ -781,7 +782,7 @@ class TFModel(BaseModel):
 
         return decay_name, decay_args
 
-    def _make_scope(self, config, device=None):
+    def _make_scope(self, config, suffix=None):
         scopes = config.get('scope')
         scopes = [scopes] if isinstance(scopes, str) else scopes
         if not isinstance(scopes, (list, tuple)):
@@ -789,7 +790,13 @@ class TFModel(BaseModel):
 
         total = []
         for scope in scopes:
-            scope_prefix = self.__class__.__name__ + '/' + self.device_scopes[device]
+            scope_prefix = self.__class__.__name__ + '/'
+            if suffix is not None:
+                if suffix in self.device_to_scope:
+                    scope_prefix += self.device_to_scope[suffix] + '/'
+                else:
+                    scope_prefix += suffix
+
             if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
                 scope_prefix += scope[1:]
             else:
@@ -809,25 +816,28 @@ class TFModel(BaseModel):
             grad_accum = [tf.Variable(np.empty(var.shape, dtype=np.float32), trainable=False)
                           for var in var_list]
 
-            with tf.variable_scope('zero_grad_accum'):
+            with tf.variable_scope('zero_grads'):
                 zero_grad_ops = [var.assign(tf.zeros(var.shape)) for var in grad_accum]
                 zero_count_op = count.assign(tf.zeros(shape=(), dtype=tf.float32))
                 zero_op = zero_grad_ops + [zero_count_op]
+                zero_op = tf.group(zero_op, name='zero_grads_op')
 
-            with tf.variable_scope('update_grad_accum'):
+            with tf.variable_scope('update_grads'):
                 grad_and_vars = optimizer.compute_gradients(loss, var_list)
                 update_grad_ops = [grad_accum[i].assign_add(g) for i, (g, _) in enumerate(grad_and_vars)
                                    if g is not None]
                 update_count_op = count.assign_add(tf.constant(1.0, dtype=tf.float32))
                 update_op = update_grad_ops + [update_count_op]
+                update_op = tf.group(update_op, name='update_grads_op')
 
-            with tf.variable_scope('apply_grad_accum'):
+            with tf.variable_scope('apply_grads'):
                 grad_and_vars = [(grad_accum[i] / count, v) for i, (_, v) in enumerate(grad_and_vars)]
                 apply_op = optimizer.apply_gradients(grad_and_vars)
+                apply_op = tf.group(apply_op, name='apply_grads_op')
         return zero_op, update_op, apply_op
 
     def _make_multi_update_op(self, gradients):
-        to_apply = []
+        combined = []
 
         for grad_and_vars in zip(*gradients):
             expanded = [tf.expand_dims(g, 0) for g, _ in grad_and_vars]
@@ -835,8 +845,8 @@ class TFModel(BaseModel):
             averaged = tf.reduce_mean(concatted, axis=0)
 
             temp = [(averaged, v) for _, v in grad_and_vars]
-            to_apply.extend(temp)
-        return to_apply
+            combined.extend(temp)
+        return combined
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
@@ -896,7 +906,7 @@ class TFModel(BaseModel):
 
     def _map_name(self, name, device=None):
         if isinstance(name, str):
-            return self._check_tensor_device(name, device)
+            return self.retrieve_from_attr(name, device)
         return name
 
     def _fill_feed_dict(self, feed_dict=None, device=None, is_training=True):
@@ -910,8 +920,8 @@ class TFModel(BaseModel):
             placeholder = self._map_name(placeholder, device)
             value = self._map_name(value, device)
             _feed_dict.update({placeholder: value})
-        if self.is_training not in _feed_dict:
-            _feed_dict.update({self.is_training: is_training})
+        if self.retrieve_from_attr('is_training') not in _feed_dict:
+            _feed_dict.update({self.retrieve_from_attr('is_training'): is_training})
         return _feed_dict
 
     def _fill_fetches(self, fetches=None, default=None):
@@ -1012,7 +1022,6 @@ class TFModel(BaseModel):
             # updating every of them with `_fill_feed_dict` so tensorflow can work with it
             feed_dict = feed_dict or {}
             feed_dict = {**feed_dict, **kwargs}
-
 
             # `fetches` and `train_mode` processing
             if fetches is None:
@@ -1182,7 +1191,8 @@ class TFModel(BaseModel):
                 os.makedirs(path)
             if self._saver is None:
                 self._saver = tf.train.Saver()
-            self._saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
+            self._saver.save(self.session, os.path.join(path, 'model'), *args,
+                             global_step=self.retrieve_from_attr('global_step'), **kwargs)
             with open(os.path.join(path, 'attrs.json'), 'w') as f:
                 json.dump(self._attrs, f)
 
@@ -1237,13 +1247,6 @@ class TFModel(BaseModel):
         with self.graph.as_default():
             for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
                 setattr(self, attr, graph_item)
-
-    def store_to_attr(self, attr, graph_item):
-        """ Make a graph item (variable or operation) accessible as a model attribute """
-        with self.graph.as_default():
-            setattr(self, attr, graph_item)
-            self._attrs.append(attr)
-            tf.get_collection_ref('attrs').append(graph_item)
 
     @classmethod
     def crop(cls, inputs, resize_to, data_format='channels_last'):
@@ -1471,50 +1474,51 @@ class TFModel(BaseModel):
                 ctx.__exit__(None, None, None)
 
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
+        device = self.scope_to_device[tf.get_variable_scope().name.split('/')[1]]
         if oper is None:
-            self._add_output_identity(inputs, name, attr_prefix, **kwargs)
+            self._add_output_identity(inputs, name, attr_prefix, device, **kwargs)
         elif oper == 'softplus':
-            self._add_output_softplus(inputs, name, attr_prefix, **kwargs)
+            self._add_output_softplus(inputs, name, attr_prefix, device, **kwargs)
         elif oper == 'sigmoid':
-            self._add_output_sigmoid(inputs, name, attr_prefix, **kwargs)
+            self._add_output_sigmoid(inputs, name, attr_prefix, device, **kwargs)
         elif oper == 'proba':
-            self._add_output_proba(inputs, name, attr_prefix, **kwargs)
+            self._add_output_proba(inputs, name, attr_prefix, device, **kwargs)
         elif oper == 'labels':
-            self._add_output_labels(inputs, name, attr_prefix, **kwargs)
+            self._add_output_labels(inputs, name, attr_prefix, device, **kwargs)
         elif callable(oper):
-            self._add_output_callable(inputs, oper, None, attr_prefix, **kwargs)
+            self._add_output_callable(inputs, oper, None, attr_prefix, device, **kwargs)
 
-    def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
+    def _add_output_identity(self, inputs, name, attr_prefix, device, **kwargs):
         _ = kwargs
         x = tf.identity(inputs, name=name)
-        self.store_to_attr(attr_prefix + name, x)
+        self.store_to_attr(attr_prefix + name, x, device)
         return x
 
-    def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
+    def _add_output_softplus(self, inputs, name, attr_prefix, device, **kwargs):
         _ = kwargs
         proba = tf.nn.softplus(inputs, name=name)
-        self.store_to_attr(attr_prefix + name, proba)
+        self.store_to_attr(attr_prefix + name, proba, device)
 
-    def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
+    def _add_output_sigmoid(self, inputs, name, attr_prefix, device, **kwargs):
         _ = kwargs
         proba = tf.sigmoid(inputs, name=name)
-        self.store_to_attr(attr_prefix + name, proba)
+        self.store_to_attr(attr_prefix + name, proba, device)
 
-    def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
+    def _add_output_proba(self, inputs, name, attr_prefix, device, **kwargs):
         axis = self.channels_axis(kwargs['data_format'])
         proba = tf.nn.softmax(inputs, name=name, axis=axis)
-        self.store_to_attr(attr_prefix + name, proba)
+        self.store_to_attr(attr_prefix + name, proba, device)
 
-    def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
+    def _add_output_labels(self, inputs, name, attr_prefix, device, **kwargs):
         class_axis = self.channels_axis(kwargs.get('data_format'))
         predicted_classes = tf.argmax(inputs, axis=class_axis, name=name)
-        self.store_to_attr(attr_prefix + name, predicted_classes)
+        self.store_to_attr(attr_prefix + name, predicted_classes, device)
 
-    def _add_output_callable(self, inputs, oper, name, attr_prefix, **kwargs):
+    def _add_output_callable(self, inputs, oper, name, attr_prefix, device, **kwargs):
         _ = kwargs
         x = oper(inputs)
         name = name or oper.__name__
-        self.store_to_attr(attr_prefix + name, x)
+        self.store_to_attr(attr_prefix + name, x, device)
         return x
 
     @classmethod
@@ -1598,23 +1602,24 @@ class TFModel(BaseModel):
             if isinstance(inputs, str):
                 if not config.get('common/data_format'):
                     config['common/data_format'] = self.data_format(inputs)
-                config['initial_block/inputs'] = self.inputs[inputs]
+                config['initial_block/inputs'] = self.retrieve_from_attr('inputs')[inputs]
+
             elif isinstance(inputs, list):
-                config['initial_block/inputs'] = [self.inputs[name] for name in inputs]
+                config['initial_block/inputs'] = [self.retrieve_from_attr('inputs')[name]
+                                                  for name in inputs]
             else:
                 raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
 
         return config
 
     def _add_block(self, name, config, inputs):
-        defaults = {'is_training': self.is_training, **config['common']}
+        defaults = {'is_training': self.retrieve_from_attr('is_training'), **config['common']}
         if callable(config[name]):
             block = config[name](inputs, **defaults)
         elif isinstance(config[name], dict):
             block = getattr(self, name)(inputs=inputs, **{**defaults, **config[name]})
         else:
             raise TypeError('block can be configured as a function or a dict with parameters')
-        # self.store_to_attr(name + '_output', block)
         return block
 
     def _build(self, config=None):
