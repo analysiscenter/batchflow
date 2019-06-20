@@ -4,7 +4,7 @@ import logging
 import tensorflow as tf
 
 from ...utils import unpack_args
-from .core import mip, flatten, alpha_dropout
+from .core import mip, flatten
 from .conv import conv, conv_transpose, separable_conv, separable_conv_transpose
 from .pooling import pooling, global_pooling
 from .drop_block import dropblock
@@ -186,10 +186,11 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             elif layer == 'D':
                 block_size = kwargs.get('block_size')
                 if dropout_rate and block_size:
-                    args = dict(dropout_rate=dropout_rate, is_training=is_training, block_size=block_size, seed=kwargs.get('seed'),
-                                data_format=data_format)
+                    args = dict(dropout_rate=dropout_rate, is_training=is_training, block_size=block_size,
+                                seed=kwargs.get('seed'), data_format=data_format)
                 else:
-                    logger.warning('conv_block/dropblock: dropout_rate or block_size is zero or undefined, so dropblock layer is skipped')
+                    logger.warning('conv_block/dropblock: dropout_rate or block_size is zero or \
+                                    undefined, so dropblock layer is skipped')
                     skip_layer = True
 
             elif layer == 'm':

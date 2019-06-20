@@ -12,22 +12,21 @@ import tensorflow as tf
 def _dropblock(inputs, keep_prob, block_size, seed, data_format):
     """
     """
-
     shape = inputs.shape.as_list()
     n_dims = len(shape)
 
     # Transpose
     if data_format == 'channels_first':
-        inputs = tf.transpose(inputs, perm=[0, *list(arange(2, n_dims)), 1])
-    
+        inputs = tf.transpose(inputs, perm=[0, *list(range(2, n_dims)), 1])
+
     spatial_dims, channels = shape[1:-1], shape[-1]
-        
+
     if block_size < 1:
         block_size = int(block_size * min(spatial_dims))
 
-    gamma = ( (1. - keep_prob) * np.product(spatial_dims) / block_size ** len(spatial_dims) /
-             np.product([dim - block_size + 1 for dim in spatial_dims]) )
-    
+    gamma = ((1. - keep_prob) * np.product(spatial_dims) / block_size ** len(spatial_dims) /
+             np.product([dim - block_size + 1 for dim in spatial_dims]))
+
     # Mask is sampled for each featuremap independently
     noise_dist = tf.distributions.Bernoulli(probs=gamma, dtype=tf.float32)
     sampling_mask_shape = tf.stack([1] + [dim - block_size + 1 for dim in spatial_dims] + [channels])
@@ -35,7 +34,7 @@ def _dropblock(inputs, keep_prob, block_size, seed, data_format):
 
     pad_one = (block_size - 1) // 2
     pad_two = (block_size - 1) - pad_one
-    pad_shape = [[0, 0]] + [[pad_one, pad_two]] * len(spatial_dims) + [[0, 0]]
+    pad_shape = [[0, 0]] + [[pad_two, pad_one]] * len(spatial_dims) + [[0, 0]]
     mask = tf.pad(mask, pad_shape)
 
     pool_size = [1] + [block_size] * len(spatial_dims) + [1]
@@ -47,13 +46,33 @@ def _dropblock(inputs, keep_prob, block_size, seed, data_format):
     output = output * tf.to_float(tf.size(mask)) / tf.reduce_sum(mask)
 
     if data_format == 'channels_first':
-        output = tf.transpose(output, perm=[0, -1, *list(range(1, ndims - 1))])
+        output = tf.transpose(output, perm=[0, -1, *list(range(1, n_dims - 1))])
     return output
 
 def dropblock(inputs, dropout_rate, block_size, is_training, seed, data_format):
+    """ Drop Block module.
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        Input tensor
+    dropout_rate : float
+        Default is 0
+    block_size : int or float
+        size of the square block to drop.
+        If float < 0, block_size is calculated as a fraction of smallest spatial
+        dimension.
+    is_training : bool or tf.Tensor
+        Default is True.
+    seed : Python integer seed for RNG
+        seed to use in tf.distributions.Bernoulli.sample method.
+    data_format : str
+        `channels_last` or `channels_first`. Default - 'channels_last'.
+
+    Returns
+    -------
+    tf.Tensor
     """
-    """
-    dim = inputs.shape.ndims - 2
     keep_prob = 1. - dropout_rate
     return tf.cond(tf.logical_or(tf.logical_not(is_training), tf.equal(keep_prob, 1.0)),
                    true_fn=lambda: inputs,
