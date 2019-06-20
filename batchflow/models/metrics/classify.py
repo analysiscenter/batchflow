@@ -60,7 +60,7 @@ class ClassificationMetrics(Metrics):
     - a single value if input is a vector for a multiclass task and multiclass averaging is enabled.
     - a vector with batch size items if input is a multidimensional array (e.g. images or sequences)
       and there are just 2 classes or multiclass averaging is on.
-    - a vector with `num_classes` items if input is a vector for multiclass casse without averaging.
+    - a vector with `num_classes` items if input is a vector for multiclass case without averaging.
     - a 2d array `(batch_items, num_classes)` for multidimensional inputs in a multiclass case without averaging.
 
     .. note:: Count-based metrics (`true_positive`, `false_positive`, etc.) do not support mutliclass averaging.
