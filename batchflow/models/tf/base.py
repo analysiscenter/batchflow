@@ -739,8 +739,8 @@ class TFModel(BaseModel):
         else:
             predictions_name = args.pop('predictions', 'predictions')
             targets_name = args.pop('targets', 'targets')
-            predictions = self._check_tensor(predictions_name, device)
-            targets = self._check_tensor(targets_name, device)
+            predictions = self.get_from_attr(predictions_name, device)
+            targets = self.get_from_attr(targets_name, device)
 
             add_loss = args.pop('add_loss', False)
             if add_loss:
@@ -851,7 +851,7 @@ class TFModel(BaseModel):
         combined = []
 
         for grad_and_vars in zip(*gradients):
-            expanded = [tf.expand_dims(g, 0) for g, _ in grad_and_vars]
+            expanded = [tf.expand_dims(g, 0) for g, _ in grad_and_vars if g is not None]
             concatted = tf.concat(expanded, axis=0)
             averaged = tf.reduce_mean(concatted, axis=0)
 
