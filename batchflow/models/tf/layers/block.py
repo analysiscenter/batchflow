@@ -7,6 +7,7 @@ from ...utils import unpack_args
 from .core import mip, flatten, alpha_dropout
 from .conv import conv, conv_transpose, separable_conv, separable_conv_transpose
 from .pooling import pooling, global_pooling
+from .drop_block import dropblock
 
 
 logger = logging.getLogger(__name__)
@@ -25,8 +26,8 @@ FUNC_LAYERS = {
     'global_pooling': global_pooling,
     'batch_norm': tf.layers.batch_normalization,
     'dropout': tf.layers.dropout,
-    'alpha_dropout': alpha_dropout,
-    'mip': mip
+    'mip': mip,
+    'dropblock': dropblock,
 }
 
 C_LAYERS = {
@@ -45,7 +46,7 @@ C_LAYERS = {
     'V': 'global_pooling',
     'n': 'batch_norm',
     'd': 'dropout',
-    'D': 'alpha_dropout',
+    'D': 'dropblock',
     'm': 'mip',
 }
 
@@ -175,11 +176,20 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 pool_op = 'mean' if layer == 'V' else kwargs.pop('pool_op', 'max')
                 args = dict(op=pool_op, data_format=data_format, keepdims=kwargs.get('keep_dims', False))
 
-            elif layer in ['d', 'D']:
+            elif layer == 'd':
                 if dropout_rate:
                     args = dict(rate=dropout_rate, training=is_training)
                 else:
                     logger.warning('conv_block: dropout_rate is zero or undefined, so dropout layer is skipped')
+                    skip_layer = True
+
+            elif layer == 'D':
+                block_size = kwargs.get('block_size')
+                if dropout_rate and block_size:
+                    args = dict(dropout_rate=dropout_rate, is_training=is_training, block_size=block_size, seed=kwargs.get('seed'),
+                                data_format=data_format)
+                else:
+                    logger.warning('conv_block/dropblock: dropout_rate or block_size is zero or undefined, so dropblock layer is skipped')
                     skip_layer = True
 
             elif layer == 'm':
