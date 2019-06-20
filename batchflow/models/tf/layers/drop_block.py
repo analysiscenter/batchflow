@@ -23,6 +23,8 @@ def _dropblock(inputs, keep_prob, block_size, seed, data_format):
 
     if block_size < 1:
         block_size = int(block_size * min(spatial_dims))
+    if block_size > min(spatial_dims):
+        block_size = min(spatial_dims)
 
     gamma = ((1. - keep_prob) * np.product(spatial_dims) / block_size ** len(spatial_dims) /
              np.product([dim - block_size + 1 for dim in spatial_dims]))
