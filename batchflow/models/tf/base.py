@@ -693,7 +693,7 @@ class TFModel(BaseModel):
                                                                         var_list=scope_collection)
                                 device_grads.append(update_op)
 
-            # Store average loss in the attribute, make operation to apply average gradient to weights
+            # Store average loss in the attribute, make operation to apply average gradient to the weights
             with tf.device(self.leading_device):
                 loss_name = 'loss' if len(key) == 0 else 'loss_' + key
                 loss = tf.reduce_mean(tf.stack(device_losses))
@@ -701,10 +701,7 @@ class TFModel(BaseModel):
                 self.store_to_attr(loss_name, loss)
 
                 if self.multi_device:
-                    averaged_gradients = self._make_multi_update_op(device_grads)
-                    apply_grads = optimizer.apply_gradients(averaged_gradients,
-                                                            global_step=self.get_from_attr('global_step'))
-                    ops['multi_apply_grads'] = apply_grads
+                    ops['multi_apply_grads'] = self._make_multi_update_op(device_grads, optimizer)
 
             # We need to explicitly initialize variable for every optimizer in order to not
             # interfere with capability to reuse optimizers for different train_steps
@@ -819,16 +816,19 @@ class TFModel(BaseModel):
 
     def _make_microbatch_ops(self, loss, optimizer, var_list):
         with tf.variable_scope('microbatch'):
+            # Container to store intermediate values of gradients
             count = tf.Variable(0.0, dtype=tf.float32, trainable=False, name='count')
             grad_accum = [tf.Variable(np.empty(var.shape, dtype=np.float32), trainable=False)
                           for var in var_list]
 
+            # Zero-out operation
             with tf.variable_scope('zero_grads'):
                 zero_grad_ops = [var.assign(tf.zeros(var.shape)) for var in grad_accum]
                 zero_count_op = count.assign(tf.zeros(shape=(), dtype=tf.float32))
                 zero_op = zero_grad_ops + [zero_count_op]
                 zero_op = tf.group(zero_op, name='zero_grads_op')
 
+            # Compute gradients and add it to the values in the storage
             with tf.variable_scope('update_grads'):
                 grad_and_vars = optimizer.compute_gradients(loss, var_list)
                 update_grad_ops = [grad_accum[i].assign_add(g) for i, (g, _) in enumerate(grad_and_vars)
@@ -837,23 +837,34 @@ class TFModel(BaseModel):
                 update_op = update_grad_ops + [update_count_op]
                 update_op = tf.group(update_op, name='update_grads_op')
 
+            # Apply gradients from the storage to the actual weights
             with tf.variable_scope('apply_grads'):
                 grad_and_vars = [(grad_accum[i] / count, v) for i, (_, v) in enumerate(grad_and_vars)]
                 apply_op = optimizer.apply_gradients(grad_and_vars)
                 apply_op = tf.group(apply_op, name='apply_grads_op')
         return zero_op, update_op, apply_op
 
-    def _make_multi_update_op(self, gradients):
-        combined = []
-
+    def _make_multi_update_op(self, gradients, optimizer):
+        operations = []
+        # Each iteration of this loop works with 'copies' of the same variable on different devices
         for grad_and_vars in zip(*gradients):
+            # Average gradients from different devices
             expanded = [tf.expand_dims(g, 0) for g, _ in grad_and_vars if g is not None]
             concatted = tf.concat(expanded, axis=0)
             averaged = tf.reduce_mean(concatted, axis=0)
 
-            temp = [(averaged, v) for _, v in grad_and_vars]
-            combined.extend(temp)
-        return combined
+            # Apply gradient on the leading device, then distribute to the others
+            leading_device_variable = grad_and_vars[0][1]
+            apply_op = optimizer.apply_gradients([(averaged, leading_device_variable)],
+                                                 global_step=self.get_from_attr('global_step'))
+
+            distribute_weights = [v.assign(leading_device_variable)for _, v in grad_and_vars[1:]]
+            update_op = tf.group([apply_op] + distribute_weights, name='update_weight_op')
+            operations.append(update_op)
+
+        # Combine update operations for every variable into single one
+        update_op = tf.group(operations, name='update_op')
+        return operations
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
