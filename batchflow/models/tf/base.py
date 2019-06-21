@@ -1032,17 +1032,19 @@ class TFModel(BaseModel):
             output = self.session.run(_fetches, _feed_dict)
         return self._fill_output(output, _fetches)
 
-    def conversion_by_name(self, tf_graph_object):
+    def _conversion_by_name(self, tf_graph_object):
         if isinstance(tf_graph_object, dict):
             for key in tf_graph_object.keys():
-                tf_graph_object.update({key: list(map(lambda t: self.conversion_by_name(t), tf_graph_object[key]))})
+                tf_graph_object.update({key: list(map(self._conversion_by_name, tf_graph_object[key]))})
             return tf_graph_object
+
         if isinstance(tf_graph_object, list):
-            return list(map(lambda t: self.conversion_by_name(t), tf_graph_object))
-        elif hasattr(tf_graph_object, 'op'):
+            return list(map(self._conversion_by_name, tf_graph_object))
+
+        if hasattr(tf_graph_object, 'op'):
             return ('Tensor', tf_graph_object.name)
-        else:
-            return ('Operation', tf_graph_object.name)
+
+        return ('Operation', tf_graph_object.name)
 
     def save(self, path, *args, **kwargs):
         """ Save tensorflow model.
@@ -1073,22 +1075,26 @@ class TFModel(BaseModel):
                 for attr in self._attrs:
                     attr_additional = getattr(self, attr)
                     if isinstance(attr_additional, dict):
-                        attrs_path.update({attr: self.conversion_by_name(attr_additional.copy())})
+                        attrs_path.update({attr: self._conversion_by_name(attr_additional.copy())})
                     else:
-                        attrs_path.update({attr: self.conversion_by_name(attr_additional)})
+                        attrs_path.update({attr: self._conversion_by_name(attr_additional)})
                 json.dump(attrs_path, f)
 
-    def conversion_by_operation(self, name):
+    def _conversion_by_operation(self, name):
         if isinstance(name, dict):
             for key in name.keys():
-                name.update({key: list(map(lambda t: self.conversion_by_operation(t), name[key]))})
+                name.update({key: list(map(self._conversion_by_operation, name[key]))})
             return name
+
         if name[0] == 'Tensor':
             return self.graph.get_tensor_by_name(name[1])
-        elif name[0] == 'Operation':
+
+        if name[0] == 'Operation':
             return self.graph.get_operation_by_name(name[1])
-        elif isinstance(name, list):
-            return list(map(lambda t: self.conversion_by_operation(t), name))
+
+        if isinstance(name, list):
+            return list(map(self._conversion_by_operation, name))
+        raise ValueError('Unknown type of value.')
 
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
         """ Load a TensorFlow model from files
@@ -1139,7 +1145,7 @@ class TFModel(BaseModel):
         with open(os.path.join(path, 'attrs.json'), 'r') as json_file:
             self._attrs = json.load(json_file)
             for attr in self._attrs:
-                setattr(self, attr, self.conversion_by_operation(self._attrs[attr].copy()))
+                setattr(self, attr, self._conversion_by_operation(self._attrs[attr].copy()))
             self._attrs = list(self._attrs.keys())
         with self.graph.as_default():
             for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
