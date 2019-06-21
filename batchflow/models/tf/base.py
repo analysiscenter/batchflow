@@ -245,6 +245,7 @@ class TFModel(BaseModel):
         self.graph = tf.Graph() if self.session is None else self.session.graph
         self._graph_context = None
         self._full_config = {}
+        self._saver = None
 
         # Train configurations
         self.train_steps = None
@@ -257,11 +258,8 @@ class TFModel(BaseModel):
         self.device_to_scope = {}
         self.multi_device = False
 
-        # Easy to access tensors
+        # Private storage for often used tensors
         self._attrs = {}
-        self._saver = None
-        self._to_classes = {}
-        self._inputs = {}
 
         super().__init__(*args, **kwargs)
 
@@ -274,22 +272,23 @@ class TFModel(BaseModel):
                 self._attrs[attr] = {device: graph_item}
         else:
             if device is None:
-                print('WARNING: attr is {}, device is {}'.format(attr, device))
                 self._attrs[attr] = graph_item
             else:
                 self._attrs[attr][device] = graph_item
 
-    def get_from_attr(self, attr, device=None):
+    def get_from_attr(self, attr, device=None, default=None):
         """ Get item from private container or directly from model graph."""
+        device = device or self.leading_device
         if attr in self._attrs:
             if isinstance(self._attrs[attr], dict):
-                device = device or self.leading_device
                 if device in self._attrs[attr]:
                     graph_item = self._attrs[attr][device]
                 else:
                     graph_item = self._attrs[attr]
             else:
                 graph_item = self._attrs[attr]
+        elif default is not None:
+            graph_item = default
         else:
             graph_item = self._check_tensor(attr, device)
         return graph_item
@@ -340,7 +339,6 @@ class TFModel(BaseModel):
                 for device in self.devices:
                     with tf.device(device):
                         with tf.variable_scope(self.device_to_scope[device]):
-                            self._inputs = {}
                             config = self.build_config()
                             self._full_config = config
                             self._build(config)
@@ -496,7 +494,7 @@ class TFModel(BaseModel):
 
         placeholders = dict()
         tensors = dict()
-
+        _inputs = dict()
         for input_name, input_config in config.items():
             if isinstance(input_config, str):
                 continue
@@ -515,7 +513,8 @@ class TFModel(BaseModel):
                 input_config['shape'] = shape
                 shape = [None] + list(shape)
 
-            self._inputs[input_name] = dict(config=input_config)
+            _inputs[input_name] = dict(config=input_config)
+            self.store_to_attr('_inputs', _inputs)
 
             if self.has_classes(input_name):
                 dtype = input_config.get('dtype', tf.int64)
@@ -533,7 +532,8 @@ class TFModel(BaseModel):
             elif input_config.get('data_format') == 'f':
                 input_config['data_format'] = 'channels_first'
 
-            self._inputs[input_name] = dict(config=input_config)
+            _inputs[input_name] = dict(config=input_config)
+            self.store_to_attr('_inputs', _inputs)
             tensor = self._make_transform(input_name, tensor, input_config)
 
             if isinstance(reshape, (list, tuple)):
@@ -546,22 +546,22 @@ class TFModel(BaseModel):
 
             tensors[input_name] = tensor
 
-            self._inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
+            _inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
             if name is not None:
-                self._inputs[name] = self._inputs[input_name]
+                _inputs[name] = _inputs[input_name]
+            self.store_to_attr('_inputs', _inputs)
 
         # check for aliases
         for input_name, input_config in config.items():
-            if isinstance(input_config, str) and input_name not in self._inputs:
-                self._inputs[input_name] = self._inputs[input_config]
+            if isinstance(input_config, str) and input_name not in _inputs:
+                _inputs[input_name] = _inputs[input_config]
                 tensors[input_name] = tensors[input_config]
                 placeholders[input_name] = placeholders[input_config]
                 tensor = tf.identity(tensors[input_name], name=input_name)
                 self.store_to_attr(input_name, tensors[input_name], device)
 
-        self.store_to_attr('_inputs', self._inputs)
+        self.store_to_attr('_inputs', _inputs)
         self.store_to_attr('inputs', tensors)
-
         return placeholders, tensors
 
     def _make_transform(self, input_name, tensor, config):
@@ -627,10 +627,10 @@ class TFModel(BaseModel):
 
     def to_classes(self, tensor, input_name, name=None):
         """ Convert tensor with labels to classes of ``input_name`` """
-        if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
+        if tensor.dtype in [tf.int16, tf.int32, tf.int64, tf.float16, tf.float32, tf.float64]:
             tensor = tf.argmax(tensor, axis=-1, name=name)
         if self.has_classes(input_name):
-            self._to_classes.update({tensor: input_name})
+            self.store_to_attr('_to_classes', input_name, tensor)
         return tensor
 
     def _make_train_steps(self, config, init=True):
@@ -876,35 +876,25 @@ class TFModel(BaseModel):
         ------
         ValueError shape in tensor configuration isn't int, tuple or list
         """
-        if isinstance(tensor, tf.Tensor):
-            names = [n for n, i in self._inputs.items() if tensor in [i['placeholder'], i['tensor']]]
-            if len(names) > 0:
-                input_name = names[0]
-            else:
-                input_name = tensor.name
-        elif isinstance(tensor, str):
-            if tensor in self._inputs:
-                input_name = tensor
-            else:
-                input_name = self._map_name(tensor)
-        else:
-            raise TypeError("Tensor can be tf.Tensor or string, but given %s" % type(tensor))
+        inputs = self.get_from_attr('_inputs')
 
-        if input_name in self._inputs:
-            config = self._inputs[input_name]['config']
+        if tensor in inputs:
+            config = inputs[tensor]['config']
             shape = config.get('shape')
             if isinstance(shape, int):
                 shape = (shape,)
             if shape:
                 kwargs['shape'] = shape
-        elif isinstance(input_name, str):
+        elif isinstance(tensor, str):
             try:
-                tensor = self.graph.get_tensor_by_name(input_name)
+                tensor = self.get_from_attr(tensor)
             except KeyError:
                 config = {}
             else:
                 shape = tensor.get_shape().as_list()[1:]
-                config = dict(dtype=tensor.dtype, shape=shape, name=tensor.name, data_format='channels_last')
+                data_format = self._full_config.get('common/data_format') or 'channels_last'
+                config = dict(dtype=tensor.dtype, shape=shape,
+                              name=tensor.name, data_format=data_format)
         else:
             config = {}
 
@@ -952,8 +942,9 @@ class TFModel(BaseModel):
             fetch = fetches[ix] if ix is not None else fetches
             if isinstance(fetch, str):
                 fetch = self.graph.get_tensor_by_name(fetch)
-            if fetch in self._to_classes:
-                return self.classes(self._to_classes[fetch])[out]
+            _to_classes = self.get_from_attr('_to_classes', default={})
+            if fetch in _to_classes:
+                return self.classes(_to_classes[fetch])[out]
         return out
 
     def _fill_output(self, output, fetches):
@@ -1012,13 +1003,14 @@ class TFModel(BaseModel):
             model.train(fetches='loss', images=B('images'), labels=B('labels'))
         """
         with self.graph.as_default():
+            train_steps = self.get_from_attr('train_steps')
             # Use microbatch size from either args or config, and if
             # necessary ops for microbatch-training are absent, create them
             if microbatch is not False:
                 microbatch = microbatch or self.microbatch
             self.microbatch = microbatch
 
-            if (microbatch) and (len(list(self.train_steps.values())[0]) == 1):
+            if (microbatch) and (len(list(train_steps.values())[0]) == 1):
                 self._make_train_steps(self._full_config, init=False)
 
             if microbatch is True: # if config option is set to True, but train option left unspectified,
@@ -1044,12 +1036,12 @@ class TFModel(BaseModel):
             if use_lock:
                 self._train_lock.acquire()
 
-            if self.train_steps:
+            if train_steps:
                 for mode in train_mode:
-                    if mode in self.train_steps.keys():
-                        train_fetches = [self.train_steps[mode]]
+                    if mode in train_steps.keys():
+                        train_fetches = [train_steps[mode]]
                     else:
-                        train_fetches = [train_step for name, train_step in self.train_steps.items()
+                        train_fetches = [train_step for name, train_step in train_steps.items()
                                          if re.search(mode, name) is not None]
 
                     if not microbatch:
@@ -1818,14 +1810,7 @@ class TFModel(BaseModel):
         if isinstance(tensor, tf.Tensor):
             pass
         elif isinstance(tensor, str):
-            if tensor in self._inputs:
-                tensor = self._inputs[tensor]['placeholder']
-            else:
-                input_name = self._map_name(tensor)
-                if input_name in self._inputs:
-                    tensor = self._inputs[input_name]
-                else:
-                    tensor = self.graph.get_tensor_by_name(input_name)
+            tensor = self.get_from_attr(tensor)
         else:
             raise TypeError("Tensor can be tf.Tensor or string, but given %s" % type(tensor))
 
