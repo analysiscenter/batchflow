@@ -244,7 +244,7 @@ class DeepGalerkin(TFModel):
             bound_cond = kwargs["boundary_condition"]
             n_dims_xs = n_dims if init_cond is None else n_dims - 1
             xs_spatial = coordinates[:n_dims_xs] if n_dims_xs > 0 else []
-            xs_spatial_ = tf.concat(xs_spatial, axis=1)
+            xs_spatial_ = tf.concat(xs_spatial, axis=1) if n_dims_xs > 0 else None
 
             # multiplicator for binding boundary conditions
             if n_dims_xs > 0:
@@ -270,7 +270,6 @@ class DeepGalerkin(TFModel):
             else:
                 add_term += bound_cond(*xs_spatial)
 
-            print(inputs.shape, multiplier.shape, add_term)
             # apply transformation to inputs
             inputs = add_term + multiplier * inputs
         return tf.identity(inputs, name='solution')
