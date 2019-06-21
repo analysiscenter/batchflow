@@ -56,7 +56,8 @@ class TFModel(BaseModel):
         See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
 
     session : dict
-        `Tensorflow session parameters <https://www.tensorflow.org/api_docs/python/tf/Session#__init__>`_.
+        parameters for session configuration. 'allow_soft_placement' is always True. To learn more, check
+        `Tensorflow ConfigProto parameters <https://www.tensorflow.org/api_docs/python/tf/ConfigProto`_.
 
     inputs : dict
         model inputs (see :meth:`.TFModel._make_inputs`)
@@ -364,8 +365,9 @@ class TFModel(BaseModel):
             self.session.run(tf.global_variables_initializer())
 
     def _get_devices(self):
-        # Get rid of internal `XLA` devices
         available_devices = device_lib.list_local_devices()
+
+        # Remove internal `XLA` devices, see `using JIT compilation <https://www.tensorflow.org/xla/jit>`_.
         usable_devices = [device.name for device in available_devices
                           if 'XLA' not in device.name]
 
@@ -385,6 +387,10 @@ class TFModel(BaseModel):
             else:
                 devices = [cpu_devices[0]]
         return devices
+
+    def _get_current_device(self):
+        device_scope = tf.get_variable_scope().name.split('/')[1]
+        return self.scope_to_device[device_scope]
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
@@ -469,7 +475,7 @@ class TFModel(BaseModel):
         full_config = config
         config = full_config.get('inputs')
 
-        device = self.scope_to_device[tf.get_variable_scope().name.split('/')[1]]
+        device = self._get_current_device()
 
         names = names or []
         missing_names = set(names) - set(config.keys())
@@ -1484,7 +1490,7 @@ class TFModel(BaseModel):
                 ctx.__exit__(None, None, None)
 
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
-        device = self.scope_to_device[tf.get_variable_scope().name.split('/')[1]]
+        device = self._get_current_device()
         if oper is None:
             self._add_output_identity(inputs, name, attr_prefix, device, **kwargs)
         elif oper == 'softplus':
