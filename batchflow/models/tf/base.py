@@ -1146,9 +1146,6 @@ class TFModel(BaseModel):
             for attr in self._attrs:
                 setattr(self, attr, self._to_graph_item(self._attrs[attr]))
             self._attrs = list(self._attrs.keys())
-        with self.graph.as_default():
-            for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
-                setattr(self, attr, graph_item)
 
     def store_to_attr(self, attr, graph_item):
         """ Make a graph item (variable or operation) accessible as a model attribute """
