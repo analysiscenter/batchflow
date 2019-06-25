@@ -1032,19 +1032,20 @@ class TFModel(BaseModel):
             output = self.session.run(_fetches, _feed_dict)
         return self._fill_output(output, _fetches)
 
-    def _conversion_to_name(self, graph_item):
+    def _to_name(self, graph_item):
         if isinstance(graph_item, dict):
-            for key in graph_item.keys():
-                graph_item.update({key: list(map(self._conversion_to_name, graph_item[key]))})
-            return graph_item
+            return {k: self._to_name(graph_item[k]) for k in graph_item}
+
+        if isinstance(graph_item, tf.Tensor):
+            return ['Tensor', graph_item.name]
+        if isinstance(graph_item, tf.Variable):
+            return ['Variable', graph_item.name]
+        if isinstance(graph_item, tf.Operation):
+            return ['Operation', graph_item.name]
 
         if isinstance(graph_item, list):
-            return list(map(self._conversion_to_name, graph_item))
-
-        if hasattr(graph_item, 'op'):
-            return ('Tensor', graph_item.name)
-
-        return ('Operation', graph_item.name)
+            return list(map(self._to_name, graph_item))
+        raise ValueError('Unrecognized type of value.')
 
     def save(self, path, *args, **kwargs):
         """ Save tensorflow model.
@@ -1074,26 +1075,24 @@ class TFModel(BaseModel):
                 attrs_path = dict()
                 for attr in self._attrs:
                     attr_additional = getattr(self, attr)
-                    if isinstance(attr_additional, dict):
-                        attrs_path.update({attr: self._conversion_to_name(attr_additional.copy())})
-                    else:
-                        attrs_path.update({attr: self._conversion_to_name(attr_additional)})
+                    attrs_path[attr] = self._to_name(attr_additional)
+
                 json.dump(attrs_path, f)
 
-    def _conversion_to_graph_item(self, name):
+    def _to_graph_item(self, name):
         if isinstance(name, dict):
-            for key in name.keys():
-                name.update({key: list(map(self._conversion_to_graph_item, name[key]))})
-            return name
+            return {k: self._to_graph_item(name[k]) for k in name}
 
         if name[0] == 'Tensor':
             return self.graph.get_tensor_by_name(name[1])
-
+        if name[0] == 'Variable':
+            with self.graph.as_default():
+                return tf.global_variables(name[1])[0]
         if name[0] == 'Operation':
             return self.graph.get_operation_by_name(name[1])
 
         if isinstance(name, list):
-            return list(map(self._conversion_to_graph_item, name))
+            return list(map(self._to_graph_item, name))
         raise ValueError('Unknown type of value.')
 
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
@@ -1145,7 +1144,7 @@ class TFModel(BaseModel):
         with open(os.path.join(path, 'attrs.json'), 'r') as json_file:
             self._attrs = json.load(json_file)
             for attr in self._attrs:
-                setattr(self, attr, self._conversion_to_graph_item(self._attrs[attr].copy()))
+                setattr(self, attr, self._to_graph_item(self._attrs[attr]))
             self._attrs = list(self._attrs.keys())
         with self.graph.as_default():
             for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
