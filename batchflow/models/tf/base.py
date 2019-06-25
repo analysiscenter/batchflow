@@ -270,14 +270,11 @@ class TFModel(BaseModel):
 
     def store_to_attr(self, attr, graph_item, device=None):
         """ Store `graph_item` to private container."""
-        if self._attrs.get(attr) is None:
-            if device is None:
-                self._attrs[attr] = graph_item
-            else:
-                self._attrs[attr] = {device: graph_item}
+        if device is None:
+            self._attrs[attr] = graph_item
         else:
-            if device is None:
-                self._attrs[attr] = graph_item
+            if self._attrs.get(attr) is None:
+                self._attrs[attr] = {device: graph_item}
             else:
                 self._attrs[attr][device] = graph_item
 
@@ -287,16 +284,11 @@ class TFModel(BaseModel):
         if attr in self._attrs:
             if isinstance(self._attrs[attr], dict):
                 if device in self._attrs[attr]:
-                    graph_item = self._attrs[attr][device]
-                else:
-                    graph_item = self._attrs[attr]
-            else:
-                graph_item = self._attrs[attr]
-        elif default is not None:
-            graph_item = default
-        else:
-            graph_item = self._check_tensor(attr, device)
-        return graph_item
+                    return self._attrs[attr][device]
+            return self._attrs[attr]
+        if default is not None:
+            return default
+        return self._check_tensor(attr, device)
 
     def _check_tensor(self, name, device=None):
         prefix = self.__class__.__name__ + '/'
@@ -380,7 +372,7 @@ class TFModel(BaseModel):
             devices = devices if isinstance(devices, list) else [devices]
             devices = [device for name in devices for device in usable_devices
                        if re.search(name.upper(), device.upper()) is not None]
-            devices = sorted(list(set(devices)))
+            devices = list(set(devices))
         else:
             cpu_devices = [item.name for item in available_devices
                            if 'CPU' in item.name]
@@ -637,7 +629,7 @@ class TFModel(BaseModel):
 
     def to_classes(self, tensor, input_name, name=None):
         """ Convert tensor with labels to classes of ``input_name`` """
-        if tensor.dtype in [tf.int16, tf.int32, tf.int64, tf.float16, tf.float32, tf.float64]:
+        if tensor.dtype in [tf.float16, tf.float32, tf.float64]:
             tensor = tf.argmax(tensor, axis=-1, name=name)
         if self.has_classes(input_name):
             self.store_to_attr('_to_classes', input_name, tensor)
@@ -850,7 +842,8 @@ class TFModel(BaseModel):
             # Apply gradients from the storage to the actual weights
             with tf.variable_scope('apply_grads'):
                 grad_and_vars = [(grad_accum[i] / count, v) for i, (_, v) in enumerate(grad_and_vars)]
-                apply_op = optimizer.apply_gradients(grad_and_vars)
+                apply_op = optimizer.apply_gradients(grad_and_vars,
+                                                     global_step=self.get_from_attr('global_step'))
                 apply_op = tf.group(apply_op, name='apply_grads_op')
         return zero_op, update_op, apply_op
 
