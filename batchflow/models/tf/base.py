@@ -246,7 +246,6 @@ class TFModel(BaseModel):
         self.graph = tf.Graph() if self.session is None else self.session.graph
         self._graph_context = None
         self._full_config = {}
-        self._saver = None
 
         # Train configurations
         self.train_steps = None
@@ -261,6 +260,11 @@ class TFModel(BaseModel):
 
         # Private storage for often used tensors
         self._attrs = {}
+
+        # Save/load things
+        self._saver = None
+        self.preserve = ['_attrs', 'microbatch',
+                         'devices', 'leading_device', 'device_to_scope', 'multi_device']
 
         super().__init__(*args, **kwargs)
 
@@ -864,13 +868,13 @@ class TFModel(BaseModel):
             apply_op = optimizer.apply_gradients([(averaged, leading_device_variable)],
                                                  global_step=self.get_from_attr('global_step'))
 
-            distribute_weights = [v.assign(leading_device_variable)for _, v in grad_and_vars[1:]]
-            update_op = tf.group([apply_op] + distribute_weights, name='update_weight_op')
-            operations.append(update_op)
+            distribute_weights = [v.assign(leading_device_variable) for _, v in grad_and_vars[1:]]
+            update_op_ = tf.group([apply_op] + distribute_weights, name='update_weight_op')
+            operations.append(update_op_)
 
         # Combine update operations for every variable into single one
         update_op = tf.group(operations, name='update_op')
-        return operations
+        return update_op
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
@@ -1185,7 +1189,11 @@ class TFModel(BaseModel):
         return self._fill_output(output, _fetches)
 
     def save(self, path, *args, **kwargs):
-        """ Save tensorflow model.
+        """ Save tensorflow model and most of important attributes.
+
+        Note
+        ----
+        All of tuples (for example, shapes) are converted to lists due to usage of JSON format.
 
         Parameters
         ----------
@@ -1209,11 +1217,38 @@ class TFModel(BaseModel):
                 self._saver = tf.train.Saver()
             self._saver.save(self.session, os.path.join(path, 'model'), *args,
                              global_step=self.get_from_attr('global_step'), **kwargs)
-            with open(os.path.join(path, 'attrs.json'), 'w') as f:
-                json.dump(self._attrs, f)
+
+        with open(os.path.join(path, 'attributes.json'), 'w') as f:
+            preserved = dict()
+            for attribute_name in self.preserve:
+                attribute = getattr(self, attribute_name)
+                preserved[attribute_name] = self._to_names(attribute)
+            json.dump(preserved, f)
+
+    def _to_names(self, graph_item):
+        # Base cases
+        if isinstance(graph_item, tf.Tensor):
+            return ('Tensor', graph_item.name)
+        if isinstance(graph_item, tf.Operation):
+            return ('Operation', graph_item.name)
+        if isinstance(graph_item, tf.Variable):
+            return ('Variable', graph_item.op.name)
+        if isinstance(graph_item, (bool, str, int, float)) or graph_item is None:
+            return graph_item
+
+        # Handle different containers
+        if isinstance(graph_item, (list, tuple)):
+            return [self._to_names(item) for item in graph_item]
+        if isinstance(graph_item, dict):
+            return {key: self._to_names(graph_item[key]) for key in graph_item.keys()}
+        raise ValueError('Unrecognized type of value.')
 
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
-        """ Load a TensorFlow model from files
+        """ Load a TensorFlow model and most important attributes from files
+
+        Note
+        ----
+        All of tuples (for example, shapes) are loaded as lists due to usage of JSON format.
 
         Parameters
         ----------
@@ -1258,11 +1293,37 @@ class TFModel(BaseModel):
             self.create_session()
             saver.restore(self.session, checkpoint_path)
 
-        with open(os.path.join(path, 'attrs.json'), 'r') as json_file:
-            self._attrs = json.load(json_file)
+        with open(os.path.join(path, 'attributes.json'), 'r') as json_file:
+            restored = json.load(json_file)
+            for attribute_name, value in restored.items():
+                setattr(self, attribute_name, self._to_graph_items(value))
+            self.preserve = list(restored.keys())
         with self.graph.as_default():
             for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
                 setattr(self, attr, graph_item)
+
+    def _to_graph_items(self, name):
+        # Base cases
+        if isinstance(name, (bool, str, int, float)) or name is None:
+            return name
+
+        # Handle different containers
+        if isinstance(name, (list, tuple)):
+            if len(name) == 2:
+                type_, name_ = name
+                if type_ in ['Variable', 'Tensor', 'Operation']:
+                    if type_ == 'Variable':
+                        with self.graph.as_default():
+                            return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=name_)[0]
+                    if type_ == 'Tensor':
+                        return self.graph.get_tensor_by_name(name_)
+                    if type_ == 'Operation':
+                        return self.graph.get_operation_by_name(name_)
+            return [self._to_graph_items(item) for item in name]
+
+        if isinstance(name, dict):
+            return {key: self._to_graph_items(name[key]) for key in name.keys()}
+        raise ValueError('Unrecognized type of value.')
 
     @classmethod
     def crop(cls, inputs, resize_to, data_format='channels_last'):
