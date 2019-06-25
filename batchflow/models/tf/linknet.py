@@ -57,7 +57,7 @@ class LinkNet(TFModel):
             config['body/filters'] = 2 ** np.arange(config['body/num_blocks']) * config['initial_block/filters']
         if config.get('head/num_classes') is None:
             config['head/num_classes'] = self.num_classes('targets')
-        config['head']['targets'] = self.get_from_attr('targets')
+        config['head/targets'] = self.get_from_attr('targets')
         return config
 
     @classmethod

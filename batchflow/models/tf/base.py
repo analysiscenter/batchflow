@@ -1232,7 +1232,7 @@ class TFModel(BaseModel):
         # Handle different containers
         if isinstance(graph_item, (list, tuple)):
             return [self._to_names(item) for item in graph_item]
-        if isinstance(graph_item, dict):
+        if isinstance(graph_item, (dict, Config)):
             return {key: self._to_names(graph_item[key]) for key in graph_item.keys()}
         raise ValueError('Unrecognized type of value.')
 
@@ -1314,7 +1314,7 @@ class TFModel(BaseModel):
                         return self.graph.get_operation_by_name(name_)
             return [self._to_graph_items(item) for item in name]
 
-        if isinstance(name, dict):
+        if isinstance(name, (dict, Config)):
             return {key: self._to_graph_items(name[key]) for key in name.keys()}
         raise ValueError('Unrecognized type of value.')
 

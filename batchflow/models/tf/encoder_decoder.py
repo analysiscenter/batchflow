@@ -124,7 +124,7 @@ class EncoderDecoder(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['targets'] = self.get_from_attr('targets')
+        config['head/targets'] = self.get_from_attr('targets')
         return config
 
 
