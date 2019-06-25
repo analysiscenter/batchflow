@@ -32,8 +32,8 @@ train_template = (Pipeline()
     .init_model('dynamic', VGG16, 'conv', config=model_config)
     .to_array()
     .train_model('conv',
+                images=B('images'), labels=B('labels'),
                 fetches='loss',
-                feed_dict={'images': B('images'), 'labels': B('labels')},
                 save_to=V('loss', mode='w'))
 )
 
@@ -43,8 +43,8 @@ test_template = (Pipeline()
     .import_model('conv', C('import_from'))
     .to_array()
     .predict_model('conv',
+                    images=B('images'), labels=B('labels'),
                     fetches='predictions',
-                    feed_dict={'images': B('images'), 'labels': B('labels')},
                     save_to=V('predictions'))
     .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
                     fmt='logits', axis=-1, save_to=V('metrics', mode='a'))
