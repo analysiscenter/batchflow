@@ -28,7 +28,7 @@ class FCN(TFModel):
 
         config['body/num_classes'] = self.num_classes('targets')
         config['head/num_classes'] = self.num_classes('targets')
-        config['head/targets'] = self.targets
+        config['head/targets'] = self.get_from_attr('targets')
 
         return config
 
