@@ -5,7 +5,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 
 sys.path.append("../../..")
-from batchflow import Pipeline, B, C, V
+from batchflow import Pipeline, B, C, V, D
 from batchflow.opensets import MNIST
 from batchflow.models.tf import VGG16
 from batchflow.research import Research, Option
@@ -16,7 +16,7 @@ model_config={
     'session/config': tf.ConfigProto(allow_soft_placement=True),
     'inputs/images/shape': (28, 28, 1),
     'inputs/labels': {
-        'classes': 10,
+        'classes': D('num_classes'),
         'transform': 'ohe',
         'name': 'targets'
     },
@@ -32,9 +32,9 @@ train_ppl = (mnist.train.p
     .init_variable('accuracy', init_on_each_run=list)
     .init_model('dynamic', VGG16, 'conv', config=model_config)
     .to_array()
-    .train_model('conv', 
-                 fetches='loss', 
-                 feed_dict={'images': B('images'), 'labels': B('labels')},
+    .train_model('conv',
+                 images=B('images'), labels=B('labels'),
+                 fetches='loss',
                  save_to=V('loss', mode='w'))
     .run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True))
 
@@ -44,9 +44,9 @@ test_ppl = (mnist.test.p
     .init_variable('metrics', init_on_each_run=None) 
     .import_model('conv', train_ppl)
     .to_array()
-    .predict_model('conv', 
-                   fetches='predictions', 
-                   feed_dict={'images': B('images'), 'labels': B('labels')},
+    .predict_model('conv',
+                   images=B('images'), labels=B('labels'),
+                   fetches='predictions',
                    save_to=V('predictions'))
     .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
                     fmt='logits', axis=-1, save_to=V('metrics', mode='a'))
