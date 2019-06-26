@@ -1071,12 +1071,13 @@ class TFModel(BaseModel):
             if self._saver is None:
                 self._saver = tf.train.Saver()
             self._saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
-            with open(os.path.join(path, 'attrs.json'), 'w') as f:
-                attrs_path = dict()
-                for attr in self._attrs:
-                    attr_additional = getattr(self, attr)
-                    attrs_path[attr] = self._to_name(attr_additional)
 
+            attrs_path = dict()
+            for attr in self._attrs:
+                attr_additional = getattr(self, attr)
+                attrs_path[attr] = self._to_name(attr_additional)
+
+            with open(os.path.join(path, 'attrs.json'), 'w') as f:
                 json.dump(attrs_path, f)
 
     def _to_graph_item(self, name):
@@ -1143,9 +1144,10 @@ class TFModel(BaseModel):
 
         with open(os.path.join(path, 'attrs.json'), 'r') as json_file:
             self._attrs = json.load(json_file)
-            for attr in self._attrs:
-                setattr(self, attr, self._to_graph_item(self._attrs[attr]))
-            self._attrs = list(self._attrs.keys())
+
+        for attr in self._attrs:
+            setattr(self, attr, self._to_graph_item(self._attrs[attr]))
+        self._attrs = list(self._attrs.keys())
 
     def store_to_attr(self, attr, graph_item):
         """ Make a graph item (variable or operation) accessible as a model attribute """
