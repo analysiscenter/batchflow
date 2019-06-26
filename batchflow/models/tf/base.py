@@ -348,6 +348,8 @@ class TFModel(BaseModel):
                 self._make_train_steps(config)
                 self.reset()
 
+                self.reset()
+
     def create_session(self, config=None):
         """ Create TF session """
         config = config if config is not None else self.config
@@ -1185,6 +1187,21 @@ class TFModel(BaseModel):
             output = self.session.run(_fetches, _feed_dict)
         return self._fill_output(output, _fetches)
 
+    def _to_name(self, graph_item):
+        if isinstance(graph_item, dict):
+            return {k: self._to_name(graph_item[k]) for k in graph_item}
+
+        if isinstance(graph_item, tf.Tensor):
+            return ['Tensor', graph_item.name]
+        if isinstance(graph_item, tf.Variable):
+            return ['Variable', graph_item.name]
+        if isinstance(graph_item, tf.Operation):
+            return ['Operation', graph_item.name]
+
+        if isinstance(graph_item, list):
+            return list(map(self._to_name, graph_item))
+        raise ValueError('Unrecognized type of value.')
+
     def save(self, path, *args, **kwargs):
         """ Save tensorflow model and most of important attributes.
 
@@ -1239,6 +1256,7 @@ class TFModel(BaseModel):
         if isinstance(graph_item, (dict, Config)):
             return type(graph_item)({key: self._to_names(graph_item[key]) for key in graph_item.keys()})
         raise ValueError('Unrecognized type of value.')
+
 
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
         """ Load a TensorFlow model and most important attributes from files
@@ -1319,6 +1337,7 @@ class TFModel(BaseModel):
         if isinstance(name, (dict, Config)):
             return type(name)({key: self._to_graph_items(name[key]) for key in name.keys()})
         raise ValueError('Unrecognized type of value.')
+
 
     @classmethod
     def crop(cls, inputs, resize_to, data_format='channels_last'):
