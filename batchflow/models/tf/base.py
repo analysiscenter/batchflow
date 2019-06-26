@@ -4,9 +4,9 @@
 import os
 import glob
 import re
-import json
 import threading
 
+import dill
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import device_lib
@@ -245,7 +245,7 @@ class TFModel(BaseModel):
         self.session = kwargs.get('session', None)
         self.graph = tf.Graph() if self.session is None else self.session.graph
         self._graph_context = None
-        self._full_config = {}
+        self._full_config = Config()
 
         # Train configurations
         self.train_steps = None
@@ -259,11 +259,11 @@ class TFModel(BaseModel):
         self.multi_device = False
 
         # Private storage for often used tensors
-        self._attrs = {}
+        self._attrs = dict()
 
         # Save/load things
         self._saver = None
-        self.preserve = ['_attrs', 'microbatch',
+        self.preserve = ['_attrs', '_full_config', 'microbatch',
                          'devices', 'leading_device', 'device_to_scope', 'multi_device']
 
         super().__init__(*args, **kwargs)
@@ -276,11 +276,11 @@ class TFModel(BaseModel):
             if self._attrs.get(attr) is None:
                 self._attrs[attr] = {device: graph_item}
             else:
-                self._attrs[attr][device] = graph_item
+                self._attrs[attr].update({device: graph_item})
 
     def get_from_attr(self, attr, device=None, default=None):
         """ Get item from private container or directly from model graph."""
-        device = device or self.leading_device
+        device = device or self._get_current_device() or self.leading_device
         if attr in self._attrs:
             if isinstance(self._attrs[attr], dict):
                 if device in self._attrs[attr]:
@@ -372,7 +372,8 @@ class TFModel(BaseModel):
             devices = devices if isinstance(devices, list) else [devices]
             devices = [device for name in devices for device in usable_devices
                        if re.search(name.upper(), device.upper()) is not None]
-            devices = list(set(devices))
+            devices = [device for i, device in enumerate(devices)
+                       if device not in devices[:i]]
         else:
             cpu_devices = [item.name for item in available_devices
                            if 'CPU' in item.name]
@@ -385,8 +386,11 @@ class TFModel(BaseModel):
         return devices
 
     def _get_current_device(self):
-        device_scope = tf.get_variable_scope().name.split('/')[1]
-        return self.scope_to_device[device_scope]
+        scope = tf.get_variable_scope().name
+        if '/' in scope:
+            device_scope = scope.split('/')[1]
+            return self.scope_to_device[device_scope]
+        return None
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
@@ -1211,12 +1215,12 @@ class TFModel(BaseModel):
             self._saver.save(self.session, os.path.join(path, 'model'), *args,
                              global_step=self.get_from_attr('global_step'), **kwargs)
 
-        with open(os.path.join(path, 'attributes.json'), 'w') as f:
-            preserved = dict()
-            for attribute_name in self.preserve:
-                attribute = getattr(self, attribute_name)
-                preserved[attribute_name] = self._to_names(attribute)
-            json.dump(preserved, f)
+        preserved = dict()
+        for attribute_name in self.preserve:
+            attribute = getattr(self, attribute_name)
+            preserved[attribute_name] = self._to_names(attribute)
+        with open(os.path.join(path, 'attributes.json'), 'wb') as f:
+            dill.dump(preserved, f)
 
     def _to_names(self, graph_item):
         # Base cases
@@ -1230,10 +1234,10 @@ class TFModel(BaseModel):
             return graph_item
 
         # Handle different containers
-        if isinstance(graph_item, (list, tuple)):
-            return [self._to_names(item) for item in graph_item]
+        if isinstance(graph_item, (list, tuple, np.ndarray)):
+            return type(graph_item)([self._to_names(item) for item in graph_item])
         if isinstance(graph_item, (dict, Config)):
-            return {key: self._to_names(graph_item[key]) for key in graph_item.keys()}
+            return type(graph_item)({key: self._to_names(graph_item[key]) for key in graph_item.keys()})
         raise ValueError('Unrecognized type of value.')
 
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
@@ -1286,14 +1290,12 @@ class TFModel(BaseModel):
             self.create_session()
             saver.restore(self.session, checkpoint_path)
 
-        with open(os.path.join(path, 'attributes.json'), 'r') as json_file:
-            restored = json.load(json_file)
-            for attribute_name, value in restored.items():
-                setattr(self, attribute_name, self._to_graph_items(value))
-            self.preserve = list(restored.keys())
-        with self.graph.as_default():
-            for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
-                setattr(self, attr, graph_item)
+        with open(os.path.join(path, 'attributes.json'), 'rb') as json_file:
+            restored = dill.load(json_file)
+
+        for attribute_name, value in restored.items():
+            setattr(self, attribute_name, self._to_graph_items(value))
+        self.preserve = list(restored.keys())
 
     def _to_graph_items(self, name):
         # Base cases
@@ -1301,7 +1303,7 @@ class TFModel(BaseModel):
             return name
 
         # Handle different containers
-        if isinstance(name, (list, tuple)):
+        if isinstance(name, (list, tuple, np.ndarray)):
             if len(name) == 2:
                 type_, name_ = name
                 if type_ in ['Variable', 'Tensor', 'Operation']:
@@ -1312,10 +1314,10 @@ class TFModel(BaseModel):
                         return self.graph.get_tensor_by_name(name_)
                     if type_ == 'Operation':
                         return self.graph.get_operation_by_name(name_)
-            return [self._to_graph_items(item) for item in name]
+            return type(name)([self._to_graph_items(item) for item in name])
 
         if isinstance(name, (dict, Config)):
-            return {key: self._to_graph_items(name[key]) for key in name.keys()}
+            return type(name)({key: self._to_graph_items(name[key]) for key in name.keys()})
         raise ValueError('Unrecognized type of value.')
 
     @classmethod
