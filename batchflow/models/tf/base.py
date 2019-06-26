@@ -294,12 +294,13 @@ class TFModel(BaseModel):
 
                 if self.session is None:
                     self.create_session(config)
-                    self.reset()
 
                 if self.train_steps is None:
                     self._make_train_steps(config)
                 else:
                     self.store_to_attr('train_steps', self.train_steps)
+
+                self.reset()
 
     def create_session(self, config=None):
         """ Create TF session """
@@ -1031,6 +1032,21 @@ class TFModel(BaseModel):
             output = self.session.run(_fetches, _feed_dict)
         return self._fill_output(output, _fetches)
 
+    def _to_name(self, graph_item):
+        if isinstance(graph_item, dict):
+            return {k: self._to_name(graph_item[k]) for k in graph_item}
+
+        if isinstance(graph_item, tf.Tensor):
+            return ['Tensor', graph_item.name]
+        if isinstance(graph_item, tf.Variable):
+            return ['Variable', graph_item.name]
+        if isinstance(graph_item, tf.Operation):
+            return ['Operation', graph_item.name]
+
+        if isinstance(graph_item, list):
+            return list(map(self._to_name, graph_item))
+        raise ValueError('Unrecognized type of value.')
+
     def save(self, path, *args, **kwargs):
         """ Save tensorflow model.
 
@@ -1055,8 +1071,30 @@ class TFModel(BaseModel):
             if self._saver is None:
                 self._saver = tf.train.Saver()
             self._saver.save(self.session, os.path.join(path, 'model'), *args, global_step=self.global_step, **kwargs)
+
+            attrs_path = dict()
+            for attr in self._attrs:
+                attr_additional = getattr(self, attr)
+                attrs_path[attr] = self._to_name(attr_additional)
+
             with open(os.path.join(path, 'attrs.json'), 'w') as f:
-                json.dump(self._attrs, f)
+                json.dump(attrs_path, f)
+
+    def _to_graph_item(self, name):
+        if isinstance(name, dict):
+            return {k: self._to_graph_item(name[k]) for k in name}
+
+        if name[0] == 'Tensor':
+            return self.graph.get_tensor_by_name(name[1])
+        if name[0] == 'Variable':
+            with self.graph.as_default():
+                return tf.global_variables(name[1])[0]
+        if name[0] == 'Operation':
+            return self.graph.get_operation_by_name(name[1])
+
+        if isinstance(name, list):
+            return list(map(self._to_graph_item, name))
+        raise ValueError('Unknown type of value.')
 
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
         """ Load a TensorFlow model from files
@@ -1106,9 +1144,10 @@ class TFModel(BaseModel):
 
         with open(os.path.join(path, 'attrs.json'), 'r') as json_file:
             self._attrs = json.load(json_file)
-        with self.graph.as_default():
-            for attr, graph_item in zip(self._attrs, tf.get_collection('attrs')):
-                setattr(self, attr, graph_item)
+
+        for attr in self._attrs:
+            setattr(self, attr, self._to_graph_item(self._attrs[attr]))
+        self._attrs = list(self._attrs.keys())
 
     def store_to_attr(self, attr, graph_item):
         """ Make a graph item (variable or operation) accessible as a model attribute """
