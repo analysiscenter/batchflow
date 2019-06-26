@@ -375,10 +375,10 @@ class TFModel(BaseModel):
             devices = [device for i, device in enumerate(devices)
                        if device not in devices[:i]]
         else:
-            cpu_devices = [item.name for item in usable_devices
-                           if 'CPU' in item.name]
-            gpu_devices = [item.name for item in usable_devices
-                           if 'GPU' in item.name]
+            cpu_devices = [device for device in usable_devices
+                           if 'CPU' in device]
+            gpu_devices = [device for device in usable_devices
+                           if 'GPU' in device]
             if gpu_devices:
                 devices = [gpu_devices[0]]
             else:
