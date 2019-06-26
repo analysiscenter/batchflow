@@ -256,6 +256,7 @@ class TFModel(BaseModel):
         self.devices = []
         self.leading_device = None
         self.device_to_scope = {}
+        self.scope_to_device = {}
         self.multi_device = False
 
         # Private storage for often used tensors
@@ -264,7 +265,7 @@ class TFModel(BaseModel):
         # Save/load things
         self._saver = None
         self.preserve = ['_attrs', '_full_config', 'microbatch',
-                         'devices', 'leading_device', 'device_to_scope', 'multi_device']
+                         'devices', 'leading_device', 'device_to_scope', 'scope_to_device', 'multi_device']
 
         super().__init__(*args, **kwargs)
 
@@ -795,7 +796,7 @@ class TFModel(BaseModel):
 
         return decay_name, decay_args
 
-    def _make_scope(self, config, device=None):
+    def _make_scope(self, config, device):
         scopes = config.get('scope')
         scopes = [scopes] if isinstance(scopes, str) else scopes
         if not isinstance(scopes, (list, tuple)):
@@ -803,19 +804,18 @@ class TFModel(BaseModel):
 
         total = []
         for scope in scopes:
-            scope_prefix = self.__class__.__name__ + '/'
-            if device is not None:
-                scope_prefix += self.device_to_scope[device] + '/'
+            model_prefix = self.__class__.__name__ + '/'
+            device_prefix = model_prefix + self.device_to_scope[device] + '/'
 
             if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
-                scope_prefix += scope[1:]
+                scope_prefix = device_prefix + scope[1:]
             else:
-                scope_prefix += scope
+                scope_prefix = device_prefix + scope
 
             scope_collection = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                                  scope_prefix)
             if (len(scope) > 0) and (scope[0] in ['-', '_', '^']):
-                scope_collection = [item for item in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+                scope_collection = [item for item in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, device_prefix)
                                     if item not in scope_collection]
             total.extend(scope_collection)
         return total
