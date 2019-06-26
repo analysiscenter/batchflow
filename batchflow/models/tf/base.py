@@ -348,8 +348,6 @@ class TFModel(BaseModel):
                 self._make_train_steps(config)
                 self.reset()
 
-                self.reset()
-
     def create_session(self, config=None):
         """ Create TF session """
         config = config if config is not None else self.config
@@ -377,10 +375,10 @@ class TFModel(BaseModel):
             devices = [device for i, device in enumerate(devices)
                        if device not in devices[:i]]
         else:
-            cpu_devices = [item.name for item in available_devices
-                           if 'CPU' in item.name]
-            gpu_devices = [item.name for item in available_devices
-                           if 'GPU' in item.name]
+            cpu_devices = [device for device in usable_devices
+                           if 'CPU' in device]
+            gpu_devices = [device for device in usable_devices
+                           if 'GPU' in device]
             if gpu_devices:
                 devices = [gpu_devices[0]]
             else:
@@ -1187,21 +1185,6 @@ class TFModel(BaseModel):
             output = self.session.run(_fetches, _feed_dict)
         return self._fill_output(output, _fetches)
 
-    def _to_name(self, graph_item):
-        if isinstance(graph_item, dict):
-            return {k: self._to_name(graph_item[k]) for k in graph_item}
-
-        if isinstance(graph_item, tf.Tensor):
-            return ['Tensor', graph_item.name]
-        if isinstance(graph_item, tf.Variable):
-            return ['Variable', graph_item.name]
-        if isinstance(graph_item, tf.Operation):
-            return ['Operation', graph_item.name]
-
-        if isinstance(graph_item, list):
-            return list(map(self._to_name, graph_item))
-        raise ValueError('Unrecognized type of value.')
-
     def save(self, path, *args, **kwargs):
         """ Save tensorflow model and most of important attributes.
 
@@ -1236,7 +1219,7 @@ class TFModel(BaseModel):
         for attribute_name in self.preserve:
             attribute = getattr(self, attribute_name)
             preserved[attribute_name] = self._to_names(attribute)
-        with open(os.path.join(path, 'attributes.json'), 'wb') as f:
+        with open(os.path.join(path, 'attributes.dill'), 'wb') as f:
             dill.dump(preserved, f)
 
     def _to_names(self, graph_item):
@@ -1308,8 +1291,8 @@ class TFModel(BaseModel):
             self.create_session()
             saver.restore(self.session, checkpoint_path)
 
-        with open(os.path.join(path, 'attributes.json'), 'rb') as json_file:
-            restored = dill.load(json_file)
+        with open(os.path.join(path, 'attributes.dill'), 'rb') as dill_file:
+            restored = dill.load(dill_file)
 
         for attribute_name, value in restored.items():
             setattr(self, attribute_name, self._to_graph_items(value))
@@ -1324,14 +1307,13 @@ class TFModel(BaseModel):
         if isinstance(name, (list, tuple, np.ndarray)):
             if len(name) == 2:
                 type_, name_ = name
-                if type_ in ['Variable', 'Tensor', 'Operation']:
-                    if type_ == 'Variable':
-                        with self.graph.as_default():
-                            return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=name_)[0]
-                    if type_ == 'Tensor':
-                        return self.graph.get_tensor_by_name(name_)
-                    if type_ == 'Operation':
-                        return self.graph.get_operation_by_name(name_)
+                if type_ == 'Variable':
+                    with self.graph.as_default():
+                        return tf.global_variables(name_)[0]
+                if type_ == 'Tensor':
+                    return self.graph.get_tensor_by_name(name_)
+                if type_ == 'Operation':
+                    return self.graph.get_operation_by_name(name_)
             return type(name)([self._to_graph_items(item) for item in name])
 
         if isinstance(name, (dict, Config)):
