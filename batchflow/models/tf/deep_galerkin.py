@@ -27,11 +27,9 @@ class DeepGalerkin(TFModel):
 
     pde : dict
         dictionary of parameters of PDE. Must contain keys
-        - form : dict
-            may contain keys 'd1' and 'd2', which define the coefficients before differentials
-            of first two orders in lhs of the equation.
-        - rhs : callable or const
-            right-hand-side of the equation. If callable, must accept and return tf.Tensor.
+        - form : callable
+            defines diferential operator in lhs of the PDE. Composed from predefined tokens including
+            differential operator `D(u, x)` and unary operations like `sin` and `cos`.
         - domain : list
             defines the rectangular domain of the equation as a sequence of coordinate-wise bounds.
         - bind_bc_ic : bool
@@ -42,7 +40,8 @@ class DeepGalerkin(TFModel):
             (heat-equation or wave-equation, e.g.). Then, first (n - 1) coordinates are spatial,
             while the last one is the time-variable. If the lhs of PDE contains second-order
             derivative w.r.t time, initial evolution-rate of the system must also be supplied.
-            In this case, the arg is a `list` with two callables (constants).
+            In this case, the arg is a `list` with two callables (constants). Also written using
+            the set of predefined tokens.
         - time_multiplier : str or callable
             Can be either 'sigmoid', 'polynomial' or callable. Needed if `initial_condition`
             is supplied. Defines the multipliers applied to network for binding initial conditions.
@@ -56,9 +55,8 @@ class DeepGalerkin(TFModel):
 
         config = dict(
             pde = dict(
-                form={'d1': (0, 1), 'd2': ((-1, 0), (0, 0))},
-                rhs=5,
-                initial_condition=lambda t: tf.sin(2 * np.pi * t),
+                form=lambda u, x, t: D(u, t) - D(D(u, x), x) - 5,
+                initial_condition=lambda t: sin(2 * np.pi * t),
                 bind_bc_ic=True,
                 domain=[[0, 1], [0, 3]],
                 time_multiplier='sigmoid'),
