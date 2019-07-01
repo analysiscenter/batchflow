@@ -5,8 +5,8 @@ import tensorflow as tf
 from . import conv_block, upsample
 
 
-def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pyramid=(0, 1, 2, 3, 6),
-                    name='psp', **kwargs):
+def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1,pool_op='mean', pyramid=(0, 1, 2, 3, 6),
+                    reshape_to_vector=False, name='psp', **kwargs):
     """ Pyramid Pooling module
 
     Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
@@ -25,8 +25,10 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
         a pooling operation ('mean' or 'max')
     pyramid : tuple of int
         the number of feature regions in each dimension, default is (0, 1, 2, 3, 6).
-
         `0` is used to include `inputs` into the output tensor.
+    reshape_to_vector : bool
+        if True, then the output is reshaped to a vector of constant size
+        if False, spatial shape of the inputs is preserved
     name : str
         a layer name that will be used as a scope.
 
@@ -36,34 +38,96 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
     """
     shape = inputs.get_shape().as_list()
     data_format = kwargs.get('data_format', 'channels_last')
+
+    static_shape = np.array(shape[1: -1] if data_format == 'channels_last' else shape[2:])
+    dynamic_shape = tf.shape(inputs)[1: -1] if data_format == 'channels_last' else tf.shape(inputs)[2:]
     axis = -1 if data_format == 'channels_last' else 1
+    num_channels = shape[axis]
     if filters is None:
-        filters = shape[axis] // len(pyramid)
+        filters = num_channels // len(pyramid)
 
     with tf.variable_scope(name):
-        if None in shape[1:]:
-            # if some dimension is undefined
-            raise ValueError("Pyramid pooling can only be applied to a tensor with a fully defined shape.")
-
-        item_shape = np.array(shape[1: -1] if data_format == 'channels_last' else shape[2:])
-
         layers = []
         for level in pyramid:
             if level == 0:
                 x = inputs
             else:
-                pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
-                pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
+                # Pooling
+                if None not in static_shape:
+                    x = _static_pyramid_pooling(inputs, static_shape, level, pool_op, name='pool-%d' % level)
+                    upsample_shape = static_shape
+                else:
+                    x = _dynamic_pyramid_pooling(inputs, level, pool_op, num_channels, data_format)
+                    upsample_shape = dynamic_shape
 
-                x = conv_block(inputs, 'p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides,
-                               name='pool-%d' % level, **kwargs)
+                # Conv block to set number of feature maps
                 x = conv_block(x, layout, filters=filters, kernel_size=kernel_size,
                                name='conv-%d' % level, **kwargs)
-                x = upsample(x, layout='b', shape=item_shape, name='upsample-%d' % level, **kwargs)
+
+                # Output either vector with fixed size or tensor with fixed spatial dimensions
+                if reshape_to_vector:
+                    x = tf.reshape(x, shape=(-1, level*level*filters),
+                                   name='reshape-%d' % level)
+                    concat_axis = -1
+                else:
+                    x = upsample(x, layout='b', shape=upsample_shape,
+                                 name='upsample-%d' % level, **kwargs)
+                    concat_axis = axis
+
             layers.append(x)
         x = tf.concat(layers, axis=axis, name='concat')
     return x
 
+def _static_pyramid_pooling(inputs, spatial_shape, level, pool_op, **kwargs):
+    pool_size = tuple(np.ceil(spatial_shape / level).astype(np.int32).tolist())
+    pool_strides = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32).tolist())
+
+    output = conv_block(inputs, 'p', pool_op=pool_op,
+                        pool_size=pool_size, pool_strides=pool_strides, **kwargs)
+    return output
+
+def _dynamic_pyramid_pooling(inputs, level, pool_op, num_channels, data_format):
+    if data_format == 'channels_last':
+        h_axis, w_axis = 1, 2
+    else:
+        h_axis, w_axis = -2, -1
+
+    inputs_shape = tf.shape(inputs)
+    h = tf.cast(tf.gather(inputs_shape, h_axis), tf.int32)
+    w = tf.cast(tf.gather(inputs_shape, w_axis), tf.int32)
+
+    h_float = tf.cast(h, tf.float32)
+    w_float = tf.cast(w, tf.float32)
+
+    if pool_op == 'mean':
+        pooling_op = tf.reduce_mean
+    elif pool_op == 'max':
+        pooling_op = tf.reduce_max
+    else:
+        raise ValueError('Wrong mode')
+
+    def calc_pos(idx, level, size):
+        """ Compute floor(idx*size // level) and cast it to tf.int. """
+        return tf.cast(tf.floor(tf.multiply(tf.divide(idx, level), size)), tf.int32)
+
+    result = []
+    for row in range(level):
+        for col in range(level):
+            start_h = calc_pos(row, level, h_float)
+            end_h = calc_pos(row+1, level, h_float)
+            start_w = calc_pos(col, level, w_float)
+            end_w = calc_pos(col+1, level, w_float)
+
+            if data_format == 'channels_last':
+                pooling_region = inputs[:, start_h:end_h, start_w:end_w, :]
+            else:
+                pooling_region = inputs[..., start_h:end_h, start_w:end_w]
+
+            pool_result = pooling_op(pooling_region, axis=(h_axis, w_axis))
+            result.append(pool_result)
+
+    output = tf.reshape(tf.stack(result, axis=1), shape=(-1, level, level, num_channels))
+    return output
 
 def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), image_level_features=2,
          name='aspp', **kwargs):
