@@ -303,6 +303,10 @@ class Pipeline:
         """
         return self.variables.get(name, *args, create=create, pipeline=self, **kwargs)
 
+    def v(self, name, *args, **kwargs):
+        """ A shorter alias for get_variable() """
+        return self.get_variable(name, *args, **kwargs)
+
     def init_variable(self, name, default=None, lock=True, **kwargs):
         """ Create a variable if not exists.
         If the variable exists, does nothing.
@@ -535,11 +539,8 @@ class Pipeline:
 
     def _exec_from_ns(self, batch, action):
         res = action['method'](*action['args'], **action['kwargs'])
-
-        if isinstance(action['save_to'], NamedExpression):
-            action['save_to'].set(res, batch=batch)
-        elif isinstance(action['save_to'], np.ndarray):
-            action['save_to'][:] = res
+        if action['save_to'] is not None:
+            self._save_output(batch, None, res, action['save_to'])
 
     @staticmethod
     def _get_action_method(batch, name):
@@ -865,6 +866,8 @@ class Pipeline:
             item = output[i]
             if isinstance(var, NamedExpression):
                 var.set(item, batch=batch, model=model)
+            elif isinstance(var, np.ndarray):
+                var[:] = item
             else:
                 save_to[i] = item
 

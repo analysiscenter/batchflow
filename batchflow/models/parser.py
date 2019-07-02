@@ -1,7 +1,6 @@
 """ Contains node-class of a syntax tree, builder of mathematical tokens (`sin`, `cos` and others)
 and tree-parser.
 """
-
 import numpy as np
 import tensorflow as tf
 
@@ -11,6 +10,8 @@ try:
 
 except ImportError:
     pass
+
+
 
 def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__', '__sub__', '__rsub__',
                                      '__truediv__', '__rtruediv__', '__pow__', '__rpow__')):
@@ -22,6 +23,7 @@ def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__
 
         setattr(cls, magic_name, magic)
     return cls
+
 
 @add_binary_magic
 class SyntaxTreeNode():
@@ -63,14 +65,14 @@ def parse(tree):
     if isinstance(tree, (int, float)):
         # constants
         return lambda *args: tree
-    else:
-        def result(*args):
-            if len(tree) > 0:
-                all_args = [parse(operand)(*args) for operand in tree._args]
-                return tree.method(*all_args)
-            else:
-                return tree.method(*args)
-        return result
+
+    def result(*args):
+        # pylint: disable=protected-access
+        if len(tree) > 0:
+            all_args = [parse(operand)(*args) for operand in tree._args]
+            return tree.method(*all_args)
+        return tree.method(*args)
+    return result
 
 def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', 'asin', 'atan',
                                     'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'D'),
@@ -102,6 +104,7 @@ def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', '
     tokens = []
     for name in names:
         # make the token-method
+        # pylint: disable=unused-variable
         method = grad_func if name == 'D' else _fetch_method(name, namespaces)
 
         # make the token

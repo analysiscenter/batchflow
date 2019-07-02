@@ -2,12 +2,11 @@
 Sirignano J., Spiliopoulos K. "`DGM: A deep learning algorithm for solving partial differential equations
 <http://arxiv.org/abs/1708.07469>`_"
 """
-
-import numpy as np
 import tensorflow as tf
 
 from . import TFModel
 from ..parser import SyntaxTreeNode, parse
+
 
 
 class DeepGalerkin(TFModel):
@@ -140,6 +139,8 @@ class DeepGalerkin(TFModel):
         config['common'].update(self.config['pde'])
 
         config = self._make_ops(config)
+
+        config['ansatz/coordinates'] = self.get_from_attr('coordinates')
         return config
 
     def _make_ops(self, config):
@@ -147,10 +148,7 @@ class DeepGalerkin(TFModel):
         # retrieving variables
         ops = config.get('output')
         track = config.get('track')
-        n_dims = config['common/n_dims']
-        inputs = config.get('initial_block/inputs', config)
-        coordinates = [inputs.graph.get_tensor_by_name(self.__class__.__name__ + '/inputs/coordinates:' + str(i))
-                       for i in range(n_dims)]
+        coordinates = self.get_from_attr('coordinates')
 
         # ensuring that 'ops' is of the needed type
         if ops is None:
@@ -181,11 +179,14 @@ class DeepGalerkin(TFModel):
 
         # split input so we can access individual variables later
         n_dims = config['pde/n_dims']
-        tensors_['points'] = tf.split(tensors_['points'], n_dims, axis=1, name='coordinates')
-        tensors_['points'] = tf.concat(tensors_['points'], axis=1)
+        coordinates = tf.split(tensors_['points'], n_dims,
+                               axis=1, name='coordinates')
+        tensors_['points'] = tf.concat(coordinates, axis=1)
+        self.store_to_attr('coordinates', coordinates)
+        self.store_to_attr('inputs', tensors_)
 
         # make targets-tensor from zeros
-        points = getattr(self, 'inputs').get('points')
+        points = self.get_from_attr('inputs').get('points')
         self.store_to_attr('targets', tf.zeros(shape=(tf.shape(points)[0], 1)))
         return placeholders_, tensors_
 
@@ -218,7 +219,7 @@ class DeepGalerkin(TFModel):
         self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
 
     @classmethod
-    def ansatz(cls, inputs, **kwargs):
+    def ansatz(cls, inputs, coordinates, **kwargs):
         """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
         of the model. Does so by:
         1. Applying one of preset multipliers to the network output
@@ -232,8 +233,6 @@ class DeepGalerkin(TFModel):
 
             # retrieving variables
             n_dims = kwargs['n_dims']
-            coordinates = [inputs.graph.get_tensor_by_name(cls.__name__ + '/inputs/coordinates:' + str(i))
-                           for i in range(n_dims)]
 
             domain = kwargs["domain"]
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]

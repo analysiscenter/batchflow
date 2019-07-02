@@ -196,7 +196,7 @@ class B(NamedExpression):
         B('images_shape')
         B(copy=True)
     """
-    def __init__(self, name, mode='w', copy=False):
+    def __init__(self, name=None, mode='w', copy=False):
         super().__init__(name, mode)
         self.copy = copy
 
