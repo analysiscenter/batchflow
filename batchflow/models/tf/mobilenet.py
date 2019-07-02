@@ -224,3 +224,82 @@ class MobileNet_v2(TFModel):
         if residual:
             x = inputs + x
         return x
+
+
+_V3_LARGE_DEFAULT_BODY = [
+    dict(repeats=1, filters=16, expansion_factor=1, strides=1, kernel_size=3, h_swish=False, se_block=False),
+    dict(repeats=1, filters=24, expansion_factor=4, strides=2, kernel_size=3, h_swish=False, se_block=False),
+    dict(repeats=1, filters=24, expansion_factor=3, strides=1, kernel_size=3, h_swish=False, se_block=False),
+    dict(repeats=3, filters=40, expansion_factor=3, strides=2, kernel_size=5, h_swish=False, se_block=True),
+    dict(repeats=1, filters=80, expansion_factor=6, strides=2, kernel_size=3, h_swish=True, se_block=False),
+    dict(repeats=1, filters=80, expansion_factor=2.5, strides=1, kernel_size=3, h_swish=True, se_block=False),
+    dict(repeats=2, filters=80, expansion_factor=2.3, strides=1, kernel_size=3, h_swish=True, se_block=False),
+    dict(repeats=2, filters=112, expansion_factor=6, strides=1, kernel_size=3, h_swish=True, se_block=True),
+    dict(repeats=3, filters=160, expansion_factor=6, strides=2, kernel_size=5, h_swish=True, se_block=True),
+]
+
+class MobileNet_v3(TFModel):
+    @classmethod
+    def default_config(cls):
+        config = TFModel.default_config()
+        config['common'].update(dict(activation=tf.nn.relu))
+        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2))
+        config['body'].update(dict(width_factor=1, layout=deepcopy(_V2_DEFAULT_BODY)))
+        config['head'].update(dict(layout='cnavcac', filters=[960, 1280, 2], pool_size=7, kernel_size=1, activation=self.h_swish))
+
+        config['loss'] = 'ce'
+
+        return config
+
+    def build_config(self, names=None):
+        config = super().build_config(names)
+        config['head']['filters'][-1] = self.num_classes('targets')
+        return config
+
+    @classmethod
+    def h_swish(cls, inputs):
+        """ Hard-swish nonlinearity function.
+        """
+        return x * tf.nn.relu6(inputs + 3) / 6.0
+
+    @classmethod
+    def body(cls, inputs, name='body', **kwargs):
+        """ Base layers
+
+        Parameters
+        ----------
+
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+
+        kwargs = cls.fill_params('body', **kwargs)
+        width_factor, layout = cls.pop(['width_factor', 'layout'], kwargs)
+
+        with tf.variable_scope(name):
+            x = inputs
+            i = 0
+            for block in layout:
+                repeats = block.pop('repeats')
+                block['width_factor'] = width_factor
+                for k in range(repeats):
+                    if k > 0:
+                        block['strides'] = 1
+                    x = cls.block(x, **block, residual=k > 0, name='block-%d' % i, **kwargs)
+                    i += 1
+        return x
+
+
+
+    @classmethod
+    def block(cls, inputs, filters, residual=False, strides=1, expansion_factor=4, kernel_size=3, width_factor=1, name=None, h_swish=False, se_block=False, **kwargs):
+        """ An inverted residual bottleneck block consisting of a separable depthwise convolution and 1x1 pointise convolution
+        and an optional Squeeze-and-Excitation block.
+        """
+        
