@@ -357,7 +357,6 @@ class DGSolver:
     model_config : dict
         Configuration of model. Supports all of the options from `DeepGalerkin`.
     """
-
     def __init__(self, config, model_class=DeepGalerkin):
         self.model = model_class(config)
 
@@ -381,7 +380,7 @@ class DGSolver:
             Whether to show progress bar during training.
         """
         if fetches is None:
-            fetches = ['loss' + '_'*int(len(name)>0) + name
+            fetches = ['loss' + '_'*int(len(name) > 0) + name
                        for name in self.model.get_from_attr('train_steps').keys()]
         fetches = [fetches] if isinstance(fetches, str) else fetches
 
