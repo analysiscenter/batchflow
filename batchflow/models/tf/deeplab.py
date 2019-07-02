@@ -29,12 +29,14 @@ class DeepLab(EncoderDecoder):
 
         middle : dict
         Dictionary with parameters for middle encoding: thorough processing.
-        See :meth:`~.EncoderDecoder.encoder` arguments.
+        See :meth:`~.EncoderDecoder.embedding` arguments.
 
         exit : dict
         Dictionary with parameters for exit encoding: final increase in number of features.
-        See :meth:`~.EncoderDecoder.encoder` arguments.
+        See :meth:`~.EncoderDecoder.embedding` arguments.
 
+        embedding : dict
+        Same as :meth:`~.EncoderDecoder.embedding`. Default is to use ASPP.
     """
     @classmethod
     def default_config(cls):
