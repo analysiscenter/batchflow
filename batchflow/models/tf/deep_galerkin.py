@@ -280,7 +280,7 @@ class DeepGalerkin(TFModel):
         Parameters
         ----------
         family : str or callable
-            defines the functional form of the multiplier, can be either `polynomial` or `sigmoid`.
+            defines the functional form of the multiplier, can be either `polynomial` or `sigmoid` or generic callable.
         order : str or None
             sets the properties of the multiplier, can be either `0` or `00` or `01`. '0'
             fixes the value of multiplier as $0$ at $t=0$, while '00' sets both value and derivative to $0$.
