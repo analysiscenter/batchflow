@@ -179,7 +179,7 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
 
         for level in rates:
             x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
-                           name='conv-%d' % level, **kwargs)
+                           name='atrous_conv-%d' % level, **kwargs)
             layers.append(x)
 
         x = pyramid_pooling(inputs, filters=filters, pyramid=image_level_features,

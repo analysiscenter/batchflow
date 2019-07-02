@@ -224,7 +224,9 @@ class EncoderDecoder(TFModel):
                         x = base_block(x, name='pre', **args)
 
                         # Downsampling
-                        x = conv_block(x, **{**kwargs, **downsample})
+                        if downsample.get('layout') is not None:
+                            x = conv_block(x, name='downsample-{}'.format(i),
+                                           **{**kwargs, **downsample})
                         encoder_outputs.append(x)
         return encoder_outputs
 
@@ -251,8 +253,18 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
+        steps = kwargs.get('num_stages', 1)
         base_block = kwargs.get('base')
-        return base_block(inputs, name=name, **kwargs)
+        x = inputs
+
+        with tf.variable_scope(name):
+            for i in range(steps):
+                # Preprocess tensor with given block
+                args = {key: value[i] for key, value in kwargs.items()
+                        if isinstance(value, list)}
+                args = {**kwargs, **args} # enforce priority of keys
+                x = base_block(x, name='embedding-'+str(i), **args)
+        return x
 
 
     @classmethod
@@ -312,8 +324,13 @@ class EncoderDecoder(TFModel):
             axis = cls.channels_axis(kwargs.get('data_format'))
             for i in range(steps):
                 with tf.variable_scope('decoder-'+str(i)):
+                    # Skip some of the steps
+                    if factor[i] == 1:
+                        continue
                     # Upsample by a desired factor
-                    x = cls.upsample(x, factor=factor[i], name='upsample', **{**kwargs, **upsample})
+                    if upsample.get('layout') is not None:
+                        x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i),
+                                         **{**kwargs, **upsample})
 
                     # Post-process resulting tensor
                     args = {key: value[i] for key, value in block_args.items()

@@ -20,7 +20,10 @@ class Xception(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head/targets'] = self.get_from_attr('targets')
+        if config.get('head/units') is None:
+            config['head/units'] = self.num_classes('targets')
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod
@@ -30,9 +33,10 @@ class Xception(TFModel):
 
         Parameters
         ----------
-        filters : tuple of 3 ints
+        filters : sequence of 3 ints
+            Number of feature maps in each layer
         """
-        strides = (1, kwargs.get('strides', 1), 1)
+        strides = (1, kwargs.pop('strides', 1), 1)
         x = inputs
 
         with tf.variable_scope(name):
@@ -62,9 +66,8 @@ class Xception(TFModel):
             x = cls._depthwise_conv(inputs, kernel_size=kernel_size, strides=strides, dilation_rate=rate,
                                     data_format=data_format, padding='same', name='depthwise')
 
-            x = conv_block(x, layout, filters=filters, kernel_size=1, strides=strides, **kwargs)
+            x = conv_block(x, layout, filters=filters, kernel_size=1, **kwargs)
         return x
-
 
     @classmethod
     def _depthwise_conv(cls, inputs, depth_multiplier=1, name=None, **kwargs):
