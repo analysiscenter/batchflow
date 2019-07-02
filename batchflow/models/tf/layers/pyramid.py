@@ -5,7 +5,7 @@ import tensorflow as tf
 from . import conv_block, upsample
 
 
-def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1,pool_op='mean', pyramid=(0, 1, 2, 3, 6),
+def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pyramid=(0, 1, 2, 3, 6),
                     reshape_to_vector=False, name='psp', **kwargs):
     """ Pyramid Pooling module
 
@@ -75,7 +75,7 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1,pool_op='m
                     concat_axis = axis
 
             layers.append(x)
-        x = tf.concat(layers, axis=axis, name='concat')
+        x = tf.concat(layers, axis=concat_axis, name='concat')
     return x
 
 def _static_pyramid_pooling(inputs, spatial_shape, level, pool_op, **kwargs):
@@ -93,11 +93,8 @@ def _dynamic_pyramid_pooling(inputs, level, pool_op, num_channels, data_format):
         h_axis, w_axis = -2, -1
 
     inputs_shape = tf.shape(inputs)
-    h = tf.cast(tf.gather(inputs_shape, h_axis), tf.int32)
-    w = tf.cast(tf.gather(inputs_shape, w_axis), tf.int32)
-
-    h_float = tf.cast(h, tf.float32)
-    w_float = tf.cast(w, tf.float32)
+    h_float = tf.cast(tf.gather(inputs_shape, h_axis), tf.float32)
+    w_float = tf.cast(tf.gather(inputs_shape, w_axis), tf.float32)
 
     if pool_op == 'mean':
         pooling_op = tf.reduce_mean

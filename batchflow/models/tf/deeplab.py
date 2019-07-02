@@ -43,7 +43,6 @@ class DeepLab(EncoderDecoder):
         config['body/entry/downsample'] = dict(layout=None)
         config['body/entry/blocks'] = dict(base=Xception.block, filters=None, strides=2, combine_type='conv')
 
-
         config['body/middle'] = dict(base=Xception.block, num_stages=None,
                                      filters=None, strides=1, combine_type='sum')
 
@@ -115,7 +114,7 @@ class DeepLab8(DeepLab):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['initial_block']: dict(layout='cnacna', filters=[32], kernel_size=3, strides=1)
+        config['initial_block'] = dict(layout='cnacna', filters=32, kernel_size=3, strides=1)
 
         config['body/entry/num_stages'] = 4
         config['body/entry/blocks/filters'] = [[64]*3,
@@ -144,7 +143,7 @@ class DeepLab16(DeepLab):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['initial_block']: dict(layout='cnacna', filters=[32], kernel_size=3, strides=1)
+        config['initial_block'] = dict(layout='cnacna', filters=32, kernel_size=3, strides=1)
 
         config['body/entry/num_stages'] = 4
         config['body/entry/blocks/filters'] = [[64]*3,
@@ -173,7 +172,7 @@ class DeepLabS(DeepLab):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['initial_block']: dict(layout='cna', filters=[32], kernel_size=3, strides=1)
+        config['initial_block'] = dict(layout='cna', filters=32, kernel_size=3, strides=1)
 
         config['body/entry/num_stages'] = 4
         config['body/entry/blocks/filters'] = [[6]*3,
