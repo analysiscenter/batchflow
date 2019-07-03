@@ -33,7 +33,6 @@ class Xception(TFModel):
                 Whether to use convolution for skip-connections inside `separable_block` or
                 just sum skip and output.
     """
-
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
@@ -139,29 +138,10 @@ class Xception(TFModel):
     @classmethod
     def _depthwise_conv(cls, inputs, depth_multiplier=1, name='depthwise_conv', **kwargs):
         data_format = kwargs.get('data_format')
-
-        # Parse shapes
-        inputs_shape = inputs.get_shape().as_list()
-        dim = inputs.shape.ndims - 2
-        axis = -1 if data_format == 'channels_last' else 1
-        size = [-1] * (dim + 2)
-        size[axis] = 1
-        channels_in = inputs_shape[axis]
-
-        # Loop through feature maps
-        depthwise_layers = []
-        for channel in range(channels_in):
-            start = [0] * (dim + 2)
-            start[axis] = channel
-
-            input_slice = tf.slice(inputs, start, size)
-            _kwargs = {**kwargs, 'inputs': input_slice, 'filters': depth_multiplier, 'name': 'slice-%d' % channel}
-
-            slice_conv = tf.layers.conv2d(**_kwargs)
-            depthwise_layers.append(slice_conv)
-
-        # Concatenate the per-channel convolutions along the channel dimension.
-        depthwise_conv = tf.concat(depthwise_layers, axis=axis, name=name)
+        filters = cls.num_channels(inputs, data_format)
+        depthwise_conv = tf.keras.layers.SeparableConv2D(filters=filters,
+                                                         depth_multiplier=depth_multiplier,
+                                                         name='dwc', **kwargs)(inputs)
         return depthwise_conv
 
 
