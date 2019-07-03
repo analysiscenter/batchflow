@@ -59,6 +59,7 @@ class SyntaxTreeNode():
     def __repr__(self):
         return tuple((self.name, *self._args)).__repr__()
 
+
 def parse(tree):
     """ Build the method represented by a parse-tree.
     """
@@ -74,8 +75,24 @@ def parse(tree):
         return tree.method(*args)
     return result
 
+def get_unique_perturbations(tree):
+    """ Get unique names of perturbation-variables from a parse-tree.
+    """
+    if isinstance(tree, (int, float)):
+        return []
+    if 'R' in tree.name:
+        return [tree.name]
+    else:
+        if len(tree) == 0:
+            return []
+        else:
+            result = []
+            for arg in tree._args:
+                result += get_unique_perturbations(arg)
+            return list(np.unique(result))
+
 def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', 'asin', 'atan',
-                                    'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'D'),
+                                    'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'D', 'R'),
                 namespaces=None, grad_func=None):
     """ Make a collection of mathematical tokens.
     """
@@ -105,10 +122,22 @@ def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', '
     for name in names:
         # make the token-method
         # pylint: disable=unused-variable
-        method = grad_func if name == 'D' else _fetch_method(name, namespaces)
+        if name == 'D':
+            method = grad_func
+        elif name == 'R':
+            pass
+        else:
+            method = _fetch_method(name, namespaces)
 
         # make the token
-        token = lambda *args, method=method, name=name: SyntaxTreeNode(method, *args, name=name)
+        if name == 'R':
+            def token(*args, name=name):
+                """ Token for PDE-perturbations.
+                """
+                return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
+        else:
+            token = lambda *args, method=method, name=name: SyntaxTreeNode(method, *args, name=name)
+
         tokens.append(token)
 
     return tokens
