@@ -131,60 +131,100 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     return output
 
 
-def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                    dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
-    dim = inputs.shape.ndims - 2
+
+def _depthwise_conv(transpose, inputs, data_format='channels_last', dilation_rate=1,
+                    depth_multiplier=1, name=None, **kwargs):
     context = None
     if name is not None:
         context = tf.variable_scope(name)
         context.__enter__()
+
     if transpose:
         conv_layer = conv_transpose
     else:
         conv_layer = conv
-
-    kwargs = {'kernel_size': kernel_size,
-              'strides': strides,
-              'padding': padding,
-              'data_format': data_format,
-              'activation': activation,
-              **kwargs}
-
-    if not transpose:
         kwargs['dilation_rate'] = dilation_rate
 
+    # Get all the shapes
     inputs_shape = inputs.get_shape().as_list()
     axis = -1 if data_format == 'channels_last' else 1
-    size = [-1] * (dim + 2)
+    size = [-1] * inputs.shape.ndims
     size[axis] = 1
     channels_in = inputs_shape[axis]
 
+    # Loop through feature maps
     depthwise_layers = []
     for channel in range(channels_in):
-        start = [0] * (dim + 2)
+        start = [0] * inputs.shape.ndims
         start[axis] = channel
 
         input_slice = tf.slice(inputs, start, size)
 
-        _kwargs = {**kwargs, 'inputs': input_slice, 'filters': depth_multiplier, 'name': 'slice-%d' % channel}
-
+        _kwargs = {**kwargs,
+                   'inputs': input_slice,
+                   'filters': depth_multiplier,
+                   'data_format': data_format,
+                   'name': 'slice-%d' % channel}
         slice_conv = conv_layer(**_kwargs)
         depthwise_layers.append(slice_conv)
 
     # Concatenate the per-channel convolutions along the channel dimension.
-    depthwise_conv = tf.concat(depthwise_layers, axis=axis)
+    output = tf.concat(depthwise_layers, axis=axis)
 
-    if channels_in * depth_multiplier != filters:
+    if context is not None:
+        context.__exit__(None, None, None)
+
+    return output
+
+
+def depthwise_conv(inputs, transpose=False, **kwargs):
+    """ Very informative docstring. """
+    if not transpose:
+        if inputs.shape.ndims == 4:
+            return tf.keras.layers.DepthwiseConv2D(**kwargs)(inputs)
+
+    return _depthwise_conv(transpose, inputs, **kwargs)
+
+
+
+def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
+                    dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
+    context = None
+    if name is not None:
+        context = tf.variable_scope(name)
+        context.__enter__()
+
+    # Make arguments for depthwise part and call it
+    _kwargs = {**kwargs,
+               'inputs': inputs,
+               'transpose': transpose,
+               'kernel_size': kernel_size,
+               'strides': strides,
+               'dilation_rate': dilation_rate,
+               'depth_multiplier': depth_multiplier,
+               'activation': activation,
+               'padding': padding,
+               'data_format': data_format,
+               'name': 'depthwise'}
+    depthwise = depthwise_conv(**_kwargs)
+
+    # If needed, make arguments for pointwise part and call it
+    shape_out = depthwise.get_shape().as_list()
+    axis = -1 if data_format == 'channels_last' else 1
+    filters_out = shape_out[axis]
+
+    if filters_out != filters:
         _kwargs = {**kwargs,
-                   'inputs': depthwise_conv,
+                   'inputs': depthwise,
                    'filters': filters,
                    'kernel_size': 1,
                    'strides': 1,
                    'dilation_rate': 1,
+                   'data_format': data_format,
                    'name': 'pointwise'}
         output = conv(**_kwargs)
     else:
-        output = depthwise_conv
+        output = depthwise
 
     if context is not None:
         context.__exit__(None, None, None)
@@ -263,5 +303,4 @@ def separable_conv_transpose(inputs, *args, **kwargs):
     tf.Tensor
 
     """
-    output = _separable_conv(True, inputs, *args, **kwargs)
-    return output
+    return _separable_conv(True, inputs, *args, **kwargs)

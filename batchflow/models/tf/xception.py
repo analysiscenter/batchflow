@@ -5,7 +5,7 @@ François Chollet. "`Xception: Deep Learning with Depthwise Separable Convolutio
 
 import tensorflow as tf
 
-from .layers import conv_block
+from .layers import conv_block, depthwise_conv
 from . import TFModel
 
 
@@ -133,21 +133,10 @@ class Xception(TFModel):
         data_format = kwargs.get('data_format')
 
         with tf.variable_scope(name):
-            x = cls._depthwise_conv(inputs, kernel_size=kernel_size, strides=strides, dilation_rate=rate,
-                                    data_format=data_format, padding='same', name='depthwise')
-
+            x = depthwise_conv(inputs, kernel_size=kernel_size, strides=strides, dilation_rate=rate,
+                               data_format=data_format, padding='same', name='depthwise')
             x = conv_block(x, layout, filters=filters, kernel_size=1, **kwargs)
         return x
-
-
-    @classmethod
-    def _depthwise_conv(cls, inputs, depth_multiplier=1, name='depthwise_conv', **kwargs):
-        data_format = kwargs.get('data_format')
-        filters = cls.num_channels(inputs, data_format)
-        depthwise_conv = tf.keras.layers.SeparableConv2D(filters=filters,
-                                                         depth_multiplier=depth_multiplier,
-                                                         name=name, **kwargs)(inputs)
-        return depthwise_conv
 
 
     @classmethod
