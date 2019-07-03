@@ -2,11 +2,13 @@
 Sirignano J., Spiliopoulos K. "`DGM: A deep learning algorithm for solving partial differential equations
 <http://arxiv.org/abs/1708.07469>`_"
 """
+from inspect import signature
+
 import tensorflow as tf
 from tqdm import tqdm_notebook, tqdm
 
 from . import TFModel
-from ..parser import SyntaxTreeNode, parse
+from ..parser import SyntaxTreeNode, parse, get_unique_perturbations
 
 
 
@@ -94,10 +96,20 @@ class DeepGalerkin(TFModel):
         if pde is None:
             raise ValueError("The PDE-problem is not specified. Use 'pde' config to set up the problem.")
 
+        # parse dimensionality of the problem along with number of perturbations
+        form = pde.get('form')
+        n_args = len(signature(form).parameters)
+        tree = form(*[SyntaxTreeNode('x' + str(i)) for i in range(n_args)])
+        unique_perturbations = get_unique_perturbations(tree)
+        n_perturbations = len(unique_perturbations)
+
+        # put all dimensionalities in the config for convenience
+        n_dims = n_args - n_perturbations - 1
+        pde.update({'n_dims': n_dims, 'n_perturbations': n_perturbations, 'n_vars': n_dims + n_perturbations})
+
         # make sure points-tensor is created
-        n_dims = pde.get('n_dims')
         self.config.update({'initial_block/inputs': 'points',
-                            'inputs': dict(points={'shape': (n_dims, )})})
+                            'inputs': dict(points={'shape': (n_dims + n_perturbations, )})})
 
         # default values for domain
         if pde.get('domain') is None:
@@ -179,9 +191,8 @@ class DeepGalerkin(TFModel):
         placeholders_, tensors_ = super()._make_inputs(names, config)
 
         # split input so we can access individual variables later
-        n_dims = config['pde/n_dims']
-        coordinates = tf.split(tensors_['points'], n_dims,
-                               axis=1, name='coordinates')
+        n_vars = config['pde/n_vars']
+        coordinates = tf.split(tensors_['points'], n_vars, axis=1, name='coordinates')
         tensors_['points'] = tf.concat(coordinates, axis=1)
         self.store_to_attr('coordinates', coordinates)
         self.store_to_attr('inputs', tensors_)
@@ -196,10 +207,10 @@ class DeepGalerkin(TFModel):
         """ Get callable that computes differential form of a tf.Tensor
         with respect to coordinates.
         """
-        n_dims = len(coordinates)
+        n_vars = len(coordinates)
 
         # get tree of lhs-differential operator and parse it to tf-callable
-        tree = form(SyntaxTreeNode('u'), *[SyntaxTreeNode('x' + str(i + 1)) for i in range(n_dims)])
+        tree = form(SyntaxTreeNode('u'), *[SyntaxTreeNode('x' + str(i + 1)) for i in range(n_vars)])
         parsed = parse(tree)
 
         # `_callable` should be a function of `net`-tensor only
@@ -234,6 +245,10 @@ class DeepGalerkin(TFModel):
 
             # retrieving variables
             n_dims = kwargs['n_dims']
+            n_perturbations = kwargs['n_perturbations']
+
+            # leave out perturbation-placeholders
+            coordinates = coordinates[:n_dims]
 
             domain = kwargs["domain"]
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
