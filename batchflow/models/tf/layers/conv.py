@@ -25,6 +25,7 @@ def conv(inputs, *args, **kwargs):
     layer_fn = CONV_LAYERS[dim]
     return layer_fn(inputs, *args, **kwargs)
 
+
 def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
                      **kwargs):
     """ Transposed 1D convolution layer
@@ -55,7 +56,6 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', d
                                    strides=(1, strides), padding=padding, **kwargs)
     x = tf.squeeze(x, [axis])
     return x
-
 
 def conv1d_transpose_nn(value, filters, output_shape, strides,
                         padding='SAME', data_format='NWC', name=None):
@@ -131,9 +131,8 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     return output
 
 
-
-def _depthwise_conv(transpose, inputs, data_format='channels_last', dilation_rate=1,
-                    depth_multiplier=1, name=None, **kwargs):
+def _depthwise_conv(transpose, inputs, kernel_size, strides=1, padding='same', data_format='channels_last',
+                    dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
     context = None
     if name is not None:
         context = tf.variable_scope(name)
@@ -144,6 +143,14 @@ def _depthwise_conv(transpose, inputs, data_format='channels_last', dilation_rat
     else:
         conv_layer = conv
         kwargs['dilation_rate'] = dilation_rate
+
+    kwargs = {**kwargs,
+              'kernel_size': kernel_size,
+              'filters': depth_multiplier,
+              'strides': strides,
+              'padding': padding,
+              'activation': activation,
+              'data_format': data_format}
 
     # Get all the shapes
     inputs_shape = inputs.get_shape().as_list()
@@ -162,8 +169,6 @@ def _depthwise_conv(transpose, inputs, data_format='channels_last', dilation_rat
 
         _kwargs = {**kwargs,
                    'inputs': input_slice,
-                   'filters': depth_multiplier,
-                   'data_format': data_format,
                    'name': 'slice-%d' % channel}
         slice_conv = conv_layer(**_kwargs)
         depthwise_layers.append(slice_conv)
@@ -176,15 +181,68 @@ def _depthwise_conv(transpose, inputs, data_format='channels_last', dilation_rat
 
     return output
 
+def depthwise_conv(inputs, *args, **kwargs):
+    """ Make Nd depthwise convolutions that act separately on channels.
 
-def depthwise_conv(inputs, transpose=False, **kwargs):
-    """ Very informative docstring. """
-    if not transpose:
-        if inputs.shape.ndims == 4:
-            return tf.keras.layers.DepthwiseConv2D(**kwargs)(inputs)
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        input tensor
+    kernel_size : int
+        kernel size
+    strides : int
+        convolution stride. Default is 1.
+    padding : str
+        padding mode, can be 'same' or 'valid'. Default - 'same'.
+    data_format : str
+        'channels_last' or 'channels_first'. Default - 'channels_last'.
+    depth_multiplier : int
+        The number of depthwise convolution output channels for each input channel.
+        The total number of depthwise convolution output channels will be equal to
+        ``num_filters_in`` * ``depth_multiplier``. Deafault - 1.
+    activation : callable
+        Default is None: linear activation.
+    name : str
+        The name of the layer. Default - None.
 
-    return _depthwise_conv(transpose, inputs, **kwargs)
+    Returns
+    -------
+    tf.Tensor
+    """
+    if inputs.shape.ndims == 4:
+        return tf.keras.layers.DepthwiseConv2D(*args, **kwargs)(inputs)
+    return _depthwise_conv(False, inputs, *args, **kwargs)
 
+
+def depthwise_conv_transpose(inputs, *args, **kwargs):
+    """ Make Nd depthwise transpose convolutions that act separately on channels.
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        input tensor
+    kernel_size : int
+        kernel size
+    strides : int
+        convolution stride. Default is 1.
+    padding : str
+        padding mode, can be 'same' or 'valid'. Default - 'same'.
+    data_format : str
+        'channels_last' or 'channels_first'. Default - 'channels_last'.
+    depth_multiplier : int
+        The number of depthwise convolution output channels for each input channel.
+        The total number of depthwise convolution output channels will be equal to
+        ``num_filters_in`` * ``depth_multiplier``. Deafault - 1.
+    activation : callable
+        Default is None: linear activation.
+    name : str
+        The name of the layer. Default - None.
+
+    Returns
+    -------
+    tf.Tensor
+    """
+    return _depthwise_conv(True, inputs, *args, **kwargs)
 
 
 def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
@@ -195,9 +253,13 @@ def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding=
         context.__enter__()
 
     # Make arguments for depthwise part and call it
+    if transpose:
+        depthwise_layer = depthwise_conv_transpose
+    else:
+        depthwise_layer = depthwise_conv
+
     _kwargs = {**kwargs,
                'inputs': inputs,
-               'transpose': transpose,
                'kernel_size': kernel_size,
                'strides': strides,
                'dilation_rate': dilation_rate,
@@ -206,7 +268,7 @@ def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding=
                'padding': padding,
                'data_format': data_format,
                'name': 'depthwise'}
-    depthwise = depthwise_conv(**_kwargs)
+    depthwise = depthwise_layer(**_kwargs)
 
     # If needed, make arguments for pointwise part and call it
     shape_out = depthwise.get_shape().as_list()
@@ -240,7 +302,7 @@ def separable_conv(inputs, *args, **kwargs):
     inputs : tf.Tensor
         input tensor
     filters : int
-        number of filters in the ouput tensor
+        number of filters in the output tensor
     kernel_size : int
         kernel size
     strides : int
@@ -280,7 +342,7 @@ def separable_conv_transpose(inputs, *args, **kwargs):
     inputs : tf.Tensor
         input tensor
     filters : int
-        number of filters in the ouput tensor
+        number of filters in the output tensor
     kernel_size : int
         kernel size
     strides : int
