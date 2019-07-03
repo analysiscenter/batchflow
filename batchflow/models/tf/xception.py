@@ -71,8 +71,10 @@ class Xception(TFModel):
             with tf.variable_scope('entry_flow'):
                 entry_stages = entry.pop('num_stages', 0)
                 for i in range(entry_stages):
-                    args = {**kwargs, **entry, **cls.slice_dict(entry, i)}
-                    x = cls.block(x, name='block-'+str(i), **args)
+                    with tf.variable_scope('group-'+str(i)):
+                        args = {**kwargs, **entry, **cls.slice_dict(entry, i)}
+                        x = cls.block(x, name='block-'+str(i), **args)
+                        x = tf.identity(x, name='output')
 
             # Middle flow: thorough processing
             with tf.variable_scope('middle_flow'):
@@ -87,6 +89,9 @@ class Xception(TFModel):
                 for i in range(exit_stages):
                     args = {**kwargs, **exit, **cls.slice_dict(exit, i)}
                     x = cls.block(x, name='block-'+str(i), **args)
+
+            with tf.variable_scope('entry_flow/group-'+str(entry_stages)):
+                x = tf.identity(x, name='output')
         return x
 
 
@@ -143,6 +148,33 @@ class Xception(TFModel):
                                                          depth_multiplier=depth_multiplier,
                                                          name=name, **kwargs)(inputs)
         return depthwise_conv
+
+
+    @classmethod
+    def make_encoder(cls, inputs, name='encoder', **kwargs):
+        """ Build the body and return the last tensors of each spatial resolution.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+        kwargs : dict
+            body params
+        """
+        steps = 1 + cls.get('entry/num_stages', config=cls.fill_params('body', **kwargs))
+
+        with tf.variable_scope(name):
+            x = cls.body(inputs, name='body', **kwargs)
+
+            scope = tf.get_default_graph().get_name_scope()
+            encoder_tensors = [inputs]
+            for i in range(steps):
+                tensor_name = scope + '/body/entry_flow/group-'+str(i) + '/output:0'
+                x = tf.get_default_graph().get_tensor_by_name(tensor_name)
+                encoder_tensors.append(x)
+        return encoder_tensors
 
 
 class Xception41(Xception):
