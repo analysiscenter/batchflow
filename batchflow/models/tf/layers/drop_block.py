@@ -1,6 +1,6 @@
 """
 Golnaz Ghiasi, Tsung-Yi Lin, Quoc V. Le "`DropBlock: A regularization method for convolutional networks
-<https://arxiv.org/pdf/1810.12890.pdf>`_"
+<https://arxiv.org/abs/1810.12890>`_"
 """
 
 import tensorflow as tf
@@ -18,7 +18,7 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, seed=N
     ----------
     inputs : tf.Tensor
         Input tensor
-    dropout_rate : float
+    dropout_rate : float or tf.Tensor
         Default is 0
     block_size : int or float or tuple of ints or floats
         Size of the block to drop. If tuple, should be of the same size as spatial
