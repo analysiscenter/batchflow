@@ -3,12 +3,13 @@ Golnaz Ghiasi, Tsung-Yi Lin, Quoc V. Le "`DropBlock: A regularization method for
 <https://arxiv.org/pdf/1810.12890.pdf>`_"
 """
 
-import numpy as np
 import tensorflow as tf
 from .pooling import max_pooling
 
 # TODO:
-# Add scheduling scheme to gradually decrease keep_prob from 1 to target value.
+# Add scheduler to gradually increase dropout_rate from 0 to target value.
+# When max_pooling allows for dynamic kernel size, implement block_size as fraction
+# of spatial_dims.
 
 def dropblock(inputs, dropout_rate, block_size, is_training, data_format, seed=None):
     """ Drop Block module.
@@ -35,57 +36,68 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, seed=N
     -------
     tf.Tensor
     """
-    keep_prob = 1. - dropout_rate
-    return tf.cond(tf.logical_or(tf.logical_not(is_training), tf.equal(keep_prob, 1.0)),
+    return tf.cond(tf.logical_or(tf.logical_not(is_training), tf.equal(dropout_rate, 0.0)),
                    true_fn=lambda: inputs,
-                   false_fn=lambda: _dropblock(inputs, keep_prob, block_size, seed, data_format),
+                   false_fn=lambda: _dropblock(inputs, dropout_rate, block_size, seed, data_format),
                    name='dropblock')
 
-def _dropblock(inputs, keep_prob, block_size, seed, data_format):
+def _dropblock(inputs, dropout_rate, block_size, seed, data_format):
     """
     """
-    shape = inputs.shape.as_list()
+    one = tf.convert_to_tensor([1], dtype=tf.int32)
+    zeros_pad = tf.convert_to_tensor([[0, 0]], dtype=tf.int32)
+
+    input_shape = tf.shape(inputs)
 
     if data_format == 'channels_first':
-        spatial_dims, channels = shape[2:], shape[1]
+        spatial_dims, channels = input_shape[2:], input_shape[1:2]
     else:
-        spatial_dims, channels = shape[1:-1], shape[-1]
+        spatial_dims, channels = input_shape[1:-1], input_shape[-1:]
+    spatial_ndim = spatial_dims.get_shape().as_list()[0]
 
-    if isinstance(block_size, (float, int)):
-        block_size = [block_size] * len(spatial_dims)
-    if isinstance(block_size, tuple):
-        if len(block_size) != len(spatial_dims):
+    if isinstance(block_size, int):
+        block_size = [block_size] * spatial_ndim
+        block_size_tf = tf.convert_to_tensor(block_size)
+    elif isinstance(block_size, tuple):
+        if len(block_size) != spatial_ndim:
             raise ValueError('Length of `block_size` should be the same as spatial dimensions of input.')
-        block_size = list(block_size)
-        for i, _ in enumerate(block_size):
-            if block_size[i] < 1:
-                block_size[i] = int(block_size[i] * spatial_dims[i])
-            if block_size[i] > spatial_dims[i]:
-                block_size[i] = spatial_dims[i]
-        block_size = [max(bs, 1) for bs in block_size]
+        block_size_tf = tf.convert_to_tensor(block_size, dtype=tf.int32)
     else:
-        raise ValueError('block_size should be tuple, float or int')
+        raise ValueError('block_size should be int or tuple!')
+    block_size_tf = tf.math.minimum(block_size_tf, spatial_dims)
+    block_size_tf = tf.math.maximum(block_size_tf, one)
 
-    inner_area = [spatial_dims[i] - block_size[i] + 1 for i in range(len(spatial_dims))]
+    spatial_dims_float = tf.cast(spatial_dims, dtype=tf.float32)
+    block_size_tf_float = tf.cast(block_size_tf, dtype=tf.float32)
 
-    gamma = ((1. - keep_prob) * np.product(spatial_dims) / np.product(block_size) /
-             np.product(inner_area))
+    inner_area = spatial_dims - block_size_tf + one
+    inner_area_float = tf.cast(inner_area, dtype=tf.float32)
+
+    gamma = (tf.convert_to_tensor(dropout_rate) * tf.math.reduce_prod(spatial_dims_float) /
+             tf.math.reduce_prod(block_size_tf_float) / tf.math.reduce_prod(inner_area_float))
 
     # Mask is sampled for each featuremap independently and applied identically to all batch items
     noise_dist = tf.distributions.Bernoulli(probs=gamma, dtype=tf.float32)
-    sampling_mask_shape = ([1] + [channels] + inner_area if data_format == 'channels_first'
-                           else [1] + inner_area + [channels])
-    sampling_mask_shape = tf.stack(sampling_mask_shape)
+
+    if data_format == 'channels_first':
+        sampling_mask_shape = tf.concat((one, channels, inner_area), axis=0)
+    else:
+        sampling_mask_shape = tf.concat((one, inner_area, channels), axis=0)
     mask = noise_dist.sample(sampling_mask_shape, seed=seed)
 
-    spatial_pads = [[(bs - 1) // 2, bs - 1 - (bs - 1) // 2] for bs in block_size]
-    pad_shape = ([[0, 0]] + [[0, 0]] + spatial_pads if data_format == 'channels_first'
-                 else [[0, 0]] + spatial_pads + [[0, 0]])
+    left_spatial_pad = (block_size_tf - one) // 2
+    right_spatial_pad = block_size_tf - one - left_spatial_pad
+    spatial_pads = tf.stack((left_spatial_pad, right_spatial_pad), axis=1)
+    if data_format == 'channels_first':
+        pad_shape = tf.concat((zeros_pad, zeros_pad, spatial_pads), axis=0)
+    else:
+        pad_shape = tf.concat((zeros_pad, spatial_pads, zeros_pad), axis=0)
     mask = tf.pad(mask, pad_shape)
 
     # Using max pool operation to extend sampled points to blocks of desired size
     pool_size = block_size
-    mask = max_pooling(mask, pool_size=pool_size, strides=[1] * (len(spatial_dims)),
+    strides = [1] * spatial_ndim
+    mask = max_pooling(mask, pool_size=pool_size, strides=strides,
                        data_format=data_format, padding='same')
     mask = tf.cast(1 - mask, tf.float32)
     output = tf.multiply(inputs, mask)
