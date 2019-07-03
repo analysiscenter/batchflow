@@ -184,13 +184,16 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                     skip_layer = True
 
             elif layer == 'D':
-                block_size = kwargs.get('block_size')
+                if not dropout_rate: 
+                    dropout_rate = layer_args.get('dropout_rate')
+                if not kwargs.get('block_size'):
+                    block_size = layer_args.get('block_size')
                 if dropout_rate and block_size:
                     args = dict(dropout_rate=dropout_rate, is_training=is_training, block_size=block_size,
-                                seed=kwargs.get('seed'), data_format=data_format)
+                                seed=kwargs.get('seed'), data_format=data_format, global_step=kwargs.get('global_step'))
                 else:
-                    logger.warning('conv_block/dropblock: dropout_rate or block_size is zero or \
-                                    undefined, so dropblock layer is skipped')
+                    logger.warning(('conv_block/dropblock: dropout_rate or block_size is'
+                                    ' zero or undefined, so dropblock layer is skipped'))
                     skip_layer = True
 
             elif layer == 'm':

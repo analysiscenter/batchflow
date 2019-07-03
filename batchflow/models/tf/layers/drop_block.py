@@ -11,7 +11,7 @@ from .pooling import max_pooling
 # When max_pooling allows for dynamic kernel size, implement block_size as fraction
 # of spatial_dims.
 
-def dropblock(inputs, dropout_rate, block_size, is_training, data_format, seed=None):
+def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global_step=None, seed=None, **kwargs):
     """ Drop Block module.
 
     Parameters
@@ -36,12 +36,19 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, seed=N
     -------
     tf.Tensor
     """
+    if callable(dropout_rate):
+        if isinstance(global_step, tf.Variable):
+            dropout_rate_kwargs = kwargs.get('drop')
+            dropout_rate = dropout_rate(global_step, **kwargs)
+        else:
+            raise ValueError("'global_step' should be tf.Tensor")
+
     return tf.cond(tf.logical_or(tf.logical_not(is_training), tf.equal(dropout_rate, 0.0)),
                    true_fn=lambda: inputs,
-                   false_fn=lambda: _dropblock(inputs, dropout_rate, block_size, seed, data_format),
+                   false_fn=lambda: _dropblock(inputs, dropout_rate, block_size, seed, data_format, global_step),
                    name='dropblock')
 
-def _dropblock(inputs, dropout_rate, block_size, seed, data_format):
+def _dropblock(inputs, dropout_rate, block_size, seed, data_format, global_step):
     """
     """
     one = tf.convert_to_tensor([1], dtype=tf.int32)
