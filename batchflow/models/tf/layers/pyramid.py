@@ -6,7 +6,7 @@ from . import conv_block, upsample
 
 
 def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pyramid=(0, 1, 2, 3, 6),
-                    reshape_to_vector=False, name='psp', **kwargs):
+                    flatten=False, name='psp', **kwargs):
     """ Pyramid Pooling module
 
     Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
@@ -26,7 +26,7 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
     pyramid : tuple of int
         the number of feature regions in each dimension, default is (0, 1, 2, 3, 6).
         `0` is used to include `inputs` into the output tensor.
-    reshape_to_vector : bool
+    flatten : bool
         if True, then the output is reshaped to a vector of constant size
         if False, spatial shape of the inputs is preserved
     name : str
@@ -65,7 +65,7 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
                                name='conv-%d' % level, **kwargs)
 
                 # Output either vector with fixed size or tensor with fixed spatial dimensions
-                if reshape_to_vector:
+                if flatten:
                     x = tf.reshape(x, shape=(-1, level*level*filters),
                                    name='reshape-%d' % level)
                     concat_axis = -1
@@ -176,7 +176,7 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
 
         for level in rates:
             x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
-                           name='atrous_conv-%d' % level, **kwargs)
+                           name='conv-%d' % level, **kwargs)
             layers.append(x)
 
         x = pyramid_pooling(inputs, filters=filters, pyramid=image_level_features,

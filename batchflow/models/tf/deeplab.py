@@ -12,8 +12,8 @@ from . import EncoderDecoder, Xception
 
 
 class DeepLab(EncoderDecoder):
-    """ DeepLab model archtecture.
-    Input is encoded through Xception backbone (entry, middle and exit flows),
+    """ DeepLab v3+ model archtecture.
+    By default, inpu is encoded with Xception backbone (entry, middle and exit flows),
     then worked via Atrous Spatial Pyramid Pooling layer, and, finally, restored to original
     spatial size with simple yet effective decoder module.
 

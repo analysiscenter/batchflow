@@ -141,7 +141,7 @@ class Xception(TFModel):
         filters = cls.num_channels(inputs, data_format)
         depthwise_conv = tf.keras.layers.SeparableConv2D(filters=filters,
                                                          depth_multiplier=depth_multiplier,
-                                                         name='dwc', **kwargs)(inputs)
+                                                         name=name, **kwargs)(inputs)
         return depthwise_conv
 
 
