@@ -38,7 +38,7 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
     tf.Tensor
     """
     if callable(dropout_rate):
-            dropout_rate = dropout_rate(global_step, **kwargs)
+        dropout_rate = dropout_rate(global_step, **kwargs)
 
     return tf.cond(tf.logical_or(tf.logical_not(is_training), tf.equal(dropout_rate, 0.0)),
                    true_fn=lambda: inputs,
