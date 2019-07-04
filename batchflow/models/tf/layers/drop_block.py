@@ -7,7 +7,6 @@ import tensorflow as tf
 from .pooling import max_pooling
 
 # TODO:
-# Add scheduler to gradually increase dropout_rate from 0 to target value.
 # When max_pooling allows for dynamic kernel size, implement block_size as fraction
 # of spatial_dims.
 
@@ -18,7 +17,7 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
     ----------
     inputs : tf.Tensor
         Input tensor
-    dropout_rate : float or tf.Tensor
+    dropout_rate : float, tf.Tensor of callable.
         Default is 0
     block_size : int or float or tuple of ints or floats
         Size of the block to drop. If tuple, should be of the same size as spatial
@@ -27,10 +26,13 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
         dimension.
     is_training : bool or tf.Tensor
         Default is True.
-    seed : int
-        seed to use in tf.distributions.Bernoulli.sample method.
     data_format : str
         `channels_last` or `channels_first`. Default - 'channels_last'.
+    global_step: tf.Tensor or None
+        If `dropout_rate` is callable, `global_step` is passed to it to 
+        schedule dropout rate. 
+    seed : int
+        seed to use in tf.distributions.Bernoulli.sample method.
 
     Returns
     -------
