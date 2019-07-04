@@ -60,28 +60,6 @@ class DeepLab(EncoderDecoder):
         return config
 
 
-    def build_config(self, names=None):
-        config = super().build_config(names)
-
-        entry_filters = config.get('body/entry/blocks/filters')
-        if entry_filters is None:
-            raise ValueError('Specify filters for the entry flow.')
-
-        middle_filters = config.get('body/middle/filters')
-        if middle_filters is None:
-            raise ValueError('Specify filters for the middle flow.')
-        if isinstance(middle_filters, list):
-            if isinstance(middle_filters[0], list):
-                config['body/middle/num_stages'] = len(middle_filters)
-            else:
-                middle_num = config.get('body/middle/num_stages')
-                if middle_num is not None:
-                    config['body/middle/filters'] = [middle_filters] * middle_num
-                else:
-                    raise ValueError('Specify number of stages for the middle')
-        return config
-
-
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
         """ Create encoder, embedding and decoder. """
