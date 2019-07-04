@@ -1685,7 +1685,9 @@ class TFModel(BaseModel):
         return config
 
     def _add_block(self, name, config, inputs):
-        defaults = {'is_training': self.get_from_attr('is_training'), **config['common']}
+        defaults = {'is_training': self.get_from_attr('is_training'),
+                    'global_step': self.get_from_attr('global_step'),
+                    **config['common']}
         if callable(config[name]):
             block = config[name](inputs, **defaults)
         elif isinstance(config[name], dict):
