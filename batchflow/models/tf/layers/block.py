@@ -184,7 +184,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                     skip_layer = True
 
             elif layer == 'D':
-                if not dropout_rate: 
+                if not dropout_rate:
                     dropout_rate = layer_args.get('dropout_rate')
                 if not kwargs.get('block_size'):
                     block_size = layer_args.get('block_size')

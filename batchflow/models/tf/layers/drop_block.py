@@ -38,17 +38,16 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
     """
     if callable(dropout_rate):
         if isinstance(global_step, tf.Variable):
-            dropout_rate_kwargs = kwargs.get('drop')
             dropout_rate = dropout_rate(global_step, **kwargs)
         else:
             raise ValueError("'global_step' should be tf.Tensor")
 
     return tf.cond(tf.logical_or(tf.logical_not(is_training), tf.equal(dropout_rate, 0.0)),
                    true_fn=lambda: inputs,
-                   false_fn=lambda: _dropblock(inputs, dropout_rate, block_size, seed, data_format, global_step),
+                   false_fn=lambda: _dropblock(inputs, dropout_rate, block_size, seed, data_format),
                    name='dropblock')
 
-def _dropblock(inputs, dropout_rate, block_size, seed, data_format, global_step):
+def _dropblock(inputs, dropout_rate, block_size, seed, data_format):
     """
     """
     one = tf.convert_to_tensor([1], dtype=tf.int32)
