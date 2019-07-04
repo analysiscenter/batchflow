@@ -2,8 +2,9 @@
 
 import tensorflow as tf
 
-from .layers import conv_block
 from . import TFModel
+from .layers import conv_block
+from ..utils import unpack_args
 
 
 class EncoderDecoder(TFModel):
@@ -218,9 +219,7 @@ class EncoderDecoder(TFModel):
                 for i in range(steps):
                     with tf.variable_scope('encoder-'+str(i)):
                         # Preprocess tensor with given block
-                        args = {key: value[i] for key, value in block_args.items()
-                                if isinstance(value, list)}
-                        args = {**kwargs, **block_args, **args} # enforce priority of keys
+                        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of keys
                         x = base_block(x, name='pre', **args)
 
                         # Downsampling
@@ -260,9 +259,7 @@ class EncoderDecoder(TFModel):
         with tf.variable_scope(name):
             for i in range(steps):
                 # Preprocess tensor with given block
-                args = {key: value[i] for key, value in kwargs.items()
-                        if isinstance(value, list)}
-                args = {**kwargs, **args} # enforce priority of keys
+                args = {**kwargs, **unpack_args(kwargs, i, steps)} # enforce priority of keys
                 x = base_block(x, name='embedding-'+str(i), **args)
         return x
 
@@ -333,9 +330,7 @@ class EncoderDecoder(TFModel):
                                          **{**kwargs, **upsample})
 
                     # Post-process resulting tensor
-                    args = {key: value[i] for key, value in block_args.items()
-                            if isinstance(value, list)}
-                    args = {**kwargs, **block_args, **args} # enforce priority of subkeys
+                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of subkeys
                     x = base_block(x, name='post', **args)
 
                     # Concatenate it with stored encoding of the ~same shape
@@ -385,9 +380,15 @@ class VariationalAutoEncoder(AutoEncoder):
         -------
         tf.Tensor
         """
+        steps = kwargs.get('num_stages', 1)
         base_block = kwargs.get('base')
+        x = inputs
 
-        mean = base_block(inputs, name='mean', **kwargs)
-        std = base_block(inputs, name='std', **kwargs)
-        eps = tf.random.normal(shape=tf.shape(mean))
-        return mean + eps*std
+        with tf.variable_scope(name):
+            for i in range(steps):
+                args = {**kwargs, **unpack_args(kwargs, i, steps)} # enforce priority of keys
+                mean = base_block(x, name='mean-'+str(i), **args)
+                std = base_block(x, name='std-'+str(i), **args)
+                eps = tf.random.normal(shape=tf.shape(mean), name='eps-'+str(i))
+                x = mean + eps*std
+        return x

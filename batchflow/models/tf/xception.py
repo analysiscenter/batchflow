@@ -5,8 +5,9 @@ François Chollet. "`Xception: Deep Learning with Depthwise Separable Convolutio
 
 import tensorflow as tf
 
-from .layers import conv_block, depthwise_conv
 from . import TFModel
+from .layers import conv_block, depthwise_conv
+from ..utils import unpack_args
 
 
 
@@ -51,12 +52,6 @@ class Xception(TFModel):
 
 
     @classmethod
-    def slice_dict(cls, dictionary, idx):
-        return {key: value[idx] for key, value in dictionary.items()
-                if isinstance(value, list)}
-
-
-    @classmethod
     def body(cls, inputs, name='body', **kwargs):
         """ Entry, middle and exit flows consequently. """
         kwargs = cls.fill_params('body', **kwargs)
@@ -72,7 +67,7 @@ class Xception(TFModel):
                 entry_stages = entry.pop('num_stages', 0)
                 for i in range(entry_stages):
                     with tf.variable_scope('group-'+str(i)):
-                        args = {**kwargs, **entry, **cls.slice_dict(entry, i)}
+                        args = {**kwargs, **entry, **unpack_args(entry, i, entry_stages)}
                         x = cls.block(x, name='block-'+str(i), **args)
                         x = tf.identity(x, name='output')
 
@@ -80,20 +75,19 @@ class Xception(TFModel):
             with tf.variable_scope('middle_flow'):
                 middle_stages = middle.pop('num_stages', 0)
                 for i in range(middle_stages):
-                    args = {**kwargs, **middle, **cls.slice_dict(middle, i)}
+                    args = {**kwargs, **middle, **unpack_args(middle, i, middle_stages)}
                     x = cls.block(x, name='block-'+str(i), **args)
 
             # Exit flow: final increase in number of feature maps
             with tf.variable_scope('exit_flow'):
                 exit_stages = exit.pop('num_stages', 0)
                 for i in range(exit_stages):
-                    args = {**kwargs, **exit, **cls.slice_dict(exit, i)}
+                    args = {**kwargs, **exit, **unpack_args(exit, i, exit_stages)}
                     x = cls.block(x, name='block-'+str(i), **args)
 
             with tf.variable_scope('entry_flow/group-'+str(entry_stages)):
                 x = tf.identity(x, name='output')
         return x
-
 
     @classmethod
     def block(cls, inputs, filters, combine_type='sum', name='block', **kwargs):
@@ -123,7 +117,6 @@ class Xception(TFModel):
 
             outputs = tf.add_n([x, shortcut])
         return outputs
-
 
     @classmethod
     def separable_block(cls, inputs, filters, kernel_size=3, strides=1, rate=1,
@@ -164,6 +157,7 @@ class Xception(TFModel):
                 x = tf.get_default_graph().get_tensor_by_name(tensor_name)
                 encoder_tensors.append(x)
         return encoder_tensors
+
 
 
 class Xception41(Xception):
