@@ -17,14 +17,12 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
     Parameters
     ----------
     inputs : tf.Tensor
-        Input tensor
+        Input tensor.
     dropout_rate : float, tf.Tensor or callable.
         Default is 0
-    block_size : int or float or tuple of ints or floats
+    block_size : int or tuple of ints
         Size of the block to drop. If tuple, should be of the same size as spatial
         dimensions of inputs.
-        If float < 0, block_size is calculated as a fraction of corresponding spatial
-        dimension.
     is_training : bool or tf.Tensor
         Default is True.
     data_format : str
@@ -33,7 +31,7 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
         If `dropout_rate` is callable, and `global_step` is passed to it as the
         first positional argument.
     seed : int
-        seed to use in tf.distributions.Bernoulli.sample method.
+        Seed to use in tf.distributions.Bernoulli.sample method.
 
     Returns
     -------
