@@ -9,6 +9,7 @@ from .pooling import max_pooling
 # TODO:
 # When max_pooling allows for dynamic kernel size, implement block_size as fraction
 # of spatial_dims.
+# Write predefined callables to control dropout_rate
 
 def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global_step=None, seed=None, **kwargs):
     """ Drop Block module.
@@ -17,7 +18,7 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
     ----------
     inputs : tf.Tensor
         Input tensor
-    dropout_rate : float, tf.Tensor of callable.
+    dropout_rate : float, tf.Tensor or callable.
         Default is 0
     block_size : int or float or tuple of ints or floats
         Size of the block to drop. If tuple, should be of the same size as spatial
@@ -28,9 +29,9 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
         Default is True.
     data_format : str
         `channels_last` or `channels_first`. Default - 'channels_last'.
-    global_step: tf.Tensor or None
-        If `dropout_rate` is callable, `global_step` is passed to it to 
-        schedule dropout rate. 
+    global_step: misc
+        If `dropout_rate` is callable, and `global_step` is passed to it as the
+        first positional argument.
     seed : int
         seed to use in tf.distributions.Bernoulli.sample method.
 
@@ -39,10 +40,7 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
     tf.Tensor
     """
     if callable(dropout_rate):
-        if isinstance(global_step, tf.Variable):
             dropout_rate = dropout_rate(global_step, **kwargs)
-        else:
-            raise ValueError("'global_step' should be tf.Tensor")
 
     return tf.cond(tf.logical_or(tf.logical_not(is_training), tf.equal(dropout_rate, 0.0)),
                    true_fn=lambda: inputs,
