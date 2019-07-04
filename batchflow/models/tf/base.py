@@ -299,16 +299,15 @@ class TFModel(BaseModel):
             else:
                 prefix += device
 
-        valid = [item for item in self.graph.get_operations()
-                 if (name in item.name) and (item.name.startswith(prefix))]
-        if len(valid) != 1:
-            valid = [item for item in valid if item.name.endswith('_output')]
+        pattern = '^' + prefix + '.*' + name + '.*'
+        valid = [item for item in self.graph.get_operations() if re.match(pattern, item.name)]
+        if len(valid) > 1:
+            valid = [item for item in valid if re.match('.*_output$', item.name)]
+            if len(valid) != 1:
+                raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
 
         if len(valid) == 1:
             return valid[0].values()[0]
-
-        if len(valid) > 1:
-            raise KeyError("Too many tensors match the '%s' name in  %s model" % (name, type(self).__name__))
         raise KeyError("Model %s does not have '%s' tensor" % (type(self).__name__, name))
 
     def build(self, *args, **kwargs):
