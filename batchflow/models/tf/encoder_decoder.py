@@ -117,9 +117,9 @@ class EncoderDecoder(TFModel):
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
         config['body/encoder/blocks'] = dict(base=cls.block)
 
-        config['body/embedding_common'] = dict(base=cls.block)
         config['body/embedding'] = dict()
-        config['body/embedding_order'] = []
+        config['body/embeddings/common'] = dict(base=cls.block)
+        config['body/embeddings/order'] = []
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
@@ -138,9 +138,10 @@ class EncoderDecoder(TFModel):
         """ Create encoder, embedding and decoder. """
         kwargs = cls.fill_params('body', **kwargs)
         encoder = kwargs.pop('encoder')
-        embedding_common = kwargs.pop('embedding_common')
-        embedding_order = kwargs.pop('embedding_order') or [name for name in kwargs
-                                                            if 'embedding' in name]
+        embeddings = kwargs.get('embeddings')
+        embeddings_common = embeddings.pop('common')
+        embeddings_order = embeddings.pop('order') or [name for name in kwargs
+                                                       if 'embedding' in name]
         decoder = kwargs.pop('decoder')
 
         with tf.variable_scope(name):
@@ -150,10 +151,10 @@ class EncoderDecoder(TFModel):
             x = encoder_outputs[-1]
 
             # Bottleneck: working with compressed representation via multiple steps of processing
-            for embedding_name in embedding_order:
+            for embedding_name in embeddings_order:
                 embedding_args = kwargs.pop(embedding_name)
                 if embedding_args:
-                    embedding_args = {**kwargs, **embedding_common, **embedding_args}
+                    embedding_args = {**kwargs, **embeddings_common, **embedding_args}
                     x = cls.embedding(x, name=embedding_name, **embedding_args)
 
             encoder_outputs.append(x)

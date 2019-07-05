@@ -43,12 +43,12 @@ class DeepLab(EncoderDecoder):
         config['body/encoder/downsample'] = dict(layout=None)
         config['body/encoder/blocks'] = dict(base=Xception.block, filters=None, strides=2, combine_type='conv')
 
-        config['body/embedding_common'] = dict(base=Xception.block)
+        config['body/embeddings/common'] = dict(base=Xception.block)
         config['body/backbone_middle'] = dict(num_stages=None, filters=None, strides=1, combine_type='sum')
         config['body/backbone_exit'] = dict(num_stages=None, filters=None, strides=1,
                                             depth_activation=True, combine_type='conv')
         config['body/embedding'] = dict(base=aspp)
-        config['body/embedding_order'] = ['backbone_middle', 'backbone_exit', 'embedding']
+        config['body/embeddings/order'] = ['backbone_middle', 'backbone_exit', 'embedding']
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='b')
