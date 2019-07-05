@@ -112,16 +112,20 @@ class EncoderDecoder(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
+
         config['body/encoder'] = dict(base=None, num_stages=None)
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
         config['body/encoder/blocks'] = dict(base=cls.block)
-        config['body/embedding'] = dict(base=cls.block)
+
+        config['body/embedding_common'] = dict(base=cls.block)
+        config['body/embedding'] = dict()
+        config['body/embedding_order'] = []
+
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block)
         config['head'] = dict(layout='c', kernel_size=1)
         return config
-
 
     def build_config(self, names=None):
         config = super().build_config(names)
@@ -134,19 +138,29 @@ class EncoderDecoder(TFModel):
         """ Create encoder, embedding and decoder. """
         kwargs = cls.fill_params('body', **kwargs)
         encoder = kwargs.pop('encoder')
-        embedding = kwargs.pop('embedding')
+        embedding_common = kwargs.pop('embedding_common')
+        embedding_order = kwargs.pop('embedding_order') or [name for name in kwargs
+                                                            if 'embedding' in name]
         decoder = kwargs.pop('decoder')
 
         with tf.variable_scope(name):
             # Encoder: transition down
-            encoder_outputs = cls.encoder(inputs, **encoder, **kwargs)
+            encoder_args = {**kwargs, **encoder}
+            encoder_outputs = cls.encoder(inputs, name='encoder', **encoder_args)
+            x = encoder_outputs[-1]
 
-            # Bottleneck: working with compressed representation
-            x = cls.embedding(encoder_outputs[-1], **embedding, **kwargs)
+            # Bottleneck: working with compressed representation via multiple steps of processing
+            for embedding_name in embedding_order:
+                embedding_args = kwargs.pop(embedding_name)
+                if embedding_args:
+                    embedding_args = {**kwargs, **embedding_common, **embedding_args}
+                    x = cls.embedding(x, name=embedding_name, **embedding_args)
+
             encoder_outputs.append(x)
 
             # Decoder: transition up
-            x = cls.decoder(encoder_outputs, **decoder, **kwargs)
+            decoder_args = {**kwargs, **decoder}
+            x = cls.decoder(encoder_outputs, name='decoder', **decoder_args)
         return x
 
 
@@ -229,7 +243,6 @@ class EncoderDecoder(TFModel):
                         encoder_outputs.append(x)
         return encoder_outputs
 
-
     @classmethod
     def embedding(cls, inputs, name='embedding', **kwargs):
         """ Create embedding from inputs tensor.
@@ -262,7 +275,6 @@ class EncoderDecoder(TFModel):
                 args = {**kwargs, **unpack_args(kwargs, i, steps)} # enforce priority of keys
                 x = base_block(x, name='embedding-'+str(i), **args)
         return x
-
 
     @classmethod
     def decoder(cls, inputs, name='decoder', **kwargs):
@@ -338,6 +350,7 @@ class EncoderDecoder(TFModel):
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
                         x = tf.concat((x, inputs[-i-3]), axis=axis, name='skip-concat')
         return x
+
 
 
 class AutoEncoder(EncoderDecoder):
