@@ -4,10 +4,8 @@ Liang-Chieh Chen, Yukun Zhu, George Papandreou, Florian Schroff, Hartwig Adam.
 Convolution for Semantic Image Segmentation
 <https://arxiv.org/abs/1802.02611>`_"
 """
-import tensorflow as tf
-
-from .layers import aspp
 from . import EncoderDecoder, Xception
+from .layers import aspp
 
 
 
@@ -47,7 +45,8 @@ class DeepLab(EncoderDecoder):
 
         config['body/embedding_common'] = dict(base=Xception.block)
         config['body/backbone_middle'] = dict(num_stages=None, filters=None, strides=1, combine_type='sum')
-        config['body/backbone_exit'] = dict(num_stages=None, filters=None, strides=1, depth_activation=True, combine_type='conv')
+        config['body/backbone_exit'] = dict(num_stages=None, filters=None, strides=1,
+                                            depth_activation=True, combine_type='conv')
         config['body/embedding'] = dict(base=aspp)
         config['body/embedding_order'] = ['backbone_middle', 'backbone_exit', 'embedding']
 
@@ -68,9 +67,9 @@ class DeepLab8(DeepLab):
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/blocks/filters'] = [[64]*3,
-                                               [128]*3,
-                                               [256]*3,
-                                               [728]*3]
+                                                 [128]*3,
+                                                 [256]*3,
+                                                 [728]*3]
         config['body/encoder/blocks/strides'] = [2, 2, 2, 1]
 
         config['body/backbone_middle/num_stages'] = 8
@@ -97,9 +96,9 @@ class DeepLab16(DeepLab):
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/blocks/filters'] = [[64]*3,
-                                               [128]*3,
-                                               [256]*3,
-                                               [728]*3]
+                                                 [128]*3,
+                                                 [256]*3,
+                                                 [728]*3]
         config['body/encoder/blocks/strides'] = [2, 2, 2, 2]
 
         config['body/backbone_middle/num_stages'] = 16
@@ -126,9 +125,9 @@ class DeepLabS(DeepLab):
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/blocks/filters'] = [[6]*3,
-                                               [1]*3,
-                                               [2]*3,
-                                               [7]*3]
+                                                 [1]*3,
+                                                 [2]*3,
+                                                 [7]*3]
         config['body/encoder/blocks/strides'] = [2, 2, 2, 2]
 
         config['body/backbone_middle/num_stages'] = 4
