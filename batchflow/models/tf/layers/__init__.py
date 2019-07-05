@@ -9,3 +9,4 @@ from .pooling import max_pooling, average_pooling, pooling, \
 from .roi import roi_pooling_layer, non_max_suppression
 from .resize import subpixel_conv, resize_bilinear_additive, resize_nn, resize_bilinear, depth_to_space
 from .pyramid import pyramid_pooling, aspp
+from .drop_block import dropblock
