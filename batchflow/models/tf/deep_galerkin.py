@@ -250,7 +250,8 @@ class DeepGalerkin(TFModel):
             n_dims = kwargs['n_dims']
             n_perturbations = kwargs['n_perturbations']
 
-            # leave out perturbation-placeholders
+            # separate perturbations and coordinates
+            perturbations = coordinates[n_dims:]
             coordinates = coordinates[:n_dims]
 
             domain = kwargs["domain"]
@@ -261,7 +262,7 @@ class DeepGalerkin(TFModel):
             n_dims_xs = n_dims if init_cond is None else n_dims - 1
             xs_spatial = coordinates[:n_dims_xs] if n_dims_xs > 0 else []
             xs_spatial_ = tf.concat(xs_spatial, axis=1) if n_dims_xs > 0 else None
-            xs_spatial_es = xs_spatial + coordinates[n_dims:]       # spatial vars and perturbations
+            xs_spatial_es = xs_spatial + perturbations       # spatial vars and perturbations
 
             # multiplicator for binding boundary conditions
             if n_dims_xs > 0:
