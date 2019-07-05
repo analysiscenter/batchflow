@@ -8,6 +8,7 @@ import tensorflow as tf
 from tqdm import tqdm_notebook, tqdm
 
 from . import TFModel
+from .layers import conv_block
 from ..parser import SyntaxTreeNode, parse, get_unique_perturbations
 
 
@@ -96,69 +97,98 @@ class DeepGalerkin(TFModel):
         if pde is None:
             raise ValueError("The PDE-problem is not specified. Use 'pde' config to set up the problem.")
 
-        # parse dimensionality of the problem along with number of perturbations
+        # Get the dimensionality
+        n_dims = pde.get('n_dims')
+        n_funs = pde.get('n_funs', 1)
+        n_eqns = pde.get('n_eqns', n_funs)
+
+        # Make sure that `form` describes necessary number of equations
         form = pde.get('form')
-        n_args = len(signature(form).parameters)
-        tree = form(*[SyntaxTreeNode('x' + str(i)) for i in range(n_args)])
+        form = form if isinstance(form, (tuple, list)) else [form]
+        assert len(form) == n_eqns
+        pde.update({'form': form})
+
+        # Convert each expression to track to list
+        track = pde.get('track')
+        if track:
+            for key, value in track.items():
+                value = value if isinstance(value, (tuple, list)) else [value]
+            pde.update({'track': track})
+
+        # Make sure that PDE dimensionality is consistent
+        n_args = len(signature(form[0]).parameters)
+        tree = form[0](*[SyntaxTreeNode('_' + str(i)) for i in range(n_args)])
         unique_perturbations = get_unique_perturbations(tree)
         n_perturbations = len(unique_perturbations)
+        assert n_dims + n_perturbations + n_funs == n_args
+        pde.update({'n_dims': n_dims,
+                    'n_funs': n_funs,
+                    'n_eqns': n_eqns,
+                    'n_perturbations': n_perturbations,
+                    'n_vars': n_dims + n_perturbations})
 
-        # put all dimensionalities in the config for convenience
-        n_dims = n_args - n_perturbations - 1
-        pde.update({'n_dims': n_dims, 'n_perturbations': n_perturbations, 'n_vars': n_dims + n_perturbations})
-
-        # make sure points-tensor is created
+        # Make sure points-tensor is created
         self.config.update({'initial_block/inputs': 'points',
                             'inputs': dict(points={'shape': (n_dims + n_perturbations, )})})
 
-        # default values for domain
+        # Default values for domain
         if pde.get('domain') is None:
             self.config.update({'pde/domain': [[0, 1]] * n_dims})
 
-        # make sure that initial conditions are callable
+        # Make sure that initial conditions are callable
         init_conds = pde.get('initial_condition', None)
         if init_conds is not None:
-            init_conds = init_conds if isinstance(init_conds, (tuple, list)) else [init_conds]
-            parsed = []
-            for cond in init_conds:
-                if callable(cond):
-                    # assume it is a function written in dg-language
-                    n_dims_xs = n_dims - 1
+            n_dims_xs = n_dims - 1
 
-                    # get syntax-tree and parse it to tf-callable
-                    tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs)])
-                    parsed.append(parse(tree))
-                else:
-                    parsed.append(lambda *args, value=cond: value)
-
-            self.config.update({'pde/initial_condition': parsed})
+            init_conds = self._make_nested_list(init_conds, n_funs,
+                                                n_dims_xs, 'initial')
+            self.config.update({'pde/initial_condition': init_conds})
 
         # make sure that boundary condition is callable
-        bound_cond = pde.get('boundary_condition', 0)
-        if isinstance(bound_cond, (float, int)):
-            bound_cond_value = bound_cond
-            self.config.update({'pde/boundary_condition': lambda *args: bound_cond_value})
-        elif callable(bound_cond):
-            n_dims_xs = n_dims if init_conds is None else n_dims - 1
+        bound_cond = pde.get('boundary_condition', [0.0]*n_funs)
+        n_dims_xs = n_dims if init_conds is None else n_dims - 1
 
-            # get syntax-tree and parse it to tf-callable
-            tree = bound_cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs)])
-            self.config.update({'pde/boundary_condition': parse(tree)})
-        else:
-            raise ValueError("Cannot parse boundary condition of the equation")
+        bound_cond = self._make_nested_list(bound_cond, n_funs,
+                                            n_dims_xs, 'boundary')
+        self.config.update({'pde/boundary_condition': bound_cond})
 
         # 'common' is updated with PDE-problem
         config = super().build_config(names)
         config['common'].update(self.config['pde'])
 
         config = self._make_ops(config)
-
         config['ansatz/coordinates'] = self.get_from_attr('coordinates')
         return config
+
+    def _make_nested_list(self, list_cond, n_funs, n_dims_xs, name=None):
+        if n_funs == 1:
+            list_cond = list_cond if isinstance(list_cond, (tuple, list)) else [list_cond]
+            list_cond = [list_cond]
+        else:
+            if isinstance(list_cond, (tuple, list)):
+                if not isinstance(list_cond[0], (tuple, list)):
+                    list_cond = [[cond] for cond in list_cond]
+            else:
+                raise ValueError('Multiple functions must have multiple {} conditions.'.format(name))
+        assert len(list_cond) == n_funs
+
+        parsed = []
+        for i in range(n_funs):
+            parsed_ = []
+            for cond in list_cond[i]:
+                if callable(cond):
+                    # get syntax-tree and parse it to tf-callable
+                    tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs)])
+                    parsed_.append(parse(tree))
+                else:
+                    parsed_.append(lambda *args, value=cond: value)
+            parsed.append(parsed_)
+        return parsed
 
     def _make_ops(self, config):
         """ Stores necessary operations in 'config'. """
         # retrieving variables
+
         ops = config.get('output')
         track = config.get('track')
         coordinates = self.get_from_attr('coordinates')
@@ -174,24 +204,27 @@ class DeepGalerkin(TFModel):
         _ops = dict()
         _ops[prefix] = list(ops[prefix])
 
+        # form for output-transformation
+        config['predictions'] = self._make_form_calculator(config.get("common/form"), coordinates,
+                                                           name='predictions', pde=config['common'])
+
         # forms for tracking
         if track is not None:
             for op in track.keys():
-                _compute_op = self._make_form_calculator(track[op], coordinates, name=op)
+                _compute_op = self._make_form_calculator(track[op], coordinates, name=op, pde=config['common'])
                 _ops[prefix].append(_compute_op)
 
-        # form for output-transformation
-        config['predictions'] = self._make_form_calculator(config.get("common/form"), coordinates,
-                                                           name='predictions')
         config['output'] = _ops
         return config
 
     def _make_inputs(self, names=None, config=None):
+        n_vars = config['pde/n_vars']
+        n_eqns = config['pde/n_eqns']
+
         """ Create necessary placeholders. """
         placeholders_, tensors_ = super()._make_inputs(names, config)
 
         # split input so we can access individual variables later
-        n_vars = config['pde/n_vars']
         coordinates = tf.split(tensors_['points'], n_vars, axis=1, name='coordinates')
         tensors_['points'] = tf.concat(coordinates, axis=1)
         self.store_to_attr('coordinates', coordinates)
@@ -199,24 +232,39 @@ class DeepGalerkin(TFModel):
 
         # make targets-tensor from zeros
         points = self.get_from_attr('inputs').get('points')
-        self.store_to_attr('targets', tf.zeros(shape=(tf.shape(points)[0], 1)))
+        self.store_to_attr('targets', tf.zeros(shape=(tf.shape(points)[0], n_eqns)))
         return placeholders_, tensors_
 
     @classmethod
-    def _make_form_calculator(cls, form, coordinates, name='_callable'):
+    def _make_form_calculator(cls, form, coordinates, name='_callable', pde=None):
         """ Get callable that computes differential form of a tf.Tensor
         with respect to coordinates.
         """
-        n_vars = len(coordinates)
+        n_vars = pde.get('n_vars')
+        n_funs = pde.get('n_funs')
+        n_eqns = pde.get('n_eqns')
+        func_list = [SyntaxTreeNode('u' + str(i)) for i in range(n_funs)]
+        var_list = [SyntaxTreeNode('x' + str(i)) for i in range(n_funs, n_funs + n_vars)]
 
-        # get tree of lhs-differential operator and parse it to tf-callable
-        tree = form(SyntaxTreeNode('u'), *[SyntaxTreeNode('x' + str(i + 1)) for i in range(n_vars)])
-        parsed = parse(tree)
-
+        form = form if isinstance(form, (tuple, list)) else [form]
         # `_callable` should be a function of `net`-tensor only
-        _callable = lambda net: parsed(net, *coordinates)
+        def _callable(net):
+            net_list = tf.split(net, n_funs, axis=-1, name='net-splitted')
+
+            results = []
+            for eqn in form:
+                # get tree of lhs-differential operator and parse it to tf-callable
+                tree = eqn(*func_list, *var_list)
+                parsed = parse(tree)
+                parsed = parsed(*net_list, *coordinates)
+
+                results.append(parsed)
+            results = tf.reshape(results, shape=(-1, len(form)))
+            return results
+
         setattr(_callable, '__name__', name)
         return _callable
+
 
     def _build(self, config=None):
         """ Overloads :meth:`.TFModel._build`: adds ansatz-block for binding
@@ -231,7 +279,22 @@ class DeepGalerkin(TFModel):
         self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
 
     @classmethod
-    def ansatz(cls, inputs, coordinates, **kwargs):
+    def head(cls, inputs, name='head', **kwargs):
+        n_funs = kwargs.get('n_funs')
+        kwargs = cls.fill_params('head', **kwargs)
+
+        if not kwargs.get('layout'):
+            return [inputs]
+
+        with tf.variable_scope(name):
+            heads = []
+            for i in range(n_funs):
+                branch = conv_block(inputs, name=('branch-' + str(i)), **kwargs)
+                heads.append(branch)
+        return heads
+
+    @classmethod
+    def ansatz(cls, inputs, coordinates, name='ansatz', **kwargs):
         """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
         of the model. Does so by:
         1. Applying one of preset multipliers to the network output
@@ -239,53 +302,73 @@ class DeepGalerkin(TFModel):
         2. Adding passed condition, so it is satisfied on boundaries
         Creates a tf.Tensor `solution` - the final output of the model.
         """
-        if kwargs["bind_bc_ic"]:
-            add_term = 0
-            multiplier = 1
+        with tf.variable_scope(name):
+            if kwargs["bind_bc_ic"]:
+                # retrieving variables
+                n_dims = kwargs['n_dims']
+                n_funs = kwargs['n_funs']
+                n_perturbations = kwargs['n_perturbations']
 
-            # retrieving variables
-            n_dims = kwargs['n_dims']
-            n_perturbations = kwargs['n_perturbations']
-
-            # leave out perturbation-placeholders
-            coordinates = coordinates[:n_dims]
-
-            domain = kwargs["domain"]
-            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
-
-            init_cond = kwargs.get("initial_condition")
-            bound_cond = kwargs["boundary_condition"]
-            n_dims_xs = n_dims if init_cond is None else n_dims - 1
-            xs_spatial = coordinates[:n_dims_xs] if n_dims_xs > 0 else []
-            xs_spatial_ = tf.concat(xs_spatial, axis=1) if n_dims_xs > 0 else None
-
-            # multiplicator for binding boundary conditions
-            if n_dims_xs > 0:
-                lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
-                                      for bounds in (lower, upper)]
-                multiplier *= tf.reduce_prod((xs_spatial_ - lower_tf) * (upper_tf - xs_spatial_) /
-                                             (upper_tf - lower_tf)**2,
-                                             axis=1, name='xs_multiplier', keepdims=True)
-
-            # ingore boundary condition as it is automatically set by initial condition
-            if init_cond is not None:
-                shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
+                init_cond = kwargs.get("initial_condition")
+                bound_cond = kwargs["boundary_condition"]
+                domain = kwargs["domain"]
                 time_mode = kwargs["time_multiplier"]
 
-                add_term += init_cond[0](*xs_spatial)
-                multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond) == 1 else '00')(shifted)
+                # Leave out perturbation-placeholders
+                coordinates = coordinates[:n_dims]
+                lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
+                n_dims_xs = n_dims if init_cond is None else n_dims - 1
+                xs_spatial = coordinates[:n_dims_xs] if n_dims_xs > 0 else []
+                xs_spatial_ = tf.concat(xs_spatial, axis=1) if n_dims_xs > 0 else None
 
-                # multiple initial conditions
-                if len(init_cond) > 1:
-                    add_term += init_cond[1](*xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
+                # Multiplicator for binding boundary conditions
+                binding_multiplier = 1
+                if n_dims_xs > 0:
+                    lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
+                                          for bounds in (lower, upper)]
+                    binding_multiplier *= tf.reduce_prod((xs_spatial_ - lower_tf) * (upper_tf - xs_spatial_) /
+                                                         (upper_tf - lower_tf)**2,
+                                                         axis=1, name='xs_multiplier', keepdims=True)
 
-            # if there are no initial conditions, boundary conditions are used (default value is 0)
-            else:
-                add_term += bound_cond(*xs_spatial)
+                # Create ansatz for each head individually
+                ansatz = []
+                for i in range(n_funs):
+                    add_term = 0
+                    multiplier = 1
+                    add_bind = 0
 
-            # apply transformation to inputs
-            inputs = add_term + multiplier * inputs
-        return tf.identity(inputs, name='solution')
+                    # Ignore boundary condition as it is automatically set by initial condition
+                    if init_cond is not None:
+                        shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
+                        time_mode = kwargs["time_multiplier"]
+
+                        add_term += init_cond[i][0](*xs_spatial)
+                        multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond[i]) == 1 else '00')(shifted)
+
+                        # multiple initial conditions
+                        if len(init_cond[i]) > 1:
+                            add_term += init_cond[i][1](*xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
+
+                    # If there are no initial conditions, boundary conditions are used (default value is 0)
+                    else:
+                        add_term += bound_cond[i][0](*xs_spatial)
+
+                    # Sometimes you need it
+                    if kwargs.get('do_that_strange_magic'):
+                        print('IN IT TO WIN IT')
+                        if n_dims_xs > 0:
+                            lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
+                                                  for bounds in (lower, upper)]
+                            binding_multiplier *= tf.reduce_prod((xs_spatial_ - lower_tf) * (upper_tf - xs_spatial_) /
+                                                                 (upper_tf - lower_tf)**2,
+                                                                  axis=1, name='xs_multiplier', keepdims=True)
+
+                            add_bind = ((bound_cond[i][0](coordinates[-1]) - init_cond[i][0](lower_tf) / (multiplier + 1e1))
+                                        * ((upper_tf - xs_spatial) / (upper_tf - lower_tf)))
+                            add_bind = tf.reshape(add_bind, shape=(-1, 1))
+
+                    ansatz.append(add_term + multiplier * (inputs[i]*binding_multiplier + add_bind))
+        return tf.concat(ansatz, axis=-1, name='ansatz_output')
 
     @classmethod
     def _make_time_multiplier(cls, family, order=None):
@@ -361,7 +444,11 @@ class DeepGalerkin(TFModel):
         `solution`-tensor is now considered to be the main model-output.
         """
         fetches = 'solution' if fetches is None else fetches
-        return super().predict(fetches, feed_dict, **kwargs)
+        predicted = super().predict(fetches, feed_dict, **kwargs)
+
+        if len(predicted) == 1:
+            predicted = predicted[0]
+        return predicted
 
 
 
