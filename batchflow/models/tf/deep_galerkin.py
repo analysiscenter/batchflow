@@ -111,8 +111,8 @@ class DeepGalerkin(TFModel):
         # Convert each expression to track to list
         track = pde.get('track')
         if track:
-            for key, value in track.items():
-                value = value if isinstance(value, (tuple, list)) else [value]
+            track = {value if isinstance(value, (tuple, list)) else [value]
+                     for value in track.values()}
             pde.update({'track': track})
 
         # Make sure that PDE dimensionality is consistent
@@ -218,10 +218,9 @@ class DeepGalerkin(TFModel):
         return config
 
     def _make_inputs(self, names=None, config=None):
+        """ Create necessary placeholders. """
         n_vars = config['pde/n_vars']
         n_eqns = config['pde/n_eqns']
-
-        """ Create necessary placeholders. """
         placeholders_, tensors_ = super()._make_inputs(names, config)
 
         # split input so we can access individual variables later
@@ -242,7 +241,6 @@ class DeepGalerkin(TFModel):
         """
         n_vars = pde.get('n_vars')
         n_funs = pde.get('n_funs')
-        n_eqns = pde.get('n_eqns')
         func_list = [SyntaxTreeNode('u' + str(i)) for i in range(n_funs)]
         var_list = [SyntaxTreeNode('x' + str(i)) for i in range(n_funs, n_funs + n_vars)]
 
@@ -307,7 +305,6 @@ class DeepGalerkin(TFModel):
                 # retrieving variables
                 n_dims = kwargs['n_dims']
                 n_funs = kwargs['n_funs']
-                n_perturbations = kwargs['n_perturbations']
 
                 init_cond = kwargs.get("initial_condition")
                 bound_cond = kwargs["boundary_condition"]
@@ -343,11 +340,13 @@ class DeepGalerkin(TFModel):
                         time_mode = kwargs["time_multiplier"]
 
                         add_term += init_cond[i][0](*xs_spatial)
-                        multiplier *= cls._make_time_multiplier(time_mode, '0' if len(init_cond[i]) == 1 else '00')(shifted)
+                        multiplier *= cls._make_time_multiplier(time_mode,
+                                                                '0' if len(init_cond[i]) == 1 else '00')(shifted)
 
                         # multiple initial conditions
                         if len(init_cond[i]) > 1:
-                            add_term += init_cond[i][1](*xs_spatial) * cls._make_time_multiplier(time_mode, '01')(shifted)
+                            add_term += (init_cond[i][1](*xs_spatial)
+                                         * cls._make_time_multiplier(time_mode, '01')(shifted))
 
                     # If there are no initial conditions, boundary conditions are used (default value is 0)
                     else:
@@ -357,13 +356,16 @@ class DeepGalerkin(TFModel):
                     if kwargs.get('do_that_strange_magic'):
                         print('IN IT TO WIN IT')
                         if n_dims_xs > 0:
-                            lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
+                            lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs],
+                                                              shape=(1, n_dims_xs), dtype=tf.float32)
                                                   for bounds in (lower, upper)]
-                            binding_multiplier *= tf.reduce_prod((xs_spatial_ - lower_tf) * (upper_tf - xs_spatial_) /
+                            binding_multiplier *= tf.reduce_prod(((xs_spatial_ - lower_tf)
+                                                                  * (upper_tf - xs_spatial_)) /
                                                                  (upper_tf - lower_tf)**2,
-                                                                  axis=1, name='xs_multiplier', keepdims=True)
+                                                                 axis=1, name='xs_multiplier', keepdims=True)
 
-                            add_bind = ((bound_cond[i][0](coordinates[-1]) - init_cond[i][0](lower_tf) / (multiplier + 1e1))
+                            add_bind = ((bound_cond[i][0](coordinates[-1]) - init_cond[i][0](lower_tf)
+                                         / (multiplier + 1e1))
                                         * ((upper_tf - xs_spatial) / (upper_tf - lower_tf)))
                             add_bind = tf.reshape(add_bind, shape=(-1, 1))
 
