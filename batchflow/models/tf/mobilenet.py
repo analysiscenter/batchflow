@@ -4,6 +4,9 @@
 Sandler M. et al. "`Inverted Residuals and Linear Bottlenecks:
 Mobile Networks for Classification, Detection and Segmentation
 <https://arxiv.org/abs/1801.04381>`_"
+
+Howard A. et al. "`Searching for MobileNetV3
+<https://arxiv.org/pdf/1905.02244.pdf>`_"
 """
 from copy import deepcopy
 import tensorflow as tf
@@ -232,8 +235,8 @@ _V3_LARGE_DEFAULT_BODY = [
     dict(repeats=1, filters=24, expansion_factor=3, strides=1, kernel_size=3, h_swish=False, se_block=False),
     dict(repeats=3, filters=40, expansion_factor=3, strides=2, kernel_size=5, h_swish=False, se_block=True),
     dict(repeats=1, filters=80, expansion_factor=6, strides=2, kernel_size=3, h_swish=True, se_block=False),
-    dict(repeats=1, filters=80, expansion_factor=2.5, strides=1, kernel_size=3, h_swish=True, se_block=False),
-    dict(repeats=2, filters=80, expansion_factor=2.3, strides=1, kernel_size=3, h_swish=True, se_block=False),
+    dict(repeats=1, filters=80, expansion_factor=2.5, strides=1, kernel_size=3, h_swish=True, se_block=False, residual=True),
+    dict(repeats=2, filters=80, expansion_factor=2.3, strides=1, kernel_size=3, h_swish=True, se_block=False, residual=True),
     dict(repeats=2, filters=112, expansion_factor=6, strides=1, kernel_size=3, h_swish=True, se_block=True),
     dict(repeats=3, filters=160, expansion_factor=6, strides=2, kernel_size=5, h_swish=True, se_block=True),
 ]
@@ -244,8 +247,8 @@ class MobileNet_v3(TFModel):
         config = TFModel.default_config()
         config['common'].update(dict(activation=tf.nn.relu))
         config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V2_DEFAULT_BODY)))
-        config['head'].update(dict(layout='cnavcac', filters=[960, 1280, 2], pool_size=7, kernel_size=1, activation=self.h_swish))
+        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
+        config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7, kernel_size=1, activation=cls.h_swish))
 
         config['loss'] = 'ce'
 
@@ -260,7 +263,14 @@ class MobileNet_v3(TFModel):
     def h_swish(cls, inputs):
         """ Hard-swish nonlinearity function.
         """
-        return x * tf.nn.relu6(inputs + 3) / 6.0
+        return inputs * tf.nn.relu6(inputs + 3) / 6.0
+
+    @classmethod
+    def h_sigmoid(cls, inputs):
+        """ Hard-sigmoid nonlinearity function.
+        A piece-wise linear analog of sigmoid function.
+        """
+        return tf.nn.relu6(inputs + 3) / 6.0
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
@@ -291,15 +301,29 @@ class MobileNet_v3(TFModel):
                 for k in range(repeats):
                     if k > 0:
                         block['strides'] = 1
-                    x = cls.block(x, **block, residual=k > 0, name='block-%d' % i, **kwargs)
+                    residual = block.pop('residual', False) or k > 0
+                    x = cls.block(x, **block, residual=residual, name='block-%d' % i, **kwargs)
+                    print('i=%s, k=%s' % (i, k))
                     i += 1
         return x
-
-
 
     @classmethod
     def block(cls, inputs, filters, residual=False, strides=1, expansion_factor=4, kernel_size=3, width_factor=1, name=None, h_swish=False, se_block=False, **kwargs):
         """ An inverted residual bottleneck block consisting of a separable depthwise convolution and 1x1 pointise convolution
         and an optional Squeeze-and-Excitation block.
         """
-        
+        if h_swish:
+            kwargs['activation'] = cls.h_swish # will not work in current se_block
+
+        num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
+        x = conv_block(inputs, 'cna Cna', [num_filters, num_filters], [1, 3], name='%s-exp' % name, strides=[1, strides], **kwargs)
+
+        if se_block:
+            kwargs['activation'] = [tf.nn.relu, cls.h_sigmoid]
+            x = cls.se_block(x, int(num_filters * 0.25), name='%s-se' % name, **kwargs)
+
+        x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
+
+        if residual:
+            x = inputs + x
+        return x

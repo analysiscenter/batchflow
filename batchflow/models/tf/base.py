@@ -1635,6 +1635,7 @@ class TFModel(BaseModel):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
         _config = config.get(_name)
+
         config = {**config['common'], **_config, **kwargs}
         return config
 
@@ -1940,9 +1941,13 @@ class TFModel(BaseModel):
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
             in_filters = cls.num_channels(inputs, data_format)
+            if isinstance (kwargs.get('activation'), list) and len(kwargs.get('activation')) == 2:
+                activation = kwargs.pop('activation')
+            else:
+                activation = [tf.nn.relu, tf.nn.sigmoid]
             x = conv_block(inputs,
                            **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
-                              'name': 'se', 'activation': [tf.nn.relu, tf.nn.sigmoid]})
+                              'name': 'se', 'activation': activation})
 
             shape = [-1] + [1] * (cls.spatial_dim(inputs) + 1)
             axis = cls.channels_axis(data_format)
