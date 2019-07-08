@@ -15,9 +15,11 @@ from ..parser import SyntaxTreeNode, parse, get_unique_perturbations
 
 class DeepGalerkin(TFModel):
     r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
-    with constant or functional coefficients on rectangular domains using neural networks. Inspired by
-    Sirignano J., Spiliopoulos K. "`DGM: A deep learning algorithm for solving partial differential equations
-    <http://arxiv.org/abs/1708.07469>`_"
+    on rectangular domains using neural networks. Inspired by Sirignano J., Spiliopoulos K.
+    "`DGM: A deep learning algorithm for solving partial differential equations<http://arxiv.org/abs/1708.07469>`_"
+    In addition, allows to solve random (parametric) PDEs in strong form as discussed in Nabian M.A., Meidani H.
+    "`A Deep Neural Network Surrogate for High-Dimensional Random Partial Differential Equations
+    <https://arxiv.org/pdf/1806.02957.pdf>`_"
 
     **Configuration**
 
@@ -26,32 +28,34 @@ class DeepGalerkin(TFModel):
     allows to set up the network-architecture using options `initial_block`, `body`, `head`. See
     docstring of :class:`.TFModel` for more detail.
 
-    Left-hand-side (lhs), right-hand-side (rhs) and other properties of PDE are defined in `pde`-dict:
+    Left-hand-side (lhs), domain and other properties of PDE are defined in `pde`-dict:
 
     pde : dict
         dictionary of parameters of PDE. Must contain keys
         - form : callable
-            defines diferential operator in lhs of the PDE. Composed from predefined tokens including
-            differential operator `D(u, x)` and unary operations like `sin` and `cos`.
+            defines diferential form in lhs of the PDE. Composed from predefined tokens including
+            differential operator `D(u, x)` and unary operations like `sin` and `cos`. Can also
+            include coefficients R(e) to make the whole equation a parametric family of equations
+            rather than a simple PDE.
         - domain : list
             defines the rectangular domain of the equation as a sequence of coordinate-wise bounds.
         - bind_bc_ic : bool
             If True, modifies the network-output to bind boundary and initial conditions.
         - initial_condition : callable or const or None or list
             If supplied, defines the initial state of the system as a function of
-            spatial coordinates. In that case, PDE is considered to be an evolution equation
-            (heat-equation or wave-equation, e.g.). Then, first (n - 1) coordinates are spatial,
-            while the last one is the time-variable. If the lhs of PDE contains second-order
-            derivative w.r.t time, initial evolution-rate of the system must also be supplied.
-            In this case, the arg is a `list` with two callables (constants). Also written using
-            the set of predefined tokens.
+            spatial coordinates (and, possibly, parametric coefficients R(e)). In that case, PDE
+            is considered to be an evolution equation (heat-equation or wave-equation, e.g.). Then,
+            first (n - 1) coordinates are spatial, while the last one is the time-variable. If the
+            lhs of PDE contains second-order derivative w.r.t time, initial evolution-rate of the
+            system must also be supplied. In this case, the arg is a `list` with two callables
+            (constants). Also written using the set of predefined tokens.
         - time_multiplier : str or callable
             Can be either 'sigmoid', 'polynomial' or callable. Needed if `initial_condition`
             is supplied. Defines the multipliers applied to network for binding initial conditions.
             `sigmoid` works better in problems with asymptotic steady states (heat equation, e.g.).
 
-    `output`-dict allows for logging of differentials of the solution-approximator. Can be used for
-    keeping track on the model-training process. See more details here: :meth:`.DeepGalerkin.output`.
+    `track`-dict allows for logging of differentials of the solution-approximator. Can be used for
+    keeping track on the model-training process.
 
     Examples
     --------
@@ -60,10 +64,9 @@ class DeepGalerkin(TFModel):
             pde = dict(
                 form=lambda u, x, t: D(u, t) - D(D(u, x), x) - 5,
                 initial_condition=lambda t: sin(2 * np.pi * t),
-                bind_bc_ic=True,
                 domain=[[0, 1], [0, 3]],
                 time_multiplier='sigmoid'),
-            output='d1t')
+            track=dict(dt=lambda u, x, t: D(u, t)))
 
         stands for PDE given by
             \begin{multline}
@@ -140,16 +143,16 @@ class DeepGalerkin(TFModel):
         if init_conds is not None:
             n_dims_xs = n_dims - 1
 
-            init_conds = self._make_nested_list(init_conds, n_funs,
-                                                n_dims_xs, 'initial')
+            init_conds = self._make_nested_list(init_conds, n_dims_xs, n_funs,
+                                                n_perturbations, 'initial')
             self.config.update({'pde/initial_condition': init_conds})
 
         # make sure that boundary condition is callable
         bound_cond = pde.get('boundary_condition', [0.0]*n_funs)
         n_dims_xs = n_dims if init_conds is None else n_dims - 1
 
-        bound_cond = self._make_nested_list(bound_cond, n_funs,
-                                            n_dims_xs, 'boundary')
+        bound_cond = self._make_nested_list(bound_cond, n_dims_xs, n_funs,
+                                            n_perturbations, 'boundary')
         self.config.update({'pde/boundary_condition': bound_cond})
 
         # 'common' is updated with PDE-problem
@@ -160,7 +163,7 @@ class DeepGalerkin(TFModel):
         config['ansatz/coordinates'] = self.get_from_attr('coordinates')
         return config
 
-    def _make_nested_list(self, list_cond, n_funs, n_dims_xs, name=None):
+    def _make_nested_list(self, list_cond, n_dims_xs, n_funs, n_perturbations, name=None):
         if n_funs == 1:
             list_cond = list_cond if isinstance(list_cond, (tuple, list)) else [list_cond]
             list_cond = [list_cond]
@@ -178,7 +181,7 @@ class DeepGalerkin(TFModel):
             for cond in list_cond[i]:
                 if callable(cond):
                     # get syntax-tree and parse it to tf-callable
-                    tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs)])
+                    tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs + n_perturbations)])
                     parsed_.append(parse(tree))
                 else:
                     parsed_.append(lambda *args, value=cond: value)
@@ -302,7 +305,7 @@ class DeepGalerkin(TFModel):
         """
         with tf.variable_scope(name):
             if kwargs["bind_bc_ic"]:
-                # retrieving variables
+                # Retrieving variables
                 n_dims = kwargs['n_dims']
                 n_funs = kwargs['n_funs']
 
@@ -311,12 +314,15 @@ class DeepGalerkin(TFModel):
                 domain = kwargs["domain"]
                 time_mode = kwargs["time_multiplier"]
 
-                # Leave out perturbation-placeholders
+                # Separate variables and perturbations
                 coordinates = coordinates[:n_dims]
+                perturbations = coordinates[n_dims:]
+
                 lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
                 n_dims_xs = n_dims if init_cond is None else n_dims - 1
                 xs_spatial = coordinates[:n_dims_xs] if n_dims_xs > 0 else []
                 xs_spatial_ = tf.concat(xs_spatial, axis=1) if n_dims_xs > 0 else None
+                xs_spatial_es = xs_spatial + perturbations
 
                 # Multiplicator for binding boundary conditions
                 binding_multiplier = 1
@@ -339,22 +345,21 @@ class DeepGalerkin(TFModel):
                         shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
                         time_mode = kwargs["time_multiplier"]
 
-                        add_term += init_cond[i][0](*xs_spatial)
+                        add_term += init_cond[i][0](*xs_spatial_es)
                         multiplier *= cls._make_time_multiplier(time_mode,
                                                                 '0' if len(init_cond[i]) == 1 else '00')(shifted)
 
                         # multiple initial conditions
                         if len(init_cond[i]) > 1:
-                            add_term += (init_cond[i][1](*xs_spatial)
+                            add_term += (init_cond[i][1](*xs_spatial_es)
                                          * cls._make_time_multiplier(time_mode, '01')(shifted))
 
                     # If there are no initial conditions, boundary conditions are used (default value is 0)
                     else:
-                        add_term += bound_cond[i][0](*xs_spatial)
+                        add_term += bound_cond[i][0](*xs_spatial_es)
 
                     # Sometimes you need it
                     if kwargs.get('do_that_strange_magic'):
-                        print('IN IT TO WIN IT')
                         if n_dims_xs > 0:
                             lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs],
                                                               shape=(1, n_dims_xs), dtype=tf.float32)
@@ -371,6 +376,7 @@ class DeepGalerkin(TFModel):
 
                     ansatz.append(add_term + multiplier * (inputs[i]*binding_multiplier + add_bind))
         return tf.concat(ansatz, axis=-1, name='ansatz_output')
+
 
     @classmethod
     def _make_time_multiplier(cls, family, order=None):
@@ -456,10 +462,13 @@ class DeepGalerkin(TFModel):
 
 class DGSolver:
     """ Wrapper around `DeepGalerkin` to surpass BatchFlow's syntax sugar.
+
     Parameters
     ----------
-    model_config : dict
+    config : dict
         Configuration of model. Supports all of the options from `DeepGalerkin`.
+    model_class : class
+        class to use when buliding the model. Should inherit `DeepGalerkin`-class.
     """
     def __init__(self, config, model_class=DeepGalerkin):
         self.model = model_class(config)
@@ -467,6 +476,7 @@ class DGSolver:
 
     def fit(self, batch_size, sampler, n_iters, train_mode='', fetches=None, bar=False):
         """ Train model on batches of sampled points.
+
         Parameters
         ----------
         sampler : Sampler
@@ -510,6 +520,7 @@ class DGSolver:
     def solve(self, points, fetches=None):
         """ Predict values of function on array of points.
         For more info, check :class:`TFModel.predict` docstring.
+
         Parameters
         ----------
         points : array-like
