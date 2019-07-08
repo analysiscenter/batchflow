@@ -6,15 +6,15 @@ import inspect
 
 from .parser import *
 
-module = os.environ.get('TOKENS_MODULE') or 'tf'
+MODULE = os.environ.get('TOKENS_MODULE') or 'tf'
 
-frame = inspect.currentframe()
+FRAME = inspect.currentframe()
 for i in range(30):
-    frame = frame.f_back
-    calling_locals = frame.f_locals
+    FRAME = FRAME.f_back
+    calling_locals = FRAME.f_locals
 
     name_ = calling_locals.get('__name__')
     if name_ == '__main__':
         break
 
-add_tokens(calling_locals, module=module)
+add_tokens(calling_locals, module=MODULE)
