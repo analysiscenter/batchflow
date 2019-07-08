@@ -1,13 +1,14 @@
 """ Contains node-class of a syntax tree, builder of mathematical tokens (`sin`, `cos` and others)
 and tree-parser.
 """
+import inspect
+
 import numpy as np
 import tensorflow as tf
 
 try:
     from autograd import grad
     import autograd.numpy as autonp
-
 except ImportError:
     pass
 
@@ -107,24 +108,22 @@ def parse(tree):
 def get_unique_perturbations(tree):
     """ Get unique names of perturbation-variables (those containing 'R' in its name) from a parse-tree.
     """
+    # pylint: disable=protected-access
     if isinstance(tree, (int, float)):
         return []
     if 'R' in tree.name:
         return [tree.name]
-    else:
-        if len(tree) == 0:
-            return []
-        else:
-            result = []
-            for arg in tree._args:
-                result += get_unique_perturbations(arg)
-            return list(np.unique(result))
+    if len(tree) == 0:
+        return []
+
+    result = []
+    for arg in tree._args:
+        result += get_unique_perturbations(arg)
+    return list(np.unique(result))
 
 
-def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', 'asin', 'atan',
-                                    'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'D', 'R'),
-                namespaces=None, grad_func=None):
-    """ Make a collection of mathematical tokens.
+def make_token(module='tf', name=None, namespaces=None, grad_func=None):
+    """ Make a mathematical tokens.
 
     Parameters
     ----------
@@ -132,27 +131,30 @@ def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', '
         Can be 'np' (stands for `numpy`) or 'tf'(stands for `tensorflow`). Either choice binds tokens to
         correspondingly named operations from a module. For instance, token 'sin' for module 'np' stands for
         operation `np.sin`.
-    names : sequence
-        names of module-funcs used for binding tokens.
+    name : str
+        name of module function used for binding tokens.
 
     Returns
     -------
-    Sequnce of tokens - callables, that can be applied to a parse-tree adding another node in there.
+    callable
+        Function that can be applied to a parse-tree, adding another node in there.
     """
+    # pylint: disable=protected-access, unused-variable
     # parse namespaces-arg
     if module in ['tensorflow', 'tf']:
         namespaces = namespaces or [tf.math, tf, tf.nn]
         grad_func = lambda f, x: tf.gradients(f, x)[0]
     elif module == 'torch':
-        raise NotImplementedError('Torch not implemented yet.')
+        raise NotImplementedError('Torch is not implemented yet.')
     elif module in ['numpy', 'np']:
         namespaces = namespaces or [np, np.math]
-        if 'D' in names:
+        if name == 'D':
             namespaces = namespaces or [autonp, autonp.math]
             grad_func = lambda f, x: grad(f)(x)
-    else:
-        if namespaces is None:
-            raise ValueError('Module ' + module + ' is not supported: you should directly pass namespaces-arg!')
+
+    # None of the passed modules supported
+    if namespaces is None:
+        raise ValueError('Module ' + module + ' is not supported: you should directly pass namespaces-arg!')
 
     def _fetch_method(name, modules):
         for module in modules:
@@ -160,27 +162,79 @@ def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', '
                 return getattr(module, name)
         raise ValueError('Cannot find method ' + name + ' in ' + [str(module) for module in modules].join(', '))
 
-    # fill up tokens-list
-    tokens = []
+    # make the token-method
+    if name == 'D':
+        method = grad_func
+    elif name == 'R':
+        pass
+    else:
+        method = _fetch_method(name, namespaces)
+
+    # make the token
+    if name == 'R':
+        def token(*args, name=name):
+            """ Token for PDE-perturbations.
+            """
+            return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
+    else:
+        token = lambda *args, method=method, name=name: SyntaxTreeNode(method, *args, name=name)
+    return token
+
+
+MATH_TOKENS = ['sin', 'cos', 'tan',
+               'asin', 'acos', 'atan',
+               'sinh', 'cosh', 'tanh',
+               'asinh', 'acosh', 'atanh',
+               'exp', 'log', 'pow',
+               'sqrt', 'sign',
+               ]
+
+CUSTOM_TOKENS = ['D', 'R']
+
+def add_tokens(var_dict=None, postfix='__', module='tf',
+               names=None, namespaces=None, grad_func=None):
+    """ Add tokens to passed namespace.
+
+    Parameters
+    ----------
+    var_dict : dict
+        Namespace to add names to. Default values is the namespace from which the function is called.
+    postfix : str
+        If the passed namespace already contains item with the same name, then
+        postfix is appended to the name to avoid naming collision.
+    module : str
+        Can be 'np' (stands for `numpy`) or 'tf'(stands for `tensorflow`). Either choice binds tokens to
+        correspondingly named operations from a module. For instance, token 'sin' for module 'np' stands for
+        operation `np.sin`.
+    names : str
+        Names of function to be tokenized from the given module.
+
+    Notes
+    -----
+    This function is also called when anything from this module is imported inside
+    executable code (e.g. code where __name__ = __main__).
+    """
+    names = names or MATH_TOKENS + CUSTOM_TOKENS
+
+    if not var_dict:
+        frame = inspect.currentframe()
+        try:
+            var_dict = frame.f_back.f_locals
+        finally:
+            del frame
+
     for name in names:
-        # make the token-method
-        # pylint: disable=unused-variable
-        if name == 'D':
-            method = grad_func
-        elif name == 'R':
-            pass
+        token = make_token(module=module, name=name,
+                           namespaces=namespaces, grad_func=grad_func)
+        if name not in var_dict:
+            name_ = name
         else:
-            method = _fetch_method(name, namespaces)
+            name_ = name + postfix
+            msg = 'Name `{}` already present in current namespace. Added as {}'.format(name, name+postfix)
+            print(msg)
+        var_dict[name_] = token
 
-        # make the token
-        if name == 'R':
-            def token(*args, name=name):
-                """ Token for PDE-perturbations.
-                """
-                return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
-        else:
-            token = lambda *args, method=method, name=name: SyntaxTreeNode(method, *args, name=name)
 
-        tokens.append(token)
-
-    return tokens
+def tokens():
+    """ Convinient alias to use `add_tokens` default behaviour. """
+    pass
