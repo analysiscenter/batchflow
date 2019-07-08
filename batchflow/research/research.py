@@ -8,6 +8,7 @@ from math import ceil
 import json
 import warnings
 import dill
+import pprint
 import pandas as pd
 
 from .. import Config, Pipeline
@@ -30,8 +31,6 @@ class Research:
         self.name = 'research'
         self.worker_class = PipelineWorker
         self.gpu = None
-        self.n_jobs = None
-        self.jobs = None
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
@@ -97,7 +96,7 @@ class Research:
         name = name or 'pipeline_' + str(len(self.executables) + 1)
 
         if name in self.executables:
-            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
+            raise ValueError('Executable unit with name {} already exists'.format(name))
 
         unit = Executable()
         unit.add_pipeline(root, name, branch, dataset, part, variables,
@@ -347,12 +346,12 @@ class Research:
 
         print("Research {} is starting...".format(self.name))
 
-        self.save()
+        self.__save()
 
-        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
+        jobs, n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
 
         distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
-        distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
+        distr.run(jobs, dirname=self.name, n_jobs=n_jobs,
                   n_iters=self.n_iters, bar=self.bar, framework=self.framework)
         return self
 
@@ -371,7 +370,8 @@ class Research:
             gpu = gpu
         return gpu
 
-    def _folder_exists(self, name):
+    @staticmethod
+    def _folder_exists(name):
         name = name or 'research'
         if not os.path.exists(name):
             dirname = name
@@ -386,7 +386,7 @@ class Research:
         os.makedirs(dirname)
         return dirname
 
-    def save(self):
+    def __save(self):
         """ Save description of the research to folder name/description. """
         dirname = os.path.join(self.name, 'description')
         if not os.path.exists(dirname):
@@ -410,13 +410,16 @@ class Research:
         description['grid_config'] = self.grid_config.value()
         return description
 
+    def describe(self):
+        pprint.pprint(self.__dict__)
+
     @classmethod
     def load(cls, name):
         """ Load description of the research from name/description. """
         with open(os.path.join(name, 'description', 'research.dill'), 'rb') as file:
-            res = dill.load(file)
-            res.loaded = True
-            return res
+            research = dill.load(file)
+            research.loaded = True
+            return research
 
 class Executable:
     """ Function or pipeline
