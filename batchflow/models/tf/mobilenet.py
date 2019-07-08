@@ -206,7 +206,7 @@ class MobileNet_v2(TFModel):
             input tensor
         filters : int
             number of output filters
-        residual : boold
+        residual : bool
             whether to make a residual connection
         strides : int
             stride for 3x3 convolution
@@ -232,7 +232,7 @@ class MobileNet_v2(TFModel):
 _V3_LARGE_DEFAULT_BODY = [
     dict(repeats=1, filters=16, expansion_factor=1, strides=1, kernel_size=3, h_swish=False, se_block=False),
     dict(repeats=1, filters=24, expansion_factor=4, strides=2, kernel_size=3, h_swish=False, se_block=False),
-    dict(repeats=1, filters=24, expansion_factor=3, strides=1, kernel_size=3, h_swish=False, se_block=False),
+    dict(repeats=1, filters=24, expansion_factor=3, strides=1, kernel_size=3, h_swish=False, se_block=False, residual=True),
     dict(repeats=3, filters=40, expansion_factor=3, strides=2, kernel_size=5, h_swish=False, se_block=True),
     dict(repeats=1, filters=80, expansion_factor=6, strides=2, kernel_size=3, h_swish=True, se_block=False),
     dict(repeats=1, filters=80, expansion_factor=2.5, strides=1, kernel_size=3, h_swish=True, se_block=False, residual=True),
@@ -246,7 +246,7 @@ class MobileNet_v3(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common'].update(dict(activation=tf.nn.relu))
-        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2))
+        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=cls.h_swish))
         config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7, kernel_size=1, activation=cls.h_swish))
 
@@ -262,6 +262,15 @@ class MobileNet_v3(TFModel):
     @classmethod
     def h_swish(cls, inputs):
         """ Hard-swish nonlinearity function.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+
+        Returns
+        -------
+        tf.Tensor
         """
         return inputs * tf.nn.relu6(inputs + 3) / 6.0
 
@@ -269,6 +278,15 @@ class MobileNet_v3(TFModel):
     def h_sigmoid(cls, inputs):
         """ Hard-sigmoid nonlinearity function.
         A piece-wise linear analog of sigmoid function.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+
+        Returns
+        -------
+        tf.Tensor
         """
         return tf.nn.relu6(inputs + 3) / 6.0
 
@@ -303,15 +321,40 @@ class MobileNet_v3(TFModel):
                         block['strides'] = 1
                     residual = block.pop('residual', False) or k > 0
                     x = cls.block(x, **block, residual=residual, name='block-%d' % i, **kwargs)
-                    print('i=%s, k=%s' % (i, k))
                     i += 1
         return x
 
     @classmethod
-    def block(cls, inputs, filters, residual=False, strides=1, expansion_factor=4, kernel_size=3, width_factor=1, name=None, h_swish=False, se_block=False, **kwargs):
+    def block(cls, inputs, filters, residual=False, strides=1, expansion_factor=4, kernel_size=3, width_factor=1, h_swish=False, se_block=False, name=None, **kwargs):
         """ An inverted residual bottleneck block consisting of a separable depthwise convolution and 1x1 pointise convolution
         and an optional Squeeze-and-Excitation block.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        filters : int
+            number of output filters
+        residual : bool
+            whether to make a residual connection
+        strides : int
+            stride for 3x3 convolution
+        expansion_factor : int
+            multiplier for the number of filters in internal convolutions
+        width_factor : float
+            multiplier for the number of filters
+        h_swish : bool
+            whether to use hard swish activation. If False tf.nn.relu is used.
+        se_block : bool
+            whether to include squeeze and excitation block
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
         """
+
         if h_swish:
             kwargs['activation'] = cls.h_swish # will not work in current se_block
 
@@ -319,11 +362,57 @@ class MobileNet_v3(TFModel):
         x = conv_block(inputs, 'cna Cna', [num_filters, num_filters], [1, 3], name='%s-exp' % name, strides=[1, strides], **kwargs)
 
         if se_block:
-            kwargs['activation'] = [tf.nn.relu, cls.h_sigmoid]
-            x = cls.se_block(x, int(num_filters * 0.25), name='%s-se' % name, **kwargs)
+            x = cls.se_block(x, int(num_filters * 0.25), name='%s-se' % name, data_format=kwargs['data_format'], activation=[tf.nn.relu, cls.h_sigmoid])
 
         x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
 
         if residual:
             x = inputs + x
         return x
+
+
+_V3_SMALL_DEFAULT_BODY = [
+    dict(repeats=1, filters=16, expansion_factor=1, strides=2, kernel_size=3, h_swish=False, se_block=True),
+    dict(repeats=1, filters=24, expansion_factor=4.5, strides=2, kernel_size=3, h_swish=False, se_block=False),
+    dict(repeats=1, filters=24, expansion_factor=3.7, strides=1, kernel_size=3, h_swish=False, se_block=False, residual=True),
+    dict(repeats=1, filters=40, expansion_factor=4, strides=2, kernel_size=5, h_swish=True, se_block=True),
+    dict(repeats=2, filters=40, expansion_factor=6, strides=1, kernel_size=5, h_swish=True, se_block=True, residual=True),
+    dict(repeats=2, filters=48, expansion_factor=3, strides=1, kernel_size=5, h_swish=True, se_block=True),
+    dict(repeats=3, filters=96, expansion_factor=6, strides=2, kernel_size=5, h_swish=True, se_block=True),
+]
+
+class MobileNet_v3_small(MobileNet_v3):
+    @classmethod
+    def default_config(cls):
+        config = MobileNet_v3.default_config()
+        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=cls.h_swish))
+        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_SMALL_DEFAULT_BODY)))
+        config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, 2], pool_size=7, kernel_size=1, activation=cls.h_swish, se_block=True))
+        return config
+
+    @classmethod
+    def head(cls, inputs, name='head', **kwargs):
+        """ The last network layers which produce predictions
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        name : str
+            scope name
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        kwargs = cls.fill_params('head', **kwargs)
+        layout = kwargs.pop('layout')
+        filters = kwargs.pop('filters')
+        if kwargs.get('se_block'):
+            x = conv_block(inputs, layout=layout[:3], filters=filters[0], name=name, **kwargs)
+            x = cls.se_block(x, int(filters[0] * 0.25), name='%s-se' % name, data_format=kwargs['data_format'], activation=[tf.nn.relu, cls.h_sigmoid])
+
+            x = conv_block(inputs, layout=layout[3:], filters=filters[1:], name=name, **kwargs)
+        else:
+            return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
+        return inputs
