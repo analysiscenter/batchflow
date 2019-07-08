@@ -7,8 +7,8 @@ from collections import OrderedDict
 from math import ceil
 import json
 import warnings
-import dill
 import pprint
+import dill
 import pandas as pd
 
 from .. import Config, Pipeline
