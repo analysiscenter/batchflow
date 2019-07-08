@@ -12,10 +12,21 @@ except ImportError:
     pass
 
 
-
 def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__', '__sub__', '__rsub__',
                                      '__truediv__', '__rtruediv__', '__pow__', '__rpow__')):
-    """ Add binary-magic operators to `SyntaxTreeNode`-class.
+    """ Add binary-magic operators to `SyntaxTreeNode`-class. Allows to create and parse syntax trees
+    using binary operations like '+', '-', '*', '/'.
+
+    Parameters
+    ----------
+    cls : class
+        The class to be processed by the decorator.
+    operators : sequence
+        Sequence of magic-method names to be added to `cls`.
+
+    Returns
+    -------
+    modified class.
     """
     for magic_name in operators:
         def magic(self, other, magic_name=magic_name):
@@ -27,7 +38,15 @@ def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__
 
 @add_binary_magic
 class SyntaxTreeNode():
-    """ Node of parse tree. Stores operation along with its arguments.
+    """ Node of parse tree. Stores operation representing the node along with its arguments.
+
+    Parameters
+    ----------
+    name : str
+        name of the node. Used for creating a readable string-repr of a tree.
+    *args:
+        args[0] : method representing the node of parse tree.
+        args[1:] : arguments of the method.
     """
     def __init__(self, *args, name=None, **kwargs):
         arg = args[0]
@@ -61,7 +80,16 @@ class SyntaxTreeNode():
 
 
 def parse(tree):
-    """ Build the method represented by a parse-tree.
+    """ Make the method (callable) represented by a parse-tree.
+
+    Parameters
+    ----------
+    tree : SyntaxTreeNode
+        instance of node-class representing the tree.
+
+    Returns
+    -------
+    resulting callable.
     """
     if isinstance(tree, (int, float)):
         # constants
@@ -75,8 +103,9 @@ def parse(tree):
         return tree.method(*args)
     return result
 
+
 def get_unique_perturbations(tree):
-    """ Get unique names of perturbation-variables from a parse-tree.
+    """ Get unique names of perturbation-variables (those containing 'R' in its name) from a parse-tree.
     """
     if isinstance(tree, (int, float)):
         return []
@@ -91,17 +120,31 @@ def get_unique_perturbations(tree):
                 result += get_unique_perturbations(arg)
             return list(np.unique(result))
 
+
 def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', 'asin', 'atan',
                                     'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'D', 'R'),
                 namespaces=None, grad_func=None):
     """ Make a collection of mathematical tokens.
+
+    Parameters
+    ----------
+    module : str
+        Can be 'np' (stands for `numpy`) or 'tf'(stands for `tensorflow`). Either choice binds tokens to
+        correspondingly named operations from a module. For instance, token 'sin' for module 'np' stands for
+        operation `np.sin`.
+    names : sequence
+        names of module-funcs used for binding tokens.
+
+    Returns
+    -------
+    Sequnce of tokens - callables, that can be applied to a parse-tree adding another node in there.
     """
     # parse namespaces-arg
     if module in ['tensorflow', 'tf']:
         namespaces = namespaces or [tf.math, tf, tf.nn]
         grad_func = lambda f, x: tf.gradients(f, x)[0]
     elif module == 'torch':
-        pass
+        raise NotImplementedError('Torch not implemented yet.')
     elif module in ['numpy', 'np']:
         namespaces = namespaces or [np, np.math]
         if 'D' in names:
