@@ -214,7 +214,7 @@ def add_tokens(var_dict=None, postfix='__', module='tf',
     This function is also called when anything from this module is imported inside
     executable code (e.g. code where __name__ = __main__).
     """
-    names = names or MATH_TOKENS + CUSTOM_TOKENS
+    names = names or (MATH_TOKENS + CUSTOM_TOKENS)
 
     if not var_dict:
         frame = inspect.currentframe()
@@ -233,8 +233,3 @@ def add_tokens(var_dict=None, postfix='__', module='tf',
             msg = 'Name `{}` already present in current namespace. Added as {}'.format(name, name+postfix)
             print(msg)
         var_dict[name_] = token
-
-
-def tokens():
-    """ Convinient alias to use `add_tokens` default behaviour. """
-    pass
