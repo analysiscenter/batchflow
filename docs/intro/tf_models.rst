@@ -36,7 +36,7 @@ A pipeline can also :meth:`~.TFModel.load` a pretrained model which was previous
         .run(BATCH_SIZE)
 
 Note that you can indicate through 'build' option whether a model graph needs to be created or updated by calling :meth:`~TFModel.build`.
-Most often than not 'build' should be `False` (which is a default value), but sometimes it might be convenient to create the graph
+More often than not 'build' should be `False` (which is a default value), but sometimes it might be convenient to create the graph
 before loading or change the graph after loading.
 
 Specify `build='first'` to create the graph and load a pretrained model afterwards.
