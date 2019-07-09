@@ -116,7 +116,7 @@ def get_unique_perturbations(tree):
         return []
 
     result = []
-    for arg in tree._args:
+    for arg in tree._args:                          # pylint: disable=protected-access
         result += get_unique_perturbations(arg)
 
     return list(np.unique(result))
@@ -178,7 +178,7 @@ def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', '
             def token(*args, name=name):
                 """ Token for PDE-perturbations.
                 """
-                return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
+                return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)      # pylint: disable=protected-access
         else:
             token = lambda *args, method=method, name=name: SyntaxTreeNode(method, *args, name=name)
 
