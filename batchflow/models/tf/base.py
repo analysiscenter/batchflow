@@ -389,7 +389,8 @@ class TFModel(BaseModel):
         scope = tf.get_variable_scope().name
         if '/' in scope:
             device_scope = scope.split('/')[1]
-            return self.scope_to_device[device_scope]
+            if device_scope in self.scope_to_device:
+                return self.scope_to_device[device_scope]
         return None
 
     def _make_inputs(self, names=None, config=None):
@@ -662,9 +663,10 @@ class TFModel(BaseModel):
         for key, subconfig in config['train_steps'].items():
             # Create losses for every device, then combine them into one via summation
             device_grads, device_losses, ops = [], [], {}
+
             for device in self.devices:
                 with tf.device(device):
-                    with tf.variable_scope(self.device_to_scope[device]):
+                    with tf.variable_scope(self.device_to_scope[device]), tf.variable_scope(key):
                         loss_ = total(self._make_loss(subconfig, device))
                         loss_ = tf.identity(loss_, name='_DEVICE_LOSS')
                         device_losses.append(loss_)
@@ -685,7 +687,7 @@ class TFModel(BaseModel):
                             # In order to use microbatches, we need to zero-out some storage, then populate it
                             # with computed gradients, and, finally, apply them to the weights at once
                             if self.microbatch:
-                                with tf.variable_scope(key):
+                                if not self.multi_device:
                                     zero_op, update_op, apply_op = self._make_microbatch_ops(loss_, optimizer,
                                                                                              var_list=scope_collection)
                                     ops.update({'zero_grads': zero_op,
@@ -695,9 +697,9 @@ class TFModel(BaseModel):
                             # To use multiple devices, we must compute gradients for every device,
                             # combine them on leading device, and apply updates to the weights on every device
                             if self.multi_device:
-                                update_op = optimizer.compute_gradients(loss_,
-                                                                        var_list=scope_collection)
-                                device_grads.append(update_op)
+                                grad_and_vars = optimizer.compute_gradients(loss_,
+                                                                            var_list=scope_collection)
+                                device_grads.append(grad_and_vars)
 
             # Store average loss in the attribute, make operation to apply average gradient to the weights
             with tf.device(self.leading_device):
@@ -707,7 +709,14 @@ class TFModel(BaseModel):
                 self.store_to_attr(loss_name, loss)
 
                 if self.multi_device:
-                    ops['multi_apply_grads'] = self._make_multi_update_op(device_grads, optimizer)
+                    if not self.microbatch:
+                        ops['multi_minimize'] = self._make_multi_op(device_grads, optimizer)
+
+                    else:
+                        zero_op, update_op, apply_op = self._make_microbatch_multi_ops(device_grads, optimizer)
+                        ops.update({'multi_zero_grads': zero_op,
+                                    'multi_update_grads': update_op,
+                                    'multi_apply_grads': apply_op})
 
             # We need to explicitly initialize variable for every optimizer in order to not
             # interfere with capability to reuse optimizers for different train_steps
@@ -850,7 +859,7 @@ class TFModel(BaseModel):
                 apply_op = tf.group(apply_op, name='apply_grads_op')
         return zero_op, update_op, apply_op
 
-    def _make_multi_update_op(self, gradients, optimizer):
+    def _make_multi_op(self, gradients, optimizer):
         operations = []
         # Each iteration of this loop works with 'copies' of the same variable on different devices
         for grad_and_vars in zip(*gradients):
@@ -865,12 +874,54 @@ class TFModel(BaseModel):
                                                  global_step=self.get_from_attr('global_step'))
 
             distribute_weights = [v.assign(leading_device_variable) for _, v in grad_and_vars[1:]]
-            update_op_ = tf.group([apply_op] + distribute_weights, name='update_weight_op')
-            operations.append(update_op_)
+            op = tf.group([apply_op] + distribute_weights, name='apply_weights_op')
+            operations.append(op)
 
         # Combine update operations for every variable into single one
-        update_op = tf.group(operations, name='update_op')
-        return update_op
+        op = tf.group(operations, name='multi_minimize_op')
+        return op
+
+    def _make_microbatch_multi_ops(self, gradients, optimizer):
+        global_step = self.get_from_attr('global_step')
+        zero_ops = []
+        update_ops = []
+        apply_ops = []
+
+        with tf.variable_scope('microbatch_multi'):
+            count = tf.Variable(0.0, dtype=tf.float32, trainable=False, name='count')
+            zero_count_op = count.assign(tf.zeros(shape=(), dtype=tf.float32))
+            zero_ops.append(zero_count_op)
+
+            update_count_op = count.assign_add(tf.constant(1.0, dtype=tf.float32))
+            update_ops.append(update_count_op)
+
+            for grad_and_vars in zip(*gradients):
+                # Leading device variable
+                var = grad_and_vars[0][1]
+                grad_accum = tf.Variable(np.empty(var.shape, dtype=np.float32), trainable=False)
+                zero_grad_op = grad_accum.assign(tf.zeros(var.shape))
+                zero_ops.append(zero_grad_op)
+
+                # Average gradients from different devices
+                expanded = [tf.expand_dims(g, 0) for g, _ in grad_and_vars if g is not None]
+                concatted = tf.concat(expanded, axis=0)
+                averaged = tf.reduce_mean(concatted, axis=0)
+                update_grad_op = grad_accum.assign_add(averaged)
+                update_ops.append(update_grad_op)
+
+                apply_grad_op_ = optimizer.apply_gradients([(grad_accum / count, var)],
+                                                           global_step=global_step)
+                distribute_weights = [v.assign(var) for _, v in grad_and_vars[1:]]
+                apply_grad_op = tf.group([apply_grad_op_] + distribute_weights, name='apply_weights_op')
+                apply_ops.append(apply_grad_op)
+
+            zero_op = tf.group(zero_ops, name='multi_zero_grads_op')
+            update_op = tf.group(update_ops, name='multi_update_grads_op')
+            apply_op = tf.group(apply_ops, name='multi_apply_grads_op')
+
+        return zero_op, update_op, apply_op
+
+
 
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
@@ -1068,7 +1119,7 @@ class TFModel(BaseModel):
                             output = self._multi_device_train(train_fetches, _fetches, feed_dict)
 
                     else: # microbatch
-                        feed_dicts = self._split_feed_dict(feed_dict, microbatch)
+                        feed_dicts = self._split_feed_dict(feed_dict, size=microbatch)
 
                         if not self.multi_device:
                             output = self._microbatch_train(train_fetches, _fetches, feed_dicts, names)
@@ -1112,12 +1163,12 @@ class TFModel(BaseModel):
 
     def _multi_device_train(self, train_fetches, _fetches, feed_dict):
         # Get list of train operations to run
-        all_fetches = [ops['multi_apply_grads'] for ops in train_fetches]
+        all_fetches = [ops['multi_minimize'] for ops in train_fetches]
         if _fetches is not None:
             all_fetches += [_fetches]
 
         # Prepare feed_dict; run session
-        _feed_dicts = self._split_feed_dict(feed_dict, self.multi_device)
+        _feed_dicts = self._split_feed_dict(feed_dict, num_parts=self.multi_device)
 
         _fd = {}
         for part, device in zip(_feed_dicts, self.devices):
@@ -1128,7 +1179,6 @@ class TFModel(BaseModel):
 
     def _microbatch_train(self, train_fetches, _fetches, feed_dicts, names):
         _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in feed_dicts]
-        steps = len(feed_dicts)
 
         outputs = []
         for ops in train_fetches:
@@ -1152,10 +1202,6 @@ class TFModel(BaseModel):
         return output
 
     def _microbatch_multi_device_train(self, train_fetches, _fetches, feed_dicts, names):
-        print('LEN FEED_DICTS INPUT', len(feed_dicts))
-        print('DEVICES NUM::', self.multi_device)
-        print('\n\n', list(feed_dicts[0].keys()))
-
         outputs = []
         for ops in train_fetches:
             # Get train operations to run
