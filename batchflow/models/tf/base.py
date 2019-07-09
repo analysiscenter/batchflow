@@ -921,8 +921,6 @@ class TFModel(BaseModel):
 
         return zero_op, update_op, apply_op
 
-
-
     def get_number_of_trainable_vars(self):
         """ Return the number of trainable variable in the model graph """
         arr = np.asarray([np.prod(v.get_shape().as_list()) for v in self.graph.get_collection('trainable_variables')])
@@ -1116,16 +1114,20 @@ class TFModel(BaseModel):
                         if not self.multi_device:
                             output = self._vanilla_train(train_fetches, _fetches, feed_dict)
                         else:
-                            output = self._multi_device_train(train_fetches, _fetches, feed_dict)
+                            output = self._multi_train(train_fetches, _fetches, feed_dict)
 
                     else: # microbatch
                         feed_dicts = self._split_feed_dict(feed_dict, size=microbatch)
 
                         if not self.multi_device:
-                            output = self._microbatch_train(train_fetches, _fetches, feed_dicts, names)
+                            outputs = self._microbatch_train(train_fetches, _fetches, feed_dicts)
 
                         else:
-                            output = self._microbatch_multi_device_train(train_fetches, _fetches, feed_dicts, names)
+                            outputs = self._microbatch_multi_train(train_fetches, _fetches, feed_dicts)
+
+                        outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
+                        output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
+                                  for i, name in enumerate(names)]
 
                     output = output[0] if isinstance(fetches, str) else output
             else:
@@ -1142,7 +1144,7 @@ class TFModel(BaseModel):
                 if num_parts is None:
                     num_parts = len(value) // size
                 if len(value) % num_parts != 0:
-                    raise ValueError('Batch size must be divisible by {}'.format(num_parts))
+                    raise ValueError('Batch size must be divisible by {}, but is {}'.format(num_parts, len(value)))
                 splitted[key] = np.array_split(value, num_parts)
 
         splitted_ = [{key: value[i] for key, value in splitted.items()}
@@ -1161,7 +1163,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def _multi_device_train(self, train_fetches, _fetches, feed_dict):
+    def _multi_train(self, train_fetches, _fetches, feed_dict):
         # Get list of train operations to run
         all_fetches = [ops['multi_minimize'] for ops in train_fetches]
         if _fetches is not None:
@@ -1177,7 +1179,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def _microbatch_train(self, train_fetches, _fetches, feed_dicts, names):
+    def _microbatch_train(self, train_fetches, _fetches, feed_dicts):
         _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in feed_dicts]
 
         outputs = []
@@ -1195,13 +1197,9 @@ class TFModel(BaseModel):
                 _, _output = self.session.run(all_fetches, feed_dict=_fd)
                 outputs += [_output]
             self.session.run(apply_op, feed_dict=_feed_dicts[-1])
+        return outputs
 
-        outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
-        output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
-                  for i, name in enumerate(names)]
-        return output
-
-    def _microbatch_multi_device_train(self, train_fetches, _fetches, feed_dicts, names):
+    def _microbatch_multi_train(self, train_fetches, _fetches, feed_dicts):
         outputs = []
         for ops in train_fetches:
             # Get train operations to run
@@ -1213,7 +1211,7 @@ class TFModel(BaseModel):
                 all_fetches += [_fetches]
 
             for i, feed_dict in enumerate(feed_dicts): # for each splitted on microbatch
-                _feed_dicts = self._split_feed_dict(feed_dict, self.multi_device)
+                _feed_dicts = self._split_feed_dict(feed_dict, num_parts=self.multi_device)
                 _fd = {} # filled
                 for part, device in zip(_feed_dicts, self.devices):
                     _fd = {**_fd, **self._fill_feed_dict(part, device)}
@@ -1224,12 +1222,7 @@ class TFModel(BaseModel):
                 _, _output = self.session.run(all_fetches, feed_dict=_fd)
                 outputs += [_output]
             self.session.run(apply_op, feed_dict=_fd)
-
-        outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
-        output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
-                  for i, name in enumerate(names)]
-        return output
-
+        return outputs
 
     def predict(self, fetches=None, feed_dict=None, **kwargs):
         """ Get predictions on the data provided
