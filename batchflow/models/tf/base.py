@@ -1062,77 +1062,19 @@ class TFModel(BaseModel):
                                          if re.search(mode, name) is not None]
 
                     if not microbatch:
-                        if len(self.devices) == 1:
-                            # Run bunch of `minimize` operations (one for every train step)
-                            all_fetches = [ops['minimize'] for ops in train_fetches]
-                            if _fetches is not None:
-                                all_fetches += [_fetches]
-                            if len(all_fetches) > 0:
-                                _fd = self._fill_feed_dict(feed_dict, is_training=True)
-                                *_, output = self.session.run(all_fetches, feed_dict=_fd)
-
+                        if not self.multi_device:
+                            output = self._vanilla_train(train_fetches, _fetches, feed_dict)
                         else:
-                            # Split batch into even parts for every device, then run complex operation
-                            # that computes gradients on every device, combines them on the leading one,
-                            # and finally sends updates back to devices
-                            all_fetches = [ops['multi_apply_grads'] for ops in train_fetches]
-                            if _fetches is not None:
-                                all_fetches += [_fetches]
-                            if len(all_fetches) > 0:
-
-                                multi_splitted = {}
-                                for key, value in feed_dict.items():
-                                    if hasattr(value, '__len__'):
-                                        if len(value) % self.multi_device != 0:
-                                            raise ValueError('Batch size must be a divisible by number of devices.')
-                                        multi_splitted[key] = np.array_split(value, self.multi_device)
-
-                                _feed_dicts = [{key: value[i] for key, value in multi_splitted.items()}
-                                               for i in range(self.multi_device)]
-                                _fd = {}
-                                for part, device in zip(_feed_dicts, self.devices):
-                                    _fd = {**_fd, **self._fill_feed_dict(part, device)}
-
-                                *_, output = self.session.run(all_fetches, feed_dict=_fd)
+                            output = self._multi_device_train(train_fetches, _fetches, feed_dict)
 
                     else: # microbatch
-                        splitted = {}
-                        for key, value in feed_dict.items():
-                            if hasattr(value, '__len__'):
-                                if len(value) % microbatch != 0:
-                                    raise ValueError('Batch size must be a divisible by microbatch size.')
-                                steps = len(value) // microbatch
-                                splitted[key] = np.array_split(value, steps)
+                        feed_dicts = self._split_feed_dict(feed_dict, microbatch)
 
-                        _feed_dicts = [{key: value[i] for key, value in splitted.items()}
-                                       for i in range(steps)]
-                        _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in _feed_dicts]
-
-                        if len(self.devices) == 1:
-                            # For every train step, zero out gradient accumulators,
-                            # then update them with gradients, computed on each of `feed_dicts`,
-                            # and finally apply accumulated values to weights
-                            outputs = []
-                            for ops in train_fetches:
-                                zero_op, update_op, apply_op = ops['zero_grads'], \
-                                                               ops['update_grads'], \
-                                                               ops['apply_grads']
-                                all_fetches = [update_op]
-                                if _fetches is not None:
-                                    all_fetches += [_fetches]
-
-                                self.session.run(zero_op, feed_dict=_feed_dicts[0])
-                                for i in range(steps):
-                                    _, _output = self.session.run(all_fetches, feed_dict=_feed_dicts[i])
-                                    outputs += [_output]
-                                self.session.run(apply_op, feed_dict=_feed_dicts[-1])
-
-                            outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
-                            output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
-                                      for i, name in enumerate(names)]
+                        if not self.multi_device:
+                            output = self._microbatch_train(train_fetches, _fetches, feed_dicts, names)
 
                         else:
-                            raise NotImplementedError('Using microbatching on multiple devices is yet to be supported')
+                            output = self._microbatch_multi_device_train(train_fetches, _fetches, feed_dicts, names)
 
                     output = output[0] if isinstance(fetches, str) else output
             else:
@@ -1141,6 +1083,107 @@ class TFModel(BaseModel):
             if use_lock:
                 self._train_lock.release()
             return self._fill_output(output, _fetches)
+
+    def _split_feed_dict(self, feed_dict, n=1):
+        splitted = {}
+        for key, value in feed_dict.items():
+            if hasattr(value, '__len__'):
+                if len(value) % n != 0:
+                    print(value.shape)
+                    raise ValueError('Batch size must be divisible by {}'.format(n))
+                steps = len(value) // n
+                splitted[key] = np.array_split(value, steps)
+
+        splitted_ = [{key: value[i] for key, value in splitted.items()}
+                     for i in range(steps)]
+        return splitted_
+
+    def _vanilla_train(self, train_fetches, fetches, feed_dict):
+        # Get list of train operations to run
+        all_fetches = [ops['minimize'] for ops in train_fetches]
+        if fetches is not None:
+            all_fetches += [fetches]
+
+        # Prepare feed_dict; run session
+        _fd = self._fill_feed_dict(feed_dict, is_training=True)
+        *_, output = self.session.run(all_fetches, feed_dict=_fd)
+
+        return output
+
+    def _multi_device_train(self, train_fetches, _fetches, feed_dict):
+        # Get list of train operations to run
+        all_fetches = [ops['multi_apply_grads'] for ops in train_fetches]
+        if _fetches is not None:
+            all_fetches += [_fetches]
+
+        # Prepare feed_dict; run session
+        _feed_dicts = self._split_feed_dict(feed_dict, self.multi_device)
+
+        _fd = {}
+        for part, device in zip(_feed_dicts, self.devices):
+            _fd = {**_fd, **self._fill_feed_dict(part, device)}
+        *_, output = self.session.run(all_fetches, feed_dict=_fd)
+
+        return output
+
+    def _microbatch_train(self, train_fetches, _fetches, feed_dicts, names):
+        _feed_dicts = [self._fill_feed_dict(part, is_training=True) for part in feed_dicts]
+        steps = len(feed_dicts)
+
+        outputs = []
+        for ops in train_fetches:
+            # Get train operations to run
+            zero_op, update_op, apply_op = ops['zero_grads'], \
+                                           ops['update_grads'], \
+                                           ops['apply_grads']
+            all_fetches = [update_op]
+            if _fetches is not None:
+                all_fetches += [_fetches]
+
+            self.session.run(zero_op, feed_dict=_feed_dicts[0])
+            for _fd in _feed_dicts:
+                _, _output = self.session.run(all_fetches, feed_dict=_fd)
+                outputs += [_output]
+            self.session.run(apply_op, feed_dict=_feed_dicts[-1])
+
+        outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
+        output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
+                  for i, name in enumerate(names)]
+        return output
+
+    def _microbatch_multi_device_train(self, train_fetches, _fetches, feed_dicts, names):
+        print('LEN FEED_DICTS INPUT', len(feed_dicts))
+        print('DEVICES NUM::', self.multi_device)
+        print('\n\n', list(feed_dicts[0].keys()))
+
+        outputs = []
+        for ops in train_fetches:
+            # Get train operations to run
+            zero_op, update_op, apply_op = ops['multi_zero_grads'], \
+                                           ops['multi_update_grads'], \
+                                           ops['multi_apply_grads']
+            all_fetches = [update_op]
+            if _fetches is not None:
+                all_fetches += [_fetches]
+
+            for i, feed_dict in enumerate(feed_dicts): # for each splitted on microbatch
+                _feed_dicts = self._split_feed_dict(feed_dict, self.multi_device)
+                _fd = {} # filled
+                for part, device in zip(_feed_dicts, self.devices):
+                    _fd = {**_fd, **self._fill_feed_dict(part, device)}
+
+                if i == 0:
+                    self.session.run(zero_op, feed_dict=_fd)
+
+                _, _output = self.session.run(all_fetches, feed_dict=_fd)
+                outputs += [_output]
+            self.session.run(apply_op, feed_dict=_fd)
+
+        outputs = [[item[i] for item in outputs] for i, _ in enumerate(names)]
+        output = [np.mean(outputs[i]) if 'loss' in name else outputs[i][-1]
+                  for i, name in enumerate(names)]
+        return output
+
 
     def predict(self, fetches=None, feed_dict=None, **kwargs):
         """ Get predictions on the data provided
