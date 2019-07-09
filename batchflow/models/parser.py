@@ -111,14 +111,15 @@ def get_unique_perturbations(tree):
         return []
     if 'R' in tree.name:
         return [tree.name]
-    else:
-        if len(tree) == 0:
-            return []
-        else:
-            result = []
-            for arg in tree._args:
-                result += get_unique_perturbations(arg)
-            return list(np.unique(result))
+
+    if len(tree) == 0:
+        return []
+
+    result = []
+    for arg in tree._args:
+        result += get_unique_perturbations(arg)
+
+    return list(np.unique(result))
 
 
 def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', 'asin', 'atan',

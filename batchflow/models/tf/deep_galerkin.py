@@ -248,7 +248,6 @@ class DeepGalerkin(TFModel):
 
             # retrieving variables
             n_dims = kwargs['n_dims']
-            n_perturbations = kwargs['n_perturbations']
 
             # separate perturbations and coordinates
             perturbations = coordinates[n_dims:]
