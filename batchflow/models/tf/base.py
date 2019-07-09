@@ -1084,18 +1084,18 @@ class TFModel(BaseModel):
                 self._train_lock.release()
             return self._fill_output(output, _fetches)
 
-    def _split_feed_dict(self, feed_dict, n=1):
+    def _split_feed_dict(self, feed_dict, num_parts=None, size=None):
         splitted = {}
         for key, value in feed_dict.items():
             if hasattr(value, '__len__'):
-                if len(value) % n != 0:
-                    print(value.shape)
-                    raise ValueError('Batch size must be divisible by {}'.format(n))
-                steps = len(value) // n
-                splitted[key] = np.array_split(value, steps)
+                if num_parts is None:
+                    num_parts = len(value) // size
+                if len(value) % num_parts != 0:
+                    raise ValueError('Batch size must be divisible by {}'.format(num_parts))
+                splitted[key] = np.array_split(value, num_parts)
 
         splitted_ = [{key: value[i] for key, value in splitted.items()}
-                     for i in range(steps)]
+                     for i in range(num_parts)]
         return splitted_
 
     def _vanilla_train(self, train_fetches, fetches, feed_dict):
@@ -1282,7 +1282,6 @@ class TFModel(BaseModel):
             return type(graph_item)({key: self._to_names(graph_item[key]) for key in graph_item.keys()})
         raise ValueError('Unrecognized type of value.')
 
-
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
         """ Load a TensorFlow model and most important attributes from files
 
@@ -1361,7 +1360,6 @@ class TFModel(BaseModel):
         if isinstance(name, (dict, Config)):
             return type(name)({key: self._to_graph_items(name[key]) for key in name.keys()})
         raise ValueError('Unrecognized type of value.')
-
 
     @classmethod
     def crop(cls, inputs, resize_to, data_format='channels_last'):
