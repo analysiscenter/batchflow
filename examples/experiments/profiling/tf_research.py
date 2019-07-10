@@ -56,8 +56,8 @@ def get_accuracy(iteration, experiment, pipeline):
     return metrics.evaluate('accuracy')
 
 research = (Research()
-    .add_pipeline(root=train_root, branch=train_template, variables='loss', name='train')
-    .add_pipeline(root=test_root, branch=test_template, name='test', run=True, execute='%100', import_from='train')
+    .add_pipeline(train_ppl, variables='loss', name='train')
+    .add_pipeline(test_ppl, branch=test_template, name='test', run=True, execute='%100', import_from='train')
     .add_function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
 )
 
