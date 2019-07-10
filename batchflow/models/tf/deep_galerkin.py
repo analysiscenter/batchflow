@@ -9,7 +9,7 @@ from tqdm import tqdm_notebook, tqdm
 
 from . import TFModel
 from .layers import conv_block
-from ..parser import SyntaxTreeNode, parse, get_unique_perturbations
+# from ..parser import SyntaxTreeNode, parse, get_unique_perturbations
 
 
 
@@ -184,6 +184,7 @@ class DeepGalerkin(TFModel):
                     # get syntax-tree and parse it to tf-callable
                     # tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs + n_perturbations)])
                     # parsed_.append(parse(tree))
+                    _ = n_dims_xs, n_perturbations
                     parsed_.append(cond)
                 else:
                     parsed_.append(lambda *args, value=cond: value)
@@ -244,7 +245,7 @@ class DeepGalerkin(TFModel):
         """ Get callable that computes differential form of a tf.Tensor
         with respect to coordinates.
         """
-        n_vars = pde.get('n_vars')
+        # n_vars = pde.get('n_vars')
         n_funs = pde.get('n_funs')
         # func_list = [SyntaxTreeNode('u' + str(i)) for i in range(n_funs)]
         # var_list = [SyntaxTreeNode('x' + str(i)) for i in range(n_funs, n_funs + n_vars)]

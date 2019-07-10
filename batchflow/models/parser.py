@@ -16,7 +16,7 @@ except ImportError:
 
 try:
     import networkx as nx
-    from networkx.drawing.nx_agraph import graphviz_layout
+    # from networkx.drawing.nx_agraph import graphviz_layout
 except ImportError:
     pass
 
