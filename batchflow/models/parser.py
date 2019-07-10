@@ -6,6 +6,8 @@ import inspect
 import numpy as np
 import tensorflow as tf
 
+from .tf.layers import conv_block
+
 try:
     from autograd import grad
     import autograd.numpy as autonp
@@ -77,7 +79,7 @@ class SyntaxTreeNode():
         return len(self._args)
 
     def __repr__(self):
-        return tuple((self.name, *self._args)).__repr__()
+        return tuple((self.name, *self._args, self._kwargs)).__repr__()
 
 
 def parse(tree):
@@ -92,7 +94,7 @@ def parse(tree):
     -------
     resulting callable.
     """
-    if isinstance(tree, (int, float)):
+    if isinstance(tree, (int, float, str)):
         # constants
         return lambda *args: tree
 
@@ -109,7 +111,7 @@ def get_unique_perturbations(tree):
     """ Get unique names of perturbation-variables (those containing 'R' in its name) from a parse-tree.
     """
     # pylint: disable=protected-access
-    if isinstance(tree, (int, float)):
+    if isinstance(tree, (int, float, str)):
         return []
     if 'R' in tree.name:
         return [tree.name]
@@ -120,6 +122,17 @@ def get_unique_perturbations(tree):
     for arg in tree._args:
         result += get_unique_perturbations(arg)
     return list(np.unique(result))
+
+
+MATH_TOKENS = ['sin', 'cos', 'tan',
+               'asin', 'acos', 'atan',
+               'sinh', 'cosh', 'tanh',
+               'asinh', 'acosh', 'atanh',
+               'exp', 'log', 'pow',
+               'sqrt', 'sign',
+               ]
+
+CUSTOM_TOKENS = ['D', 'R', 'V', 'C']
 
 
 def make_token(module='tf', name=None, namespaces=None, grad_func=None):
@@ -143,53 +156,102 @@ def make_token(module='tf', name=None, namespaces=None, grad_func=None):
     # parse namespaces-arg
     if module in ['tensorflow', 'tf']:
         namespaces = namespaces or [tf.math, tf, tf.nn]
-        grad_func = lambda f, x: tf.gradients(f, x)[0]
-    elif module == 'torch':
-        raise NotImplementedError('Torch is not implemented yet.')
+        d_func = lambda f, x: tf.gradients(f, x)[0]
+        v_func = tf_v
+        c_func = tf_c
     elif module in ['numpy', 'np']:
         namespaces = namespaces or [np, np.math]
         if name == 'D':
             namespaces = namespaces or [autonp, autonp.math]
-            grad_func = lambda f, x: grad(f)(x)
+            d_func = lambda f, x: grad(f)(x)
+    elif module == 'torch':
+        raise NotImplementedError('Torch is not implemented yet.')
 
-    # None of the passed modules supported
+    # None of the passed modules are supported
     if namespaces is None:
         raise ValueError('Module ' + module + ' is not supported: you should directly pass namespaces-arg!')
 
-    def _fetch_method(name, modules):
-        for module in modules:
-            if hasattr(module, name):
-                return getattr(module, name)
-        raise ValueError('Cannot find method ' + name + ' in ' + [str(module) for module in modules].join(', '))
+    # make method
+    letters = {'D': d_func,
+               'V': v_func,
+               'C': c_func,
+               'R': None}
 
-    # make the token-method
-    if name == 'D':
-        method = grad_func
-    elif name == 'R':
-        pass
+    if name in letters:
+        method = letters[name]
     else:
-        method = _fetch_method(name, namespaces)
+        method = fetch_method(name, namespaces)
 
     # make the token
-    if name == 'R':
-        def token(*args, name=name):
-            """ Token for PDE-perturbations.
-            """
+    def token(*args, **kwargs):
+        if name == 'R':
+            # Just pass all the arguments to the next Node
             return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
-    else:
-        token = lambda *args, method=method, name=name: SyntaxTreeNode(method, *args, name=name)
+        elif name in  ['V', 'C']:
+            # Use both args and kwargs for method call
+            return SyntaxTreeNode(lambda *args: method(*args, **kwargs), *args, name=name)
+        else:
+            # Use args for method call, pass kwargs to the next Node
+            return SyntaxTreeNode(method, *args, name=name, **kwargs)
     return token
 
+def fetch_method(name, modules):
+    for module in modules:
+        if hasattr(module, name):
+            return getattr(module, name)
+    raise ValueError('Cannot find method ' + name + ' in ' + ', '.join([module.__name__ for module in modules]))
 
-MATH_TOKENS = ['sin', 'cos', 'tan',
-               'asin', 'acos', 'atan',
-               'sinh', 'cosh', 'tanh',
-               'asinh', 'acosh', 'atanh',
-               'exp', 'log', 'pow',
-               'sqrt', 'sign',
-               ]
 
-CUSTOM_TOKENS = ['D', 'R']
+
+# Tf implementations of custom letters
+def tf_v(*args, prefix='addendums', **kwargs):
+    # Parsing arguments
+    *args, name = args
+    if not isinstance(name, str):
+        raise ValueError('`W` last positional argument should be its name. Instead got {}'.format(name))
+    if len(args) > 1:
+        raise ValueError('`W` can work only with one initial value. ')
+    x = args[0] if len(args) == 1 else 0.0
+
+    # Try to get already existing variable with the given name from current graph.
+    # If it does not exist, create one
+    try:
+        var = tf_check_tensor(prefix, name)
+        print('GOT BY TRY')
+        return var
+    except KeyError:
+        var_name = prefix + '/' + name
+        var = tf.Variable(x, name=var_name, dtype=tf.float32, trainable=True)
+        var = tf.identity(var, name=var_name + '/_output')
+        print('CREATED NEW')
+        return var
+
+def tf_c(*args, prefix='addendums', **kwargs):
+    *args, name = args
+    if not isinstance(name, str):
+        raise ValueError('`C` last positional argument should be its name. Instead got {}'.format(name))
+
+    defaults = dict(layout='faf',
+                    units=[15, 1],
+                    activation=tf.nn.tanh)
+    kwargs = {**defaults, **kwargs}
+
+    try:
+        block = tf_check_tensor(prefix, name)
+        print('GOT BY TRY BLOCK')
+        return block
+    except KeyError:
+        block_name = prefix + '/' + name
+        points = tf.concat(args, axis=-1, name=block_name + '/concat')
+        block = conv_block(points, name=block_name, **kwargs)
+        print('CREATED NEW BLOCK')
+        return block
+
+def tf_check_tensor(prefix, name):
+    tensor_name = tf.get_variable_scope().name + '/' + prefix + '/' + name + '/_output:0'
+    graph = tf.get_default_graph()
+    tensor = graph.get_tensor_by_name(tensor_name)
+    return tensor
 
 def add_tokens(var_dict=None, postfix='__', module='tf',
                names=None, namespaces=None, grad_func=None):

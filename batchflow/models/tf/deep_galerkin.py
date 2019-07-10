@@ -303,79 +303,79 @@ class DeepGalerkin(TFModel):
         2. Adding passed condition, so it is satisfied on boundaries
         Creates a tf.Tensor `solution` - the final output of the model.
         """
-        with tf.variable_scope(name):
-            if kwargs["bind_bc_ic"]:
-                # Retrieving variables
-                n_dims = kwargs['n_dims']
-                n_funs = kwargs['n_funs']
+        if kwargs["bind_bc_ic"]:
+            # Retrieving variables
+            n_dims = kwargs['n_dims']
+            n_funs = kwargs['n_funs']
 
-                init_cond = kwargs.get("initial_condition")
-                bound_cond = kwargs["boundary_condition"]
-                domain = kwargs["domain"]
-                time_mode = kwargs["time_multiplier"]
+            init_cond = kwargs.get("initial_condition")
+            bound_cond = kwargs["boundary_condition"]
+            domain = kwargs["domain"]
+            time_mode = kwargs["time_multiplier"]
 
-                # Separate variables and perturbations
-                coordinates = coordinates[:n_dims]
-                perturbations = coordinates[n_dims:]
+            # Separate variables and perturbations
+            coordinates = coordinates[:n_dims]
+            perturbations = coordinates[n_dims:]
 
-                lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
-                n_dims_xs = n_dims if init_cond is None else n_dims - 1
-                xs_spatial = coordinates[:n_dims_xs] if n_dims_xs > 0 else []
-                xs_spatial_ = tf.concat(xs_spatial, axis=1) if n_dims_xs > 0 else None
-                xs_spatial_es = xs_spatial + perturbations
+            lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
+            n_dims_xs = n_dims if init_cond is None else n_dims - 1
+            xs_spatial = coordinates[:n_dims_xs] if n_dims_xs > 0 else []
+            xs_spatial_ = tf.concat(xs_spatial, axis=1) if n_dims_xs > 0 else None
+            xs_spatial_es = xs_spatial + perturbations
 
-                # Multiplicator for binding boundary conditions
-                binding_multiplier = 1
-                if n_dims_xs > 0:
-                    lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
-                                          for bounds in (lower, upper)]
-                    binding_multiplier *= tf.reduce_prod((xs_spatial_ - lower_tf) * (upper_tf - xs_spatial_) /
-                                                         (upper_tf - lower_tf)**2,
-                                                         axis=1, name='xs_multiplier', keepdims=True)
+            # Multiplicator for binding boundary conditions
+            binding_multiplier = 1
+            if n_dims_xs > 0:
+                lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs], shape=(1, n_dims_xs), dtype=tf.float32)
+                                      for bounds in (lower, upper)]
+                binding_multiplier *= tf.reduce_prod((xs_spatial_ - lower_tf) * (upper_tf - xs_spatial_) /
+                                                     (upper_tf - lower_tf)**2,
+                                                     axis=1, name='ansatz/xs_multiplier', keepdims=True)
 
-                # Create ansatz for each head individually
-                ansatz = []
-                for i in range(n_funs):
-                    add_term = 0
-                    multiplier = 1
-                    add_bind = 0
+            # Create ansatz for each head individually
+            ansatz = []
+            for i in range(n_funs):
+                add_term = 0
+                multiplier = 1
+                add_bind = 0
 
-                    # Ignore boundary condition as it is automatically set by initial condition
-                    if init_cond is not None:
-                        shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
-                        time_mode = kwargs["time_multiplier"]
+                # Ignore boundary condition as it is automatically set by initial condition
+                if init_cond is not None:
+                    shifted = coordinates[-1] - tf.constant(lower[-1], shape=(1, 1), dtype=tf.float32)
+                    time_mode = kwargs["time_multiplier"]
 
-                        add_term += init_cond[i][0](*xs_spatial_es)
-                        multiplier *= cls._make_time_multiplier(time_mode,
-                                                                '0' if len(init_cond[i]) == 1 else '00')(shifted)
+                    add_term += init_cond[i][0](*xs_spatial_es)
+                    multiplier *= cls._make_time_multiplier(time_mode,
+                                                            '0' if len(init_cond[i]) == 1 else '00')(shifted)
 
-                        # multiple initial conditions
-                        if len(init_cond[i]) > 1:
-                            add_term += (init_cond[i][1](*xs_spatial_es)
-                                         * cls._make_time_multiplier(time_mode, '01')(shifted))
+                    # multiple initial conditions
+                    if len(init_cond[i]) > 1:
+                        add_term += (init_cond[i][1](*xs_spatial_es)
+                                     * cls._make_time_multiplier(time_mode, '01')(shifted))
 
-                    # If there are no initial conditions, boundary conditions are used (default value is 0)
-                    else:
-                        add_term += bound_cond[i][0](*xs_spatial_es)
+                # If there are no initial conditions, boundary conditions are used (default value is 0)
+                else:
+                    add_term += bound_cond[i][0](*xs_spatial_es)
 
-                    # Sometimes you need it
-                    if kwargs.get('do_that_strange_magic'):
-                        if n_dims_xs > 0:
-                            lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs],
-                                                              shape=(1, n_dims_xs), dtype=tf.float32)
-                                                  for bounds in (lower, upper)]
-                            binding_multiplier *= tf.reduce_prod(((xs_spatial_ - lower_tf)
-                                                                  * (upper_tf - xs_spatial_)) /
-                                                                 (upper_tf - lower_tf)**2,
-                                                                 axis=1, name='xs_multiplier', keepdims=True)
+                # Sometimes you need it
+                if kwargs.get('do_that_strange_magic'):
+                    if n_dims_xs > 0:
+                        lower_tf, upper_tf = [tf.constant(bounds[:n_dims_xs],
+                                                          shape=(1, n_dims_xs), dtype=tf.float32)
+                                              for bounds in (lower, upper)]
+                        binding_multiplier *= tf.reduce_prod(((xs_spatial_ - lower_tf)
+                                                              * (upper_tf - xs_spatial_)) /
+                                                             (upper_tf - lower_tf)**2,
+                                                             axis=1, name='ansatz/xs_multiplier', keepdims=True)
 
-                            add_bind = ((bound_cond[i][0](coordinates[-1]) - init_cond[i][0](lower_tf)
-                                         / (multiplier + 1e1))
-                                        * ((upper_tf - xs_spatial) / (upper_tf - lower_tf)))
-                            add_bind = tf.reshape(add_bind, shape=(-1, 1))
+                        add_bind = ((bound_cond[i][0](coordinates[-1]) - init_cond[i][0](lower_tf)
+                                     / (multiplier + 1e1))
+                                    * ((upper_tf - xs_spatial) / (upper_tf - lower_tf)))
+                        add_bind = tf.reshape(add_bind, shape=(-1, 1))
 
-                    ansatz.append(add_term + multiplier * (inputs[i]*binding_multiplier + add_bind))
-        return tf.concat(ansatz, axis=-1, name='ansatz_output')
+                result = add_term + multiplier * (inputs[i]*binding_multiplier + add_bind)
+                ansatz.append(result)
+        return tf.concat(ansatz, axis=-1, name='ansatz/_output')
 
 
     @classmethod
@@ -454,8 +454,9 @@ class DeepGalerkin(TFModel):
         fetches = 'solution' if fetches is None else fetches
         predicted = super().predict(fetches, feed_dict, **kwargs)
 
-        if len(predicted) == 1:
-            predicted = predicted[0]
+        if hasattr(predicted, '__len__'):
+            if len(predicted) == 1:
+                predicted = predicted[0]
         return predicted
 
 
