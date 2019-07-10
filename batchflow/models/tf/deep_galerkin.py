@@ -311,6 +311,7 @@ class DeepGalerkin(TFModel):
             n_dims = kwargs['n_dims']
             n_funs = kwargs['n_funs']
 
+
             init_cond = kwargs.get("initial_condition")
             bound_cond = kwargs["boundary_condition"]
             domain = kwargs["domain"]
