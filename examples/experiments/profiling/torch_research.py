@@ -2,7 +2,7 @@ import sys
 import tensorflow as tf
 
 sys.path.append("../../..")
-from batchflow import Pipeline, B, C, V
+from batchflow import Pipeline, B, C, V, D
 from batchflow.opensets import MNIST
 from batchflow.models.torch import VGG16
 from batchflow.research import Research, Option
@@ -12,7 +12,7 @@ BATCH_SIZE = 64
 model_config = {
     'inputs/images/shape': (1, 28, 28),
     'inputs/labels': {
-        'classes': 10,
+        'classes': D('num_classes'),
         'transform': 'ohe',
         'name': 'targets'
     },
@@ -39,7 +39,7 @@ test_template = (Pipeline()
     .init_variable('metrics', init_on_each_run=None)
     .import_model('conv', C('import_from'))
     .to_array(channels='first', dtype='float32')
-    .predict_model('conv', B('images'), targets=B('labels'),
+    .predict_model('conv', B('images'),
                    fetches='predictions',
                    save_to=V('predictions'))
     .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
