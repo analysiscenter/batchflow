@@ -295,7 +295,7 @@ class DeepGalerkin(TFModel):
         return heads
 
     @classmethod
-    def ansatz(cls, inputs, coordinates, name='ansatz', **kwargs):
+    def ansatz(cls, inputs, coordinates, **kwargs):
         """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
         of the model. Does so by:
         1. Applying one of preset multipliers to the network output

@@ -135,7 +135,7 @@ MATH_TOKENS = ['sin', 'cos', 'tan',
 CUSTOM_TOKENS = ['D', 'R', 'V', 'C']
 
 
-def make_token(module='tf', name=None, namespaces=None, grad_func=None):
+def make_token(module='tf', name=None, namespaces=None):
     """ Make a mathematical tokens.
 
     Parameters
@@ -175,27 +175,24 @@ def make_token(module='tf', name=None, namespaces=None, grad_func=None):
     letters = {'D': d_func,
                'V': v_func,
                'C': c_func,
-               'R': None}
+               'R': lambda x: x}
 
-    if name in letters:
-        method = letters[name]
-    else:
-        method = fetch_method(name, namespaces)
+    method = letters.get(name) or fetch_method(name, namespaces)
 
     # make the token
     def token(*args, **kwargs):
         if name == 'R':
             # Just pass all the arguments to the next Node
             return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
-        elif name in  ['V', 'C']:
+        if name in  ['V', 'C']:
             # Use both args and kwargs for method call
             return SyntaxTreeNode(lambda *args: method(*args, **kwargs), *args, name=name)
-        else:
-            # Use args for method call, pass kwargs to the next Node
-            return SyntaxTreeNode(method, *args, name=name, **kwargs)
+        # Use args for method call, pass kwargs to the next Node
+        return SyntaxTreeNode(method, *args, name=name, **kwargs)
     return token
 
 def fetch_method(name, modules):
+    """ Get function from list of modules. """
     for module in modules:
         if hasattr(module, name):
             return getattr(module, name)
@@ -205,7 +202,9 @@ def fetch_method(name, modules):
 
 # Tf implementations of custom letters
 def tf_v(*args, prefix='addendums', **kwargs):
+    """ Tensorflow implementation of `V` letter: adjustable variation of the coefficient. """
     # Parsing arguments
+    _ = kwargs
     *args, name = args
     if not isinstance(name, str):
         raise ValueError('`W` last positional argument should be its name. Instead got {}'.format(name))
@@ -217,16 +216,15 @@ def tf_v(*args, prefix='addendums', **kwargs):
     # If it does not exist, create one
     try:
         var = tf_check_tensor(prefix, name)
-        print('GOT BY TRY')
         return var
     except KeyError:
         var_name = prefix + '/' + name
         var = tf.Variable(x, name=var_name, dtype=tf.float32, trainable=True)
         var = tf.identity(var, name=var_name + '/_output')
-        print('CREATED NEW')
         return var
 
 def tf_c(*args, prefix='addendums', **kwargs):
+    """ Tensorflow implementation of `C` letter: small neural network inside equation. """
     *args, name = args
     if not isinstance(name, str):
         raise ValueError('`C` last positional argument should be its name. Instead got {}'.format(name))
@@ -238,23 +236,22 @@ def tf_c(*args, prefix='addendums', **kwargs):
 
     try:
         block = tf_check_tensor(prefix, name)
-        print('GOT BY TRY BLOCK')
         return block
     except KeyError:
         block_name = prefix + '/' + name
         points = tf.concat(args, axis=-1, name=block_name + '/concat')
         block = conv_block(points, name=block_name, **kwargs)
-        print('CREATED NEW BLOCK')
         return block
 
 def tf_check_tensor(prefix, name):
+    """ Simple wrapper around `get_tensor_by_name`. """
     tensor_name = tf.get_variable_scope().name + '/' + prefix + '/' + name + '/_output:0'
     graph = tf.get_default_graph()
     tensor = graph.get_tensor_by_name(tensor_name)
     return tensor
 
 def add_tokens(var_dict=None, postfix='__', module='tf',
-               names=None, namespaces=None, grad_func=None):
+               names=None, namespaces=None):
     """ Add tokens to passed namespace.
 
     Parameters
@@ -286,8 +283,7 @@ def add_tokens(var_dict=None, postfix='__', module='tf',
             del frame
 
     for name in names:
-        token = make_token(module=module, name=name,
-                           namespaces=namespaces, grad_func=grad_func)
+        token = make_token(module=module, name=name, namespaces=namespaces)
         if name not in var_dict:
             name_ = name
         else:
