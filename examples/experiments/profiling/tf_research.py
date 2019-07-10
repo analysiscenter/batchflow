@@ -49,16 +49,10 @@ test_template = (Pipeline()
 train_ppl = train_root + train_template
 test_ppl = test_root + test_template
 
-def get_accuracy(iteration, experiment, pipeline):
-    _ = iteration
-    pipeline = experiment[pipeline].pipeline
-    metrics = pipeline.get_variable('metrics')
-    return metrics.evaluate('accuracy')
-
 research = (Research()
     .add_pipeline(train_ppl, variables='loss', name='train')
     .add_pipeline(test_ppl, name='test', run=True, execute='%100', import_from='train')
-    .add_function(get_accuracy, returns='accuracy', name='test_accuracy', execute='%100', pipeline='test')
+    .get_metrics('test', 'metrics', 'accuracy', returns='accuracy', execute='%100')    
 )
 
 n_workers = 1 if len(sys.argv) <= 1 else int(sys.argv[1])
