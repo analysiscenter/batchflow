@@ -1,5 +1,5 @@
-""" Contains node-class of a syntax tree, builder of mathematical tokens (`sin`, `cos` and others)
-and tree-parser.
+""" Contains node-class of a syntax tree, builder of mathematical tokens (`sin`, `cos` and others),
+tree-parser and helper-functions for plotting of syntax-trees.
 """
 import numpy as np
 import tensorflow as tf
@@ -7,9 +7,21 @@ import tensorflow as tf
 try:
     from autograd import grad
     import autograd.numpy as autonp
-
 except ImportError:
     pass
+
+try:
+    import networkx as nx
+    from networkx.drawing.nx_agraph import graphviz_layout
+except ImportError:
+    pass
+
+LABELS_MAPPING = {
+    '__sub__': '-', '__rsub__': '-',
+    '__mul__': '*', '__rmul__': '*',
+    '__div__': '/', '__rdiv__': '/',
+    '__add__': '+', '__radd__': '+'
+}
 
 
 def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__', '__sub__', '__rsub__',
@@ -185,3 +197,66 @@ def make_tokens(module='tf', names=('sin', 'cos', 'exp', 'log', 'tan', 'acos', '
         tokens.append(token)
 
     return tokens
+
+
+def make_unique_node(graph, name):
+    """ Add as much postfix-'_' to `name` as necessary to make unique name for new node in `graph`.
+
+    Parameters
+    ----------
+    graph : nx.Graph
+        graph, for which the node is created.
+    name : str
+        name of new node.
+
+    Returns
+    -------
+    Resulting name. Composed from `name` and possibly several '_'-characters.
+    """
+    if name not in graph:
+        return name
+    ctr = 1
+    while True:
+        name_ = name + '_' * ctr
+        if name_ not in graph:
+            return name_
+        ctr += 1
+
+def _build_graph(tree, graph, parent_name, labels):
+    """ Recursive graph-builder. Util-function.
+    """
+    if isinstance(tree, (float, int)):
+        return
+    if len(tree) == 0:
+        return
+
+    for child in tree._args:
+        if isinstance(child, (float, int)):
+            child_name = make_unique_node(graph, str(np.round(child, 2)))
+            labels.update({child_name: str(np.round(child, 2))})
+        else:
+            child_name = make_unique_node(graph, child.name)
+            labels.update({child_name: LABELS_MAPPING.get(child.name, child.name)})
+
+        graph.add_edge(parent_name, child_name)
+        _build_graph(child, graph, child_name, labels)
+
+def build_graph(tree):
+    """ Build graph from a syntax tree.
+    """
+    # boundary case: trees with no children
+    graph = nx.DiGraph()
+    if isinstance(tree, (float, int)):
+        graph.add_node(str(np.round(tree, 2)))
+        return graph
+
+    parent_name = LABELS_MAPPING.get(tree.name, tree.name)
+    graph.add_node(parent_name)
+    if len(tree) == 0:
+        return graph
+
+    # process generic trees
+    labels = {parent_name: parent_name}
+    _build_graph(tree, graph, parent_name, labels)
+
+    return graph, labels
