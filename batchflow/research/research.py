@@ -14,6 +14,7 @@ from .distributor import Distributor
 from .workers import PipelineWorker
 from .grid import Grid, Option
 from .job import Job
+from .utils import
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
@@ -68,7 +69,7 @@ class Research:
 
             If positive int, pipeline will be excuted for that iteration
 
-            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
+            If str, must be `'%{step}'` where step is int and function will be executed each `step` iterations.
 
             If list, must be list of int or str descibed above
         dump : int, str or list of int or str
@@ -100,6 +101,42 @@ class Research:
         unit.add_pipeline(root, name, branch, dataset, part, variables, execute, dump, run, logging, **kwargs)
         self.executables[name] = unit
         return self
+
+    def get_metrics(self, pipeline, metrics_var, metrics_name,
+                    returns=None, execute='%1', dump=-1,
+                    logging=False, *args, **kwargs):
+        """ Evaluate metrics.
+
+        Parameters
+        ----------
+        pipeline : str
+            pipeline name
+        metrics_var : str
+            pipeline variable which accumulate metrics
+        metrics_name : str or list of str
+            metrics to evaluate
+        returns : str, list of str or None
+            names to save metrics into results
+            if None, `function` will be executed without any saving results and dumping
+        execute : int, str or list of int or str
+            If -1, metrics will be evaluated just at last iteration (if `iteration + 1 == n_iters`
+            or `StopIteration` was raised)
+
+            If positive int, metrics will be evaluated for that iteration
+
+            If str, must be `'%{step}'` where step is int and metrics will be evaluated each `step` iterations.
+
+            If list, must be list of int or str descibed above
+        dump : int, str or list of int or str
+            iteration when results will be dumped and cleared. Similar to execute
+        logging : bool
+            include execution information to log file or not
+        """
+        name = pipeline + '_metrics'
+        self.add_function(get_metrics, returns, name, execute, dump,
+                          False, logging, pipeline=pipeline,
+                          metrics_var=metrics_var, metrics_name=metrics_name)
+        return self 
 
     def add_function(self, function, returns=None, name=None, execute='%1', dump=-1,
                      on_root=False, logging=False, *args, **kwargs):
@@ -401,6 +438,7 @@ class Research:
             res = dill.load(file)
             res.loaded = True
             return res
+
 
 class Executable:
     """ Function or pipeline

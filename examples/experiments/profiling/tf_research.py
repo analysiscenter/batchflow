@@ -2,7 +2,7 @@ import sys
 import tensorflow as tf
 
 sys.path.append("../../..")
-from batchflow import Pipeline, B, C, V
+from batchflow import Pipeline, B, C, V, D
 from batchflow.opensets import MNIST
 from batchflow.models.tf import VGG16
 from batchflow.research import Research
@@ -10,13 +10,8 @@ from batchflow.research import Research
 BATCH_SIZE = 64
 
 model_config = {
-    'session/config': tf.ConfigProto(allow_soft_placement=True),
     'inputs/images/shape': (28, 28, 1),
-    'inputs/labels': {
-        'classes': 10,
-        'transform': 'ohe',
-        'name': 'targets'
-    },
+    'inputs/labels/classes': D('num_classes'),
     'initial_block/inputs': 'images',
     'body/block/layout': 'cna',
     'device': C('device') # it's technical parameter for TFModel
@@ -43,7 +38,7 @@ test_template = (Pipeline()
     .import_model('conv', C('import_from'))
     .to_array()
     .predict_model('conv',
-                    images=B('images'), labels=B('labels'),
+                    images=B('images'),
                     fetches='predictions',
                     save_to=V('predictions'))
     .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
