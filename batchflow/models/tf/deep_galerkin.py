@@ -120,9 +120,10 @@ class DeepGalerkin(TFModel):
 
         # Make sure that PDE dimensionality is consistent
         n_args = len(signature(form[0]).parameters)
-        tree = form[0](*[SyntaxTreeNode('_' + str(i)) for i in range(n_args)])
-        unique_perturbations = get_unique_perturbations(tree)
-        n_perturbations = len(unique_perturbations)
+        # tree = form[0](*[SyntaxTreeNode('_' + str(i)) for i in range(n_args)])
+        # unique_perturbations = get_unique_perturbations(tree)
+        # n_perturbations = len(unique_perturbations)
+        n_perturbations = 0
         assert n_dims + n_perturbations + n_funs == n_args
         pde.update({'n_dims': n_dims,
                     'n_funs': n_funs,
@@ -181,8 +182,9 @@ class DeepGalerkin(TFModel):
             for cond in list_cond[i]:
                 if callable(cond):
                     # get syntax-tree and parse it to tf-callable
-                    tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs + n_perturbations)])
-                    parsed_.append(parse(tree))
+                    # tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs + n_perturbations)])
+                    # parsed_.append(parse(tree))
+                    parsed_.append(cond)
                 else:
                     parsed_.append(lambda *args, value=cond: value)
             parsed.append(parsed_)
@@ -244,8 +246,8 @@ class DeepGalerkin(TFModel):
         """
         n_vars = pde.get('n_vars')
         n_funs = pde.get('n_funs')
-        func_list = [SyntaxTreeNode('u' + str(i)) for i in range(n_funs)]
-        var_list = [SyntaxTreeNode('x' + str(i)) for i in range(n_funs, n_funs + n_vars)]
+        # func_list = [SyntaxTreeNode('u' + str(i)) for i in range(n_funs)]
+        # var_list = [SyntaxTreeNode('x' + str(i)) for i in range(n_funs, n_funs + n_vars)]
 
         form = form if isinstance(form, (tuple, list)) else [form]
         # `_callable` should be a function of `net`-tensor only
@@ -255,9 +257,10 @@ class DeepGalerkin(TFModel):
             results = []
             for eqn in form:
                 # get tree of lhs-differential operator and parse it to tf-callable
-                tree = eqn(*func_list, *var_list)
-                parsed = parse(tree)
-                parsed = parsed(*net_list, *coordinates)
+                # tree = eqn(*func_list, *var_list)
+                # parsed = parse(tree)
+                # parsed = parsed(*net_list, *coordinates)
+                parsed = eqn(*net_list, *coordinates)
 
                 results.append(parsed)
             results = tf.reshape(results, shape=(-1, len(form)))

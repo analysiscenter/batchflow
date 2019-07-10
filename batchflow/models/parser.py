@@ -180,16 +180,16 @@ def make_token(module='tf', name=None, namespaces=None):
     method = letters.get(name) or fetch_method(name, namespaces)
 
     # make the token
-    def token(*args, **kwargs):
-        if name == 'R':
-            # Just pass all the arguments to the next Node
-            return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
-        if name in  ['V', 'C']:
-            # Use both args and kwargs for method call
-            return SyntaxTreeNode(lambda *args: method(*args, **kwargs), *args, name=name)
-        # Use args for method call, pass kwargs to the next Node
-        return SyntaxTreeNode(method, *args, name=name, **kwargs)
-    return token
+    # def token(*args, **kwargs):
+    #     if name == 'R':
+    #         # Just pass all the arguments to the next Node
+    #         return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
+    #     if name in  ['V', 'C']:
+    #         # Use both args and kwargs for method call
+    #         return SyntaxTreeNode(lambda *args: method(*args, **kwargs), *args, name=name)
+    #     # Use args for method call, pass kwargs to the next Node
+    #     return SyntaxTreeNode(method, *args, name=name, **kwargs)
+    return method
 
 def fetch_method(name, modules):
     """ Get function from list of modules. """
