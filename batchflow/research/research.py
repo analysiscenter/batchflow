@@ -14,7 +14,7 @@ from .distributor import Distributor
 from .workers import PipelineWorker
 from .grid import Grid, Option
 from .job import Job
-from .utils import
+from .utils import get_metrics
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
@@ -103,8 +103,7 @@ class Research:
         return self
 
     def get_metrics(self, pipeline, metrics_var, metrics_name,
-                    returns=None, execute='%1', dump=-1,
-                    logging=False, *args, **kwargs):
+                    returns=None, execute='%1', dump=-1, logging=False):
         """ Evaluate metrics.
 
         Parameters
@@ -136,7 +135,7 @@ class Research:
         self.add_function(get_metrics, returns, name, execute, dump,
                           False, logging, pipeline=pipeline,
                           metrics_var=metrics_var, metrics_name=metrics_name)
-        return self 
+        return self
 
     def add_function(self, function, returns=None, name=None, execute='%1', dump=-1,
                      on_root=False, logging=False, *args, **kwargs):

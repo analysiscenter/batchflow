@@ -1,5 +1,6 @@
+""" Test research with tf model """
+
 import sys
-import tensorflow as tf
 
 sys.path.append("../../..")
 from batchflow import Pipeline, B, C, V, D
@@ -49,6 +50,7 @@ train_ppl = train_root + train_template
 test_ppl = test_root + test_template
 
 def get_accuracy(iteration, experiment, pipeline):
+    _ = iteration
     pipeline = experiment[pipeline].pipeline
     metrics = pipeline.get_variable('metrics')
     return metrics.evaluate('accuracy')

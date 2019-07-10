@@ -1,11 +1,12 @@
+""" Test research with torch model """
+
 import sys
-import tensorflow as tf
 
 sys.path.append("../../..")
 from batchflow import Pipeline, B, C, V, D
 from batchflow.opensets import MNIST
 from batchflow.models.torch import VGG16
-from batchflow.research import Research, Option
+from batchflow.research import Research
 
 BATCH_SIZE = 64
 
@@ -50,6 +51,7 @@ train_ppl = train_root + train_template
 test_ppl = test_root + test_template
 
 def get_accuracy(iteration, experiment, pipeline):
+    _ = iteration
     pipeline = experiment[pipeline].pipeline
     metrics = pipeline.get_variable('metrics')
     return metrics.evaluate('accuracy')
