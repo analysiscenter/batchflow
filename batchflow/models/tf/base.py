@@ -1941,7 +1941,7 @@ class TFModel(BaseModel):
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
             in_filters = cls.num_channels(inputs, data_format)
-            if isinstance (kwargs.get('activation'), list) and len(kwargs.get('activation')) == 2:
+            if isinstance(kwargs.get('activation'), list) and len(kwargs.get('activation')) == 2:
                 activation = kwargs.pop('activation')
             else:
                 activation = [tf.nn.relu, tf.nn.sigmoid]
