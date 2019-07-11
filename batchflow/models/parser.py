@@ -16,15 +16,15 @@ except ImportError:
 
 try:
     import networkx as nx
-    # from networkx.drawing.nx_agraph import graphviz_layout
 except ImportError:
     pass
 
 LABELS_MAPPING = {
     '__sub__': '-', '__rsub__': '-',
     '__mul__': '*', '__rmul__': '*',
-    '__div__': '/', '__rdiv__': '/',
-    '__add__': '+', '__radd__': '+'
+    '__div__': '/', '__rdiv__': '/', '__truediv__': '/', '__rtruediv__': '/',
+    '__add__': '+', '__radd__': '+',
+    '__pow__': '^', '__rpow__': '^'
 }
 
 
@@ -46,7 +46,7 @@ def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__
     """
     for magic_name in operators:
         def magic(self, other, magic_name=magic_name):
-            return cls(lambda x, y: getattr(x, magic_name)(y), self, other, name=magic_name)
+            return cls(LABELS_MAPPING.get(magic_name), self, other)
 
         setattr(cls, magic_name, magic)
     return cls
@@ -64,28 +64,9 @@ class SyntaxTreeNode():
         args[0] : method representing the node of parse tree.
         args[1:] : arguments of the method.
     """
-    def __init__(self, *args, name=None, **kwargs):
-        arg = args[0]
-        if isinstance(arg, str):
-            if len(arg) == 1:
-                nums_of_args = {'u': 0, 'x': 1, 'y': 2, 'z': 3, 't': -1}
-                if arg in nums_of_args:
-                    self.method = lambda *args: args[nums_of_args[arg]]
-                else:
-                    raise ValueError("Cannot parse variable-number from " + arg)
-            else:
-                try:
-                    var_num = int(arg[1:])
-                    self.method = lambda *args: args[var_num]
-                except ValueError:
-                    raise ValueError("Cannot parse variable-number from " + arg)
-            self.name = arg
-        elif callable(arg):
-            self.method = arg
-            self.name = name
-        else:
-            raise ValueError("Cannot create a NodeTree-instance from ", *args)
-        self._args = args[1:]
+    def __init__(self, name, *args, **kwargs):
+        self.name = name
+        self._args = args
         self._kwargs = kwargs
 
     def __len__(self):
@@ -93,31 +74,6 @@ class SyntaxTreeNode():
 
     def __repr__(self):
         return tuple((self.name, *self._args, self._kwargs)).__repr__()
-
-
-def parse(tree):
-    """ Make the method (callable) represented by a parse-tree.
-
-    Parameters
-    ----------
-    tree : SyntaxTreeNode
-        instance of node-class representing the tree.
-
-    Returns
-    -------
-    resulting callable.
-    """
-    if isinstance(tree, (int, float, str)):
-        # constants
-        return lambda *args: tree
-
-    def result(*args):
-        # pylint: disable=protected-access
-        if len(tree) > 0:
-            all_args = [parse(operand)(*args) for operand in tree._args]
-            return tree.method(*all_args)
-        return tree.method(*args)
-    return result
 
 
 def get_unique_perturbations(tree):
@@ -191,18 +147,9 @@ def make_token(module='tf', name=None, namespaces=None):
                'C': c_func,
                'R': lambda x: x}
 
-    method = letters.get(name) or fetch_method(name, namespaces)
-
-    # make the token
-    # def token(*args, **kwargs):
-    #     if name == 'R':
-    #         # Just pass all the arguments to the next Node
-    #         return SyntaxTreeNode(args[0].method, *args[0]._args, name='R_' + args[0].name, **args[0]._kwargs)
-    #     if name in  ['V', 'C']:
-    #         # Use both args and kwargs for method call
-    #         return SyntaxTreeNode(lambda *args: method(*args, **kwargs), *args, name=name)
-    #     # Use args for method call, pass kwargs to the next Node
-    #     return SyntaxTreeNode(method, *args, name=name, **kwargs)
+    method_ = letters.get(name) or fetch_method(name, namespaces)
+    method = (lambda *args, **kwargs: SyntaxTreeNode(name, *args, **kwargs)
+              if isinstance(args[0], SyntaxTreeNode) else method_(*args, **kwargs))
     return method
 
 
@@ -214,8 +161,7 @@ def fetch_method(name, modules):
     raise ValueError('Cannot find method ' + name + ' in ' + ', '.join([module.__name__ for module in modules]))
 
 
-def add_tokens(var_dict=None, postfix='__', module='tf',
-               names=None, namespaces=None):
+def add_tokens(var_dict=None, postfix='__', module='tf', names=None, namespaces=None):
     """ Add tokens to passed namespace.
 
     Parameters

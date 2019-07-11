@@ -104,6 +104,7 @@ class DeepGalerkin(TFModel):
         n_dims = pde.get('n_dims')
         n_funs = pde.get('n_funs', 1)
         n_eqns = pde.get('n_eqns', n_funs)
+        n_perturbations = pde.get('n_perturbations', 0)
 
         # Make sure that `form` describes necessary number of equations
         form = pde.get('form')
@@ -120,10 +121,6 @@ class DeepGalerkin(TFModel):
 
         # Make sure that PDE dimensionality is consistent
         n_args = len(signature(form[0]).parameters)
-        # tree = form[0](*[SyntaxTreeNode('_' + str(i)) for i in range(n_args)])
-        # unique_perturbations = get_unique_perturbations(tree)
-        # n_perturbations = len(unique_perturbations)
-        n_perturbations = 0
         assert n_dims + n_perturbations + n_funs == n_args
         pde.update({'n_dims': n_dims,
                     'n_funs': n_funs,
@@ -144,16 +141,14 @@ class DeepGalerkin(TFModel):
         if init_conds is not None:
             n_dims_xs = n_dims - 1
 
-            init_conds = self._make_nested_list(init_conds, n_dims_xs, n_funs,
-                                                n_perturbations, 'initial')
+            init_conds = self._make_nested_list(init_conds, n_funs, 'initial')
             self.config.update({'pde/initial_condition': init_conds})
 
         # make sure that boundary condition is callable
         bound_cond = pde.get('boundary_condition', [0.0]*n_funs)
         n_dims_xs = n_dims if init_conds is None else n_dims - 1
 
-        bound_cond = self._make_nested_list(bound_cond, n_dims_xs, n_funs,
-                                            n_perturbations, 'boundary')
+        bound_cond = self._make_nested_list(bound_cond, n_funs, 'boundary')
         self.config.update({'pde/boundary_condition': bound_cond})
 
         # 'common' is updated with PDE-problem
@@ -164,7 +159,7 @@ class DeepGalerkin(TFModel):
         config['ansatz/coordinates'] = self.get_from_attr('coordinates')
         return config
 
-    def _make_nested_list(self, list_cond, n_dims_xs, n_funs, n_perturbations, name=None):
+    def _make_nested_list(self, list_cond, n_funs, name=None):
         if n_funs == 1:
             list_cond = list_cond if isinstance(list_cond, (tuple, list)) else [list_cond]
             list_cond = [list_cond]
@@ -176,20 +171,16 @@ class DeepGalerkin(TFModel):
                 raise ValueError('Multiple functions must have multiple {} conditions.'.format(name))
         assert len(list_cond) == n_funs
 
-        parsed = []
         for i in range(n_funs):
-            parsed_ = []
+            results = []
+            result = []
             for cond in list_cond[i]:
                 if callable(cond):
-                    # get syntax-tree and parse it to tf-callable
-                    # tree = cond(*[SyntaxTreeNode('x' + str(i)) for i in range(n_dims_xs + n_perturbations)])
-                    # parsed_.append(parse(tree))
-                    _ = n_dims_xs, n_perturbations
-                    parsed_.append(cond)
+                    result.append(cond)
                 else:
-                    parsed_.append(lambda *args, value=cond: value)
-            parsed.append(parsed_)
-        return parsed
+                    result.append(lambda *args, value=cond: value)
+            results.append(result)
+        return results
 
     def _make_ops(self, config):
         """ Stores necessary operations in 'config'. """
@@ -245,31 +236,23 @@ class DeepGalerkin(TFModel):
         """ Get callable that computes differential form of a tf.Tensor
         with respect to coordinates.
         """
-        # n_vars = pde.get('n_vars')
         n_funs = pde.get('n_funs')
-        # func_list = [SyntaxTreeNode('u' + str(i)) for i in range(n_funs)]
-        # var_list = [SyntaxTreeNode('x' + str(i)) for i in range(n_funs, n_funs + n_vars)]
-
         form = form if isinstance(form, (tuple, list)) else [form]
+
         # `_callable` should be a function of `net`-tensor only
         def _callable(net):
             net_list = tf.split(net, n_funs, axis=-1, name='net-splitted')
 
             results = []
             for eqn in form:
-                # get tree of lhs-differential operator and parse it to tf-callable
-                # tree = eqn(*func_list, *var_list)
-                # parsed = parse(tree)
-                # parsed = parsed(*net_list, *coordinates)
-                parsed = eqn(*net_list, *coordinates)
+                result = eqn(*net_list, *coordinates)
+                results.append(result)
 
-                results.append(parsed)
             results = tf.reshape(results, shape=(-1, len(form)))
             return results
 
         setattr(_callable, '__name__', name)
         return _callable
-
 
     def _build(self, config=None):
         """ Overloads :meth:`.TFModel._build`: adds ansatz-block for binding
@@ -285,6 +268,9 @@ class DeepGalerkin(TFModel):
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
+        """ Head (final) block of the neural network-model. Makes one output branch for each
+        equation in PDE-system.
+        """
         n_funs = kwargs.get('n_funs')
         kwargs = cls.fill_params('head', **kwargs)
 
@@ -303,8 +289,8 @@ class DeepGalerkin(TFModel):
         """ Binds `initial_condition` or `boundary_condition`, if these are supplied in the config
         of the model. Does so by:
         1. Applying one of preset multipliers to the network output
-           (effectively zeroing it out on boundaries)
-        2. Adding passed condition, so it is satisfied on boundaries
+           (effectively zeroing it out on boundaries and $t=t_0$)
+        2. Adding passed condition, so it is satisfied on boundaries and/or at $t=t_0$.
         Creates a tf.Tensor `solution` - the final output of the model.
         """
         if kwargs["bind_bc_ic"]:
@@ -312,15 +298,14 @@ class DeepGalerkin(TFModel):
             n_dims = kwargs['n_dims']
             n_funs = kwargs['n_funs']
 
-
             init_cond = kwargs.get("initial_condition")
             bound_cond = kwargs["boundary_condition"]
             domain = kwargs["domain"]
             time_mode = kwargs["time_multiplier"]
 
             # Separate variables and perturbations
-            coordinates = coordinates[:n_dims]
             perturbations = coordinates[n_dims:]
+            coordinates = coordinates[:n_dims]
 
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
             n_dims_xs = n_dims if init_cond is None else n_dims - 1
@@ -337,8 +322,8 @@ class DeepGalerkin(TFModel):
                                                      (upper_tf - lower_tf)**2,
                                                      axis=1, name='ansatz/xs_multiplier', keepdims=True)
 
-            # Create ansatz for each head individually
-            ansatz = []
+            # Apply ansatz to each branch of head to obtain solution-approximation for each pde
+            solution = []
             for i in range(n_funs):
                 add_term = 0
                 multiplier = 1
@@ -379,9 +364,8 @@ class DeepGalerkin(TFModel):
                         add_bind = tf.reshape(add_bind, shape=(-1, 1))
 
                 result = add_term + multiplier * (inputs[i]*binding_multiplier + add_bind)
-                ansatz.append(result)
-        return tf.concat(ansatz, axis=-1, name='ansatz/_output')
-
+                solution.append(result)
+        return tf.concat(solution, axis=-1, name='ansatz/_output')
 
     @classmethod
     def _make_time_multiplier(cls, family, order=None):
