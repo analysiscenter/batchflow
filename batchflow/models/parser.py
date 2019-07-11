@@ -214,6 +214,48 @@ def fetch_method(name, modules):
     raise ValueError('Cannot find method ' + name + ' in ' + ', '.join([module.__name__ for module in modules]))
 
 
+def add_tokens(var_dict=None, postfix='__', module='tf',
+               names=None, namespaces=None):
+    """ Add tokens to passed namespace.
+
+    Parameters
+    ----------
+    var_dict : dict
+        Namespace to add names to. Default values is the namespace from which the function is called.
+    postfix : str
+        If the passed namespace already contains item with the same name, then
+        postfix is appended to the name to avoid naming collision.
+    module : str
+        Can be 'np' (stands for `numpy`) or 'tf'(stands for `tensorflow`). Either choice binds tokens to
+        correspondingly named operations from a module. For instance, token 'sin' for module 'np' stands for
+        operation `np.sin`.
+    names : str
+        Names of function to be tokenized from the given module.
+
+    Notes
+    -----
+    This function is also called when anything from this module is imported inside
+    executable code (e.g. code where __name__ = __main__).
+    """
+    names = names or (MATH_TOKENS + CUSTOM_TOKENS)
+
+    if not var_dict:
+        frame = inspect.currentframe()
+        try:
+            var_dict = frame.f_back.f_locals
+        finally:
+            del frame
+
+    for name in names:
+        token = make_token(module=module, name=name, namespaces=namespaces)
+        if name not in var_dict:
+            name_ = name
+        else:
+            name_ = name + postfix
+            msg = 'Name `{}` already present in current namespace. Added as {}'.format(name, name+postfix)
+            print(msg)
+        var_dict[name_] = token
+
 
 
 # Tf implementations of custom letters
@@ -266,48 +308,6 @@ def tf_check_tensor(prefix, name):
     tensor = graph.get_tensor_by_name(tensor_name)
     return tensor
 
-def add_tokens(var_dict=None, postfix='__', module='tf',
-               names=None, namespaces=None):
-    """ Add tokens to passed namespace.
-
-    Parameters
-    ----------
-    var_dict : dict
-        Namespace to add names to. Default values is the namespace from which the function is called.
-    postfix : str
-        If the passed namespace already contains item with the same name, then
-        postfix is appended to the name to avoid naming collision.
-    module : str
-        Can be 'np' (stands for `numpy`) or 'tf'(stands for `tensorflow`). Either choice binds tokens to
-        correspondingly named operations from a module. For instance, token 'sin' for module 'np' stands for
-        operation `np.sin`.
-    names : str
-        Names of function to be tokenized from the given module.
-
-    Notes
-    -----
-    This function is also called when anything from this module is imported inside
-    executable code (e.g. code where __name__ = __main__).
-    """
-    names = names or (MATH_TOKENS + CUSTOM_TOKENS)
-
-    if not var_dict:
-        frame = inspect.currentframe()
-        try:
-            var_dict = frame.f_back.f_locals
-        finally:
-            del frame
-
-    for name in names:
-        token = make_token(module=module, name=name, namespaces=namespaces)
-        if name not in var_dict:
-            name_ = name
-        else:
-            name_ = name + postfix
-            msg = 'Name `{}` already present in current namespace. Added as {}'.format(name, name+postfix)
-            print(msg)
-        var_dict[name_] = token
-
 
 def make_unique_node(graph, name):
     """ Add as much postfix-'_' to `name` as necessary to make unique name for new node in `graph`.
@@ -335,6 +335,7 @@ def make_unique_node(graph, name):
 def _build_graph(tree, graph, parent_name, labels):
     """ Recursive graph-builder. Util-function.
     """
+    #pylint: disable=protected-access
     if isinstance(tree, (float, int)):
         return
     if len(tree) == 0:
