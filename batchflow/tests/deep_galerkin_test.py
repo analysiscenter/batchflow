@@ -29,9 +29,6 @@ def test_run_tutorial():
         if not line.startswith('#'):
             if not any(bs in line for bs in BAD_PREFIXES):
                 code_.append(line.replace('in tqdm_notebook', 'in '))
-        if 'import tokens' in line:
-            code_.append('from batchflow.models.parser import add_tokens')
-            code_.append('add_tokens()')
 
     code = '\n'.join(code_)
     exec(code, {})
