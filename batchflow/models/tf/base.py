@@ -51,9 +51,12 @@ class TFModel(BaseModel):
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
 
     device : str or sequence of str
-        device name(s), e.g. '/device:GPU:0'. Regular expressions are allowed.
+        device name(s), e.g. '/device:GPU:0'. Regular expressions are allowed, e.g. 'GPU:*'.
         Default behaviour is to use the first available GPU (or CPU if no GPUs are detected).
         See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
+
+        If multiple devices are at use, batch size must be divisible by the number of used devices.
+        If microbatch is also used, then microbatch size must be divisible by the number of devices.
 
     session : dict
         parameters for session configuration. 'allow_soft_placement' is always True. To learn more, check
@@ -113,8 +116,7 @@ class TFModel(BaseModel):
 
     scope - subset of variables to optimize during training. Can be either string or sequence of strings.
         Value `''` is reserved for optimizing all trainable variables.
-        Putting `-` sign before name stands for complement: optimize everything but
-        the passed scope.
+        Putting `-` sign before name stands for complement: optimize everything but the passed scope.
 
         Examples:
 
@@ -229,16 +231,8 @@ class TFModel(BaseModel):
     #. In many cases there is no need to write a loss function, learning rate decay and optimizer
        as they might be defined through config.
 
-    #. For a configured loss to work one of the inputs should have a name ``targets`` and
-       one of the tensors in your model should have a name ``predictions``.
-       They will be used in a loss function.
-
     #. If you have defined your own loss function, call `tf.losses.add_loss(...)
        <https://www.tensorflow.org/api_docs/python/tf/losses/add_loss>`_.
-
-    #. If you need to use your own optimizer, assign ``self.train_step`` to the train step operation.
-       Don't forget about `UPDATE_OPS control dependency
-       <https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization>`_.
     """
 
     def __init__(self, *args, **kwargs):
@@ -246,9 +240,6 @@ class TFModel(BaseModel):
         self.graph = tf.Graph() if self.session is None else self.session.graph
         self._graph_context = None
         self._full_config = Config()
-
-        # Train configurations
-        self.train_steps = None
         self._train_lock = threading.Lock()
 
         # Parameters of batch processing: splitting batches into parts and/or using multiple devices to process data
@@ -726,7 +717,6 @@ class TFModel(BaseModel):
             # Store all the created operations
             train_steps.update({key: ops})
 
-        self.train_steps = train_steps
         self.store_to_attr('train_steps', train_steps)
 
     def _make_loss(self, config, device):
@@ -1115,13 +1105,11 @@ class TFModel(BaseModel):
                             output = self._vanilla_train(train_fetches, _fetches, feed_dict)
                         else:
                             output = self._multi_train(train_fetches, _fetches, feed_dict)
-
-                    else: # microbatch
+                    else:
                         feed_dicts = self._split_feed_dict(feed_dict, size=microbatch)
 
                         if not self.multi_device:
                             outputs = self._microbatch_train(train_fetches, _fetches, feed_dicts)
-
                         else:
                             outputs = self._microbatch_multi_train(train_fetches, _fetches, feed_dicts)
 
@@ -1157,7 +1145,7 @@ class TFModel(BaseModel):
         if fetches is not None:
             all_fetches += [fetches]
 
-        # Prepare feed_dict; run session
+        # Fill feed_dict with placeholders
         _fd = self._fill_feed_dict(feed_dict, is_training=True)
         *_, output = self.session.run(all_fetches, feed_dict=_fd)
 
@@ -1169,7 +1157,9 @@ class TFModel(BaseModel):
         if _fetches is not None:
             all_fetches += [_fetches]
 
-        # Prepare feed_dict; run session
+        # Split batch into even parts for every device, then run complex operation
+        # that computes gradients on every device, combines them on the leading one,
+        # and finally sends updates back to devices
         _feed_dicts = self._split_feed_dict(feed_dict, num_parts=self.multi_device)
 
         _fd = {}
@@ -1192,6 +1182,8 @@ class TFModel(BaseModel):
             if _fetches is not None:
                 all_fetches += [_fetches]
 
+            # For every train step, zero out gradient accumulators,then update them with gradients,
+            # computed on each of `feed_dicts`, and finally apply accumulated values to weights
             self.session.run(zero_op, feed_dict=_feed_dicts[0])
             for _fd in _feed_dicts:
                 _, _output = self.session.run(all_fetches, feed_dict=_fd)
@@ -1210,9 +1202,13 @@ class TFModel(BaseModel):
             if _fetches is not None:
                 all_fetches += [_fetches]
 
-            for i, feed_dict in enumerate(feed_dicts): # for each splitted on microbatch
+            # For every microbatch run complex operation that computes gradients on every device,
+            # combines them on the leading one, and stores into accumulator. When the last
+            # microbatch is processed, accumulated value is applied to the weights on leading device,
+            # and finally distributed to other devices
+            for i, feed_dict in enumerate(feed_dicts):
                 _feed_dicts = self._split_feed_dict(feed_dict, num_parts=self.multi_device)
-                _fd = {} # filled
+                _fd = {}
                 for part, device in zip(_feed_dicts, self.devices):
                     _fd = {**_fd, **self._fill_feed_dict(part, device)}
 
