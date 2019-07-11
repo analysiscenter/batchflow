@@ -416,6 +416,7 @@ _V3_SMALL_DEFAULT_BODY = [
 ]
 
 class MobileNet_v3_small(MobileNet_v3):
+    """ MobileNet version 3 small architecture """
     @classmethod
     def default_config(cls):
         config = MobileNet_v3.default_config()
