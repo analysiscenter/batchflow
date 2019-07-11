@@ -264,7 +264,7 @@ class TFModel(BaseModel):
 
         # Save/load things
         self._saver = None
-        self.preserve = ['_attrs', '_full_config', 'microbatch',
+        self.preserve = ['_attrs', 'microbatch',
                          'devices', 'leading_device', 'device_to_scope', 'scope_to_device', 'multi_device']
 
         super().__init__(*args, **kwargs)
