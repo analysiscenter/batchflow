@@ -99,7 +99,7 @@ class ClassificationMetrics(Metrics):
         self.num_classes = None if axis is None else predictions.shape[axis]
         self.num_classes = self.num_classes or num_classes or 2
         self._agg_fn_dict = {
-            'mean': partial(np.mean, axis=0),
+            'mean': self.infmean,
         }
 
         if fmt in ['proba', 'logits'] and axis is None and self.num_classes > 2:
@@ -128,6 +128,21 @@ class ClassificationMetrics(Metrics):
 
         if calc:
             self._calc()
+
+    def infmean(self, arr):
+        """
+        We need to average array while skipping infs when there is at least one finite number along averaging axis.
+        Since np.nanmean() exists, temporarily replacing np.inf with np.nan effectively solves our problem.
+        """
+        if isinstance(arr, list):
+            arr = np.array(arr)
+        arr[np.isinf(arr)] = np.nan
+        arr = np.nanmean(arr, axis=0)
+        if np.isscalar(arr):
+            return np.inf if np.isnan(arr) else arr
+        else:
+            arr[np.isnan(arr)] = np.inf
+            return arr
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
@@ -256,7 +271,7 @@ class ClassificationMetrics(Metrics):
                 value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
             elif multiclass in ['macro', 'mean']:
                 value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-                value = np.mean(value, axis=0).reshape(-1, 1)
+                value = self.infmean(value).reshape(-1, 1)
         else:
             label = label if label is not None else 1
             d = denom(label)
@@ -293,7 +308,11 @@ class ClassificationMetrics(Metrics):
         return self.true_negative_rate(*args, **kwargs)
 
     def prevalence(self, *args, **kwargs):
-        return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs, when_zero=(1, 0))
+        """
+        Parameter when_zero doesn't really matter in this case,
+        since total_population is never zero, when targets are not empty.
+        """
+        return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs, when_zero=(0, 0))
 
     def accuracy(self):
         """ An accuracy of detecting all the classes combined """
@@ -315,13 +334,13 @@ class ClassificationMetrics(Metrics):
         return self._calc_agg(self.true_negative, self.prediction_negative, *args, **kwargs, when_zero=(0, 1))
 
     def positive_likelihood_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, **kwargs, when_zero=(1, 0))
+        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, **kwargs, when_zero=(np.inf, 0))
 
     def negative_likelihood_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs, when_zero=(1, 0))
+        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs, when_zero=(np.inf, 0))
 
     def diagnostics_odds_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs, when_zero=(1,0))
+        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs, when_zero=(np.inf, 0))
 
     def f1_score(self, *args, **kwargs):
         return 2 / (1 / self.recall(*args, **kwargs) + 1 / self.precision(*args, **kwargs))
