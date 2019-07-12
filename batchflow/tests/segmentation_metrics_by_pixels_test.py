@@ -10,8 +10,9 @@ import numpy as np
 import pytest
 
 from itertools import chain
-from batchflow.models.metrics import SegmentationMetricsByPixels, SegmentationMetricsByInstances
+from batchflow.models.metrics import SegmentationMetricsByPixels
 
+# Dict {metric_alias : metric_names}
 metrics_dict = {'tpr' : ['true_positive_rate', 'sensitivity', 'recall'],
                 'fpr' : ['false_positive_rate', 'fallout'],
                 'fnr' : ['false_negative_rate', 'miss_rate'],
@@ -37,8 +38,9 @@ num_classes = 3
 targets = np.array([0, 1, 2, 2, 0, 0, 1, 1]).reshape(batch_size, image_size, image_size)
 labels = np.array([0, 1, 1, 0, 2, 0, 1, 1]).reshape(batch_size, image_size, image_size)
 proba = np.eye(num_classes)[labels] #onehots are basically like probas, just with all 0 and a single 1
-logits = np.log(proba / (1. - proba)) #logit function gives ±infs on degenerate case of 0s and 1s, but it's okay for sigmoid function 
+logits = np.log(proba / (1. - proba)) #logit function gives ±infs on degenerate case of 0s and 1s, but it's okay for sigmoid function
 
+# Wrapper over np.allclose(), that works with np.nan values.
 def nanallclose(a, b, atol, rtol):
     if (np.isnan(a) != np.isnan(b)).any():
         return False
@@ -50,14 +52,12 @@ class TestShape:
     Checks the shape of return value for all combinations of both types of metrics aggregation and predictions shapes.
     """
 
-    # First param stands for predictions variable, second — for predictions type,
-    # third — for axis with class info.
+    # First param stands for predictions variable, second — for predictions type, third — for axis with class info.
     predictions_params = [(labels, 'labels', None),
                           (proba, 'proba', 3),
                           (logits, 'logits', 3)]
 
-    # First param stands for batch aggregation type, second — for multiclass one,
-    # third represents expected output shape.
+    # First param stands for batch aggregation type, second — for multiclass one, third represents expected output shape.
     aggregation_params = [(None, None, (batch_size, num_classes)),
                           (None, 'micro', (batch_size,)),
                           (None, 'macro', (batch_size,)),
@@ -65,7 +65,6 @@ class TestShape:
                           ('mean', 'micro', None),
                           ('mean', 'macro', None)]
 
-    # @pytest.mark.parametrize('metrics_name', metrics_names)
     @pytest.mark.parametrize('predictions, fmt, axis', predictions_params)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_shape', aggregation_params)
     def test_shape(self, predictions, fmt, axis, batch_agg, multi_agg, exp_shape):
@@ -77,7 +76,7 @@ class TestShape:
 
             assert res_shape == exp_shape, 'failed on metric {}'.format(metric_name)
 
-    # Individual test for accuracy — batch-only aggregation param and corresponding expected shapes.
+    # Individual test params for accuracy — batch-only aggregation param and corresponding expected shapes.
     aggregation_params_accuracy = [(None, (batch_size,)),
                                    ('mean', None)]
 
@@ -200,7 +199,7 @@ class TestResult:
 
                 assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format(metric_name)
 
-    # Individual test for accuracy — batch-only aggregation param and corresponding expected metrics contents.
+    # Individual test params for accuracy — batch-only aggregation param and corresponding expected metrics contents.
     params_accuracy = [(None, np.array([0.50, 0.75])),
                        ('mean', np.array([0.62]))]
 
