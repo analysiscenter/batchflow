@@ -33,20 +33,23 @@ class DeepGalerkin(TFModel):
 
     pde : dict
         dictionary of parameters of PDE. Must contain keys
+        - n_dims : int
+            the dimensionality of the problem, that is, total number of domain-variables, including
+            time-dimension.
         - form : callable
             defines diferential form in lhs of the PDE. Composed from predefined tokens including
             differential operator `D(u, x)` and unary operations like `sin` and `cos`. Can also
-            include coefficients R(e) to make the whole equation a parametric family of equations
-            rather than a simple PDE.
+            include coefficients P(e) to make the whole equation a parametric family of equations
+            rather than a simple PDE, random coefficients R(e) and trainable coefficients C("var").
         - domain : list
             defines the rectangular domain of the equation as a sequence of coordinate-wise bounds.
         - bind_bc_ic : bool
             If True, modifies the network-output to bind boundary and initial conditions.
         - initial_condition : callable or const or None or list
-            If supplied, defines the initial state of the system as a function of
-            spatial coordinates (and, possibly, parametric coefficients R(e)). In that case, PDE
-            is considered to be an evolution equation (heat-equation or wave-equation, e.g.). Then,
-            first (n - 1) coordinates are spatial, while the last one is the time-variable. If the
+            If supplied, defines the initial state of the system as a function of spatial coordinates
+            (also parametric coefficients P(e1), noise R(e2) and trainable coefficients C(...)).
+            In that case, PDE is considered to be an evolution equation (heat-equation or wave-equation, e.g.).
+            Then, first (n - 1) coordinates are spatial, while the last one is the time-variable. If the
             lhs of PDE contains second-order derivative w.r.t time, initial evolution-rate of the
             system must also be supplied. In this case, the arg is a `list` with two callables
             (constants). Also written using the set of predefined tokens.
