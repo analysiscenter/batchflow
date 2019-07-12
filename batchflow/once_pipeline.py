@@ -5,7 +5,7 @@ from functools import partial
 import numpy as np
 
 from .named_expr import NamedExpression, eval_expr
-from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID
+from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID,IMPORT_MODEL_ID
 
 
 class OncePipeline:
@@ -175,3 +175,10 @@ class OncePipeline:
 
     def _exec_load_model(self, action):
         self.pipeline._exec_load_model(None, action)        # pylint:disable=protected-access
+
+    def import_model(self, model, pipeline=None, name=None):
+        """ Import a model from another pipeline"""
+        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, pipeline=pipeline, model_name=name))
+
+    def _exec_import_model(self, action):
+        self.pipeline._exec_import_model(None, action)      # pylint:disable=protected-access
