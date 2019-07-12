@@ -1,7 +1,10 @@
 """ Deep Galerkin model for solving partial differential equations. Inspired by
 Sirignano J., Spiliopoulos K. "`DGM: A deep learning algorithm for solving partial differential equations
-<http://arxiv.org/abs/1708.07469>`_"
+<http://arxiv.org/abs/1708.07469>`_". In addition, allows to solve parametric families of PDEs, as in
+Nabian M.A., Meidani H. "`A Deep Neural Network Surrogate for High-Dimensional Random Partial Differential Equations
+<https://arxiv.org/abs/1806.02957>`_".
 """
+
 from inspect import signature
 
 import tensorflow as tf
@@ -14,12 +17,10 @@ from ..parser import get_num_parameters
 
 
 class DeepGalerkin(TFModel):
-    r""" Deep Galerkin model for solving partial differential equations (PDEs) of up to the second order
-    on rectangular domains using neural networks.
-
-    In addition, allows to solve random (parametric) PDEs in strong form as discussed in Nabian M.A., Meidani H.
-    "`A Deep Neural Network Surrogate for High-Dimensional Random Partial Differential Equations
-    <https://arxiv.org/abs/1806.02957>`_"
+    r""" Deep Galerkin model for solving systems of partial differential equations (PDEs)
+    using neural networks. Can also solve parametric families of PDEs as well as PDEs with
+    trainable coefficients. That is, the PDE-problem itself can be adjusted in order to validate
+    additional constraints imposed on the solution.
 
     **Configuration**
 
@@ -505,7 +506,7 @@ class DGSolver:
 
         for _ in iterator:
             points = sampler.sample(batch_size)
-            fetched = self.model.train(fetches=fetches, feed_dict={'points': points}, train_mode=train_mode)
+            fetched = self.model.train(fetches=fetches, points=points, train_mode=train_mode)
             for tensor, name in zip(fetched, fetches):
                 getattr(self, name).append(tensor)
 
@@ -524,6 +525,5 @@ class DGSolver:
         Calculated values of tensors in `fetches` in the same order and structure.
         """
         if points is not None:
-            return self.model.predict(fetches=fetches,
-                                      feed_dict={'points': points})
+            return self.model.predict(fetches=fetches, points=points)
         return self.model.predict(fetches=fetches)
