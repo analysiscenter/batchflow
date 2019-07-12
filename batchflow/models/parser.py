@@ -19,6 +19,18 @@ try:
 except ImportError:
     pass
 
+
+
+MATH_TOKENS = ['sin', 'cos', 'tan',
+               'asin', 'acos', 'atan',
+               'sinh', 'cosh', 'tanh',
+               'asinh', 'acosh', 'atanh',
+               'exp', 'log', 'pow',
+               'sqrt', 'sign',
+               ]
+
+CUSTOM_TOKENS = ['D', 'R', 'V', 'C', 'E']
+
 LABELS_MAPPING = {
     '__sub__': '-', '__rsub__': '-',
     '__mul__': '*', '__rmul__': '*',
@@ -77,7 +89,6 @@ class SyntaxTreeNode():
     def __repr__(self):
         return tuple((self.name, *self._args, self._kwargs)).__repr__()
 
-
 def get_num_perturbations(form):
     """ Get number of unique perturbations (created via `R` letter) in the passed form."""
     n_args = len(inspect.signature(form).parameters)
@@ -90,7 +101,6 @@ def get_unique_perturbations(tree):
     # pylint: disable=protected-access
     if isinstance(tree, (int, float, str, tf.Tensor, tf.Variable)):
         return []
-
     if tree.name == 'R':
         return [tree._args[0]]
     if len(tree) == 0:
@@ -101,17 +111,6 @@ def get_unique_perturbations(tree):
         result += get_unique_perturbations(arg)
 
     return list(set(result))
-
-
-MATH_TOKENS = ['sin', 'cos', 'tan',
-               'asin', 'acos', 'atan',
-               'sinh', 'cosh', 'tanh',
-               'asinh', 'acosh', 'atanh',
-               'exp', 'log', 'pow',
-               'sqrt', 'sign',
-               ]
-
-CUSTOM_TOKENS = ['D', 'R', 'V', 'C']
 
 
 def make_token(module='tf', name=None, namespaces=None):
@@ -139,6 +138,7 @@ def make_token(module='tf', name=None, namespaces=None):
         v_func = tf_v
         c_func = tf_c
         r_func = tf_r
+        e_func = tf_e
     elif module in ['numpy', 'np']:
         namespaces = namespaces or [np, np.math]
         if name == 'D':
@@ -155,13 +155,13 @@ def make_token(module='tf', name=None, namespaces=None):
     letters = {'D': d_func,
                'V': v_func,
                'C': c_func,
-               'R': r_func}
+               'R': r_func,
+               'E': e_func}
 
     method_ = letters.get(name) or fetch_method(name, namespaces)
     method = (lambda *args, **kwargs: SyntaxTreeNode(name, *args, **kwargs)
               if isinstance(args[0], SyntaxTreeNode) else method_(*args, **kwargs))
     return method
-
 
 def fetch_method(name, modules):
     """ Get function from list of modules. """
@@ -258,20 +258,44 @@ def tf_c(*args, prefix='addendums', **kwargs):
         return block
 
 def tf_r(*args, **kwargs):
+    """ Tensorflow implementation of `R` letter: controllable from the outside perturbation. """
     _ = kwargs
     if len(args) != 1:
         raise ValueError('`R` is reserved to create exactly one perturbation at a time. ')
     return tf.identity(args[0])
 
+def tf_e(*args, **kwargs):
+    """ Tensorflow implementation of `E` letter: dynamically generated random noise. """
+    if len(args) > 2:
+        raise ValueError('`E`')
+    if len(args) == 2:
+        inputs, scale = args
+        shape = tf.shape(inputs)
+    else:
+        scale = args[0] if len(args) == 1 else 1
+        try:
+            points = tf_check_tensor('inputs', 'concat', ':0')
+            shape = (tf.shape(points)[0], 1)
+        except KeyError:
+            shape = ()
 
-def tf_check_tensor(prefix, name):
+    distribution = kwargs.pop('distribution', 'normal')
+
+    if distribution == 'normal':
+        noise = tf.random.normal(shape=shape, stddev=scale)
+    if distribution == 'uniform':
+        noise = tf.random.uniform(shape=shape, minval=-scale, maxval=scale)
+    return noise
+
+def tf_check_tensor(prefix=None, name=None, postfix='/_output:0'):
     """ Simple wrapper around `get_tensor_by_name`. """
-    tensor_name = tf.get_variable_scope().name + '/' + prefix + '/' + name + '/_output:0'
+    tensor_name = tf.get_variable_scope().name + '/' + prefix + '/' + name + postfix
     graph = tf.get_default_graph()
     tensor = graph.get_tensor_by_name(tensor_name)
     return tensor
 
 
+# Drawing functions. Require graphviz
 def make_unique_node(graph, name):
     """ Add as much postfix-'_' to `name` as necessary to make unique name for new node in `graph`.
 
