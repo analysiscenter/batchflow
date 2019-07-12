@@ -107,6 +107,11 @@ class DeepGalerkin(TFModel):
 
         # Get the dimensionality
         n_dims = pde.get('n_dims')
+        if not isinstance(n_dims, int):
+            if n_dims is None:
+                raise ValueError("The dimensionality of the problem must be supplied in n_dims-key!")
+            raise ValueError("Cannot parse dimensionality of the problem from n_dims={}".format(n_dims))
+
         n_funs = pde.get('n_funs', 1)
         n_eqns = pde.get('n_eqns', n_funs)
 
