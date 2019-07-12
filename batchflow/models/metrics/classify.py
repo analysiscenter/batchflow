@@ -148,6 +148,10 @@ class ClassificationMetrics(Metrics):
             arr[np.isnan(arr)] = np.inf
             return arr
 
+    @property
+    def confusion_matrix(self):
+        return self._confusion_matrix.sum(axis=0)
+
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
         metrics = copy(self)

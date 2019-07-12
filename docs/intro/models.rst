@@ -28,9 +28,12 @@ There are two modes of model definition:
 A static model is created when the pipeline is created, i.e. before it is executed.
 As a result, the model might have an access to the pipeline, its config and variables.
 
-A dynamic model is created during the first pipeline's execution, when some action uses the model the first time.
-Consequently, the model has an access to the pipeline and the very first batch thus allowing to create models adapting to shapes and data sizes.
+A dynamic model is created during the pipeline's execution, when some action uses the model the first time.
+Consequently, the model has an access to the pipeline and the very first batch thus allowing to create models adapting
+to batch size, content, shape and data types.
 
+
+.. _init_a_model:
 
 Adding a model to a pipeline
 ============================
@@ -50,14 +53,16 @@ If a model was already created in another pipeline, it might be `imported <#impo
 Configuring a model
 ===================
 
-Most often than not models have many options and hyperparameters which define the model structure (e.g. number and types of layers for a neural network or a number and depth of trees for forests), as well as a training procedure (e.g. an optimization algorithm or regularization constants).
+Most often than not models have many options and hyperparameters which define the model structure
+(e.g. number and types of layers for a neural network or a number and depth of trees for forests),
+as well as a training procedure (e.g. an optimization algorithm or regularization constants).
 
 Global options:
 
 * ``build`` : bool - whether to call ``model.build(...)`` to create a model. Default is ``True``.
 * ``load`` : dict - parameters for model loading from some storage. If present, a model will be loaded by calling `self.load(**config['load'])`.
 
-  Loading usually requires some additional config parameters like paths, file names or file formats. Check the documentation for the model you use for more details.
+Loading usually requires some additional config parameters like paths, file names or file formats. Check the documentation for the model you use for more details.
 
 For some models only one of ``build`` or ``load`` should be specified. While other models might need a building phase even if a model is loaded from a disk.
 
@@ -152,6 +157,7 @@ You can also write an action which works with a model directly.::
        .train_linked_model()
    )
 
+
 Predicting with a model
 =======================
 
@@ -166,8 +172,34 @@ Predicting with a model
 
 Read a model specfication to find out what it needs for predicting and what its output is.
 
-.. _saving_a_model:
 
+.. _loading_a_model:
+
+Loading a model
+===============
+
+A model can be loaded into a pipeline::
+
+   some_pipeline.load_model('dynamic', ResNet18, 'my_model', path='/some/path')
+
+The parameters are the same as in :ref:`the model initalization <init_a_model>`.
+
+Note, that :meth:`~batchflow.Pipeline.load_model` just adds a loading action to the pipeline, but the actual loading
+will happen only when pipeline is being executed.
+
+Also take into account that ``load_model`` will be called at each iteration which might be desired or undesired depending
+on the specific circumstances.
+
+To load model only once before the pipeline is executed you might use :ref:`before <after_pipeline>` pipeline::
+
+    some_pipeline.before.load_model('dynamic', ResNet18, 'my_model', path='/some/path')
+
+There is also and imperative :meth:`~batchflow.Pipeline.load_model_now`, i.e. it loads a model immediately, and not when a pipeline is executed.
+Thus, it cannot be a part of a pipeline's chain of actions. ``load_model_now`` is expected to be called in an action method or before a training
+or inference pipeline is run (e.g. before `pipeline.run <pipeline#running-pipelines>`_).
+
+
+.. _saving_a_model:
 
 Saving a model
 ==============
@@ -179,11 +211,18 @@ You can write a model to a persistent storage at any time by calling ``save_mode
 As usual, the first argument is a model name, while all other arguments are model specific, so read a model documentation
 to find out what parameters are required to save a model.
 
-Note, that :meth:`~batchflow.Pipeline.save_model` is imperative, i.e. it saves a model right now, but not when a pipeline is executed.
-Thus, it cannot be a part of a pipeline's chain of actions (otherwise, this would save the model after processing each batch,
-which might be highly undesired).
+Note, that :meth:`~batchflow.Pipeline.save_model` just adds a saving action to the pipeline, but the actual saving
+will happen only when pipeline is being executed.
 
-``save_model`` is expected to be called in an action method or after a training pipeline has finished
+Also take into account that ``save_model`` will be called at each iteration which might be desired or undesired depending
+on the specific circumstances.
+
+To save model only once after the pipeline you might use :ref:`after <after_pipeline>` pipeline::
+
+    some_pipeline.after.save_model('my_model', path='/some/path')
+
+There is also and imperative :meth:`~batchflow.Pipeline.save_model_now`, i.e. it saves a model immediately, and not when a pipeline is executed.
+Thus, it cannot be a part of a pipeline's chain of actions. ``save_model_now`` is expected to be called in an action method or after a training pipeline has finished
 (e.g. after `pipeline.run <pipeline#running-pipelines>`_).
 
 
@@ -215,7 +254,9 @@ Whilst, a separate instance of a dynamic model will be created in each children 
 Importing models
 ================
 
-Models exist within pipelines. This is very convenient if a single pipeline includes everything: preprocessing, model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between pipelines. For instance, when you train a model in one pipeline and later use it in an inference pipeline.
+Models exist within pipelines. This is very convenient if a single pipeline includes everything: preprocessing,
+model training, model evaluation, model saving and so on. However, sometimes you might want to share a model between
+pipelines. For instance, when you train a model in one pipeline and later use it in an inference pipeline.
 
 This can be easily achieved with a model import.::
 
@@ -237,13 +278,16 @@ This can be easily achieved with a model import.::
 
    infer = (inference_pipeline_template << some_dataset).run(INFER_BATCH_SIZE, shuffle=False)
 
-When ``inference_pipeline_template`` is run, the model ``Resnet50`` from ``train_pipeline`` will be imported. If you still have questions about import_model, search the answer in :meth:`~batchflow.Pipeline.import_model`.
+When ``inference_pipeline_template`` is run, the model ``Resnet50`` from ``train_pipeline`` will be imported.
+If you still have questions about import_model, search the answer in :meth:`~batchflow.Pipeline.import_model`.
 
 
 Parallel training
 =================
 
-If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, you might encounter that your model hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock can be added to an action to allow for only one concurrent execution::
+If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, you might encounter that your model
+hardly learns anything. The reason is that model variables might not update concurrently. To solve this problem a lock
+can be added to an action to allow for only one concurrent execution::
 
    class MyBatch(Batch):
        ...
@@ -253,7 +297,8 @@ If you :doc:`prefetch <prefetch>` with actions based on non-thread-safe models, 
            model.train(input_images=self.images, input_labels=self.labels)
            return self
 
-However, as far as ``TensorFlow`` is concerned, its optimizers have a parameter `use_locking <https://www.tensorflow.org/api_docs/python/tf/train/Optimizer#__init__>`_ which allows for concurrent updates when set to ``True``.
+However, as far as ``TensorFlow`` is concerned, its optimizers have a parameter `use_locking <https://www.tensorflow.org/api_docs/python/tf/train/Optimizer#__init__>`_
+which allows for concurrent updates when set to ``True``.
 
 
 Ready to use models

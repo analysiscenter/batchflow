@@ -52,7 +52,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - P - global pooling (default is max-pooling)
         - V - global average pooling
         - d - dropout
-        - D - alpha dropout
+        - D - dropblock
         - m - maximum intensity projection (:func:`~.layers.mip`)
         - b - upsample with bilinear resize
         - B - upsample with bilinear additive resize
@@ -115,6 +115,8 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         parameters for dropout layers, like noise_shape, etc
         If None or inculdes parameters 'off' or 'disable' set to True or 1,
         the layer will be excluded whatsoever.
+    dropblock : dict or None
+        parameters for dropblock layers, like dropout_rate, block_size, etc
     subpixel_conv : dict or None
         parameters for subpixel convolution (layout, activation, etc)
     resize_bilinear : dict or None

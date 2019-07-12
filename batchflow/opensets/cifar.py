@@ -2,14 +2,20 @@
 
 import os
 import tempfile
+import logging
 import urllib.request
 import pickle
 import tarfile
-import numpy as np
+
 import PIL
+import tqdm
+import numpy as np
 
 from ..dsindex import DatasetIndex
 from .base import ImagesOpenset
+
+
+logger = logging.getLogger('cifar')
 
 
 class BaseCIFAR(ImagesOpenset):
@@ -19,15 +25,20 @@ class BaseCIFAR(ImagesOpenset):
     TRAIN_NAME_ID = None
     TEST_NAME_ID = None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, train_test=True, **kwargs)
-        self.split()
+    def __init__(self, *args, bar=False, preloaded=None, train_test=True, **kwargs):
+        self.bar = tqdm.tqdm(total=6) if bar else None
+        super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
+        if self.bar:
+            self.bar.close()
 
     def download(self, path=None):
         """ Load data from a web site and extract into numpy arrays """
 
         def _extract(archive_file, member):
-            return pickle.load(archive_file.extractfile(member), encoding='bytes')
+            data = pickle.load(archive_file.extractfile(member), encoding='bytes')
+            if self.bar:
+                self.bar.update(1)
+            return data
 
         def _gather_extracted(all_res):
             images = np.concatenate([res[b'data'] for res in all_res]).reshape(-1, 3, 32, 32).transpose((0, 2, 3, 1))
@@ -41,11 +52,13 @@ class BaseCIFAR(ImagesOpenset):
         localname = os.path.join(path, filename)
 
         if not os.path.isfile(localname):
-            print("Downloading", filename, "...")
+            logger.info("Downloading %s", filename)
             urllib.request.urlretrieve(self.SOURCE_URL, localname)
-            print("Downloaded", filename)
+            logger.info("Downloaded %s", filename)
+            if self.bar:
+                self.bar.update(1)
 
-        print("Extracting...")
+        logger.info("Extracting...")
         with tarfile.open(localname, "r:gz") as archive_file:
             files_in_archive = archive_file.getmembers()
 
@@ -56,7 +69,7 @@ class BaseCIFAR(ImagesOpenset):
             test_files = [one_file for one_file in files_in_archive if self.TEST_NAME_ID in one_file.name]
             all_res = [_extract(archive_file, one_file) for one_file in test_files]
             test_data = _gather_extracted(all_res)
-        print("Extracted")
+        logger.info("Extracted")
 
         self._train_index = DatasetIndex(np.arange(len(train_data[0])))
         self._test_index = DatasetIndex(np.arange(len(test_data[0])))
@@ -81,6 +94,7 @@ class CIFAR10(BaseCIFAR):
     LABELS_KEY = b"labels"
     TRAIN_NAME_ID = "data_batch"
     TEST_NAME_ID = "test_batch"
+    num_classes = 10
 
 
 class CIFAR100(BaseCIFAR):
@@ -101,3 +115,4 @@ class CIFAR100(BaseCIFAR):
     LABELS_KEY = b"fine_labels"
     TRAIN_NAME_ID = "train"
     TEST_NAME_ID = "test"
+    num_classes = 100

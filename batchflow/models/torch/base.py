@@ -1,4 +1,5 @@
 """ Cotains base class for Torch models """
+import os
 import re
 import threading
 from functools import partial
@@ -105,6 +106,10 @@ class TorchModel(BaseModel):
         - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
         - ``{'optimizer': {'name': MyCustomOptimizer, momentum=0.95}}``
 
+    microbatch : int
+        make forward/backward pass with microbatches of a given size, but apply gradients after the whole batch.
+        Batch size should be evenly divisible by microbatch size.
+
     common : dict
         default parameters for all blocks (see :class:`.ConvBlock`)
 
@@ -176,12 +181,15 @@ class TorchModel(BaseModel):
         self._inputs = dict()
         self.predictions = None
         self.loss = None
+        self.microbatch = None
+        self._full_config = None
 
         super().__init__(*args, **kwargs)
 
     def build(self, *args, **kwargs):
         """ Build the model """
         config = self.build_config()
+        self._full_config = config
 
         if 'device' in config:
             self.device = torch.device(config['device'])
@@ -192,6 +200,9 @@ class TorchModel(BaseModel):
             self._make_loss(config)
         if self.optimizer is None:
             self._make_optimizer(config)
+
+        self.microbatch = config.get('microbatch', None)
+
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
@@ -418,6 +429,7 @@ class TorchModel(BaseModel):
         config['predictions'] = None
         config['output'] = None
         config['optimizer'] = ('Adam', dict())
+        config['microbatch'] = None
 
         return config
 
@@ -635,17 +647,17 @@ class TorchModel(BaseModel):
 
     def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
-        proba = torch.nn.Softplus()(inputs)
+        proba = torch.nn.functional.softplus(inputs)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
-        proba = torch.nn.Sigmoid()(inputs)
+        proba = torch.nn.functional.sigmoid(inputs)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
         axis = self.channels_axis(kwargs.get('data_format'))
-        proba = torch.nn.Softmax(dim=axis)(inputs)
+        proba = torch.nn.functional.softmax(inputs, dim=axis)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
@@ -679,10 +691,11 @@ class TorchModel(BaseModel):
             inputs = self._fill_value(inputs)
         return inputs
 
-    def _fill_input(self, inputs, targets):
-        inputs = self._fill_param(inputs)
-        targets = self._fill_param(targets)
-        return inputs, targets
+    def _fill_input(self, *args):
+        inputs = []
+        for arg in args:
+            inputs.append(self._fill_param(arg))
+        return tuple(inputs)
 
     def _fill_output(self, fetches):
         _fetches = [fetches] if isinstance(fetches, str) else fetches
@@ -701,50 +714,135 @@ class TorchModel(BaseModel):
 
         return output
 
-    def train(self, inputs, targets, fetches=None, use_lock=False):    # pylint: disable=arguments-differ
+    def train(self, *args, fetches=None, use_lock=False, microbatch=None):    # pylint: disable=arguments-differ
         """ Train the model with the data provided
+
+        Parameters
+        ----------
+        args
+            arguments to be passed directly into the model
+
+        fetches : tuple, list
+            a sequence of `tf.Operation` and/or `tf.Tensor` to calculate
+
+        use_lock : bool
+            if True, the whole train step is locked, thus allowing for multithreading.
+
+        microbatch : int or None
+            make forward/backward pass with microbatches of a given size, but apply gradients after the whole batch.
+            Batch size should be evenly divisible by microbatch size.
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same structure
+
+
+        Examples
+        --------
+
+        ::
+
+            model.train(B('images'), B('labels'), fetches='loss')
         """
         if use_lock:
             self._train_lock.acquire()
 
-        inputs, targets = self._fill_input(inputs, targets)
+        *inputs, targets = self._fill_input(*args)
 
         self.model.train()
 
         if self.lr_decay:
             self.lr_decay()
-        self.optimizer.zero_grad()
 
-        self.predictions = self.model(inputs)
-        self.loss = self.loss_fn(self.predictions, targets)
+        if microbatch is not False:
+            if microbatch is True:
+                microbatch = self.microbatch
+            else:
+                microbatch = microbatch or self.microbatch
+        if microbatch:
+            if len(inputs[0]) % microbatch != 0:
+                raise ValueError("Inputs size should be evenly divisible by microbatch size: %d and %d" %
+                                 (len(inputs), microbatch))
 
-        self.loss.backward()
-        self.optimizer.step()
+            self.optimizer.zero_grad()
+
+            steps = len(inputs[0]) // microbatch
+            predictions = []
+            for i in range(0, len(inputs[0]), microbatch):
+                inputs_ = [data[i: i + microbatch] for data in inputs]
+                targets_ = targets[i: i + microbatch]
+
+                predictions.append(self.model(*inputs_))
+                self.loss = self.loss_fn(predictions[-1], targets_)
+                self.loss.backward()
+
+            self.optimizer.step()
+            self.predictions = torch.cat(predictions)
+            self.loss = self.loss / steps
+        else:
+            self.optimizer.zero_grad()
+            self.predictions = self.model(*inputs)
+            self.loss = self.loss_fn(self.predictions, targets)
+            self.loss.backward()
+            self.optimizer.step()
 
         if use_lock:
             self._train_lock.release()
 
-        config = self.build_config()
+        config = self._full_config
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
 
         return output
 
-    def predict(self, inputs, targets=None, fetches=None):    # pylint: disable=arguments-differ
+    def predict(self, *args, targets=None, fetches=None):    # pylint: disable=arguments-differ
         """ Get predictions on the data provided
+
+        Parameters
+        ----------
+        args
+            arguments to be passed directly into the model
+
+        targets
+            (optional) targets to calculate loss
+
+        fetches : tuple, list
+            a sequence of tensors to fetch from the model
+
+        use_lock : bool
+            if True, the whole train step is locked, thus allowing for multithreading.
+
+        microbatch : int or None
+            make forward/backward pass with microbatches of a given size, but apply gradients after the whole batch.
+            Batch size should be evenly divisible by microbatch size.
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same structure
+
+
+        Examples
+        --------
+
+        ::
+
+            model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
-        inputs, targets = self._fill_input(inputs, targets)
+        inputs = self._fill_input(*args)
+        if targets:
+            targets = self._fill_input(targets)
+
         self.model.eval()
 
         with torch.no_grad():
-            self.predictions = self.model(inputs)
+            self.predictions = self.model(*inputs)
             if targets is None:
                 self.loss = None
             else:
                 self.loss = self.loss_fn(self.predictions, targets)
 
-        config = self.build_config()
+        config = self._full_config
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
@@ -756,7 +854,7 @@ class TorchModel(BaseModel):
         Parameters
         ----------
         path : str
-            a path to a directory where all model files will be stored
+            a path to a file where the model data will be stored
 
         Examples
         --------
@@ -769,20 +867,27 @@ class TorchModel(BaseModel):
         The model will be saved to /path/to/models/resnet34
         """
         _ = args, kwargs
+        dirname = os.path.dirname(path)
+        if dirname and not os.path.exists(dirname):
+            os.makedirs(dirname)
         torch.save({
             'model_state_dict': self.model,
             'optimizer_state_dict': self.optimizer,
             'loss': self.loss_fn,
-            'config': self.config
+            'config': self.config,
+            'full_config': self._full_config
             }, path)
 
-    def load(self, path, *args, **kwargs):
+    def load(self, path, *args, eval=False, **kwargs):
         """ Load a torch model from files
 
         Parameters
         ----------
         path : str
-            a directory where a model is stored
+            a file path where a model is stored
+
+        eval : bool
+            whether to switch the model to eval mode
 
         Examples
         --------
@@ -808,8 +913,12 @@ class TorchModel(BaseModel):
         self.optimizer = checkpoint['optimizer_state_dict']
         self.loss_fn = checkpoint['loss']
         self.config = self.config + checkpoint['config']
+        self._full_config = checkpoint['full_config']
 
         self.device = device
 
         if device:
             self.model.to(device)
+
+        if eval:
+            self.model.eval()
