@@ -705,7 +705,10 @@ class TorchModel(BaseModel):
             if hasattr(self, f):
                 v = getattr(self, f)
                 if isinstance(v, (torch.Tensor, torch.autograd.Variable)):
-                    v = v.detach().cpu().numpy()
+                    if v.numel() == 1:
+                        v = v.detach().cpu().item()
+                    else:
+                        v = v.detach().cpu().numpy()
                 output.append(v)
             else:
                 raise KeyError('Unknown value to fetch', f)
