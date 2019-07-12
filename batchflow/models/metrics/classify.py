@@ -128,6 +128,10 @@ class ClassificationMetrics(Metrics):
 
         if calc:
             self._calc()
+            
+    @property
+    def confusion_matrix(self):
+        return self._confusion_matrix.sum(axis=0)
 
     def infmean(self, arr):
         """
