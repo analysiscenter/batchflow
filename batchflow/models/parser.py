@@ -29,7 +29,7 @@ MATH_TOKENS = ['sin', 'cos', 'tan',
                'sqrt', 'sign',
                ]
 
-CUSTOM_TOKENS = ['D', 'R', 'V', 'C', 'E']
+CUSTOM_TOKENS = ['D', 'P', 'V', 'C', 'R']
 
 LABELS_MAPPING = {
     '__sub__': '-', '__rsub__': '-',
@@ -89,26 +89,26 @@ class SyntaxTreeNode():
     def __repr__(self):
         return tuple((self.name, *self._args, self._kwargs)).__repr__()
 
-def get_num_perturbations(form):
-    """ Get number of unique perturbations (created via `R` letter) in the passed form."""
+def get_num_parameters(form):
+    """ Get number of unique parameters (created via `P` letter) in the passed form."""
     n_args = len(inspect.signature(form).parameters)
     tree = form(*[SyntaxTreeNode('_' + str(i)) for i in range(n_args)])
-    return len(get_unique_perturbations(tree))
+    return len(get_unique_parameters(tree))
 
-def get_unique_perturbations(tree):
-    """ Get unique names of perturbation-variables (those containing 'R' in its name) from a parse-tree.
+def get_unique_parameters(tree):
+    """ Get unique names of parameters-variables (those containing 'P' in its name) from a parse-tree.
     """
     # pylint: disable=protected-access
     if isinstance(tree, (int, float, str, tf.Tensor, tf.Variable)):
         return []
-    if tree.name == 'R':
+    if tree.name == 'P':
         return [tree._args[0]]
     if len(tree) == 0:
         return []
 
     result = []
     for arg in tree._args:
-        result += get_unique_perturbations(arg)
+        result += get_unique_parameters(arg)
 
     return list(set(result))
 
@@ -130,15 +130,14 @@ def make_token(module='tf', name=None, namespaces=None):
     callable
         Function that can be applied to a parse-tree, adding another node in there.
     """
-    # pylint: disable=protected-access, unused-variable
     # parse namespaces-arg
     if module in ['tensorflow', 'tf']:
         namespaces = namespaces or [tf.math, tf, tf.nn]
         d_func = lambda f, x: tf.gradients(f, x)[0]
         v_func = tf_v
         c_func = tf_c
+        p_func = tf_p
         r_func = tf_r
-        e_func = tf_e
     elif module in ['numpy', 'np']:
         namespaces = namespaces or [np, np.math]
         if name == 'D':
@@ -153,10 +152,10 @@ def make_token(module='tf', name=None, namespaces=None):
 
     # make method
     letters = {'D': d_func,
+               'P': p_func,
                'V': v_func,
                'C': c_func,
-               'R': r_func,
-               'E': e_func}
+               'R': r_func}
 
     method_ = letters.get(name) or fetch_method(name, namespaces)
     method = (lambda *args, **kwargs: SyntaxTreeNode(name, *args, **kwargs)
@@ -257,17 +256,17 @@ def tf_c(*args, prefix='addendums', **kwargs):
         block = conv_block(points, name=block_name, **kwargs)
         return block
 
-def tf_r(*args, **kwargs):
+def tf_p(*args, **kwargs):
     """ Tensorflow implementation of `R` letter: controllable from the outside perturbation. """
     _ = kwargs
     if len(args) != 1:
-        raise ValueError('`R` is reserved to create exactly one perturbation at a time. ')
+        raise ValueError('`P` is reserved to create exactly one perturbation at a time. ')
     return tf.identity(args[0])
 
-def tf_e(*args, **kwargs):
+def tf_r(*args, **kwargs):
     """ Tensorflow implementation of `E` letter: dynamically generated random noise. """
     if len(args) > 2:
-        raise ValueError('`E`')
+        raise ValueError('`R`')
     if len(args) == 2:
         inputs, scale = args
         shape = tf.shape(inputs)

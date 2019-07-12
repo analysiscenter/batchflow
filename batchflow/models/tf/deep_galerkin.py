@@ -9,7 +9,7 @@ from tqdm import tqdm_notebook, tqdm
 
 from . import TFModel
 from .layers import conv_block
-from ..parser import get_num_perturbations
+from ..parser import get_num_parameters
 
 
 
@@ -112,8 +112,8 @@ class DeepGalerkin(TFModel):
         assert len(form) == n_eqns
         pde.update({'form': form})
 
-        # Count unique usages of `R`
-        n_perturbations = get_num_perturbations(form[0])
+        # Count unique usages of `P`
+        n_parameters = get_num_parameters(form[0])
 
         # Convert each expression to track to list
         track = pde.get('track')
@@ -124,16 +124,16 @@ class DeepGalerkin(TFModel):
 
         # Make sure that PDE dimensionality is consistent
         n_args = len(signature(form[0]).parameters)
-        assert n_dims + n_perturbations + n_funs == n_args
+        assert n_dims + n_parameters + n_funs == n_args
         pde.update({'n_dims': n_dims,
                     'n_funs': n_funs,
                     'n_eqns': n_eqns,
-                    'n_perturbations': n_perturbations,
-                    'n_vars': n_dims + n_perturbations})
+                    'n_parameters': n_parameters,
+                    'n_vars': n_dims + n_parameters})
 
         # Make sure points-tensor is created
         self.config.update({'initial_block/inputs': 'points',
-                            'inputs': dict(points={'shape': (n_dims + n_perturbations, )})})
+                            'inputs': dict(points={'shape': (n_dims + n_parameters, )})})
 
         # Default values for domain
         if pde.get('domain') is None:
