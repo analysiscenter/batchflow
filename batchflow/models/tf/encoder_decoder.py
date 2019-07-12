@@ -117,9 +117,7 @@ class EncoderDecoder(TFModel):
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
         config['body/encoder/blocks'] = dict(base=cls.block)
 
-        config['body/embedding'] = dict()
-        config['body/embeddings/common'] = dict(base=cls.block)
-        config['body/embeddings/order'] = []
+        config['body/embedding'] = dict(base=cls.block)
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
@@ -138,10 +136,7 @@ class EncoderDecoder(TFModel):
         """ Create encoder, embedding and decoder. """
         kwargs = cls.fill_params('body', **kwargs)
         encoder = kwargs.pop('encoder')
-        embeddings = kwargs.get('embeddings')
-        embeddings_common = embeddings.pop('common')
-        embeddings_order = embeddings.pop('order') or [name for name in kwargs
-                                                       if 'embedding' in name]
+        embeddings = kwargs.get('embedding')
         decoder = kwargs.pop('decoder')
 
         with tf.variable_scope(name):
@@ -151,11 +146,11 @@ class EncoderDecoder(TFModel):
             x = encoder_outputs[-1]
 
             # Bottleneck: working with compressed representation via multiple steps of processing
-            for embedding_name in embeddings_order:
-                embedding_args = kwargs.pop(embedding_name)
-                if embedding_args:
-                    embedding_args = {**kwargs, **embeddings_common, **embedding_args}
-                    x = cls.embedding(x, name=embedding_name, **embedding_args)
+            embeddings = embeddings if isinstance(embeddings, list) else [embeddings]
+
+            for i, embedding in enumerate(embeddings):
+                embedding_args = {**kwargs, **embedding}
+                x = cls.embedding(x, name='embedding'+str(i), **embedding_args)
 
             encoder_outputs.append(x)
 
@@ -163,7 +158,6 @@ class EncoderDecoder(TFModel):
             decoder_args = {**kwargs, **decoder}
             x = cls.decoder(encoder_outputs, name='decoder', **decoder_args)
         return x
-
 
     @classmethod
     def head(cls, inputs, targets, name='head', **kwargs):
@@ -174,7 +168,6 @@ class EncoderDecoder(TFModel):
             channels = cls.num_channels(targets)
             x = conv_block(x, filters=channels, **kwargs)
         return x
-
 
     @classmethod
     def block(cls, inputs, name='block', **kwargs):
