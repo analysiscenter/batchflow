@@ -4,7 +4,7 @@ Liang-Chieh Chen, Yukun Zhu, George Papandreou, Florian Schroff, Hartwig Adam.
 Convolution for Semantic Image Segmentation
 <https://arxiv.org/abs/1802.02611>`_"
 """
-from . import EncoderDecoder, Xception
+from . import EncoderDecoder, Xception, MobileNet
 from .layers import aspp
 
 
@@ -45,6 +45,7 @@ class DeepLab(EncoderDecoder):
         return config
 
 
+
 class DeepLabX(DeepLab):
     """ DeepLab v3+ model archtecture with Xception-based encoder.
 
@@ -82,9 +83,9 @@ class DeepLabX(DeepLab):
         config['body/encoder/base'] = Xception
         config['body/encoder/entry'] = dict(num_stages=None, filters=None, strides=2, combine_type='conv')
         config['body/encoder/middle'] = dict(num_stages=None, filters=None, strides=1, combine_type='sum')
-        config['body/encoder/exit'] = dict(num_stages=None, filters=None, strides=1, depth_activation=True, combine_type='conv')
+        config['body/encoder/exit'] = dict(num_stages=None, filters=None, strides=1,
+                                           depth_activation=True, combine_type='conv')
         config['body/encoder/downsample'] = dict(layout=None)
-
         return config
 
 class DeepLabX8(DeepLabX):
@@ -96,9 +97,9 @@ class DeepLabX8(DeepLabX):
 
         config['body/encoder/entry/num_stages'] = 4
         config['body/encoder/entry/filters'] = [[64]*3,
-                                                 [128]*3,
-                                                 [256]*3,
-                                                 [728]*3]
+                                                [128]*3,
+                                                [256]*3,
+                                                [728]*3]
         config['body/encoder/entry/strides'] = [2, 2, 2, 1]
 
         config['body/encoder/middle/num_stages'] = 8
@@ -108,7 +109,7 @@ class DeepLabX8(DeepLabX):
         config['body/encoder/exit/num_stages'] = 2
         config['body/encoder/exit/rate'] = [2, 4]
         config['body/encoder/exit/filters'] = [[728, 1024, 1024],
-                                                [1536, 1536, 2048]]
+                                               [1536, 1536, 2048]]
 
         config['body/embedding/rates'] = (12, 24, 36)
 
@@ -124,9 +125,9 @@ class DeepLabX16(DeepLabX):
 
         config['body/encoder/entry/num_stages'] = 4
         config['body/encoder/entry/filters'] = [[64]*3,
-                                                 [128]*3,
-                                                 [256]*3,
-                                                 [728]*3]
+                                                [128]*3,
+                                                [256]*3,
+                                                [728]*3]
         config['body/encoder/entry/strides'] = [2, 2, 2, 2]
 
         config['body/encoder/middle/num_stages'] = 16
@@ -136,7 +137,7 @@ class DeepLabX16(DeepLabX):
         config['body/encoder/exit/num_stages'] = 2
         config['body/encoder/exit/rate'] = [2, 4]
         config['body/encoder/exit/filters'] = [[728, 1024, 1024],
-                                                [1536, 1536, 2048]]
+                                               [1536, 1536, 2048]]
 
         config['body/embedding/rates'] = (6, 12, 18)
 
@@ -155,9 +156,9 @@ class DeepLabXS(DeepLabX):
 
         config['body/encoder/entry/num_stages'] = 4
         config['body/encoder/entry/filters'] = [[6]*3,
-                                                 [1]*3,
-                                                 [2]*3,
-                                                 [7]*3]
+                                                [1]*3,
+                                                [2]*3,
+                                                [7]*3]
         config['body/encoder/entry/strides'] = [2, 2, 2, 2]
 
         config['body/encoder/middle/num_stages'] = 4
@@ -167,9 +168,15 @@ class DeepLabXS(DeepLabX):
         config['body/encoder/exit/num_stages'] = 2
         config['body/encoder/exit/rate'] = [2, 4]
         config['body/encoder/exit/filters'] = [[7, 10, 10],
-                                                [15, 15, 20]]
+                                               [15, 15, 20]]
 
         config['body/embedding/rates'] = (6, 12, 18)
 
         config['body/decoder'] = dict(skip=True, num_stages=4, factor=[1, 4, 1, 4])
         return config
+
+
+
+class DeepLabM(DeepLab):
+    """ DeepLab v3+ model archtecture with MobileNet-based encoder. """
+    pass
