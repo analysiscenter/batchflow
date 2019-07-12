@@ -63,7 +63,7 @@ class Xception(TFModel):
             x = inputs
 
             # Entry flow: downsample the inputs
-            with tf.variable_scope('entry_flow'):
+            with tf.variable_scope('entry'):
                 entry_stages = entry.pop('num_stages', 0)
                 for i in range(entry_stages):
                     with tf.variable_scope('group-'+str(i)):
@@ -72,20 +72,20 @@ class Xception(TFModel):
                         x = tf.identity(x, name='output')
 
             # Middle flow: thorough processing
-            with tf.variable_scope('middle_flow'):
+            with tf.variable_scope('middle'):
                 middle_stages = middle.pop('num_stages', 0)
                 for i in range(middle_stages):
                     args = {**kwargs, **middle, **unpack_args(middle, i, middle_stages)}
                     x = cls.block(x, name='block-'+str(i), **args)
 
             # Exit flow: final increase in number of feature maps
-            with tf.variable_scope('exit_flow'):
+            with tf.variable_scope('exit'):
                 exit_stages = exit.pop('num_stages', 0)
                 for i in range(exit_stages):
                     args = {**kwargs, **exit, **unpack_args(exit, i, exit_stages)}
                     x = cls.block(x, name='block-'+str(i), **args)
 
-            with tf.variable_scope('entry_flow/group-'+str(entry_stages)):
+            with tf.variable_scope('entry/group-'+str(entry_stages)):
                 x = tf.identity(x, name='output')
         return x
 
@@ -153,7 +153,7 @@ class Xception(TFModel):
             scope = tf.get_default_graph().get_name_scope()
             encoder_tensors = [inputs]
             for i in range(steps):
-                tensor_name = scope + '/body/entry_flow/group-'+str(i) + '/output:0'
+                tensor_name = scope + '/body/entry/group-'+str(i) + '/output:0'
                 x = tf.get_default_graph().get_tensor_by_name(tensor_name)
                 encoder_tensors.append(x)
         return encoder_tensors

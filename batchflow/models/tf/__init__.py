@@ -24,4 +24,4 @@ from .pyramidnet import PyramidNet, PyramidNet18, PyramidNet34, PyramidNet50, Py
 from .tf_sampler import TfSampler
 from .deep_galerkin import DeepGalerkin
 from .xception import Xception, XceptionS
-from .deeplab import DeepLab, DeepLabS, DeepLab8, DeepLab16
+from .deeplab import DeepLab, DeepLabXS, DeepLabX8, DeepLabX16
