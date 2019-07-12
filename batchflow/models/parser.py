@@ -22,14 +22,14 @@ except ImportError:
 LABELS_MAPPING = {
     '__sub__': '-', '__rsub__': '-',
     '__mul__': '*', '__rmul__': '*',
-    '__div__': '/', '__rdiv__': '/', '__truediv__': '/', '__rtruediv__': '/',
+    '__div__': '/', '__rdiv__': '/',
+    '__truediv__': '/', '__rtruediv__': '/',
     '__add__': '+', '__radd__': '+',
     '__pow__': '^', '__rpow__': '^'
 }
 
 
-def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__', '__sub__', '__rsub__',
-                                     '__truediv__', '__rtruediv__', '__pow__', '__rpow__')):
+def add_binary_magic(cls):
     """ Add binary-magic operators to `SyntaxTreeNode`-class. Allows to create and parse syntax trees
     using binary operations like '+', '-', '*', '/'.
 
@@ -44,6 +44,8 @@ def add_binary_magic(cls, operators=('__add__', '__radd__', '__mul__', '__rmul__
     -------
     modified class.
     """
+    operators = list(LABELS_MAPPING.keys())
+
     for magic_name in operators:
         def magic(self, other, magic_name=magic_name):
             return cls(LABELS_MAPPING.get(magic_name), self, other)
@@ -76,14 +78,21 @@ class SyntaxTreeNode():
         return tuple((self.name, *self._args, self._kwargs)).__repr__()
 
 
+def get_num_perturbations(form):
+    """ Get number of unique perturbations (created via `R` letter) in the passed form."""
+    n_args = len(inspect.signature(form).parameters)
+    tree = form(*[SyntaxTreeNode('_' + str(i)) for i in range(n_args)])
+    return len(get_unique_perturbations(tree))
+
 def get_unique_perturbations(tree):
     """ Get unique names of perturbation-variables (those containing 'R' in its name) from a parse-tree.
     """
     # pylint: disable=protected-access
-    if isinstance(tree, (int, float, str)):
+    if isinstance(tree, (int, float, str, tf.Tensor, tf.Variable)):
         return []
-    if 'R' in tree.name:
-        return [tree.name]
+
+    if tree.name == 'R':
+        return [tree._args[0]]
     if len(tree) == 0:
         return []
 
@@ -91,7 +100,7 @@ def get_unique_perturbations(tree):
     for arg in tree._args:
         result += get_unique_perturbations(arg)
 
-    return list(np.unique(result))
+    return list(set(result))
 
 
 MATH_TOKENS = ['sin', 'cos', 'tan',
@@ -129,6 +138,7 @@ def make_token(module='tf', name=None, namespaces=None):
         d_func = lambda f, x: tf.gradients(f, x)[0]
         v_func = tf_v
         c_func = tf_c
+        r_func = tf_r
     elif module in ['numpy', 'np']:
         namespaces = namespaces or [np, np.math]
         if name == 'D':
@@ -145,7 +155,7 @@ def make_token(module='tf', name=None, namespaces=None):
     letters = {'D': d_func,
                'V': v_func,
                'C': c_func,
-               'R': lambda x: x}
+               'R': r_func}
 
     method_ = letters.get(name) or fetch_method(name, namespaces)
     method = (lambda *args, **kwargs: SyntaxTreeNode(name, *args, **kwargs)
@@ -204,7 +214,7 @@ def add_tokens(var_dict=None, postfix='__', module='tf', names=None, namespaces=
 
 
 
-# Tf implementations of custom letters
+# TF implementations of custom letters
 def tf_v(*args, prefix='addendums', **kwargs):
     """ Tensorflow implementation of `V` letter: adjustable variation of the coefficient. """
     # Parsing arguments
@@ -246,6 +256,13 @@ def tf_c(*args, prefix='addendums', **kwargs):
         points = tf.concat(args, axis=-1, name=block_name + '/concat')
         block = conv_block(points, name=block_name, **kwargs)
         return block
+
+def tf_r(*args, **kwargs):
+    _ = kwargs
+    if len(args) != 1:
+        raise ValueError('`R` is reserved to create exactly one perturbation at a time. ')
+    return tf.identity(args[0])
+
 
 def tf_check_tensor(prefix, name):
     """ Simple wrapper around `get_tensor_by_name`. """

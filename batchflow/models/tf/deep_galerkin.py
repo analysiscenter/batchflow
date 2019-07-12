@@ -9,17 +9,17 @@ from tqdm import tqdm_notebook, tqdm
 
 from . import TFModel
 from .layers import conv_block
-# from ..parser import SyntaxTreeNode, parse, get_unique_perturbations
+from ..parser import get_num_perturbations
 
 
 
 class DeepGalerkin(TFModel):
-    r""" Deep Galerkin model for solving partial differential equations (PDEs) of the second order
-    on rectangular domains using neural networks. Inspired by Sirignano J., Spiliopoulos K.
-    "`DGM: A deep learning algorithm for solving partial differential equations<http://arxiv.org/abs/1708.07469>`_"
+    r""" Deep Galerkin model for solving partial differential equations (PDEs) of up to the second order
+    on rectangular domains using neural networks.
+
     In addition, allows to solve random (parametric) PDEs in strong form as discussed in Nabian M.A., Meidani H.
     "`A Deep Neural Network Surrogate for High-Dimensional Random Partial Differential Equations
-    <https://arxiv.org/pdf/1806.02957.pdf>`_"
+    <https://arxiv.org/abs/1806.02957>`_"
 
     **Configuration**
 
@@ -54,8 +54,9 @@ class DeepGalerkin(TFModel):
             is supplied. Defines the multipliers applied to network for binding initial conditions.
             `sigmoid` works better in problems with asymptotic steady states (heat equation, e.g.).
 
-    `track`-dict allows for logging of differentials of the solution-approximator. Can be used for
-    keeping track on the model-training process.
+    track : dict
+        allows for logging of differentials of the solution-approximator. Can be used for
+        keeping track on the model-training process.
 
     Examples
     --------
@@ -104,13 +105,15 @@ class DeepGalerkin(TFModel):
         n_dims = pde.get('n_dims')
         n_funs = pde.get('n_funs', 1)
         n_eqns = pde.get('n_eqns', n_funs)
-        n_perturbations = pde.get('n_perturbations', 0)
 
         # Make sure that `form` describes necessary number of equations
         form = pde.get('form')
         form = form if isinstance(form, (tuple, list)) else [form]
         assert len(form) == n_eqns
         pde.update({'form': form})
+
+        # Count unique usages of `R`
+        n_perturbations = get_num_perturbations(form[0])
 
         # Convert each expression to track to list
         track = pde.get('track')
@@ -139,15 +142,11 @@ class DeepGalerkin(TFModel):
         # Make sure that initial conditions are callable
         init_conds = pde.get('initial_condition', None)
         if init_conds is not None:
-            n_dims_xs = n_dims - 1
-
             init_conds = self._make_nested_list(init_conds, n_funs, 'initial')
             self.config.update({'pde/initial_condition': init_conds})
 
         # make sure that boundary condition is callable
         bound_cond = pde.get('boundary_condition', [0.0]*n_funs)
-        n_dims_xs = n_dims if init_conds is None else n_dims - 1
-
         bound_cond = self._make_nested_list(bound_cond, n_funs, 'boundary')
         self.config.update({'pde/boundary_condition': bound_cond})
 
@@ -171,8 +170,8 @@ class DeepGalerkin(TFModel):
                 raise ValueError('Multiple functions must have multiple {} conditions.'.format(name))
         assert len(list_cond) == n_funs
 
+        results = []
         for i in range(n_funs):
-            results = []
             result = []
             for cond in list_cond[i]:
                 if callable(cond):
@@ -185,7 +184,6 @@ class DeepGalerkin(TFModel):
     def _make_ops(self, config):
         """ Stores necessary operations in 'config'. """
         # retrieving variables
-
         ops = config.get('output')
         track = config.get('track')
         coordinates = self.get_from_attr('coordinates')
@@ -204,7 +202,6 @@ class DeepGalerkin(TFModel):
         # form for output-transformation
         config['predictions'] = self._make_form_calculator(config.get("common/form"), coordinates,
                                                            name='predictions', pde=config['common'])
-
         # forms for tracking
         if track is not None:
             for op in track.keys():
@@ -267,9 +264,15 @@ class DeepGalerkin(TFModel):
         self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
 
     @classmethod
+    def body(cls, inputs, name='body', **kwargs):
+        """ Body of the neural network.
+        Shared between all of the unknown functions in the PDE."""
+        return super().body(inputs, name, **kwargs)
+
+    @classmethod
     def head(cls, inputs, name='head', **kwargs):
-        """ Head (final) block of the neural network-model. Makes one output branch for each
-        equation in PDE-system.
+        """ Head (final) block of the neural network.
+        Makes one individual output branch for each unknown function in the PDE-system.
         """
         n_funs = kwargs.get('n_funs')
         kwargs = cls.fill_params('head', **kwargs)
@@ -304,8 +307,8 @@ class DeepGalerkin(TFModel):
             time_mode = kwargs["time_multiplier"]
 
             # Separate variables and perturbations
-            perturbations = coordinates[n_dims:]
             coordinates = coordinates[:n_dims]
+            perturbations = coordinates[n_dims:]
 
             lower, upper = [[bounds[i] for bounds in domain] for i in range(2)]
             n_dims_xs = n_dims if init_cond is None else n_dims - 1
@@ -507,9 +510,8 @@ class DGSolver:
                 getattr(self, name).append(tensor)
 
 
-    def solve(self, points, fetches=None):
+    def solve(self, points=None, fetches=None):
         """ Predict values of function on array of points.
-        For more info, check :class:`TFModel.predict` docstring.
 
         Parameters
         ----------
@@ -521,4 +523,7 @@ class DGSolver:
         -------
         Calculated values of tensors in `fetches` in the same order and structure.
         """
-        return self.model.predict(fetches=fetches, feed_dict={'points': points})
+        if points is not None:
+            return self.model.predict(fetches=fetches,
+                                      feed_dict={'points': points})
+        return self.model.predict(fetches=fetches)
