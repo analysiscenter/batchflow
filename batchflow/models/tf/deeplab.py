@@ -179,4 +179,8 @@ class DeepLabXS(DeepLabX):
 
 class DeepLabM(DeepLab):
     """ DeepLab v3+ model archtecture with MobileNet-based encoder. """
-    pass
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['body/encoder/base'] = MobileNet
+        return config
