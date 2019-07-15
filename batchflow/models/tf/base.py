@@ -51,7 +51,8 @@ class TFModel(BaseModel):
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
 
     device : str or sequence of str
-        device name(s), e.g. '/device:GPU:0'. Regular expressions are allowed, e.g. 'GPU:*'.
+        device name(s), e.g. '/device:GPU:0' (TensorFlow-like format), 'gpu:1:, 'CPU:0'.
+        Regular expressions are allowed, e.g. 'GPU:*'.
         Default behaviour is to use the first available GPU (or CPU if no GPUs are detected).
         See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
 
