@@ -405,13 +405,18 @@ class ImagesBatch(BaseImagesBatch):
         ----------
         image_shape : sequence
             shape of the input image.
-        origin : array_like, sequence, {'center', 'top_left', 'random'}
+        origin : array_like, sequence, {'center', 'top_left', 'top_right', 'bottom_left', 'bottom_right', 'random'}
             Position of the input image with respect to the background.
-
             - 'center' - place the center of the input image on the center of the background and crop
                          the input image accordingly.
             - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
                            and crop the input image accordingly.
+            - 'top_right' - crop an image such that upper-right corners of
+                           an image and the cropping box coincide
+            - 'bottom_left' - crop an image such that lower-left corners of
+                           an image and the cropping box coincide
+            - 'bottom_right' - crop an image such that lower-right corners of
+                           an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
             - other - place the upper-left corner of the input image on the given position in the background.
@@ -425,6 +430,13 @@ class ImagesBatch(BaseImagesBatch):
         if isinstance(origin, str):
             if origin == 'top_left':
                 origin = 0, 0
+            elif origin == 'top_right':
+                origin = (background_shape[0]-image_shape[0]+1, 0)
+            elif origin == 'bottom_left':
+                origin = (0, background_shape[1]-image_shape[1]+1)
+            elif origin == 'bottom_right':
+                origin = (background_shape[0]-image_shape[0]+1,
+                          background_shape[1]-image_shape[1]+1)
             elif origin == 'center':
                 origin = np.maximum(0, np.asarray(background_shape) - image_shape) // 2
             elif origin == 'random':
@@ -486,16 +498,21 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         origin : sequence, str
-            Upper-left corner of the cropping box. Can be one of:
-
-            - sequence - corner's coordinates in the form of (row, column)
-            - 'top_left' - crop an image such that upper-left corners of
+            Location of the cropping box. Can be one of:
+            - 'center' - place the center of the input image on the center of the background and crop
+                the input image accordingly.
+            - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
+                           and crop the input image accordingly.
+            - 'top_right' - crop an image such that upper-right corners of
                            an image and the cropping box coincide
-            - 'center' - crop an image such that centers of
-                         the image and the cropping box coincide
-            - 'random' - place the upper-left corner of the cropping box at a random position
+            - 'bottom_left' - crop an image such that lower-left corners of
+                           an image and the cropping box coincide
+            - 'bottom_right' - crop an image such that lower-right corners of
+                           an image and the cropping box coincide
+            - 'random' - place the upper-left corner of the input image on the randomly sampled position
+                         in the background. Position is sampled uniformly such that there is no need for cropping.
+            - array_like - place the upper-left corner of the input image on the given position in the background.
         shape : sequence
-
             - sequence - crop size in the form of (rows, columns)
         crop_boundaries : bool
             If `True` then crop is got only from image's area. Shape of the crop might diverge with the passed one
@@ -505,6 +522,12 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
+
+        Notes
+        -----
+        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each 
+        element, as origin will be sampled independently for each `src` element. 
+        To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
         """
         origin = self._calc_origin(shape, origin, image.size)
         right_bottom = origin + shape
@@ -526,15 +549,28 @@ class ImagesBatch(BaseImagesBatch):
         ----------
         background : PIL.Image, np.ndarray of np.uint8
         origin : sequence, str
-            Upper-left corner of the cropping box. Can be one of:
-
-            - sequence - corner's coordinates in the form of (row, column).
-            - 'top_left' - crop an image such that upper-left corners of an image and the cropping box coincide.
-            - 'center' - crop an image such that centers of an image and the cropping box coincide.
-            - 'random' - place the upper-left corner of the cropping box at a random position.
-
+            Location of the cropping box. Can be one of:
+            - 'center' - place the center of the input image on the center of the background and crop
+                         the input image accordingly.
+            - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
+                           and crop the input image accordingly.
+            - 'top_right' - crop an image such that upper-right corners of
+                           an image and the cropping box coincide
+            - 'bottom_left' - crop an image such that lower-left corners of
+                           an image and the cropping box coincide
+            - 'bottom_right' - crop an image such that lower-right corners of
+                           an image and the cropping box coincide
+            - 'random' - place the upper-left corner of the input image on the randomly sampled position
+                         in the background. Position is sampled uniformly such that there is no need for cropping.
+            - array_like - place the upper-left corner of the input image on the given position in the background.
         mask : None, PIL.Image, np.ndarray of np.uint8
             mask passed to PIL.Image.paste
+
+        Notes
+        -----
+        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each 
+        element, as origin will be sampled independently for each `src` element. 
+        To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
         """
         if not isinstance(background, PIL.Image.Image):
             background = PIL.Image.fromarray(background)
@@ -954,14 +990,19 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         origin : sequence, str
-            Upper-left corner of a filled box. Can be one of:
-
-            - sequence - corner's coordinates in the form of (row, column).
+            Location of the cropping box. Can be one of:
             - 'top_left' - crop an image such that upper-left corners of
                            an image and the filled box coincide.
+            - 'top_right' - crop an image such that upper-right corners of
+                           an image and the cropping box coincide
+            - 'bottom_left' - crop an image such that lower-left corners of
+                           an image and the cropping box coincide
+            - 'bottom_right' - crop an image such that lower-right corners of
+                           an image and the cropping box coincide
             - 'center' - crop an image such that centers of
                          an image and the filled box coincide.
             - 'random' - place the upper-left corner of the filled box at a random position.
+            - array_like - place the upper-left corner of the input image on the given position in the background.
         shape : sequence, int
             Shape of a filled box. Can be one of:
 
@@ -978,6 +1019,12 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
+
+        Notes
+        -----
+        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each 
+        element, as origin will be sampled independently for each `src` element. 
+        To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
         """
         image = image.copy()
         shape = (shape, shape) if isinstance(shape, Number) else shape
