@@ -493,7 +493,7 @@ class ImagesBatch(BaseImagesBatch):
         rescaled_shape = list(np.int32(np.ceil(np.asarray(original_shape)*factor)))
         rescaled_image = image.resize(rescaled_shape, resample=resample)
         if preserve_shape:
-            rescaled_image = self._preserve_shape(original_shape, rescaled_image, origin)
+            rescaled_image = self._preserve_shape(original_shape, rescaled_image, input_origin, crop_origin)
         return rescaled_image
 
     def _crop_(self, image, origin, shape, crop_boundaries=False):
