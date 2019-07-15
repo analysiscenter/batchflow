@@ -330,9 +330,6 @@ class ImagesBatch(BaseImagesBatch):
             Results after inbatch_parallel.
         component : str
             component to assemble
-        preserve_shape : bool
-            If True then all images are cropped from the top left corner to have similar shapes.
-            Shape is chosen to be minimal among given images.
         """
         if isinstance(result[0], PIL.Image.Image):
             setattr(self, component, np.asarray(result, dtype=object))
@@ -444,7 +441,7 @@ class ImagesBatch(BaseImagesBatch):
                           np.random.randint(background_shape[1]-image_shape[1]+1))
         return np.asarray(origin, dtype=np.int)
 
-    def _scale_(self, image, factor, preserve_shape=False, origin='center', resample=0):
+    def _scale_(self, image, factor, preserve_shape=False, input_origin='center', crop_origin='center', resample=0):
         """ Scale the content of each image in the batch.
 
         Resulting shape is obtained as original_shape * factor.
@@ -460,17 +457,26 @@ class ImagesBatch(BaseImagesBatch):
         preserve_shape : bool
             whether to preserve the shape of the image after scaling
 
-        origin : {'center', 'top_left', 'random'}, sequence
+        input_origin : array-like, {'center', 'top_left', 'random'}
             Relevant only if `preserve_shape` is True.
             Position of the scaled image with respect to the original one's shape.
-
-            - 'center' - place the center of the rescaled image on the center of the original one and crop
-                         the rescaled image accordingly
-            - 'top_left' - place the upper-left corner of the rescaled image on the upper-left of the original one
-                           and crop the rescaled image accordingly
-            - 'random' - place the upper-left corner of the rescaled image on the randomly sampled position
-                         in the original one. Position is sampled uniformly such that there is no need for cropping.
-            - sequence - place the upper-left corner of the rescaled image on the given position in the original one.
+            - 'center' - place the center of the input image on the center of the background and crop
+                the input image accordingly.
+            - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
+                           and crop the input image accordingly.
+            - 'top_right' - crop an image such that upper-right corners of
+                           an image and the cropping box coincide
+            - 'bottom_left' - crop an image such that lower-left corners of
+                           an image and the cropping box coincide
+            - 'bottom_right' - crop an image such that lower-right corners of
+                           an image and the cropping box coincide
+            - 'random' - place the upper-left corner of the input image on the randomly sampled position
+                         in the background. Position is sampled uniformly such that there is no need for cropping.
+            - array_like - place the upper-left corner of the input image on the given position in the background.
+        crop_origin: array-like, {'center', 'top_left', 'random'}
+            Relevant only if `preserve_shape` is True.
+            Position of crop from scaled image if `scale` > 1.
+            Has same values as input origin.
         resample: int
             Parameter passed to PIL.Image.resize. Interpolation order
         src : str
@@ -587,7 +593,7 @@ class ImagesBatch(BaseImagesBatch):
 
         return background
 
-    def _preserve_shape(self, original_shape, transformed_image, origin='center'):
+    def _preserve_shape(self, original_shape, transformed_image, input_origin='center', crop_origin='center'):
         """ Change the transformed image's shape by cropping and adding empty pixels to fit the shape of original image.
 
         Parameters
@@ -615,11 +621,9 @@ class ImagesBatch(BaseImagesBatch):
         else:
             background = np.zeros((*original_shape, n_channels), dtype=np.uint8)
 
-        crop_origin = 'top_left' if origin != 'center' else 'center'
-
         return self._put_on_background_(self._crop_(transformed_image, crop_origin, original_shape, True),
                                         background,
-                                        origin)
+                                        input_origin)
 
     def _filter_(self, image, mode, *args, **kwargs):
         """ Filters an image. Calls image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))
