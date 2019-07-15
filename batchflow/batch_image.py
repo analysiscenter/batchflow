@@ -409,11 +409,11 @@ class ImagesBatch(BaseImagesBatch):
             - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
                            and crop the input image accordingly.
             - 'top_right' - crop an image such that upper-right corners of
-                           an image and the cropping box coincide
+                            an image and the cropping box coincide
             - 'bottom_left' - crop an image such that lower-left corners of
-                           an image and the cropping box coincide
+                              an image and the cropping box coincide
             - 'bottom_right' - crop an image such that lower-right corners of
-                           an image and the cropping box coincide
+                               an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
             - other - place the upper-left corner of the input image on the given position in the background.
@@ -461,22 +461,22 @@ class ImagesBatch(BaseImagesBatch):
             Relevant only if `preserve_shape` is True.
             Position of the scaled image with respect to the original one's shape.
             - 'center' - place the center of the input image on the center of the background and crop
-                the input image accordingly.
+                         the input image accordingly.
             - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
                            and crop the input image accordingly.
             - 'top_right' - crop an image such that upper-right corners of
-                           an image and the cropping box coincide
+                            an image and the cropping box coincide
             - 'bottom_left' - crop an image such that lower-left corners of
-                           an image and the cropping box coincide
+                              an image and the cropping box coincide
             - 'bottom_right' - crop an image such that lower-right corners of
-                           an image and the cropping box coincide
+                               an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
             - array_like - place the upper-left corner of the input image on the given position in the background.
         crop_origin: array-like, {'center', 'top_left', 'random'}
             Relevant only if `preserve_shape` is True.
             Position of crop from scaled image if `scale` > 1.
-            Has same values as input origin.
+            Has same values as `input origin`.
         resample: int
             Parameter passed to PIL.Image.resize. Interpolation order
         src : str
@@ -485,6 +485,13 @@ class ImagesBatch(BaseImagesBatch):
             Component to write images to. Default is 'images'.
         p : float
             Probability of applying the transform. Default is 1.
+
+        Notes
+        -----
+        Using 'random' option for origin with `src` as list with multiple elements will not result in same crop for each
+        element, as origin will be sampled independently for each `src` element.
+        To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
+
         Returns
         -------
         self
@@ -531,8 +538,8 @@ class ImagesBatch(BaseImagesBatch):
 
         Notes
         -----
-        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each 
-        element, as origin will be sampled independently for each `src` element. 
+        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each
+        element, as origin will be sampled independently for each `src` element.
         To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
         """
         origin = self._calc_origin(shape, origin, image.size)
@@ -574,8 +581,8 @@ class ImagesBatch(BaseImagesBatch):
 
         Notes
         -----
-        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each 
-        element, as origin will be sampled independently for each `src` element. 
+        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each
+        element, as origin will be sampled independently for each `src` element.
         To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
         """
         if not isinstance(background, PIL.Image.Image):
@@ -600,16 +607,24 @@ class ImagesBatch(BaseImagesBatch):
         ----------
         original_shape : sequence
         transformed_image : np.ndarray
-        origin : {'center', 'top_left', 'random'}, sequence
-            Position of the transformed image with respect to the original one's shape.
-
-            - 'center' - place the center of the transformed image on the center of the original one and crop
-                         the transformed image accordingly.
-            - 'top_left' - place the upper-left corner of the transformed image on the upper-left of the original one
-                           and crop the transformed image accordingly.
-            - 'random' - place the upper-left corner of the transformed image on the randomly sampled position
-                         in the original one. Position is sampled uniformly such that there is no need for cropping.
-            - sequence - place the upper-left corner of the transformed image on the given position in the original one.
+        input_origin : array-like, {'center', 'top_left', 'random'}
+            Position of the scaled image with respect to the original one's shape.
+            - 'center' - place the center of the input image on the center of the background and crop
+                         the input image accordingly.
+            - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
+                           and crop the input image accordingly.
+            - 'top_right' - crop an image such that upper-right corners of
+                            an image and the cropping box coincide
+            - 'bottom_left' - crop an image such that lower-left corners of
+                              an image and the cropping box coincide
+            - 'bottom_right' - crop an image such that lower-right corners of
+                               an image and the cropping box coincide
+            - 'random' - place the upper-left corner of the input image on the randomly sampled position
+                         in the background. Position is sampled uniformly such that there is no need for cropping.
+            - array_like - place the upper-left corner of the input image on the given position in the background.
+        crop_origin: array-like, {'center', 'top_left', 'random'}
+            Position of crop from transformed image.
+            Has same values as `input_origin`.
 
         Returns
         -------
