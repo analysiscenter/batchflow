@@ -64,7 +64,7 @@ my_workflow = my_dataset.pipeline()
               .init_model('dynamic', ResNet34, config={
                           'inputs/images/shape': B('image_shape'),
                           'labels/classes': 10,
-                          'input_block/inputs': 'images'})
+                          'initial_block/inputs': 'images'})
               .load('/some/path')
               .some_transform()
               .another_transform()
