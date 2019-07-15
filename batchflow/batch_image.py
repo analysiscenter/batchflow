@@ -1041,8 +1041,8 @@ class ImagesBatch(BaseImagesBatch):
 
         Notes
         -----
-        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each 
-        element, as origin will be sampled independently for each `src` element. 
+        Using 'random' origin with `src` as list with multiple elements will not result in same crop for each
+        element, as origin will be sampled independently for each `src` element.
         To randomly sample same origin for a number of components, use `R` named expression for `origin` argument.
         """
         image = image.copy()
