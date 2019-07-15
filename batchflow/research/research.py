@@ -6,7 +6,6 @@ from copy import copy, deepcopy
 from collections import OrderedDict
 from math import ceil
 import json
-import warnings
 import dill
 import pandas as pd
 
@@ -15,6 +14,7 @@ from .distributor import Distributor
 from .workers import PipelineWorker
 from .grid import Grid, Option
 from .job import Job
+from .utils import get_metrics
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
@@ -25,7 +25,6 @@ class Research:
         self.trails = 3
         self.workers = 1
         self.bar = False
-        self.initial_name = 'research'
         self.n_reps = 1
         self.name = 'research'
         self.worker_class = PipelineWorker
@@ -37,7 +36,6 @@ class Research:
         self.timeout = 5
         self.n_splits = None
         self.shuffle = None
-        self.framework = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
                      name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
@@ -71,7 +69,7 @@ class Research:
 
             If positive int, pipeline will be excuted for that iteration
 
-            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
+            If str, must be `'%{step}'` where step is int and function will be executed each `step` iterations.
 
             If list, must be list of int or str descibed above
         dump : int, str or list of int or str
@@ -100,9 +98,43 @@ class Research:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
 
         unit = Executable()
-        unit.add_pipeline(root, name, branch, dataset, part, variables,
-                          execute, dump, run, logging, **kwargs)
+        unit.add_pipeline(root, name, branch, dataset, part, variables, execute, dump, run, logging, **kwargs)
         self.executables[name] = unit
+        return self
+
+    def get_metrics(self, pipeline, metrics_var, metrics_name,
+                    returns=None, execute='%1', dump=-1, logging=False):
+        """ Evaluate metrics.
+
+        Parameters
+        ----------
+        pipeline : str
+            pipeline name
+        metrics_var : str
+            pipeline variable which accumulate metrics
+        metrics_name : str or list of str
+            metrics to evaluate
+        returns : str, list of str or None
+            names to save metrics into results
+            if None, `function` will be executed without any saving results and dumping
+        execute : int, str or list of int or str
+            If -1, metrics will be evaluated just at last iteration (if `iteration + 1 == n_iters`
+            or `StopIteration` was raised)
+
+            If positive int, metrics will be evaluated for that iteration
+
+            If str, must be `'%{step}'` where step is int and metrics will be evaluated each `step` iterations.
+
+            If list, must be list of int or str descibed above
+        dump : int, str or list of int or str
+            iteration when results will be dumped and cleared. Similar to execute
+        logging : bool
+            include execution information to log file or not
+        """
+        name = pipeline + '_metrics'
+        self.add_function(get_metrics, returns, name, execute, dump,
+                          False, logging, pipeline=pipeline,
+                          metrics_var=metrics_var, metrics_name=metrics_name)
         return self
 
     def add_function(self, function, returns=None, name=None, execute='%1', dump=-1,
@@ -113,7 +145,7 @@ class Research:
         ----------
         function : callable
             callable object with following parameters:
-                experiment : `OrderedDict` of Executable
+                experiment : `OrderedDict` of Executable objects
                     all pipelines and functions that were added to Research
                 iteration : int
                     iteration when function is called
@@ -251,7 +283,7 @@ class Research:
             raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
-            bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
+            bar=False, gpu=None, worker_class=None, timeout=5, trails=2):
 
         """ Run research.
 
@@ -301,9 +333,6 @@ class Research:
             each job will be killed if it doesn't answer more then that time in minutes
         trails : int
             trails to execute job
-        framework : 'tf' or 'torch'
-            depends on the format of `C('device')`: `'/device:GPU:i'` for `'tf'` and `'cuda:i'` for `'torch'`.
-
 
         **How does it work**
 
@@ -319,12 +348,10 @@ class Research:
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
             self.trails = trails
-            self.initial_name = name
-            self.name = name
+            self.name = name or self.name
 
             self.n_splits = n_splits
             self.shuffle = shuffle
-            self.framework = framework
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
@@ -343,7 +370,7 @@ class Research:
             raise ValueError("Number of gpus / n_workers must be 1 \
                              or be divisible by the number of branches but {} was given".format(len(self.gpu)))
 
-        self.name = self._folder_exists(self.initial_name)
+        self._folder_exists(self.name)
 
         print("Research {} is starting...".format(self.name))
 
@@ -353,7 +380,7 @@ class Research:
 
         distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
         distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
-                  n_iters=self.n_iters, bar=self.bar, framework=self.framework)
+                  n_iters=self.n_iters, bar=self.bar)
         return self
 
     def __getstate__(self):
@@ -372,19 +399,12 @@ class Research:
         return gpu
 
     def _folder_exists(self, name):
-        name = name or 'research'
         if not os.path.exists(name):
-            dirname = name
+            os.makedirs(name)
         else:
-            i = 1
-            while os.path.exists(name + '_' + str(i)):
-                i += 1
-            dirname = name + '_' + str(i)
-            warnings.warn(
-                "Research with name {} already exists. That research will be renamed to {}".format(name, dirname)
+            raise ValueError(
+                "Research with name '{}' already exists".format(name)
             )
-        os.makedirs(dirname)
-        return dirname
 
     def save(self):
         """ Save description of the research to folder name/description. """
@@ -417,6 +437,7 @@ class Research:
             res = dill.load(file)
             res.loaded = True
             return res
+
 
 class Executable:
     """ Function or pipeline

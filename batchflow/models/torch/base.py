@@ -43,7 +43,7 @@ class TorchModel(BaseModel):
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
 
     device : str or torch.device
-        if str, a device name (e.g. 'cpu' or 'cuda:0').
+        if str, a device name (e.g. 'cpu' or 'gpu:0').
 
     inputs : dict
         model inputs (see :meth:`~.TorchModel._make_inputs`)
@@ -191,8 +191,7 @@ class TorchModel(BaseModel):
         config = self.build_config()
         self._full_config = config
 
-        if 'device' in config:
-            self.device = torch.device(config['device'])
+        self.device = self._get_device()
 
         self._build(config)
 
@@ -284,6 +283,22 @@ class TorchModel(BaseModel):
                 self._inputs['targets'] = self._inputs['labels']
             elif 'masks' in config:
                 self._inputs['targets'] = self._inputs['masks']
+
+    def _get_device(self):
+        device = self.config.get('device')
+        if device is torch.device or device is None:
+            _device = device
+        elif isinstance(device, str):
+            _device = device.split(':')
+            unit, index = _device if len(_device) > 1 else (device, '0')
+            if unit.lower() in ['gpu', 'cpu']:
+                unit = 'cuda' if unit.lower() == 'gpu' else 'cpu'
+                _device = torch.device(unit, int(index))
+            else:
+                raise ValueError('Unknown device type: ', device)
+        else:
+            raise TypeError('Wrong device type: ', type(device))
+        return _device
 
     def _make_loss(self, config):
         loss, args = unpack_fn_from_config('loss', config)
@@ -830,8 +845,8 @@ class TorchModel(BaseModel):
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
         inputs = self._fill_input(*args)
-        if targets:
-            targets = self._fill_input(targets)
+        if targets is not None:
+            targets = self._fill_input(targets)[0]
 
         self.model.eval()
 
@@ -895,17 +910,15 @@ class TorchModel(BaseModel):
 
         >>> torch_model.load(path='/path/to/models/resnet34')
 
-        >>> TorchModel(config={'device': 'cuda:2', 'load/path': '/path/to/models/resnet34'})
+        >>> TorchModel(config={'device': 'gpu:2', 'load/path': '/path/to/models/resnet34'})
 
         **How to move the model to device**
 
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args, kwargs
-        device = self.config.get('device')
+        device = self._get_device()
         if device:
-            if isinstance(device, str):
-                device = torch.device(device)
             checkpoint = torch.load(path, map_location=device)
         else:
             checkpoint = torch.load(path)
