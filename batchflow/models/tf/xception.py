@@ -30,16 +30,17 @@ class Xception(TFModel):
                 Stride of the middle `separable_block` inside `block`.
             depth_activation : bool or list of bools
                 Whether to use activation between depthwise and pointwise convolutions.
-            combine_type : {'sum', 'conv'}
+            combine_op : {'sum', 'softsum'}
                 Whether to use convolution for skip-connections inside `separable_block` or
                 just sum skip and output.
     """
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['body/entry'] = dict(num_stages=None, filters=None, strides=2, combine_type='conv')
-        config['body/middle'] = dict(num_stages=None, filters=None, strides=1, combine_type='sum')
-        config['body/exit'] = dict(num_stages=None, filters=None, strides=1, depth_activation=True, combine_type='conv')
+        config['body/entry'] = dict(num_stages=None, filters=None, strides=2, combine_op='softsum')
+        config['body/middle'] = dict(num_stages=None, filters=None, strides=1, combine_op='sum')
+        config['body/exit'] = dict(num_stages=None, filters=None, strides=1,
+                                   depth_activation=True, combine_op='softsum')
         return config
 
     def build_config(self, names=None):
@@ -84,13 +85,10 @@ class Xception(TFModel):
                 for i in range(exit_stages):
                     args = {**kwargs, **exit, **unpack_args(exit, i, exit_stages)}
                     x = cls.block(x, name='block-'+str(i), **args)
-
-            with tf.variable_scope('entry/group-'+str(entry_stages)):
-                x = tf.identity(x, name='output')
         return x
 
     @classmethod
-    def block(cls, inputs, filters, combine_type='sum', name='block', **kwargs):
+    def block(cls, inputs, filters, combine_op='softsum', name='block', **kwargs):
         """ Basic building block of the architecture.
         For details see figure 5 in the article.
 
@@ -103,19 +101,13 @@ class Xception(TFModel):
         x = inputs
 
         with tf.variable_scope(name):
-            # Prepare skip-connection
-            if combine_type == 'sum':
-                shortcut = inputs
-            elif combine_type == 'conv':
-                shortcut = conv_block(inputs, 'cn', filters[-1], kernel_size=1,
-                                      strides=strides[1], name='shortcut')
-
             # Three consecutive separable blocks
             for i, filter_ in enumerate(filters):
                 x = cls.separable_block(x, filter_, strides=strides[i],
                                         name='separable_conv-{}'.format(i), **kwargs)
 
-            outputs = tf.add_n([x, shortcut])
+            outputs = cls.combine([x, inputs], op=combine_op, strides=strides[1],
+                                  data_format=kwargs.get('data_format'))
         return outputs
 
     @classmethod
@@ -145,7 +137,7 @@ class Xception(TFModel):
         kwargs : dict
             body params
         """
-        steps = 1 + cls.get('entry/num_stages', config=cls.fill_params('body', **kwargs))
+        steps = cls.get('entry/num_stages', config=cls.fill_params('body', **kwargs))
 
         with tf.variable_scope(name):
             x = cls.body(inputs, name='body', **kwargs)

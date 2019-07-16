@@ -121,7 +121,7 @@ class EncoderDecoder(TFModel):
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=cls.block)
+        config['body/decoder/blocks'] = dict(base=cls.block, combine_op='softsum')
         config['head'] = dict(layout='c', kernel_size=1)
         return config
 
@@ -316,7 +316,6 @@ class EncoderDecoder(TFModel):
         with tf.variable_scope(name):
             x = inputs[-1]
 
-            axis = cls.channels_axis(kwargs.get('data_format'))
             for i in range(steps):
                 with tf.variable_scope('decoder-'+str(i)):
                     # Skip some of the steps
@@ -331,10 +330,12 @@ class EncoderDecoder(TFModel):
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of subkeys
                     x = base_block(x, name='post', **args)
 
-                    # Concatenate it with stored encoding of the ~same shape
+                    # Combine it with stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
+                        combine_op = args.get('combine_op')
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
-                        x = tf.concat((x, inputs[-i-3]), axis=axis, name='skip-concat')
+                        x = cls.combine([x, inputs[-i-3]], op=combine_op,
+                                        data_format=kwargs.get('data_format'))
         return x
 
 

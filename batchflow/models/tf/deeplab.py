@@ -80,10 +80,10 @@ class DeepLabX(DeepLab):
     def default_config(cls):
         config = super().default_config()
         config['body/encoder/base'] = Xception
-        config['body/encoder/entry'] = dict(num_stages=None, filters=None, strides=2, combine_type='conv')
-        config['body/encoder/middle'] = dict(num_stages=None, filters=None, strides=1, combine_type='sum')
+        config['body/encoder/entry'] = dict(num_stages=None, filters=None, strides=2, combine_op='softsum')
+        config['body/encoder/middle'] = dict(num_stages=None, filters=None, strides=1, combine_op='sum')
         config['body/encoder/exit'] = dict(num_stages=None, filters=None, strides=1,
-                                           depth_activation=True, combine_type='conv')
+                                           depth_activation=True, combine_op='softsum')
         config['body/encoder/downsample'] = dict(layout=None)
         return config
 
