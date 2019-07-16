@@ -262,7 +262,7 @@ class Batch:
         Raises
         ------
         ValueError
-            If a component ar an attribute with the given name already exists
+            If a component or an attribute with the given name already exists
         """
         if isinstance(components, str):
             components = (components,)
