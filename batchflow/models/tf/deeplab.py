@@ -38,9 +38,8 @@ class DeepLab(EncoderDecoder):
 
         config['body/embedding'] = dict(base=aspp)
 
-        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='b')
-        config['body/decoder/blocks'] = dict(base=cls.block)
+
         config['head'] = dict(layout='c', kernel_size=1)
         return config
 
@@ -117,7 +116,7 @@ class DeepLabX8(DeepLabX):
         return config
 
 class DeepLabX16(DeepLabX):
-    """ DeepLab with output stride 8 and Xception-based encoder. """
+    """ DeepLab with output stride 16 and Xception-based encoder. """
     @classmethod
     def default_config(cls):
         config = super().default_config()

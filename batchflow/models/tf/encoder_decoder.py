@@ -39,7 +39,7 @@ class EncoderDecoder(TFModel):
             other args : dict
                 Parameters for ``make_encoder`` method.
 
-        embedding : dict
+        embedding : dict or sequence of dicts
             base : callable
                 Tensor processing function. Default is :func:`~.layers.conv_block`.
             other args
@@ -146,7 +146,7 @@ class EncoderDecoder(TFModel):
             x = encoder_outputs[-1]
 
             # Bottleneck: working with compressed representation via multiple steps of processing
-            embeddings = embeddings if isinstance(embeddings, list) else [embeddings]
+            embeddings = embeddings if isinstance(embeddings, (tuple, list)) else [embeddings]
 
             for i, embedding in enumerate(embeddings):
                 embedding_args = {**kwargs, **embedding}
@@ -259,16 +259,8 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
-        steps = kwargs.get('num_stages', 1)
-        base_block = kwargs.get('base')
-        x = inputs
-
-        with tf.variable_scope(name):
-            for i in range(steps):
-                # Preprocess tensor with given block
-                args = {**kwargs, **unpack_args(kwargs, i, steps)} # enforce priority of keys
-                x = base_block(x, name='embedding-'+str(i), **args)
-        return x
+        base_block = kwargs.get('base', cls.block)
+        return base_block(inputs, name=name, **kwargs)
 
     @classmethod
     def decoder(cls, inputs, name='decoder', **kwargs):
@@ -387,15 +379,11 @@ class VariationalAutoEncoder(AutoEncoder):
         -------
         tf.Tensor
         """
-        steps = kwargs.get('num_stages', 1)
         base_block = kwargs.get('base')
-        x = inputs
 
         with tf.variable_scope(name):
-            for i in range(steps):
-                args = {**kwargs, **unpack_args(kwargs, i, steps)} # enforce priority of keys
-                mean = base_block(x, name='mean-'+str(i), **args)
-                std = base_block(x, name='std-'+str(i), **args)
-                eps = tf.random.normal(shape=tf.shape(mean), name='eps-'+str(i))
-                x = mean + eps*std
+            mean = base_block(inputs, name='mean', **kwargs)
+            std = base_block(inputs, name='std', **kwargs)
+            eps = tf.random.normal(shape=tf.shape(mean), name='eps')
+            x = mean + eps*std
         return x
