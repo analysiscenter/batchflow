@@ -441,7 +441,7 @@ class ImagesBatch(BaseImagesBatch):
                           np.random.randint(background_shape[1]-image_shape[1]+1))
         return np.asarray(origin, dtype=np.int)
 
-    def _scale_(self, image, factor, preserve_shape=False, input_origin='center', crop_origin='center', resample=0):
+    def _scale_(self, image, factor, preserve_shape=False, origin='center', resample=0):
         """ Scale the content of each image in the batch.
 
         Resulting shape is obtained as original_shape * factor.
@@ -457,9 +457,10 @@ class ImagesBatch(BaseImagesBatch):
         preserve_shape : bool
             whether to preserve the shape of the image after scaling
 
-        input_origin : array-like, {'center', 'top_left', 'random'}
+        origin : array-like, {'center', 'top_left', 'top_right', 'bottom_left', 'bottom_right', 'random'}
             Relevant only if `preserve_shape` is True.
-            Position of the scaled image with respect to the original one's shape.
+            If `scale` < 1, defines position of the scaled image with respect to the original one's shape.
+            If `scale` > 1, defines position of cropping box.
             - 'center' - place the center of the input image on the center of the background and crop
                          the input image accordingly.
             - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
@@ -473,10 +474,6 @@ class ImagesBatch(BaseImagesBatch):
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
             - array_like - place the upper-left corner of the input image on the given position in the background.
-        crop_origin: array-like, {'center', 'top_left', 'random'}
-            Relevant only if `preserve_shape` is True.
-            Position of crop from scaled image if `scale` > 1.
-            Has same values as `input origin`.
         resample: int
             Parameter passed to PIL.Image.resize. Interpolation order
         src : str
@@ -500,7 +497,7 @@ class ImagesBatch(BaseImagesBatch):
         rescaled_shape = list(np.int32(np.ceil(np.asarray(original_shape)*factor)))
         rescaled_image = image.resize(rescaled_shape, resample=resample)
         if preserve_shape:
-            rescaled_image = self._preserve_shape(original_shape, rescaled_image, input_origin, crop_origin)
+            rescaled_image = self._preserve_shape(original_shape, rescaled_image, origin)
         return rescaled_image
 
     def _crop_(self, image, origin, shape, crop_boundaries=False):
@@ -600,7 +597,7 @@ class ImagesBatch(BaseImagesBatch):
 
         return background
 
-    def _preserve_shape(self, original_shape, transformed_image, input_origin='center', crop_origin='center'):
+    def _preserve_shape(self, original_shape, transformed_image, origin='center'):
         """ Change the transformed image's shape by cropping and adding empty pixels to fit the shape of original image.
 
         Parameters
@@ -630,15 +627,15 @@ class ImagesBatch(BaseImagesBatch):
         -------
         np.ndarray : image after described actions
         """
-        n_channels = len(transformed_image.getbands())
-        if n_channels == 1:
-            background = np.zeros(original_shape, dtype=np.uint8)
-        else:
-            background = np.zeros((*original_shape, n_channels), dtype=np.uint8)
-
-        return self._put_on_background_(self._crop_(transformed_image, crop_origin, original_shape, True),
-                                        background,
-                                        input_origin)
+        transformed_shape = self._get_image_shape(transformed_image)
+        if np.all(np.array(transformed_shape) < np.array(original_shape)):
+            n_channels = len(transformed_image.getbands())
+            if n_channels == 1:
+                background = np.zeros(original_shape, dtype=np.uint8)
+            else:
+                background = np.zeros((*original_shape, n_channels), dtype=np.uint8)
+            return self._put_on_background_(transformed_image, background, origin)
+        return self._crop_(transformed_image, origin, original_shape, True)
 
     def _filter_(self, image, mode, *args, **kwargs):
         """ Filters an image. Calls image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))
