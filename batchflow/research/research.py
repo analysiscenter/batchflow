@@ -250,7 +250,7 @@ class Research:
             raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
-            bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
+            bar=False, gpu=None, worker_class=None, timeout=5, trials=2, framework='tf'):
 
         """ Run research.
 
@@ -298,7 +298,7 @@ class Research:
             if None, default gpu configuration will be used
         timeout : int
             each job will be killed if it doesn't answer more then that time in minutes
-        trails : int
+        trials : int
             trails to execute job
         framework : 'tf' or 'torch'
             depends on the format of `C('device')`: `'/device:GPU:i'` for `'tf'` and `'cuda:i'` for `'torch'`.
@@ -317,7 +317,7 @@ class Research:
             self.gpu = self._get_gpu_list(gpu)
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
-            self.trails = trails
+            self.trails = trials
             self.initial_name = name
             self.name = name
 
