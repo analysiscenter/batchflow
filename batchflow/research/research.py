@@ -35,7 +35,6 @@ class Research:
         self.n_iters = None
         self.timeout = 5
         self.n_splits = None
-        self.shuffle = None
         self.framework = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
@@ -322,7 +321,6 @@ class Research:
             self.name = name
 
             self.n_splits = n_splits
-            self.shuffle = shuffle
             self.framework = framework
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
