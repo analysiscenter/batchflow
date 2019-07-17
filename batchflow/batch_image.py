@@ -629,6 +629,7 @@ class ImagesBatch(BaseImagesBatch):
         ----------
         size : tuple
             the resulting size of the image. If one of the components of tuple is None,
+            corresponding dimension will be proportionally resized.
         src : str
             Component to get images from. Default is 'images'.
         dst : str
