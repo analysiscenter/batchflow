@@ -645,14 +645,16 @@ class ImagesBatch(BaseImagesBatch):
             if size[0] is None and size[1] is None:
                 raise ValueError('At least one component of the parameter "size" must be a number.')
             if size[0] is None:
-                size[0] = int(image.size[0] * size[1] / image.size[1])
+                new_size = (int(image.size[0] * size[1] / image.size[1]), size[1])
             elif size[1] is None:
-                size[1] = int(image.size[1] * size[0] / image.size[0])
+                new_size = (size[0], int(image.size[1] * size[0] / image.size[0]))
+            else:
+                new_size = size
 
             if len(args) > 0:
-                args = (size, *args)
+                args = (new_size, *args[1:])
             else:
-                kwargs['size'] = size
+                kwargs['size'] = new_size
 
         return image.resize(*args, **kwargs)
 
