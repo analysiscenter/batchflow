@@ -627,6 +627,8 @@ class ImagesBatch(BaseImagesBatch):
 
         Parameters
         ----------
+        size : tuple
+            the resulting size of the image. If one of the components of tuple is None,
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -634,6 +636,24 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
+        if len(args) > 0:
+            size = args[0]
+        else:
+            size = kwargs.get('size')
+
+        if size is not None:
+            if size[0] is None and size[1] is None:
+                raise ValueError('At least one component of the parameter "size" must be a number.')
+            elif size[0] is None:
+                size[0] = int(image.size[0] * size[1] / image.size[1])
+            elif size[1] is None:
+                size[1] = int(image.size[1] * size[0] / image.size[0])
+
+            if len(args) > 0:
+                args = (size, *args)
+            else:
+                kwargs['size'] = size
+
         return image.resize(*args, **kwargs)
 
     def _shift_(self, image, offset, mode='const'):
