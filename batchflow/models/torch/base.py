@@ -36,7 +36,6 @@ DECAYS = {
     'step': torch.optim.lr_scheduler.StepLR,
     'multistep': torch.optim.lr_scheduler.MultiStepLR,
     'cos': torch.optim.lr_scheduler.CosineAnnealingLR,
-    'lronp': torch.optim.lr_scheduler.ReduceLROnPlateau,
     'cyclic': torch.optim.lr_scheduler.CyclicLR,
 
 }
@@ -48,7 +47,6 @@ DECAYS_DEFAULTS = {
     torch.optim.lr_scheduler.StepLR: dict(step_size=30),
     torch.optim.lr_scheduler.MultiStepLR: dict(milestones=[30, 80]),
     torch.optim.lr_scheduler.CosineAnnealingLR: dict(T_max=None),
-    torch.optim.lr_scheduler.ReduceLROnPlateau: dict(),
     torch.optim.lr_scheduler.CyclicLR: dict(base_lr=1e-3, max_lr=5e-3)
 }
 
@@ -90,12 +88,15 @@ class TorchModel(BaseModel):
         - tuple (name, args)
         - dict {'name': name, **args}
 
+        .. note:: All torch decays require to have ```num_iters``` as a key in a configuration
+        dictionary that contains the number of iterations in one epoch.
+
         where name might be one of:
 
-        - short name ('exp', 'lambda', 'step', 'multistep', 'cos', 'lronp', 'cyclic')
+        - short name (`'exp'`, `'lambda'`, `'step'`, `'multistep'`, `'cos'`, `'cyclic'`)
         - a class name from `torch.optim.lr_scheduler
           <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate>`_
-          (e.g. 'LambdaLR')
+          (e.g. 'LambdaLR') except `ReduceLROnPlateau`.
         - a class with ``_LRScheduler`` interface
         - a callable which takes optimizer and optional args
 
@@ -189,17 +190,17 @@ class TorchModel(BaseModel):
        the model output is considered ``predictions``.
        They will be passed to a loss function.
 
-    #. Default values for decay optimizers are following:
-    ==========  ==========
-    Decay name  Parameters
-    ==========  ==========
-    exp         gamma = 0.96
-    lambda      lr_lambda = lambda epoch: 0.96**epoch
-    step        step_size = 30
-    multistep   milestones = [30, 80]
-    cos         T_max = num_iters
-    cyclic      base_lr=1e-3, max_lr=5e-3
-    ==========  ==========
+    #. Default values for a learning rate decay algorithms are following:
+       ==========  ==========
+       Decay name  Parameters
+       ==========  ==========
+       exp         gamma = 0.96
+       lambda      lr_lambda = lambda epoch: 0.96**epoch
+       step        step_size = 30
+       multistep   milestones = [30, 80]
+       cos         T_max = num_iters
+       cyclic      base_lr=1e-3, max_lr=5e-3
+       ==========  ==========
  }
     """
     def __init__(self, *args, **kwargs):
@@ -368,14 +369,12 @@ class TorchModel(BaseModel):
 
         decay_name, decay_args = self._make_decay(config)
         if decay_name is not None:
-            print(decay_args, decay_name)
             self.lr_decay = decay_name(self.optimizer, **decay_args)
 
     def _update_decay_args(self, decay_name, decay_args):
-        decay_dict = DECAYS_DEFAULTS.get(decay_name)
+        decay_dict = DECAYS_DEFAULTS.get(decay_name).copy()
         decay_dict.update(decay_args)
-        decay_args = decay_dict.copy()
-        return decay_args
+        return decay_dict
 
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
@@ -383,19 +382,18 @@ class TorchModel(BaseModel):
         if 'num_iters' not in config:
             raise ValueError('Missing required key ```num_iters``` in the cofiguration dict.')
         self.num_iters = config.pop('num_iters')
-        DECAYS_DEFAULTS[torch.optim.lr_scheduler.CosineAnnealingLR].update(T_max=self.num_iters)
+        DECAYS_DEFAULTS[DECAYS['cos']].update(T_max=self.num_iters)
 
         if decay_name is None or callable(decay_name) or isinstance(decay_name, type):
-            if decay_name in DECAYS_DEFAULTS:
-                decay_args = self._update_decay_args(decay_name, decay_args)
+            pass
         elif isinstance(decay_name, str) and hasattr(torch.optim.lr_scheduler, decay_name):
             decay_name = getattr(torch.optim.lr_scheduler, decay_name)
-            decay_args = self._update_decay_args(decay_name, decay_args)
         elif decay_name in DECAYS:
             decay_name = DECAYS.get(decay_name)
-            decay_args = self._update_decay_args(decay_name, decay_args)
         else:
             raise ValueError("Unknown learning rate decay method", decay_name)
+        if decay_name in DECAYS_DEFAULTS:
+            decay_args = self._update_decay_args(decay_name, decay_args)
         return decay_name, decay_args
 
     def get_tensor_config(self, tensor):
@@ -845,7 +843,6 @@ class TorchModel(BaseModel):
 
         if self.lr_decay:
             if self.current_iter == self.num_iters:
-                print('LR now is: {}'.format(self.optimizer.state_dict()['param_groups'][0]['lr']))
                 self.lr_decay.step()
                 self.current_iter = 0
             self.current_iter += 1
