@@ -5,7 +5,7 @@ from functools import partial
 import numpy as np
 
 from .named_expr import NamedExpression, eval_expr
-from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID,IMPORT_MODEL_ID
+from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID, IMPORT_MODEL_ID
 
 
 class OncePipeline:
