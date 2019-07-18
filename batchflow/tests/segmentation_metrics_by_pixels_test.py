@@ -5,20 +5,20 @@ Main test functions run for almost all metrics values, declared in metrics_dict 
 Test data is pre-defined, it's shape and contents were chosen for reasons of balance between visual simplicity
 and test coverage diversity.
 """
-
+# pylint: disable=import-error, no-name-in-module
+from itertools import chain
 import numpy as np
 import pytest
 
-from itertools import chain
 from batchflow.models.metrics import SegmentationMetricsByPixels
 
 # Dict {metric_alias : metric_names}
-metrics_dict = {'tpr' : ['true_positive_rate', 'sensitivity', 'recall'],
+METRICS_DICT = {'tpr' : ['true_positive_rate', 'sensitivity', 'recall'],
                 'fpr' : ['false_positive_rate', 'fallout'],
                 'fnr' : ['false_negative_rate', 'miss_rate'],
                 'tnr' : ['true_negative_rate', 'specificity'],
                 'prv' : ['prevalence'],
-                'acc' : ['accuracy'], # can't process 'multiclass' parameter and therefore should be tested individualy
+                # accuracy can't process 'multiclass' parameter and therefore is being tested individually
                 'ppv' : ['positive_predictive_value', 'precision'],
                 'fdr' : ['false_discovery_rate'],
                 'for' : ['false_omission_rate'],
@@ -28,63 +28,109 @@ metrics_dict = {'tpr' : ['true_positive_rate', 'sensitivity', 'recall'],
                 'dor' : ['diagnostics_odds_ratio'],
                 'fos' : ['f1_score', 'dice'],
                 'jac' : ['jaccard', 'iou']}
+# List all metrics' names from METRICS_DICT values.
+METRICS_LIST = list(chain.from_iterable(METRICS_DICT.values()))
 
-metrics_names = list(chain.from_iterable(metrics_dict.values())) # list of all metric names from metrics_dict values
-metrics_names.remove('accuracy') # since accuracy is tested separately, it is removed from metrics_names list
+BATCH_SIZE = 2
+IMAGE_SIZE = 2
+NUM_CLASSES = 3
 
-batch_size = 2
-image_size = 2
-num_classes = 3
-targets = np.array([0, 1, 2, 2, 0, 0, 1, 1]).reshape(batch_size, image_size, image_size)
-labels = np.array([0, 1, 1, 0, 2, 0, 1, 1]).reshape(batch_size, image_size, image_size)
-proba = np.eye(num_classes)[labels] #onehots are basically like probas, just with all 0 and a single 1
-logits = np.log(proba / (1. - proba)) #logit function gives ±infs on degenerate case of 0s and 1s, but it's okay for sigmoid function
-
-# Wrapper over np.allclose(), that works with np.nan values.
-def nanallclose(a, b, atol, rtol):
-    if (np.isnan(a) != np.isnan(b)).any():
-        return False
-    else:
-        return np.allclose(np.nan_to_num(a), np.nan_to_num(b), rtol, atol)
+# Set targets.
+TARGETS = np.array([0, 1, 2, 2, 0, 0, 1, 1]).reshape(BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE)
+# Set predictions as 'labels'.
+LABELS = np.array([0, 1, 1, 0, 2, 0, 1, 1]).reshape(BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE)
+# Onehots are basically like probas, just with all 0 and a single 1.
+PROBA = np.eye(NUM_CLASSES)[LABELS]
+# Logit function gives ±infs on degenerate case of 0s and 1s, but it's okay for sigmoid function.
+LOGITS = np.log(PROBA / (1. - PROBA))
+# First param stands for predictions variable, second — for predictions type, third — for axis with class info.
+PREDICTIONS = [(LABELS, 'labels', None),
+               (PROBA, 'proba', 3),
+               (LOGITS, 'logits', 3)]
 
 class TestShape:
     """
-    Checks the shape of return value for all combinations of both types of metrics aggregation and predictions shapes.
+    This class checks the shape of metrics' return value for all combinations of both aggregation types.
+
+    There is a following pattern in both tests:
+    0. Each function is preceded by data for it's parametrization.
+    1. Fixtures with preset parameters are applied.
+    2. Instance of SegmentationMetricsByPixels is being created.
+    3. Metric is being evaluated with given parameters.
+    4. It's result's shape is being compared with expected one.
     """
 
-    # First param stands for predictions variable, second — for predictions type, third — for axis with class info.
-    predictions_params = [(labels, 'labels', None),
-                          (proba, 'proba', 3),
-                          (logits, 'logits', 3)]
+    # First param stands for batch aggregation, second — for multiclass one, third represents expected output shape.
+    params = [(None, None, (BATCH_SIZE, NUM_CLASSES)),
+              (None, 'micro', (BATCH_SIZE,)),
+              (None, 'macro', (BATCH_SIZE,)),
+              ('mean', None, (NUM_CLASSES,)),
+              ('mean', 'micro', None),
+              ('mean', 'macro', None)]
 
-    # First param stands for batch aggregation type, second — for multiclass one, third represents expected output shape.
-    aggregation_params = [(None, None, (batch_size, num_classes)),
-                          (None, 'micro', (batch_size,)),
-                          (None, 'macro', (batch_size,)),
-                          ('mean', None, (num_classes,)),
-                          ('mean', 'micro', None),
-                          ('mean', 'macro', None)]
-
-    @pytest.mark.parametrize('predictions, fmt, axis', predictions_params)
-    @pytest.mark.parametrize('batch_agg, multi_agg, exp_shape', aggregation_params)
+    @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
+    @pytest.mark.parametrize('batch_agg, multi_agg, exp_shape', params)
     def test_shape(self, predictions, fmt, axis, batch_agg, multi_agg, exp_shape):
+        """
+        Function compares expected return value shape with actual return value shape
+        of metric evaluation with given params for all metrics from METRICS_LIST.
 
-        metric = SegmentationMetricsByPixels(targets, predictions, fmt, num_classes, axis)
-        for metric_name in metrics_names:
+        Parameters
+        ----------
+        predictions : np.array
+            Variable name containing predictions' array of desired format
+
+        fmt : string
+            Denotes predictions format
+
+        axis : None or int
+            A class axis
+
+        batch_agg : string
+            Cross-batch aggregation type
+
+        multi_agg : string
+            Multiclass agregation type
+
+        exp_shape : None or tuple
+            Expected return value shape
+        """
+        metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
+        for metric_name in METRICS_LIST:
             res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
             res_shape = res.shape if isinstance(res, np.ndarray) else None
 
             assert res_shape == exp_shape, 'failed on metric {}'.format(metric_name)
 
     # Individual test params for accuracy — batch-only aggregation param and corresponding expected shapes.
-    aggregation_params_accuracy = [(None, (batch_size,)),
-                                   ('mean', None)]
+    params_accuracy = [(None, (BATCH_SIZE,)),
+                       ('mean', None)]
 
-    @pytest.mark.parametrize('predictions, fmt, axis', predictions_params)
-    @pytest.mark.parametrize('batch_agg, exp_shape', aggregation_params_accuracy)
+    @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
+    @pytest.mark.parametrize('batch_agg, exp_shape', params_accuracy)
     def test_shape_accuracy(self, predictions, fmt, axis, batch_agg, exp_shape):
+        """
+        Function compares expected return value shape with actual return value shape
+        of accuracy metric evaluation with given params.
 
-        metric = SegmentationMetricsByPixels(targets, predictions, fmt, num_classes, axis)
+        Parameters
+        ----------
+        predictions : np.array
+            Variable name containing predictions' array of desired format
+
+        fmt : string
+            Denotes predictions format
+
+        axis : None or int
+            A class axis
+
+        batch_agg : string
+            Cross-batch aggregation type
+
+        exp_shape : None or tuple
+            Expected return value shape
+        """
+        metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
         res = metric.evaluate(metrics='accuracy', agg=batch_agg)
         res_shape = res.shape if isinstance(res, np.ndarray) else None
 
@@ -92,7 +138,14 @@ class TestShape:
 
 class TestResult:
     """
-    Checks the contents of return value for all combinations of both types of metrics aggregation.
+    This class checks the contents of metrics' return value for all combinations of both aggregation types.
+
+    There is a following pattern in both tests:
+    0. Each function is preceded by data for it's parametrization.
+    1. Fixtures with preset parameters are applied.
+    2. Instance of SegmentationMetricsByPixels is being created.
+    3. Metric is being evaluated with given parameters.
+    4. It's result is being compared with expected one.
     """
 
     # First param stands for batch aggregation type, second — for multiclass one,
@@ -187,12 +240,37 @@ class TestResult:
                                  'fos' : np.array([0.70]),
                                  'jac' : np.array([0.54])})]
 
+    @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_dict', params)
-    def test_contents(self, batch_agg, multi_agg, exp_dict):
+    def test_contents(self, predictions, fmt, axis, batch_agg, multi_agg, exp_dict):
+        """
+        Function compares expected return value contents with contents of actual return value
+        of metric evaluation with given params for all metrics from METRICS_DICT.
 
-        metric = SegmentationMetricsByPixels(targets, labels, 'labels', num_classes)
+        Parameters
+        ----------
+        predictions : np.array
+            Variable name containing predictions' array of desired format
+
+        fmt : string
+            Denotes predictions format
+
+        axis : None or int
+            A class axis
+
+        batch_agg : string
+            Cross-batch aggregation type
+
+        multi_agg : string
+            Multiclass agregation type
+
+        exp_dict : dict
+            Keys are metric's aliases and values are expected contents
+            of their evaluation results with given aggregation params
+        """
+        metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
         for alias, exp in exp_dict.items():
-            metric_names = metrics_dict[alias]
+            metric_names = METRICS_DICT[alias]
             for metric_name in metric_names:
                 res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
                 res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
@@ -203,10 +281,31 @@ class TestResult:
     params_accuracy = [(None, np.array([0.50, 0.75])),
                        ('mean', np.array([0.62]))]
 
+    @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, exp', params_accuracy)
-    def test_contents_accuracy(self, batch_agg, exp):
+    def test_contents_accuracy(self, predictions, fmt, axis, batch_agg, exp):
+        """
+        Function compares expected return value contents with contents of actual return value
+        of accuracy metric evaluation with given params.
 
-        metric = SegmentationMetricsByPixels(targets, labels, 'labels', num_classes)
+        Parameters
+        ----------
+        predictions : np.array
+            Variable name containing predictions' array of desired format
+
+        fmt : string
+            Denotes predictions format
+
+        axis : None or int
+            A class axis
+
+        batch_agg : string
+            Cross-batch aggregation type
+
+        exp : np.array
+            Expected contents of accuracy evaluation results with given aggregation params
+        """
+        metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
         res = metric.evaluate(metrics='accuracy', agg=batch_agg)
         res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
 
