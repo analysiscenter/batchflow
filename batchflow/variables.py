@@ -1,4 +1,5 @@
 """ Contains Variable class and Variables storage class """
+import copy as cp
 import threading
 import logging
 
@@ -92,6 +93,9 @@ class VariableDirectory:
             self.variables[name].unlock()
 
     def copy(self):
+        return cp.copy(self)
+
+    def __copy__(self):
         """ Make a shallow copy of the directory """
         new_dir = VariableDirectory()
         new_dir.variables = {**self.variables}

@@ -65,6 +65,61 @@ And again, no action is executed until its result is needed.::
        # only now the actions are fired and data is changed with the workflow defined earlier
 
 
+Actions
+=======
+Pipeline actions might come from 3 sources:
+- Pipeline API
+- batch class actions
+- arbitrary namespaces.
+
+:doc:`Pipeline API <../api/batchflow.pipeline>` contains operations with variables and models.
+
+:doc:`Batch class <batch>` comprises data loading operations, preprocessing methods and augmentations.
+A batch class method marked with :ref:`action <actions>` decorator might be used in a pipeline workflow.
+
+
+Besides, pipeline actions chains might include arbitrary functions. Just add a namespace (e.g. a class, a module) with the functions needed to a pipeline.
+
+::
+
+   pipeline = (dataset.pipeline()
+                .add_namespace(numpy, mymodule)    # numpy and mymodule methods are now accessible within the pipeline
+                .init_variable("var")              # Pipeline API
+                .init_model("dynamic", ResNet18)   # Pipeline API
+                .resize((128, 128))                # batch class API, namely ImagesBatch
+                .my_func(10, save_to=V("var"))     # call a function from mymodule and store its result into a pipeline variable
+                .print(V("var"))                   # Pipeline API again
+
+
+.. _after_pipeline:
+
+Before and after pipelines
+==========================
+More complicated pipelines include setup and tear down actions. That's exactly what `before` and `after` pipelines are supposed to do.
+
+::
+
+    pipeline.before
+        .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
+        .init_variable("var")              # Pipeline API
+        .init_model("dynamic", ResNet18)   # Pipeline API
+        .connect_to_mydb(USER, PASSWORD)   # a method from mymodule
+
+    pipeline.after
+        .add_namespace(mymodule)           # mymodule methods are now accessible within the pipeline
+        .save_model("ResNet18", path='/some/path')     #Pipeline API
+        .disconnect_from_mydb()            # a method from mymodule
+
+`before` and `after` pipelines are executed automatically when the main pipeline is executed (specifically, before and after it).
+
+However, take into account that when you iterate over the pipeline with `gen_batch(...)` or `next_batch(...)`, `after`-pipeline
+will be executed automatically only when the iteration is fully finished.
+If you break the iteration process (e.g. when early stopping is occurred or when exception is caught),
+you should explicitly call `pipeline.after.run()`.
+
+See :doc:`API <../api/batchflow.once_pipeline>` for methods available in `before` and `after` pipelines.
+
+
 Algebra of pipelines
 ====================
 
@@ -227,12 +282,12 @@ then call `run()` or `next_batch()` without arguments at all::
         # do whatever you want
 
 
-
 Single execution
 ^^^^^^^^^^^^^^^^
 A pipeline might be run for one batch only with :meth:`~.Pipeline.execute_for`::
 
     res_batch = my_pipeline.execute_for(batch)
+
 
 
 Pipeline variables
@@ -250,7 +305,7 @@ Initializing a variable
     my_pipeline = (my_dataset.p
         .init_variable("my_variable", 100)
         .init_variable("some_counter", init_on_each_run=0)
-        .init_variable("var with init function", F_(my_init_function))
+        .init_variable("var with init function", F(my_init_function))
         .init_variable("loss_history", init_on_each_run=list)
         .first_action()
         .second_action()
@@ -262,7 +317,7 @@ Variables might be initialized once in a lifetime (e.g. some global state or a c
 (like counters or history stores).
 
 Sometimes it is more convenient to initialize variables indirectly through a function. For instance, `loss_history` cannot be initialized with `[]`
-as it would make a global variable which won't be cleared on every run. What you actually need is a call to `list()` on each run.
+as it would make a global variable which won't be cleared on every run. What you actually need is to call `list()` on each run.
 
 Init functions are also a good place for some complex logic or randomization.
 
@@ -283,10 +338,13 @@ So getting an access to a variable is easy::
 If a variable does not exist, it might be created and initialized, if `create` parameter is set to `True`.
 For a flexible initialization `default`, `init` and `init_on_each_run` might also be passed to `get_variable()`.
 
-
 .. note:: An explicit variable initialization in a pipeline is a preferred way to create variables.
 
 If `create` is `False` (which is by default), then `get_variable` will raise a `KeyError` if a variable does not exist.
+
+`v()` is a shorter alias for `get_variable()`::
+    
+    pipeline.v('var_name')
 
 To change a variable value just call `set_variable` within an action::
 
@@ -307,7 +365,7 @@ Or add `update_variable` to the pipeline::
 
 The first parameter specifies a variable name, and it can be a string or :doc:`a named expression <named_expr>`,
 returning a string.
-The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`:
+The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`, e.g.:
 
 * B('name') - a batch class attribute or component name
 * V('name') - a pipeline variable name
@@ -315,7 +373,7 @@ The second parameter is an updating value and it can be a value of any type or :
 * F(name) - a callable which takes a batch (could be a batch class method or a function)
 * R('name') - a random value from a given distribution
 
-Mode could be one of:
+Note that a named expression might have a mode (e.g. `V('name', mode='a')`) which could be one of:
 
 * `'w'` or `'write'` to rewrite a variable with a new value. This is a default mode.
 * `'a'` or `'append'` to append a value to a variable (e.g. if a variable is a list).

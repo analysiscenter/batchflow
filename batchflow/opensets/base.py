@@ -6,15 +6,17 @@ from .. import ImagesBatch
 
 class Openset(Dataset):
     """ The base class for open datasets """
-    def __init__(self, index=None, batch_class=None, train_test=False, path=None):
+    def __init__(self, index=None, batch_class=None, train_test=False, path=None, preloaded=None):
         self.train_test = train_test
         self._train_index, self._test_index = None, None
-        self._data = self.download(path=path)
-        preloaded = self._data if not train_test else None
+        if preloaded is None:
+            preloaded = self.download(path=path)
         super().__init__(index, batch_class, preloaded=preloaded)
+        if train_test:
+            self.split()
 
     @staticmethod
-    def build_index(index):
+    def uild_index(index):
         """ Create an index """
         if index is not None:
             return super().build_index(index)
@@ -27,14 +29,14 @@ class Openset(Dataset):
 
     def split(self, shares=0.8, shuffle=False):
         if self.train_test:
-            train_data, test_data = self._data  # pylint:disable=unpacking-non-sequence
-            self.train = Dataset(self._train_index, self.batch_class, preloaded=train_data)
-            self.test = Dataset(self._test_index, self.batch_class, preloaded=test_data)
+            train_data, test_data = self.preloaded  # pylint:disable=unpacking-non-sequence
+            self.train = type(self)(self._train_index, self.batch_class, train_test=False, preloaded=train_data)
+            self.test = type(self)(self._test_index, self.batch_class, train_test=False, preloaded=test_data)
         else:
             super().split(shares, shuffle)
 
 
 class ImagesOpenset(Openset):
     """ The base class for open datasets with images """
-    def __init__(self, index=None, batch_class=ImagesBatch, train_test=False, path=None):
-        super().__init__(index, batch_class, train_test, path)
+    def __init__(self, index=None, batch_class=ImagesBatch, *args, **kwargs):
+        super().__init__(index, batch_class, *args, **kwargs)

@@ -51,7 +51,7 @@ class RefineNet(TFModel):
         config = super().build_config(names)
         if config.get('head/num_classes') is None:
             config['head/num_classes'] = self.num_classes('targets')
-        config['head/targets'] = self.targets
+        config['head/targets'] = self.get_from_attr('targets')
         return config
 
     @classmethod
