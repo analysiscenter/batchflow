@@ -44,6 +44,32 @@ You may also use :doc:`named expressions <../api/batchflow.named_expressions>` i
 There are two main methods: :meth:`~batchflow.named_expr.NamedExpression.get` and :func:`~batchflow.named_expr.NamedExpression.set`.
 
 
+Operations with expressions
+===========================
+Named expressions support basic arithmetic operations like `+`, `-`, etc.
+
+::
+
+    pipeline
+        ...
+        .print('Iterations per epoch:', D('size') // B('size'))
+
+
+To convert a named expression value to a string use :meth:`~batchflow.named_expr.NamedExpression.str` method::
+
+    pipeline
+        ...
+        .print('Dataset contains ' + D('size').str() + ' items')
+
+
+Slicing is also supported::
+
+    pipeline
+        ...
+        .print('Current loss:', V('loss_history')[-1])
+
+
+
 B - batch component
 ===================
 ::
