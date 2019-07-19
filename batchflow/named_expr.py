@@ -535,11 +535,28 @@ class I(NamedExpression):
     ::
     TODO
     """
-    def __init__(self, name=None):
+    def __init__(self, name='c'):
         super().__init__(name, mode=None)
+        self._allowed_keys = { 
+            'current': 'c',
+            'c': 'c',
+            'maximun': 'm',
+            'm': 'm',
+            'ratio': 'ratio',
+            'r': 'r',
+        }
 
     def get(self, batch=None, pipeline=None, model=None):
-        """ Return a value of a pipeline variable """
+        """ Return current or maximum iteration number """
+        name = self._allowed_keys.get(self.name)
+        if name is None:
+            raise ValueError('Unknown key for named expresssion I')
+
         pipeline = batch.pipeline if batch is not None else pipeline
-        value = pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
+        if name == 'c':
+            value = pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
+        elif name == 'm':
+            value = pipeline._iter_params['_total']    # pylint:disable=protected-access
+        elif name == 'r':
+            value = pipeline._iter_params['_n_iters'] / pipeline._iter_params['_total']    # pylint:disable=protected-access
         return value
