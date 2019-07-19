@@ -710,8 +710,8 @@ class Executable:
 
         if n_iters is None:
             return it_ok or freq_ok
-        else:
-            return (iteration + 1 == n_iters and 'last' in rule) or it_ok or freq_ok
+
+        return (iteration + 1 == n_iters and 'last' in rule) or it_ok or freq_ok
 
 
 class Results():
