@@ -134,7 +134,7 @@ class Job:
         for idx, experiment in enumerate(self.experiments):
             if experiment[name].action_iteration(iteration, self.n_iters, action) and self.exceptions[idx] is None:
                 res.append(experiment[name].action)
-            elif (self.stopped[idx]) and -1 in getattr(experiment[name], action):
+            elif (self.stopped[idx]) and 'last' in getattr(experiment[name], action):
                 res.append(experiment[name].action)
             else:
                 res.append(None)

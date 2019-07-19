@@ -36,7 +36,7 @@ class Research:
         self.n_splits = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
-                     name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
+                     name=None, execute=1, dump='last', run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
 
@@ -61,15 +61,16 @@ class Research:
             If None, pipeline will be executed without any dumping.
         name : str
             pipeline name. If None, pipeline will have name `pipeline_{index}`
-        execute : int, str or list of int or str
-            If -1, pipeline will be executed just at last iteration (if `iteration + 1 == n_iters`
+        execute : int, str or list of int and str
+            If `'last'`, pipeline will be executed just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
 
-            If positive int, pipeline will be excuted for that iteration
+            If positive int, pipeline will be executed each `step` iterations.
 
-            If str, must be `'%{step}'` where step is int and function will be executed each `step` iterations.
+            If str, must be `'#{it}'` or `'last'` where it is int,
+            the pipeline will be executed at this iteration (zero-based)
 
-            If list, must be list of int or str descibed above
+            If list, must be list of int or str described above
         dump : int, str or list of int or str
             iteration when results will be dumped and cleared. Similar to `execute`
         run : bool
@@ -101,7 +102,7 @@ class Research:
         return self
 
     def get_metrics(self, pipeline, metrics_var, metrics_name,
-                    returns=None, execute='%1', dump=-1, logging=False):
+                    returns=None, execute=1, dump='last', logging=False):
         """ Evaluate metrics.
 
         Parameters
@@ -115,15 +116,16 @@ class Research:
         returns : str, list of str or None
             names to save metrics into results
             if None, `function` will be executed without any saving results and dumping
-        execute : int, str or list of int or str
-            If -1, metrics will be evaluated just at last iteration (if `iteration + 1 == n_iters`
+        execute : int, str or list of int and str
+            If `'last'`, metrics will be gathered just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
 
-            If positive int, metrics will be evaluated for that iteration
+            If positive int, pmetrics will be gathered each `step` iterations.
 
-            If str, must be `'%{step}'` where step is int and metrics will be evaluated each `step` iterations.
+            If str, must be `'#{it}'` or `'last'` where it is int,
+            metrics will be gathered at this iteration (zero-based)
 
-            If list, must be list of int or str descibed above
+            If list, must be list of int or str described above
         dump : int, str or list of int or str
             iteration when results will be dumped and cleared. Similar to execute
         logging : bool
@@ -135,7 +137,7 @@ class Research:
                           metrics_var=metrics_var, metrics_name=metrics_name)
         return self
 
-    def add_function(self, function, returns=None, name=None, execute='%1', dump=-1,
+    def add_function(self, function, returns=None, name=None, execute=1, dump='last',
                      on_root=False, logging=False, *args, **kwargs):
         """ Add function to research.
 
@@ -153,15 +155,16 @@ class Research:
             if None, `function` will be executed without any saving results and dumping
         name : str (default None)
             function name. If None, a function will have name `func_{index}`
-        execute : int, str or list of int or str
-            If -1, function will be executed just at last iteration (if `iteration + 1 == n_iters`
+        execute : int, str or list of int and str
+            If `'last'`, function will be executed just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
 
-            If positive int, function will be excuted for that iteration
+            If positive int, function will be executed each `step` iterations.
 
-            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
+            If str, must be `'#{it}'` or `'last'` where it is int,
+            the function will be executed at this iteration (zero-based)
 
-            If list, must be list of int or str descibed above
+            If list, must be list of int or str described above
         dump : int, str or list of int or str
             iteration when results will be dumped and cleared. Similar to execute
         on_root : bool
@@ -495,7 +498,7 @@ class Executable:
         self.dataset = None
         self.part = None
 
-    def add_function(self, function, name, execute='%1', dump=-1, returns=None,
+    def add_function(self, function, name, execute=1, dump='last', returns=None,
                      on_root=False, logging=False, *args, **kwargs):
         """ Add function as an Executable Unit. """
         returns = returns or []
@@ -523,7 +526,7 @@ class Executable:
         self._process_iterations()
 
     def add_pipeline(self, root, name, branch=None, dataset=None, part=None, variables=None,
-                     execute='%1', dump=-1, run=False, logging=False, **kwargs):
+                     execute=1, dump='last', run=False, logging=False, **kwargs):
         """ Add pipeline as an Executable Unit """
         variables = variables or []
 
@@ -698,18 +701,18 @@ class Executable:
     def action_iteration(self, iteration, n_iters=None, action='execute'):
         """ Returns does Unit should be executed at that iteration """
         rule = self.execute if action == 'execute' else self.dump
-        list_rule = [item for item in rule if isinstance(item, int)]
-        step_rule = [int(item[1:]) for item in rule if isinstance(item, str)]
 
-        in_list = iteration in list_rule
-        in_step = sum([(iteration+1) % item == 0 for item in step_rule])
+        frequencies = (item for item in rule if isinstance(item, int))
+        iterations = (int(item[1:]) for item in rule if isinstance(item, str) and item != 'last')
+
+        it_ok = iteration in iterations
+        freq_ok = any((iteration+1) % item == 0 for item in frequencies)
 
         if n_iters is None:
-            action_list = in_list or in_step
+            return it_ok or freq_ok
         else:
-            in_final = -1 in list_rule and iteration+1 == n_iters
-            action_list = in_list or in_step or in_final
-        return action_list
+            return (iteration + 1 == n_iters and 'last' in rule) or it_ok or freq_ok
+
 
 class Results():
     """ Class for dealing with results of research
@@ -826,9 +829,9 @@ class Results():
 
             research = (Research()
             .add_pipeline(train_ppl, variables='loss', name='train')
-            .add_pipeline(test_ppl, name='test', execute='%100', run=True, import_from='train')
+            .add_pipeline(test_ppl, name='test', execute=100, run=True, import_from='train')
             .add_function(accuracy, returns='accuracy', name='test_accuracy',
-                      execute='%100', pipeline='test')
+                      execute=100, pipeline='test')
             .add_grid(grid))
 
             research.run(n_reps=2, n_iters=10000)
