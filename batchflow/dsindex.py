@@ -8,6 +8,7 @@ import tqdm
 import numpy as np
 
 from .base import Baseset
+from .named_expr import eval_expr
 
 
 class DatasetIndex(Baseset):
@@ -399,7 +400,8 @@ class DatasetIndex(Baseset):
         return self.create_batch(batch_items, pos=True)
 
 
-    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, bar=False):
+    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
+                  bar=False, bar_desc=None):
         """ Generate batches
 
         Parameters
@@ -493,6 +495,9 @@ class DatasetIndex(Baseset):
             except StopIteration:
                 return
             if 'bar' in iter_params:
+                if bar_desc:
+                    val = eval_expr(bar_desc, unwrap=True)
+                    iter_params['bar'].set_description(str(val))
                 iter_params['bar'].update(1)
             yield batch
 
