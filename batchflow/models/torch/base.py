@@ -88,7 +88,7 @@ class TorchModel(BaseModel):
         - tuple (name, args)
         - dict {'name': name, **args}
 
-        .. note:: All torch decays require to have ```num_iters``` as a key in a configuration
+        .. note:: All torch decays require to have ```n_iters``` as a key in a configuration
         dictionary that contains the number of iterations in one epoch.
 
         where name might be one of:
@@ -198,14 +198,14 @@ class TorchModel(BaseModel):
        lambda      lr_lambda = lambda epoch: 0.96**epoch
        step        step_size = 30
        multistep   milestones = [30, 80]
-       cos         T_max = num_iters
+       cos         T_max = n_iters
        cyclic      base_lr=1e-3, max_lr=5e-3
        ==========  ==========
  }
     """
     def __init__(self, *args, **kwargs):
         self._train_lock = threading.Lock()
-        self.num_iters = None
+        self.n_iters = None
         self.current_iter = 0
         self.device = None
         self.loss_fn = None
@@ -379,10 +379,10 @@ class TorchModel(BaseModel):
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
 
-        if 'num_iters' not in config:
-            raise ValueError('Missing required key ```num_iters``` in the cofiguration dict.')
-        self.num_iters = config.pop('num_iters')
-        DECAYS_DEFAULTS[DECAYS['cos']].update(T_max=self.num_iters)
+        if 'n_iters' not in config:
+            raise ValueError('Missing required key ```n_iters``` in the cofiguration dict.')
+        self.n_iters = config.pop('n_iters')
+        DECAYS_DEFAULTS[DECAYS['cos']].update(T_max=self.n_iters)
 
         if decay_name is None or callable(decay_name) or isinstance(decay_name, type):
             pass
