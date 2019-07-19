@@ -442,3 +442,20 @@ class P(W):
         if parallel:
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
         return self
+
+class I(NamedExpression):
+    """ Pipeline iteration number
+
+    Examples
+    --------
+    ::
+    TODO
+    """
+    def __init__(self, name=None):
+        super().__init__(name, mode=None)
+
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a value of a pipeline variable """
+        pipeline = batch.pipeline if batch is not None else pipeline
+        value = pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
+        return value

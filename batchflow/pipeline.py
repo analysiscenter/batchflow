@@ -89,6 +89,7 @@ class Pipeline:
         self._batch_queue = None
         self._batch_generator = None
         self._rest_batch = None
+        self._iter_params = None
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -1142,6 +1143,9 @@ class Pipeline:
         else:
             pipeline = self.from_pipeline(_action['pipeline'])
 
+        # Passing iter_params from main pipeline
+        pipeline._iter_params = kwargs.get('iter_params', None)    # pylint:disable=protected-access
+
         self._rest_batch = None
         while True:
             if self._rest_batch is None:
@@ -1244,11 +1248,14 @@ class Pipeline:
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
 
+        if kwargs.pop('iter_params', None) is None:
+            self._iter_params = self._iter_params if self._iter_params else self.dataset.get_default_iter_params()
+
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
-            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
+            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch, iter_params=self._iter_params)
             prefetch = 0
         else:
-            batch_generator = self.dataset.gen_batch(*args, **kwargs)
+            batch_generator = self.dataset.gen_batch(*args, **kwargs, iter_params=self._iter_params)
 
         if self.before:
             self.before.run()
