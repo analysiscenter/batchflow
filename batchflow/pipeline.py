@@ -498,14 +498,13 @@ class Pipeline:
         args = []
         if len(args_value) == 0:
             pass
-        elif len(args_value) == 1:
-            args.append(args_value[0])
         else:
-            args.append(args_value)
+            args.extend(args_value)
         if len(kwargs_value) == 0:
             pass
         else:
-            args.append(kwargs_value)
+            for k in kwargs_value:
+                args.append(str(k) + '=' + str(kwargs_value[k]))
         try:
             print(*args)
         except OSError:
