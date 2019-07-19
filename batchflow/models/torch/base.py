@@ -201,7 +201,6 @@ class TorchModel(BaseModel):
        cos         T_max = n_iters
        cyclic      base_lr=1e-3, max_lr=5e-3
        ==========  ==========
- }
     """
     def __init__(self, *args, **kwargs):
         self._train_lock = threading.Lock()
@@ -217,6 +216,7 @@ class TorchModel(BaseModel):
         self.loss = None
         self.microbatch = None
         self._full_config = None
+
         super().__init__(*args, **kwargs)
 
     def build(self, *args, **kwargs):
@@ -371,18 +371,12 @@ class TorchModel(BaseModel):
         if decay_name is not None:
             self.lr_decay = decay_name(self.optimizer, **decay_args)
 
-    def _update_decay_args(self, decay_name, decay_args):
-        decay_dict = DECAYS_DEFAULTS.get(decay_name).copy()
-        decay_dict.update(decay_args)
-        return decay_dict
-
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
 
         if 'n_iters' not in config:
             raise ValueError('Missing required key ```n_iters``` in the cofiguration dict.')
         self.n_iters = config.pop('n_iters')
-        DECAYS_DEFAULTS[DECAYS['cos']].update(T_max=self.n_iters)
 
         if decay_name is None or callable(decay_name) or isinstance(decay_name, type):
             pass
@@ -393,8 +387,11 @@ class TorchModel(BaseModel):
         else:
             raise ValueError("Unknown learning rate decay method", decay_name)
         if decay_name in DECAYS_DEFAULTS:
-            decay_args = self._update_decay_args(decay_name, decay_args)
-        return decay_name, decay_args
+            decay_dict = DECAYS_DEFAULTS.get(decay_name).copy()
+            if decay_name == DECAYS['cos']:
+                decay_dict.update(T_max=self.n_iters)
+            decay_dict.update(decay_args)
+        return decay_name, decay_dict
 
     def get_tensor_config(self, tensor):
         """ Return tensor configuration """
@@ -842,7 +839,7 @@ class TorchModel(BaseModel):
             self.optimizer.step()
 
         if self.lr_decay:
-            if self.current_iter == self.num_iters:
+            if self.current_iter == self.n_iters:
                 self.lr_decay.step()
                 self.current_iter = 0
             self.current_iter += 1
