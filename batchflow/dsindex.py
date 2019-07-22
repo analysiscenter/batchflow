@@ -501,6 +501,7 @@ class DatasetIndex(Baseset):
                 if bar_desc:
                     try:
                         val = eval_expr(bar_desc, unwrap=True)
+                        val = str(val)
                     except (LookupError, ValueError):
                         val = None
                     iter_params['bar'].set_description(val)
