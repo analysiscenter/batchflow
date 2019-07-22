@@ -122,12 +122,21 @@ class NamedExpression:
     def __getitem__(self, key):
         return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
 
-    def format(self, string):
-        return NamedExpression(AN_EXPR, op='#format', a=self, b=string)
-
     def str(self):
         """ Convert a named expression value to a string """
         return NamedExpression(AN_EXPR, op='#str', a=self)
+
+    def format(self, string):
+        """ Convert a value to a formatted representation, controlled by format spec.
+
+        Examples
+        --------
+        Unlike Python built-in function, the usage is value.format(format_spec), for example:
+        ::
+
+            V('variable').format('Value of the variable is {:7.7}')
+        """
+        return NamedExpression(AN_EXPR, op='#format', a=self, b=string)
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression

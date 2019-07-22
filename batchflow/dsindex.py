@@ -452,6 +452,9 @@ class DatasetIndex(Baseset):
             Whether to show a progress bar.
             If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
+        bar_desc
+            Prefix for the progressbar.
+
         Yields
         ------
         An instance of the same class with a subset of indices
@@ -496,8 +499,12 @@ class DatasetIndex(Baseset):
                 return
             if 'bar' in iter_params:
                 if bar_desc:
-                    val = eval_expr(bar_desc, unwrap=True)
-                    iter_params['bar'].set_description(str(val))
+                    try:
+                        val = eval_expr(bar_desc, unwrap=True)
+                    except:
+                        val = None
+                    iter_params['bar'].set_description(val)
+
                 iter_params['bar'].update(1)
             yield batch
 

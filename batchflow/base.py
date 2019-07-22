@@ -165,7 +165,7 @@ class Baseset:
             self.index.reset_iter()
 
     def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
-        bar=False, bar_desc=None, *args, **kwargs):
+                  bar=False, bar_desc=None, *args, **kwargs):
         """ Generate batches """
         for ix_batch in self.index.gen_batch(batch_size, shuffle, n_iters, n_epochs, drop_last, bar, bar_desc):
             batch = self.create_batch(ix_batch, *args, **kwargs)
