@@ -554,9 +554,11 @@ class I(NamedExpression):
 
         pipeline = batch.pipeline if batch is not None else pipeline
         if name == 'c':
-            value = pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
-        elif name == 'm':
-            value = pipeline._iter_params['_total']    # pylint:disable=protected-access
-        elif name == 'r':
-            value = pipeline._iter_params['_n_iters'] / pipeline._iter_params['_total']    # pylint:disable=protected-access
-        return value
+            return pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
+        if name in ['m', 'r']:
+            total = pipeline._iter_params.get('_total')    # pylint:disable=protected-access
+            if total is None:
+                raise ValueError('Number of total iteration is not defined!')
+            if name == 'r':
+                return pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
+        return total
