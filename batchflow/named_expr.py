@@ -42,9 +42,10 @@ def swap(op):
         return op(b, a)
     return _op_
 
-ARITHMETIC_EXPR = "#!__op__"
 
-ARITHMETIC_OPS_BINARY = {
+AN_EXPR = "#!__op__"
+
+BINARY_OPS = {
     '__add__': operator.add, '__radd__': swap(operator.add),
     '__sub__': operator.sub, '__rsub__': swap(operator.sub),
     '__mul__': operator.mul, '__rmul__': swap(operator.mul),
@@ -56,15 +57,17 @@ ARITHMETIC_OPS_BINARY = {
     '__lshift__': operator.lshift, '__rshift__': operator.rshift,
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
+    '#slice': lambda a,b: a[b],
 }
 
-ARITHMETIC_OPS_UNARY = {
+UNARY_OPS = {
     '__eq__': operator.eq, '__ne__': operator.ne,
     '__neg__': operator.neg, '__pos__': operator.pos, '__abs__': operator.abs, '__invert__': operator.inv,
-    '_str__': str,
+    '#str': str,
 }
 
-ARITHMETIC_OPS = {**ARITHMETIC_OPS_BINARY, **ARITHMETIC_OPS_UNARY}
+
+OPERATIONS = {**BINARY_OPS, **UNARY_OPS}
 
 
 def add_ops(cls):
@@ -76,10 +79,11 @@ def add_ops(cls):
     op_cls : class
         The class which represents an arithmetics expression.
     """
-    for op in ARITHMETIC_OPS:
-        def _oper_(self, other=None, op=op):
-            return cls(ARITHMETIC_EXPR, op=ARITHMETIC_OPS[op], a=self, b=other)
-        setattr(cls, op, _oper_)
+    for op in OPERATIONS:
+        if op[0] != '#':
+            def _oper_(self, other=None, op=op):
+                return cls(AN_EXPR, op=op, a=self, b=other)
+            setattr(cls, op, _oper_)
     return cls
 
 
@@ -113,8 +117,11 @@ class NamedExpression:
         self.b = b
 
     def __getitem__(self, key):
-        self.item = key   # pylint: disable=attribute-defined-outside-init
-        return self
+        return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
+
+    def str(self):
+        """ Convert a named expression value to a string """
+        return NamedExpression(AN_EXPR, op='#str', a=self)
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression
@@ -130,27 +137,24 @@ class NamedExpression:
             a model which should be used to calculate a value
             (usually omitted, but might be useful for F- and L-expressions)
         """
-        res = self._get(batch, pipeline, model)
-        if hasattr(self, 'item'):
-            res = res[self.item]
-        return res
+        name = self._get_name(batch, pipeline, model)
+        if name == AN_EXPR:
+            return self._get_value(batch, pipeline, model)
+        raise ValueError("Undefined value")
 
-    def str(self):
-        """ Convert a named expression value to a string """
-        return NamedExpression(ARITHMETIC_EXPR, op=str, a=self)
-
-    def _get(self, batch=None, pipeline=None, model=None):
-        if self.name == ARITHMETIC_EXPR:
-            a = eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
-            if self.op in ARITHMETIC_OPS_UNARY.values():
-                return self.op(a)
-            b = eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
-            return self.op(a, b)
-
+    def _get_name(self, batch=None, pipeline=None, model=None):
         if isinstance(self.name, NamedExpression):
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
-
         return self.name
+
+    def _get_value(self, batch=None, pipeline=None, model=None):
+        if self.name == AN_EXPR:
+            a = eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
+            b = eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
+            if self.op in UNARY_OPS:
+                return OPERATIONS[self.op](a)
+            return OPERATIONS[self.op](a, b)
+        raise ValueError("Undefined value")
 
     def set(self, value, batch=None, pipeline=None, model=None, mode=None, eval=True):
         """ Set a value to a named expression
@@ -228,9 +232,9 @@ class NamedExpression:
             self.assign(value, *args, **kwargs)
 
     def __repr__(self):
-        if self.name == ARITHMETIC_EXPR:
+        if self.name == AN_EXPR:
             val = "Arithmetic expression on " + repr(self.a)
-            if self.op in ARITHMETIC_OPS_BINARY.values():
+            if self.op in BINARY_OPS:
                 val += " and " + repr(self.b)
             return val
         return type(self).__name__ + '(' + str(self.name) + ')'
@@ -280,9 +284,9 @@ class B(NamedExpression):
         super().__init__(name, mode)
         self.copy = copy
 
-    def _get(self, batch=None, pipeline=None, model=None):
+    def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a batch component """
-        name = super()._get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
         if name is None:
@@ -291,7 +295,7 @@ class B(NamedExpression):
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a batch component """
-        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         if name is not None:
             setattr(batch, name, value)
 
@@ -306,9 +310,9 @@ class C(NamedExpression):
         C('model_class')
         C('GPU')
     """
-    def _get(self, batch=None, pipeline=None, model=None):
+    def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline config """
-        name = super()._get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
         try:
@@ -319,7 +323,7 @@ class C(NamedExpression):
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """
-        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
         config[name] = value
@@ -341,9 +345,9 @@ class F(NamedExpression):
         self.kwargs = kwargs
         self._pass = _pass
 
-    def _get(self, batch=None, pipeline=None, model=None):
+    def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
-        name = super()._get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         args = []
         if self._pass:
             if isinstance(batch, _DummyBatch) or batch is None:
@@ -378,18 +382,19 @@ class V(NamedExpression):
         V('model_name')
         V('loss_history')
     """
-    def _get(self, batch=None, pipeline=None, model=None):
+    def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline variable """
-        name = super()._get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         value = pipeline.get_variable(name)
         return value
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline variable """
-        name = super().get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.assign_variable(name, value, batch=batch)
+
 
 class D(NamedExpression):
     """ Dataset attribute
@@ -402,7 +407,7 @@ class D(NamedExpression):
         D('organization')
     """
     def _get_name_dataset(self, batch=None, pipeline=None, model=None):
-        name = super()._get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline or pipeline
         dataset = pipeline.dataset if pipeline is not None else None
         dataset = dataset or batch.dataset
@@ -410,7 +415,7 @@ class D(NamedExpression):
             raise ValueError("Dataset is not set", self)
         return name, dataset
 
-    def _get(self, batch=None, pipeline=None, model=None):
+    def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a dataset attribute """
         name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
         if hasattr(dataset, name):
@@ -453,9 +458,9 @@ class R(NamedExpression):
         self.kwargs = kwargs
         self.size = size
 
-    def _get(self, batch=None, pipeline=None, model=None):
+    def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a random variable """
-        name = super()._get(batch=batch, pipeline=pipeline, model=model)
+        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         if callable(name):
             pass
         elif isinstance(name, str) and hasattr(self.random_state, name):
