@@ -578,3 +578,8 @@ class I(NamedExpression):
             if name == 'r':
                 return pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
         return total
+
+    def assign(self, *args, **kwargs):
+        """ Assign a value by calling a callable """
+        _ = args, kwargs
+        raise NotImplementedError("Assigning a value with is not supported")
