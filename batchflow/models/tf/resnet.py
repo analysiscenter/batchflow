@@ -54,10 +54,8 @@ class ResNet(TFModel):
                 or apply a 1x1 convolution (default is False)
             width_factor : int
                 widening factor to make WideResNet (default=1)
-            se_block : bool
-                whether to use squeeze-and-excitation blocks (default=False)
-            se_factor : int
-                squeeze-and-excitation channels ratio (default=16)
+            se_block : dict or None
+                params for squeeze-and-excitation blocks, see :meth:`~TFModel.se_block` (default=None)
             resnext : bool
                 whether to use aggregated ResNeXt block (default=False)
             resnext_factor : int
@@ -77,7 +75,7 @@ class ResNet(TFModel):
                                     bottleneck=False, bottleneck_factor=4,
                                     width_factor=1, zero_pad=False,
                                     resnext=False, resnext_factor=32,
-                                    se_block=False, se_factor=16)
+                                    se_block=None)
 
         config['head'] = dict(layout='Vdf', dropout_rate=.4)
 
@@ -197,10 +195,8 @@ class ResNet(TFModel):
             whether to use a simple (`False`) or bottleneck (`True`) block
         bottleneck_factor : int
             the filters nultiplier in the bottleneck block
-        se_block : bool
-            whether to include squeeze and excitation block
-        se_factor : int
-            se block ratio
+        se_block : dict or None
+            params for squeeze-and-excitation blocks, see :meth:`~TFModel.se_block` (default=None)
         name : str
             scope name
         kwargs : dict
@@ -215,7 +211,7 @@ class ResNet(TFModel):
         width_factor = cls.pop('width_factor', kwargs)
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
         resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
-        se_block, se_factor = cls.pop(['se_block', 'se_factor'], kwargs)
+        se_block= cls.pop('se_block', kwargs)
         post_activation = cls.pop('post_activation', kwargs)
         if isinstance(post_activation, bool) and post_activation:
             post_activation = 'an'
@@ -234,7 +230,7 @@ class ResNet(TFModel):
             x_channels = cls.num_channels(x, data_format)
 
             if se_block:
-                x = cls.se_block(x, se_factor, **kwargs)
+                x = cls.se_block(x, **{**kwargs, **se_block})
 
             with tf.variable_scope('shortcut'):
                 strides = 2 if downsample else 1
