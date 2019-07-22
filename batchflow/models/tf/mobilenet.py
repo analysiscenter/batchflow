@@ -6,14 +6,14 @@ Mobile Networks for Classification, Detection and Segmentation
 <https://arxiv.org/abs/1801.04381>`_"
 
 Howard A. et al. "`Searching for MobileNetV3
-<https://arxiv.org/pdf/1905.02244.pdf>`_"
+<https://arxiv.org/abs/1905.02244>`_"
 """
 from copy import deepcopy
 import tensorflow as tf
 
 from . import TFModel
 from .layers import conv_block
-
+from .nn import h_swish, h_sigmoid
 
 _V1_DEFAULT_BODY = {
     'strides': [1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 2],
@@ -230,18 +230,18 @@ class MobileNet_v2(TFModel):
 
 
 _V3_LARGE_DEFAULT_BODY = [
-    dict(repeats=1, filters=16, expansion_factor=1, strides=1, kernel_size=3, h_swish=False, se_block=False),
-    dict(repeats=1, filters=24, expansion_factor=4, strides=2, kernel_size=3, h_swish=False, se_block=False),
-    dict(repeats=1, filters=24, expansion_factor=3, strides=1, kernel_size=3, h_swish=False, se_block=False,
+    dict(repeats=1, filters=16, expansion_factor=1, strides=1, kernel_size=3, se_block=False),
+    dict(repeats=1, filters=24, expansion_factor=4, strides=2, kernel_size=3, se_block=False),
+    dict(repeats=1, filters=24, expansion_factor=3, strides=1, kernel_size=3, se_block=False,
          residual=True),
-    dict(repeats=3, filters=40, expansion_factor=3, strides=2, kernel_size=5, h_swish=False, se_block=True),
-    dict(repeats=1, filters=80, expansion_factor=6, strides=2, kernel_size=3, h_swish=True, se_block=False),
-    dict(repeats=1, filters=80, expansion_factor=2.5, strides=1, kernel_size=3, h_swish=True, se_block=False,
+    dict(repeats=3, filters=40, expansion_factor=3, strides=2, kernel_size=5, se_block=True),
+    dict(repeats=1, filters=80, expansion_factor=6, strides=2, kernel_size=3, activation=h_swish, se_block=False),
+    dict(repeats=1, filters=80, expansion_factor=2.5, strides=1, kernel_size=3, activation=h_swish, se_block=False,
          residual=True),
-    dict(repeats=2, filters=80, expansion_factor=2.3, strides=1, kernel_size=3, h_swish=True, se_block=False,
+    dict(repeats=2, filters=80, expansion_factor=2.3, strides=1, kernel_size=3, activation=h_swish, se_block=False,
          residual=True),
-    dict(repeats=2, filters=112, expansion_factor=6, strides=1, kernel_size=3, h_swish=True, se_block=True),
-    dict(repeats=3, filters=160, expansion_factor=6, strides=2, kernel_size=5, h_swish=True, se_block=True),
+    dict(repeats=2, filters=112, expansion_factor=6, strides=1, kernel_size=3, activation=h_swish, se_block=True),
+    dict(repeats=3, filters=160, expansion_factor=6, strides=2, kernel_size=5, activation=h_swish, se_block=True),
 ]
 
 class MobileNet_v3(TFModel):
@@ -273,11 +273,10 @@ class MobileNet_v3(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['common'].update(dict(activation=tf.nn.relu))
-        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=cls.h_swish))
+        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
         config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7, kernel_size=1,
-                                   activation=cls.h_swish))
+                                   activation=h_swish))
 
         config['loss'] = 'ce'
 
@@ -287,37 +286,6 @@ class MobileNet_v3(TFModel):
         config = super().build_config(names)
         config['head']['filters'][-1] = self.num_classes('targets')
         return config
-
-    @classmethod
-    def h_swish(cls, inputs):
-        """ Hard-swish nonlinearity function.
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        return inputs * tf.nn.relu6(inputs + 3) / 6.0
-
-    @classmethod
-    def h_sigmoid(cls, inputs):
-        """ Hard-sigmoid nonlinearity function.
-        A piece-wise linear analog of sigmoid function.
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        return tf.nn.relu6(inputs + 3) / 6.0
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
@@ -354,7 +322,7 @@ class MobileNet_v3(TFModel):
         return x
 
     @classmethod
-    def block(cls, inputs, filters, residual=False, strides=1, expansion_factor=4, width_factor=1, h_swish=False,
+    def block(cls, inputs, filters, residual=False, strides=1, expansion_factor=4, width_factor=1, kernel_size=3,
               se_block=False, name=None, **kwargs):
         """ An inverted residual bottleneck block consisting of a separable depthwise convolution and 1x1 pointise
         convolution and an optional Squeeze-and-Excitation block.
@@ -385,16 +353,13 @@ class MobileNet_v3(TFModel):
         tf.Tensor
         """
 
-        if h_swish:
-            kwargs['activation'] = cls.h_swish # will not work in current se_block
-
         num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
-        x = conv_block(inputs, 'cna Cna', [num_filters, num_filters], [1, 3], name='%s-exp' % name,
+        x = conv_block(inputs, 'cna Cna', [num_filters, num_filters], [1, kernel_size], name='%s-exp' % name,
                        strides=[1, strides], **kwargs)
 
         if se_block:
             x = cls.se_block(x, int(num_filters * 0.25), name='%s-se' % name, data_format=kwargs['data_format'],
-                             activation=[tf.nn.relu, cls.h_sigmoid])
+                             activation=[tf.nn.relu, h_sigmoid])
 
         x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
 
@@ -404,15 +369,15 @@ class MobileNet_v3(TFModel):
 
 
 _V3_SMALL_DEFAULT_BODY = [
-    dict(repeats=1, filters=16, expansion_factor=1, strides=2, kernel_size=3, h_swish=False, se_block=True),
-    dict(repeats=1, filters=24, expansion_factor=4.5, strides=2, kernel_size=3, h_swish=False, se_block=False),
-    dict(repeats=1, filters=24, expansion_factor=3.7, strides=1, kernel_size=3, h_swish=False, se_block=False,
+    dict(repeats=1, filters=16, expansion_factor=1, strides=2, kernel_size=3, se_block=True),
+    dict(repeats=1, filters=24, expansion_factor=4.5, strides=2, kernel_size=3, se_block=False),
+    dict(repeats=1, filters=24, expansion_factor=3.7, strides=1, kernel_size=3, se_block=False,
          residual=True),
-    dict(repeats=1, filters=40, expansion_factor=4, strides=2, kernel_size=5, h_swish=True, se_block=True),
-    dict(repeats=2, filters=40, expansion_factor=6, strides=1, kernel_size=5, h_swish=True, se_block=True,
+    dict(repeats=1, filters=40, expansion_factor=4, strides=2, kernel_size=5, activation=h_swish, se_block=True),
+    dict(repeats=2, filters=40, expansion_factor=6, strides=1, kernel_size=5, activation=h_swish, se_block=True,
          residual=True),
-    dict(repeats=2, filters=48, expansion_factor=3, strides=1, kernel_size=5, h_swish=True, se_block=True),
-    dict(repeats=3, filters=96, expansion_factor=6, strides=2, kernel_size=5, h_swish=True, se_block=True),
+    dict(repeats=2, filters=48, expansion_factor=3, strides=1, kernel_size=5, activation=h_swish, se_block=True),
+    dict(repeats=3, filters=96, expansion_factor=6, strides=2, kernel_size=5, activation=h_swish, se_block=True),
 ]
 
 class MobileNet_v3_small(MobileNet_v3):
@@ -420,10 +385,10 @@ class MobileNet_v3_small(MobileNet_v3):
     @classmethod
     def default_config(cls):
         config = MobileNet_v3.default_config()
-        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=cls.h_swish))
+        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
         config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_SMALL_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, 2], pool_size=7, kernel_size=1,
-                                   activation=cls.h_swish, se_block=True))
+                                   activation=h_swish, se_block=True))
         return config
 
     @classmethod
@@ -447,7 +412,7 @@ class MobileNet_v3_small(MobileNet_v3):
         if kwargs.get('se_block'):
             x = conv_block(inputs, layout=layout[:3], filters=filters[0], name=name, **kwargs)
             x = cls.se_block(x, int(filters[0] * 0.25), name='%s-se' % name, data_format=kwargs['data_format'],
-                             activation=[tf.nn.relu, cls.h_sigmoid])
+                             activation=[tf.nn.relu, h_sigmoid])
 
             x = conv_block(inputs, layout=layout[3:], filters=filters[1:], name=name, **kwargs)
         else:
