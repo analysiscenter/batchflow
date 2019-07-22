@@ -528,16 +528,32 @@ class P(W):
         return self
 
 class I(NamedExpression):
-    """ Pipeline iteration number
+    """ Iteration number
 
+    Parameters
+    ----------
+    name : str
+        'c', 'current' - current iteration number, default.
+        'm',' maximum' - number of total iteration to be performed if defined,
+                         raises an error othervise.
+        'r', 'ratio' - current interation divided by a total number of iterations.
+
+    Raises
+    ------
+    ValueError
+        * If `name` is not valid
+        * If `name` is 'm' or 'r' and total number of iterations is not defined.
     Examples
     --------
     ::
-    TODO
+
+        I()
+        I('m')
+        P(R('normal', loc=0, scale=I('ratio')*100)
     """
     def __init__(self, name='c'):
         super().__init__(name, mode=None)
-        self._allowed_keys = { 
+        self._allowed_names = {
             'current': 'c',
             'c': 'c',
             'maximun': 'm',
@@ -548,7 +564,7 @@ class I(NamedExpression):
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return current or maximum iteration number """
-        name = self._allowed_keys.get(self.name)
+        name = self._allowed_names.get(self.name)
         if name is None:
             raise ValueError('Unknown key for named expresssion I')
 
