@@ -374,11 +374,13 @@ class TorchModel(BaseModel):
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
 
+        if decay_name is None:
+            return decay_name, decay_args
         if 'n_iters' not in config:
             raise ValueError('Missing required key ```n_iters``` in the cofiguration dict.')
         self.n_iters = config.pop('n_iters')
 
-        if decay_name is None or callable(decay_name) or isinstance(decay_name, type):
+        if callable(decay_name) or isinstance(decay_name, type):
             pass
         elif isinstance(decay_name, str) and hasattr(torch.optim.lr_scheduler, decay_name):
             decay_name = getattr(torch.optim.lr_scheduler, decay_name)
@@ -386,12 +388,14 @@ class TorchModel(BaseModel):
             decay_name = DECAYS.get(decay_name)
         else:
             raise ValueError("Unknown learning rate decay method", decay_name)
+
         if decay_name in DECAYS_DEFAULTS:
             decay_dict = DECAYS_DEFAULTS.get(decay_name).copy()
             if decay_name == DECAYS['cos']:
                 decay_dict.update(T_max=self.n_iters)
             decay_dict.update(decay_args)
-        return decay_name, decay_dict
+            decay_args = decay_dict.copy()
+        return decay_name, decay_args
 
     def get_tensor_config(self, tensor):
         """ Return tensor configuration """
