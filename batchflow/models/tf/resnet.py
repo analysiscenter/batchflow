@@ -43,23 +43,29 @@ class ResNet(TFModel):
             number of filters in each group
 
         block : dict
-            bottleneck : bool
-                whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
-            bottleneck_factor : int
-                filter shrinking factor in a bottleneck block (default=4)
-            post_activation : None or bool or str
-                layout to apply after after residual and shortcut summation (default is None)
+            layout : str
+                a sequence of layers in the block
+            filters : int or list/tuple of ints
+                number of output filters
             zero_pad : bool
                 whether to pad a shortcut with zeros when a number of filters increases
                 or apply a 1x1 convolution (default is False)
             width_factor : int
                 widening factor to make WideResNet (default=1)
-            se_block : dict or None
-                params for squeeze-and-excitation blocks, see :meth:`~TFModel.se_block` (default=None)
+            downsample : bool
+                whether to decrease spatial dimensions with strides=2 in the first convolution
             resnext : bool
                 whether to use aggregated ResNeXt block (default=False)
             resnext_factor : int
                 the number of aggregations in ResNeXt block (default=32)
+            bottleneck : bool
+                whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
+            bottleneck_factor : int
+                filter shrinking factor in a bottleneck block (default=4)
+            se_block : dict or None
+                params for squeeze-and-excitation blocks, see :meth:`~TFModel.se_block` (default=None)
+            post_activation : None or bool or str
+                layout to apply after after residual and shortcut summation (default is None)
 
     head : dict
         'Vdf' with dropout_rate=.4
@@ -197,6 +203,8 @@ class ResNet(TFModel):
             the filters nultiplier in the bottleneck block
         se_block : dict or None
             params for squeeze-and-excitation blocks, see :meth:`~TFModel.se_block` (default=None)
+        post_activation : str or bool
+            layout to apply after after residual and shortcut summation (default is None)
         name : str
             scope name
         kwargs : dict
