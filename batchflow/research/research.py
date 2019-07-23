@@ -702,7 +702,7 @@ class Executable:
         """ Returns does Unit should be executed at that iteration """
         rule = self.execute if action == 'execute' else self.dump
 
-        frequencies = (item for item in rule if isinstance(item, int))
+        frequencies = (item for item in rule if isinstance(item, int) and item > 0)
         iterations = (int(item[1:]) for item in rule if isinstance(item, str) and item != 'last')
 
         it_ok = iteration in iterations
