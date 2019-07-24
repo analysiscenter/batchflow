@@ -11,7 +11,7 @@ class _DummyBatch:
 def _check3(val, expr, attr, default):
     if val is not None:
         return val
-    val = getattr(val, attr, None)
+    val = getattr(expr, attr, None)
     if val is not None:
         return val
     return default
