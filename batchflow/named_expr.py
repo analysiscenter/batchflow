@@ -8,12 +8,19 @@ class _DummyBatch:
     def __init__(self, pipeline):
         self.pipeline = pipeline
 
+def _check3(val, expr, attr, default):
+    if val is not None:
+        return val
+    val = getattr(val, attr, None)
+    if val is not None:
+        return val
+    return default
 
 def eval_expr(expr, batch=None, pipeline=None, model=None, unwrap=False):
     """ Evaluate a named expression recursively """
-    pipeline = pipeline or getattr(expr, '_pipeline', None)
-    batch = batch or getattr(expr, '_batch', None) or _DummyBatch(pipeline)
-    model = model or getattr(expr, '_model', None)
+    batch = _check3(batch, expr, '_batch', _DummyBatch(pipeline))
+    pipeline = _check3(pipeline, expr, '_pipeline', None)
+    model = _check3(model, expr, '_model', None)
     args = dict(batch=batch, pipeline=pipeline, model=model)
 
     if isinstance(expr, NamedExpression):
