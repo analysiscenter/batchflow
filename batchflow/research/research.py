@@ -339,19 +339,24 @@ class Research:
 
         At each iteration all pipelines and functions will be executed in the order in which were added.
         """
-        if not self.loaded:
+        if self.loaded:
+            print("Starting loaded research. All parameters passed to run except name, bar and gpu are ignored.\n",
+                  "If gpu is not provided it will be inherited")
+            if gpu:
+                self.gpu = self._get_gpu_list(gpu)
+        else:
             self.n_reps = n_reps
             self.n_iters = n_iters
             self.workers = workers
             self.branches = branches
-            self.bar = bar
             self.gpu = self._get_gpu_list(gpu)
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
             self.trails = trials
-            self.name = name or self.name
-
             self.n_splits = n_splits
+            
+        self.name = name or self.name
+        self.bar = bar
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
