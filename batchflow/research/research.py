@@ -354,7 +354,7 @@ class Research:
             self.timeout = timeout
             self.trails = trials
             self.n_splits = n_splits
-            
+
         self.name = name or self.name
         self.bar = bar
 

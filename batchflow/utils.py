@@ -81,7 +81,7 @@ def plot_results_by_config(results, variables, figsize=None, force_flat=True):
     if figsize is None:
         figsize = (n_h * 5, n_v * 5)
 
-    fig, axs = plt.subplots(n_v, n_h, figsize=figsize)
+    _, axs = plt.subplots(n_v, n_h, figsize=figsize)
     for x, (config, df) in enumerate(gbc):
         for y, (source, val) in enumerate(variables):
             if n_configs == 1 and n_vars == 1:
