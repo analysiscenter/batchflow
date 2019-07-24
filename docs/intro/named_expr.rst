@@ -61,8 +61,13 @@ To convert a named expression value to a string use :meth:`~batchflow.named_expr
         ...
         .print('Dataset contains ' + D('size').str() + ' items')
 
+Formatting is also possible::
 
-Slicing is also supported::
+    pipeline
+        ...
+        .print(V('variable').format('Value of the variable is {:7.7}')
+
+Slicing is often useful::
 
     pipeline
         ...
@@ -74,6 +79,11 @@ As well as getting attributes::
         ...
         .print('Size in bytes:', B('images').nbytes)
 
+And calling a function::
+
+    pipeline
+        ...
+        .print('Accuracy:', C('custom_accuracy')(targets=B('labels'), predictions=V('predictions'))
 
 
 B - batch component

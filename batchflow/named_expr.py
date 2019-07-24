@@ -61,7 +61,7 @@ BINARY_OPS = {
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
     '#slice': lambda a, b: a[b], '#format': lambda a, b: b.format(a),
-    '#attr': lambda a, b: getattr(a, b),
+    '#attr': lambda a, b: getattr(a, b), '#call': lambda a, b: a(*b[0], **b[1]),
 }
 
 UNARY_OPS = {
@@ -125,6 +125,9 @@ class NamedExpression:
 
     def __getitem__(self, key):
         return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
+
+    def __call__(self, *args, **kwargs):
+        return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
 
     def str(self):
         """ Convert a named expression value to a string """
