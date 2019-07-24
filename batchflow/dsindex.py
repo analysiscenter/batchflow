@@ -8,6 +8,7 @@ import tqdm
 import numpy as np
 
 from .base import Baseset
+from .named_expr import eval_expr
 
 
 class DatasetIndex(Baseset):
@@ -399,7 +400,8 @@ class DatasetIndex(Baseset):
         return self.create_batch(batch_items, pos=True)
 
 
-    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, bar=False):
+    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
+                  bar=False, bar_desc=None):
         """ Generate batches
 
         Parameters
@@ -450,6 +452,9 @@ class DatasetIndex(Baseset):
             Whether to show a progress bar.
             If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
+        bar_desc
+            Prefix for the progressbar.
+
         Yields
         ------
         An instance of the same class with a subset of indices
@@ -493,6 +498,14 @@ class DatasetIndex(Baseset):
             except StopIteration:
                 return
             if 'bar' in iter_params:
+                if bar_desc:
+                    try:
+                        val = eval_expr(bar_desc, unwrap=True)
+                        val = str(val)
+                    except (LookupError, ValueError):
+                        val = None
+                    iter_params['bar'].set_description(val)
+
                 iter_params['bar'].update(1)
             yield batch
 

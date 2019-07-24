@@ -1207,6 +1207,9 @@ class Pipeline:
             Whether to show a progress bar.
             If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
+        bar_desc
+            Prefix for the progressbar.
+
         prefetch : int
             a number of batches to process in advance (default=0)
 
