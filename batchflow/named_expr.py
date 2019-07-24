@@ -60,7 +60,8 @@ BINARY_OPS = {
     '__lshift__': operator.lshift, '__rshift__': operator.rshift,
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
-    '#slice': lambda a, b: a[b], '#format': lambda a, b: b.format(a)
+    '#slice': lambda a, b: a[b], '#format': lambda a, b: b.format(a),
+    '#attr': lambda a, b: getattr(a, b),
 }
 
 UNARY_OPS = {
@@ -118,6 +119,9 @@ class NamedExpression:
         self.op = op
         self.a = a
         self.b = b
+
+    def __getattr__(self, name):
+        return NamedExpression(AN_EXPR, op='#attr', a=self, b=name)
 
     def __getitem__(self, key):
         return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)

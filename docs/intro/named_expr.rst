@@ -68,6 +68,12 @@ Slicing is also supported::
         ...
         .print('Current loss:', V('loss_history')[-1])
 
+As well as getting attributes::
+
+    pipeline
+        ...
+        .print('Size in bytes:', B('images').nbytes)
+
 
 
 B - batch component
