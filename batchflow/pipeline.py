@@ -491,9 +491,9 @@ class Pipeline:
         """ Print a value during pipeline execution """
         return self._add_action(PRINT_ID, *args, **kwargs)
 
-    def _exec_print(self, batch, action):
-        args_value = self._eval_expr(action['args'], batch=batch)
-        kwargs_value = self._eval_expr(action['kwargs'], batch=batch)
+    def _exec_print(self, _, action):
+        args_value = action['args']
+        kwargs_value = action['kwargs']
 
         args = []
         if len(args_value) == 0:
