@@ -8,17 +8,27 @@ class _DummyBatch:
     def __init__(self, pipeline):
         self.pipeline = pipeline
 
+def _check3(val, expr, attr, default):
+    if val is not None:
+        return val
+    val = getattr(expr, attr, None)
+    if val is not None:
+        return val
+    return default
 
-def eval_expr(expr, batch=None, pipeline=None, model=None):
+def eval_expr(expr, batch=None, pipeline=None, model=None, unwrap=False):
     """ Evaluate a named expression recursively """
-    if batch is None:
-        batch = _DummyBatch(pipeline)
+    batch = _check3(batch, expr, '_batch', _DummyBatch(pipeline))
+    pipeline = _check3(pipeline, expr, '_pipeline', None)
+    model = _check3(model, expr, '_model', None)
     args = dict(batch=batch, pipeline=pipeline, model=model)
 
     if isinstance(expr, NamedExpression):
         _expr = expr.get(**args)
         if isinstance(_expr, NamedExpression) and not isinstance(expr, W):
             expr = eval_expr(_expr, **args)
+        elif unwrap and isinstance(expr, W):
+            expr = eval_expr(expr.name, **args)
         else:
             expr = _expr
     elif isinstance(expr, (list, tuple)):
@@ -57,7 +67,8 @@ BINARY_OPS = {
     '__lshift__': operator.lshift, '__rshift__': operator.rshift,
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
-    '#slice': lambda a, b: a[b],
+    '#slice': lambda a, b: a[b], '#format': lambda a, b: b.format(a),
+    '#attr': lambda a, b: getattr(a, b), '#call': lambda a, b: a(*b[0], **b[1]),
 }
 
 UNARY_OPS = {
@@ -116,12 +127,30 @@ class NamedExpression:
         self.a = a
         self.b = b
 
+    def __getattr__(self, name):
+        return NamedExpression(AN_EXPR, op='#attr', a=self, b=name)
+
     def __getitem__(self, key):
         return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
+
+    def __call__(self, *args, **kwargs):
+        return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
 
     def str(self):
         """ Convert a named expression value to a string """
         return NamedExpression(AN_EXPR, op='#str', a=self)
+
+    def format(self, string):
+        """ Convert a value to a formatted representation, controlled by format spec.
+
+        Examples
+        --------
+        Unlike Python built-in function, the usage is value.format(format_spec), for example:
+        ::
+
+            V('variable').format('Value of the variable is {:7.7}')
+        """
+        return NamedExpression(AN_EXPR, op='#format', a=self, b=string)
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression
@@ -252,10 +281,18 @@ class W(NamedExpression):
         W(B(copy=True))
         W(R('normal', 0, 1, size=B('size')))
     """
+    def __init__(self, name=None, mode='w'):
+        super().__init__(name, mode)
+        self._batch = None
+        self._pipeline = None
+        self._model = None
+
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a wrapped named expression """
-        _ = batch, pipeline, model
-        return self.name
+        self._batch = batch
+        self._pipeline = pipeline
+        self._model = model
+        return self
 
     def assign(self, *args, **kwargs):
         """ Assign a value """

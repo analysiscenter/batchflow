@@ -1211,6 +1211,9 @@ class Pipeline:
             Whether to show a progress bar.
             If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
+        bar_desc
+            Prefix for the progressbar.
+
         prefetch : int
             a number of batches to process in advance (default=0)
 
@@ -1359,8 +1362,10 @@ class Pipeline:
             self._lazy_run = args, kwargs
         else:
             self.reset_iter(init_vars=init_vars)
-            if len(args) == 0 and len(kwargs) == 0:
-                args, kwargs = self._lazy_run
+            if self._lazy_run:
+                _args, _kwargs = self._lazy_run
+                args = _args if len(args) == 0 else args
+                kwargs = {**_kwargs, **kwargs}
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
 
