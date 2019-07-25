@@ -576,14 +576,14 @@ class I(NamedExpression):
     ----------
     name : str
         'c', 'current' - current iteration number, default.
-        'm',' maximum' - number of total iteration to be performed if defined,
-                         raises an error othervise.
-        'r', 'ratio' - current interation divided by a total number of iterations.
+        'm', 'max', maximum' - total number of iterations to be performed.
+                               If total number is not defined, raises an error.
+        'r', 'ratio' - current iteration divided by a total number of iterations.
 
     Raises
     ------
     ValueError
-        * If `name` is not valid
+        * If `name` is not valid.
         * If `name` is 'm' or 'r' and total number of iterations is not defined.
     Examples
     --------
@@ -598,15 +598,16 @@ class I(NamedExpression):
         self._allowed_names = {
             'current': 'c',
             'c': 'c',
-            'maximun': 'm',
+            'maximum': 'm',
             'm': 'm',
+            'max': 'm',
             'ratio': 'ratio',
             'r': 'r',
         }
 
     def get(self, batch=None, pipeline=None, model=None):
-        """ Return current or maximum iteration number """
-        name = self._allowed_names.get(self.name)
+        """ Return current or maximum iteration number or their ratio """
+        name = self._allowed_names.get(self._get_name())
         if name is None:
             raise ValueError('Unknown key for named expresssion I')
 
@@ -616,7 +617,7 @@ class I(NamedExpression):
         if name in ['m', 'r']:
             total = pipeline._iter_params.get('_total')    # pylint:disable=protected-access
             if total is None:
-                raise ValueError('Number of total iteration is not defined!')
+                raise ValueError('Total number of iterations is not defined!')
             if name == 'r':
                 return pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
         return total
@@ -624,4 +625,4 @@ class I(NamedExpression):
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
         _ = args, kwargs
-        raise NotImplementedError("Assigning a value with is not supported")
+        raise NotImplementedError("Assigning a value to an iteration number is not supported")

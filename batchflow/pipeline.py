@@ -1251,7 +1251,7 @@ class Pipeline:
         on_iter = kwargs.pop('on_iter', None)
 
         if kwargs.pop('iter_params', None) is None:
-            self._iter_params = self._iter_params if self._iter_params else self.dataset.get_default_iter_params()
+            self._iter_params = self._iter_params or self.dataset.get_default_iter_params()
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch, iter_params=self._iter_params)
