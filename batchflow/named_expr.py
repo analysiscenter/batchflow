@@ -8,27 +8,21 @@ class _DummyBatch:
     def __init__(self, pipeline):
         self.pipeline = pipeline
 
-def _check3(val, expr, attr, default):
-    if val is not None:
-        return val
-    val = getattr(expr, attr, None)
-    if val is not None:
-        return val
-    return default
 
-def eval_expr(expr, batch=None, pipeline=None, model=None, unwrap=False):
+def eval_expr(expr, batch=None, pipeline=None, model=None):
     """ Evaluate a named expression recursively """
-    batch = _check3(batch, expr, '_batch', _DummyBatch(pipeline))
-    pipeline = _check3(pipeline, expr, '_pipeline', None)
-    model = _check3(model, expr, '_model', None)
+    batch = batch or _DummyBatch(pipeline)
+    pipeline = pipeline or batch.pipeline
     args = dict(batch=batch, pipeline=pipeline, model=model)
 
     if isinstance(expr, NamedExpression):
+        if expr.params:
+            args = {}
         _expr = expr.get(**args)
-        if isinstance(_expr, NamedExpression) and not isinstance(expr, W):
+        if isinstance(expr, W):
+            expr = _expr
+        elif isinstance(_expr, NamedExpression):
             expr = eval_expr(_expr, **args)
-        elif unwrap and isinstance(expr, W):
-            expr = eval_expr(expr.name, **args)
         else:
             expr = _expr
     elif isinstance(expr, (list, tuple)):
@@ -126,6 +120,7 @@ class NamedExpression:
         self.op = op
         self.a = a
         self.b = b
+        self.params = None
 
     def __getattr__(self, name):
         return NamedExpression(AN_EXPR, op='#attr', a=self, b=name)
@@ -152,6 +147,9 @@ class NamedExpression:
         """
         return NamedExpression(AN_EXPR, op='#format', a=self, b=string)
 
+    def set_params(self, batch=None, pipeline=None, model=None):
+        self.params = batch, pipeline, model
+
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a named expression
 
@@ -166,6 +164,8 @@ class NamedExpression:
             a model which should be used to calculate a value
             (usually omitted, but might be useful for F- and L-expressions)
         """
+        if self.params:
+            batch, pipeline, model = self.params
         name = self._get_name(batch, pipeline, model)
         if name == AN_EXPR:
             return self._get_value(batch, pipeline, model)
@@ -206,7 +206,10 @@ class NamedExpression:
             (as value might contain other named expressions,
             so it should be processed recursively)
         """
+        if self.params:
+            batch, pipeline, model = self.params
         mode = mode or self.mode
+
         if eval:
             value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
         if mode in ['a', 'append']:
@@ -261,43 +264,12 @@ class NamedExpression:
             self.assign(value, *args, **kwargs)
 
     def __repr__(self):
-        if self.name == AN_EXPR:
-            val = "Arithmetic expression on " + repr(self.a)
+        if isinstance(self.name, str) and self.name == AN_EXPR:
+            val = "Arithmetic expression " + str(self.op) + " on " + repr(self.a)
             if self.op in BINARY_OPS:
                 val += " and " + repr(self.b)
             return val
         return type(self).__name__ + '(' + str(self.name) + ')'
-
-
-
-class W(NamedExpression):
-    """ A wrapper which returns the wrapped named expression without evaluating it
-
-    Examples
-    --------
-    ::
-
-        W(V('variable'))
-        W(B(copy=True))
-        W(R('normal', 0, 1, size=B('size')))
-    """
-    def __init__(self, name=None, mode='w'):
-        super().__init__(name, mode)
-        self._batch = None
-        self._pipeline = None
-        self._model = None
-
-    def get(self, batch=None, pipeline=None, model=None):
-        """ Return a wrapped named expression """
-        self._batch = batch
-        self._pipeline = pipeline
-        self._model = model
-        return self
-
-    def assign(self, *args, **kwargs):
-        """ Assign a value """
-        _ = args, kwargs
-        raise NotImplementedError("Assigning a value to a wrapper is not supported")
 
 
 class B(NamedExpression):
@@ -323,6 +295,8 @@ class B(NamedExpression):
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a batch component """
+        if self.params:
+            batch, pipeline, model = self.params
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
@@ -332,6 +306,8 @@ class B(NamedExpression):
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a batch component """
+        if self.params:
+            batch, pipeline, model = self.params
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         if name is not None:
             setattr(batch, name, value)
@@ -349,6 +325,8 @@ class C(NamedExpression):
     """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline config """
+        if self.params:
+            batch, pipeline, model = self.params
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
@@ -360,6 +338,8 @@ class C(NamedExpression):
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline config """
+        if self.params:
+            batch, pipeline, model = self.params
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
@@ -384,6 +364,8 @@ class F(NamedExpression):
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
+        if self.params:
+            batch, pipeline, model = self.params
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         args = []
         if self._pass:
@@ -421,6 +403,8 @@ class V(NamedExpression):
     """
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline variable """
+        if self.params:
+            batch, pipeline, model = self.params
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         value = pipeline.get_variable(name)
@@ -428,6 +412,8 @@ class V(NamedExpression):
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a pipeline variable """
+        if self.params:
+            batch, pipeline, model = self.params
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.assign_variable(name, value, batch=batch)
@@ -454,6 +440,8 @@ class D(NamedExpression):
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a dataset attribute """
+        if self.params:
+            batch, pipeline, model = self.params
         name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
         if hasattr(dataset, name):
             value = getattr(dataset, name)
@@ -497,6 +485,8 @@ class R(NamedExpression):
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a random variable """
+        if self.params:
+            batch, pipeline, model = self.params
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         if callable(name):
             pass
@@ -525,8 +515,30 @@ class R(NamedExpression):
         return repr_str + (', size=' + str(self.size) + ')' if self.size else ')')
 
 
+class W(NamedExpression):
+    """ A wrapper which returns the wrapped named expression without evaluating it
+
+    Examples
+    --------
+    ::
+
+        W(V('variable'))
+        W(B(copy=True))
+        W(R('normal', 0, 1, size=B('size')))
+    """
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a wrapped named expression """
+        self.name.set_params(batch, pipeline, model)
+        return self.name
+
+    def assign(self, *args, **kwargs):
+        """ Assign a value """
+        _ = args, kwargs
+        raise NotImplementedError("Assigning a value to a wrapper is not supported")
+
+
 class P(W):
-    """ A wrapper for parallel actions
+    """ A wrapper for actions parallelized with @inbatch_parallel
 
     Examples
     --------
@@ -536,7 +548,7 @@ class P(W):
             .rotate(angle=P(R('normal', 0, 1)))
 
     Without ``P`` all images in the batch will be rotated at the same angle,
-    as an angle randomized across batches only::
+    as an angle is randomized across batches only::
 
         pipeline
             .rotate(angle=R('normal', 0, 1))
