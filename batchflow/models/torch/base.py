@@ -46,8 +46,7 @@ DECAYS_DEFAULTS = {
     torch.optim.lr_scheduler.LambdaLR : dict(lr_lambda=lambda epoch: 0.96**epoch),
     torch.optim.lr_scheduler.StepLR: dict(step_size=30),
     torch.optim.lr_scheduler.MultiStepLR: dict(milestones=[30, 80]),
-    torch.optim.lr_scheduler.CosineAnnealingLR: dict(T_max=None),
-    torch.optim.lr_scheduler.CyclicLR: dict(base_lr=1e-3, max_lr=5e-3)
+    torch.optim.lr_scheduler.CosineAnnealingLR: dict(T_max=None)
 }
 
 
@@ -199,7 +198,6 @@ class TorchModel(BaseModel):
        step        step_size = 30
        multistep   milestones = [30, 80]
        cos         T_max = n_iters
-       cyclic      base_lr=1e-3, max_lr=5e-3
        ==========  ==========
     """
     def __init__(self, *args, **kwargs):
