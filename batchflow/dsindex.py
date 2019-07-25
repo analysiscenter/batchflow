@@ -500,7 +500,7 @@ class DatasetIndex(Baseset):
             if 'bar' in iter_params:
                 if bar_desc:
                     try:
-                        val = eval_expr(bar_desc, unwrap=True)
+                        val = eval_expr(bar_desc)
                         val = str(val)
                     except (LookupError, ValueError):
                         val = None

@@ -171,11 +171,14 @@ class Pipeline:
         return new_p
 
     def __lshift__(self, other):
-        if not isinstance(other, Baseset):
-            raise TypeError("Pipelines might take only Datasets. Use as pipeline << dataset")
         new_p = self.from_pipeline(self)
-        new_p.dataset = other
-        return new_p
+        if not isinstance(other, Baseset):
+            new_p.dataset = other
+            return new_p
+        if not isinstance(other, (Config, dict)):
+            new_p.set_config(other)
+            return new_p
+        raise TypeError("Pipeline might take only Dataset or Config. Use as pipeline << dataset or pipeine << config")
 
     def _is_batch_method(self, name, namespace=None):
         if namespace is None and self.dataset is not None:
@@ -265,6 +268,19 @@ class Pipeline:
             self.config = {}
         self.config.update(config)
         return self
+
+    def update_config(self, config):
+        """ Update pipeline's config
+
+        Parameters
+        ----------
+        config: dict
+            configuration parameters
+        clear : bool
+            whether to clear the current config
+        """
+        return self.set_config(config, clear=False)
+
 
     def has_variable(self, name):
         """ Check if a variable exists
@@ -492,9 +508,9 @@ class Pipeline:
         """ Print a value during pipeline execution """
         return self._add_action(PRINT_ID, *args, **kwargs)
 
-    def _exec_print(self, batch, action):
-        args_value = self._eval_expr(action['args'], batch=batch)
-        kwargs_value = self._eval_expr(action['kwargs'], batch=batch)
+    def _exec_print(self, _, action):
+        args_value = action['args']
+        kwargs_value = action['kwargs']
 
         args = []
         if len(args_value) == 0:
