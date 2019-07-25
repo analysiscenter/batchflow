@@ -152,6 +152,8 @@ Execute the pipeline with the given probability.
 Link a pipeline to a dataset.
 `dataset >> pipeline` or `pipeline << dataset`
 
+Or update pipeline's config.
+`config >> pipeline` or `pipeline << config`
 
 The complete example::
 
