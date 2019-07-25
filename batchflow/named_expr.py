@@ -601,7 +601,7 @@ class I(NamedExpression):
             'maximum': 'm',
             'm': 'm',
             'max': 'm',
-            'ratio': 'ratio',
+            'ratio': 'r',
             'r': 'r',
         }
 

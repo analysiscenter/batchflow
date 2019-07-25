@@ -472,7 +472,7 @@ class DatasetIndex(Baseset):
             for index_batch in index.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
-        iter_params = iter_params if iter_params else self.get_default_iter_params()
+        iter_params = iter_params or self.get_default_iter_params()
         if bar:
             if n_iters is not None:
                 total = n_iters
