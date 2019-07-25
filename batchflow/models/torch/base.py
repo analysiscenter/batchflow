@@ -36,8 +36,6 @@ DECAYS = {
     'step': torch.optim.lr_scheduler.StepLR,
     'multistep': torch.optim.lr_scheduler.MultiStepLR,
     'cos': torch.optim.lr_scheduler.CosineAnnealingLR,
-    'cyclic': torch.optim.lr_scheduler.CyclicLR,
-
 }
 
 
