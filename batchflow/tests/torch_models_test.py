@@ -31,7 +31,7 @@ def model_setup():
                           batch_class=ImagesBatch,
                           preloaded=data)
 
-        model_config = {'inputs': {'images': {'shape': image_shape},
+        model_config = {'inputs/images/shape': image_shape,
                                    'labels': {'classes': 10}},
                         'initial_block/inputs': 'images'}
         return dataset, model_config
