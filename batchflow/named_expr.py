@@ -607,17 +607,8 @@ class I(NamedExpression):
     """
     def __init__(self, name='c'):
         super().__init__(name, mode=None)
-        self._allowed_names = {
-            'current': 'c',
-            'c': 'c',
-            'maximum': 'm',
-            'm': 'm',
-            'max': 'm',
-            'ratio': 'r',
-            'r': 'r',
-        }
 
-    def get(self, batch=None, pipeline=None, model=None):
+    def get(self, batch=None, pipeline=None, model=None):    # pylint:disable=inconsistent-return-statements
         """ Return current or maximum iteration number or their ratio """
         name = self._allowed_names.get(self._get_name())
         if name is None:
