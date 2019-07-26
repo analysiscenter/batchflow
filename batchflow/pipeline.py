@@ -171,10 +171,10 @@ class Pipeline:
 
     def __lshift__(self, other):
         new_p = self.from_pipeline(self)
-        if not isinstance(other, Baseset):
+        if isinstance(other, Baseset):
             new_p.dataset = other
             return new_p
-        if not isinstance(other, (Config, dict)):
+        if isinstance(other, (Config, dict)):
             new_p.set_config(other)
             return new_p
         raise TypeError("Pipeline might take only Dataset or Config. Use as pipeline << dataset or pipeine << config")
