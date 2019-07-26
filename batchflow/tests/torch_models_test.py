@@ -32,7 +32,7 @@ def model_setup():
                           preloaded=data)
 
         model_config = {'inputs/images/shape': image_shape,
-                                   'labels': {'classes': 10}},
+                                   'inputs/labels/classes': 10},
                         'initial_block/inputs': 'images'}
         return dataset, model_config
 
