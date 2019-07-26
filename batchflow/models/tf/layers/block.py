@@ -63,6 +63,7 @@ GROUP_KEYS = (
 
 C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
 
+
 def _update_layers(symbols, funcs, groups):
     global LAYER_KEYS, GROUP_KEYS, C_GROUPS
     C_LAYERS.update(symbols)
@@ -73,6 +74,10 @@ def _update_layers(symbols, funcs, groups):
     for k, v in groups.items():
         GROUP_KEYS = GROUP_KEYS.replace(k, v)
     C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
+
+
+def filters_needed(layout):
+    return sum(l in 'cCtT' for l in layout)
 
 
 def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,

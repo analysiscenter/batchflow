@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from .resize import resize_bilinear_additive, resize_bilinear, resize_nn, subpixel_conv
-from .block import _conv_block, _update_layers
+from .block import _conv_block, _update_layers, filters_needed
 
 
 _NEW_LAYERS = {

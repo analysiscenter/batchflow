@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block
+from .layers import conv_block, filters_needed
 from ..utils import unpack_args
 
 
@@ -163,10 +163,27 @@ class EncoderDecoder(TFModel):
     def head(cls, inputs, targets, name='head', **kwargs):
         """ Linear convolutions. """
         kwargs = cls.fill_params('head', **kwargs)
+
         with tf.variable_scope(name):
             x = cls.crop(inputs, targets, kwargs['data_format'])
             channels = cls.num_channels(targets)
-            x = conv_block(x, filters=channels, **kwargs)
+
+            filters = kwargs.get('filters')
+            if filters is None:
+                filters = channels
+            elif isinstance(filters, int):
+                if filters != channels and 'layout' in kwargs:
+                    filters = [filters] * filters_needed(kwargs['layout'])
+
+            if isinstance(filters, (list, tuple)) and len(filters) > 0:
+                if isinstance(filters, tuple):
+                    filters = list(filters)
+                filters[-1] = channels
+
+            kwargs['filters'] = filters
+
+            x = conv_block(x, **kwargs)
+
         return x
 
     @classmethod
@@ -323,8 +340,8 @@ class EncoderDecoder(TFModel):
                         continue
                     # Upsample by a desired factor
                     if upsample.get('layout') is not None:
-                        x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i),
-                                         **{**kwargs, **upsample})
+                        args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
+                        x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **args)
 
                     # Post-process resulting tensor
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of subkeys
