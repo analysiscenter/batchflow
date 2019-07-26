@@ -16,8 +16,8 @@ def eval_expr(expr, batch=None, pipeline=None, model=None):
     args = dict(batch=batch, pipeline=pipeline, model=model)
 
     if isinstance(expr, NamedExpression):
-        if expr.params:
-            args = {}
+        args = expr.params or {}
+        args = {**args, **dict(batch=batch, pipeline=pipeline, model=model)}
         _expr = expr.get(**args)
         if isinstance(expr, W):
             expr = _expr
