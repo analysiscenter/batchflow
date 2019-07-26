@@ -631,7 +631,7 @@ class I(NamedExpression):
         if total is None:
             raise ValueError('Total number of iterations is not defined!')
 
-        if 'maximum'.startwith(name):
+        if 'maximum'.startswith(name):
             return total
         if 'ratio'.startswith('name'):
             return pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
