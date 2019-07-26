@@ -587,10 +587,10 @@ class I(NamedExpression):
     Parameters
     ----------
     name : str
-        'c', 'current' - current iteration number, default.
-        'm', 'max', maximum' - total number of iterations to be performed.
-                               If total number is not defined, raises an error.
-        'r', 'ratio' - current iteration divided by a total number of iterations.
+        'current' or its substring - current iteration number, default.
+        'maximum' or its substring - total number of iterations to be performed.
+                                     If total number is not defined, raises an error.
+        'ratio' or its substring - current iteration divided by a total number of iterations.
 
     Raises
     ------
@@ -624,15 +624,17 @@ class I(NamedExpression):
             raise ValueError('Unknown key for named expresssion I')
 
         pipeline = batch.pipeline if batch is not None else pipeline
-        if name == 'c':
+        if 'current'.startswith(name):
             return pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
-        if name in ['m', 'r']:
-            total = pipeline._iter_params.get('_total')    # pylint:disable=protected-access
-            if total is None:
-                raise ValueError('Total number of iterations is not defined!')
-            if name == 'r':
-                return pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
-        return total
+
+        total = pipeline._iter_params.get('_total')    # pylint:disable=protected-access
+        if total is None:
+            raise ValueError('Total number of iterations is not defined!')
+
+        if 'maximum'.startwith(name):
+            return total
+        if 'ratio'.startswith('name'):
+            return pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
