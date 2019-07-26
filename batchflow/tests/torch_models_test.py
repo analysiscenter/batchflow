@@ -32,7 +32,7 @@ def model_setup():
                           preloaded=data)
 
         model_config = {'inputs/images/shape': image_shape,
-                                   'inputs/labels/classes': 10},
+                        'inputs/labels/classes': 10,
                         'initial_block/inputs': 'images'}
         return dataset, model_config
 
@@ -88,7 +88,7 @@ class Test_models:
         dataset, model_config = model_setup()
         model_config.update(decay=decay, n_iters=25)
         config = {'model_class': model, 'model_config': model_config}
-        test_pipeline = (pipeline << dataset).set_config(config)
+        test_pipeline = (pipeline << dataset) << config
         batch = test_pipeline.next_batch(2, n_epochs=None)
 
         assert len(batch) == 2
