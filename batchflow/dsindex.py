@@ -340,6 +340,7 @@ class DatasetIndex(Baseset):
 
         ValueError
             When `n_epochs` and `n_iters` have been passed at the same time.
+            When batch size exceeds the dataset size.
 
         Examples
         --------
@@ -350,6 +351,8 @@ class DatasetIndex(Baseset):
                 index_batch = index.next_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
+        if batch_size > len(self):
+            raise ValueError("Batch size cannot be larger than the dataset size.")
         if n_iters is not None and n_epochs is not None:
             raise ValueError("Only one of n_iters and n_epochs should be specified.")
 
