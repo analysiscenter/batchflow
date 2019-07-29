@@ -132,7 +132,7 @@ class NamedExpression:
 
     def __call__(self, *args, **kwargs):
         if isinstance(self, F):
-            self._call = False
+            self._call = False     # pylint: disable=attribute-defined-outside-init
         return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
 
     def str(self):
