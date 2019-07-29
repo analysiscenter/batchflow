@@ -148,19 +148,17 @@ F - callable
 ============
 A function which takes a batch and, possibly, other arguments.
 
-The first parameter specifies a callable while all others are parameters to pass to that callable.
-
 The callable can be a lambda function::
 
     pipeline
         .init_model('dynamic', MyModel, 'my_model', config={
-            'inputs': {'images': {'shape': F(lambda batch: batch.images.shape[1:])}}
+            'inputs/images/shape': F(lambda batch: batch.images.shape[1:])}}
         })
 
 or a batch class method::
 
     pipeline
-        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict, task='segmentation'))
+        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict)(task='segmentation'))
 
 or an arbitrary function::
 
@@ -171,7 +169,7 @@ or an arbitrary function::
 
     pipeline
         ...
-        .update_variable(var_name, F(get_boxes, V('image_shape')))
+        .update_variable(var_name, F(get_boxes)(C('image_shape')))
         ...
 
 or any other Python callable.
@@ -184,7 +182,7 @@ all ``F``-functions specified in static ``init_model`` get ``pipeline`` as the f
 
     pipeline
         .init_model('static', MyModel, 'my_model', config={
-            'inputs': {'images': {'shape': F(lambda pipeline: pipeline.some_attr)}}
+            'inputs/images/shape': F(lambda pipeline: pipeline.some_attr)}}
         })
 
 In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
@@ -197,7 +195,7 @@ A function which takes arbitrary arguments.::
 
     pipeline
         ...
-        .init_variable('logfile', L(open, 'file.log', 'w'))
+        .init_variable('logfile', L(open)('file.log', 'w'))
         ...
 
 So no batch, pipeline or model will be passed to that function implicitly.

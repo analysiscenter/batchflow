@@ -1,5 +1,7 @@
 """ Contains named expression classes"""
 import operator
+from functools import partial
+
 import numpy as np
 
 
@@ -129,6 +131,8 @@ class NamedExpression:
         return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
 
     def __call__(self, *args, **kwargs):
+        if isinstance(self, F):
+            self._call = False
         return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
 
     def str(self):
@@ -353,14 +357,19 @@ class F(NamedExpression):
     --------
     ::
 
-        F(MyBatch.rotate, angle=30)
-        F(prepare_data, 115, item=10)
+        F(MyBatch.rotate)(angle=30)
+        F(make_data)
+        F(prepare_data)(115, item=10)
+
+    Notes
+    -----
+    Take into account that the actual calls will look like `current_batch.rotate(angle=30)`,
+    `make_data(current_batch)` and `prepare_data(current_batch, 115, item=10)`.
     """
-    def __init__(self, name, *args, mode='w', _pass=True, **kwargs):
+    def __init__(self, name, mode='w', _pass=True):
         super().__init__(name, mode)
-        self.args = args
-        self.kwargs = kwargs
         self._pass = _pass
+        self._call = True
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
@@ -376,9 +385,8 @@ class F(NamedExpression):
                 args += [batch]
             if model is not None:
                 args += [model]
-        fargs = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
-        fkwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
-        return name(*args, *fargs, **fkwargs)
+            name = partial(name, *args)
+        return name() if self._call else name
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
