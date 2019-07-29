@@ -28,9 +28,9 @@ class UNet(EncoderDecoder):
         config['body/encoder/num_stages'] = 4
         config['body/encoder/blocks'] = dict(layout='cna cna', kernel_size=3)
         config['body/embedding'] = dict(layout='')  # identity
-        config['body/decoder/blocks'] = dict(base=EncoderDecoder.block, combine_op='concat')
+        config['body/decoder/blocks'] = dict(layout='cna cna', kernel_size=3)
 
-        config['head'] = dict(layout='cna cna c', kernel_size=[3, 3, 1], strides=1, filters=64)
+        config['head'] = dict(layout='cna cna', kernel_size=[3, 3], strides=1, filters=64)
 
         config['loss'] = 'ce'
 

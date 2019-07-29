@@ -121,8 +121,11 @@ class EncoderDecoder(TFModel):
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=cls.block, combine_op='softsum')
-        config['head'] = dict(layout='c', kernel_size=1)
+        config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
+
+        # an extra 1x1 convolutional layer that makes outputs shape match targets will be added implicitly if needed
+        config['head'] = dict(layout='')
+
         return config
 
     def build_config(self, names=None):
@@ -166,23 +169,14 @@ class EncoderDecoder(TFModel):
 
         with tf.variable_scope(name):
             x = cls.crop(inputs, targets, kwargs['data_format'])
-            channels = cls.num_channels(targets)
-
-            filters = kwargs.get('filters')
-            if filters is None:
-                filters = channels
-            elif isinstance(filters, int):
-                if filters != channels and 'layout' in kwargs:
-                    filters = [filters] * filters_needed(kwargs['layout'])
-
-            if isinstance(filters, (list, tuple)) and len(filters) > 0:
-                if isinstance(filters, tuple):
-                    filters = list(filters)
-                filters[-1] = channels
-
-            kwargs['filters'] = filters
-
             x = conv_block(x, **kwargs)
+
+            channels = cls.num_channels(targets)
+            if cls.num_channels(x) != channels:
+                with tf.variable_scope('final'):
+                    x = cls.crop(x, targets, kwargs['data_format'])
+                    args = cls.combine_kwargs(kwargs, dict(layout='c', kernel_size=1, filters=channels))
+                    x = conv_block(x, **args)
 
         return x
 
@@ -244,15 +238,23 @@ class EncoderDecoder(TFModel):
                 for i in range(steps):
                     with tf.variable_scope('encoder-'+str(i)):
                         # Preprocess tensor with given block
-                        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of keys
+                        args = cls.combine_kwargs(kwargs, block_args, i, steps)
                         x = base_block(x, name='pre', **args)
 
                         # Downsampling
                         if downsample.get('layout') is not None:
-                            x = conv_block(x, name='downsample-{}'.format(i),
-                                           **{**kwargs, **downsample})
+                            args = cls.combine_kwargs(kwargs, downsample, i, steps)
+                            x = conv_block(x, name='downsample-{}'.format(i), **args)
                         encoder_outputs.append(x)
         return encoder_outputs
+
+    @classmethod
+    def combine_kwargs(cls, kwargs, spec_kwargs, i=None, n=None):
+        # enforce priority of keys
+        if i is None:
+            return {**kwargs, **spec_kwargs}
+        else:
+            return {**kwargs, **spec_kwargs, **unpack_args(spec_kwargs, i, n)}
 
     @classmethod
     def embedding(cls, inputs, name='embedding', **kwargs):
@@ -340,11 +342,11 @@ class EncoderDecoder(TFModel):
                         continue
                     # Upsample by a desired factor
                     if upsample.get('layout') is not None:
-                        args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
+                        args = cls.combine_kwargs(kwargs, upsample, i, steps)
                         x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **args)
 
                     # Post-process resulting tensor
-                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of subkeys
+                    args = cls.combine_kwargs(kwargs, block_args, i, steps)
                     x = base_block(x, name='post', **args)
 
                     # Combine it with stored encoding of the ~same shape
