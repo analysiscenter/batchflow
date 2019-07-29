@@ -37,7 +37,7 @@ def test_general_get(named_expr):
 NAMES = ['c', 'm', 'r'] * 2
 EXPECTATIONS = [does_not_raise()] * 4 + [pytest.raises(ValueError)] * 2
 N_EPOCHS = [1] * 3 + [None] * 3
-RESULTS = [1, None, None, 1, 5, .2]
+RESULTS = [1, 5, .2, 1, None, None]
 
 @pytest.mark.parametrize('name,expectation,n_epochs,result',
                          list(zip(NAMES, EXPECTATIONS, N_EPOCHS, RESULTS))
