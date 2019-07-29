@@ -361,8 +361,8 @@ class Research:
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
 
-        if n_splits is not None:
-            self._cv_split(n_splits, shuffle)
+        if self.n_splits is not None:
+            self._cv_split(self.n_splits, shuffle)
 
         if self.grid_config is None:
             self.grid_config = Grid(Option('_dummy', [None]))
