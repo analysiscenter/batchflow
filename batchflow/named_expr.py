@@ -11,13 +11,13 @@ class _DummyBatch:
 
 def eval_expr(expr, batch=None, pipeline=None, model=None):
     """ Evaluate a named expression recursively """
-    batch = batch or _DummyBatch(pipeline)
-    pipeline = pipeline or batch.pipeline
+    batch = batch if batch is not None else _DummyBatch(pipeline)
+    pipeline = pipeline if pipeline is not None else batch.pipeline
     args = dict(batch=batch, pipeline=pipeline, model=model)
 
     if isinstance(expr, NamedExpression):
-        if expr.params:
-            args = {}
+        args = expr.params or {}
+        args = {**args, **dict(batch=batch, pipeline=pipeline, model=model)}
         _expr = expr.get(**args)
         if isinstance(expr, W):
             expr = _expr
