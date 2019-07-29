@@ -1,8 +1,9 @@
 """ Contains helper functions """
 import sys
 import copy
-import tqdm
+import math
 from functools import wraps
+import tqdm
 
 from .named_expr import NamedExpression, eval_expr
 

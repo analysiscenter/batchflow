@@ -6,7 +6,6 @@ import concurrent.futures as cf
 import asyncio
 import logging
 import warnings
-import tqdm
 import queue as q
 import numpy as np
 
@@ -1287,7 +1286,7 @@ class Pipeline:
         drop_last = kwargs.get('drop_last')
 
         if bar:
-            bar = create_bar(bar, args[0], n_iters, n_epochs,
+            bar = create_bar(bar, batch_size, n_iters, n_epochs,
                              drop_last, len(self.dataset.index))
 
 
@@ -1336,6 +1335,9 @@ class Pipeline:
                     yield batch_res
                     if callable(on_iter):
                         on_iter(batch_res)
+
+        if bar:
+            bar.close()
 
         if self.after:
             self.after.run()

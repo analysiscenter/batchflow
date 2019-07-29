@@ -3,11 +3,9 @@ import os
 import math
 import glob
 from collections.abc import Iterable
-import tqdm
 import numpy as np
 
 from .base import Baseset
-from .named_expr import eval_expr
 from .utils import create_bar, update_bar
 
 
