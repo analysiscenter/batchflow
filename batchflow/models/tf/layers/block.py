@@ -76,10 +76,6 @@ def _update_layers(symbols, funcs, groups):
     C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
 
 
-def filters_needed(layout):
-    return sum(l in 'cCtT' for l in layout)
-
-
 def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., is_training=True,

@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block, filters_needed
+from .layers import conv_block
 from ..utils import unpack_args
 
 
@@ -250,11 +250,19 @@ class EncoderDecoder(TFModel):
 
     @classmethod
     def combine_kwargs(cls, kwargs, spec_kwargs, i=None, n=None):
+        """
+        Unite kwarg dicts with more specific kwargs having higher priority
+        :param kwargs: lowest priority kwargs
+        :param spec_kwargs: specific block kwargs having higher priority
+        :param i: If int - step number to extract highest priority parameters
+        :param n: Total number of steps, used if i is not None
+        :return: united parameters dict
+        """
         # enforce priority of keys
         if i is None:
             return {**kwargs, **spec_kwargs}
-        else:
-            return {**kwargs, **spec_kwargs, **unpack_args(spec_kwargs, i, n)}
+
+        return {**kwargs, **spec_kwargs, **unpack_args(spec_kwargs, i, n)}
 
     @classmethod
     def embedding(cls, inputs, name='embedding', **kwargs):

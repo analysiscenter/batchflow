@@ -1,6 +1,6 @@
 """ Custom tf layers and operations """
 from .core import flatten, flatten2d, maxout, mip, xip, alpha_dropout
-from .conv_block import conv_block, upsample, filters_needed
+from .conv_block import conv_block, upsample
 from .conv import conv1d_transpose, conv1d_transpose_nn, conv_transpose, \
 				  separable_conv, separable_conv_transpose, depthwise_conv, depthwise_conv_transpose
 from .pooling import max_pooling, average_pooling, pooling, \
