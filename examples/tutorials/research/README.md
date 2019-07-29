@@ -1,4 +1,4 @@
-1. [Introduction to Research Module](01_introduction_to_research.ipynb)
+1. [Introduction to Research Module](./01_introduction_to_research.ipynb)
     * Basic example
         * 1 pipeline with fixed parameters
             * creating research
@@ -15,11 +15,11 @@
             * defining pipeline execution frequency
             * adding functions
 
-1. [Advanced topics](02_advanced_usage_of_research.ipynb)
+1. [Advanced topics](./02_advanced_usage_of_research.ipynb)
     * Reducing extra dataset loads
         * 1 pipeline with root and branch + grid
     * Performance
         * execution tasks managing
     * Cross-validation
 
-1. [Plotting Research results](03_plotting_research_results.ipynb)
+1. [Plotting Research results](./03_plotting_research_results.ipynb)
