@@ -610,7 +610,7 @@ class I(NamedExpression):
 
     def get(self, batch=None, pipeline=None, model=None):    # pylint:disable=inconsistent-return-statements
         """ Return current or maximum iteration number or their ratio """
-        name = self._allowed_names.get(self._get_name())
+        name = self._get_name(batch, pipeline, model)
         if name is None:
             raise ValueError('Unknown key for named expresssion I')
 
@@ -624,8 +624,9 @@ class I(NamedExpression):
 
         if 'maximum'.startswith(name):
             return total
-        if 'ratio'.startswith('name'):
-            return pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
+        if 'ratio'.startswith(name):
+            ratio = pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
+            return ratio
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """

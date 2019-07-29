@@ -1,6 +1,5 @@
 """ DatasetIndex """
 import os
-import sys
 import math
 import glob
 from collections.abc import Iterable
@@ -476,16 +475,18 @@ class DatasetIndex(Baseset):
                 # do whatever you want
         """
         iter_params = iter_params or self.get_default_iter_params()
+
+        if n_iters is not None:
+            total = n_iters
+        elif n_epochs is None:
+            total = None
+        elif drop_last:
+            total = len(self) // batch_size * n_epochs
+        else:
+            total = math.ceil(len(self) * n_epochs / batch_size)
+        iter_params.update({'_total': total})
+
         if bar:
-            if n_iters is not None:
-                total = n_iters
-            elif n_epochs is None:
-                total = sys.maxsize
-            elif drop_last:
-                total = len(self) // batch_size * n_epochs
-            else:
-                total = math.ceil(len(self) * n_epochs / batch_size)
-            iter_params.update({'_total': total})
             if callable(bar):
                 iter_params['bar'] = bar(total=total)
             elif bar == 'n':
