@@ -61,12 +61,12 @@ BINARY_OPS = {
     '__lshift__': operator.lshift, '__rshift__': operator.rshift,
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
+    '__eq__': operator.eq, '__ne__': operator.ne,
     '#slice': lambda a, b: a[b], '#format': lambda a, b: b.format(a),
     '#attr': lambda a, b: getattr(a, b), '#call': lambda a, b: a(*b[0], **b[1]),
 }
 
 UNARY_OPS = {
-    '__eq__': operator.eq, '__ne__': operator.ne,
     '__neg__': operator.neg, '__pos__': operator.pos, '__abs__': operator.abs, '__invert__': operator.inv,
     '#str': str,
 }
