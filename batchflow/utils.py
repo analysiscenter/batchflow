@@ -1,6 +1,11 @@
 """ Contains helper functions """
+import sys
 import copy
+import tqdm
 from functools import wraps
+
+from .named_expr import NamedExpression, eval_expr
+
 
 
 def partialmethod(func, *frozen_args, **frozen_kwargs):
@@ -44,3 +49,38 @@ def _copy1_list(data):
 
 def _copy1_dict(data):
     return dict((key, copy.copy(item)) for key, item in data.items())
+
+
+def create_bar(bar, batch_size, n_iters, n_epochs, drop_last, length):
+    """ Create progress bar with desired number of total iterations."""
+    if n_iters is not None:
+        total = n_iters
+    elif n_epochs is None:
+        total = sys.maxsize
+    elif drop_last:
+        total = length // batch_size * n_epochs
+    else:
+        total = math.ceil(length * n_epochs / batch_size)
+
+    if callable(bar):
+        progressbar = bar(total=total)
+    elif bar == 'n':
+        progressbar = tqdm.tqdm_notebook(total=total)
+    else:
+        progressbar = tqdm.tqdm(total=total)
+    return progressbar
+
+
+def update_bar(bar, bar_desc, **kwargs):
+    """ Update bar with description and one step."""
+    if bar_desc:
+        if callable(bar_desc) and not isinstance(bar_desc, NamedExpression):
+            desc = bar_desc()
+        else:
+            try:
+                desc = eval_expr(bar_desc, **kwargs)
+                desc = str(desc)
+            except (LookupError, ValueError):
+                desc = None
+        bar.set_description(desc)
+    bar.update(1)
