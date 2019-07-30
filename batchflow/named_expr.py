@@ -438,6 +438,9 @@ class D(NamedExpression):
         D('classes')
         D('organization')
     """
+    def __init__(self, name=None, mode='w'):
+        super().__init__(name, mode)
+
     def _get_name_dataset(self, batch=None, pipeline=None, model=None):
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline or pipeline
