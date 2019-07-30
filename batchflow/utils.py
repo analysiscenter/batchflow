@@ -74,14 +74,20 @@ def create_bar(bar, batch_size, n_iters, n_epochs, drop_last, length):
 
 def update_bar(bar, bar_desc, **kwargs):
     """ Update bar with description and one step."""
+    current_iter = bar.n
     if bar_desc:
         if callable(bar_desc) and not isinstance(bar_desc, NamedExpression):
             desc = bar_desc()
-        else:
+
+        if current_iter == 0:
+            # During the first iteration we can't get items from empty containers (lists, dicts, etc)
             try:
                 desc = eval_expr(bar_desc, **kwargs)
                 desc = str(desc)
-            except (LookupError, ValueError):
+            except LookupError:
                 desc = None
+        else:
+            desc = eval_expr(bar_desc, **kwargs)
+            desc = str(desc)
         bar.set_description(desc)
     bar.update(1)
