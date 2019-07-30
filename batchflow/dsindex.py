@@ -285,7 +285,8 @@ class DatasetIndex(Baseset):
             raise ValueError("shuffle could be bool, int, numpy.random.RandomState or callable")
         return order
 
-    def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, iter_params=None):
+    def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
+                   iter_params=None, global_iter_params=None):
         """ Return the next batch
 
         Parameters
@@ -391,19 +392,20 @@ class DatasetIndex(Baseset):
         if n_iters is not None and iter_params['_n_iters'] >= n_iters or \
            n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
             if 'bar' in iter_params:
+                iter_params['bar'].update(1)
                 iter_params['bar'].close()
             if n_iters is not None or drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             iter_params['_stop_iter'] = True
-            iter_params['_n_iters'] += 1
+            global_iter_params['_n_iters'] += 1
             return self.create_batch(rest_items, pos=True)
 
-        iter_params['_n_iters'] += 1
+        global_iter_params['_n_iters'] += 1
         iter_params['_start_index'] += rest_of_batch
         return self.create_batch(batch_items, pos=True)
 
     def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
-                  bar=False, bar_desc=None, iter_params=None):
+                  bar=False, bar_desc=None, global_iter_params=None):
         """ Generate batches
 
         Parameters
@@ -474,7 +476,7 @@ class DatasetIndex(Baseset):
             for index_batch in index.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
-        iter_params = iter_params or self.get_default_iter_params()
+        iter_params = self.get_default_iter_params()
 
         if n_iters is not None:
             total = n_iters
@@ -484,7 +486,11 @@ class DatasetIndex(Baseset):
             total = len(self) // batch_size * n_epochs
         else:
             total = math.ceil(len(self) * n_epochs / batch_size)
-        iter_params.update({'_total': total})
+
+        if total:
+            global_iter_params['_total'] = global_iter_params['_n_iters'] + total
+        else:
+            global_iter_params['_total'] = None
 
         if bar:
             if callable(bar):
@@ -498,7 +504,8 @@ class DatasetIndex(Baseset):
             if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
                 return
             try:
-                batch = self.next_batch(batch_size, shuffle, n_iters, n_epochs, drop_last, iter_params)
+                batch = self.next_batch(batch_size, shuffle, n_iters, n_epochs, drop_last, iter_params,
+                                        global_iter_params)
             except StopIteration:
                 return
             if 'bar' in iter_params:
