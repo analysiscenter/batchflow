@@ -1,6 +1,5 @@
 """ DatasetIndex """
 import os
-import sys
 import math
 import glob
 from collections.abc import Iterable
@@ -396,15 +395,15 @@ class DatasetIndex(Baseset):
             if n_iters is not None or drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             iter_params['_stop_iter'] = True
+            iter_params['_n_iters'] += 1
             return self.create_batch(rest_items, pos=True)
 
         iter_params['_n_iters'] += 1
         iter_params['_start_index'] += rest_of_batch
         return self.create_batch(batch_items, pos=True)
 
-
     def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
-                  bar=False, bar_desc=None):
+                  bar=False, bar_desc=None, iter_params=None):
         """ Generate batches
 
         Parameters
@@ -475,17 +474,19 @@ class DatasetIndex(Baseset):
             for index_batch in index.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
-        iter_params = self.get_default_iter_params()
-        if bar:
-            if n_iters is not None:
-                total = n_iters
-            elif n_epochs is None:
-                total = sys.maxsize
-            elif drop_last:
-                total = len(self) // batch_size * n_epochs
-            else:
-                total = math.ceil(len(self) * n_epochs / batch_size)
+        iter_params = iter_params or self.get_default_iter_params()
 
+        if n_iters is not None:
+            total = n_iters
+        elif n_epochs is None:
+            total = None
+        elif drop_last:
+            total = len(self) // batch_size * n_epochs
+        else:
+            total = math.ceil(len(self) * n_epochs / batch_size)
+        iter_params.update({'_total': total})
+
+        if bar:
             if callable(bar):
                 iter_params['bar'] = bar(total=total)
             elif bar == 'n':
