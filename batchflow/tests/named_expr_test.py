@@ -34,10 +34,10 @@ def test_general_get(named_expr):
         pytest.fail("Name does not exist")
 
 NAMES = ['c', 'm', 'r'] * 4
-EXPECTATIONS = ([does_not_raise()] * 4 + [pytest.raises(ValueError)] * 2) * 2
+EXPECTATIONS = ([does_not_raise()] * 5 + [pytest.raises(ValueError)]) * 2
 LIMIT_NAME = ['n_epochs'] * 6 + ['n_iters'] * 6
 LIMIT_VALUE = [1] * 3 + [None] * 3 + [5] * 3 + [None] * 3
-RESULTS = [1, 5, .2, 1, -1, -1, 1, 5, .2, 1, -1, -1]
+RESULTS = [1, 5, .2, 1, None, -1, 1, 5, .2, 1, None, -1]
 
 @pytest.mark.parametrize('name,expectation,limit_name,limit_value,result',
                          list(zip(NAMES, EXPECTATIONS, LIMIT_NAME, LIMIT_VALUE, RESULTS))
