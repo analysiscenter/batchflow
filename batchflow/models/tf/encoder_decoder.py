@@ -124,7 +124,7 @@ class EncoderDecoder(TFModel):
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
 
         # an extra 1x1 convolutional layer that makes outputs shape match targets will be added implicitly if needed
-        config['head'] = dict(layout='')
+        config['head/layout'] = None
 
         return config
 
@@ -149,7 +149,10 @@ class EncoderDecoder(TFModel):
             x = encoder_outputs[-1]
 
             # Bottleneck: working with compressed representation via multiple steps of processing
-            embeddings = embeddings if isinstance(embeddings, (tuple, list)) else [embeddings]
+            if embeddings is None:
+                embeddings = []
+            elif not isinstance(embeddings, (tuple, list)):
+                embeddings = [embeddings]
 
             for i, embedding in enumerate(embeddings):
                 embedding_args = {**kwargs, **embedding}
@@ -165,16 +168,14 @@ class EncoderDecoder(TFModel):
     @classmethod
     def head(cls, inputs, targets, name='head', **kwargs):
         """ Linear convolutions. """
-        kwargs = cls.fill_params('head', **kwargs)
-
         with tf.variable_scope(name):
+            kwargs = cls.fill_params('head', **kwargs)
             x = cls.crop(inputs, targets, kwargs['data_format'])
-            x = conv_block(x, **kwargs)
+            x = super().head(x, name, **kwargs)
 
             channels = cls.num_channels(targets)
             if cls.num_channels(x) != channels:
-                with tf.variable_scope('final'):
-                    x = cls.crop(x, targets, kwargs['data_format'])
+                with tf.variable_scope('conv1x1'):
                     args = cls.combine_kwargs(kwargs, dict(layout='c', kernel_size=1, filters=channels))
                     x = conv_block(x, **args)
 
