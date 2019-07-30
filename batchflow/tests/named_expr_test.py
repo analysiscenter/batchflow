@@ -17,7 +17,6 @@ from batchflow import B, C, D, F, V, L, R, P, I, Dataset
     P('normal', 0, 1),
     F(lambda batch: 0),
     L(lambda: 0),
-    I('c'),
 ])
 def test_general_get(named_expr):
     pipeline = (Dataset(10).pipeline({'option': 0})
@@ -44,7 +43,7 @@ RESULTS = [1, 5, .2, 1, -1, -1, 1, 5, .2, 1, -1, -1]
                          list(zip(NAMES, EXPECTATIONS, LIMIT_NAME, LIMIT_VALUE, RESULTS))
 )
 def test_i(name, expectation, limit_name, limit_value, result):
-    """Test checks for behaviour of I under differen pipeline configurations.
+    """Test checks for behaviour of I under different pipeline configurations.
 
     name
         Name of I, defines its output.
