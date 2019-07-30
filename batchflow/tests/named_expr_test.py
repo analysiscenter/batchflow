@@ -34,31 +34,36 @@ def test_general_get(named_expr):
     if failed:
         pytest.fail("Name does not exist")
 
-NAMES = ['c', 'm', 'r'] * 2
-EXPECTATIONS = [does_not_raise()] * 4 + [pytest.raises(ValueError)] * 2
-N_EPOCHS = [1] * 3 + [None] * 3
-RESULTS = [1, 5, .2, 1, None, None]
+NAMES = ['c', 'm', 'r'] * 4
+EXPECTATIONS = ([does_not_raise()] * 4 + [pytest.raises(ValueError)] * 2) * 2
+LIMIT_NAME = ['n_epochs'] * 6 + ['n_iters'] * 6
+LIMIT_VALUE = [1] * 3 + [None] * 3 + [5] * 3 + [None] * 3
+RESULTS = [1, 5, .2, 1, -1, -1, 1, 5, .2, 1, -1, -1]
 
-@pytest.mark.parametrize('name,expectation,n_epochs,result',
-                         list(zip(NAMES, EXPECTATIONS, N_EPOCHS, RESULTS))
+@pytest.mark.parametrize('name,expectation,limit_name,limit_value,result',
+                         list(zip(NAMES, EXPECTATIONS, LIMIT_NAME, LIMIT_VALUE, RESULTS))
 )
-def test_i(name, expectation, n_epochs, result):
+def test_i(name, expectation, limit_name, limit_value, result):
     """Test checks for behaviour of I under differen pipeline configurations.
 
     name
         Name of I, defines its output.
     expectation
         Test is expected to raise an error when names requires calculaion of total iterations (e.g. for 'm')
-        and this number is not defined in pipeline (e.g. n_epochs is None).
-    n_epochs
-        Total numer of epochs to run pipeline.
+        and this number is not defined in pipeline (limit_value is None).
+    limit_name
+        n_epochs or n_iters
+    limit_value
+        Total numer of epochs or iteration to run.
     result
         Expected output of I. If None, I is expected to raise an error.
     """
+    kwargs = {'batch_size': 2, limit_name: limit_value, 'lazy': True}
+
     pipeline = (Dataset(10).pipeline()
-        .init_variable('var')
+        .init_variable('var', -1)
         .update_variable('var', I(name), mode='w')
-        .run(2, n_epochs=n_epochs, lazy=True)
+        .run(**kwargs)
     )
 
     with expectation:
