@@ -98,7 +98,7 @@ B - batch component
 At each iteration ``B('features')`` and ``B('labels')`` will be replaced with ``current_batch.features``
 and ``current_batch.labels``, i.e. `batch components <components>`_ or attributes.
 
-.. note:: ``B()`` without name returns the batch itself.
+.. note:: ``B()`` (i.e. without a component name) returns the batch itself.
           To avoid unexpected changes of the batch, the copy can be created with ``B(copy=True)``.
 
 
@@ -132,6 +132,7 @@ At each iteration ``C('model')`` will be replaced with the current value of ``pi
 This is an example of a model independent pipeline which allows to change models, for instance,
 to assess performance of various models.
 
+
 D - dataset attribute
 =====================
 ::
@@ -142,6 +143,28 @@ D - dataset attribute
         ...
 
 At each iteration ``D('data_path')`` will be replaced with the current value of ``pipeline.dataset.data_path``.
+
+.. note:: `D()` (i.e. without an attribute name) returns the dataset itself.
+
+
+I - iterations counter
+======================
+
+::
+
+    pipeline
+        ...
+        .print('Iteration:', I('current'), ' out of ', I('max'))
+        ...
+
+
+`I('ratio')` returns the ratio `current / max` and thus allows to control the iteration progress.
+For instance, at each iteration dataset items can be rotated at a random angle which increases with time::
+
+    pipeline
+        ...
+        .rotate(angle=I('ratio')*45)
+        ...
 
 
 F - callable
