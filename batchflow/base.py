@@ -173,8 +173,7 @@ class Baseset:
             batch = self.create_batch(ix_batch, *args, **kwargs)
             yield batch
 
-    def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
-                   *args, **kwargs):
+    def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, *args, **kwargs):
         """ Return a batch """
         global_iter_params = kwargs.pop('global_iter_params', None)
         batch_index = self.index.next_batch(batch_size, shuffle, n_iters, n_epochs, drop_last, global_iter_params)

@@ -89,7 +89,6 @@ class Pipeline:
         self._batch_queue = None
         self._batch_generator = None
         self._rest_batch = None
-        self._iter_params = None
         self._global_iter_params = None
 
     def __enter__(self):
@@ -1269,7 +1268,6 @@ class Pipeline:
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
 
-        # if kwargs.pop('global_iter_params', None) is None:
         self._global_iter_params = self._global_iter_params or {'_total': None, '_n_iters': 0}
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
@@ -1370,8 +1368,10 @@ class Pipeline:
 
         Parameters
         ----------
-        reset_pipeline : bool
+        init_vars : bool
             whether to clear all the pipeline variables
+        reset_pipeline : bool
+            whether to reset iteration counter
 
         See also
         --------
