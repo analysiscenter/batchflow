@@ -186,8 +186,8 @@ class EncoderDecoder(TFModel):
         By default makes 3x3 convolutions followed by batch-norm and activation.
         Does not change tensor shapes.
         """
-        layout = kwargs.pop('layout', None) or 'cna'
-        filters = kwargs.pop('filters', None) or cls.num_channels(inputs)
+        layout = kwargs.pop('layout', 'cna')
+        filters = kwargs.pop('filters', cls.num_channels(inputs))
         return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
 
 
