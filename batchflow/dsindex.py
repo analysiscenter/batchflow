@@ -397,10 +397,12 @@ class DatasetIndex(Baseset):
             if n_iters is not None or drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             iter_params['_stop_iter'] = True
-            global_iter_params['_n_iters'] += 1
+            if global_iter_params:
+                global_iter_params['_n_iters'] += 1
             return self.create_batch(rest_items, pos=True)
 
-        global_iter_params['_n_iters'] += 1
+        if global_iter_params:
+            global_iter_params['_n_iters'] += 1
         iter_params['_start_index'] += rest_of_batch
         return self.create_batch(batch_items, pos=True)
 
@@ -487,10 +489,11 @@ class DatasetIndex(Baseset):
         else:
             total = math.ceil(len(self) * n_epochs / batch_size)
 
-        if total:
-            global_iter_params['_total'] = global_iter_params['_n_iters'] + total
-        else:
-            global_iter_params['_total'] = None
+        if global_iter_params:
+            if total:
+                global_iter_params['_total'] = global_iter_params['_n_iters'] + total
+            else:
+                global_iter_params['_total'] = None
 
         if bar:
             if callable(bar):
