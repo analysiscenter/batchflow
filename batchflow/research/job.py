@@ -71,18 +71,20 @@ class Job:
 
     def parallel_execute_for(self, iteration, name, actions):
         """ Parallel execution of pipeline 'name' """
+        unit = self.experiments[0][name] if len(self.experiments) else self.executable_units[name]
         run = [action['run'] for action in actions if action is not None][0]
         if run:
+            unit.reset_root_iter()
             self.executable_units[name].reset_root_iter()
             while True:
                 try:
-                    batch = self.executable_units[name].next_batch_root()
+                    batch = unit.next_batch_root()
                     exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
                 except StopIteration:
                     break
         else:
             try:
-                batch = self.executable_units[name].next_batch_root()
+                batch = unit.next_batch_root()
             except StopIteration as e:
                 exceptions = [e] * len(self.experiments)
             else:
