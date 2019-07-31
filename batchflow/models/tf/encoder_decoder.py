@@ -176,7 +176,7 @@ class EncoderDecoder(TFModel):
             channels = cls.num_channels(targets)
             if cls.num_channels(x) != channels:
                 with tf.variable_scope('conv1x1'):
-                    args = cls.combine_kwargs(kwargs, dict(layout='c', kernel_size=1, filters=channels))
+                    args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels)}
                     x = conv_block(x, **args)
 
         return x
@@ -239,31 +239,15 @@ class EncoderDecoder(TFModel):
                 for i in range(steps):
                     with tf.variable_scope('encoder-'+str(i)):
                         # Preprocess tensor with given block
-                        args = cls.combine_kwargs(kwargs, block_args, i, steps)
+                        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of keys
                         x = base_block(x, name='pre', **args)
 
                         # Downsampling
                         if downsample.get('layout') is not None:
-                            args = cls.combine_kwargs(kwargs, downsample, i, steps)
+                            args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
                             x = conv_block(x, name='downsample-{}'.format(i), **args)
                         encoder_outputs.append(x)
         return encoder_outputs
-
-    @classmethod
-    def combine_kwargs(cls, kwargs, spec_kwargs, i=None, n=None):
-        """
-        Unite kwarg dicts with more specific kwargs having higher priority
-        :param kwargs: lowest priority kwargs
-        :param spec_kwargs: specific block kwargs having higher priority
-        :param i: If int - step number to extract highest priority parameters
-        :param n: Total number of steps, used if i is not None
-        :return: united parameters dict
-        """
-        # enforce priority of keys
-        if i is None:
-            return {**kwargs, **spec_kwargs}
-
-        return {**kwargs, **spec_kwargs, **unpack_args(spec_kwargs, i, n)}
 
     @classmethod
     def embedding(cls, inputs, name='embedding', **kwargs):
@@ -302,7 +286,7 @@ class EncoderDecoder(TFModel):
         name : str
             Scope name.
 
-        steps : int
+        num_stages : int
             Number of upsampling stages. Defaults to the number of downsamplings.
 
         factor : int or list of ints
@@ -351,11 +335,11 @@ class EncoderDecoder(TFModel):
                         continue
                     # Upsample by a desired factor
                     if upsample.get('layout') is not None:
-                        args = cls.combine_kwargs(kwargs, upsample, i, steps)
+                        args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
                         x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **args)
 
                     # Post-process resulting tensor
-                    args = cls.combine_kwargs(kwargs, block_args, i, steps)
+                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}  # enforce priority of subkeys
                     x = base_block(x, name='post', **args)
 
                     # Combine it with stored encoding of the ~same shape
