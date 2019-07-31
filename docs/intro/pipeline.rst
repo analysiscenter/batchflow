@@ -90,6 +90,9 @@ Besides, pipeline actions chains might include arbitrary functions. Just add a n
                 .my_func(10, save_to=V("var"))     # call a function from mymodule and store its result into a pipeline variable
                 .print(V("var"))                   # Pipeline API again
 
+For convenience, the main module and the dataset class are automatically added to namespaces available.
+So you can use dataset methods or functions defined right in the main module in the pipeline chain.
+
 
 .. _after_pipeline:
 
