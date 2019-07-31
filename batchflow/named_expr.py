@@ -631,16 +631,16 @@ class I(NamedExpression):
 
         pipeline = batch.pipeline if batch is not None else pipeline
         if 'current'.startswith(name):
-            return pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
+            return pipeline._combine_iter_params()['_n_iters']    # pylint:disable=protected-access
 
-        total = pipeline._iter_params.get('_total')    # pylint:disable=protected-access
+        total = pipeline._combine_iter_params()['_total']    # pylint:disable=protected-access
 
         if 'maximum'.startswith(name):
             return total
         if 'ratio'.startswith(name):
             if total is None:
                 raise ValueError('Total number of iterations is not defined!')
-            ratio = pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
+            ratio = pipeline._combine_iter_params()['_n_iters'] / total    # pylint:disable=protected-access
             return ratio
 
         raise ValueError('Unknown key for named expresssion I: %s' % name)

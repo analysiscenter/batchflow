@@ -90,6 +90,7 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
         self._iter_params = None
+        self._global_iter_params = None
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -1113,7 +1114,7 @@ class Pipeline:
                         skip_batch = False
                     self._prefetch_queue.task_done()
 
-    def reset_iter(self, dataset=True, init_vars=True):
+    def reset_iter(self, dataset=True, init_vars=True, reset_global=False, reset_local=True):
         """ Clear all iteration metadata in order to start iterating from scratch """
         def _clear_queue(queue):
             if queue is not None:
@@ -1148,6 +1149,12 @@ class Pipeline:
         if init_vars:
             self._init_variables_before_run()
 
+        self._global_iter_params = self._combine_iter_params()
+        if reset_global:
+            self._global_iter_params = None
+
+        if reset_local:
+            self._iter_params = None
 
     def gen_rebatch(self, *args, **kwargs):
         """ Generate batches for rebatch operation """
@@ -1159,7 +1166,7 @@ class Pipeline:
             pipeline = self.from_pipeline(_action['pipeline'])
 
         # Passing iter_params from main pipeline
-        pipeline._iter_params = kwargs.get('iter_params', None)    # pylint:disable=protected-access
+        pipeline._iter_params = self._iter_params    # pylint:disable=protected-access
 
         self._rest_batch = None
         while True:
@@ -1172,7 +1179,7 @@ class Pipeline:
                 self._rest_batch = None
             while cur_len < _action['batch_size']:
                 try:
-                    new_batch = pipeline.next_batch(*args, **kwargs)
+                    new_batch = pipeline.next_batch(*args, reset_local=False, **kwargs)
                 except StopIteration:
                     break
                 else:
@@ -1266,11 +1273,11 @@ class Pipeline:
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
 
-        if kwargs.pop('iter_params', None) is None:
-            self._iter_params = self._iter_params or self.dataset.get_default_iter_params()
+        self._iter_params = self._iter_params or self.dataset.get_default_iter_params()
+        self._global_iter_params = self._global_iter_params or {'_n_iters': 0, '_total': None}
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
-            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch, iter_params=self._iter_params)
+            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
             prefetch = 0
         else:
             batch_generator = self.dataset.gen_batch(*args, **kwargs, iter_params=self._iter_params)
@@ -1344,7 +1351,9 @@ class Pipeline:
         elif True or kwargs.get('prefetch', 0) > 0:
             if self._batch_generator is None:
                 self._lazy_run = args, kwargs
-                self.reset_iter()
+                # keeps self._iter_params from resetting for tracking iterations with rebatch
+                reset_local = kwargs.get('reset_local', True)
+                self.reset_iter(reset_local=reset_local)
                 self._batch_generator = self.gen_batch(*args, **kwargs)
             batch_res = next(self._batch_generator)
         else:
@@ -1362,13 +1371,15 @@ class Pipeline:
                     pass
         return batch_res
 
-    def run(self, *args, init_vars=True, **kwargs):
+    def run(self, *args, init_vars=True, reset_pipeline=False, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
 
         Parameters
         ----------
         init_vars : bool
             whether to clear all the pipeline variables
+        reset_pipeline : bool
+            whether to clear pipeline iteration counter
 
         See also
         --------
@@ -1377,7 +1388,7 @@ class Pipeline:
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
         else:
-            self.reset_iter(init_vars=init_vars)
+            self.reset_iter(init_vars=init_vars, reset_global=reset_pipeline)
             if self._lazy_run:
                 _args, _kwargs = self._lazy_run
                 args = _args if len(args) == 0 else args
@@ -1397,3 +1408,16 @@ class Pipeline:
     def run_later(self, *args, **kwargs):
         """ Define params to execute pipeline later """
         return self.run(*args, **kwargs, lazy=True)
+
+    def _combine_iter_params(self):
+        """ Combine global pipeline and current run's iteration parameters """
+
+        _n_iters, _total = 0, None
+        if self._global_iter_params and self._iter_params:
+            _n_iters = self._global_iter_params['_n_iters'] + self._iter_params['_n_iters']
+
+            _total = self._iter_params.get('_total', None)
+            if _total:
+                _total = self._global_iter_params['_n_iters'] + self._iter_params['_total']
+
+        return {'_n_iters': _n_iters, '_total': _total}
