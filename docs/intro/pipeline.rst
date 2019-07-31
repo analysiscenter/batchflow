@@ -77,8 +77,12 @@ Pipeline actions might come from 3 sources:
 :doc:`Batch class <batch>` comprises data loading operations, preprocessing methods and augmentations.
 A batch class method marked with :ref:`action <actions>` decorator might be used in a pipeline workflow.
 
+Besides, pipeline actions chains might include arbitrary functions from given namespaces.
 
-Besides, pipeline actions chains might include arbitrary functions. Just add a namespace (e.g. a class, a module) with the functions needed to a pipeline.
+
+Actions from namespaces
+-----------------------
+Just add a namespace (e.g. a class, a module) which contains the functions needed within a pipeline.
 
 ::
 
@@ -90,8 +94,32 @@ Besides, pipeline actions chains might include arbitrary functions. Just add a n
                 .my_func(10, save_to=V("var"))     # call a function from mymodule and store its result into a pipeline variable
                 .print(V("var"))                   # Pipeline API again
 
-For convenience, the main module and the dataset class are automatically added to namespaces available.
+The result of these actions can be stored with `save_to` parameter::
+
+    pipeline.before
+        ...
+        .some_func(save_to=V('some_var')))
+
+Normally, `named expressions <named_expr>` are used in `save_to`. However, lists or numpy arrays also work out.
+Note that `save_to` argument is never passed to a function, since it is fully processed within the pipeline.
+
+For convenience the main module and the dataset class are automatically added to namespaces available.
 So you can use dataset methods or functions defined right in the main module in the pipeline chain.
+
+::
+
+    class MyDataset(Dataset):
+        def dataset_method(self):
+            print("dataset method")
+            return 200
+
+    def main_func():
+        print("main func")
+        return 100
+
+    pipeline.
+        .dataset_method(save_to=V('return_from_method'))
+        .main_func(save_to=V('return_from_func'))
 
 
 .. _after_pipeline:
@@ -115,18 +143,8 @@ More complicated pipelines include setup and tear down actions. That's exactly w
 
 `before` and `after` pipelines are executed automatically when the main pipeline is executed (specifically, before and after it).
 
-The result of these actions can be stored with `save_to` parameter::
-
-    pipeline.before
-        ...
-        .some_func(save_to=V('some_var')))
-
-Normally, `named expressions <named_expr>` are used in `save_to`. However, lists or numpy arrays also work out.
-
-Note that `save_to` argument is never passed to a function, since it is fully processed within the pipeline.
-
-For convenience, the main module and the dataset class are automatically added to namespaces available.
-So you can use dataset methods or functions defined right in the main module in the pipeline chain.
+Note that the main module and the dataset class are automatically added to namespaces available.
+And result of these actions can be retrieved and stored with `save_to` parameter.
 
 ::
 
@@ -142,7 +160,6 @@ So you can use dataset methods or functions defined right in the main module in 
     pipeline.before
         .dataset_method(save_to=V('return_from_method'))
         .main_func(save_to=V('return_from_func'))
-
 
 However, take into account that when you iterate over the pipeline with `gen_batch(...)` or `next_batch(...)`, `after`-pipeline
 will be executed automatically only when the iteration is fully finished.
