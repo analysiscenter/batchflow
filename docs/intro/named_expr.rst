@@ -19,6 +19,7 @@ There are several types of named expressions:
 * R(...) - a random value
 * W(...) - a wrapper for a named expression
 * P(...) - a wrapper for parallel actions
+* I(...) - an iteration counter
 
 
 Using in pipelines
@@ -92,7 +93,7 @@ B - batch component
 
     pipeline
         ...
-        .train_model(model_name, feed_dict={'features': B('features'), 'labels': B('labels')})
+        .train_model(model_name, features=B('features'), labels=B('labels'))
         ...
 
 At each iteration ``B('features')`` and ``B('labels')`` will be replaced with ``current_batch.features``
