@@ -191,7 +191,7 @@ class Pipeline:
 
     @property
     def _all_namespaces(self):
-        return [sys.modules["__main__"]] + self._namespaces
+        return [sys.modules["__main__"], self.dataset] + self._namespaces
 
     def is_method_from_ns(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)
