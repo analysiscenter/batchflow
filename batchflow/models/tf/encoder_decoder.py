@@ -39,7 +39,8 @@ class EncoderDecoder(TFModel):
             other args : dict
                 Parameters for ``make_encoder`` method.
 
-        embedding : dict or sequence of dicts
+        embedding : dict or sequence of dicts or None
+            if None no embedding block is created
             base : callable
                 Tensor processing function. Default is :func:`~.layers.conv_block`.
             other args
@@ -68,7 +69,8 @@ class EncoderDecoder(TFModel):
 
     head : dict
         parameters for the head layers, usually :func:`.conv_block` parameters
-        Note that an extra 1x1 convolution may be applied in order to make predictions compatible with the shape of targets
+        Note that an extra 1x1 convolution may be applied
+        in order to make predictions compatible with the shape of targets
 
     Examples
     --------
@@ -130,12 +132,6 @@ class EncoderDecoder(TFModel):
         config['head/layout'] = None
 
         return config
-
-    def build_config(self, names=None):
-        config = super().build_config(names)
-        config['head/targets'] = self.get_from_attr('targets')
-        return config
-
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
