@@ -275,6 +275,12 @@ class NamedExpression:
             return val
         return type(self).__name__ + '(' + str(self.name) + ')'
 
+    def __setstate__(self, state):
+        self.__dict__ = state
+
+    def __getstate__(self):
+        return self.__dict__
+
 
 class B(NamedExpression):
     """ Batch component or attribute name
