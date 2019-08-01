@@ -1,5 +1,7 @@
 """ Contains named expression classes"""
 import operator
+from functools import partial
+
 import numpy as np
 
 
@@ -11,13 +13,13 @@ class _DummyBatch:
 
 def eval_expr(expr, batch=None, pipeline=None, model=None):
     """ Evaluate a named expression recursively """
-    batch = batch or _DummyBatch(pipeline)
-    pipeline = pipeline or batch.pipeline
+    batch = batch if batch is not None else _DummyBatch(pipeline)
+    pipeline = pipeline if pipeline is not None else batch.pipeline
     args = dict(batch=batch, pipeline=pipeline, model=model)
 
     if isinstance(expr, NamedExpression):
-        if expr.params:
-            args = {}
+        args = expr.params or {}
+        args = {**args, **dict(batch=batch, pipeline=pipeline, model=model)}
         _expr = expr.get(**args)
         if isinstance(expr, W):
             expr = _expr
@@ -61,12 +63,12 @@ BINARY_OPS = {
     '__lshift__': operator.lshift, '__rshift__': operator.rshift,
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
+    '__eq__': operator.eq, '__ne__': operator.ne,
     '#slice': lambda a, b: a[b], '#format': lambda a, b: b.format(a),
     '#attr': lambda a, b: getattr(a, b), '#call': lambda a, b: a(*b[0], **b[1]),
 }
 
 UNARY_OPS = {
-    '__eq__': operator.eq, '__ne__': operator.ne,
     '__neg__': operator.neg, '__pos__': operator.pos, '__abs__': operator.abs, '__invert__': operator.inv,
     '#str': str,
 }
@@ -129,6 +131,8 @@ class NamedExpression:
         return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
 
     def __call__(self, *args, **kwargs):
+        if isinstance(self, F):
+            self._call = False     # pylint: disable=attribute-defined-outside-init
         return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
 
     def str(self):
@@ -353,14 +357,19 @@ class F(NamedExpression):
     --------
     ::
 
-        F(MyBatch.rotate, angle=30)
-        F(prepare_data, 115, item=10)
+        F(MyBatch.rotate)(angle=30)
+        F(make_data)
+        F(prepare_data)(115, item=10)
+
+    Notes
+    -----
+    Take into account that the actual calls will look like `current_batch.rotate(angle=30)`,
+    `make_data(current_batch)` and `prepare_data(current_batch, 115, item=10)`.
     """
-    def __init__(self, name, *args, mode='w', _pass=True, **kwargs):
+    def __init__(self, name, mode='w', _pass=True):
         super().__init__(name, mode)
-        self.args = args
-        self.kwargs = kwargs
         self._pass = _pass
+        self._call = True
 
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value from a callable """
@@ -376,9 +385,8 @@ class F(NamedExpression):
                 args += [batch]
             if model is not None:
                 args += [model]
-        fargs = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
-        fkwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
-        return name(*args, *fargs, **fkwargs)
+            name = partial(name, *args)
+        return name() if self._call else name
 
     def assign(self, *args, **kwargs):
         """ Assign a value by calling a callable """
@@ -420,15 +428,19 @@ class V(NamedExpression):
 
 
 class D(NamedExpression):
-    """ Dataset attribute
+    """ Dataset attribute or dataset itself
 
     Examples
     --------
     ::
 
+        D()
         D('classes')
         D('organization')
     """
+    def __init__(self, name=None, mode='w'):
+        super().__init__(name, mode)
+
     def _get_name_dataset(self, batch=None, pipeline=None, model=None):
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline or pipeline
@@ -443,7 +455,10 @@ class D(NamedExpression):
         if self.params:
             batch, pipeline, model = self.params
         name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
-        if hasattr(dataset, name):
+
+        if name is None:
+            value = dataset
+        elif hasattr(dataset, name):
             value = getattr(dataset, name)
         else:
             raise KeyError("Attribute does not exist in the dataset", name)
@@ -452,6 +467,8 @@ class D(NamedExpression):
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a dataset attribute """
         name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        if name is None:
+            raise ValueError('Assigning a value to D() is not possible.')
         setattr(dataset, name, value)
 
 
@@ -580,3 +597,55 @@ class P(W):
         if parallel:
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
         return self
+
+class I(NamedExpression):
+    """ Iteration counter
+
+    Parameters
+    ----------
+    name : str
+        'current' or its substring - current iteration number, default.
+        'maximum' or its substring - total number of iterations to be performed.
+                                     If total number is not defined, raises an error.
+        'ratio' or its substring - current iteration divided by a total number of iterations.
+
+    Raises
+    ------
+    ValueError
+        * If `name` is not valid.
+        * If `name` is 'm' or 'r' and total number of iterations is not defined.
+    Examples
+    --------
+    ::
+
+        I('current')
+        I('max')
+        R('normal', loc=0, scale=I('ratio')*100)
+    """
+    def __init__(self, name='c'):
+        super().__init__(name, mode=None)
+
+    def get(self, batch=None, pipeline=None, model=None):    # pylint:disable=inconsistent-return-statements
+        """ Return current or maximum iteration number or their ratio """
+        name = self._get_name(batch, pipeline, model)
+
+        pipeline = batch.pipeline if batch is not None else pipeline
+        if 'current'.startswith(name):
+            return pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
+
+        total = pipeline._iter_params.get('_total')    # pylint:disable=protected-access
+
+        if 'maximum'.startswith(name):
+            return total
+        if 'ratio'.startswith(name):
+            if total is None:
+                raise ValueError('Total number of iterations is not defined!')
+            ratio = pipeline._iter_params['_n_iters'] / total    # pylint:disable=protected-access
+            return ratio
+
+        raise ValueError('Unknown key for named expresssion I: %s' % name)
+
+    def assign(self, *args, **kwargs):
+        """ Assign a value by calling a callable """
+        _ = args, kwargs
+        raise NotImplementedError("Assigning a value to an iteration number is not supported")

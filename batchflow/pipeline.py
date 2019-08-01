@@ -89,6 +89,7 @@ class Pipeline:
         self._batch_queue = None
         self._batch_generator = None
         self._rest_batch = None
+        self._iter_params = None
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -170,11 +171,14 @@ class Pipeline:
         return new_p
 
     def __lshift__(self, other):
-        if not isinstance(other, Baseset):
-            raise TypeError("Pipelines might take only Datasets. Use as pipeline << dataset")
         new_p = self.from_pipeline(self)
-        new_p.dataset = other
-        return new_p
+        if isinstance(other, Baseset):
+            new_p.dataset = other
+            return new_p
+        if isinstance(other, (Config, dict)):
+            new_p.set_config(other)
+            return new_p
+        raise TypeError("Pipeline might take only Dataset or Config. Use as pipeline << dataset or pipeine << config")
 
     def _is_batch_method(self, name, namespace=None):
         if namespace is None and self.dataset is not None:
@@ -187,7 +191,7 @@ class Pipeline:
 
     @property
     def _all_namespaces(self):
-        return [sys.modules["__main__"]] + self._namespaces
+        return [sys.modules["__main__"], self.dataset] + self._namespaces
 
     def is_method_from_ns(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)
@@ -264,6 +268,19 @@ class Pipeline:
             self.config = {}
         self.config.update(config)
         return self
+
+    def update_config(self, config):
+        """ Update pipeline's config
+
+        Parameters
+        ----------
+        config: dict
+            configuration parameters
+        clear : bool
+            whether to clear the current config
+        """
+        return self.set_config(config, clear=False)
+
 
     def has_variable(self, name):
         """ Check if a variable exists
@@ -1141,6 +1158,9 @@ class Pipeline:
         else:
             pipeline = self.from_pipeline(_action['pipeline'])
 
+        # Passing iter_params from main pipeline
+        pipeline._iter_params = kwargs.get('iter_params', None)    # pylint:disable=protected-access
+
         self._rest_batch = None
         while True:
             if self._rest_batch is None:
@@ -1246,11 +1266,14 @@ class Pipeline:
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
 
+        if kwargs.pop('iter_params', None) is None:
+            self._iter_params = self._iter_params or self.dataset.get_default_iter_params()
+
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
-            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
+            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch, iter_params=self._iter_params)
             prefetch = 0
         else:
-            batch_generator = self.dataset.gen_batch(*args, **kwargs)
+            batch_generator = self.dataset.gen_batch(*args, **kwargs, iter_params=self._iter_params)
 
         if self.before:
             self.before.run()
