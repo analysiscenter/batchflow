@@ -68,7 +68,7 @@ class EncoderDecoder(TFModel):
 
     head : dict
         parameters for the head layers, usually :func:`.conv_block` parameters
-        an extra 1x1 convolutional layer that makes outputs shape match targets will be added implicitly if needed
+        Note that an extra 1x1 convolution may be applied in order to make predictions compatible with the shape of targets
 
     Examples
     --------
