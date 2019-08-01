@@ -157,7 +157,7 @@ class EncoderDecoder(TFModel):
 
                 for i, embedding in enumerate(embeddings):
                     embedding_args = {**kwargs, **embedding}
-                    x = cls.embedding(x, name='embedding'+str(i), **embedding_args)
+                    x = cls.embedding(x, name='embedding-'+str(i), **embedding_args)
 
             encoder_outputs.append(x)
 
