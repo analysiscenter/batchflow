@@ -585,6 +585,7 @@ class Executable:
             if self.root_pipeline is not None:
                 self.root_pipeline = self.root_pipeline << dataset
             else:
+                print(dataset)
                 self.pipeline = self.pipeline << dataset
 
     def reset_iter(self):
