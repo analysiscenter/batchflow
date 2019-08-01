@@ -276,7 +276,7 @@ class NamedExpression:
         return type(self).__name__ + '(' + str(self.name) + ')'
 
     def __setstate__(self, state):
-        self.__dict__ = state
+        self.__dict__ = state # pylint: attribute-defined-outside-init
 
     def __getstate__(self):
         return self.__dict__
