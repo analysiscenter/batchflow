@@ -20,16 +20,16 @@ class EncoderDecoder(TFModel):
         encoder : dict
             base : TFModel
                 Model implementing ``make_encoder`` method which returns tensors
-                with encoded representation of the inputs.
+                with encoded representation of the inputs. Optional
 
             num_stages : int
                 Number of downsampling stages.
 
             downsample : dict
-                Parameters for downsampling (see :func:`~.layers.conv_block`)
+                Parameters for downsampling (see :func:`~.layers.conv_block`). Optional
 
             blocks : dict
-                Parameters for pre-processing blocks:
+                Parameters for pre-processing blocks. Optional
 
                 base : callable
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
@@ -40,13 +40,16 @@ class EncoderDecoder(TFModel):
                 Parameters for ``make_encoder`` method.
 
         embedding : dict or sequence of dicts or None
-            if None no embedding block is created
+            Optional. If None no embedding block is created
+
             base : callable
                 Tensor processing function. Default is :func:`~.layers.conv_block`.
             other args
                 Parameters for the base block.
 
         decoder : dict
+            Optional
+
             num_stages : int
                 Number of upsampling blocks.
 
@@ -70,7 +73,7 @@ class EncoderDecoder(TFModel):
     head : dict
         parameters for the head layers, usually :func:`.conv_block` parameters
         Note that an extra 1x1 convolution may be applied
-        in order to make predictions compatible with the shape of targets
+        in order to make predictions compatible with the shape of targets. Optional
 
     Examples
     --------
@@ -342,6 +345,11 @@ class EncoderDecoder(TFModel):
                     # Combine it with stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
                         combine_op = args.get('combine_op')
+                        # inputs[-1] is embedding output and decoder's input, inputs[-2] is last encoder's output,
+                        # they both have same shape, if connection between them is needed,
+                        # it can be incorporated in embedding
+                        # input[-3] is last encoder's input that has normally different shape
+                        # so it might be connected to first decoder's output, that also has modified shape
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
                         x = cls.combine([x, inputs[-i-3]], op=combine_op,
                                         data_format=kwargs.get('data_format'))
