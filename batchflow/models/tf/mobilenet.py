@@ -8,11 +8,11 @@ Mobile Networks for Classification, Detection and Segmentation
 Howard A. et al. "`Searching for MobileNetV3
 <https://arxiv.org/abs/1905.02244>`_"
 """
-from copy import deepcopy
 import tensorflow as tf
+from copy import deepcopy
 
 from . import TFModel
-from .layers import conv_block
+from .layers import conv_block, depthwise_conv
 from .nn import h_swish, h_sigmoid
 
 _V1_DEFAULT_BODY = {
@@ -354,8 +354,11 @@ class MobileNet_v3(TFModel):
         """
 
         num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
-        x = conv_block(inputs, 'cna Cna', [num_filters, num_filters], [1, kernel_size], name='%s-exp' % name,
-                       strides=[1, strides], **kwargs)
+        x = conv_block(inputs, 'cna', num_filters, 1, name='%s-exp' % name,
+                       strides=1, **kwargs)
+        x = depthwise_conv(x, kernel_size=kernel_size, strides=strides,
+                           padding='same', data_format=kwargs['data_format'], name='depthwise')
+        conv_block(x, 'na', name='%s-exp-a' % name, **kwargs)
 
         if se_block:
             x = cls.se_block(x, int(num_filters * 0.25), name='%s-se' % name, data_format=kwargs['data_format'],
