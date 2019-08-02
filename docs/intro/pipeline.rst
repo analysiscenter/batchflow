@@ -275,7 +275,7 @@ There are 5 ways to execute a pipeline.
 Batch generator
 ^^^^^^^^^^^^^^^
 
-.. code-block:: python
+:meth:`~.Pipeline.gen_batch`::
 
    for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
        # do whatever you want
@@ -286,20 +286,18 @@ Batch generator
 
 .. note:: Pipeline execution might take a long time so showing a progress bar might be helpful. Just add `bar=True` to gen_batch parameters.
 
+To start from scratch, `reset` parameter can be used::
 
-next_batch function
-^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   for i in range(MAX_ITER):
-       batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_iters=1000, drop_last=True)
+    for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True, reset='vars'):
        # do whatever you want
+
+You might reset pipeline variables, the batch iterator and models. See :meth:`~.Pipeline.reset` for details.
+
 
 Run
 ^^^
 
-To execute the pipeline right now for all iterations at once::
+To execute the pipeline right now for all iterations at once call :meth:`~.Pipeline.run`::
 
    my_pipeline = (dataset.p
       .some_action()
@@ -308,19 +306,29 @@ To execute the pipeline right now for all iterations at once::
       .run(BATCH_SIZE, n_epochs=2, drop_last=True, bar=True)
    )
 
-Some people prefer a slightly longer, but a bit more certain name `run_now`.
+Some people prefer a slightly longer, but a bit more certain name :meth:`~.Pipeline.run_now`.
 
-Usually `run` is used to execute the pipeline from scratch. But you might continue the pipeline which was run before::
+Usually `run` is used to execute the pipeline without resetting all the variables and models
+(thus continuing the execution which started earlier and keeping the values and trained models).
+However, you might want to start from scratch re-initialzing the variables and/or the models::
 
-    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, init_vars=False)
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='variables')
 
-In this case the pipeline variables aren't reinitialized and keep their values from the previous run.
+or::
+
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='models')
+
+or even:
+
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='all')
+
+In this case the pipeline variables will be reinitialized and the modes will be reset to initial untrained state.
 
 
 Lazy run
 ^^^^^^^^
 
-You can add `run` with `lazy=True` or just `run_later` as the last action in the pipeline and
+You can add `run` with `lazy=True` or just :meth:`~.Pipeline.run_later`:: as the last action in the pipeline and
 then call `run()` or `next_batch()` without arguments at all::
 
     my_pipeline = (dataset.p
@@ -333,6 +341,24 @@ then call `run()` or `next_batch()` without arguments at all::
     for i in range(MAX_ITER):
         batch = my_pipeline.next_batch()
         # do whatever you want
+
+
+next_batch function
+^^^^^^^^^^^^^^^^^^^
+
+:meth:`~.Pipeline.next_batch`::
+
+   for i in range(MAX_ITER):
+       batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_iters=1000, drop_last=True)
+       # do whatever you want
+
+If you need to start from scratch, you might call :meth:`~.Pipeline.reset` beforehand::
+
+    my_pipeline.reset('models')
+    my_pipeline.reset('variables')
+    my_pipeline.reset('all')
+
+Or pass `reset` parameter to `next_batch`.
 
 
 Single execution
