@@ -1299,9 +1299,8 @@ class Pipeline:
 
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
-
         self.reset(reset)
-        self._iter_params = iter_params or self._iter_params
+        self._iter_params = iter_params or self._iter_params or self.dataset.get_default_iter_params()
 
         return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
 
@@ -1356,15 +1355,19 @@ class Pipeline:
                 else:
                     self._stop_flag = True
         else:
+            is_empty = True
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
                 except SkipBatchException:
                     pass
                 else:
+                    is_empty = False
                     yield batch_res
                     if callable(on_iter):
                         on_iter(batch_res)
+            if is_empty:
+                logging.warning("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.")
 
         if self.after:
             self.after.run()
@@ -1410,15 +1413,6 @@ class Pipeline:
 
     def run(self, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
-
-        Parameters
-        ----------
-        reset : list of str, str or bool
-            what to reset to start from scratch:
-
-            - 'iter' - restart the batch iterator
-            - 'variables' - re-initialize all pipeline variables
-            - 'models' - reset all models
 
         See also
         --------
