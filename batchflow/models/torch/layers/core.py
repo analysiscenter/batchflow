@@ -341,7 +341,7 @@ class _Pool(nn.Module):
 
             self.pool = _fn[get_num_dims(inputs)](**kwargs)
         else:
-            self.pool = _fn(inputs=inputs, **kwargs)
+            self.pool = _fn(inputs=inputs, padding=padding, **kwargs)
 
     def forward(self, x):
         if self.padding:
@@ -358,7 +358,7 @@ MAXPOOL = {
 class MaxPool(_Pool):
     """ Multi-dimensional max pooling layer """
     def __init__(self, padding='same', **kwargs):
-        super().__init__(_fn=MAXPOOL, **kwargs)
+        super().__init__(_fn=MAXPOOL, padding=padding, **kwargs)
 
 AVGPOOL = {
     1: nn.AvgPool1d,
@@ -369,7 +369,7 @@ AVGPOOL = {
 class AvgPool(_Pool):
     """ Multi-dimensional average pooling layer """
     def __init__(self, padding='same', **kwargs):
-        super().__init__(_fn=AVGPOOL, **kwargs)
+        super().__init__(_fn=AVGPOOL, padding=padding, **kwargs)
 
 
 class Pool(_Pool):
