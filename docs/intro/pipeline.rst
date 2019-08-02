@@ -77,8 +77,12 @@ Pipeline actions might come from 3 sources:
 :doc:`Batch class <batch>` comprises data loading operations, preprocessing methods and augmentations.
 A batch class method marked with :ref:`action <actions>` decorator might be used in a pipeline workflow.
 
+Besides, pipeline actions chains might include arbitrary functions from given namespaces.
 
-Besides, pipeline actions chains might include arbitrary functions. Just add a namespace (e.g. a class, a module) with the functions needed to a pipeline.
+
+Actions from namespaces
+-----------------------
+Just add a namespace (e.g. a class, a module) which contains the functions needed within a pipeline.
 
 ::
 
@@ -89,6 +93,33 @@ Besides, pipeline actions chains might include arbitrary functions. Just add a n
                 .resize((128, 128))                # batch class API, namely ImagesBatch
                 .my_func(10, save_to=V("var"))     # call a function from mymodule and store its result into a pipeline variable
                 .print(V("var"))                   # Pipeline API again
+
+The result of these actions can be stored with `save_to` parameter::
+
+    pipeline.before
+        ...
+        .some_func(save_to=V('some_var')))
+
+Normally, `named expressions <named_expr>` are used in `save_to`. However, lists or numpy arrays also work out.
+Note that `save_to` argument is never passed to a function, since it is fully processed within the pipeline.
+
+For convenience the main module and the dataset class are automatically added to namespaces available.
+So you can use dataset methods or functions defined right in the main module in the pipeline chain.
+
+::
+
+    class MyDataset(Dataset):
+        def dataset_method(self):
+            print("dataset method")
+            return 200
+
+    def main_func():
+        print("main func")
+        return 100
+
+    pipeline.
+        .dataset_method(save_to=V('return_from_method'))
+        .main_func(save_to=V('return_from_func'))
 
 
 .. _after_pipeline:
@@ -111,6 +142,24 @@ More complicated pipelines include setup and tear down actions. That's exactly w
         .disconnect_from_mydb()            # a method from mymodule
 
 `before` and `after` pipelines are executed automatically when the main pipeline is executed (specifically, before and after it).
+
+Note that the main module and the dataset class are automatically added to namespaces available.
+And result of these actions can be retrieved and stored with `save_to` parameter.
+
+::
+
+    class MyDataset(Dataset):
+        def dataset_method(self):
+            print("dataset method")
+            return 200
+
+    def main_func():
+        print("main func")
+        return 100
+
+    pipeline.before
+        .dataset_method(save_to=V('return_from_method'))
+        .main_func(save_to=V('return_from_func'))
 
 However, take into account that when you iterate over the pipeline with `gen_batch(...)` or `next_batch(...)`, `after`-pipeline
 will be executed automatically only when the iteration is fully finished.
@@ -152,6 +201,8 @@ Execute the pipeline with the given probability.
 Link a pipeline to a dataset.
 `dataset >> pipeline` or `pipeline << dataset`
 
+Or update pipeline's config.
+`config >> pipeline` or `pipeline << config`
 
 The complete example::
 
@@ -222,7 +273,7 @@ There are 5 ways to execute a pipeline.
 Batch generator
 ^^^^^^^^^^^^^^^
 
-.. code-block:: python
+:meth:`~.Pipeline.gen_batch`::
 
    for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
        # do whatever you want
@@ -233,20 +284,18 @@ Batch generator
 
 .. note:: Pipeline execution might take a long time so showing a progress bar might be helpful. Just add `bar=True` to gen_batch parameters.
 
+To start from scratch, `reset` parameter can be used::
 
-next_batch function
-^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   for i in range(MAX_ITER):
-       batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_iters=1000, drop_last=True)
+    for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True, reset='vars'):
        # do whatever you want
+
+You might reset pipeline variables, the batch iterator and models. See :meth:`~.Pipeline.reset` for details.
+
 
 Run
 ^^^
 
-To execute the pipeline right now for all iterations at once::
+To execute the pipeline right now for all iterations at once call :meth:`~.Pipeline.run`::
 
    my_pipeline = (dataset.p
       .some_action()
@@ -255,19 +304,29 @@ To execute the pipeline right now for all iterations at once::
       .run(BATCH_SIZE, n_epochs=2, drop_last=True, bar=True)
    )
 
-Some people prefer a slightly longer, but a bit more certain name `run_now`.
+Some people prefer a slightly longer, but a bit more certain name :meth:`~.Pipeline.run_now`.
 
-Usually `run` is used to execute the pipeline from scratch. But you might continue the pipeline which was run before::
+Usually `run` is used to execute the pipeline without resetting all the variables and models
+(thus continuing the execution which started earlier and keeping the values and trained models).
+However, you might want to start from scratch re-initialzing the variables and/or the models::
 
-    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, init_vars=False)
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='variables')
 
-In this case the pipeline variables aren't reinitialized and keep their values from the previous run.
+or::
+
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='models')
+
+or even:
+
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='all')
+
+In this case the pipeline variables will be reinitialized and the modes will be reset to initial untrained state.
 
 
 Lazy run
 ^^^^^^^^
 
-You can add `run` with `lazy=True` or just `run_later` as the last action in the pipeline and
+You can add `run` with `lazy=True` or just :meth:`~.Pipeline.run_later`:: as the last action in the pipeline and
 then call `run()` or `next_batch()` without arguments at all::
 
     my_pipeline = (dataset.p
@@ -280,6 +339,24 @@ then call `run()` or `next_batch()` without arguments at all::
     for i in range(MAX_ITER):
         batch = my_pipeline.next_batch()
         # do whatever you want
+
+
+next_batch function
+^^^^^^^^^^^^^^^^^^^
+
+:meth:`~.Pipeline.next_batch`::
+
+   for i in range(MAX_ITER):
+       batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_iters=1000, drop_last=True)
+       # do whatever you want
+
+If you need to start from scratch, you might call :meth:`~.Pipeline.reset` beforehand::
+
+    my_pipeline.reset('models')
+    my_pipeline.reset('variables')
+    my_pipeline.reset('all')
+
+Or pass `reset` parameter to `next_batch`.
 
 
 Single execution

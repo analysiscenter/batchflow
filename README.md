@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/github/license/analysiscenter/batchflow.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![Python](https://img.shields.io/badge/python-3.5,%203.6-blue.svg)](https://python.org)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-1.8-orange.svg)](https://tensorflow.org)
+[![Python](https://img.shields.io/badge/python-3.5-blue.svg)](https://python.org)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-1.12-orange.svg)](https://tensorflow.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-0.4-orange.svg)](https://pytorch.org)
 [![Run Status](https://api.shippable.com/projects/58c6ada92e042a0600297f61/badge?branch=master)](https://app.shippable.com/github/analysiscenter/batchflow)
 
@@ -62,9 +62,9 @@ from batchflow.models.tf import ResNet34
 
 my_workflow = my_dataset.pipeline()
               .init_model('dynamic', ResNet34, config={
-                          'inputs': {'images': {'shape': B('image_shape')},
-                                     'labels': {'classes': 10}}
-                          'input_block/inputs': 'images'})
+                          'inputs/images/shape': B('image_shape'),
+                          'labels/classes': 10,
+                          'initial_block/inputs': 'images'})
               .load('/some/path')
               .some_transform()
               .another_transform()

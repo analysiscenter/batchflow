@@ -262,7 +262,7 @@ class Batch:
         Raises
         ------
         ValueError
-            If the component with the given name already exists
+            If a component or an attribute with the given name already exists
         """
         if isinstance(components, str):
             components = (components,)
@@ -273,6 +273,9 @@ class Batch:
                 init = (None,) * len(components)
             else:
                 init = tuple(init)
+
+        if any(hasattr(self, c) for c in components):
+            raise ValueError("An attribute with the same name exists")
 
         data = self._data
         if self.components is None:
@@ -292,6 +295,28 @@ class Batch:
 
         return self
 
+    def __getattr__(self, name):
+        if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
+            attr = getattr(self.data, name)
+            return attr
+        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+
+    def __setattr__(self, name, value):
+        if self.components is not None:
+            if name == "_data":
+                super().__setattr__(name, value)
+                if self._item_class is None:
+                    self.make_item_class()
+                self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
+                return
+            if name in self.components:    # pylint: disable=unsupported-membership-test
+                if self._data_named is None:
+                    _ = self.data
+                setattr(self._data_named, name, value)
+                super().__setattr__('_data', self._data_named.data)
+                return
+        super().__setattr__(name, value)
+
     def __getstate__(self):
         state = self.__dict__.copy()
         state.pop('_data_named')
@@ -305,6 +330,11 @@ class Batch:
     @property
     def _empty_data(self):
         return None if self.components is None else self._item_class()   # pylint: disable=not-callable
+
+    @property
+    def array_of_nones(self):
+        """1-D ndarray: ``NumPy`` array with ``None`` values."""
+        return np.array([None] * len(self.index))
 
     def get_pos(self, data, component, index):
         """ Return a position in data for a given index
@@ -365,29 +395,6 @@ class Batch:
         else:
             pos = index
         return pos
-
-    def __getattr__(self, name):
-        if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
-            attr = getattr(self.data, name)
-            return attr
-        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
-
-    def __setattr__(self, name, value):
-        if self.components is not None:
-            if name == "_data":
-                super().__setattr__(name, value)
-                if self._item_class is None:
-                    self.make_item_class()
-                self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
-            elif name in self.components:    # pylint: disable=unsupported-membership-test
-                if self._data_named is None:
-                    _ = self.data
-                setattr(self._data_named, name, value)
-                super().__setattr__('_data', self._data_named.data)
-            else:
-                super().__setattr__(name, value)
-        else:
-            super().__setattr__(name, value)
 
     def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
