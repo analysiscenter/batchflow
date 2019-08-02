@@ -215,6 +215,10 @@ class TorchModel(BaseModel):
 
         super().__init__(*args, **kwargs)
 
+    def reset(self):
+        """ Reset the trained model to allow a new training from scratch """
+        pass
+
     def build(self, *args, **kwargs):
         """ Build the model """
         config = self.build_config()
@@ -230,7 +234,6 @@ class TorchModel(BaseModel):
             self._make_optimizer(config)
 
         self.microbatch = config.get('microbatch', None)
-
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided

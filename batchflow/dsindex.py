@@ -281,7 +281,7 @@ class DatasetIndex(Baseset):
         elif callable(shuffle):
             order = shuffle(self.indices)
         else:
-            raise ValueError("shuffle could be bool, int, numpy.random.RandomState or callable")
+            raise ValueError("shuffle could be bool, int, numpy.random.RandomState or callable", shuffle)
         return order
 
     def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, iter_params=None):
