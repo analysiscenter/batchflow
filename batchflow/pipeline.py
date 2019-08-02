@@ -18,6 +18,7 @@ from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
 from ._const import *       # pylint:disable=wildcard-import
+from .utils import create_bar, update_bar
 
 
 METRICS = dict(
@@ -1079,11 +1080,13 @@ class Pipeline:
         new_p = type(self)(self.dataset)
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn))    # pylint:disable=protected-access
 
-    def _put_batches_into_queue(self, gen_batch):
+    def _put_batches_into_queue(self, gen_batch, bar, bar_desc):
         while not self._stop_flag:
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
+                if bar:
+                    update_bar(bar, bar_desc, pipeline=self, batch=batch)
             except StopIteration:
                 break
             else:
@@ -1310,6 +1313,8 @@ class Pipeline:
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
+        bar = kwargs.pop('bar', None)
+        bar_desc = kwargs.pop('bar_desc', None)
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
@@ -1320,6 +1325,16 @@ class Pipeline:
         if self._not_init_vars:
             self._init_all_variables()
             self._not_init_vars = False
+
+        batch_size = args[0] if len(args) != 0 else kwargs.get('batch_size')
+        n_iters = kwargs.get('n_iters')
+        n_epochs = kwargs.get('n_epochs')
+        drop_last = kwargs.get('drop_last')
+
+        if bar:
+            bar = create_bar(bar, batch_size, n_iters, n_epochs,
+                             drop_last, len(self.dataset.index))
+
 
         if self.before:
             self.before.run()
@@ -1340,7 +1355,7 @@ class Pipeline:
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator, bar, bar_desc)
             self._service_executor.submit(self._run_batches_from_queue)
 
             while not self._stop_flag:
@@ -1359,6 +1374,8 @@ class Pipeline:
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
+                    if bar:
+                        update_bar(bar, bar_desc, pipeline=self, batch=batch)
                 except SkipBatchException:
                     pass
                 else:
@@ -1368,6 +1385,9 @@ class Pipeline:
                         on_iter(batch_res)
             if is_empty:
                 logging.warning("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.")
+
+        if bar:
+            bar.close()
 
         if self.after:
             self.after.run()
