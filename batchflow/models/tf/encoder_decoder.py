@@ -17,39 +17,37 @@ class EncoderDecoder(TFModel):
         Dictionary with 'images' (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
-        encoder : dict
+        encoder : dict, optional
             base : TFModel
                 Model implementing ``make_encoder`` method which returns tensors
-                with encoded representation of the inputs. Optional
+                with encoded representation of the inputs.
 
             num_stages : int
                 Number of downsampling stages.
 
-            downsample : dict
-                Parameters for downsampling (see :func:`~.layers.conv_block`). Optional
+            downsample : dict, optional
+                Parameters for downsampling (see :func:`~.layers.conv_block`)
 
-            blocks : dict
-                Parameters for pre-processing blocks. Optional
+            blocks : dict, optional
+                Parameters for pre-processing blocks.
 
                 base : callable
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
                 other args : dict
                     Parameters for the base block.
 
-            other args : dict
+            other args : dict, optional
                 Parameters for ``make_encoder`` method.
 
-        embedding : dict or sequence of dicts or None
-            Optional. If None no embedding block is created
+        embedding : dict or sequence of dicts or None, optional
+            If None no embedding block is created
 
             base : callable
                 Tensor processing function. Default is :func:`~.layers.conv_block`.
             other args
                 Parameters for the base block.
 
-        decoder : dict
-            Optional
-
+        decoder : dict, optional
             num_stages : int
                 Number of upsampling blocks.
 
@@ -70,10 +68,10 @@ class EncoderDecoder(TFModel):
                 other args : dict
                     Parameters for the base block.
 
-    head : dict
+    head : dict, optional
         parameters for the head layers, usually :func:`.conv_block` parameters
         Note that an extra 1x1 convolution may be applied
-        in order to make predictions compatible with the shape of targets. Optional
+        in order to make predictions compatible with the shape of targets
 
     Examples
     --------
