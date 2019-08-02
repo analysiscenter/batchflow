@@ -1,6 +1,5 @@
 """ Contains two class classification metrics """
 from copy import copy
-from functools import partial
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -128,7 +127,7 @@ class ClassificationMetrics(Metrics):
 
         if calc:
             self._calc()
-            
+
     @property
     def confusion_matrix(self):
         return self._confusion_matrix.sum(axis=0)
@@ -144,13 +143,8 @@ class ClassificationMetrics(Metrics):
         arr = np.nanmean(arr, axis=0)
         if np.isscalar(arr):
             return np.inf if np.isnan(arr) else arr
-        else:
-            arr[np.isnan(arr)] = np.inf
-            return arr
-
-    @property
-    def confusion_matrix(self):
-        return self._confusion_matrix.sum(axis=0)
+        arr[np.isnan(arr)] = np.inf
+        return arr
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
@@ -348,7 +342,8 @@ class ClassificationMetrics(Metrics):
         return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs, when_zero=(np.inf, 0))
 
     def diagnostics_odds_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs, when_zero=(np.inf, 0))
+        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs,
+                              when_zero=(np.inf, 0))
 
     def f1_score(self, *args, **kwargs):
         return 2 / (1 / self.recall(*args, **kwargs) + 1 / self.precision(*args, **kwargs))
