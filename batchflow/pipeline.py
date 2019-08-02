@@ -1326,7 +1326,7 @@ class Pipeline:
             self._init_all_variables()
             self._not_init_vars = False
 
-        batch_size = args[0]
+        batch_size = args[0] if len(args) != 0 else None
         n_iters = kwargs.get('n_iters')
         n_epochs = kwargs.get('n_epochs')
         drop_last = kwargs.get('drop_last')
