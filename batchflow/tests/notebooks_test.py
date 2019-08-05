@@ -11,6 +11,7 @@ from tensorflow.test import is_gpu_available
 
 NO_GPU = pytest.mark.skipif(not is_gpu_available(), reason='No GPU')
 if is_gpu_available():
+    # Set your own value(s) for visible devices
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -26,10 +27,10 @@ ALLOWED_TUTORIALS = [
     # '03', # very long
     '04',
     '07',
-    # '10', # requires multiprocess module
+    # '10', # requires `multiprocess` module
 ]
 
-MICROBATCH_LIST = [None, 4]
+MICROBATCH_LIST = [None, 4] # each integer values must be a divisor of 16
 DEVICE_LIST = [None, pytest.param('GPU:*', marks=NO_GPU)]
 
 # Each parameter is (path, microbatch) configuration
@@ -40,12 +41,13 @@ PARAMETERS += [(path, mb) for path in NOTEBOOKS
                for mb in MICROBATCH_LIST]
 
 # Run selected notebooks inside tutorials dir without microbatching
-PARAMETERS += [(path, None) for path in TUTORIALS
-               if path.split('/')[-1][:2] in ALLOWED_TUTORIALS]
+# PARAMETERS += [(path, None) for path in TUTORIALS
+#                if path.split('/')[-1][:2] in ALLOWED_TUTORIALS]
 
 _ = [print(item) for item in PARAMETERS]
 
 
+# Some of the actions are appropriate in notebooks, but better be ignored in tests
 BAD_PREFIXES = ['get_ipython', 'plt', 'plot', 'figure', 'ax.',]
 
 
