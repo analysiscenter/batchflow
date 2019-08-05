@@ -1,4 +1,5 @@
 """ Run multiple notebooks. """
+# pylint: disable=import-error
 import os
 import warnings
 from glob import glob
