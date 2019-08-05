@@ -18,8 +18,10 @@ def eval_expr(expr, batch=None, pipeline=None, model=None):
     args = dict(batch=batch, pipeline=pipeline, model=model)
 
     if isinstance(expr, NamedExpression):
-        args = expr.params or {}
-        args = {**args, **dict(batch=batch, pipeline=pipeline, model=model)}
+        batch_, pipeline_, model_ = expr.params or (None, None, None)
+        args = {**dict(batch=batch_, pipeline=pipeline_, model=model_),
+                **dict(batch=batch, pipeline=pipeline, model=model)}
+
         _expr = expr.get(**args)
         if isinstance(expr, W):
             expr = _expr
@@ -274,6 +276,12 @@ class NamedExpression:
                 val += " and " + repr(self.b)
             return val
         return type(self).__name__ + '(' + str(self.name) + ')'
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
+    def __getstate__(self):
+        return self.__dict__
 
 
 class B(NamedExpression):

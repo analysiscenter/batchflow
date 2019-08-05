@@ -42,6 +42,11 @@ class ModelDirectory:
         new_md.models = {**self.models}
         return new_md
 
+    def reset(self):
+        """ Reset all models """
+        for model in self.models:
+            model.reset()
+
     def eval_expr(self, expr, batch=None):
         """ Evaluate all named expressions in a given data structure """
         return eval_expr(expr, batch=batch)
