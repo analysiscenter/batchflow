@@ -251,6 +251,19 @@ class Config:
     def __len__(self):
         return len(self.config)
 
+    def __rshift__(self, other):
+        """
+            Parameters
+            ----------
+            other : Pipeline
+
+            Returns
+            -------
+            Pipeline
+                Pipeline object with an updated config
+        """
+        return other << self
+
     def items(self, flatten=False):
         """ Returns config items
 

@@ -19,6 +19,7 @@ There are several types of named expressions:
 * R(...) - a random value
 * W(...) - a wrapper for a named expression
 * P(...) - a wrapper for parallel actions
+* I(...) - an iteration counter
 
 
 Using in pipelines
@@ -61,13 +62,29 @@ To convert a named expression value to a string use :meth:`~batchflow.named_expr
         ...
         .print('Dataset contains ' + D('size').str() + ' items')
 
+Formatting is also possible::
 
-Slicing is also supported::
+    pipeline
+        ...
+        .print(V('variable').format('Value of the variable is {:7.7}')
+
+Slicing is often useful::
 
     pipeline
         ...
         .print('Current loss:', V('loss_history')[-1])
 
+As well as getting attributes::
+
+    pipeline
+        ...
+        .print('Size in bytes:', B('images').nbytes)
+
+And calling a function::
+
+    pipeline
+        ...
+        .print('Accuracy:', C('custom_accuracy')(targets=B('labels'), predictions=V('predictions'))
 
 
 B - batch component
@@ -76,13 +93,13 @@ B - batch component
 
     pipeline
         ...
-        .train_model(model_name, feed_dict={'features': B('features'), 'labels': B('labels')})
+        .train_model(model_name, features=B('features'), labels=B('labels'))
         ...
 
 At each iteration ``B('features')`` and ``B('labels')`` will be replaced with ``current_batch.features``
 and ``current_batch.labels``, i.e. `batch components <components>`_ or attributes.
 
-.. note:: ``B()`` without name returns the batch itself.
+.. note:: ``B()`` (i.e. without a component name) returns the batch itself.
           To avoid unexpected changes of the batch, the copy can be created with ``B(copy=True)``.
 
 
@@ -116,6 +133,7 @@ At each iteration ``C('model')`` will be replaced with the current value of ``pi
 This is an example of a model independent pipeline which allows to change models, for instance,
 to assess performance of various models.
 
+
 D - dataset attribute
 =====================
 ::
@@ -127,24 +145,44 @@ D - dataset attribute
 
 At each iteration ``D('data_path')`` will be replaced with the current value of ``pipeline.dataset.data_path``.
 
+.. note:: `D()` (i.e. without an attribute name) returns the dataset itself.
+
+
+I - iterations counter
+======================
+
+::
+
+    pipeline
+        ...
+        .print('Iteration:', I('current'), ' out of ', I('max'))
+        ...
+
+
+`I('ratio')` returns the ratio `current / max` and thus allows to control the iteration progress.
+For instance, at each iteration dataset items can be rotated at a random angle which increases with time::
+
+    pipeline
+        ...
+        .rotate(angle=I('ratio')*45)
+        ...
+
 
 F - callable
 ============
 A function which takes a batch and, possibly, other arguments.
 
-The first parameter specifies a callable while all others are parameters to pass to that callable.
-
 The callable can be a lambda function::
 
     pipeline
         .init_model('dynamic', MyModel, 'my_model', config={
-            'inputs': {'images': {'shape': F(lambda batch: batch.images.shape[1:])}}
+            'inputs/images/shape': F(lambda batch: batch.images.shape[1:])}}
         })
 
 or a batch class method::
 
     pipeline
-        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict, task='segmentation'))
+        .train_model(model_name, make_data=F(MyBatch.pack_to_feed_dict)(task='segmentation'))
 
 or an arbitrary function::
 
@@ -155,7 +193,7 @@ or an arbitrary function::
 
     pipeline
         ...
-        .update_variable(var_name, F(get_boxes, V('image_shape')))
+        .update_variable(var_name, F(get_boxes)(C('image_shape')))
         ...
 
 or any other Python callable.
@@ -168,7 +206,7 @@ all ``F``-functions specified in static ``init_model`` get ``pipeline`` as the f
 
     pipeline
         .init_model('static', MyModel, 'my_model', config={
-            'inputs': {'images': {'shape': F(lambda pipeline: pipeline.some_attr)}}
+            'inputs/images/shape': F(lambda pipeline: pipeline.some_attr)}}
         })
 
 In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
@@ -181,7 +219,7 @@ A function which takes arbitrary arguments.::
 
     pipeline
         ...
-        .init_variable('logfile', L(open, 'file.log', 'w'))
+        .init_variable('logfile', L(open)('file.log', 'w'))
         ...
 
 So no batch, pipeline or model will be passed to that function implicitly.

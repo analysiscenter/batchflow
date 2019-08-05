@@ -1795,6 +1795,8 @@ class TFModel(BaseModel):
             else:
                 raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
 
+        config['head/targets'] = self.get_from_attr('targets')
+
         return config
 
     def _add_block(self, name, config, inputs):

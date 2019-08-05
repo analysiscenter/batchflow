@@ -44,7 +44,7 @@ class OncePipeline:
 
     @property
     def _all_namespaces(self):
-        return [sys.modules["__main__"]] + self._namespaces
+        return [sys.modules["__main__"], self.pipeline.dataset] + self._namespaces
 
     def has_method(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)

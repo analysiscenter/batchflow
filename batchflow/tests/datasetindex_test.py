@@ -235,13 +235,8 @@ def test_next_batch_smaller():
         assert len(batch) == 2
 
 def test_next_batch_bigger():
-    """ When 'batch_size' is bigger than length of DatasetIndex, the
-    behavior is unstable.
+    """ When 'batch_size' is bigger than DatasetIndex's length, ValueError is raised
     """
     dsi = DatasetIndex(5)
-    with pytest.raises(AssertionError):
-        for _ in range(10):
-            batch = dsi.next_batch(batch_size=7,
-                                   n_epochs=None,
-                                   drop_last=True)
-            assert len(batch) == 7
+    with pytest.raises(ValueError):
+        dsi.next_batch(batch_size=7, n_epochs=None, drop_last=True)
