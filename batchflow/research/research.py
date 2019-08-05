@@ -74,7 +74,7 @@ class Research:
         dump : int, str or list of int or str
             iteration when results will be dumped and cleared. Similar to `execute`
         run : bool
-            if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset_iter()`.
+            if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset("iter")`.
         kwargs :
             parameters in pipeline config that depends on the names of the other pipeline.
 
@@ -599,9 +599,9 @@ class Executable:
     def reset_iter(self):
         """ Reset iterators in pipelines """
         if self.pipeline is not None:
-            self.pipeline.reset_iter()
+            self.pipeline.reset("iter")
         if self.root_pipeline is not None:
-            self.root_pipeline.reset_iter()
+            self.root_pipeline.reset("iter")
 
     def _clear_result(self):
         self.result = {var: [] for var in self.variables}
@@ -626,7 +626,7 @@ class Executable:
     def run(self):
         """ Run pipeline """
         if self.pipeline is not None:
-            self.pipeline.reset_iter()
+            self.pipeline.reset("iter")
             self.pipeline.run()
         else:
             raise TypeError("Executable should be pipeline, not a function")
@@ -634,7 +634,7 @@ class Executable:
     def reset_root_iter(self):
         """ Reset pipeline iterator """
         if self.root_pipeline is not None:
-            self.root_pipeline.reset_iter()
+            self.root_pipeline.reset("iter")
         else:
             raise TypeError("Executable must have root")
 
