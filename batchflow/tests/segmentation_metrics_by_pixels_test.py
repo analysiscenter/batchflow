@@ -68,9 +68,10 @@ class TestShape:
               ('mean', 'micro', None),
               ('mean', 'macro', None)]
 
+    @pytest.mark.parametrize('metric_name', METRICS_LIST)
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_shape', params)
-    def test_shape(self, predictions, fmt, axis, batch_agg, multi_agg, exp_shape):
+    def test_shape(self, metric_name, predictions, fmt, axis, batch_agg, multi_agg, exp_shape):
         """
         Function compares expected return value shape with actual return value shape
         of metric evaluation with given params for all metrics from METRICS_LIST.
@@ -96,11 +97,10 @@ class TestShape:
             Expected return value shape
         """
         metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
-        for metric_name in METRICS_LIST:
-            res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
-            res_shape = res.shape if isinstance(res, np.ndarray) else None
+        res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
+        res_shape = res.shape if isinstance(res, np.ndarray) else None
 
-            assert res_shape == exp_shape, 'failed on metric {}'.format(metric_name)
+        assert res_shape == exp_shape
 
     # Individual test params for accuracy — batch-only aggregation param and corresponding expected shapes.
     params_accuracy = [(None, (BATCH_SIZE,)),
