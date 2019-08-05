@@ -1,13 +1,12 @@
 """ DatasetIndex """
 import os
-import sys
 import math
 import glob
 from collections.abc import Iterable
-import tqdm
 import numpy as np
 
 from .base import Baseset
+from .utils import create_bar, update_bar
 
 
 class DatasetIndex(Baseset):
@@ -282,7 +281,7 @@ class DatasetIndex(Baseset):
         elif callable(shuffle):
             order = shuffle(self.indices)
         else:
-            raise ValueError("shuffle could be bool, int, numpy.random.RandomState or callable")
+            raise ValueError("shuffle could be bool, int, numpy.random.RandomState or callable", shuffle)
         return order
 
     def next_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, iter_params=None):
@@ -339,6 +338,7 @@ class DatasetIndex(Baseset):
 
         ValueError
             When `n_epochs` and `n_iters` have been passed at the same time.
+            When batch size exceeds the dataset size.
 
         Examples
         --------
@@ -349,6 +349,8 @@ class DatasetIndex(Baseset):
                 index_batch = index.next_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
+        if batch_size > len(self):
+            raise ValueError("Batch size cannot be larger than the dataset size.")
         if n_iters is not None and n_epochs is not None:
             raise ValueError("Only one of n_iters and n_epochs should be specified.")
 
@@ -392,14 +394,15 @@ class DatasetIndex(Baseset):
             if n_iters is not None or drop_last and (rest_items is None or len(rest_items) < batch_size):
                 raise StopIteration("Dataset is over. No more batches left.")
             iter_params['_stop_iter'] = True
+            iter_params['_n_iters'] += 1
             return self.create_batch(rest_items, pos=True)
 
         iter_params['_n_iters'] += 1
         iter_params['_start_index'] += rest_of_batch
         return self.create_batch(batch_items, pos=True)
 
-
-    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, bar=False):
+    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
+                  bar=False, bar_desc=None, iter_params=None):
         """ Generate batches
 
         Parameters
@@ -450,6 +453,9 @@ class DatasetIndex(Baseset):
             Whether to show a progress bar.
             If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
+        bar_desc
+            Prefix for the progressbar.
+
         Yields
         ------
         An instance of the same class with a subset of indices
@@ -467,23 +473,21 @@ class DatasetIndex(Baseset):
             for index_batch in index.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
                 # do whatever you want
         """
-        iter_params = self.get_default_iter_params()
-        if bar:
-            if n_iters is not None:
-                total = n_iters
-            elif n_epochs is None:
-                total = sys.maxsize
-            elif drop_last:
-                total = len(self) // batch_size * n_epochs
-            else:
-                total = math.ceil(len(self) * n_epochs / batch_size)
+        iter_params = iter_params or self.get_default_iter_params()
 
-            if callable(bar):
-                iter_params['bar'] = bar(total=total)
-            elif bar == 'n':
-                iter_params['bar'] = tqdm.tqdm_notebook(total=total)
-            else:
-                iter_params['bar'] = tqdm.tqdm(total=total)
+        if n_iters is not None:
+            total = n_iters
+        elif n_epochs is None:
+            total = None
+        elif drop_last:
+            total = len(self) // batch_size * n_epochs
+        else:
+            total = math.ceil(len(self) * n_epochs / batch_size)
+        iter_params.update({'_total': total})
+
+        if bar:
+            iter_params['bar'] = create_bar(bar, batch_size, n_iters, n_epochs, drop_last, len(self))
+
 
         while True:
             if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
@@ -493,7 +497,7 @@ class DatasetIndex(Baseset):
             except StopIteration:
                 return
             if 'bar' in iter_params:
-                iter_params['bar'].update(1)
+                update_bar(iter_params['bar'], bar_desc)
             yield batch
 
 

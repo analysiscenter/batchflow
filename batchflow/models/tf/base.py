@@ -1454,6 +1454,40 @@ class TFModel(BaseModel):
         return x
 
     @classmethod
+    def combine(cls, inputs, name='combine', op='conv', data_format='channels_last', **kwargs):
+        """ Combine inputs into one tensor via various transformations.
+
+        Parameters
+        ----------
+        inputs : sequence of tf.Tensor
+            tensors to combine
+        op : str {'concat', 'sum', 'conv'}
+            if 'concat', inputs are concated along channels axis
+            if 'sum', inputs are summed
+            if 'softsum', every tensor is passed through 1x1 convolution in order to have
+            the same number of channels as the first tensor, and then summed
+        data_format : str {'channels_last', 'channels_first'}
+            data format
+        kwargs : dict
+            arguments for :func:`.conv_block`
+        """
+        with tf.variable_scope(name):
+            if op == 'concat':
+                axis = cls.channels_axis(data_format)
+                return tf.concat(inputs, axis=axis, name='combine-concat')
+            if op == 'sum':
+                return tf.add_n(inputs, name='combine-sum')
+            if op == 'softsum':
+                filters = cls.num_channels(inputs[0], data_format=data_format)
+
+                for i in range(1, len(inputs)):
+                    inputs[i] = conv_block(inputs[i], layout='c', filters=filters,
+                                           kernel_size=1, name='conv', **kwargs)
+                return tf.add_n(inputs, name='combine-softsum')
+
+        raise ValueError('`op` must be one of `concat`, `sum`, `softsum`, got {}.'.format(combine_type))
+
+    @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
         """ Transform inputs with a convolution block
 
@@ -1758,6 +1792,8 @@ class TFModel(BaseModel):
                                                   for name in inputs]
             else:
                 raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
+
+        config['head/targets'] = self.get_from_attr('targets')
 
         return config
 

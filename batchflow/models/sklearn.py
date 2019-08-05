@@ -37,7 +37,7 @@ class SklearnModel(BaseModel):
 
         pipeline
             .init_model('static', SklearnModel, 'my_model',
-                        config={'load': {'path': '/path/to/estimator.pickle'}})
+                        config={'load/path': '/path/to/estimator.pickle'})
     """
     def __init__(self, *args, **kwargs):
         self.estimator = None
@@ -46,7 +46,11 @@ class SklearnModel(BaseModel):
     def build(self, *args, **kwargs):
         """ Define the model """
         _ = args, kwargs
-        self.estimator = self.get('estimator', self.config)
+        self.estimator = self.config.get('estimator')
+
+    def reset(self):
+        """ Reset the trained model to allow a new training from scratch """
+        self.build()
 
     def load(self, path):
         """ Load the model.
