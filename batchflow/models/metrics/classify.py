@@ -134,8 +134,9 @@ class ClassificationMetrics(Metrics):
 
     def infmean(self, arr):
         """
-        We need to average array while skipping infs when there is at least one finite number along averaging axis.
-        Since np.nanmean() exists, temporarily replacing np.inf with np.nan effectively solves our problem.
+        Compute the arithmetic mean along 0 axis ignoring infs,
+        when there is at least one finite number along averaging axis.
+        Done via np.nanmean() while temporarily replacing np.inf with np.nan.
         """
         if isinstance(arr, list):
             arr = np.array(arr)
@@ -311,6 +312,8 @@ class ClassificationMetrics(Metrics):
 
     def prevalence(self, *args, **kwargs):
         """
+        Notes
+        -----
         Parameter when_zero doesn't really matter in this case,
         since total_population is never zero, when targets are not empty.
         """

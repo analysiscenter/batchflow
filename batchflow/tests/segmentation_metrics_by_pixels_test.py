@@ -54,7 +54,7 @@ class TestShape:
 
     There is a following pattern in both tests:
     0. Each function is preceded by data for it's parametrization.
-    1. Fixtures with preset parameters are applied.
+    1. Parametrizing decorators are applied.
     2. Instance of SegmentationMetricsByPixels is being created.
     3. Metric is being evaluated with given parameters.
     4. It's result's shape is being compared with expected one.
@@ -142,14 +142,14 @@ class TestResult:
 
     There is a following pattern in both tests:
     0. Each function is preceded by data for it's parametrization.
-    1. Fixtures with preset parameters are applied.
+    1. Parametrizing decorators are applied.
     2. Instance of SegmentationMetricsByPixels is being created.
     3. Metric is being evaluated with given parameters.
     4. It's result is being compared with expected one.
     """
 
     # First param stands for batch aggregation type, second — for multiclass one,
-    # third represents expected output contents for each type of metrics.
+    # third represents manually pre-calculated expected output contents for each type of metrics.
     params = [(None, None, {'tpr' : np.array([1.00, 1.00, 0.00, 0.50, 1.00, 1.00]),
                             'fpr' : np.array([0.33, 0.33, 0.00, 0.00, 0.00, 0.25]),
                             'tnr' : np.array([0.66, 0.66, 1.00, 1.00, 1.00, 0.75]),
