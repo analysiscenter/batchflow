@@ -67,7 +67,9 @@ And again, no action is executed until its result is needed.::
 
 Actions
 =======
+
 Pipeline actions might come from 3 sources:
+
 - Pipeline API
 - batch class actions
 - arbitrary namespaces.
@@ -182,22 +184,22 @@ An action chain is a concise and convenient way to write pipelines. But sometime
 There are 5 operations available: `+`, `*`, `@`, `<<`, `>>`.
 
 concat `+`
-^^^^^^^^^^
+----------
 Add two pipelines by concatenating them, so the actions from the first pipeline will be executed before actions from the second one.
 `p.resize(shape=(256, 256)) + p.rotate(angle=45)`
 
 repeat `*`
-^^^^^^^^^^
+----------
 Repeat the pipeline several times.
 `p.random_rotate(angle=(-30, 30)) * 3`
 
 sometimes `@`
-^^^^^^^^^^^^^
+-------------
 Execute the pipeline with the given probability.
 `p.random_rotate(angle=(-30, 30)) @ 0.5`
 
 `>>` and `<<`
-^^^^^^^^^^^^^
+-------------
 Link a pipeline to a dataset.
 `dataset >> pipeline` or `pipeline << dataset`
 
@@ -224,7 +226,7 @@ Creating pipelines
 Pipelines can be created from scratch or from a dataset.
 
 A template pipeline
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 The code below creates a pipeline from scratch.
 
@@ -250,7 +252,7 @@ On the other hand, such pipelines might be applied to different datasets::
    mnist_pipeline = template_preprocessing_pipeline << mnist_dataset
 
 A dataset pipeline
-^^^^^^^^^^^^^^^^^^
+------------------
 
 .. code-block:: python
 
@@ -273,7 +275,7 @@ Running pipelines
 There are 5 ways to execute a pipeline.
 
 Batch generator
-^^^^^^^^^^^^^^^
+---------------
 
 :meth:`~.Pipeline.gen_batch`::
 
@@ -295,7 +297,7 @@ You might reset pipeline variables, the batch iterator and models. See :meth:`~.
 
 
 Run
-^^^
+---
 
 To execute the pipeline right now for all iterations at once call :meth:`~.Pipeline.run`::
 
@@ -326,9 +328,9 @@ In this case the pipeline variables will be reinitialized and the modes will be 
 
 
 Lazy run
-^^^^^^^^
+--------
 
-You can add `run` with `lazy=True` or just :meth:`~.Pipeline.run_later`:: as the last action in the pipeline and
+You can add `run` with `lazy=True` or just :meth:`~.Pipeline.run_later` as the last action in the pipeline and
 then call `run()` or `next_batch()` without arguments at all::
 
     my_pipeline = (dataset.p
@@ -344,7 +346,7 @@ then call `run()` or `next_batch()` without arguments at all::
 
 
 next_batch function
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 :meth:`~.Pipeline.next_batch`::
 
@@ -362,8 +364,8 @@ Or pass `reset` parameter to `next_batch`.
 
 
 Single execution
-^^^^^^^^^^^^^^^^
-A pipeline might be run for one batch only with :meth:`~.Pipeline.execute_for`::
+----------------
+A pipeline might be run for one given batch only with :meth:`~.Pipeline.execute_for`::
 
     res_batch = my_pipeline.execute_for(batch)
 
@@ -377,7 +379,7 @@ However, not infrequently you might need to remember some parameters or intermed
 to draw a graph later). This is why you might need pipeline variables.
 
 Initializing a variable
-^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 
 .. code-block:: python
 
@@ -401,7 +403,7 @@ as it would make a global variable which won't be cleared on every run. What you
 Init functions are also a good place for some complex logic or randomization.
 
 Updating a variable
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 Each batch instance have a pointer to the pipeline it was created in (or `None` if the batch was created manually).
 
@@ -462,17 +464,17 @@ Note that a named expression might have a mode (e.g. `V('name', mode='a')`) whic
 For sets and dicts `'u'` and `'a'` do the same.
 
 Deleting a variable
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 Just call `pipeline.delete_variable("variable_name")` or `pipeline.del_variable("variable_name")`.
 
 Deleting all variables
-^^^^^^^^^^^^^^^^^^^^^^
+----------------------
 
 As simple as `pipeline.delete_all_variables()`
 
 Variables as locks
-^^^^^^^^^^^^^^^^^^
+------------------
 
 If you use multi-threading :doc:`prefetching <prefetch>` or :doc:`in-batch parallelism <parallel>`,
 than you might require synchronization when accessing some shared resource.
@@ -496,7 +498,7 @@ Join and merge
 ==============
 
 Joining pipelines
-^^^^^^^^^^^^^^^^^
+-----------------
 
 If you have a pipeline `images` and a pipeline `labels`, you might join them for a more convenient processing::
 
@@ -553,7 +555,7 @@ Mostly, `join` is used as follows::
 See :func:`~batchflow.Batch.load` for more details.
 
 Merging pipelines
-^^^^^^^^^^^^^^^^^
+-----------------
 
 You can also merge data from two pipelines (this is not the same as `concatenating pipelines <#algebra-of-pipelines>`_).::
 
