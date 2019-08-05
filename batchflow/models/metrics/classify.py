@@ -8,6 +8,29 @@ import numpy as np
 from ...decorators import mjit
 from . import Metrics, binarize, sigmoid
 
+METRICS_ALIASES = {'sensitivity' : 'true_positive_rate',
+                   'recall' : 'true_positive_rate',
+                   'tpr' : 'true_positive_rate',
+                   'fallout' : 'false_positive_rate',
+                   'fpr' : 'false_positive_rate',
+                   'miss_rate' : 'false_negative_rate',
+                   'fnr' : 'false_negative_rate',
+                   'specificity' : 'true_negative_rate',
+                   'tnr' : 'true_negative_rate',
+                   'prv' : 'prevalence',
+                   'acc' : 'accuracy',
+                   'precision' : 'positive_predictive_value',
+                   'ppv' : 'positive_predictive_value',
+                   'fdr' : 'false_discovery_rate',
+                   'for' : 'false_omission_rate',
+                   'npv' : 'negative_predictive_value',
+                   'plr' : 'positive_likelihood_ratio',
+                   'nlr' : 'negative_likelihood_ratio',
+                   'dor' : 'diagnostics_odds_ratio',
+                   'dice' : 'f1_score',
+                   'f1s' : 'f1_score',
+                   'iou' : 'jaccard',
+                   'jac' : 'jaccard'}
 
 class ClassificationMetrics(Metrics):
     """ Metrics to assess classification models
@@ -127,6 +150,12 @@ class ClassificationMetrics(Metrics):
 
         if calc:
             self._calc()
+
+    def __getattr__(self, name):
+        if name == "METRICS_ALIASES":
+            raise AttributeError # See https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
+        name = METRICS_ALIASES.get(name, name)
+        return object.__getattribute__(self, name)
 
     @property
     def confusion_matrix(self):
@@ -286,29 +315,14 @@ class ClassificationMetrics(Metrics):
     def true_positive_rate(self, *args, **kwargs):
         return self._calc_agg(self.true_positive, self.condition_positive, *args, **kwargs, when_zero=(0, 1))
 
-    def sensitivity(self, *args, **kwargs):
-        return self.true_positive_rate(*args, **kwargs)
-
-    def recall(self, *args, **kwargs):
-        return self.true_positive_rate(*args, **kwargs)
-
     def false_positive_rate(self, *args, **kwargs):
         return self._calc_agg(self.false_positive, self.condition_negative, *args, **kwargs, when_zero=(1, 0))
-
-    def fallout(self, *args, **kwargs):
-        return self.false_positive_rate(*args, **kwargs)
 
     def false_negative_rate(self, *args, **kwargs):
         return self._calc_agg(self.false_negative, self.condition_positive, *args, **kwargs, when_zero=(1, 0))
 
-    def miss_rate(self, *args, **kwargs):
-        return self.false_negative_rate(*args, **kwargs)
-
     def true_negative_rate(self, *args, **kwargs):
         return self._calc_agg(self.true_negative, self.condition_negative, *args, **kwargs, when_zero=(0, 1))
-
-    def specificity(self, *args, **kwargs):
-        return self.true_negative_rate(*args, **kwargs)
 
     def prevalence(self, *args, **kwargs):
         """
@@ -325,9 +339,6 @@ class ClassificationMetrics(Metrics):
 
     def positive_predictive_value(self, *args, **kwargs):
         return self._calc_agg(self.true_positive, self.prediction_positive, *args, **kwargs, when_zero=(0, 1))
-
-    def precision(self, *args, **kwargs):
-        return self.positive_predictive_value(*args, **kwargs)
 
     def false_discovery_rate(self, *args, **kwargs):
         return self._calc_agg(self.false_positive, self.prediction_positive, *args, **kwargs, when_zero=(1, 0))
@@ -351,12 +362,6 @@ class ClassificationMetrics(Metrics):
     def f1_score(self, *args, **kwargs):
         return 2 / (1 / self.recall(*args, **kwargs) + 1 / self.precision(*args, **kwargs))
 
-    def dice(self, *args, **kwargs):
-        return self.f1_score(*args, **kwargs)
-
     def jaccard(self, *args, **kwargs):
         d = self.dice(*args, **kwargs)
         return d / (2 - d)
-
-    def iou(self, *args, **kwargs):
-        return self.jaccard(*args, **kwargs)
