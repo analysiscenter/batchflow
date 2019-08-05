@@ -154,7 +154,8 @@ class Baseset:
         if self.index.validation is not None:
             self.validation = self.create_subset(self.index.validation)
 
-    def get_default_iter_params(self):
+    @classmethod
+    def get_default_iter_params(cls):
         """ Return iteration params with default values to start iteration from scratch """
         return dict(_stop_iter=False, _start_index=0, _order=None, _n_iters=0, _n_epochs=0, _random_state=None)
 
