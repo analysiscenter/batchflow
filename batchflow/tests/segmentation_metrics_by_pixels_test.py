@@ -27,9 +27,12 @@ PROBA = np.eye(NUM_CLASSES)[LABELS]
 # Logit function gives ±infs on degenerate case of 0s and 1s, but it's okay for sigmoid function.
 LOGITS = np.log(PROBA / (1. - PROBA))
 # First param stands for predictions variable, second — for predictions type, third — for axis with class info.
+# Transposed predictions correspond to 'channels_first' data format.
 PREDICTIONS = [(LABELS, 'labels', None),
                (PROBA, 'proba', 3),
-               (LOGITS, 'logits', 3)]
+               (LOGITS, 'logits', 3),
+               (np.transpose(PROBA, (3, 0, 1, 2)), 'proba', 0),
+               (np.transpose(LOGITS, (3, 0, 1, 2)), 'logits', 0)]
 
 class TestShape:
     """
