@@ -67,7 +67,7 @@ class VNet(EncoderDecoder):
         config['body/decoder/upsample'] = dict(layout='tna', kernel_size=2, strides=2)
         config['body/decoder/blocks'] = dict(base=ResNet.block, layout=None, filters=None, kernel_size=5)
 
-        config['head'] = dict(layout='Rcna+ cna', kernel_size=5, filters=[24, 32])
+        config['head'] = dict(layout='Rcna+ cna', kernel_size=5, filters=[48, 32])
 
         config['loss'] = 'ce'
         return config
