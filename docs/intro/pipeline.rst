@@ -328,7 +328,7 @@ In this case the pipeline variables will be reinitialized and the modes will be 
 Lazy run
 --------
 
-You can add `run` with `lazy=True` or just :meth:`~.Pipeline.run_later`:: as the last action in the pipeline and
+You can add `run` with `lazy=True` or just :meth:`~.Pipeline.run_later` as the last action in the pipeline and
 then call `run()` or `next_batch()` without arguments at all::
 
     my_pipeline = (dataset.p
