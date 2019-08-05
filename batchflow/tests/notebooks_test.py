@@ -1,15 +1,17 @@
 """ Run multiple notebooks. """
 # pylint: disable=import-error
+import os
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+
 import warnings
 from glob import glob
 import pytest
-
 from tensorflow.test import is_gpu_available
 
 
 
 NO_GPU = pytest.mark.skipif(not is_gpu_available(), reason='No GPU')
-
 
 NOTEBOOKS_DIR = './notebooks/'
 NOTEBOOKS = glob(NOTEBOOKS_DIR + '*.ipynb')
@@ -25,19 +27,17 @@ ALLOWED_TUTORIALS = [
     # '10', # requires `multiprocess` module
 ]
 
-MICROBATCH_LIST = [None, 4] # each integer values must be a divisor of 16
-DEVICE_LIST = [None, pytest.param(6, marks=NO_GPU)] # set your own value(s) for used devices
+MICROBATCH_LIST = [None, 8] # each integer values must be a divisor of 16
+DEVICE_LIST = ['CPU:0', pytest.param('GPU:*', marks=NO_GPU)] # set your own value(s) for used devices
 
-# Each parameter is (path, microbatch) configuration
 PARAMETERS = []
-
 # Run every notebook in test directory for every combination of microbatching
 PARAMETERS += [(path, mb) for path in NOTEBOOKS
                for mb in MICROBATCH_LIST]
 
 # Run selected notebooks inside tutorials dir without microbatching
-# PARAMETERS += [(path, None) for path in TUTORIALS
-#                if path.split('/')[-1][:2] in ALLOWED_TUTORIALS]
+PARAMETERS += [(path, None) for path in TUTORIALS
+               if path.split('/')[-1][:2] in ALLOWED_TUTORIALS]
 
 _ = [print(item) for item in PARAMETERS]
 
@@ -64,6 +64,10 @@ def test_run_notebooks(path, microbatch, device):
     device : str or None
         If None, then default device behaviour is used.
         If str, then any option of device configuration from :class:`.tf.TFModel` is supported.
+
+    Notes
+    -----
+    `device` is moved to separate parameter in order to work properly with `parametrize`.
     """
     # pylint: disable=exec-used
     if path.startswith(TUTORIALS_DIR) and device:
