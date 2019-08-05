@@ -1,6 +1,5 @@
 """ Run multiple notebooks. """
 # pylint: disable=import-error
-import os
 import warnings
 from glob import glob
 import pytest
@@ -10,10 +9,6 @@ from tensorflow.test import is_gpu_available
 
 
 NO_GPU = pytest.mark.skipif(not is_gpu_available(), reason='No GPU')
-if is_gpu_available():
-    # Set your own value(s) for visible devices
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 NOTEBOOKS_DIR = './notebooks/'
@@ -31,7 +26,7 @@ ALLOWED_TUTORIALS = [
 ]
 
 MICROBATCH_LIST = [None, 4] # each integer values must be a divisor of 16
-DEVICE_LIST = [None, pytest.param('GPU:*', marks=NO_GPU)]
+DEVICE_LIST = [None, pytest.param(6, marks=NO_GPU)] # set your own value(s) for used devices
 
 # Each parameter is (path, microbatch) configuration
 PARAMETERS = []
