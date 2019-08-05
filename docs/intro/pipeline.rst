@@ -228,6 +228,8 @@ Pipelines can be created from scratch or from a dataset.
 A template pipeline
 -------------------
 
+The code below creates a pipeline from scratch.
+
 .. code-block:: python
 
    from batchflow import Pipeline
@@ -236,7 +238,7 @@ A template pipeline
                    .some_action()
                    .another_action()
 
-Or through a context manager with pipeline algebra::
+Or one can use a context manager with pipeline algebra::
 
    from batchflow import Pipeline
 
