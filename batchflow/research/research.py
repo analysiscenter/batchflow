@@ -23,7 +23,7 @@ class Research:
         self.executables = OrderedDict()
         self.loaded = False
         self.branches = 1
-        self.trails = 3
+        self.trials = 3
         self.workers = 1
         self.bar = False
         self.n_reps = 1
@@ -120,7 +120,7 @@ class Research:
             If `'last'`, metrics will be gathered just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
 
-            If positive int, pmetrics will be gathered each `step` iterations.
+            If positive int, metrics will be gathered each `step` iterations.
 
             If str, must be `'#{it}'` or `'last'` where it is int,
             metrics will be gathered at this iteration (zero-based)
@@ -333,7 +333,7 @@ class Research:
         timeout : int
             each job will be killed if it doesn't answer more then that time in minutes
         trials : int
-            trails to execute job
+            trials to execute job
 
         **How does it work**
 
@@ -352,7 +352,7 @@ class Research:
             self.gpu = self._get_gpu_list(gpu)
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
-            self.trails = trials
+            self.trials = trials
             self.n_splits = n_splits
 
         self.name = name or self.name
@@ -383,7 +383,7 @@ class Research:
 
         jobs, n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
 
-        distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
+        distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trials)
         distr.run(jobs, dirname=self.name, n_jobs=n_jobs,
                   n_iters=self.n_iters, bar=self.bar)
         return self
