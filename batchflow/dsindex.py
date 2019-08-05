@@ -3,11 +3,10 @@ import os
 import math
 import glob
 from collections.abc import Iterable
-import tqdm
 import numpy as np
 
 from .base import Baseset
-from .named_expr import eval_expr
+from .utils import create_bar, update_bar
 
 
 class DatasetIndex(Baseset):
@@ -487,12 +486,8 @@ class DatasetIndex(Baseset):
         iter_params.update({'_total': total})
 
         if bar:
-            if callable(bar):
-                iter_params['bar'] = bar(total=total)
-            elif bar == 'n':
-                iter_params['bar'] = tqdm.tqdm_notebook(total=total)
-            else:
-                iter_params['bar'] = tqdm.tqdm(total=total)
+            iter_params['bar'] = create_bar(bar, batch_size, n_iters, n_epochs, drop_last, len(self))
+
 
         while True:
             if n_epochs is not None and iter_params['_n_epochs'] >= n_epochs:
@@ -502,15 +497,7 @@ class DatasetIndex(Baseset):
             except StopIteration:
                 return
             if 'bar' in iter_params:
-                if bar_desc:
-                    try:
-                        val = eval_expr(bar_desc)
-                        val = str(val)
-                    except (LookupError, ValueError):
-                        val = None
-                    iter_params['bar'].set_description(val)
-
-                iter_params['bar'].update(1)
+                update_bar(iter_params['bar'], bar_desc)
             yield batch
 
 
