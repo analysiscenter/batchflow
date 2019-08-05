@@ -6,30 +6,13 @@ Test data is pre-defined, it's shape and contents were chosen for reasons of bal
 and test coverage diversity.
 """
 # pylint: disable=import-error, no-name-in-module
-from itertools import chain
 import numpy as np
 import pytest
 
 from batchflow.models.metrics import SegmentationMetricsByPixels
 
-# Dict {metric_alias : metric_names}
-METRICS_DICT = {'tpr' : ['true_positive_rate', 'sensitivity', 'recall'],
-                'fpr' : ['false_positive_rate', 'fallout'],
-                'fnr' : ['false_negative_rate', 'miss_rate'],
-                'tnr' : ['true_negative_rate', 'specificity'],
-                'prv' : ['prevalence'],
-                # accuracy can't process 'multiclass' parameter and therefore is being tested individually
-                'ppv' : ['positive_predictive_value', 'precision'],
-                'fdr' : ['false_discovery_rate'],
-                'for' : ['false_omission_rate'],
-                'npv' : ['negative_predictive_value'],
-                'plr' : ['positive_likelihood_ratio'],
-                'nlr' : ['negative_likelihood_ratio'],
-                'dor' : ['diagnostics_odds_ratio'],
-                'fos' : ['f1_score', 'dice'],
-                'jac' : ['jaccard', 'iou']}
-# List all metrics' names from METRICS_DICT values.
-METRICS_LIST = list(chain.from_iterable(METRICS_DICT.values()))
+# Accuracy is not included because it can't process 'multiclass' parameter and therefore is being tested individually.
+METRICS_LIST = ['tpr', 'fpr', 'fnr', 'tnr', 'prv', 'ppv', 'fdr', 'for', 'npv', 'plr', 'nlr', 'dor', 'f1s', 'jac']
 
 BATCH_SIZE = 2
 IMAGE_SIZE = 2
@@ -162,7 +145,7 @@ class TestResult:
                             'plr' : np.array([3.00, 3.00, 0.00, np.inf, np.inf, 4.00]),
                             'nlr' : np.array([0.00, 0.00, 1.00, 0.50, 0.00, 0.00]),
                             'dor' : np.array([np.inf, np.inf, 0.00, np.inf, np.inf, np.inf]),
-                            'fos' : np.array([0.66, 0.66, 0.00, 0.66, 1.00, 0.00]),
+                            'f1s' : np.array([0.66, 0.66, 0.00, 0.66, 1.00, 0.00]),
                             'jac' : np.array([0.49, 0.49, 0.00, 0.49, 1.00, 0.00])}),
 
               (None, 'micro', {'tpr' : np.array([0.50, 0.75]),
@@ -177,7 +160,7 @@ class TestResult:
                                'plr' : np.array([3.00, 10.00]),
                                'nlr' : np.array([0.42, 0.18]),
                                'dor' : np.array([6.00, np.inf]),
-                               'fos' : np.array([0.50, 0.75]),
+                               'f1s' : np.array([0.50, 0.75]),
                                'jac' : np.array([0.33, 0.60])}),
 
               (None, 'macro', {'tpr' : np.array([0.66, 0.83]),
@@ -192,7 +175,7 @@ class TestResult:
                                'plr' : np.array([2.00, 4.00]),
                                'nlr' : np.array([0.33, 0.16]),
                                'dor' : np.array([0.00, np.inf]),
-                               'fos' : np.array([0.66, 0.74]),
+                               'f1s' : np.array([0.66, 0.74]),
                                'jac' : np.array([0.50, 0.58])}),
 
               ('mean', None, {'tpr' : np.array([0.75, 1.00, 0.50]),
@@ -207,7 +190,7 @@ class TestResult:
                               'plr' : np.array([3.00, 3.00, 2.00]),
                               'nlr' : np.array([0.25, 0.00, 0.50]),
                               'dor' : np.array([np.inf, np.inf, 0.00]),
-                              'fos' : np.array([0.66, 0.83, 0.00]),
+                              'f1s' : np.array([0.66, 0.83, 0.00]),
                               'jac' : np.array([0.50, 0.75, 0.00])}),
 
               ('mean', 'micro', {'tpr' : np.array([0.62]),
@@ -222,7 +205,7 @@ class TestResult:
                                  'plr' : np.array([6.50]),
                                  'nlr' : np.array([0.30]),
                                  'dor' : np.array([6.00]),
-                                 'fos' : np.array([0.62]),
+                                 'f1s' : np.array([0.62]),
                                  'jac' : np.array([0.46])}),
 
               ('mean', 'macro', {'tpr' : np.array([0.75]),
@@ -237,7 +220,7 @@ class TestResult:
                                  'plr' : np.array([3.00]),
                                  'nlr' : np.array([0.25]),
                                  'dor' : np.array([0.00]),
-                                 'fos' : np.array([0.70]),
+                                 'f1s' : np.array([0.70]),
                                  'jac' : np.array([0.54])})]
 
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
@@ -269,13 +252,11 @@ class TestResult:
             of their evaluation results with given aggregation params
         """
         metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
-        for alias, exp in exp_dict.items():
-            metric_names = METRICS_DICT[alias]
-            for metric_name in metric_names:
-                res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
-                res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
+        for metric_name, exp in exp_dict.items():
+            res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
+            res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
 
-                assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format(metric_name)
+            assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format(metric_name)
 
     # Individual test params for accuracy — batch-only aggregation param and corresponding expected metrics contents.
     params_accuracy = [(None, np.array([0.50, 0.75])),
