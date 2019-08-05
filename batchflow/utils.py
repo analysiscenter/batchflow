@@ -5,10 +5,9 @@ import math
 from functools import wraps
 import tqdm
 
-from .named_expr import NamedExpression, eval_expr
-
-
 from matplotlib import pyplot as plt
+
+from .named_expr import NamedExpression, eval_expr
 
 
 def partialmethod(func, *frozen_args, **frozen_kwargs):
