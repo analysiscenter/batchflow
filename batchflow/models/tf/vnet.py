@@ -72,7 +72,7 @@ class VNet(EncoderDecoder):
         config['loss'] = 'ce'
         return config
 
-def build_config(self, names=None):
+    def build_config(self, names=None):
         config = super().build_config(names)
 
         num_stages = config.get('body/encoder/num_stages')
@@ -84,7 +84,7 @@ def build_config(self, names=None):
         decoder_filters = encoder_filters[::-1]
 
         if config.get('body/encoder/blocks/layout') is None:
-            config['body/encoder/blocks/layout'] = ['cna'*2 if i<1 else 'cna'*3 for i in range(num_stages)]
+            config['body/encoder/blocks/layout'] = ['cna'*2 if i < 1 else 'cna'*3 for i in range(num_stages)]
 
         if config.get('body/encoder/blocks/filters') is None:
             config['body/encoder/blocks/filters'] = encoder_filters
