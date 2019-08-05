@@ -8,8 +8,8 @@ Mobile Networks for Classification, Detection and Segmentation
 Howard A. et al. "`Searching for MobileNetV3
 <https://arxiv.org/abs/1905.02244>`_"
 """
-import tensorflow as tf
 from copy import deepcopy
+import tensorflow as tf
 
 from . import TFModel
 from .layers import conv_block, depthwise_conv

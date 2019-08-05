@@ -2059,7 +2059,9 @@ class TFModel(BaseModel):
                 activation = kwargs.pop('activation')
             else:
                 activation = [tf.nn.relu, tf.nn.sigmoid]
-                logger.warning('Activation passed to se_block is not a list of two activations, so it is ignored and default `[tf.nn.relu, tf.nn.sigmoid]` is used instead.')
+                logger.warning(
+                    'Activation passed to se_block is not a list of two activations, \
+                    so it is ignored and default `[tf.nn.relu, tf.nn.sigmoid]` is used instead.')
 
             x = conv_block(inputs,
                            **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
