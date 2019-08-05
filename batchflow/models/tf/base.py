@@ -1,6 +1,6 @@
 # pylint: disable=undefined-variable, no-name-in-module
 """ Contains base class for tensorflow models """
-
+import logging
 import os
 import glob
 import re
@@ -18,6 +18,7 @@ from .layers import mip, conv_block, upsample
 from .losses import softmax_cross_entropy, dice
 from .train import piecewise_constant
 
+logger = logging.getLogger(__name__)
 
 LOSSES = {
     'mse': tf.losses.mean_squared_error,
@@ -2056,6 +2057,8 @@ class TFModel(BaseModel):
                 activation = kwargs.pop('activation')
             else:
                 activation = [tf.nn.relu, tf.nn.sigmoid]
+                logger.warning('Activation passed to se_block is not a list of two activations, so it is ignored and default `[tf.nn.relu, tf.nn.sigmoid]` is used instead.')
+
             x = conv_block(inputs,
                            **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
                               'name': 'se', 'activation': activation})

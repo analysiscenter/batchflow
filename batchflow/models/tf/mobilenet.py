@@ -222,8 +222,12 @@ class MobileNet_v2(TFModel):
         tf.Tensor
         """
         num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
-        conv_filters = [num_filters, num_filters, filters]
-        x = conv_block(inputs, 'cna Cna cn', conv_filters, [1, 3, 1], name=name, strides=[1, strides, 1], **kwargs)
+
+        x = conv_block(inputs, 'cna', num_filters, kernel_size=1, name='%s-exp' % name, strides=1, **kwargs)
+        x = depthwise_conv(x, kernel_size=3, strides=strides, padding='same',
+                           data_format=kwargs['data_format'], name='%s-depthwise' % name)
+        x = conv_block(x, 'nacn', filters, kernel_size=1, strides=1, name='%s-down' % name, **kwargs)
+
         if residual:
             x = inputs + x
         return x
@@ -277,7 +281,6 @@ class MobileNet_v3(TFModel):
         config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7, kernel_size=1,
                                    activation=h_swish))
-
         config['loss'] = 'ce'
 
         return config
@@ -357,12 +360,12 @@ class MobileNet_v3(TFModel):
         x = conv_block(inputs, 'cna', num_filters, 1, name='%s-exp' % name,
                        strides=1, **kwargs)
         x = depthwise_conv(x, kernel_size=kernel_size, strides=strides,
-                           padding='same', data_format=kwargs['data_format'], name='depthwise')
-        conv_block(x, 'na', name='%s-exp-a' % name, **kwargs)
+                           padding='same', data_format=kwargs['data_format'], name='%s-depthwise' % name)
+        x = conv_block(x, 'na', name='%s-na' % name, **kwargs)
 
         if se_block:
-            x = cls.se_block(x, int(num_filters * 0.25), name='%s-se' % name, data_format=kwargs['data_format'],
-                             activation=[tf.nn.relu, h_sigmoid])
+            x = cls.se_block(x, num_filters // 4, name='%s-se' % name, data_format=kwargs['data_format'],
+                             activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid])
 
         x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
 
@@ -390,12 +393,13 @@ class MobileNet_v3_small(MobileNet_v3):
         config = MobileNet_v3.default_config()
         config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
         config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_SMALL_DEFAULT_BODY)))
-        config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, 2], pool_size=7, kernel_size=1,
-                                   activation=h_swish, se_block=True))
+        config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, 2], pool_size=7,
+                                   kernel_size=1, activation=h_swish, se_block=True,
+                                   se_kwargs=dict(activation=[h_swish, h_sigmoid], ratio=144)))
         return config
 
     @classmethod
-    def head(cls, inputs, name='head', **kwargs):
+    def head(cls, inputs, se_kwargs=None, name='head', **kwargs):
         """ The last network layers which produce predictions
 
         Parameters
@@ -413,11 +417,8 @@ class MobileNet_v3_small(MobileNet_v3):
         layout = kwargs.pop('layout')
         filters = kwargs.pop('filters')
         if kwargs.get('se_block'):
-            x = conv_block(inputs, layout=layout[:3], filters=filters[0], name=name, **kwargs)
-            x = cls.se_block(x, int(filters[0] * 0.25), name='%s-se' % name, data_format=kwargs['data_format'],
-                             activation=[tf.nn.relu, h_sigmoid])
-
-            x = conv_block(inputs, layout=layout[3:], filters=filters[1:], name=name, **kwargs)
-        else:
-            return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
-        return inputs
+            x = conv_block(inputs, layout=layout[:3], filters=filters[0], name='%s-conv1' % name, **kwargs)
+            x = cls.se_block(x, **se_kwargs, data_format=kwargs['data_format'], name='%s-se' % name)
+            x = conv_block(x, layout=layout[3:], filters=filters[1:], name='%s-conv2' % name, **kwargs)
+            return x
+        return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
