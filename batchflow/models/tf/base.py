@@ -2057,11 +2057,10 @@ class TFModel(BaseModel):
             in_filters = cls.num_channels(inputs, data_format)
             if isinstance(kwargs.get('activation'), list) and len(kwargs.get('activation')) == 2:
                 activation = kwargs.pop('activation')
+            elif kwargs.get('activation') is not None:
+                activation = [kwargs.get('activation'), tf.nn.sigmoid]
             else:
                 activation = [tf.nn.relu, tf.nn.sigmoid]
-                logger.warning(
-                    'Activation passed to se_block is not a list of two activations, \
-                    so it is ignored and default `[tf.nn.relu, tf.nn.sigmoid]` is used instead.')
 
             x = conv_block(inputs,
                            **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
