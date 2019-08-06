@@ -58,6 +58,7 @@ _V3_SMALL_DEFAULT_BODY = [
     dict(repeats=3, filters=96, expansion_factor=6, strides=2, kernel_size=5, activation=h_swish, se_block=True),
 ]
 
+
 class MobileNet_v1(TFModel):
     """ MobileNet
 
