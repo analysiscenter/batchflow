@@ -196,7 +196,7 @@ class MobileNet(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head']['filters'][-1] = self.num_classes('targets')
+        config['head/filters'][-1] = self.num_classes('targets')
         return config
 
     @classmethod
