@@ -194,7 +194,6 @@ class MobileNet(TFModel):
         config['head'].update(dict(layout='cnacnV', filters=[1280, 2], kernel_size=1))
         config['common'].update(dict(activation=tf.nn.relu6))
         config['loss'] = 'ce'
-
         return config
 
     def build_config(self, names=None):
@@ -299,7 +298,6 @@ class MobileNet_v3(MobileNet):
         config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7, kernel_size=1,
                                    activation=h_swish))
         config['loss'] = 'ce'
-
         return config
 
 
@@ -314,7 +312,6 @@ class MobileNet_v3_small(MobileNet):
                                    kernel_size=1, activation=h_swish,
                                    se_block=dict(activation=[h_swish, h_sigmoid], ratio=144)))
         config['loss'] = 'ce'
-
         return config
 
     @classmethod
