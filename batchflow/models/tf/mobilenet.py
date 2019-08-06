@@ -340,6 +340,6 @@ class MobileNet_v3_small(MobileNet):
             x = conv_block(inputs, 'cna', filters[0], name='%s-conv1' % name, **kwargs)
             se_block = {**kwargs, **se_block}
             x = cls.se_block(x, **se_block, name='%s-se' % name)
-            x = conv_block(x,'vcacV', filters=filters[1:], name='%s-conv2' % name, **kwargs)
+            x = conv_block(x, 'vcacV', filters=filters[1:], name='%s-conv2' % name, **kwargs)
             return x
         return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
