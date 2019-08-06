@@ -262,8 +262,10 @@ class MobileNet(TFModel):
             multiplier for the number of filters
         activation : callable, optional
             If not specified tf.nn.relu is used.
-        se_block : bool
+        se_block : bool or dict
             whether to include squeeze and excitation block
+            If dict it must contain ratio and activation keys
+            to customize se_block parameters
         name : str
             scope name
 
@@ -273,14 +275,16 @@ class MobileNet(TFModel):
         """
 
         num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
-        x = conv_block(inputs, 'cnawna', [num_filters, num_filters], [1, kernel_size], strides=[1, strides],
+        x = conv_block(inputs, 'cnaWna', [num_filters, num_filters], [1, kernel_size], strides=[1, strides],
                        name='%s-exp' % name, **kwargs)
 
         if se_block:
             if not isinstance(se_block, dict):
                 se_block = dict(activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid], ratio=num_filters // 4)
-            x = cls.se_block(x, **se_block, name='%s-se' % name, data_format=kwargs.get('data_format'))
-
+                activation = kwargs.pop('activation', None)
+            x = cls.se_block(x, **se_block, name='%s-se' % name, **kwargs)
+        if activation is not None:
+            kwargs['activation'] = activation
         x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
 
         if residual:
@@ -324,7 +328,9 @@ class MobileNet_v3_small(MobileNet):
             input tensor
         name : str
             scope name
-
+        se_block : dict, optional
+            If not None it must be a dict containing ratio and activation keys
+            to customize se_block parameters
         Returns
         -------
         tf.Tensor
@@ -332,7 +338,7 @@ class MobileNet_v3_small(MobileNet):
         kwargs = cls.fill_params('head', **kwargs)
         layout = kwargs.pop('layout')
         filters = kwargs.pop('filters')
-        if kwargs.get('se_block'):
+        if se_block:
             x = conv_block(inputs, layout=layout[:3], filters=filters[0], name='%s-conv1' % name, **kwargs)
             x = cls.se_block(x, **se_block, data_format=kwargs.get('data_format'), name='%s-se' % name)
             x = conv_block(x, layout=layout[3:], filters=filters[1:], name='%s-conv2' % name, **kwargs)

@@ -40,7 +40,7 @@ C_LAYERS = {
     'c': 'conv',
     't': 'transposed_conv',
     'C': 'separable_conv',
-    'w': 'depthwise_conv',
+    'W': 'depthwise_conv',
     'T': 'separable_conv_transpose',
     'p': 'pooling',
     'v': 'pooling',
@@ -57,7 +57,7 @@ GROUP_KEYS = (
     LAYER_KEYS
     .replace('t', 'c')
     .replace('C', 'c')
-    .replace('w', 'c')
+    .replace('W', 'c')
     .replace('T', 'c')
     .replace('v', 'p')
     .replace('V', 'P')
@@ -147,7 +147,7 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                 if filters is None or filters == 0:
                     raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
 
-            elif layer == 'w':
+            elif layer == 'W':
                 args = dict(kernel_size=kernel_size, strides=strides, padding=padding,
                             data_format=data_format, dilation_rate=dilation_rate, depth_multiplier=depth_multiplier)
 
