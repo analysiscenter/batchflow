@@ -12,7 +12,7 @@ from copy import deepcopy
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block, depthwise_conv
+from .layers import conv_block
 from .nn import h_swish, h_sigmoid
 
 _V1_DEFAULT_BODY = {
@@ -176,9 +176,10 @@ class MobileNet(TFModel):
             kernel_size : int
                 kernel size for depthwise convolution
             activation : callable, optional
-                If not specified tf.nn.relu is used.
-            se_block : bool
+            se_block : bool or dict
                 whether to include squeeze and excitation block
+                If dict it must contain ratio and activation keys
+                to customize se_block parameters
             residual : bool
                 whether to make a residual connection
         width_factor : float
@@ -188,9 +189,9 @@ class MobileNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['initial_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V2_DEFAULT_BODY), activation=tf.nn.relu6))
+        config['body'].update(dict(width_factor=1, layout=deepcopy(_V2_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnacnV', filters=[1280, 2], kernel_size=1))
-
+        config['common'].update(dict(activation=tf.nn.relu6))
         config['loss'] = 'ce'
 
         return config
@@ -221,13 +222,11 @@ class MobileNet(TFModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         width_factor, layout = cls.pop(['width_factor', 'layout'], kwargs)
-        default_activation = kwargs.pop('activation')
         with tf.variable_scope(name):
             x = inputs
             i = 0
             for block in layout:
                 repeats = block.pop('repeats')
-                block['activation'] = block.get('activation', default_activation)
                 block['width_factor'] = width_factor
                 for k in range(repeats):
                     if k > 0:
@@ -274,16 +273,13 @@ class MobileNet(TFModel):
         """
 
         num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
-        x = conv_block(inputs, 'cna', num_filters, 1, name='%s-exp' % name,
-                       strides=1, **kwargs)
-        x = depthwise_conv(x, kernel_size=kernel_size, strides=strides,
-                           padding='same', data_format=kwargs.get('data_format'), name='%s-depthwise' % name)
-        x = conv_block(x, 'na', name='%s-na' % name, **kwargs)
+        x = conv_block(inputs, 'cnawna', [num_filters, num_filters], [1, kernel_size], strides=[1, strides],
+                       name='%s-exp' % name, **kwargs)
 
         if se_block:
             if not isinstance(se_block, dict):
                 se_block = dict(activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid], ratio=num_filters // 4)
-            x = cls.se_block(x, **se_block, name='%s-se' % name, data_format=kwargs.get('data_format')
+            x = cls.se_block(x, **se_block, name='%s-se' % name, data_format=kwargs.get('data_format'))
 
         x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
 
@@ -298,7 +294,7 @@ class MobileNet_v3(MobileNet):
     def default_config(cls):
         config = TFModel.default_config()
         config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY), activation=tf.nn.relu))
+        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7, kernel_size=1,
                                    activation=h_swish))
         config['loss'] = 'ce'
@@ -312,10 +308,12 @@ class MobileNet_v3_small(MobileNet):
     def default_config(cls):
         config = TFModel.default_config()
         config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_SMALL_DEFAULT_BODY), activation=tf.nn.relu))
+        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_SMALL_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, 2], pool_size=7,
                                    kernel_size=1, activation=h_swish,
                                    se_block=dict(activation=[h_swish, h_sigmoid], ratio=144)))
+        config['loss'] = 'ce'
+
         return config
 
     @classmethod
