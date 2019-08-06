@@ -152,7 +152,6 @@ class MobileNet_v1(TFModel):
         return conv_block(inputs, 'Cna cna', filters, [3, 1], name=name, strides=[strides, 1], **kwargs)
 
 
-
 class MobileNet(TFModel):
     """ Base class for MobileNets after v2.
     Default configuration is MobileNet_v2.
@@ -232,7 +231,8 @@ class MobileNet(TFModel):
                     if k > 0:
                         block['strides'] = 1
                     residual = block.pop('residual', False) or k > 0
-                    x = cls.block(x, **block, residual=residual, name='block-%d' % i, **kwargs)
+                    block = {**kwargs, **block}
+                    x = cls.block(x, **block, residual=residual, name='block-%d' % i)
                     i += 1
         return x
 
@@ -281,10 +281,8 @@ class MobileNet(TFModel):
         if se_block:
             if not isinstance(se_block, dict):
                 se_block = dict(activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid], ratio=num_filters // 4)
-                activation = kwargs.pop('activation', None)
-            x = cls.se_block(x, **se_block, name='%s-se' % name, **kwargs)
-        if activation is not None:
-            kwargs['activation'] = activation
+            se_block = {**kwargs, **se_block}
+            x = cls.se_block(x, name='%s-se' % name, **se_block)
         x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
 
         if residual:
@@ -339,8 +337,9 @@ class MobileNet_v3_small(MobileNet):
         layout = kwargs.pop('layout')
         filters = kwargs.pop('filters')
         if se_block:
-            x = conv_block(inputs, layout=layout[:3], filters=filters[0], name='%s-conv1' % name, **kwargs)
-            x = cls.se_block(x, **se_block, data_format=kwargs.get('data_format'), name='%s-se' % name)
-            x = conv_block(x, layout=layout[3:], filters=filters[1:], name='%s-conv2' % name, **kwargs)
+            x = conv_block(inputs, 'cna', filters[0], name='%s-conv1' % name, **kwargs)
+            se_block = {**kwargs, **se_block}
+            x = cls.se_block(x, **se_block, name='%s-se' % name)
+            x = conv_block(x,'vcacV', filters=filters[1:], name='%s-conv2' % name, **kwargs)
             return x
         return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
