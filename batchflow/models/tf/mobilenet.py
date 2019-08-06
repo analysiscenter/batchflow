@@ -151,6 +151,7 @@ class MobileNet_v1(TFModel):
         return conv_block(inputs, 'Cna cna', filters, [3, 1], name=name, strides=[strides, 1], **kwargs)
 
 
+
 class MobileNet(TFModel):
     """ Base class for MobileNets after v2.
     Default configuration is MobileNet_v2.
@@ -196,7 +197,10 @@ class MobileNet(TFModel):
 
     def build_config(self, names=None):
         config = super().build_config(names)
-        config['head/filters'][-1] = self.num_classes('targets')
+        if isinstance(config['head/filters'], list):
+            config['head/filters'][-1] = self.num_classes('targets')
+        else:
+            config['head/filters'] = self.num_classes('targets')
         return config
 
     @classmethod
@@ -277,8 +281,9 @@ class MobileNet(TFModel):
         x = conv_block(x, 'na', name='%s-na' % name, **kwargs)
 
         if se_block:
-            x = cls.se_block(x, num_filters // 4, name='%s-se' % name, data_format=kwargs.get('data_format'),
-                             activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid])
+            if not isinstance(se_block, dict):
+                se_block = dict(activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid], ratio=num_filters // 4)
+            x = cls.se_block(x, **se_block, name='%s-se' % name, data_format=kwargs.get('data_format')
 
         x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
 
