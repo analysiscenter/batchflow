@@ -451,7 +451,7 @@ class D(NamedExpression):
 
     def _get_name_dataset(self, batch=None, pipeline=None, model=None):
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline or pipeline
+        pipeline = pipeline if pipeline is not None else batch.pipeline
         dataset = pipeline.dataset if pipeline is not None else None
         dataset = dataset or batch.dataset
         if dataset is None:
