@@ -539,6 +539,14 @@ class Pipeline:
 
         save_to : a named expression or a sequence of named expressions
             A location where function output will be saved to.
+
+        Notes
+        -----
+        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline,
+        `call` is convenient with lambdas::
+
+            pipeline
+                .call(lambda batch: [image.shape[1] for image in batch.images], save_to=V('image_widths'))
         """
         return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, **kwargs))
 
