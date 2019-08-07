@@ -2,57 +2,98 @@
 import torch
 import torch.nn as nn
 
-from .layers import ConvBlock
-from .layers import Upsample
+from .layers import ConvBlock, Upsample
 from . import TorchModel
-from .resnet import ResNet18
 from .utils import get_shape
 from ..utils import unpack_args
 
 
 class EncoderDecoder(TorchModel):
-    """ Encoder-decoder architecture
+    """ Encoder-decoder architecture. Allows to combine features of different models,
+    e.g. ResNet, in order to create new ones with just a few lines of code.
 
-    **Configuration**
-
+    Parameters
+    ----------
     inputs : dict
-        dict with 'images' (see :meth:`~.TorchModel._make_inputs`)
+        Dictionary with 'images' (see :meth:`~.TorchModel._make_inputs`)
 
     body : dict
         encoder : dict
-            base_class : TorchModel
-                a model implementing ``make_encoder`` method which returns tensors
-                with encoded representation of the inputs
-            other args
-                parameters for base class ``make_encoder`` method
+            base : TorchModel, optional
+                Model implementing ``make_encoder`` method which returns tensors
+                with encoded representation of the inputs.
 
-        embedding : dict
-            :class:`~.ConvBlock` parameters for the bottom block
+            num_stages : int
+                Number of downsampling stages.
+
+            downsample : dict
+                Parameters for downsampling (see :func:`~.layers.conv_block`)
+
+            blocks : dict
+                Parameters for pre-processing blocks:
+
+                base : callable, optional
+                    Tensor processing function. Default is :func:`~.layers.ConvBlock`.
+                other args : dict
+                    Parameters for the base block.
+
+            other args : dict
+                Parameters for ``make_encoder`` method.
+
+        embedding : dict or sequence of dicts
+            base : callable, optional
+                Tensor processing function. Default is :func:`~.layers.ConvBlock`.
+            other args
+                Parameters for the base block.
 
         decoder : dict
             num_stages : int
-                number of upsampling blocks
-            factor : int or list of int
-                if int, the total upsampling factor for all blocks combined.
-                if list, upsampling factors for each block.
-            layout : str
-                upsampling method (see :func:`~.layers.upsample`)
+                Number of upsampling blocks.
 
-            other :func:`~.layers.upsample` parameters.
+            factor : int or list of int
+                If int, the total upsampling factor for all stages combined.
+                If list, upsampling factors for each stage.
+
+            skip : bool
+                Whether to concatenate upsampled tensor with stored pre-downsample encoding.
+            upsample : dict
+                Parameters for upsampling (see :func:`~.layers.Upsample`).
+
+            blocks : dict
+                Parameters for post-processing blocks:
+
+                base : callable
+                    Tensor processing function. Default is :func:`~.layers.ConvBlock`.
+                other args : dict
+                    Parameters for the base block.
 
     Examples
     --------
-    Use ResNet18 as an encoder (which by default downsamples the image with a factor of 8),
-    create an embedding that contains 16 channels,
-    and build a decoder with 3 upsampling stages to scale the embedding 8 times with transposed convolutions::
+    Preprocess input image with 7x7 convolutions, downsample it 4 times with ResNet blocks in between,
+    use convolution block in the bottleneck, then restore original image size with subpixel convolutions and
+    ResNeXt blocks in between:
 
-        config = {
-            'inputs': dict(images={'shape': B('image_shape'), 'name': 'targets'}),
-            'initial_block/inputs': 'images',
-            'encoder/base_class': ResNet18,
-            'embedding/filters': 16,
-            'decoder': dict(num_stages=3, factor=8, layout='tna')
+    >>> config = {
+            'inputs': dict(images={'shape': B('image_shape')},
+                           masks={'name': 'targets', 'shape': B('mask_shape')}),
+            'initial_block': {'inputs': 'images',
+                              'layout': 'cna', 'filters': 4, 'kernel_size': 7},
+            'body/encoder': {'num_stages': 4,
+                             'blocks': {'base': ResNet.block,
+                                        'resnext': False,
+                                        'filters': [8, 16, 32, 64]}},
+            'body/embedding': {'filters': 128},
+            'body/decoder': {'upsample': {'layout': 'X'},
+                             'blocks': {'base': ResNet.block,
+                                        'filters': [128, 64, 32, 16],
+                                        'resnext': True}},
         }
+
+    Notes
+    -----
+    When `base` is used for decoder creation, downsampling is done one less time than
+    the length of `filters` (or other size-defining parameter) list in the `encoder` configuration.
+    That is due to the fact that the first block is used as preprocessing of input tensors.
     """
     @classmethod
     def default_config(cls):
@@ -66,7 +107,7 @@ class EncoderDecoder(TorchModel):
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=cls.block, combine_op='softsum')
+        config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
         config['head'] = dict(layout='c', kernel_size=1)
         return config
 
@@ -81,14 +122,7 @@ class EncoderDecoder(TorchModel):
 
     @classmethod
     def body(cls, inputs, **kwargs):
-        """ Create encoder, embedding and decoder
-
-        Parameters
-        ----------
-        inputs
-            input tensor
-        filters : tuple of int
-            number of filters in decoder blocks
+        """ Create encoder, embedding and decoder.
 
         Returns
         -------
@@ -99,7 +133,6 @@ class EncoderDecoder(TorchModel):
         embeddings = kwargs.get('embedding')
         decoder = kwargs.pop('decoder')
 
-        # print('BODY INPUTS', get_shape(inputs))
         # Encoder: transition down
         encoder_args = {**kwargs, **encoder}
         encoders = cls.encoder(inputs, **encoder_args)
@@ -117,28 +150,62 @@ class EncoderDecoder(TorchModel):
         decoder_args = {**kwargs, **decoder}
         decoders = cls.decoder(encoders, **decoder_args)
 
-        return EncoderDecoderBody(encoders, decoders, skip=True)
+        return EncoderDecoderBody(encoders, decoders, skip=decoder_args.get('skip'))
 
 
     @classmethod
     def head(cls, inputs, filters, **kwargs):
-        """ Linear convolutions with kernel 1 """
-        x = ConvBlock(inputs, filters=filters, **kwargs)
+        """ Linear convolutions. """
+        kwargs = cls.get_defaults('head', kwargs)
+        x = super().head(inputs=inputs, filters=filters, **kwargs)
+
+        if get_shape(x)[1] != filters:
+            args = {**kwargs, **dict(layout='c', filters=filters, kernel_size=1)}
+            x = ConvBlock(inputs, **args)
         return x
 
     @classmethod
-    def block(cls, inputs, name='block', **kwargs):
-        """ Default conv block for processing tensors in encoder and decoder.
-        By default makes 3x3 convolutions followed by batch-norm and activation.
+    def block(cls, inputs, **kwargs):
+        """ Default conv block for processing tensors. Makes 3x3 convolutions followed by batch-norm and activation.
         Does not change tensor shapes.
         """
         layout = kwargs.pop('layout', None) or 'cna'
-        filters = kwargs.pop('filters', None) or cls.num_channels(inputs)
-        return ConvBlock(inputs, layout=layout, filters=filters, name=name, **kwargs)
+        filters = kwargs.pop('filters', None) or get_shape(inputs)[1]
+        return ConvBlock(inputs, layout=layout, filters=filters, **kwargs)
 
 
     @classmethod
     def encoder(cls, inputs, base_class=None, **kwargs):
+        """ Create encoder either by using ``make_encoder`` of passed `base` model,
+        or by combining building blocks, specified in `blocks/base`.
+
+        Parameters
+        ----------
+        inputs
+            Input tensor.
+
+        base : TorchModel
+            Model class. Should implement ``make_encoder`` method.
+
+        name : str
+            Scope name.
+
+        num_stages : int
+            Number of downsampling stages.
+
+        blocks : dict
+            Parameters for tensor processing before downsampling.
+
+        downsample : dict
+            Parameters for downsampling.
+
+        kwargs : dict
+            Parameters for ``make_encoder`` method.
+
+        Returns
+        -------
+        list of nn.Modules
+        """
         base_class = kwargs.pop('base')
         steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
 
@@ -151,100 +218,108 @@ class EncoderDecoder(TorchModel):
 
             encoders = [x]
             for i in range(steps):
-                # Preprocess tensor with given block
-                x = EncoderBlock(x, i, steps, downsample, block_args, **kwargs)
+                d_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
+                d_args['filters'] = d_args.get('filters') or get_shape(x)[1]
+                b_args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
+                x = EncoderBlock(x, d_args, b_args, **kwargs)
                 encoders.append(x)
         return encoders
 
     @classmethod
     def embedding(cls, inputs, **kwargs):
-        """ Create embedding from inputs tensor
+        """ Create embedding from inputs tensor.
 
         Parameters
         ----------
         inputs
-            input tensor
+            Input tensor.
+
+        name : str
+            Scope name.
+
+        base : callable
+            Tensor processing function. Default is :func:`~.layers.ConvBlock`.
+
+        kwargs : dict
+            Parameters for `base` block.
 
         Returns
         -------
-        nn.Module
+        torch.nn.Module
         """
-        x = cls.block(inputs, **kwargs)
-        return x
+        base_block = kwargs.get('base', cls.block)
+        return base_block(inputs, **kwargs)
 
     @classmethod
     def decoder(cls, inputs, **kwargs):
+        """ Create decoder with a given number of upsampling stages.
+
+        Parameters
+        ----------
+        inputs
+            Input tensor.
+
+        name : str
+            Scope name.
+
+        steps : int
+            Number of upsampling stages. Defaults to the number of downsamplings.
+
+        factor : int or list of ints
+            If int, the total upsampling factor for all stages combined.
+            If list, upsampling factors for each stage.s, then each entry is increase of size on i-th upsampling stage.
+
+        skip : bool
+            Whether to concatenate upsampled tensor with stored pre-downsample encoding.
+
+        upsample : dict
+            Parameters for upsampling.
+
+        blocks : dict
+            Parameters for post-processing blocks.
+
+        kwargs : dict
+            Parameters for :func:`~.layers.Upsample` method.
+
+        Returns
+        -------
+        torch.nn.Module
+
+        Raises
+        ------
+        TypeError
+            If passed `factor` is not integer or list.
+        """
         steps = kwargs.pop('num_stages') or len(inputs)-2
+        factor = kwargs.pop('factor') or [2]*steps
         skip, upsample, block_args = cls.pop(['skip', 'upsample', 'blocks'], kwargs)
-        base_block = block_args.get('base')
+
+        if isinstance(factor, int):
+            factor = int(factor ** (1/steps))
+            factor = [factor] * steps
+        elif not isinstance(factor, list):
+            raise TypeError('factor should be int or list of int, but %s was given' % type(factor))
 
         x = inputs[-1]
         decoders = []
         for i in range(steps):
-            x = DecoderBlock(x, inputs[-i-3], i, steps, upsample, block_args, **kwargs)
+            if factor[i] == 1:
+                continue
+            # Make upsample/block args, as well as prepare the skip connection if needed
+            u_args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
+            u_args['filters'] = u_args.get('filters') or get_shape(x)[1]
+            u_args['factor'] = u_args.get('factor') or factor[i]
+            b_args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
+            skip_ = inputs[-i-3] if (skip and (i < len(inputs)-2)) else None
+
+            x = DecoderBlock(x, skip_, u_args, b_args, **kwargs)
             decoders.append(x)
         return decoders
 
 
-class EncoderBlock(nn.Module):
-    def __init__(self, inputs, i, steps, downsample, block_args, **kwargs):
-        super().__init__()
-        base_block = block_args.get('base')
-        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
-        self.encoder = base_block(inputs, **args)
-
-        e_shape = get_shape(self.encoder)
-        ifilters = downsample.get('filters') or e_shape[1]
-        self.downsample = ConvBlock(e_shape, filters=ifilters, **{**kwargs, **downsample})
-
-        self.output_shape = self.downsample.output_shape
-
-    def forward(self, x):
-        x = self.encoder(x)
-        x = self.downsample(x)
-        return x
-
-
-class DecoderBlock(nn.Module):
-    def __init__(self, inputs, skip, i, steps, upsample, block_args, **kwargs):
-        super().__init__()
-        base_block = block_args.get('base')
-        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
-        self.decoder = base_block(inputs, **args)
-
-        # Upsample: keep the same amount of filters
-        d_shape = get_shape(self.decoder)
-        ifilters = upsample.get('filters') or d_shape[1]
-        self.upsample = ConvBlock(d_shape, filters=ifilters, **{**kwargs, **upsample})
-
-        # Output shape: take skip into account
-        shape = list(get_shape(self.upsample))
-        shape[1] += get_shape(skip)[1]
-        self.output_shape = tuple(shape)
-
-    def forward(self, x, skip):
-        """ Block -> upsample -> crop -> concat. """
-        x = self.decoder(x)
-        x = self.upsample(x)
-
-        # Move to separate method `crop`
-        x_shape = list(get_shape(x))
-        skip_shape = list(get_shape(skip))
-        if x_shape[2] > skip_shape[2]:
-            shape = [slice(None, c) for c in skip.size()[2:]]
-            shape = tuple([slice(None, None), slice(None, None)] + shape)
-            x = x[shape]
-        elif x_shape[2] < skip_shape[2]:
-            background = torch.zeros(*x_shape[:2], *skip_shape[2:])
-            background[:, :, :x_shape[2], :x_shape[3]] = x
-            x = background
-        x = torch.cat([skip, x], dim=1)
-
-        return x
-
 
 class EncoderDecoderBody(nn.Module):
-    """ A sequence of encoder and decoder blocks with skip connections """
+    """ A sequence of encoder and decoder blocks with optional skip connections """
     def __init__(self, encoders, decoders, skip=True):
         super().__init__()
         self.encoders = nn.ModuleList(encoders)
@@ -259,6 +334,126 @@ class EncoderDecoderBody(nn.Module):
             skips.append(x)
 
         for i, decoder in enumerate(self.decoders):
-            skip = skips[-i-3] if self.skip else None
+            skip = skips[-i-3] if (self.skip and (i < len(skips)-2)) else None
             x = decoder(x, skip=skip)
         return x
+
+
+class EncoderBlock(nn.Module):
+    """ Pass tensor through complex block, then downsample. """
+    def __init__(self, inputs, d_args, b_args, **kwargs):
+        super().__init__()
+        # Preprocess tensor with given block
+        base_block = b_args.get('base')
+        self.encoder = base_block(inputs, **b_args)
+
+        # Downsampling
+        if d_args.get('layout'):
+            self.downsample = ConvBlock(get_shape(self.encoder), **d_args)
+        else:
+            self.downsample = self.encoder
+        self.output_shape = self.downsample.output_shape
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = self.downsample(x)
+        return x
+
+
+class DecoderBlock(nn.Module):
+    """ Upsample tensor, then pass it through complex block and combine with skip if needed. """
+    def __init__(self, inputs, skip, u_args, b_args, **kwargs):
+        super().__init__()
+        # Upsample by a desired factor
+        if u_args.get('layout'):
+            self.upsample = Upsample(inputs=inputs, **u_args)
+        else:
+            self.upsample = inputs
+
+        # Process tensor with block
+        base_block = b_args.get('base')
+        self.decoder = base_block(get_shape(self.upsample), **b_args)
+
+        # Output shape: take skip into account
+        shape = get_shape(self.decoder)
+        if skip is not None:
+            self.crop = Crop(shape, skip)
+            self.combine = Combine([skip, get_shape(self.crop)], b_args.get('combine_op'))
+            shape = self.combine.output_shape
+        self.output_shape = shape
+
+    def forward(self, x, skip):
+        x = self.upsample(x)
+        x = self.decoder(x)
+
+        if skip is not None:
+            x = self.crop(x, skip)
+            x = self.combine([skip, x])
+        return x
+
+
+
+class Crop(nn.Module):
+    def __init__(self, inputs, resize_to):
+        super().__init__()
+        i_shape = list(get_shape(inputs))
+        r_shape = list(get_shape(resize_to))
+        self.output_shape = (*i_shape[:2], *r_shape[2:])
+
+    def forward(self, inputs, resize_to):
+        i_shape = list(get_shape(inputs))
+        r_shape = list(get_shape(resize_to))
+        if i_shape[2] > r_shape[2]:
+            shape = [slice(None, c) for c in resize_to.size()[2:]]
+            shape = tuple([slice(None, None), slice(None, None)] + shape)
+            output = inputs[shape]
+        elif i_shape[2] < r_shape[2]:
+            output = torch.zeros(*i_shape[:2], *r_shape[2:])
+            output[:, :, :i_shape[2], :i_shape[3]] = inputs
+        else:
+            output = inputs
+        return output
+
+
+class Combine(nn.Module):
+    """ Combine list of tensor into one.
+
+    Parameters
+    ----------
+    inputs : sequence of torch.Tensors
+        Tensors to combine.
+
+    op : str {'concat', 'sum', 'conv'}
+        If 'concat', inputs are concated along channels axis.
+        If 'sum', inputs are summed.
+        If 'softsum', every tensor is passed through 1x1 convolution in order to have
+        the same number of channels as the first tensor, and then summed.
+    """
+    def __init__(self, inputs, op='concat'):
+        super().__init__()
+
+        self.op = op
+        if op == 'concat':
+            shape = list(get_shape(inputs[0]))
+            shape[1] = int(sum([get_shape(tensor)[1] for tensor in inputs]))
+            self.output_shape = shape
+        elif op == 'sum':
+            self.output_shape = get_shape(inputs[0])
+        elif op == 'softsum':
+            args = dict(layout='c', filters=get_shape(inputs[0])[1],
+                        kernel_size=1)
+            self.conv = [ConvBlock(get_shape(tensor), **args)
+                         for tensor in inputs]
+            self.output_shape = get_shape(inputs[0])
+        else:
+            raise ('Combine `op` must be one of `concat`, `sum`, `softsum`, got {}.'.format(op))
+
+    def forward(self, inputs):
+        if self.op == 'concat':
+            return torch.cat(inputs, dim=1)
+        elif self.op == 'sum':
+            return torch.stack(inputs, dim=0).sum(dim=0)
+        elif self.op == 'softsum':
+            lst = [self.conv[i](tensor)
+                      for i, tensor in enumerate(inputs)]
+            return torch.stack(lst, dim=0).sum(dim=0)
