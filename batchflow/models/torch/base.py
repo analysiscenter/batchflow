@@ -315,14 +315,15 @@ class TorchModel(BaseModel):
 
     def _get_device(self):
         device = self.config.get('device')
-        if device is torch.device or device is None:
+        if isinstance(device, torch.device) or device is None:
             _device = device
         elif isinstance(device, str):
             _device = device.split(':')
             unit, index = _device if len(_device) > 1 else (device, '0')
-            if unit.lower() in ['gpu', 'cpu']:
-                unit = 'cuda' if unit.lower() == 'gpu' else 'cpu'
-                _device = torch.device(unit, int(index))
+            if unit.lower() == 'gpu':
+                _device = torch.device('cuda', int(index))
+            elif unit.lower() == 'cpu':
+                _device = torch.device('cpu')
             else:
                 raise ValueError('Unknown device type: ', device)
         else:
