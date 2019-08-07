@@ -59,7 +59,7 @@ _V3_SMALL_DEFAULT_BODY = [
 ]
 
 
-class MobileNet_v1(TFModel):
+class MobileNet(TFModel):
     """ MobileNet
 
     **Configuration**
@@ -152,7 +152,7 @@ class MobileNet_v1(TFModel):
         return conv_block(inputs, 'Cna cna', filters, [3, 1], name=name, strides=[strides, 1], **kwargs)
 
 
-class MobileNet(TFModel):
+class MobileNet_v2(TFModel):
     """ Base class for MobileNets after v2.
     Default configuration is MobileNet_v2.
     **Configuration**
@@ -178,8 +178,7 @@ class MobileNet(TFModel):
             activation : callable, optional
             se_block : bool or dict
                 whether to include squeeze and excitation block
-                If dict it must contain ratio and activation keys
-                to customize se_block parameters
+                If dict, it must contain :meth:`~TFModel.se_block` params
             residual : bool
                 whether to make a residual connection
         width_factor : float
@@ -264,8 +263,7 @@ class MobileNet(TFModel):
             If not specified tf.nn.relu is used.
         se_block : bool or dict
             whether to include squeeze and excitation block
-            If dict it must contain ratio and activation keys
-            to customize se_block parameters
+            If dict, it must contain :meth:`~TFModel.se_block` params
         name : str
             scope name
 
@@ -290,7 +288,7 @@ class MobileNet(TFModel):
         return x
 
 
-class MobileNet_v3(MobileNet):
+class MobileNet_v3(MobileNet_v2):
     """ MobileNet version 3 architecture """
     @classmethod
     def default_config(cls):
@@ -303,7 +301,7 @@ class MobileNet_v3(MobileNet):
         return config
 
 
-class MobileNet_v3_small(MobileNet):
+class MobileNet_v3_small(MobileNet_v2):
     """ MobileNet version 3 small architecture """
     @classmethod
     def default_config(cls):
@@ -327,8 +325,7 @@ class MobileNet_v3_small(MobileNet):
         name : str
             scope name
         se_block : dict, optional
-            If not None it must be a dict containing ratio and activation keys
-            to customize se_block parameters
+            If not None it must be a dict containing :meth:`~TFModel.se_block` params
         Returns
         -------
         tf.Tensor
