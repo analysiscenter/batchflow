@@ -71,6 +71,10 @@ class BaseModel:
         _ = names, config
         return None
 
+    def reset(self):
+        """ Reset the trained model to allow a new training from scratch """
+        pass
+
     def build(self, *args, **kwargs):
         """ Define the model """
         _ = self, args, kwargs

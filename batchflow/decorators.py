@@ -113,7 +113,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
                 init_fn = lambda *a, **k: init
 
             if post is not None:
-                if isinstance(init, str):
+                if isinstance(post, str):
                     try:
                         post_fn = getattr(self, post)
                     except AttributeError:

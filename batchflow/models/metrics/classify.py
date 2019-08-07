@@ -1,6 +1,5 @@
 """ Contains two class classification metrics """
 from copy import copy
-from functools import partial
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -9,6 +8,29 @@ import numpy as np
 from ...decorators import mjit
 from . import Metrics, binarize, sigmoid
 
+METRICS_ALIASES = {'sensitivity' : 'true_positive_rate',
+                   'recall' : 'true_positive_rate',
+                   'tpr' : 'true_positive_rate',
+                   'fallout' : 'false_positive_rate',
+                   'fpr' : 'false_positive_rate',
+                   'miss_rate' : 'false_negative_rate',
+                   'fnr' : 'false_negative_rate',
+                   'specificity' : 'true_negative_rate',
+                   'tnr' : 'true_negative_rate',
+                   'prv' : 'prevalence',
+                   'acc' : 'accuracy',
+                   'precision' : 'positive_predictive_value',
+                   'ppv' : 'positive_predictive_value',
+                   'fdr' : 'false_discovery_rate',
+                   'for' : 'false_omission_rate',
+                   'npv' : 'negative_predictive_value',
+                   'plr' : 'positive_likelihood_ratio',
+                   'nlr' : 'negative_likelihood_ratio',
+                   'dor' : 'diagnostics_odds_ratio',
+                   'dice' : 'f1_score',
+                   'f1s' : 'f1_score',
+                   'iou' : 'jaccard',
+                   'jac' : 'jaccard'}
 
 class ClassificationMetrics(Metrics):
     """ Metrics to assess classification models
@@ -60,7 +82,7 @@ class ClassificationMetrics(Metrics):
     - a single value if input is a vector for a multiclass task and multiclass averaging is enabled.
     - a vector with batch size items if input is a multidimensional array (e.g. images or sequences)
       and there are just 2 classes or multiclass averaging is on.
-    - a vector with `num_classes` items if input is a vector for multiclass casse without averaging.
+    - a vector with `num_classes` items if input is a vector for multiclass case without averaging.
     - a 2d array `(batch_items, num_classes)` for multidimensional inputs in a multiclass case without averaging.
 
     .. note:: Count-based metrics (`true_positive`, `false_positive`, etc.) do not support mutliclass averaging.
@@ -99,7 +121,7 @@ class ClassificationMetrics(Metrics):
         self.num_classes = None if axis is None else predictions.shape[axis]
         self.num_classes = self.num_classes or num_classes or 2
         self._agg_fn_dict = {
-            'mean': partial(np.mean, axis=0),
+            'mean': self.infmean,
         }
 
         if fmt in ['proba', 'logits'] and axis is None and self.num_classes > 2:
@@ -129,9 +151,30 @@ class ClassificationMetrics(Metrics):
         if calc:
             self._calc()
 
+    def __getattr__(self, name):
+        if name == "METRICS_ALIASES":
+            raise AttributeError # See https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
+        name = METRICS_ALIASES.get(name, name)
+        return object.__getattribute__(self, name)
+
     @property
     def confusion_matrix(self):
         return self._confusion_matrix.sum(axis=0)
+
+    def infmean(self, arr):
+        """
+        Compute the arithmetic mean along 0 axis ignoring infs,
+        when there is at least one finite number along averaging axis.
+        Done via np.nanmean() while temporarily replacing np.inf with np.nan.
+        """
+        if isinstance(arr, list):
+            arr = np.array(arr)
+        arr[np.isinf(arr)] = np.nan
+        arr = np.nanmean(arr, axis=0)
+        if np.isscalar(arr):
+            return np.inf if np.isnan(arr) else arr
+        arr[np.isnan(arr)] = np.inf
+        return arr
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
@@ -197,8 +240,8 @@ class ClassificationMetrics(Metrics):
         return value[0] if isinstance(value, np.ndarray) and value.shape == (1, ) else value
 
     def _all_labels(self):
-        labels = 1 if self.skip_bg else 0
-        labels = list(range(labels, self.num_classes))
+        first = 1 if self.skip_bg else 0
+        labels = list(range(first, self.num_classes))
         return labels
 
     def _count(self, f, label=None):
@@ -260,7 +303,7 @@ class ClassificationMetrics(Metrics):
                 value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
             elif multiclass in ['macro', 'mean']:
                 value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-                value = np.mean(value, axis=0).reshape(-1, 1)
+                value = self.infmean(value).reshape(-1, 1)
         else:
             label = label if label is not None else 1
             d = denom(label)
@@ -272,32 +315,23 @@ class ClassificationMetrics(Metrics):
     def true_positive_rate(self, *args, **kwargs):
         return self._calc_agg(self.true_positive, self.condition_positive, *args, **kwargs, when_zero=(0, 1))
 
-    def sensitivity(self, *args, **kwargs):
-        return self.true_positive_rate(*args, **kwargs)
-
-    def recall(self, *args, **kwargs):
-        return self.true_positive_rate(*args, **kwargs)
-
     def false_positive_rate(self, *args, **kwargs):
         return self._calc_agg(self.false_positive, self.condition_negative, *args, **kwargs, when_zero=(1, 0))
-
-    def fallout(self, *args, **kwargs):
-        return self.false_positive_rate(*args, **kwargs)
 
     def false_negative_rate(self, *args, **kwargs):
         return self._calc_agg(self.false_negative, self.condition_positive, *args, **kwargs, when_zero=(1, 0))
 
-    def miss_rate(self, *args, **kwargs):
-        return self.false_negative_rate(*args, **kwargs)
-
     def true_negative_rate(self, *args, **kwargs):
         return self._calc_agg(self.true_negative, self.condition_negative, *args, **kwargs, when_zero=(0, 1))
 
-    def specificity(self, *args, **kwargs):
-        return self.true_negative_rate(*args, **kwargs)
-
     def prevalence(self, *args, **kwargs):
-        return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs)
+        """
+        Notes
+        -----
+        Parameter when_zero doesn't really matter in this case,
+        since total_population is never zero, when targets are not empty.
+        """
+        return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs, when_zero=(0, 0))
 
     def accuracy(self):
         """ An accuracy of detecting all the classes combined """
@@ -305,9 +339,6 @@ class ClassificationMetrics(Metrics):
 
     def positive_predictive_value(self, *args, **kwargs):
         return self._calc_agg(self.true_positive, self.prediction_positive, *args, **kwargs, when_zero=(0, 1))
-
-    def precision(self, *args, **kwargs):
-        return self.positive_predictive_value(*args, **kwargs)
 
     def false_discovery_rate(self, *args, **kwargs):
         return self._calc_agg(self.false_positive, self.prediction_positive, *args, **kwargs, when_zero=(1, 0))
@@ -319,23 +350,18 @@ class ClassificationMetrics(Metrics):
         return self._calc_agg(self.true_negative, self.prediction_negative, *args, **kwargs, when_zero=(0, 1))
 
     def positive_likelihood_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, **kwargs)
+        return self._calc_agg(self.true_positive_rate, self.false_positive_rate, *args, **kwargs, when_zero=(np.inf, 0))
 
     def negative_likelihood_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs)
+        return self._calc_agg(self.false_negative_rate, self.true_negative_rate, *args, **kwargs, when_zero=(np.inf, 0))
 
     def diagnostics_odds_ratio(self, *args, **kwargs):
-        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs)
+        return self._calc_agg(self.positive_likelihood_ratio, self.negative_likelihood_ratio, *args, **kwargs,
+                              when_zero=(np.inf, 0))
 
     def f1_score(self, *args, **kwargs):
         return 2 / (1 / self.recall(*args, **kwargs) + 1 / self.precision(*args, **kwargs))
 
-    def dice(self, *args, **kwargs):
-        return self.f1_score(*args, **kwargs)
-
     def jaccard(self, *args, **kwargs):
         d = self.dice(*args, **kwargs)
         return d / (2 - d)
-
-    def iou(self, *args, **kwargs):
-        return self.jaccard(*args, **kwargs)
