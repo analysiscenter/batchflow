@@ -70,7 +70,7 @@ def test_run_notebooks(path, microbatch, device):
     `device` is moved to separate parameter in order to work properly with `parametrize`.
     """
     # pylint: disable=exec-used
-    if path.startswith(TUTORIALS_DIR) and 'СPU' not in device:
+    if path.startswith(TUTORIALS_DIR) and 'CPU' not in device:
         pytest.skip("Tutorials don't utilize device config.")
 
     with warnings.catch_warnings():
