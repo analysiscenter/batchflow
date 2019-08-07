@@ -1,9 +1,8 @@
 """  Encoder-decoder """
-import torch
 import torch.nn as nn
 
-from .layers import ConvBlock, Upsample
 from . import TorchModel
+from .layers import ConvBlock, Upsample, Crop, Combine
 from .utils import get_shape
 from ..utils import unpack_args
 
@@ -141,7 +140,7 @@ class EncoderDecoder(TorchModel):
         # Bottleneck: working with compressed representation via multiple steps of processing
         embeddings = embeddings if isinstance(embeddings, (tuple, list)) else [embeddings]
 
-        for i, embedding in enumerate(embeddings):
+        for embedding in embeddings:
             embedding_args = {**kwargs, **embedding}
             x = cls.embedding(x, **embedding_args)
         encoders.append(x)
@@ -211,19 +210,17 @@ class EncoderDecoder(TorchModel):
 
         if base_class is not None:
             encoder_outputs = base_class.make_encoder(inputs, **kwargs)
-
         else:
-            base_block = block_args.get('base')
             x = inputs
+            encoder_outputs = [x]
 
-            encoders = [x]
             for i in range(steps):
                 d_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
                 d_args['filters'] = d_args.get('filters') or get_shape(x)[1]
                 b_args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
                 x = EncoderBlock(x, d_args, b_args, **kwargs)
-                encoders.append(x)
-        return encoders
+                encoder_outputs.append(x)
+        return encoder_outputs
 
     @classmethod
     def embedding(cls, inputs, **kwargs):
@@ -342,7 +339,9 @@ class EncoderDecoderBody(nn.Module):
 class EncoderBlock(nn.Module):
     """ Pass tensor through complex block, then downsample. """
     def __init__(self, inputs, d_args, b_args, **kwargs):
+        _ = kwargs
         super().__init__()
+
         # Preprocess tensor with given block
         base_block = b_args.get('base')
         self.encoder = base_block(inputs, **b_args)
@@ -363,7 +362,9 @@ class EncoderBlock(nn.Module):
 class DecoderBlock(nn.Module):
     """ Upsample tensor, then pass it through complex block and combine with skip if needed. """
     def __init__(self, inputs, skip, u_args, b_args, **kwargs):
+        _ = kwargs
         super().__init__()
+
         # Upsample by a desired factor
         if u_args.get('layout'):
             self.upsample = Upsample(inputs=inputs, **u_args)
@@ -390,70 +391,3 @@ class DecoderBlock(nn.Module):
             x = self.crop(x, skip)
             x = self.combine([skip, x])
         return x
-
-
-
-class Crop(nn.Module):
-    def __init__(self, inputs, resize_to):
-        super().__init__()
-        i_shape = list(get_shape(inputs))
-        r_shape = list(get_shape(resize_to))
-        self.output_shape = (*i_shape[:2], *r_shape[2:])
-
-    def forward(self, inputs, resize_to):
-        i_shape = list(get_shape(inputs))
-        r_shape = list(get_shape(resize_to))
-        if i_shape[2] > r_shape[2]:
-            shape = [slice(None, c) for c in resize_to.size()[2:]]
-            shape = tuple([slice(None, None), slice(None, None)] + shape)
-            output = inputs[shape]
-        elif i_shape[2] < r_shape[2]:
-            output = torch.zeros(*i_shape[:2], *r_shape[2:])
-            output[:, :, :i_shape[2], :i_shape[3]] = inputs
-        else:
-            output = inputs
-        return output
-
-
-class Combine(nn.Module):
-    """ Combine list of tensor into one.
-
-    Parameters
-    ----------
-    inputs : sequence of torch.Tensors
-        Tensors to combine.
-
-    op : str {'concat', 'sum', 'conv'}
-        If 'concat', inputs are concated along channels axis.
-        If 'sum', inputs are summed.
-        If 'softsum', every tensor is passed through 1x1 convolution in order to have
-        the same number of channels as the first tensor, and then summed.
-    """
-    def __init__(self, inputs, op='concat'):
-        super().__init__()
-
-        self.op = op
-        if op == 'concat':
-            shape = list(get_shape(inputs[0]))
-            shape[1] = int(sum([get_shape(tensor)[1] for tensor in inputs]))
-            self.output_shape = shape
-        elif op == 'sum':
-            self.output_shape = get_shape(inputs[0])
-        elif op == 'softsum':
-            args = dict(layout='c', filters=get_shape(inputs[0])[1],
-                        kernel_size=1)
-            self.conv = [ConvBlock(get_shape(tensor), **args)
-                         for tensor in inputs]
-            self.output_shape = get_shape(inputs[0])
-        else:
-            raise ('Combine `op` must be one of `concat`, `sum`, `softsum`, got {}.'.format(op))
-
-    def forward(self, inputs):
-        if self.op == 'concat':
-            return torch.cat(inputs, dim=1)
-        elif self.op == 'sum':
-            return torch.stack(inputs, dim=0).sum(dim=0)
-        elif self.op == 'softsum':
-            lst = [self.conv[i](tensor)
-                      for i, tensor in enumerate(inputs)]
-            return torch.stack(lst, dim=0).sum(dim=0)
