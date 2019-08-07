@@ -20,6 +20,15 @@ There are several types of named expressions:
 * P(...) - a wrapper for parallel actions
 * I(...) - an iteration counter
 
+Named expressions can be defined in two ways:
+
+- through instance creation, e.g. B('attr'), V('name'), C('option')
+
+- through attribution, e.g. B.attr, V.name, C.option.
+
+The only difference is that the former allows for assignment mode, V('name', mode='append'),
+while the latter requires fewer letters to type (so the default mode is implied).
+
 
 Using in pipelines
 ==================
@@ -29,7 +38,7 @@ Named expressions can be used in pipelines as variables to get data from and to 
 
     pipeline
         ...
-        .train_model(C('model_name'), feed_dict={'features': B('features'), 'labels': B('labels')},
+        .train_model(C('model_name'), features=B.features, labels=B.labels,
                      fetches='predictions', save_to=V('predictions'))
         ...
 
@@ -52,7 +61,7 @@ Named expressions support basic arithmetic operations like `+`, `-`, etc.
 
     pipeline
         ...
-        .print('Iterations per epoch:', D('size') // B('size'))
+        .print('Iterations per epoch:', D.size // B.size)
 
 
 To convert a named expression value to a string use :meth:`~batchflow.named_expr.NamedExpression.str` method::
@@ -77,13 +86,13 @@ As well as getting attributes::
 
     pipeline
         ...
-        .print('Size in bytes:', B('images').nbytes)
+        .print('Size in bytes:', B.images.nbytes)
 
 And calling a function::
 
     pipeline
         ...
-        .print('Accuracy:', C('custom_accuracy')(targets=B('labels'), predictions=V('predictions'))
+        .print('Accuracy:', C.custom_accuracy(targets=B.labels, predictions=V('predictions'))
 
 
 B - batch component
@@ -92,7 +101,7 @@ B - batch component
 
     pipeline
         ...
-        .train_model(model_name, features=B('features'), labels=B('labels'))
+        .train_model(model_name, features=B.features, labels=B.labels)
         ...
 
 At each iteration ``B('features')`` and ``B('labels')`` will be replaced with ``current_batch.features``
@@ -124,7 +133,7 @@ C - config option
 
     train_pipeline = dataset.train.pipeline(config)
         ...
-        .init_model('dynamic', C('model'), 'my_model', C('model_config'))
+        .init_model('dynamic', C.model, 'my_model', C.model_config)
         ...
 
 At each iteration ``C('model')`` will be replaced with the current value of ``pipeline.config['model']``.
@@ -139,7 +148,7 @@ D - dataset attribute
 
     pipeline
         ...
-        .load(src=D('data_path'), ...)
+        .load(src=D.data_path, ...)
         ...
 
 At each iteration ``D('data_path')`` will be replaced with the current value of ``pipeline.dataset.data_path``.
@@ -154,7 +163,7 @@ I - iterations counter
 
     pipeline
         ...
-        .print('Iteration:', I('current'), ' out of ', I('max'))
+        .print('Iteration:', I.current, ' out of ', I.max)
         ...
 
 
@@ -210,6 +219,18 @@ all ``F``-functions specified in static ``init_model`` get ``pipeline`` as the f
 
 In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
 as the second parameter. So you can adapt the function to specific models.
+
+
+L - callable
+============
+A function which takes arbitrary arguments::
+
+    pipeline
+        ...
+        .init_variable('logfile', L(open)('file.log', 'w'))
+    ...
+
+So no batch, pipeline or model will be passed to that function implicitly.
 
 
 R - random value

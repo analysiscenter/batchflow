@@ -467,6 +467,33 @@ class Pipeline:
         else:
             raise KeyError("No such variable %s exists" % action['var_name'])
 
+    def update(self, expr, value=None):
+        """ Update a value of a given named expression lazily during pipeline execution
+
+        Parameters
+        ----------
+        expr : NamedExpression
+            an expression
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        ``set_variable`` is imperative and may be used to change variable value within actions.
+        """
+        return self._add_action(UPDATE_ID, _args=dict(expr=expr, value=value))
+
+    def _exec_update(self, batch, action):
+        action['expr'].set(action['value'], batch=batch)
+
+
     def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable lazily during pipeline execution
 

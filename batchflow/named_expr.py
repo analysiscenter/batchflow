@@ -96,8 +96,18 @@ def add_ops(cls):
     return cls
 
 
+class MetaNamedExpression(type):
+    """ Meta class to allow for easy instantiation through attribution
+
+    Examples
+    --------
+    `B.images` is equal to B('images'), but requires fewer letters to type
+    """
+    def __getattr__(cls, name):
+        return cls(name)
+
 @add_ops
-class NamedExpression:
+class NamedExpression(metaclass=MetaNamedExpression):
     """ Base class for a named expression
 
     Attributes
@@ -400,6 +410,12 @@ class F(NamedExpression):
         """ Assign a value by calling a callable """
         _ = args, kwargs
         raise NotImplementedError("Assigning a value with a callable is not supported")
+
+
+class L(F):
+    """ A function, method or any other callable """
+    def __init__(self, name, mode='w'):
+        super().__init__(name, mode=mode, _pass=False)
 
 
 class V(NamedExpression):
