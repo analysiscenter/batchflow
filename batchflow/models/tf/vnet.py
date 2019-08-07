@@ -60,14 +60,14 @@ class VNet(EncoderDecoder):
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/downsample'] = dict(layout='cna', kernel_size=2, strides=2)
-        config['body/encoder/blocks'] = dict(base=ResNet.block, layout=None, filters=None, kernel_size=5)
+        config['body/encoder/blocks'] = dict(base=ResNet.block, layout=['cna'*2] + ['cna'*3] * 3, filters=[32, 64, 128, 256], kernel_size=5)
 
         config['body/embedding'] = None
 
         config['body/decoder/upsample'] = dict(layout='tna', kernel_size=2, strides=2)
-        config['body/decoder/blocks'] = dict(base=ResNet.block, layout=None, filters=None, kernel_size=5)
+        config['body/decoder/blocks'] = dict(base=ResNet.block, layout=['cna'*3] * 3 + ['cna'*2], filters=[256, 128, 64, 32], kernel_size=5)
 
-        config['head'] = dict(layout='Rcna+ cna', kernel_size=5, filters=None)
+        config['head'] = dict(layout='Rcna+ cna', kernel_size=5, filters=[48, 32])
 
         config['loss'] = 'ce'
         return config
@@ -83,22 +83,23 @@ class VNet(EncoderDecoder):
         encoder_filters = [f_0*2**(i+1) for i in range(num_stages)]
         decoder_filters = encoder_filters[::-1]
 
-        if config.get('body/encoder/blocks/layout') is None:
-            config['body/encoder/blocks/layout'] = ['cna'*2 if i < 1 else 'cna'*3 for i in range(num_stages)]
+        if num_stages != 4:
+            if config.get('body/encoder/blocks/layout') == ['cna'*2] + ['cna'*3] * 3:
+                config['body/encoder/blocks/layout'] = ['cna'*2 if i < 1 else 'cna'*3 for i in range(num_stages)]
 
-        if config.get('body/encoder/blocks/filters') is None:
-            config['body/encoder/blocks/filters'] = encoder_filters
+            if config.get('body/encoder/blocks/filters') == [32, 64, 128, 256]:
+                config['body/encoder/blocks/filters'] = encoder_filters
 
-        if config.get('body/encoder/downsample/filters') is None:
-            config['body/encoder/downsample/filters'] = encoder_filters
+            if config.get('body/encoder/downsample/filters') == [32, 64, 128, 256]:
+                config['body/encoder/downsample/filters'] = encoder_filters
 
-        if config.get('body/decoder/blocks/layout') is None:
-            config['body/decoder/blocks/layout'] = config.get('body/encoder/blocks/layout')[::-1]
+            if config.get('body/decoder/blocks/layout') == ['cna'*3] * 3 + ['cna'*2]:
+                config['body/decoder/blocks/layout'] = ['cna'*3 if i < num_stages-1 else 'cna'*2 for i in range(num_stages)]
 
-        if config.get('body/decoder/blocks/filters') is None:
-            config['body/decoder/blocks/filters'] = decoder_filters
+            if config.get('body/decoder/blocks/filters') == [256, 128, 64, 32]:
+                config['body/decoder/blocks/filters'] = decoder_filters
 
-        if config.get('head/filters') is None:
-            config['head/filters'] = [f_0 * 3, f_0 * 2]
+            if config.get('head/filters') == [48, 32]:
+                config['head/filters'] = [f_0 * 3, f_0 * 2]
 
         return config
