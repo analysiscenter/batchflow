@@ -189,20 +189,19 @@ class EncoderDecoder(TorchModel):
 class EncoderBlock(nn.Module):
     def __init__(self, inputs, i, steps, downsample, block_args, **kwargs):
         super().__init__()
-        ifilters = list(get_shape(inputs))[1]
-        self.downsample = ConvBlock(inputs, filters=ifilters, **{**kwargs, **downsample})
-        shape = list(get_shape(self.downsample))
-        shape = tuple(shape)
-
         base_block = block_args.get('base')
         args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
-        self.encoder = base_block(shape, **args)
-        self.output_shape = self.encoder.output_shape
+        self.encoder = base_block(inputs, **args)
 
+        e_shape = get_shape(self.encoder)
+        ifilters = downsample.get('filters') or e_shape[1]
+        self.downsample = ConvBlock(e_shape, filters=ifilters, **{**kwargs, **downsample})
+
+        self.output_shape = self.downsample.output_shape
 
     def forward(self, x):
-        x = self.downsample(x)
         x = self.encoder(x)
+        x = self.downsample(x)
         return x
 
 
@@ -218,10 +217,10 @@ class DecoderBlock(nn.Module):
         ifilters = upsample.get('filters') or d_shape[1]
         self.upsample = ConvBlock(d_shape, filters=ifilters, **{**kwargs, **upsample})
 
+        # Output shape: take skip into account
         shape = list(get_shape(self.upsample))
         shape[1] += get_shape(skip)[1]
         self.output_shape = tuple(shape)
-
 
     def forward(self, x, skip):
         """ Block -> upsample -> crop -> concat. """
