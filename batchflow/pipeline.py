@@ -542,7 +542,7 @@ class Pipeline:
 
         Notes
         -----
-        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline, 
+        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline,
         `call` is convenient with lambdas::
 
             pipeline
