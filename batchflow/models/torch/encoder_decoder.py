@@ -209,21 +209,23 @@ class EncoderBlock(nn.Module):
 class DecoderBlock(nn.Module):
     def __init__(self, inputs, skip, i, steps, upsample, block_args, **kwargs):
         super().__init__()
-
-        # Upsample: keep the same amount of filters
-        ifilters = upsample.get('filters') or get_shape(inputs)[1]
-        self.upsample = ConvBlock(inputs, filters=ifilters, **{**kwargs, **upsample})
-
         base_block = block_args.get('base')
         args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
+        self.decoder = base_block(inputs, **args)
+
+        # Upsample: keep the same amount of filters
+        d_shape = get_shape(self.decoder)
+        ifilters = upsample.get('filters') or d_shape[1]
+        self.upsample = ConvBlock(d_shape, filters=ifilters, **{**kwargs, **upsample})
 
         shape = list(get_shape(self.upsample))
         shape[1] += get_shape(skip)[1]
-        self.decoder = base_block(tuple(shape), **args)
-        self.output_shape = self.decoder.output_shape
+        self.output_shape = tuple(shape)
 
 
     def forward(self, x, skip):
+        """ Block -> upsample -> crop -> concat. """
+        x = self.decoder(x)
         x = self.upsample(x)
 
         # Move to separate method `crop`
@@ -239,7 +241,6 @@ class DecoderBlock(nn.Module):
             x = background
         x = torch.cat([skip, x], dim=1)
 
-        x = self.decoder(x)
         return x
 
 
