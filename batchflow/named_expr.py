@@ -401,11 +401,6 @@ class F(NamedExpression):
         _ = args, kwargs
         raise NotImplementedError("Assigning a value with a callable is not supported")
 
-class L(F):
-    """ A function, method or any other callable """
-    def __init__(self, name, *args, mode='w', **kwargs):
-        super().__init__(name, *args, mode=mode, _pass=False, **kwargs)
-
 
 class V(NamedExpression):
     """ Pipeline variable name

@@ -5,7 +5,7 @@ from contextlib import ExitStack as does_not_raise
 import pytest
 
 sys.path.append('..')
-from batchflow import B, C, D, F, V, L, R, P, I, Dataset
+from batchflow import B, C, D, F, V, R, P, I, Dataset
 
 
 @pytest.mark.parametrize('named_expr', [
@@ -16,7 +16,6 @@ from batchflow import B, C, D, F, V, L, R, P, I, Dataset
     R('normal', 0, 1),
     P('normal', 0, 1),
     F(lambda batch: 0),
-    L(lambda: 0),
 ])
 def test_general_get(named_expr):
     pipeline = (Dataset(10).pipeline({'option': 0})

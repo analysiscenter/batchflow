@@ -15,7 +15,6 @@ There are several types of named expressions:
 * C('name') - a pipeline config option
 * D('name') - a dataset attribute
 * F(...) - a callable which takes a batch (could be a batch class method or an arbitrary function)
-* L(...) - an arbitrary callable (the current batch won't be passed as a parameter)
 * R(...) - a random value
 * W(...) - a wrapper for a named expression
 * P(...) - a wrapper for parallel actions
@@ -211,18 +210,6 @@ all ``F``-functions specified in static ``init_model`` get ``pipeline`` as the f
 
 In ``train_model`` and ``predict_model`` ``F``-functions take the batch as the first parameter and the model
 as the second parameter. So you can adapt the function to specific models.
-
-
-L - callable
-============
-A function which takes arbitrary arguments.::
-
-    pipeline
-        ...
-        .init_variable('logfile', L(open)('file.log', 'w'))
-        ...
-
-So no batch, pipeline or model will be passed to that function implicitly.
 
 
 R - random value
