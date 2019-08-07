@@ -1,7 +1,9 @@
 """  Encoder-decoder """
+import torch
 import torch.nn as nn
 
 from .layers import ConvBlock
+from .layers import Upsample
 from . import TorchModel
 from .resnet import ResNet18
 from .utils import get_shape
@@ -97,6 +99,7 @@ class EncoderDecoder(TorchModel):
         embeddings = kwargs.get('embedding')
         decoder = kwargs.pop('decoder')
 
+        # print('BODY INPUTS', get_shape(inputs))
         # Encoder: transition down
         encoder_args = {**kwargs, **encoder}
         encoders = cls.encoder(inputs, **encoder_args)
@@ -105,18 +108,16 @@ class EncoderDecoder(TorchModel):
         # Bottleneck: working with compressed representation via multiple steps of processing
         embeddings = embeddings if isinstance(embeddings, (tuple, list)) else [embeddings]
 
-        embeddings = []
         for i, embedding in enumerate(embeddings):
             embedding_args = {**kwargs, **embedding}
             x = cls.embedding(x, **embedding_args)
-            embeddings.append(x)
-
         encoders.append(x)
 
         # Decoder: transition up
         decoder_args = {**kwargs, **decoder}
         decoders = cls.decoder(encoders, **decoder_args)
-        return EncoderDecoderBody(encoders, embeddings, decoders, skip=True)
+
+        return EncoderDecoderBody(encoders, decoders, skip=True)
 
 
     @classmethod
@@ -168,10 +169,7 @@ class EncoderDecoder(TorchModel):
         -------
         nn.Module
         """
-        if kwargs.get('layout') is not None:
-            x = ConvBlock(inputs, **kwargs)
-        else:
-            x = inputs
+        x = cls.block(inputs, **kwargs)
         return x
 
     @classmethod
@@ -180,11 +178,10 @@ class EncoderDecoder(TorchModel):
         skip, upsample, block_args = cls.pop(['skip', 'upsample', 'blocks'], kwargs)
         base_block = block_args.get('base')
 
-
         x = inputs[-1]
         decoders = []
         for i in range(steps):
-            x = DecoderBlock(x, inputs[-i-3], i, upsample, block_args, **kwargs)
+            x = DecoderBlock(x, inputs[-i-3], i, steps, upsample, block_args, **kwargs)
             decoders.append(x)
         return decoders
 
@@ -192,8 +189,8 @@ class EncoderDecoder(TorchModel):
 class EncoderBlock(nn.Module):
     def __init__(self, inputs, i, steps, downsample, block_args, **kwargs):
         super().__init__()
-        dfilters = list(get_shape(inputs))[1]
-        self.downsample = ConvBlock(inputs, filters=dfilters, **{**kwargs, **downsample})
+        ifilters = list(get_shape(inputs))[1]
+        self.downsample = ConvBlock(inputs, filters=ifilters, **{**kwargs, **downsample})
         shape = list(get_shape(self.downsample))
         shape = tuple(shape)
 
@@ -202,6 +199,7 @@ class EncoderBlock(nn.Module):
         self.encoder = base_block(shape, **args)
         self.output_shape = self.encoder.output_shape
 
+
     def forward(self, x):
         x = self.downsample(x)
         x = self.encoder(x)
@@ -209,54 +207,58 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, inputs, skip, i, upsample, block_args, **kwargs):
+    def __init__(self, inputs, skip, i, steps, upsample, block_args, **kwargs):
         super().__init__()
-        _ = skip
-        ufilters = list(get_shape(inputs))[1]
-        self.upsample = ConvBlock(inputs, filters=ufilters, **{**kwargs, **upsample})
-        shape = list(get_shape(self.upsample))
-        shape[1] = 10
-        shape = tuple(shape)
+
+        # Upsample: keep the same amount of filters
+        ifilters = upsample.get('filters') or get_shape(inputs)[1]
+        self.upsample = ConvBlock(inputs, filters=ifilters, **{**kwargs, **upsample})
 
         base_block = block_args.get('base')
-        args = {**kwargs, **block_args, **unpack_args(block_args, i, 4)}
-        self.decoder = base_block(shape, **args)
+        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
+
+        shape = list(get_shape(self.upsample))
+        shape[1] += get_shape(skip)[1]
+        self.decoder = base_block(tuple(shape), **args)
         self.output_shape = self.decoder.output_shape
+
 
     def forward(self, x, skip):
         x = self.upsample(x)
-        if x.size() > skip.size():
+
+        # Move to separate method `crop`
+        x_shape = list(get_shape(x))
+        skip_shape = list(get_shape(skip))
+        if x_shape[2] > skip_shape[2]:
             shape = [slice(None, c) for c in skip.size()[2:]]
             shape = tuple([slice(None, None), slice(None, None)] + shape)
             x = x[shape]
-
+        elif x_shape[2] < skip_shape[2]:
+            background = torch.zeros(*x_shape[:2], *skip_shape[2:])
+            background[:, :, :x_shape[2], :x_shape[3]] = x
+            x = background
         x = torch.cat([skip, x], dim=1)
+
         x = self.decoder(x)
         return x
 
 
 class EncoderDecoderBody(nn.Module):
     """ A sequence of encoder and decoder blocks with skip connections """
-    def __init__(self, encoders, embeddings, decoders, skip=True):
+    def __init__(self, encoders, decoders, skip=True):
         super().__init__()
         self.encoders = nn.ModuleList(encoders)
-        self.embeddings = nn.ModuleList(embeddings)
         self.decoders = nn.ModuleList(decoders)
         self.skip = skip
         self.output_shape = self.decoders[-1].output_shape
 
     def forward(self, x):
-        skips = []
-        for encoder in self.encoders:
+        skips = [x]
+        for encoder in self.encoders[1:]:
             x = encoder(x)
             skips.append(x)
-
-        for embedding in self.embeddings:
-            x = embedding(x)
-        skips.append(x)
 
         for i, decoder in enumerate(self.decoders):
             skip = skips[-i-3] if self.skip else None
             x = decoder(x, skip=skip)
-
         return x
