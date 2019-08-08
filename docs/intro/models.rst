@@ -2,7 +2,7 @@
 Working with models
 ===================
 
-Pipelines can include model definitions, training, evauluation and prediction actions which links models and pipelines.
+Pipelines can include model definitions, training, evauluation and prediction actions which link models and pipelines.
 
 
 Model class
@@ -53,7 +53,7 @@ If a model was already created in another pipeline, it might be `imported <#impo
 Configuring a model
 ===================
 
-Most often than not models have many options and hyperparameters which define the model structure
+More often than not models have many options and hyperparameters which define the model structure
 (e.g. number and types of layers for a neural network or a number and depth of trees for forests),
 as well as a training procedure (e.g. an optimization algorithm or regularization constants).
 
@@ -83,7 +83,7 @@ For flexibilty ``config`` might include so called :doc:`named expressions <named
 
    pipeline
        .init_variable('shape_name', 'images_shape')
-       .init_model('dynamic', MyModel, config={V('shape_name)': B('images_shape')})
+       .init_model('dynamic', MyModel, config={V('shape_name'): B('images_shape')})
 
    pipeline
        .init_model('dynamic', MyModel, config={'input_shape': F(lambda batch: batch.images.shape[1:])})
@@ -92,7 +92,7 @@ For flexibilty ``config`` might include so called :doc:`named expressions <named
 Training a model
 ================
 
-A train action should be stated below an initialization action::
+A train action should be stated after an initialization action::
 
    full_workflow = (my_dataset.p
        .init_model('static', MyModel, 'my_model', config)
@@ -104,8 +104,8 @@ A train action should be stated below an initialization action::
 
 Model independent arguments are:
 
-* ``make_data`` - a function or method which takes a current batch and a model instance and return a dict of arguments for ``model.train(...)``.
-* ``save_to`` - a location or a sequence of locations where to store an output of ``model.train`` (if there is any).
+* ``make_data`` - a function or method which takes a current batch and a model instance and returns a dict of arguments for ``model.train(...)``.
+* ``save_to`` - a location or a sequence of locations to store an output of ``model.train`` (if there any).
   Could be :doc:`a named expression <named_expr>`: ``B("name")``, ``C("name")`` or ``V("name")``.
 * ``mode`` - could be one of:
 
@@ -246,9 +246,9 @@ Linking a pipeline to a dataset creates a new pipeline that can be run.::
    cifar_pipeline = (template_pipeline << cifar_dataset).run(BATCH_SIZE, n_epochs=10)
 
 Take into account, that a static model is created only once in the template_pipeline.
-But it will be used in each children pipeline with different datasets (which might be a good or bad thing).
+But it will be used in each child pipeline with different datasets (which might be a good or bad thing).
 
-Whilst, a separate instance of a dynamic model will be created in each children pipeline.
+Whilst, a separate instance of a dynamic model will be created in each child pipeline.
 
 
 Importing models

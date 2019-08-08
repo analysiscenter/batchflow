@@ -67,7 +67,9 @@ And again, no action is executed until its result is needed.::
 
 Actions
 =======
+
 Pipeline actions might come from 3 sources:
+
 - Pipeline API
 - batch class actions
 - arbitrary namespaces.
@@ -182,22 +184,22 @@ An action chain is a concise and convenient way to write pipelines. But sometime
 There are 5 operations available: `+`, `*`, `@`, `<<`, `>>`.
 
 concat `+`
-^^^^^^^^^^
+----------
 Add two pipelines by concatenating them, so the actions from the first pipeline will be executed before actions from the second one.
 `p.resize(shape=(256, 256)) + p.rotate(angle=45)`
 
 repeat `*`
-^^^^^^^^^^
+----------
 Repeat the pipeline several times.
 `p.random_rotate(angle=(-30, 30)) * 3`
 
 sometimes `@`
-^^^^^^^^^^^^^
+-------------
 Execute the pipeline with the given probability.
 `p.random_rotate(angle=(-30, 30)) @ 0.5`
 
 `>>` and `<<`
-^^^^^^^^^^^^^
+-------------
 Link a pipeline to a dataset.
 `dataset >> pipeline` or `pipeline << dataset`
 
@@ -224,7 +226,9 @@ Creating pipelines
 Pipelines can be created from scratch or from a dataset.
 
 A template pipeline
-^^^^^^^^^^^^^^^^^^^
+-------------------
+
+The code below creates a pipeline from scratch.
 
 .. code-block:: python
 
@@ -234,7 +238,7 @@ A template pipeline
                    .some_action()
                    .another_action()
 
-Or through a context manager with pipeline algebra::
+Or one can use a context manager with pipeline algebra::
 
    from batchflow import Pipeline
 
@@ -248,9 +252,9 @@ On the other hand, such pipelines might be applied to different datasets::
    mnist_pipeline = template_preprocessing_pipeline << mnist_dataset
 
 A dataset pipeline
-^^^^^^^^^^^^^^^^^^
+------------------
 
-.. code-block:: python
+::
 
    my_pipeline = my_dataset.pipeline()
                    .some_action()
@@ -271,9 +275,9 @@ Running pipelines
 There are 5 ways to execute a pipeline.
 
 Batch generator
-^^^^^^^^^^^^^^^
+---------------
 
-.. code-block:: python
+:meth:`~.Pipeline.gen_batch`::
 
    for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True):
        # do whatever you want
@@ -284,20 +288,18 @@ Batch generator
 
 .. note:: Pipeline execution might take a long time so showing a progress bar might be helpful. Just add `bar=True` to gen_batch parameters.
 
+To start from scratch, `reset` parameter can be used::
 
-next_batch function
-^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   for i in range(MAX_ITER):
-       batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_iters=1000, drop_last=True)
+    for batch in my_pipeline.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2, drop_last=True, reset='vars'):
        # do whatever you want
 
-Run
-^^^
+You might reset pipeline variables, the batch iterator and models. See :meth:`~.Pipeline.reset` for details.
 
-To execute the pipeline right now for all iterations at once::
+
+Run
+---
+
+To execute the pipeline right now for all iterations at once call :meth:`~.Pipeline.run`::
 
    my_pipeline = (dataset.p
       .some_action()
@@ -306,19 +308,29 @@ To execute the pipeline right now for all iterations at once::
       .run(BATCH_SIZE, n_epochs=2, drop_last=True, bar=True)
    )
 
-Some people prefer a slightly longer, but a bit more certain name `run_now`.
+Some people prefer a slightly longer, but a bit more certain name :meth:`~.Pipeline.run_now`.
 
-Usually `run` is used to execute the pipeline from scratch. But you might continue the pipeline which was run before::
+Usually `run` is used to execute the pipeline without resetting all the variables and models
+(thus continuing the execution which started earlier and keeping the values and trained models).
+However, you might want to start from scratch re-initialzing the variables and/or the models::
 
-    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, init_vars=False)
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='variables')
 
-In this case the pipeline variables aren't reinitialized and keep their values from the previous run.
+or::
+
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='models')
+
+or even:
+
+    my_pipeline.run_now(BATCH_SIZE, n_iters=1000, reset='all')
+
+In this case the pipeline variables will be reinitialized and the modes will be reset to initial untrained state.
 
 
 Lazy run
-^^^^^^^^
+--------
 
-You can add `run` with `lazy=True` or just `run_later` as the last action in the pipeline and
+You can add `run` with `lazy=True` or just :meth:`~.Pipeline.run_later` as the last action in the pipeline and
 then call `run()` or `next_batch()` without arguments at all::
 
     my_pipeline = (dataset.p
@@ -333,9 +345,27 @@ then call `run()` or `next_batch()` without arguments at all::
         # do whatever you want
 
 
+next_batch function
+-------------------
+
+:meth:`~.Pipeline.next_batch`::
+
+   for i in range(MAX_ITER):
+       batch = my_pipeline.next_batch(BATCH_SIZE, shuffle=True, n_iters=1000, drop_last=True)
+       # do whatever you want
+
+If you need to start from scratch, you might call :meth:`~.Pipeline.reset` beforehand::
+
+    my_pipeline.reset('models')
+    my_pipeline.reset('variables')
+    my_pipeline.reset('all')
+
+Or pass `reset` parameter to `next_batch`.
+
+
 Single execution
-^^^^^^^^^^^^^^^^
-A pipeline might be run for one batch only with :meth:`~.Pipeline.execute_for`::
+----------------
+A pipeline might be run for one given batch only with :meth:`~.Pipeline.execute_for`::
 
     res_batch = my_pipeline.execute_for(batch)
 
@@ -349,7 +379,7 @@ However, not infrequently you might need to remember some parameters or intermed
 to draw a graph later). This is why you might need pipeline variables.
 
 Initializing a variable
-^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 
 .. code-block:: python
 
@@ -373,7 +403,7 @@ as it would make a global variable which won't be cleared on every run. What you
 Init functions are also a good place for some complex logic or randomization.
 
 Updating a variable
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 Each batch instance have a pointer to the pipeline it was created in (or `None` if the batch was created manually).
 
@@ -394,7 +424,7 @@ For a flexible initialization `default`, `init` and `init_on_each_run` might als
 If `create` is `False` (which is by default), then `get_variable` will raise a `KeyError` if a variable does not exist.
 
 `v()` is a shorter alias for `get_variable()`::
-    
+
     pipeline.v('var_name')
 
 To change a variable value just call `set_variable` within an action::
@@ -434,17 +464,17 @@ Note that a named expression might have a mode (e.g. `V('name', mode='a')`) whic
 For sets and dicts `'u'` and `'a'` do the same.
 
 Deleting a variable
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 Just call `pipeline.delete_variable("variable_name")` or `pipeline.del_variable("variable_name")`.
 
 Deleting all variables
-^^^^^^^^^^^^^^^^^^^^^^
+----------------------
 
 As simple as `pipeline.delete_all_variables()`
 
 Variables as locks
-^^^^^^^^^^^^^^^^^^
+------------------
 
 If you use multi-threading :doc:`prefetching <prefetch>` or :doc:`in-batch parallelism <parallel>`,
 than you might require synchronization when accessing some shared resource.
@@ -464,11 +494,50 @@ And pipeline variables might be a handy place to store locks.::
                    .some_action()
                    ...
 
+Update
+======
+
+A pipeline might need custom calculations which can be implemented with :meth:`~Pipeline.update`::
+
+    pipeline
+        .init_variable('counter', 0)
+        ...
+        .update(V('counter'), V('counter') + 1)
+
+The first parameter is a named expression where the result will be stored, while the second parameter is an expression
+which value will be re-calculated at each iteration.
+
+Some other useful examples might include:
+
+- collecting loss history::
+
+    pipeline
+        .init_variable('loss_history', list)
+        ...
+        .update(V('list', mode='a'), V('current_loss'))
+
+- collecting predictions::
+
+    pipeline
+        .init_variable('all_predictions', list)
+        ...
+        .update(V('all_predictions', mode='e'), V('predictions'))
+
+- assessing performance::
+
+    pipeline
+        .update(B('time'), L(time.time))
+        ...
+        .update(B('time'), L(time.time) - B('time'))
+        .update(V('throughput'), B('images').nbytes / B('time'))
+        ...
+
+
 Join and merge
 ==============
 
 Joining pipelines
-^^^^^^^^^^^^^^^^^
+-----------------
 
 If you have a pipeline `images` and a pipeline `labels`, you might join them for a more convenient processing::
 
@@ -525,7 +594,7 @@ Mostly, `join` is used as follows::
 See :func:`~batchflow.Batch.load` for more details.
 
 Merging pipelines
-^^^^^^^^^^^^^^^^^
+-----------------
 
 You can also merge data from two pipelines (this is not the same as `concatenating pipelines <#algebra-of-pipelines>`_).::
 

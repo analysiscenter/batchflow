@@ -18,6 +18,7 @@ from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
 from ._const import *       # pylint:disable=wildcard-import
+from .utils import create_bar, update_bar
 
 
 METRICS = dict(
@@ -90,6 +91,7 @@ class Pipeline:
         self._batch_generator = None
         self._rest_batch = None
         self._iter_params = None
+        self._not_init_vars = True
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -381,7 +383,7 @@ class Pipeline:
         self.variables.create_many(variables)
         return self
 
-    def _init_variables_before_run(self):
+    def _init_all_variables(self):
         self.variables.init_on_run(pipeline=self)
 
     def set_variable(self, name, value, mode='w', batch=None):
@@ -465,6 +467,33 @@ class Pipeline:
         else:
             raise KeyError("No such variable %s exists" % action['var_name'])
 
+    def update(self, expr, value=None):
+        """ Update a value of a given named expression lazily during pipeline execution
+
+        Parameters
+        ----------
+        expr : NamedExpression
+            an expression
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        ``set_variable`` is imperative and may be used to change variable value within actions.
+        """
+        return self._add_action(UPDATE_ID, _args=dict(expr=expr, value=value))
+
+    def _exec_update(self, batch, action):
+        action['expr'].set(action['value'], batch=batch)
+
+
     def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable lazily during pipeline execution
 
@@ -537,6 +566,14 @@ class Pipeline:
 
         save_to : a named expression or a sequence of named expressions
             A location where function output will be saved to.
+
+        Notes
+        -----
+        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline,
+        `call` is convenient with lambdas::
+
+            pipeline
+                .call(lambda batch: [image.shape[1] for image in batch.images], save_to=V('image_widths'))
         """
         return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, **kwargs))
 
@@ -1078,11 +1115,13 @@ class Pipeline:
         new_p = type(self)(self.dataset)
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn))    # pylint:disable=protected-access
 
-    def _put_batches_into_queue(self, gen_batch):
+    def _put_batches_into_queue(self, gen_batch, bar, bar_desc):
         while not self._stop_flag:
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
+                if bar:
+                    update_bar(bar, bar_desc, pipeline=self, batch=batch)
             except StopIteration:
                 break
             else:
@@ -1113,40 +1152,76 @@ class Pipeline:
                         skip_batch = False
                     self._prefetch_queue.task_done()
 
-    def reset_iter(self, dataset=True, init_vars=True):
-        """ Clear all iteration metadata in order to start iterating from scratch """
-        def _clear_queue(queue):
-            if queue is not None:
-                while not queue.empty():
-                    queue.get(block=True)
-                    queue.task_done()
+    def _clear_queue(self, queue):
+        if queue is not None:
+            while not queue.empty():
+                queue.get(block=True)
+                queue.task_done()
 
-        def _stop_executor(executor):
-            if executor is not None:
-                executor.shutdown()
+    def _stop_executor(self, executor):
+        if executor is not None:
+            executor.shutdown()
 
-        self._stop_flag = True
+    def reset(self, *args):
+        """ Clear all iteration metadata in order to start iterating from scratch
 
-        _clear_queue(self._prefetch_queue)
-        _clear_queue(self._batch_queue)
-        _clear_queue(self._prefetch_count)
+        Parameters
+        ----------
+        what : list of str, str or bool or None
+            what to reset to start from scratch:
 
-        _stop_executor(self._executor)
-        _stop_executor(self._service_executor)
+            - 'iter' - restart the batch iterator
+            - 'variables' - re-initialize all pipeline variables
+            - 'models' - reset all models
 
-        self._executor = None
-        self._service_executor = None
-        self._prefetch_count = None
-        self._prefetch_queue = None
-        self._batch_queue = None
-        self._batch_generator = None
-        self._rest_batch = None
+        Examples
+        --------
+        ::
+            pipeline.reset('iter')
 
-        if dataset and self.dataset is not None:
-            self.dataset.reset_iter()
+            pipeline.reset('vars', 'models')
 
-        if init_vars:
-            self._init_variables_before_run()
+            pipeline.reset(['iter', 'vars'])
+
+        """
+        if len(args) == 1 and isinstance(args[0], (list, tuple)):
+            args = args[0]
+        what = args
+
+        if len(what) == 1:
+            if what[0] is None or what[0] is False:
+                what = []
+            elif what[0] is True:
+                what = 'iter'
+            elif what[0] == 'all':
+                what = ['iter', 'variables', 'models']
+        if isinstance(what, str):
+            what = [what]
+
+        if 'iter' in what:
+            self._stop_flag = True
+
+            self._clear_queue(self._prefetch_queue)
+            self._clear_queue(self._batch_queue)
+            self._clear_queue(self._prefetch_count)
+
+            self._stop_executor(self._executor)
+            self._stop_executor(self._service_executor)
+
+            self._executor = None
+            self._service_executor = None
+            self._prefetch_count = None
+            self._prefetch_queue = None
+            self._batch_queue = None
+            self._rest_batch = None
+            self._batch_generator = None
+            self._iter_params = Baseset.get_default_iter_params()
+
+        if 'vars' in what or 'variables' in what:
+            self._init_all_variables()
+
+        if 'models' in what:
+            self.models.reset()
 
 
     def gen_rebatch(self, *args, **kwargs):
@@ -1158,8 +1233,7 @@ class Pipeline:
         else:
             pipeline = self.from_pipeline(_action['pipeline'])
 
-        # Passing iter_params from main pipeline
-        pipeline._iter_params = kwargs.get('iter_params', None)    # pylint:disable=protected-access
+        iter_params = kwargs.get('iter_params', None)
 
         self._rest_batch = None
         while True:
@@ -1172,7 +1246,7 @@ class Pipeline:
                 self._rest_batch = None
             while cur_len < _action['batch_size']:
                 try:
-                    new_batch = pipeline.next_batch(*args, **kwargs)
+                    new_batch = pipeline.next_batch(*args, iter_params=iter_params, **kwargs)
                 except StopIteration:
                     break
                 else:
@@ -1188,7 +1262,7 @@ class Pipeline:
                 yield batch
 
 
-    def gen_batch(self, *args, **kwargs):
+    def gen_batch(self, *args, iter_params=None, reset='iter', **kwargs):
         """ Generate batches
 
         Parameters
@@ -1237,6 +1311,13 @@ class Pipeline:
             batch parallelization engine used for prefetching (default='threads').
             'mpc' rarely works well due to complicated and slow python's inter-process communications.
 
+        reset : list of str, str or bool
+            what to reset to start from scratch:
+
+            - 'iter' - restart the batch iterator
+            - 'variables' - re-initialize all pipeline variables
+            - 'models' - reset all models
+
         Yields
         ------
         an instance of the batch class returned by the last action
@@ -1256,8 +1337,10 @@ class Pipeline:
 
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
+        self.reset(reset)
+        self._iter_params = iter_params or self._iter_params or self.dataset.get_default_iter_params()
 
-        return self._gen_batch(*args_value, **kwargs_value)
+        return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
 
 
     def _gen_batch(self, *args, **kwargs):
@@ -1265,15 +1348,28 @@ class Pipeline:
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
-
-        if kwargs.pop('iter_params', None) is None:
-            self._iter_params = self._iter_params or self.dataset.get_default_iter_params()
+        bar = kwargs.pop('bar', None)
+        bar_desc = kwargs.pop('bar_desc', None)
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
-            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch, iter_params=self._iter_params)
+            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
             prefetch = 0
         else:
-            batch_generator = self.dataset.gen_batch(*args, **kwargs, iter_params=self._iter_params)
+            batch_generator = self.dataset.gen_batch(*args, **kwargs)
+
+        if self._not_init_vars:
+            self._init_all_variables()
+            self._not_init_vars = False
+
+        batch_size = args[0] if len(args) != 0 else kwargs.get('batch_size')
+        n_iters = kwargs.get('n_iters')
+        n_epochs = kwargs.get('n_epochs')
+        drop_last = kwargs.get('drop_last')
+
+        if bar:
+            bar = create_bar(bar, batch_size, n_iters, n_epochs,
+                             drop_last, len(self.dataset.index))
+
 
         if self.before:
             self.before.run()
@@ -1294,7 +1390,7 @@ class Pipeline:
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator, bar, bar_desc)
             self._service_executor.submit(self._run_batches_from_queue)
 
             while not self._stop_flag:
@@ -1309,15 +1405,24 @@ class Pipeline:
                 else:
                     self._stop_flag = True
         else:
+            is_empty = True
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
+                    if bar:
+                        update_bar(bar, bar_desc, pipeline=self, batch=batch)
                 except SkipBatchException:
                     pass
                 else:
+                    is_empty = False
                     yield batch_res
                     if callable(on_iter):
                         on_iter(batch_res)
+            if is_empty:
+                logging.warning("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.")
+
+        if bar:
+            bar.close()
 
         if self.after:
             self.after.run()
@@ -1344,7 +1449,6 @@ class Pipeline:
         elif True or kwargs.get('prefetch', 0) > 0:
             if self._batch_generator is None:
                 self._lazy_run = args, kwargs
-                self.reset_iter()
                 self._batch_generator = self.gen_batch(*args, **kwargs)
             batch_res = next(self._batch_generator)
         else:
@@ -1362,13 +1466,8 @@ class Pipeline:
                     pass
         return batch_res
 
-    def run(self, *args, init_vars=True, **kwargs):
+    def run(self, *args, **kwargs):
         """ Execute all lazy actions for each batch in the dataset
-
-        Parameters
-        ----------
-        init_vars : bool
-            whether to clear all the pipeline variables
 
         See also
         --------
@@ -1377,7 +1476,6 @@ class Pipeline:
         if kwargs.pop('lazy', False):
             self._lazy_run = args, kwargs
         else:
-            self.reset_iter(init_vars=init_vars)
             if self._lazy_run:
                 _args, _kwargs = self._lazy_run
                 args = _args if len(args) == 0 else args
@@ -1385,8 +1483,10 @@ class Pipeline:
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
 
-            for _ in self.gen_batch(*args, **kwargs):
+            self._batch_generator = self.gen_batch(*args, **kwargs)
+            for _ in self._batch_generator:
                 pass
+            self._batch_generator = None
 
         return self
 

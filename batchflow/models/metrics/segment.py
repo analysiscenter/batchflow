@@ -64,8 +64,8 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
         super().__init__(targets, predictions, fmt, num_classes, axis, threshold, skip_bg, calc=False)
 
         self.iot = iot
-        self.target_instances = self._get_instances(self.one_hot(self.targets), axis)
-        self.predicted_instances = self._get_instances(self.one_hot(self.predictions), axis)
+        self.target_instances = self._get_instances(self.targets)
+        self.predicted_instances = self._get_instances(self.predictions)
         if calc:
             self._calc()
 
@@ -75,13 +75,13 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
         self.target_instances = None
         self.predicted_instances = None
 
-    def _get_instances(self, inputs, axis):
+    def _get_instances(self, inputs):
         """ Find instances of each class within inputs
 
         Parameters
         ----------
         inputs : np.ndarray
-            one-hot array
+            labels
         axis : int
             a class axis
 
@@ -90,14 +90,15 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
         nested list with ndarray of coords
             num_classes - 1, batch_items, num_instances, inputs.shape, number of pixels
         """
-        if axis is None:
+        if self.num_classes == 2:
             instances = [get_components(inputs, batch=True)]
         else:
             instances = []
-            shape = [slice(None)] * inputs.ndim
-            for i in range(1, inputs.shape[axis]):
-                shape[axis] = i
-                one_class = get_components(inputs[shape], batch=True)
+            inputs = self.one_hot(inputs)
+            class_slice = [slice(None)] * inputs.ndim
+            for class_index in range(1, self.num_classes):
+                class_slice[-1] = class_index
+                one_class = get_components(inputs[class_slice], batch=True)
                 instances.append(one_class)
         return instances
 
