@@ -11,6 +11,7 @@ import numpy as np
 
 from .base import Baseset
 from .config import Config
+from .decorators import deprecated
 from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
@@ -494,6 +495,7 @@ class Pipeline:
         action['expr'].set(action['value'], batch=batch)
 
 
+    @deprecated("update_variable() is deprecated. Use pipeline.update(V(name), value) instead.")
     def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable lazily during pipeline execution
 
@@ -525,10 +527,6 @@ class Pipeline:
         ``set_variable`` is imperative and may be used to change variable value within actions.
         """
         return self._add_action(UPDATE_VARIABLE_ID, _args=dict(var_name=name, value=value, mode=mode))
-
-    def save_to_variable(self, name, *args, **kwargs):
-        """ Save a value to a given variable during pipeline execution """
-        return self.update_variable(name, *args, **kwargs)
 
     def _exec_update_variable(self, batch, action):
         self.set_variable(action['var_name'], action['value'], action['mode'], batch=batch)
