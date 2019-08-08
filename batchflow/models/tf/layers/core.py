@@ -1,6 +1,8 @@
 """ Contains common layers """
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.layers as K #pylint: disable=import-error
+
 
 
 def flatten2d(inputs, name=None):
@@ -20,7 +22,7 @@ def flatten(inputs, name=None):
     return x
 
 
-def alpha_dropout(inputs, rate=0.5, noise_shape=None, seed=None, training=False, name=None):
+def alpha_dropout(inputs, rate=0.5, seed=None, training=False, name=None):
     """ Alpha dropout layer
 
     Alpha Dropout is a dropout that maintains the self-normalizing property.
@@ -29,9 +31,7 @@ def alpha_dropout(inputs, rate=0.5, noise_shape=None, seed=None, training=False,
 
     Klambauer G. et al "`Self-Normalizing Neural Networks <https://arxiv.org/abs/1706.02515>`_"
     """
-    def _dropped_inputs():
-        return tf.contrib.nn.alpha_dropout(inputs, 1-rate, noise_shape=noise_shape, seed=seed)
-    return tf.cond(training, _dropped_inputs, lambda: tf.identity(inputs), name=name)
+    return K.AlphaDropout(rate, seed=seed)(inputs, training)
 
 
 def maxout(inputs, depth, axis=-1, name='max'):

@@ -1,6 +1,6 @@
 """ Contains convolutional layers """
 import tensorflow as tf
-import tensorflow.keras.layers as K
+import tensorflow.keras.layers as K #pylint: disable=import-error
 
 
 

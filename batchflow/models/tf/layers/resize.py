@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from .block import _conv_block as conv_block
-from .conv import conv1d_transpose_nn
+from .conv import conv_transpose
 from .core import xip
 
 
@@ -67,13 +67,9 @@ def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
 
 
 def _depth_to_space(inputs, block_size, name='d2s'):
+    print('IN HERE LOL')
     dim = inputs.shape.ndims - 2
-    if dim == 1:
-        conv_layer = conv1d_transpose_nn
-    elif dim == 2:
-        conv_layer = tf.nn.conv2d_transpose
-    elif dim == 3:
-        conv_layer = tf.nn.conv3d_transpose
+    conv_layer = conv_transpose
 
     with tf.variable_scope(name):
         shape = inputs.get_shape().as_list()[1:]

@@ -1,7 +1,7 @@
 """ Contains pooling layers """
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras.layers as K
+import tensorflow.keras.layers as K #pylint: disable=import-error
 
 
 def max_pooling(inputs, pool_size, strides, padding='same', data_format='channels_last', name=None):
