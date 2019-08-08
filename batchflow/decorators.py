@@ -384,3 +384,13 @@ def mjit(*args, nopython=True, nogil=True, **kwargs):
         args = tuple()
         return _jit(method)
     return _jit
+
+
+def deprecated(msg):
+    """ Decorator for deprecated functions and methods """
+    def decorator(func):
+        def _call(*args, **kwargs):
+            logging.warning(msg)
+            return func(*args, **kwargs)
+        return _call
+    return decorator
