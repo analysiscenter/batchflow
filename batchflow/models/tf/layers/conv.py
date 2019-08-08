@@ -1,10 +1,13 @@
 """ Contains convolutional layers """
 import tensorflow as tf
+import tensorflow.keras.layers as K
+
+
 
 CONV_LAYERS = {
-    1: tf.layers.conv1d,
-    2: tf.layers.conv2d,
-    3: tf.layers.conv3d
+    1: K.Conv1D,
+    2: K.Conv2D,
+    3: K.Conv3D
 }
 
 def conv(inputs, *args, **kwargs):
@@ -23,7 +26,7 @@ def conv(inputs, *args, **kwargs):
     """
     dim = inputs.shape.ndims - 2
     layer_fn = CONV_LAYERS[dim]
-    return layer_fn(inputs, *args, **kwargs)
+    return layer_fn(*args, **kwargs)(inputs)
 
 
 def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
@@ -52,8 +55,8 @@ def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', d
     """
     axis = 1 if data_format == 'channels_last' else 2
     x = tf.expand_dims(inputs, axis=axis)
-    x = tf.layers.conv2d_transpose(x, filters=filters, kernel_size=(1, kernel_size),
-                                   strides=(1, strides), padding=padding, **kwargs)
+    x = K.Conv2DTranspose(filters=filters, kernel_size=(1, kernel_size),
+                          strides=(1, strides), padding=padding, **kwargs)(x)
     x = tf.squeeze(x, [axis])
     return x
 
@@ -125,9 +128,9 @@ def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
     if dim == 1:
         output = conv1d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
     elif dim == 2:
-        output = tf.layers.conv2d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
+        output = K.Conv2DTranspose(filters, kernel_size, strides, *args, **kwargs)(inputs)
     elif dim == 3:
-        output = tf.layers.conv3d_transpose(inputs, filters, kernel_size, strides, *args, use_bias=False, **kwargs)
+        output = K.Conv3DTranspose(filters, kernel_size, strides, *args, use_bias=False, **kwargs)(inputs)
     return output
 
 
@@ -210,7 +213,7 @@ def depthwise_conv(inputs, *args, **kwargs):
     tf.Tensor
     """
     if inputs.shape.ndims == 4:
-        return tf.keras.layers.DepthwiseConv2D(*args, **kwargs)(inputs)
+        return K.DepthwiseConv2D(*args, **kwargs)(inputs)
     return _depthwise_conv(False, inputs, *args, **kwargs)
 
 
@@ -328,9 +331,10 @@ def separable_conv(inputs, *args, **kwargs):
 
     """
     dim = inputs.shape.ndims - 2
-
+    if dim == 1:
+        return K.SeparableConv1D(*args, **kwargs)(inputs)
     if dim == 2:
-        return tf.layers.separable_conv2d(inputs, *args, **kwargs)
+        return K.SeparableConv2D(*args, **kwargs)(inputs)
     return _separable_conv(False, inputs, *args, **kwargs)
 
 def separable_conv_transpose(inputs, *args, **kwargs):

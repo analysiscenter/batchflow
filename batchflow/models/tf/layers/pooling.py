@@ -1,6 +1,7 @@
 """ Contains pooling layers """
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.layers as K
 
 
 def max_pooling(inputs, pool_size, strides, padding='same', data_format='channels_last', name=None):
@@ -33,11 +34,14 @@ def max_pooling(inputs, pool_size, strides, padding='same', data_format='channel
     """
     dim = inputs.shape.ndims - 2
     if dim == 1:
-        out = tf.layers.max_pooling1d(inputs, pool_size, strides, padding, data_format, name)
+        # out = tf.layers.max_pooling1d(inputs, pool_size, strides, padding, data_format, name)
+        out = K.MaxPool1D(pool_size, strides, padding, data_format, name=name)(inputs)
     elif dim == 2:
-        out = tf.layers.max_pooling2d(inputs, pool_size, strides, padding, data_format, name)
+        # out = tf.layers.max_pooling2d(inputs, pool_size, strides, padding, data_format, name)
+        out = K.MaxPool2D(pool_size, strides, padding, data_format, name=name)(inputs)
     elif dim == 3:
-        out = tf.layers.max_pooling3d(inputs, pool_size, strides, padding, data_format, name)
+        # out = tf.layers.max_pooling3d(inputs, pool_size, strides, padding, data_format, name)
+        out = K.MaxPool3D(pool_size, strides, padding, data_format, name=name)(inputs)
     else:
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
     return out
@@ -72,11 +76,11 @@ def average_pooling(inputs, pool_size, strides, padding='same', data_format='cha
     """
     dim = inputs.shape.ndims - 2
     if dim == 1:
-        out = tf.layers.average_pooling1d(inputs, pool_size, strides, padding, data_format, name)
+        out = K.AveragePooling1D(pool_size, strides, padding, data_format, name=name)(inputs)
     elif dim == 2:
-        out = tf.layers.average_pooling2d(inputs, pool_size, strides, padding, data_format, name)
+        out = K.AveragePooling2D(pool_size, strides, padding, data_format, name=name)(inputs)
     elif dim == 3:
-        out = tf.layers.average_pooling3d(inputs, pool_size, strides, padding, data_format, name)
+        out = K.AveragePooling3D(pool_size, strides, padding, data_format, name=name)(inputs)
     else:
         raise ValueError("Number of dimensions should be 1, 2 or 3, but given %d" % dim)
     return out

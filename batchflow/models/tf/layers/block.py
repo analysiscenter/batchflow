@@ -2,6 +2,7 @@
 # pylint:disable=too-many-statements
 import logging
 import tensorflow as tf
+import tensorflow.keras.layers as K
 
 from ...utils import unpack_args
 from .core import mip, flatten
@@ -17,15 +18,15 @@ FUNC_LAYERS = {
     'activation': None,
     'residual_start': None,
     'residual_end': None,
-    'dense': tf.layers.dense,
+    'dense': lambda x, *args, **kwargs: K.Dense(*args, **kwargs)(x), #tf.layers.dense,
     'conv': conv,
     'transposed_conv': conv_transpose,
     'separable_conv':separable_conv,
     'separable_conv_transpose': separable_conv_transpose,
     'pooling': pooling,
     'global_pooling': global_pooling,
-    'batch_norm': tf.layers.batch_normalization,
-    'dropout': tf.layers.dropout,
+    'batch_norm': lambda x, training, *args, **kwargs: K.BatchNormalization(*args, **kwargs)(x, training), #tf.layers.batch_normalization,
+    'dropout': lambda x, training, *args, **kwargs: K.Dropout(*args, **kwargs)(x, training),#tf.layers.dropout,
     'mip': mip,
     'dropblock': dropblock,
 }
