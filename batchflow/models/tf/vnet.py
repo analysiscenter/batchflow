@@ -100,7 +100,7 @@ class VNet(EncoderDecoder):
                 config['body/encoder/downsample/filters'] = encoder_filters
 
             if config.get('body/decoder/blocks/layout') == ['cna'*3] * 3 + ['cna'*2]:
-                config['body/decoder/blocks/layout'] = ['cna'*3 if i < num_stages-1 else 'cna'*2 for i in range(num_stages)]
+                config['body/decoder/blocks/layout'] = ['cna'*3 for i in range(num_stages-1)] + ['cna'*2]
 
             if config.get('body/decoder/blocks/filters') == [256, 128, 64, 32]:
                 config['body/decoder/blocks/filters'] = decoder_filters
