@@ -85,9 +85,7 @@ class MobileNet(TFModel):
         config['initial_block'] = dict(layout='cna', filters=32, kernel_size=3, strides=2)
         config['body'].update(_V1_DEFAULT_BODY)
         config['head'].update(dict(layout='Vf'))
-
         config['loss'] = 'ce'
-
         return config
 
     def build_config(self, names=None):
@@ -182,6 +180,10 @@ class MobileNet_v2(TFModel):
                 whether to make a residual connection
         width_factor : float
             multiplier for the number of channels (default=1)
+
+    head : dict
+        se_block : dict, optional
+            None or a dict with :meth:`~TFModel.se_block` params
     """
     @classmethod
     def default_config(cls):
@@ -261,7 +263,7 @@ class MobileNet_v2(TFModel):
         activation : callable, optional
             If not specified tf.nn.relu is used.
         se_block : bool or dict
-            whether to include squeeze and excitation block
+            whether to include squeeze and excitation block.
             If dict, it must contain :meth:`~TFModel.se_block` params
         name : str
             scope name
@@ -270,7 +272,6 @@ class MobileNet_v2(TFModel):
         -------
         tf.Tensor
         """
-
         num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
         x = conv_block(inputs, 'cnaWna', [num_filters, num_filters], [1, kernel_size], strides=[1, strides],
                        name='%s-exp' % name, **kwargs)
@@ -286,19 +287,6 @@ class MobileNet_v2(TFModel):
             x = inputs + x
         return x
 
-
-class MobileNet_v3(MobileNet_v2):
-    """ MobileNet version 3 """
-    @classmethod
-    def default_config(cls):
-        config = TFModel.default_config()
-        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
-        config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7, kernel_size=1,
-                                   activation=h_swish))
-        config['loss'] = 'ce'
-        return config
-
     @classmethod
     def head(cls, inputs, se_block=None, name='head', **kwargs):
         """ The last network layers which produce predictions
@@ -310,22 +298,35 @@ class MobileNet_v3(MobileNet_v2):
         name : str
             scope name
         se_block : dict, optional
-            If not None, it must be a dict containing :meth:`~TFModel.se_block` params
+            params for :meth:`~TFModel.se_block`
 
         Returns
         -------
         tf.Tensor
         """
-        kwargs = cls.fill_params('head', **kwargs)
-        layout = kwargs.pop('layout')
-        filters = kwargs.pop('filters')
+        kwargs = cls.fill_params('head', se_block=se_block, **kwargs)
+        layout, filters, se_block = cls.pop(['layout', 'filters', 'se_block'], kwargs)
+
         if se_block:
             x = conv_block(inputs, 'cna', filters[0], name='%s-conv1' % name, **kwargs)
-            se_block = {**kwargs, **se_block}
-            x = cls.se_block(x, **se_block, name='%s-se' % name)
+            x = cls.se_block(x, **{**kwargs, **se_block}, name='%s-se' % name)
             x = conv_block(x, 'vcacV', filters=filters[1:], name='%s-conv2' % name, **kwargs)
             return x
         return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
+
+
+class MobileNet_v3(MobileNet_v2):
+    """ MobileNet version 3 large """
+    @classmethod
+    def default_config(cls):
+        config = TFModel.default_config()
+        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
+        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
+        config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7,
+                                   kernel_size=1, activation=h_swish))
+        config['common'].update(dict(activation=tf.nn.relu))
+        config['loss'] = 'ce'
+        return config
 
 
 class MobileNet_v3_small(MobileNet_v3):

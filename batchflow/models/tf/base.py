@@ -1747,7 +1747,6 @@ class TFModel(BaseModel):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
         _config = config.get(_name)
-
         config = {**config['common'], **_config, **kwargs}
         return config
 
