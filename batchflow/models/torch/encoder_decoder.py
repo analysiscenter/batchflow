@@ -87,12 +87,6 @@ class EncoderDecoder(TorchModel):
                                         'filters': [128, 64, 32, 16],
                                         'resnext': True}},
         }
-
-    Notes
-    -----
-    When `base` is used for decoder creation, downsampling is done one less time than
-    the length of `filters` (or other size-defining parameter) list in the `encoder` configuration.
-    That is due to the fact that the first block is used as preprocessing of input tensors.
     """
     @classmethod
     def default_config(cls):
@@ -148,9 +142,7 @@ class EncoderDecoder(TorchModel):
         # Decoder: transition up
         decoder_args = {**kwargs, **decoder}
         decoders = cls.decoder(encoders, **decoder_args)
-
         return EncoderDecoderBody(encoders, decoders, skip=decoder_args.get('skip'))
-
 
     @classmethod
     def head(cls, inputs, filters, **kwargs):
