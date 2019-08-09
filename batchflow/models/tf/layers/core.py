@@ -31,7 +31,7 @@ def alpha_dropout(inputs, rate=0.5, seed=None, training=False, name=None):
 
     Klambauer G. et al "`Self-Normalizing Neural Networks <https://arxiv.org/abs/1706.02515>`_"
     """
-    return K.AlphaDropout(rate, seed=seed)(inputs, training)
+    return K.AlphaDropout(rate, seed=seed, name=name)(inputs, training)
 
 
 def maxout(inputs, depth, axis=-1, name='max'):
