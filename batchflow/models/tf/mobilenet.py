@@ -1,8 +1,7 @@
 """ Howard A. et al. "`MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications
 <https://arxiv.org/abs/1704.04861>`_"
 
-Sandler M. et al. "`Inverted Residuals and Linear Bottlenecks:
-Mobile Networks for Classification, Detection and Segmentation
+Sandler M. et al. "`MobileNetV2: Inverted Residuals and Linear Bottlenecks
 <https://arxiv.org/abs/1801.04381>`_"
 
 Howard A. et al. "`Searching for MobileNetV3
@@ -153,8 +152,8 @@ class MobileNet(TFModel):
 
 
 class MobileNet_v2(TFModel):
-    """ Base class for MobileNets after v2.
-    Default configuration is MobileNet_v2.
+    """ Base class for MobileNets after v2
+
     **Configuration**
 
     inputs : dict
@@ -289,7 +288,7 @@ class MobileNet_v2(TFModel):
 
 
 class MobileNet_v3(MobileNet_v2):
-    """ MobileNet version 3 architecture """
+    """ MobileNet version 3 """
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
@@ -297,20 +296,6 @@ class MobileNet_v3(MobileNet_v2):
         config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
         config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7, kernel_size=1,
                                    activation=h_swish))
-        config['loss'] = 'ce'
-        return config
-
-
-class MobileNet_v3_small(MobileNet_v2):
-    """ MobileNet version 3 small architecture """
-    @classmethod
-    def default_config(cls):
-        config = TFModel.default_config()
-        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_SMALL_DEFAULT_BODY)))
-        config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, 2], pool_size=7,
-                                   kernel_size=1, activation=h_swish,
-                                   se_block=dict(activation=[h_swish, h_sigmoid], ratio=144)))
         config['loss'] = 'ce'
         return config
 
@@ -325,7 +310,8 @@ class MobileNet_v3_small(MobileNet_v2):
         name : str
             scope name
         se_block : dict, optional
-            If not None it must be a dict containing :meth:`~TFModel.se_block` params
+            If not None, it must be a dict containing :meth:`~TFModel.se_block` params
+
         Returns
         -------
         tf.Tensor
@@ -340,3 +326,17 @@ class MobileNet_v3_small(MobileNet_v2):
             x = conv_block(x, 'vcacV', filters=filters[1:], name='%s-conv2' % name, **kwargs)
             return x
         return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
+
+
+class MobileNet_v3_small(MobileNet_v3):
+    """ MobileNet version 3 small """
+    @classmethod
+    def default_config(cls):
+        config = TFModel.default_config()
+        config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
+        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_SMALL_DEFAULT_BODY)))
+        config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, 2], pool_size=7,
+                                   kernel_size=1, activation=h_swish,
+                                   se_block=dict(activation=[h_swish, h_sigmoid], ratio=144)))
+        config['loss'] = 'ce'
+        return config
