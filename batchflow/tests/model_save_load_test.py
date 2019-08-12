@@ -2,9 +2,6 @@
 
 import pytest
 
-import os
-import shutil
-
 import numpy as np
 
 from batchflow import Pipeline
@@ -16,30 +13,30 @@ from batchflow.models.tf import VGG7 as TF_VGG7
 PATH = 'my_mdl'
 BATCH_SIZE = 20
 
+
 @pytest.mark.slow
 @pytest.mark.parametrize('mode',
                          [pytest.param('static', marks=pytest.mark.skip(reason="doesn't work")),
                           'dynamic'])
 class TestModelSaveLoad:
-    """ Ensure that a model can be built and trained.
-
-    There is a following pattern in every test:
-        First of all, we get 'data' and 'config' via 'model_setup' fixture.
-        Then we optionally modify 'config'. In this case we modify only 'model' argument.
-        Finally, we assert that our modification was actually applied to a model by attempting
-        to build and train it with a small batch.
     """
-
-    # def setup(self):
-    #     if os.path.exists(PATH):
-    #         shutil.rmtree(PATH)
+    Ensure that a model can be saved and loaded.
+    """
 
     @pytest.fixture()
     def save_path(self, tmp_path):
+        """
+        Make path in temporary pytest folder for model to be saved to and loaded from
+        """
         return str((tmp_path / PATH).absolute())
 
     @pytest.fixture()
     def load_save_ppls(self, model_setup_images_clf, mode):
+        """
+        Create pipelines with models to be saved and to be loaded
+        Same dataset with no shuffling should be used, so that on same iterations
+        the pipelines get same data
+        """
         dataset, model_config = model_setup_images_clf(image_shape=(100, 100, 2))
         config = {'model_class': TF_VGG7, 'model_config': model_config}
 
@@ -60,6 +57,21 @@ class TestModelSaveLoad:
         return save_pipeline, load_pipeline
 
     def test_run(self, load_save_ppls, mode, save_path):
+        """
+        Check model loading and saving during pipeline iterations
+
+        A model is initialised in save_pipeline, then for each batch:
+            predictions are obtained and saved;
+            path for model saving is constructed using current iteration number;
+            current model state is saved;
+            the model is trained.
+        After that in load_pipeline for each batch in same dataset:
+            path for model loading is constructed using current iteration number;
+            the model is loaded;
+            predictions are obtained and saved.
+
+        Predictions from save_pipeline and from load_pipeline should be equal
+        """
         save_pipeline, load_pipeline = load_save_ppls
 
         def make_path_name(batch, path, iteration):
@@ -89,6 +101,9 @@ class TestModelSaveLoad:
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
 
     def test_tf_now(self, load_save_ppls, mode, save_path):
+        """
+        Test model loading and saving with `save_model_now`  and `load_model_now`
+        """
         save_pipeline, load_pipeline = load_save_ppls
 
         save_pipeline.run(BATCH_SIZE, n_epochs=1)
@@ -102,6 +117,9 @@ class TestModelSaveLoad:
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
 
     def test_tf_after_before(self, load_save_ppls, mode, save_path):
+        """
+        Test model saving in pipeline.after and loading in pipeline.before
+        """
         save_pipeline, load_pipeline = load_save_ppls
 
         save_pipeline.after.save_model('model', path=save_path)
