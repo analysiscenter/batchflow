@@ -1,5 +1,4 @@
 """ Once pipeline """
-import sys
 import copy as cp
 from functools import partial
 import numpy as np
