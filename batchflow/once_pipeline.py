@@ -42,20 +42,6 @@ class OncePipeline:
             return self.pipeline + other
         return other + self
 
-    @property
-    def _all_namespaces(self):
-        return [sys.modules["__main__"], self.pipeline.dataset] + self._namespaces
-
-    def has_method(self, name):
-        return any(hasattr(namespace, name) for namespace in self._all_namespaces)
-
-    def get_method(self, name):
-        """ Return a method by the name """
-        for namespace in self._all_namespaces:
-            if hasattr(namespace, name):
-                return getattr(namespace, name)
-        return None
-
     def _add_action(self, name, *args, _args=None, save_to=None, **kwargs):
         action = {'name': name, 'args': args, 'kwargs': kwargs, 'save_to': save_to}
         if _args:
@@ -64,12 +50,12 @@ class OncePipeline:
         return self
 
     def __getattr__(self, name):
-        if self.has_method(name):
+        if self.pipeline.is_method_from_ns(name):
             return partial(self._add_action, name)
         raise AttributeError("Unknown name: %s" % name)
 
     def add_namespace(self, *namespaces):
-        self._namespaces.extend(namespaces)
+        self.pipeline.add_namespace(*namespaces)
         return self
 
     def _exec_action(self, action):
@@ -80,7 +66,7 @@ class OncePipeline:
             method = getattr(self, ACTIONS[action['name']])
             method(action)
         else:
-            method = self.get_method(action['name'])
+            method = self.pipeline.get_method(action['name'])
             if method is None:
                 raise ValueError("Unknown method: %s" % action['name'])
 

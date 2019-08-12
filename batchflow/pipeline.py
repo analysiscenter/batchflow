@@ -192,6 +192,10 @@ class Pipeline:
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
 
+    def add_namespace(self, *namespaces):
+        self._namespaces.extend(namespaces)
+        return self
+
     @property
     def _all_namespaces(self):
         return [sys.modules["__main__"], self.dataset] + self._namespaces
@@ -583,10 +587,6 @@ class Pipeline:
             raise TypeError("Callable is expected, but got {}".format(type(fn)))
         if action['save_to'] is not None:
             self._save_output(batch, None, output, action['save_to'])
-
-    def add_namespace(self, *namespaces):
-        self._namespaces.extend(namespaces)
-        return self
 
     def _exec_from_ns(self, batch, action):
         res = action['method'](*action['args'], **action['kwargs'])
