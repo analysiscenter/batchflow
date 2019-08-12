@@ -1,4 +1,5 @@
 """ Test for model saving and loading """
+# pylint: disable=import-error, no-name-in-module
 
 import pytest
 
@@ -115,6 +116,7 @@ class TestModelSaveLoad:
         save_pipeline, load_pipeline = fixture_dict[fixture_name]
 
         def make_path_name(batch, path, iteration):
+            _ = batch
             return "{}_{}".format(path, iteration)
 
         save_tmpl = (Pipeline()
