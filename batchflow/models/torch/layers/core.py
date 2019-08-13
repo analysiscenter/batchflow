@@ -407,6 +407,7 @@ class AdaptiveAvgPool(_Pool):
     """ Multi-dimensional adaptive average pooling layer """
     def __init__(self, inputs=None, output_size=None, **kwargs):
         shape = get_shape(inputs)
+        kwargs.pop('padding')
         super().__init__(_fn=ADAPTIVE_AVGPOOL, inputs=inputs, output_size=output_size, padding=None, **kwargs)
         self.output_shape = tuple(shape[:2]) + tuple(output_size)
 
