@@ -149,8 +149,9 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
             if post_fn is None:
                 if any_action_failed(all_results):
                     all_errors = [error for error in all_results if isinstance(error, Exception)]
-                    print(all_errors)
+                    logging.error("Parallel action failed %s", all_errors)
                     traceback.print_tb(all_errors[0].__traceback__)
+                    raise RuntimeError("Parallel action failed")
                 return self
             return post_fn(all_results, *args, **kwargs)
 
