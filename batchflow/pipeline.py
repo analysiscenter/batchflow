@@ -455,18 +455,6 @@ class Pipeline:
         """ Delete all variables """
         self.variables = VariableDirectory()
 
-    def inc_variable(self, name):
-        """ Increment a value of a given variable during pipeline execution """
-        return self._add_action(INC_VARIABLE_ID, _args=dict(var_name=name))
-
-    def _exec_inc_variable(self, _, action):
-        if self.has_variable(action['var_name']):
-            self.variables.lock(action['var_name'])
-            self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
-            self.variables.unlock(action['var_name'])
-        else:
-            raise KeyError("No such variable %s exists" % action['var_name'])
-
     def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable lazily during pipeline execution
 
