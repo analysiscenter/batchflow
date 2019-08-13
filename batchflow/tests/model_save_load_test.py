@@ -35,12 +35,12 @@ class TestModelSaveLoad:
         Same dataset with no shuffling should be used, so that on same iterations
         the pipelines get same data
         """
-        dataset, model_config = model_setup_images_clf(image_shape=(100, 100, 2))
+        dataset, model_config = model_setup_images_clf('channels_last')
         config = {'model_class': TF_VGG7, 'model_config': model_config}
 
         save_pipeline = (Pipeline()
                          .init_variable('predictions', init_on_each_run=list)
-                         .init_model(mode, C('model_class'), 'model', C('model_config'))
+                         .init_model('dynamic', C('model_class'), 'model', C('model_config'))
                          .to_array()
                          .predict_model('model',
                                         fetches='predictions', save_to=V('predictions', mode='a'),
@@ -62,12 +62,12 @@ class TestModelSaveLoad:
         Create pipelines with Torch models to be saved and to be loaded
         see :meth:`~.TestModelSaveLoad.tf_pipelines` for details
         """
-        dataset, model_config = model_setup_images_clf(image_shape=(2, 100, 100))
+        dataset, model_config = model_setup_images_clf('channels_first')
         config = {'model_class': TORCH_VGG7, 'model_config': model_config}
 
         save_pipeline = (Pipeline()
                          .init_variable('predictions', init_on_each_run=list)
-                         .init_model(mode, C('model_class'), 'model', C('model_config'))
+                         .init_model('dynamic', C('model_class'), 'model', C('model_config'))
                          .to_array(channels='first', dtype='float32')
                          .predict_model('model', B('images'),
                                         fetches='predictions', save_to=V('predictions', mode='a')))
@@ -90,7 +90,7 @@ class TestModelSaveLoad:
 
     @pytest.mark.parametrize('fixture_name, model_args, model_kwargs',
                              [pytest.param('tf_pipelines', (), dict(images=B('images'), labels=B('labels')),
-                                           id="tf_model"),
+                                           id="tf"),
                               pytest.param('torch_pipelines', (B('images'), B('labels')), dict(fetches='loss'),
                                            id='torch')])
     def test_run(self, fixture_dict, fixture_name, save_path, model_args, model_kwargs):
