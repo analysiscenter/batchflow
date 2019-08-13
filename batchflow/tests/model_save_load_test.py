@@ -23,16 +23,20 @@ class TestModelSaveLoad:
     """
     Ensure that a model can be saved and loaded.
     """
-
+    @staticmethod
     @pytest.fixture()
-    def save_path(self, tmp_path):
+    def save_path(tmp_path):
         """
         Make path in temporary pytest folder for model to be saved to and loaded from
         """
         return str((tmp_path / PATH).absolute())
 
+    @staticmethod
     @pytest.fixture
-    def pipelines(self, model_setup_images_clf):
+    def pipelines(model_setup_images_clf):
+        """
+        make pipelines for model loading and saving, that are compatible with given `model_class`
+        """
         def _pipelines(model_class):
             config = {}
             data_format = predict_args = predict_kwargs = None
@@ -72,6 +76,9 @@ class TestModelSaveLoad:
 
     @staticmethod
     def train_args(model_class):
+        """
+        make args and kwargs for `.train_model`  that are compatible with `model_class`
+        """
         args = kwargs = None
         if issubclass(model_class, TFModel):
             args = ()

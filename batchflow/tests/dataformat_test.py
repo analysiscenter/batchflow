@@ -2,10 +2,10 @@
 # pylint: disable=import-error, no-name-in-module
 # pylint: disable=redefined-outer-name
 import pytest
-import numpy as np
+
 from tensorflow.test import is_gpu_available
 
-from batchflow import Pipeline, ImagesBatch, Dataset
+from batchflow import Pipeline
 from batchflow import B, V, C
 from batchflow.models.tf import VGG7, ResNet18, Inception_v1, MobileNet
 
