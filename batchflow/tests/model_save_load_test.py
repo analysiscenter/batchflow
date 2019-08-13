@@ -8,14 +8,17 @@ import numpy as np
 from batchflow import Pipeline
 from batchflow import B, V, C, I
 
-from batchflow.models.tf import VGG7 as TF_VGG7
-from batchflow.models.torch import VGG7 as TORCH_VGG7
+from batchflow.models.tf import VGG7 as TF_VGG7, TFModel
+from batchflow.models.torch import VGG7 as TORCH_VGG7, TorchModel
 
 PATH = 'my_mdl'
 BATCH_SIZE = 20
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize('model_class',
+                         [pytest.param(TF_VGG7, id="tf"),
+                          pytest.param(TORCH_VGG7, id='torch')])
 class TestModelSaveLoad:
     """
     Ensure that a model can be saved and loaded.
@@ -29,71 +32,57 @@ class TestModelSaveLoad:
         return str((tmp_path / PATH).absolute())
 
     @pytest.fixture
-    def tf_pipelines(self, model_setup_images_clf):
-        """
-        Create pipelines with TF models to be saved and to be loaded
-        Same dataset with no shuffling should be used, so that on same iterations
-        the pipelines get same data
-        """
-        dataset, model_config = model_setup_images_clf('channels_last')
-        config = {'model_class': TF_VGG7, 'model_config': model_config}
+    def pipelines(self, model_setup_images_clf):
+        def _pipelines(model_class):
+            config = {}
+            data_format = predict_args = predict_kwargs = None
+            if issubclass(model_class, TFModel):
+                data_format = 'channels_last'
+                config.update({'channels': 'last', 'dtype': None})
+                predict_args = ()
+                predict_kwargs = dict(images=B('images'))
+            elif issubclass(model_class, TorchModel):
+                data_format = 'channels_first'
+                config.update({'channels': 'first', 'dtype': 'float32'})
+                predict_args = (B('images'),)
+                predict_kwargs = dict()
 
-        save_pipeline = (Pipeline()
-                         .init_variable('predictions', init_on_each_run=list)
-                         .init_model('dynamic', C('model_class'), 'model', C('model_config'))
-                         .to_array()
-                         .predict_model('model',
-                                        fetches='predictions', save_to=V('predictions', mode='a'),
-                                        images=B('images')))
-        load_pipeline = (Pipeline()
-                         .init_variable('predictions', init_on_each_run=list)
-                         .to_array()
-                         .predict_model('model',
-                                        fetches='predictions', save_to=V('predictions', mode='a'),
-                                        images=B('images')))
+            dataset, model_config = model_setup_images_clf(data_format)
+            config.update({'model_class': model_class, 'model_config': model_config})
 
-        save_pipeline = (save_pipeline << dataset) << config
-        load_pipeline = (load_pipeline << dataset) << config
-        return save_pipeline, load_pipeline
+            save_pipeline = (Pipeline()
+                             .init_variable('predictions', init_on_each_run=list)
+                             .init_model('dynamic', C('model_class'), 'model', C('model_config'))
+                             .to_array(channels=C('channels'), dtype=C('dtype'))
+                             .predict_model('model', *predict_args,
+                                            fetches='predictions', save_to=V('predictions', mode='a'),
+                                            **predict_kwargs))
+            load_pipeline = (Pipeline()
+                             .init_variable('predictions', init_on_each_run=list)
+                             .to_array(channels=C('channels'), dtype=C('dtype'))
+                             .predict_model('model', *predict_args,
+                                            fetches='predictions', save_to=V('predictions', mode='a'),
+                                            **predict_kwargs))
 
-    @pytest.fixture
-    def torch_pipelines(self, model_setup_images_clf):
-        """
-        Create pipelines with Torch models to be saved and to be loaded
-        see :meth:`~.TestModelSaveLoad.tf_pipelines` for details
-        """
-        dataset, model_config = model_setup_images_clf('channels_first')
-        config = {'model_class': TORCH_VGG7, 'model_config': model_config}
+            save_pipeline = (save_pipeline << dataset) << config
+            load_pipeline = (load_pipeline << dataset) << config
+            return save_pipeline, load_pipeline
 
-        save_pipeline = (Pipeline()
-                         .init_variable('predictions', init_on_each_run=list)
-                         .init_model('dynamic', C('model_class'), 'model', C('model_config'))
-                         .to_array(channels='first', dtype='float32')
-                         .predict_model('model', B('images'),
-                                        fetches='predictions', save_to=V('predictions', mode='a')))
-        load_pipeline = (Pipeline()
-                         .init_variable('predictions', init_on_each_run=list)
-                         .to_array(channels='first', dtype='float32')
-                         .predict_model('model', B('images'),
-                                        fetches='predictions', save_to=V('predictions', mode='a')))
+        return _pipelines
 
-        save_pipeline = (save_pipeline << dataset) << config
-        load_pipeline = (load_pipeline << dataset) << config
-        return save_pipeline, load_pipeline
+    @staticmethod
+    def train_args(model_class):
+        args = kwargs = None
+        if issubclass(model_class, TFModel):
+            args = ()
+            kwargs = dict(images=B('images'), labels=B('labels'))
+        elif issubclass(model_class, TorchModel):
+            args = (B('images'), B('labels'))
+            kwargs = dict(fetches='loss')
 
-    @pytest.fixture
-    def fixture_dict(self, tf_pipelines, torch_pipelines):
-        """
-        workaround for passing parametrized fixtures as parameters
-        """
-        return dict(tf_pipelines=tf_pipelines, torch_pipelines=torch_pipelines)
+        return args, kwargs
 
-    @pytest.mark.parametrize('fixture_name, model_args, model_kwargs',
-                             [pytest.param('tf_pipelines', (), dict(images=B('images'), labels=B('labels')),
-                                           id="tf"),
-                              pytest.param('torch_pipelines', (B('images'), B('labels')), dict(fetches='loss'),
-                                           id='torch')])
-    def test_run(self, fixture_dict, fixture_name, save_path, model_args, model_kwargs):
+    def test_run(self, save_path, pipelines, model_class):
         """
         Check model loading and saving during pipeline iterations
 
@@ -107,11 +96,13 @@ class TestModelSaveLoad:
 
         Predictions from save_pipeline and from load_pipeline should be equal
         """
-        save_pipeline, load_pipeline = fixture_dict[fixture_name]
+        save_pipeline, load_pipeline = pipelines(model_class)
+
+        train_args, train_kwargs = self.train_args(model_class)
 
         save_tmpl = (Pipeline()
                      .save_model('model', path=save_path + I("current").str())
-                     .train_model('model', *model_args, **model_kwargs))
+                     .train_model('model', *train_args, **train_kwargs))
 
         save_pipeline = save_pipeline + save_tmpl
         save_pipeline.run(BATCH_SIZE, n_epochs=1, bar=True)
@@ -126,16 +117,11 @@ class TestModelSaveLoad:
 
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
 
-    @pytest.mark.parametrize('fixture_name',
-                             [pytest.param('tf_pipelines',
-                                           id="tf"),
-                              pytest.param('torch_pipelines',
-                                           id='torch')])
-    def test_now(self, fixture_dict, fixture_name, save_path):
+    def test_now(self, save_path, pipelines, model_class):
         """
         Test model loading and saving with `save_model_now`  and `load_model_now`
         """
-        save_pipeline, load_pipeline = fixture_dict[fixture_name]
+        save_pipeline, load_pipeline = pipelines(model_class)
 
         save_pipeline.run(BATCH_SIZE, n_epochs=1)
         saved_predictions = save_pipeline.get_variable('predictions')
@@ -147,16 +133,11 @@ class TestModelSaveLoad:
 
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
 
-    @pytest.mark.parametrize('fixture_name',
-                             [pytest.param('tf_pipelines',
-                                           id="tf"),
-                              pytest.param('torch_pipelines',
-                                           id='torch')])
-    def test_after_before(self, fixture_dict, fixture_name, save_path):
+    def test_after_before(self, save_path, pipelines, model_class):
         """
         Test model saving in pipeline.after and loading in pipeline.before
         """
-        save_pipeline, load_pipeline = fixture_dict[fixture_name]
+        save_pipeline, load_pipeline = pipelines(model_class)
 
         save_pipeline.after.save_model('model', path=save_path)
         save_pipeline.run(BATCH_SIZE, n_epochs=1)
