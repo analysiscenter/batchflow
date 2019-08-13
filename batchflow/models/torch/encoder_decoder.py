@@ -73,8 +73,8 @@ class EncoderDecoder(TorchModel):
     ResNeXt blocks in between:
 
     >>> config = {
-            'inputs': dict(images={'shape': B('image_shape')},
-                           masks={'name': 'targets', 'shape': B('mask_shape')}),
+            'inputs/images/shape': B('image_shape'),
+            'inputs/masks/shape': B('mask_shape'),
             'initial_block': {'inputs': 'images',
                               'layout': 'cna', 'filters': 4, 'kernel_size': 7},
             'body/encoder': {'num_stages': 4,
