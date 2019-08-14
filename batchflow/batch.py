@@ -4,6 +4,7 @@ import os
 import traceback
 import threading
 import warnings
+from copy import deepcopy
 
 import dill
 try:
@@ -197,13 +198,16 @@ class Batch:
             return np.concatenate(data)
         raise TypeError("Unknown data type", type(data[0]))
 
-    def as_dataset(self, dataset=None):
+    def as_dataset(self, dataset=None, copy=False):
         """ Makes a new dataset from batch data
 
         Parameters
         ----------
         dataset
             an instance or a subclass of Dataset
+
+        copy : bool
+            whether to copy batch data to allow for further inplace transformations
 
         Returns
         -------
@@ -216,7 +220,8 @@ class Batch:
             dataset_class = dataset
         else:
             dataset_class = dataset.__class__
-        return dataset_class(self.index, batch_class=type(self), preloaded=self.data)
+        data = deepcopy(self.data) if copy else self.data
+        return dataset_class(self.index, batch_class=type(self), preloaded=data)
 
     @property
     def indices(self):
