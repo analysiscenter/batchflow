@@ -307,7 +307,10 @@ class Batch:
                 super().__setattr__(name, value)
                 if self._item_class is None:
                     self.make_item_class()
-                self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
+                if isinstance(value, self._item_class):
+                    self._data_named = value
+                else:
+                    self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
                 return
             if name in self.components:    # pylint: disable=unsupported-membership-test
                 if self._data_named is None:
@@ -398,16 +401,17 @@ class Batch:
 
     def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
-        if self.components is None:
-            _src = data
-        else:
-            _src = data if isinstance(data, tuple) or data is None else tuple([data])
-        _src = self.get_items(self.indices, _src)
+        _src = self.get_items(self.indices, data)
+        if not isinstance(_src, (tuple, dict, self._item_class)):
+            _src = (_src,)
 
         if dst is None:
             self._data = _src
         else:
-            components = [dst] if isinstance(dst, str) else dst
+            if isinstance(dst, str):
+                components = [dst]
+            else:
+                components = dst
             for i, comp in enumerate(components):
                 if isinstance(_src, dict):
                     comp_src = _src[comp]
@@ -421,14 +425,13 @@ class Batch:
             _data = self.data
         else:
             _data = data
-        if components is None:
-            components = self.components
+        components = components or self.components
 
         if self._item_class is not None and isinstance(_data, self._item_class):
             pos = [self.get_pos(None, comp, index) for comp in components]   # pylint: disable=not-an-iterable
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
-            comps = components if components is not None else range(len(_data))
+            comps = components or range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
@@ -449,8 +452,7 @@ class Batch:
             if component is None:
                 res = self[item]
             else:
-                res = self[item]
-                res = getattr(res, component)
+                res = getattr(self[item], component)
         return res
 
     def __getitem__(self, item):
