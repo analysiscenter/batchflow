@@ -34,7 +34,7 @@ class Batch:
     _item_class = None
     components = None
 
-    def __init__(self, index, preloaded=None, *args, **kwargs):
+    def __init__(self, index, preloaded=None, dataset=None, *args, **kwargs):
         _ = args
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
@@ -44,6 +44,7 @@ class Batch:
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
         self._local = None
+        self._dataset = dataset
         self._pipeline = None
         self.create_attrs(**kwargs)
 
@@ -51,6 +52,13 @@ class Batch:
         """ Create attributes from kwargs """
         for attr, value in kwargs.items():
             setattr(self, attr, value)
+
+    @property
+    def dataset(self):
+        """: Dataset - a dataset the batch has been taken from """
+        if self.pipeline is not None:
+            return self.pipeline.dataset
+        return self._dataset
 
     @property
     def pipeline(self):
@@ -189,7 +197,7 @@ class Batch:
             return np.concatenate(data)
         raise TypeError("Unknown data type", type(data[0]))
 
-    def as_dataset(self, dataset):
+    def as_dataset(self, dataset=None):
         """ Makes a new dataset from batch data
 
         Parameters
@@ -201,6 +209,7 @@ class Batch:
         -------
         an instance of a class specified by `dataset` arg, preloaded with this batch data
         """
+        dataset = dataset or self._dataset
         if dataset is None:
             raise ValueError('dataset can be an instance of Dataset (sub)class or the class itself, but not None')
         if isinstance(dataset, type):

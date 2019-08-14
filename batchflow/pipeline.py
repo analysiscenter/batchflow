@@ -678,7 +678,6 @@ class Pipeline:
 
                 batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
 
-            batch.pipeline = self
         return batch
 
     def _needs_exec(self, batch, action):
