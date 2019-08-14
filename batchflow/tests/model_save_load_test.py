@@ -155,3 +155,40 @@ class TestModelSaveLoad:
         loaded_predictions = load_pipeline.get_variable('predictions')
 
         assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
+
+    def test_bare_model(self, save_path, model_class):
+        """
+        Test model saving and loading without pipeline
+        """
+        num_classes = 10
+        dataset_size = 10
+
+        image_shape = None
+        if issubclass(model_class, TFModel):
+            image_shape = (100, 100, 2)
+        elif issubclass(model_class, TorchModel):
+            image_shape = (2, 100, 100)
+
+        model_config = {'inputs/images/shape': image_shape,
+                        'inputs/labels/classes': num_classes,
+                        'initial_block/inputs': 'images'}
+        model_save = model_class(config=model_config)
+
+        batch_shape = (dataset_size, *image_shape)
+        images_array = np.random.random(batch_shape)
+        args = kwargs = None
+        if issubclass(model_class, TFModel):
+            args = ()
+            kwargs = dict(feed_dict={'images': images_array}, fetches=('predictions', ))
+        elif issubclass(model_class, TorchModel):
+            args = (images_array.astype('float32'),)
+            kwargs = dict(fetches='predictions')
+
+        saved_predictions = model_save.predict(*args, **kwargs)
+        model_save.save(path=save_path)
+
+        model_load = model_class(config=model_config)
+        model_load.load(path=save_path)
+        loaded_predictions = model_load.predict(*args, **kwargs)
+
+        assert (np.concatenate(saved_predictions) == np.concatenate(loaded_predictions)).all()
