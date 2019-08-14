@@ -65,16 +65,18 @@ class Dataset(Baseset):
         super().__init__(index, *args)
         self.batch_class = batch_class
         self.preloaded = preloaded
-        self._copy = copy
+        self._attrs = None
+        kwargs['_copy'] = kwargs.get('_copy', copy)
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
         """ Create attributes from kwargs """
+        self._attrs = kwargs
         for attr, value in kwargs.items():
             setattr(self, attr, value)
 
     @classmethod
-    def from_dataset(cls, dataset, index, batch_class=None, copy=False):
+    def from_dataset(cls, dataset, index, batch_class=None, copy=False, **kwargs):
         """ Create a Dataset object from another dataset with a new index
             (usually a subset of the source dataset index)
 
@@ -90,7 +92,7 @@ class Dataset(Baseset):
                 a subclass of Batch class
 
             copy : bool
-                whether to copy the dataset or use it wherever possible
+                whether to create a copy of the dataset or use the same instance wherever possible
 
             Returns
             -------
@@ -102,7 +104,7 @@ class Dataset(Baseset):
         if copy:
             index = cp.copy(index)
         bcl = batch_class if batch_class is not None else dataset.batch_class
-        return cls(index, batch_class=bcl, preloaded=dataset.preloaded)
+        return cls(index, batch_class=bcl, preloaded=dataset.preloaded, **kwargs)
 
     def __copy__(self):
         return self.from_dataset(self, self.index, copy=True)
@@ -173,7 +175,7 @@ class Dataset(Baseset):
         indices = index.indices if isinstance(index, DatasetIndex) else index
         if not np.isin(indices, self.indices).all():
             raise IndexError
-        return type(self).from_dataset(self, self.index.create_subset(index))
+        return type(self).from_dataset(self, self.index.create_subset(index), **self._attrs)
 
     def create_batch(self, index, pos=False, *args, **kwargs):
         """ Create a batch from given indices.
