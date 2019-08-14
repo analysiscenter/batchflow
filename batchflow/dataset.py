@@ -41,7 +41,7 @@ class Dataset(Baseset):
     validation : Dataset
         The validation part of this dataset. It appears after splitting
     """
-    def __init__(self, index, batch_class=Batch, preloaded=None, *args, **kwargs):
+    def __init__(self, index, batch_class=Batch, preloaded=None, copy=False, *args, **kwargs):
         """ Create Dataset
 
             Parameters
@@ -55,6 +55,9 @@ class Dataset(Baseset):
             preloaded : data-type
                 For smaller dataset it might be convenient to preload all data at once
                 As a result, all created batches will contain a portion of some_data.
+
+            copy : bool
+                whether to copy data from `preloaded` when creating a batch to alow for in-place transformations
         """
         if batch_class is not Batch and not issubclass(batch_class, Batch):
             raise TypeError("batch_class should be inherited from Batch", batch_class)
@@ -62,6 +65,7 @@ class Dataset(Baseset):
         super().__init__(index, *args)
         self.batch_class = batch_class
         self.preloaded = preloaded
+        self._copy = copy
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
@@ -194,7 +198,7 @@ class Dataset(Baseset):
         """
         if not isinstance(index, DatasetIndex):
             index = self.index.create_batch(index, pos, *args, **kwargs)
-        return self.batch_class(index, preloaded=self.preloaded, dataset=self, **kwargs)
+        return self.batch_class(index, dataset=self, preloaded=self.preloaded, copy=self._copy, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow

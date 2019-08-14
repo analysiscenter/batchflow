@@ -35,7 +35,7 @@ class Batch:
     _item_class = None
     components = None
 
-    def __init__(self, index, preloaded=None, dataset=None, *args, **kwargs):
+    def __init__(self, index, dataset=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
@@ -44,6 +44,7 @@ class Batch:
         self._data = None
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
+        self._copy = copy
         self._local = None
         self._dataset = dataset
         self._pipeline = None
@@ -220,8 +221,7 @@ class Batch:
             dataset_class = dataset
         else:
             dataset_class = dataset.__class__
-        data = deepcopy(self.data) if copy else self.data
-        return dataset_class(self.index, batch_class=type(self), preloaded=data)
+        return dataset_class(self.index, batch_class=type(self), preloaded=self._data, copy=copy)
 
     @property
     def indices(self):
@@ -453,6 +453,9 @@ class Batch:
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]
+
+        if self._copy and data == self._preloaded:
+            res = deepcopy(res)
         return res
 
     def get(self, item=None, component=None):
