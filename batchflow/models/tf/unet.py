@@ -70,19 +70,3 @@ class UNet(EncoderDecoder):
 
         config['loss'] = 'ce'
         return config
-
-    def build_config(self, names=None):
-        config = super().build_config(names)
-
-        num_stages = config.get('body/encoder/num_stages')
-
-        initial_block_filters = config.get('initial_block/filters')
-        f_0 = initial_block_filters[-1] if isinstance(initial_block_filters, (list, tuple)) else initial_block_filters
-
-        if config.get('body/encoder/blocks/filters') == [128, 256, 512, 1024] and num_stages != 4:
-            config['body/encoder/blocks/filters'] = [f_0*2**(i+1) for i in range(num_stages)]
-
-        if config.get('body/decoder/blocks/filters') == [512, 256, 128, 64] and num_stages != 4:
-            config['body/decoder/blocks/filters'] = [f_0*2**i for i in range(num_stages)][::-1]
-
-        return config

@@ -7,9 +7,9 @@ from .resnet import ResNet
 
 
 class VNet(EncoderDecoder):
-    """ VNet-like model
+    """ VNet model
 
-  **Configuration**
+    **Configuration**
 
     inputs : dict
         dict with 'images' and 'masks' (see :meth:`~.TFModel._make_inputs`)
@@ -76,36 +76,4 @@ class VNet(EncoderDecoder):
         config['head'] = dict(layout='Rcna+ cna', kernel_size=5, filters=[48, 32])
 
         config['loss'] = 'ce'
-        return config
-
-    def build_config(self, names=None):
-        config = super().build_config(names)
-
-        num_stages = config.get('body/encoder/num_stages')
-
-        initial_block_filters = config.get('initial_block/filters')
-        f_0 = initial_block_filters[-1] if isinstance(initial_block_filters, (list, tuple)) else initial_block_filters
-
-        encoder_filters = [f_0*2**(i+1) for i in range(num_stages)]
-        decoder_filters = encoder_filters[::-1]
-
-        if num_stages != 4:
-            if config.get('body/encoder/blocks/layout') == ['cna'*2] + ['cna'*3] * 3:
-                config['body/encoder/blocks/layout'] = ['cna'*2 if i < 1 else 'cna'*3 for i in range(num_stages)]
-
-            if config.get('body/encoder/blocks/filters') == [32, 64, 128, 256]:
-                config['body/encoder/blocks/filters'] = encoder_filters
-
-            if config.get('body/encoder/downsample/filters') == [32, 64, 128, 256]:
-                config['body/encoder/downsample/filters'] = encoder_filters
-
-            if config.get('body/decoder/blocks/layout') == ['cna'*3] * 3 + ['cna'*2]:
-                config['body/decoder/blocks/layout'] = ['cna'*3 for i in range(num_stages-1)] + ['cna'*2]
-
-            if config.get('body/decoder/blocks/filters') == [256, 128, 64, 32]:
-                config['body/decoder/blocks/filters'] = decoder_filters
-
-            if config.get('head/filters') == [48, 32]:
-                config['head/filters'] = [f_0 * 3, f_0 * 2]
-
         return config
