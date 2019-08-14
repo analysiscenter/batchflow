@@ -221,7 +221,7 @@ class Batch:
             dataset_class = dataset
         else:
             dataset_class = dataset.__class__
-        return dataset_class(self.index, batch_class=type(self), preloaded=self._data, copy=copy)
+        return dataset_class(self.index, batch_class=type(self), preloaded=self.data, copy=copy)
 
     @property
     def indices(self):
@@ -446,7 +446,7 @@ class Batch:
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
             comps = components or range(len(_data))
-            res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
+            res = tuple(data_item[self.get_pos(None, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
             res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
