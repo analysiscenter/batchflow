@@ -11,6 +11,7 @@ import numpy as np
 
 from .base import Baseset
 from .config import Config
+from .decorators import deprecated
 from .exceptions import SkipBatchException
 from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
@@ -190,6 +191,10 @@ class Pipeline:
         if hasattr(namespace, name) and callable(getattr(namespace, name)):
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
+
+    def add_namespace(self, *namespaces):
+        self._namespaces.extend(namespaces)
+        return self
 
     @property
     def _all_namespaces(self):
@@ -455,6 +460,46 @@ class Pipeline:
         """ Delete all variables """
         self.variables = VariableDirectory()
 
+    def inc_variable(self, name):
+        """ Increment a value of a given variable during pipeline execution """
+        return self._add_action(INC_VARIABLE_ID, _args=dict(var_name=name))
+
+    def _exec_inc_variable(self, _, action):
+        if self.has_variable(action['var_name']):
+            self.variables.lock(action['var_name'])
+            self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
+            self.variables.unlock(action['var_name'])
+        else:
+            raise KeyError("No such variable %s exists" % action['var_name'])
+
+    def update(self, expr, value=None):
+        """ Update a value of a given named expression lazily during pipeline execution
+
+        Parameters
+        ----------
+        expr : NamedExpression
+            an expression
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        ``set_variable`` is imperative and may be used to change variable value within actions.
+        """
+        return self._add_action(UPDATE_ID, _args=dict(expr=expr, value=value))
+
+    def _exec_update(self, batch, action):
+        action['expr'].set(action['value'], batch=batch)
+
+
+    @deprecated("update_variable() is deprecated. Use pipeline.update(V(name), value) instead.")
     def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable lazily during pipeline execution
 
@@ -486,10 +531,6 @@ class Pipeline:
         ``set_variable`` is imperative and may be used to change variable value within actions.
         """
         return self._add_action(UPDATE_VARIABLE_ID, _args=dict(var_name=name, value=value, mode=mode))
-
-    def save_to_variable(self, name, *args, **kwargs):
-        """ Save a value to a given variable during pipeline execution """
-        return self.update_variable(name, *args, **kwargs)
 
     def _exec_update_variable(self, batch, action):
         self.set_variable(action['var_name'], action['value'], action['mode'], batch=batch)
@@ -527,6 +568,14 @@ class Pipeline:
 
         save_to : a named expression or a sequence of named expressions
             A location where function output will be saved to.
+
+        Notes
+        -----
+        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline,
+        `call` is convenient with lambdas::
+
+            pipeline
+                .call(lambda batch: [image.shape[1] for image in batch.images], save_to=V('image_widths'))
         """
         return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, **kwargs))
 
@@ -538,10 +587,6 @@ class Pipeline:
             raise TypeError("Callable is expected, but got {}".format(type(fn)))
         if action['save_to'] is not None:
             self._save_output(batch, None, output, action['save_to'])
-
-    def add_namespace(self, *namespaces):
-        self._namespaces.extend(namespaces)
-        return self
 
     def _exec_from_ns(self, batch, action):
         res = action['method'](*action['args'], **action['kwargs'])

@@ -243,7 +243,7 @@ class Batch:
         elif type(self)._item_class is None or not local:
             comp_class = MetaComponentsTuple(type(self).__name__ + 'Components', components=self.components)
             type(self)._item_class = comp_class
-        else:
+        elif local:
             comp_class = MetaComponentsTuple(type(self).__name__ + 'Components' + str(id(self)),
                                              components=self.components)
             self._item_class = comp_class

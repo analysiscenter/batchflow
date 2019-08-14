@@ -3,7 +3,7 @@ import copy as cp
 import threading
 import logging
 
-from .named_expr import eval_expr, L
+from .named_expr import eval_expr, F
 
 
 class Variable:
@@ -13,7 +13,7 @@ class Variable:
         if 'init_on_each_run' in kwargs:
             init_on_each_run = kwargs.get('init_on_each_run')
             if callable(init_on_each_run):
-                self.default = L(init_on_each_run)
+                self.default = F(init_on_each_run, _pass=False)
             else:
                 self.default = init_on_each_run
             self._init_on_each_run = True

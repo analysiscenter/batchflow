@@ -96,8 +96,18 @@ def add_ops(cls):
     return cls
 
 
+class MetaNamedExpression(type):
+    """ Meta class to allow for easy instantiation through attribution
+
+    Examples
+    --------
+    `B.images` is equal to B('images'), but requires fewer letters to type
+    """
+    def __getattr__(cls, name):
+        return cls(name)
+
 @add_ops
-class NamedExpression:
+class NamedExpression(metaclass=MetaNamedExpression):
     """ Base class for a named expression
 
     Attributes
@@ -401,10 +411,11 @@ class F(NamedExpression):
         _ = args, kwargs
         raise NotImplementedError("Assigning a value with a callable is not supported")
 
+
 class L(F):
     """ A function, method or any other callable """
-    def __init__(self, name, *args, mode='w', **kwargs):
-        super().__init__(name, *args, mode=mode, _pass=False, **kwargs)
+    def __init__(self, name, mode='w'):
+        super().__init__(name, mode=mode, _pass=False)
 
 
 class V(NamedExpression):
@@ -451,7 +462,7 @@ class D(NamedExpression):
 
     def _get_name_dataset(self, batch=None, pipeline=None, model=None):
         name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline or pipeline
+        pipeline = pipeline if pipeline is not None else batch.pipeline
         dataset = pipeline.dataset if pipeline is not None else None
         dataset = dataset or batch.dataset
         if dataset is None:
