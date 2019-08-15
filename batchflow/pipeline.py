@@ -44,7 +44,6 @@ def hashable(x):
     return True
 
 
-
 class Pipeline:
     """ Pipeline """
     def __init__(self, dataset=None, config=None, pipeline=None, actions=None, proba=None, repeat=None):
@@ -457,18 +456,6 @@ class Pipeline:
     def delete_all_variables(self):
         """ Delete all variables """
         self.variables = VariableDirectory()
-
-    def inc_variable(self, name):
-        """ Increment a value of a given variable during pipeline execution """
-        return self._add_action(INC_VARIABLE_ID, _args=dict(var_name=name))
-
-    def _exec_inc_variable(self, _, action):
-        if self.has_variable(action['var_name']):
-            self.variables.lock(action['var_name'])
-            self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
-            self.variables.unlock(action['var_name'])
-        else:
-            raise KeyError("No such variable %s exists" % action['var_name'])
 
     def update(self, expr, value=None):
         """ Update a value of a given named expression lazily during pipeline execution

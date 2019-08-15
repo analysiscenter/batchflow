@@ -2,41 +2,13 @@
 # pylint: disable=import-error, no-name-in-module
 # pylint: disable=redefined-outer-name
 import pytest
-import numpy as np
 
-from batchflow import Pipeline, ImagesBatch, Dataset
+from batchflow import Pipeline
 from batchflow import B, V, C
 from batchflow.models.torch import VGG7
 
 MODELS = [VGG7]
 
-@pytest.fixture()
-def model_setup():
-    """ Pytest fixture to generate fake dataset and model config.
-
-    Returns
-    -------
-    tuple
-        an instance of Dataset
-        a model config
-    """
-    def _model_setup():
-        size = 50
-        image_shape = (2, 100, 100)
-        batch_shape = (size, *image_shape)
-        images_array = np.random.random(batch_shape)
-        labels_array = np.random.choice(10, size=size)
-        data = images_array, labels_array
-        dataset = Dataset(index=size,
-                          batch_class=ImagesBatch,
-                          preloaded=data)
-
-        model_config = {'inputs/images/shape': image_shape,
-                        'inputs/labels/classes': 10,
-                        'initial_block/inputs': 'images'}
-        return dataset, model_config
-
-    return _model_setup
 
 @pytest.fixture()
 def pipeline():
@@ -71,6 +43,7 @@ def pipeline():
                      )
     return test_pipeline
 
+
 @pytest.mark.slow
 @pytest.mark.parametrize('model', MODELS)
 class Test_models:
@@ -83,9 +56,9 @@ class Test_models:
         to build and train it with a small batch.
     """
     @pytest.mark.parametrize('decay', [None, 'exp'])
-    def test_data_format(self, model, model_setup, pipeline, decay):
+    def test_data_format(self, model, model_setup_images_clf, pipeline, decay):
         """ We can explicitly pass 'data_format' to inputs or common."""
-        dataset, model_config = model_setup()
+        dataset, model_config = model_setup_images_clf()
         model_config.update(decay=decay, n_iters=25)
         config = {'model_class': model, 'model_config': model_config}
         test_pipeline = (pipeline << dataset) << config
