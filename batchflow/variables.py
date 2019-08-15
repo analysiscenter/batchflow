@@ -34,7 +34,6 @@ class Variable:
     def initialize(self, pipeline=None):
         """ Initialize a variable value """
         value = eval_expr(self.default, pipeline=pipeline)
-        print(id(self.default), id(value))
         self.set(value)
 
     def lock(self):
