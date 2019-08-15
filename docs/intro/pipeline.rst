@@ -437,22 +437,15 @@ To change a variable value just call `set_variable` within an action::
             self.pipeline.set_variable("variable_name", new_value)
             ...
 
-Or add `update_variable` to the pipeline::
+Or add `update` to the pipeline::
 
     my_pipeline
         ...
-        .update_variable("current_batch_labels", F(MyBatch.get_labels))
-        .update_variable("all_labels", V('current_batch_labels'), mode='append')
+        .update(V("current_batch_labels"), F(MyBatch.get_labels))
+        .update(V("all_labels", mode='append'), V('current_batch_labels'))
 
-The first parameter specifies a variable name, and it can be a string or :doc:`a named expression <named_expr>`,
-returning a string.
-The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`, e.g.:
-
-* B('name') - a batch class attribute or component name
-* V('name') - a pipeline variable name
-* C('name') - a pipeline config option
-* F(name) - a callable which takes a batch (could be a batch class method or a function)
-* R('name') - a random value from a given distribution
+The first parameter specifies :doc:`a named expression <named_expr>` where the value will be stored.
+The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`.
 
 Note that a named expression might have a mode (e.g. `V('name', mode='a')`) which could be one of:
 

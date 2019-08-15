@@ -4,6 +4,7 @@ import os
 import traceback
 import threading
 import warnings
+from copy import deepcopy
 
 import dill
 try:
@@ -34,7 +35,7 @@ class Batch:
     _item_class = None
     components = None
 
-    def __init__(self, index, preloaded=None, *args, **kwargs):
+    def __init__(self, index, dataset=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
@@ -43,7 +44,9 @@ class Batch:
         self._data = None
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
+        self._copy = copy
         self._local = None
+        self._dataset = dataset
         self._pipeline = None
         self.create_attrs(**kwargs)
 
@@ -51,6 +54,13 @@ class Batch:
         """ Create attributes from kwargs """
         for attr, value in kwargs.items():
             setattr(self, attr, value)
+
+    @property
+    def dataset(self):
+        """: Dataset - a dataset the batch has been taken from """
+        if self.pipeline is not None:
+            return self.pipeline.dataset
+        return self._dataset
 
     @property
     def pipeline(self):
@@ -189,7 +199,7 @@ class Batch:
             return np.concatenate(data)
         raise TypeError("Unknown data type", type(data[0]))
 
-    def as_dataset(self, dataset):
+    def as_dataset(self, dataset=None, copy=False):
         """ Makes a new dataset from batch data
 
         Parameters
@@ -197,17 +207,21 @@ class Batch:
         dataset
             an instance or a subclass of Dataset
 
+        copy : bool
+            whether to copy batch data to allow for further inplace transformations
+
         Returns
         -------
         an instance of a class specified by `dataset` arg, preloaded with this batch data
         """
+        dataset = dataset or self._dataset
         if dataset is None:
             raise ValueError('dataset can be an instance of Dataset (sub)class or the class itself, but not None')
         if isinstance(dataset, type):
             dataset_class = dataset
         else:
             dataset_class = dataset.__class__
-        return dataset_class(self.index, batch_class=type(self), preloaded=self.data)
+        return dataset_class(self.index, batch_class=type(self), preloaded=self.data, copy=copy)
 
     @property
     def indices(self):
@@ -243,7 +257,7 @@ class Batch:
         elif type(self)._item_class is None or not local:
             comp_class = MetaComponentsTuple(type(self).__name__ + 'Components', components=self.components)
             type(self)._item_class = comp_class
-        else:
+        elif local:
             comp_class = MetaComponentsTuple(type(self).__name__ + 'Components' + str(id(self)),
                                              components=self.components)
             self._item_class = comp_class
@@ -307,7 +321,10 @@ class Batch:
                 super().__setattr__(name, value)
                 if self._item_class is None:
                     self.make_item_class()
-                self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
+                if isinstance(value, self._item_class):
+                    self._data_named = value
+                else:
+                    self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
                 return
             if name in self.components:    # pylint: disable=unsupported-membership-test
                 if self._data_named is None:
@@ -398,16 +415,17 @@ class Batch:
 
     def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
-        if self.components is None:
-            _src = data
-        else:
-            _src = data if isinstance(data, tuple) or data is None else tuple([data])
-        _src = self.get_items(self.indices, _src)
+        _src = self.get_items(self.indices, data)
+        if not isinstance(_src, (tuple, dict, self._item_class)):
+            _src = (_src,)
 
         if dst is None:
             self._data = _src
         else:
-            components = [dst] if isinstance(dst, str) else dst
+            if isinstance(dst, str):
+                components = [dst]
+            else:
+                components = dst
             for i, comp in enumerate(components):
                 if isinstance(_src, dict):
                     comp_src = _src[comp]
@@ -421,21 +439,23 @@ class Batch:
             _data = self.data
         else:
             _data = data
-        if components is None:
-            components = self.components
+        components = components or self.components
 
         if self._item_class is not None and isinstance(_data, self._item_class):
             pos = [self.get_pos(None, comp, index) for comp in components]   # pylint: disable=not-an-iterable
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
-            comps = components if components is not None else range(len(_data))
-            res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
+            comps = components or range(len(_data))
+            res = tuple(data_item[self.get_pos(None, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
             res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]
+
+        if self._copy and data == self._preloaded:
+            res = deepcopy(res)
         return res
 
     def get(self, item=None, component=None):
@@ -449,8 +469,7 @@ class Batch:
             if component is None:
                 res = self[item]
             else:
-                res = self[item]
-                res = getattr(res, component)
+                res = getattr(self[item], component)
         return res
 
     def __getitem__(self, item):

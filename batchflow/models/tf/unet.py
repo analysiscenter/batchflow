@@ -59,38 +59,14 @@ class UNet(EncoderDecoder):
     def default_config(cls):
         config = super().default_config()
 
-        config['common'] = dict(conv=dict(use_bias=False))
-
         config['initial_block'] = dict(layout='cna cna', kernel_size=3, filters=64)
 
         config['body/encoder/num_stages'] = 4
-        config['body/encoder/blocks'] = dict(layout='cna cna', kernel_size=3, filters=None)
-        config['body/embedding'] = None  # identity
-        config['body/decoder/num_stages'] = None  # defaults to body/encoder/num_stages
-        config['body/decoder/factor'] = None  # defaults to [2] * num_stages
-        config['body/decoder/blocks'] = dict(layout='cna cna', kernel_size=3, filters=None)
+        config['body/encoder/blocks'] = dict(layout='cna cna', kernel_size=3, filters=[128, 256, 512, 1024])
+        config['body/embedding'] = None
+        config['body/decoder/blocks'] = dict(layout='cna cna', kernel_size=3, filters=[512, 256, 128, 64])
 
-        config['head'] = dict(layout='cna cna', kernel_size=3, strides=1, filters=64)
+        config['head'] = dict(layout='cna cna', kernel_size=3, filters=64)
 
         config['loss'] = 'ce'
-
-        return config
-
-    def build_config(self, names=None):
-        config = super().build_config(names)
-
-        num_stages = config.get('body/encoder/num_stages')
-
-        initial_block_filters = config.get('initial_block/filters')
-        f_0 = initial_block_filters[-1] if isinstance(initial_block_filters, (list, tuple)) else initial_block_filters
-
-        if config.get('body/encoder/blocks/filters') is None:
-            config['body/encoder/blocks/filters'] = [f_0*2**(i+1) for i in range(num_stages)]
-
-        if config.get('body/decoder/blocks/filters') is None:
-            config['body/decoder/blocks/filters'] = list(reversed([f_0*2**i for i in range(num_stages)]))
-
-        if config.get('body/decoder/upsample/filters') is None:
-            config['body/decoder/upsample/filters'] = list(reversed([f_0*2**(i+1) for i in range(num_stages)]))
-
         return config
