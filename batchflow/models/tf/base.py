@@ -18,7 +18,6 @@ from .layers import mip, conv_block, upsample
 from .losses import softmax_cross_entropy, dice
 from .train import piecewise_constant
 
-logger = logging.getLogger(__name__)
 
 LOSSES = {
     'mse': tf.losses.mean_squared_error,

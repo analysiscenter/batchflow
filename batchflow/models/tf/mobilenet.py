@@ -223,22 +223,14 @@ class MobileNet_v2(TFModel):
         width_factor, layout = cls.pop(['width_factor', 'layout'], kwargs)
         with tf.variable_scope(name):
             x = inputs
-            i = 0
-            for block in layout:
-                repeats = block.pop('repeats')
+            for i, block in enumerate(layout):
                 block['width_factor'] = width_factor
-                for k in range(repeats):
-                    if k > 0:
-                        block['strides'] = 1
-                    residual = block.pop('residual', False) or k > 0
-                    block = {**kwargs, **block}
-                    x = cls.block(x, **block, residual=residual, name='block-%d' % i)
-                    i += 1
+                x = cls.block(x, **{**kwargs, **block}, name='block-%d' % i)
         return x
 
     @classmethod
     def block(cls, inputs, filters, residual=False, strides=1, expansion_factor=4, width_factor=1, kernel_size=3,
-              se_block=False, name=None, **kwargs):
+              se_block=False, name=None, repeats=1, residual_agg='sum', **kwargs):
         """ An inverted residual bottleneck block consisting of a separable depthwise convolution and 1x1 pointise
         convolution and an optional Squeeze-and-Excitation block.
 
@@ -272,19 +264,21 @@ class MobileNet_v2(TFModel):
         -------
         tf.Tensor
         """
-        num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
-        x = conv_block(inputs, 'cnaWna', [num_filters, num_filters], [1, kernel_size], strides=[1, strides],
-                       name='%s-exp' % name, **kwargs)
-
-        if se_block:
-            if not isinstance(se_block, dict):
-                se_block = dict(activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid], ratio=num_filters // 4)
-            se_block = {**kwargs, **se_block}
-            x = cls.se_block(x, name='%s-se' % name, **se_block)
-        x = conv_block(x, 'cn', filters, 1, name='%s-down' % name, **kwargs)
-
-        if residual:
-            x = inputs + x
+        with tf.variable_scope(name):
+            for k in range(repeats):
+                if k > 0:
+                    strides = 1
+                num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
+                x = conv_block(inputs, 'cnaWna', [num_filters, num_filters], [1, kernel_size], strides=[1, strides],
+                               name='-%d-exp' % k, **kwargs)
+                if se_block:
+                    if not isinstance(se_block, dict):
+                        se_block = dict(activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid], ratio=num_filters // 4)
+                    x = cls.se_block(x, name='-%d-se' % k, **{**kwargs, **se_block})
+                x = conv_block(x, 'cn', filters, 1, name='-%d-down' % k, **kwargs)
+                if residual or k > 0:
+                    x = cls.combine((inputs, x), op=residual_agg)
+                inputs = x
         return x
 
     @classmethod
