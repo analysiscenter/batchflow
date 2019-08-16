@@ -145,10 +145,11 @@ class Batch:
             index = _make_index(data[0])
             return cls(index, preloaded=tuple(data)) if index is not None else None
 
-        break_point = len(batches) - 1
         if batch_size is None:
+            break_point = len(batches)
             last_batch_len = len(batches[-1])
         else:
+            break_point = len(batches) - 1
             last_batch_len = 0
             cur_size = 0
             for i, b in enumerate(batches):

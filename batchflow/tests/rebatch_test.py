@@ -16,6 +16,9 @@ PARAMETERS = PARAMETERS + [(b, a) for a, b in PARAMETERS]
 
 
 def check_batch_lengths(batch_lengths, batch_size):
+    """
+    check that list of batch lengths agrees with `DATASET_SIZE` and `batch_size`
+    """
     expected_iterations = np.ceil(DATASET_SIZE / batch_size)
     assert len(batch_lengths) == expected_iterations
 
@@ -30,7 +33,7 @@ def check_batch_lengths(batch_lengths, batch_size):
 
 @pytest.mark.parametrize('batch_size, rebatch_size', PARAMETERS)
 def test_rebatch(batch_size, rebatch_size):
-
+    """ checks that rebatch produces batches of expected lengths (and doesn't crash)"""
     data = np.vstack([np.array([i, i]) for i in range(DATASET_SIZE)])
     dataset = Dataset(index=DATASET_SIZE,
                       batch_class=MyBatch,
