@@ -31,6 +31,14 @@ def _dynamic_calc_shape(inputs, factor, data_format):
     return shape
 
 
+class DepthToSpace:
+    """ Placeholder. """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return depth_to_space(inputs, *self.args, **self.kwargs)
+
 def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
     """ 1d, 2d and 3d depth_to_space transformation.
 
@@ -67,7 +75,6 @@ def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
 
 
 def _depth_to_space(inputs, block_size, name='d2s'):
-    print('IN HERE LOL')
     dim = inputs.shape.ndims - 2
     conv_layer = conv_transpose
 
@@ -108,6 +115,15 @@ def _depth_to_space(inputs, block_size, name='d2s'):
     return x
 
 
+class SubpixelConv:
+    """ Placeholder. """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return subpixel_conv(inputs, *self.args, **self.kwargs)
+
+
 def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last', **kwargs):
     """ Resize input tensor with subpixel convolution (depth to space operation)
 
@@ -141,6 +157,14 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
         x = depth_to_space(x, block_size=factor, name='d2s', data_format=data_format)
     return x
 
+
+class ResizeBilinearAdditive:
+    """ Placeholder. """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return resize_bilinear_additive(inputs, *self.args, **self.kwargs)
 
 def resize_bilinear_additive(inputs, factor=2, name='bilinear_additive', data_format='channels_last', **kwargs):
     """ Resize input tensor with bilinear additive technique
@@ -329,6 +353,14 @@ def resize_bilinear(inputs, factor=2, shape=None, name='resize', data_format='ch
             x = tf.transpose(x, perm_reverse)
     return x
 
+
+class ResizeNn:
+    """ Placeholder. """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return resize_nn(inputs, *self.args, **self.kwargs)
 
 def resize_nn(inputs, factor=2, shape=None, name=None, data_format='channels_last', **kwargs):
     """ Resize input tensor with nearest neighbors method

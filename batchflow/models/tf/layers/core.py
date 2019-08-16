@@ -3,23 +3,36 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
+from .utils import * #pylint: disable=wildcard-import
 
 
-def flatten2d(inputs, name=None):
+@add_as_function
+class Flatten2D:
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) """
-    x = tf.convert_to_tensor(inputs)
-    dims = tf.reduce_prod(tf.shape(x)[1:])
-    x = tf.reshape(x, [-1, dims], name=name)
-    return x
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        x = tf.convert_to_tensor(inputs)
+        dims = tf.reduce_prod(tf.shape(x)[1:])
+        x = tf.reshape(x, [-1, dims], **self.kwargs)
+        return x
 
 
-def flatten(inputs, name=None):
+
+@add_as_function
+class Flatten:
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) using inferred shape and numpy """
-    x = tf.convert_to_tensor(inputs)
-    shape = x.get_shape().as_list()
-    dim = np.prod(shape[1:])
-    x = tf.reshape(x, [-1, dim], name=name)
-    return x
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        x = tf.convert_to_tensor(inputs)
+        shape = x.get_shape().as_list()
+        dim = np.prod(shape[1:])
+        x = tf.reshape(x, [-1, dim], **self.kwargs)
+        return x
+
 
 
 def alpha_dropout(inputs, rate=0.5, seed=None, training=False, name=None):
@@ -34,46 +47,69 @@ def alpha_dropout(inputs, rate=0.5, seed=None, training=False, name=None):
     return K.AlphaDropout(rate, seed=seed, name=name)(inputs, training)
 
 
-def maxout(inputs, depth, axis=-1, name='max'):
+
+@add_as_function
+class Maxout:
     """ Shrink last dimension by making max pooling every ``depth`` channels """
-    with tf.name_scope(name):
-        x = tf.convert_to_tensor(inputs)
+    def __init__(self, depth, axis=-1, name='max', *args, **kwargs):
+        self.depth, self.axis = depth, axis
+        self.name = name
+        self.args, self.kwargs = args, kwargs
 
-        shape = x.get_shape().as_list()
-        shape[axis] = -1
-        shape += [depth]
-        for i, _ in enumerate(shape):
-            if shape[i] is None:
-                shape[i] = tf.shape(x)[i]
+    def __call__(self, inputs):
+        with tf.name_scope(self.name):
+            x = tf.convert_to_tensor(inputs)
 
-        out = tf.reduce_max(tf.reshape(x, shape), axis=-1, keep_dims=False)
-        return out
+            shape = x.get_shape().as_list()
+            shape[self.axis] = -1
+            shape += [self.depth]
+            for i, _ in enumerate(shape):
+                if shape[i] is None:
+                    shape[i] = tf.shape(x)[i]
+
+            out = tf.reduce_max(tf.reshape(x, shape), axis=-1, keep_dims=False)
+            return out
 
 
-_REDUCE_OP = {
-    'max': tf.reduce_max,
-    'mean': tf.reduce_mean,
-    'sum': tf.reduce_sum,
-}
 
-def xip(inputs, depth, reduction='max', data_format='channels_last', name='xip'):
+@add_as_function
+class Xip:
     """ Shrink the channels dimension with reduce ``op`` every ``depth`` channels """
-    reduce_op = _REDUCE_OP[reduction]
+    REDUCE_OP = {
+        'max': tf.reduce_max,
+        'mean': tf.reduce_mean,
+        'sum': tf.reduce_sum,
+    }
 
-    with tf.name_scope(name):
-        x = tf.convert_to_tensor(inputs)
+    def __init__(self, depth, reduction='max', data_format='channels_last', name='max'):
+        self.depth, self.reduction, self.data_format = depth, reduction, data_format
+        self.name = name
 
-        axis = -1 if data_format == 'channels_last' else 1
-        num_layers = x.get_shape().as_list()[axis]
-        split_sizes = [depth] * (num_layers // depth)
-        if num_layers % depth:
-            split_sizes += [num_layers % depth]
+    def __call__(self, inputs):
+        reduce_op = self.REDUCE_OP[self.reduction]
 
-        xips = [reduce_op(split, axis=axis) for split in tf.split(x, split_sizes, axis=axis)]
-        xips = tf.stack(xips, axis=axis)
+        with tf.name_scope(self.name):
+            x = tf.convert_to_tensor(inputs)
 
-    return xips
+            axis = -1 if self.data_format == 'channels_last' else 1
+            num_layers = x.get_shape().as_list()[axis]
+            split_sizes = [self.depth] * (num_layers // self.depth)
+            if num_layers % self.depth:
+                split_sizes += [num_layers % self.depth]
 
-def mip(inputs, depth, data_format='channels_last', name='mip'):
+            xips = [reduce_op(split, axis=axis) for split in tf.split(x, split_sizes, axis=axis)]
+            xips = tf.stack(xips, axis=axis)
+
+        return xips
+
+
+
+@add_as_function
+class Mip:
     """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels """
-    return xip(inputs, depth, 'max', data_format, name)
+    def __init__(self, depth, data_format='channels_last', name='max'):
+        self.depth, self.data_format = depth, data_format
+        self.name = name
+
+    def __call__(self, inputs):
+        return Xip(self.depth, 'max', self.data_format, self.name)(inputs)

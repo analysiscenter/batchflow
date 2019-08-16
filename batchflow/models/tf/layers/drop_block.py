@@ -2,14 +2,29 @@
 Golnaz Ghiasi, Tsung-Yi Lin, Quoc V. Le "`DropBlock: A regularization method for convolutional networks
 <https://arxiv.org/abs/1810.12890>`_"
 """
-
 import tensorflow as tf
 from .pooling import max_pooling
+from .utils import * #pylint: disable=wildcard-import
 
 # TODO:
 # When max_pooling allows for dynamic kernel size, implement block_size as fraction
 # of spatial_dims.
 # Write predefined callables to control dropout_rate
+
+
+
+class Dropblock:
+    """ Drop Block module. """
+    def __init__(self, dropout_rate, block_size, data_format, global_step=None, seed=None, **kwargs):
+        self.dropout_rate, self.block_size = dropout_rate, block_size
+        self.data_format, self.global_step, self.seed = data_format, global_step, seed
+
+    def __call__(self, inputs, training):
+        return dropblock(inputs, dropout_rate=self.dropout_rate, block_size=self.block_size,
+                         is_training=training, data_format=self.data_format,
+                         global_step=self.global_step, seed=self.seed, **self.kwargs)
+
+
 
 def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global_step=None, seed=None, **kwargs):
     """ Drop Block module.

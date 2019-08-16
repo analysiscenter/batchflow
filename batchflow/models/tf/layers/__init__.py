@@ -10,3 +10,4 @@ from .roi import roi_pooling_layer, non_max_suppression
 from .resize import subpixel_conv, resize_bilinear_additive, resize_nn, resize_bilinear, depth_to_space
 from .pyramid import pyramid_pooling, aspp
 from .drop_block import dropblock
+from .utils import * #pylint: disable=wildcard-import

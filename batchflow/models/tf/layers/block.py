@@ -99,6 +99,17 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             layout_dict[C_GROUPS[layer]] = [-1, 0]
         layout_dict[C_GROUPS[layer]][1] += 1
 
+    from pprint import pprint
+    print('C_LAYERS')
+    pprint(C_LAYERS)
+
+    print('C_GROUPS')
+    pprint(C_GROUPS)
+
+    print('layout_dict')
+    pprint(layout_dict)
+
+
     residuals = []
     tensor = inputs
     for i, layer in enumerate(layout):
@@ -128,6 +139,8 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
             residuals = residuals[:-1]
         else:
             layer_args = kwargs.get(layer_name, {})
+            print('\nlayer args: {} {}'.format(i, layer))
+            pprint(layer_args)
             skip_layer = layer_args is False or isinstance(layer_args, dict) and layer_args.get('disable', False)
 
             if skip_layer:
