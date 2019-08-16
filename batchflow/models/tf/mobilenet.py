@@ -7,7 +7,6 @@ Sandler M. et al. "`MobileNetV2: Inverted Residuals and Linear Bottlenecks
 Howard A. et al. "`Searching for MobileNetV3
 <https://arxiv.org/abs/1905.02244>`_"
 """
-from copy import deepcopy
 import tensorflow as tf
 
 from . import TFModel
@@ -189,8 +188,8 @@ class MobileNet_v2(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['initial_block'].update(dict(layout='cna', filters=32, kernel_size=3, strides=2))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V2_DEFAULT_BODY)))
-        config['head'].update(dict(layout='cnacnV', filters=[1280, 2], kernel_size=1))
+        config['body'].update(dict(width_factor=1, layout=_V2_DEFAULT_BODY))
+        config['head'].update(dict(layout='cnacnV', filters=[1280, None], kernel_size=1))
         config['common'].update(dict(activation=tf.nn.relu6))
         config['loss'] = 'ce'
         return config
@@ -315,8 +314,8 @@ class MobileNet_v3(MobileNet_v2):
     def default_config(cls):
         config = TFModel.default_config()
         config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_LARGE_DEFAULT_BODY)))
-        config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, 2], pool_size=7,
+        config['body'].update(dict(width_factor=1, layout=_V3_LARGE_DEFAULT_BODY))
+        config['head'].update(dict(layout='cnavcacV', filters=[960, 1280, None], pool_size=7,
                                    kernel_size=1, activation=h_swish))
         config['common'].update(dict(activation=tf.nn.relu))
         config['loss'] = 'ce'
@@ -329,8 +328,8 @@ class MobileNet_v3_small(MobileNet_v3):
     def default_config(cls):
         config = TFModel.default_config()
         config['initial_block'].update(dict(layout='cna', filters=16, kernel_size=3, strides=2, activation=h_swish))
-        config['body'].update(dict(width_factor=1, layout=deepcopy(_V3_SMALL_DEFAULT_BODY)))
-        config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, 2], pool_size=7,
+        config['body'].update(dict(width_factor=1, layout=_V3_SMALL_DEFAULT_BODY))
+        config['head'].update(dict(layout='cnavcacV', filters=[576, 1280, None], pool_size=7,
                                    kernel_size=1, activation=h_swish,
                                    se_block=dict(activation=[h_swish, h_sigmoid], ratio=144)))
         config['loss'] = 'ce'
