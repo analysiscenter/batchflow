@@ -2,7 +2,7 @@
 import numpy as np
 import tensorflow as tf
 
-from . import conv_block, upsample
+from . import ConvBlock, Upsample
 
 
 class PyramidPooling:
@@ -64,8 +64,8 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
                     upsample_shape = dynamic_shape
 
                 # Conv block to set number of feature maps
-                x = conv_block(x, layout, filters=filters, kernel_size=kernel_size,
-                               name='conv-%d' % level, **kwargs)
+                x = ConvBlock(layout, filters=filters, kernel_size=kernel_size,
+                              name='conv-%d' % level, **kwargs)(x)
 
                 # Output either vector with fixed size or tensor with fixed spatial dimensions
                 if flatten:
@@ -73,8 +73,7 @@ def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='
                                    name='reshape-%d' % level)
                     concat_axis = -1
                 else:
-                    x = upsample(x, layout='b', shape=upsample_shape,
-                                 name='upsample-%d' % level, **kwargs)
+                    x = Upsample(layout='b', shape=upsample_shape, name='upsample-%d' % level, **kwargs)(x)
                     concat_axis = axis
 
             layers.append(x)
@@ -85,8 +84,7 @@ def _static_pyramid_pooling(inputs, spatial_shape, level, pool_op, **kwargs):
     pool_size = tuple(np.ceil(spatial_shape / level).astype(np.int32).tolist())
     pool_strides = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32).tolist())
 
-    output = conv_block(inputs, 'p', pool_op=pool_op,
-                        pool_size=pool_size, pool_strides=pool_strides, **kwargs)
+    output = ConvBlock('p', pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides, **kwargs)(inputs)
     return output
 
 def _dynamic_pyramid_pooling(inputs, level, pool_op, num_channels, data_format):
@@ -179,12 +177,12 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
         image_level_features = (image_level_features,)
 
     with tf.variable_scope(name):
-        x = conv_block(inputs, layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs)
+        x = ConvBlock(layout, filters=filters, kernel_size=1, name='conv-1x1', **kwargs)(inputs)
         layers = [x]
 
         for level in rates:
-            x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
-                           name='conv-%d' % level, **kwargs)
+            x = ConvBlock(layout, filters=filters, kernel_size=kernel_size, dilation_rate=level,
+                          name='conv-%d' % level, **kwargs)(inputs)
             layers.append(x)
 
         x = pyramid_pooling(inputs, filters=filters, pyramid=image_level_features,
@@ -192,5 +190,5 @@ def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), i
         layers.append(x)
 
         x = tf.concat(layers, axis=axis, name='concat')
-        x = conv_block(x, layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)
+        x = ConvBlock(layout, filters=filters, kernel_size=1, name='last_conv', **kwargs)(x)
     return x

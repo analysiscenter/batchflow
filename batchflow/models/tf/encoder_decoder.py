@@ -129,9 +129,6 @@ class EncoderDecoder(TFModel):
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
-
-        config['head/layout'] = None
-
         return config
 
     @classmethod
