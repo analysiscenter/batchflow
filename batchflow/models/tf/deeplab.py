@@ -39,8 +39,6 @@ class DeepLab(EncoderDecoder):
         config['body/embedding'] = dict(base=aspp)
 
         config['body/decoder/upsample'] = dict(layout='b')
-
-        # config['head'] = dict(layout='c', kernel_size=1)
         return config
 
 
