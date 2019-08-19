@@ -2,9 +2,9 @@
 import numpy as np
 import tensorflow as tf
 
-from .block import _conv_block as conv_block
 from .conv import conv_transpose
 from .core import xip
+
 
 
 def _calc_size(inputs, factor, data_format):
@@ -153,7 +153,8 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
     x = inputs
     with tf.variable_scope(name):
         if layout:
-            x = conv_block(inputs, layout, kernel_size=1, name='conv', data_format=data_format, **kwargs)
+            from .conv_block import ConvBlock
+            x = ConvBlock(layout, kernel_size=1, name='conv', data_format=data_format, **kwargs)(inputs)
         x = depth_to_space(x, block_size=factor, name='d2s', data_format=data_format)
     return x
 
@@ -190,8 +191,9 @@ def resize_bilinear_additive(inputs, factor=2, name='bilinear_additive', data_fo
     _, channels = _calc_size(inputs, factor, data_format)
     layout = kwargs.pop('layout', 'cna')
     with tf.variable_scope(name):
+        from .conv_block import ConvBlock
         x = resize_bilinear(inputs, factor, name=name, data_format=data_format, **kwargs)
-        x = conv_block(x, layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)
+        x = ConvBlock(layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)(x)
         x = xip(x, depth=factor**dim, reduction='sum', name='addition')
     return x
 
@@ -311,6 +313,16 @@ def _calc_size_after_resize(inputs, size, axis):
                 size[i] = static_size[i+1]
             static_size[1:4] = size
     return size, static_size
+
+
+class ResizeBilinear:
+    """ Placeholder. """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return resize_bilinear(inputs, *self.args, **self.kwargs)
+
 
 
 def resize_bilinear(inputs, factor=2, shape=None, name='resize', data_format='channels_last', **kwargs):

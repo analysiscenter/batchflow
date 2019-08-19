@@ -10,11 +10,15 @@ def add_as_function(cls):
                         if (c.isupper() and (i != len(name)-1) and name[i+1].islower()) else c.lower()
                         for i, c in enumerate(name)).strip('_')
 
-    def _func(inputs, *args, **kwargs):
-        return cls(*args, **kwargs)(inputs)
+    def func(inputs, *args, **kwargs):
+        call_args = []
+        training = kwargs.get('training') or kwargs.get('is_training')
+        if training is not None:
+            call_args = [training]
+        return cls(*args, **kwargs)(inputs, *call_args)
 
-    module = inspect.getmodule(inspect.stack()[1][0])#sys.modules[__name__]#__import__(__name__)
-    setattr(module, func_name, _func)
+    module = inspect.getmodule(inspect.stack()[1][0])
+    setattr(module, func_name, func)
     return cls
 
 
