@@ -98,19 +98,19 @@ class ConvBlock:
         If None or inculdes parameters 'off' or 'disable' set to True or 1,
         the layer will be excluded whatsoever.
     pooling : dict
-        Parameters for pooling layers, like initializers, regularalizers, etc
+        Parameters for pooling layers, like initializers, regularalizers, etc.
     dropout : dict or None
         Parameters for dropout layers, like noise_shape, etc
         If None or inculdes parameters 'off' or 'disable' set to True or 1,
         the layer will be excluded whatsoever.
     dropblock : dict or None
-        Parameters for dropblock layers, like dropout_rate, block_size, etc
+        Parameters for dropblock layers, like dropout_rate, block_size, etc.
     subpixel_conv : dict or None
         Parameters for subpixel convolution like layout, activation, etc.
     resize_bilinear : dict or None
-        Parameters for bilinear resize
+        Parameters for bilinear resize.
     resize_bilinear_additive : dict or None
-        Parameters for bilinear additive resize like layout, activation, etc
+        Parameters for bilinear additive resize like layout, activation, etc.
 
     Notes
     -----
@@ -289,8 +289,7 @@ class ConvBlock:
             layer_name = self.C_LAYERS[layer]
             layer_fn = self.FUNC_LAYERS[layer_name]
 
-            args = {}
-            call_args = {}
+            args, call_args = {}, {}
 
             if layer == 'a':
                 args = dict(activation=self.activation)
@@ -418,6 +417,32 @@ class ConvBlock:
             context.__exit__(None, None, None)
 
         return tensor
+
+
+def update_layers(letter, func, name=None):
+    """ Add custom letter to layout parsing procedure.
+
+    Parameters
+    ----------
+    letter : str
+        Letter to add.
+    func : class
+        Tensor-processing layer. Must have layer-like signature (both init and call overloaded).
+    name : str
+        Name of parameter dictionary. Defaults to `letter`.
+
+    Examples
+    --------
+    Add custom `Q` letter::
+
+        block = ConvBlock('cnap Q', filters=32, custom_params={'key': 'value'})
+        block.add_letter('Q', my_func, 'custom_params')
+        x = block(x)
+    """
+    name = name or letter
+    ConvBlock.C_LAYERS.update({letter: name})
+    ConvBlock.FUNC_LAYERS.update({name: func})
+    ConvBlock.C_GROUPS.update({letter: letter})
 
 
 
