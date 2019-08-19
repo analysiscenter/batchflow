@@ -1,6 +1,5 @@
 # pylint: disable=undefined-variable, no-name-in-module
 """ Contains base class for tensorflow models """
-import logging
 import os
 import glob
 import re

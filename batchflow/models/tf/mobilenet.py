@@ -272,7 +272,8 @@ class MobileNet_v2(TFModel):
                                name='-%d-exp' % k, **kwargs)
                 if se_block:
                     if not isinstance(se_block, dict):
-                        se_block = dict(activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid], ratio=num_filters // 4)
+                        se_block = dict(activation=[kwargs.get('activation', tf.nn.relu), h_sigmoid],
+                                        ratio=num_filters // 4)
                     x = cls.se_block(x, name='-%d-se' % k, **{**kwargs, **se_block})
                 x = conv_block(x, 'cn', filters, 1, name='-%d-down' % k, **kwargs)
                 if residual or k > 0:
