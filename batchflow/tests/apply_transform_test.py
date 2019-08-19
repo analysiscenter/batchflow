@@ -77,11 +77,14 @@ FUNCTIONS[36] = one2one
 FUNCTIONS[41] = one2one
 
 
+class MyBatch(Batch):
+    pass
+
 @pytest.fixture
 def batch():
     """ Prepare batch and load same DATA to comp1 and comp2 components.
     """
-    dataset = Dataset(range(BATCH_SIZE), Batch)
+    dataset = Dataset(range(BATCH_SIZE), MyBatch)
     batch = (dataset.next_batch(BATCH_SIZE)
              .load(src=DATA, dst='comp1')
              .load(src=DATA, dst='comp2')

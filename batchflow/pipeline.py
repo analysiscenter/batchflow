@@ -1245,7 +1245,7 @@ class Pipeline:
         else:
             pipeline = self.from_pipeline(_action['pipeline'])
 
-        iter_params = kwargs.get('iter_params', None)
+        kwargs.setdefault('iter_params', None)
 
         self._rest_batch = None
         while True:
@@ -1258,7 +1258,7 @@ class Pipeline:
                 self._rest_batch = None
             while cur_len < _action['batch_size']:
                 try:
-                    new_batch = pipeline.next_batch(*args, iter_params=iter_params, **kwargs)
+                    new_batch = pipeline.next_batch(*args, **kwargs)
                 except StopIteration:
                     break
                 else:
