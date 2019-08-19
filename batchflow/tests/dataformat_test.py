@@ -2,10 +2,10 @@
 # pylint: disable=import-error, no-name-in-module
 # pylint: disable=redefined-outer-name
 import pytest
-import numpy as np
+
 from tensorflow.test import is_gpu_available
 
-from batchflow import Pipeline, ImagesBatch, Dataset
+from batchflow import Pipeline
 from batchflow import B, V, C
 from batchflow.models.tf import VGG7, ResNet18, Inception_v1, MobileNet
 
@@ -14,43 +14,6 @@ MODELS = [VGG7, ResNet18, Inception_v1, MobileNet]
 LOCATIONS = set(['initial_block', 'body', 'block', 'head'])
 NO_GPU = pytest.mark.skipif(not is_gpu_available(), reason='No GPU')
 
-
-@pytest.fixture()
-def model_setup():
-    """ Pytest fixture to generate fake dataset and model config with desired format.
-
-    Parameters
-    ----------
-    data_format: {'channels_last', 'channels_first'}
-        Desired format of tensors
-
-    Returns
-    -------
-    tuple
-        an instance of Dataset
-        a model config
-    """
-    def _model_setup(data_format):
-        if data_format == 'channels_last':
-            image_shape = (100, 100, 2)
-        elif data_format == 'channels_first':
-            image_shape = (2, 100, 100)
-
-        size = 50
-        batch_shape = (size,) + image_shape
-        images_array = np.random.random(batch_shape)
-        labels_array = np.random.choice(10, size=size)
-        data = images_array, labels_array
-        dataset = Dataset(index=size,
-                          batch_class=ImagesBatch,
-                          preloaded=data)
-
-        model_config = {'inputs': {'images': {'shape': image_shape},
-                                   'labels': {'classes': 10}},
-                        'initial_block/inputs': 'images'}
-        return dataset, model_config
-
-    return _model_setup
 
 @pytest.fixture()
 def pipeline():
@@ -144,7 +107,7 @@ class Test_models:
     """ Ensure that a model with given 'data_format' can be built and trained.
 
     There is a following pattern in every test:
-        First of all, we get 'data' and 'config' via 'model_setup' fixture.
+        First of all, we get 'data' and 'config' via 'model_setup_images_clf' fixture.
         Then we optionally modify 'config'. In most cases it is done only at 'location'.
         Finally, we assert that our modification was actually applied to a model by attempting
         to build and train it with a small batch.
@@ -154,7 +117,7 @@ class Test_models:
                              [None,
                               pytest.param('channels_first', marks=NO_GPU),
                               'channels_last'])
-    def test_data_format(self, model, model_setup, pipeline, location, data_format):
+    def test_data_format(self, model, model_setup_images_clf, pipeline, location, data_format):
         """ We can explicitly pass 'data_format' to inputs or common
 
         Notes
@@ -164,7 +127,7 @@ class Test_models:
         `channels_first` might not work on CPU as some convolutional and pooling kernels are not implemented yet.
         """
         expected_data_format = data_format or 'channels_last'
-        dataset, model_config = model_setup(data_format=expected_data_format)
+        dataset, model_config = model_setup_images_clf(data_format=expected_data_format)
         if data_format:
             model_config[location + '/data_format'] = data_format
         config = {'model_class': model, 'model_config': model_config}

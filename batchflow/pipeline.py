@@ -12,7 +12,7 @@ import numpy as np
 from .base import Baseset
 from .config import Config
 from .decorators import deprecated
-from .exceptions import SkipBatchException
+from .exceptions import SkipBatchException, EmptyBatchSequence
 from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
@@ -42,7 +42,6 @@ def hashable(x):
     except TypeError:
         return False
     return True
-
 
 
 class Pipeline:
@@ -341,8 +340,6 @@ class Pipeline:
             a name of the variable
         default
             an initial value for the variable set when pipeline is created
-        init_on_each_run
-            an initial value for the variable to set before each run
         lock : bool
             whether to lock a variable before each update (default: True)
 
@@ -354,8 +351,8 @@ class Pipeline:
         --------
         >>> pp = dataset.p.
                     .init_variable("iterations", default=0)
-                    .init_variable("accuracy", init_on_each_run=0)
-                    .init_variable("loss_history", init_on_each_run=list)
+                    .init_variable("accuracy", 0)
+                    .init_variable("loss_history", [])
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
@@ -380,7 +377,7 @@ class Pipeline:
         Examples
         --------
         >>> pp = dataset.p
-                    .init_variables({"loss_history": dict(init_on_each_run=list),
+                    .init_variables({"loss_history": dict(default=[]),
                                      "accuracy", dict(default=0)})
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
@@ -389,7 +386,7 @@ class Pipeline:
         return self
 
     def _init_all_variables(self):
-        self.variables.init_on_run(pipeline=self)
+        self.variables.initialize(pipeline=self)
 
     def set_variable(self, name, value, mode='w', batch=None):
         """ Set a variable value
@@ -459,18 +456,6 @@ class Pipeline:
     def delete_all_variables(self):
         """ Delete all variables """
         self.variables = VariableDirectory()
-
-    def inc_variable(self, name):
-        """ Increment a value of a given variable during pipeline execution """
-        return self._add_action(INC_VARIABLE_ID, _args=dict(var_name=name))
-
-    def _exec_inc_variable(self, _, action):
-        if self.has_variable(action['var_name']):
-            self.variables.lock(action['var_name'])
-            self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
-            self.variables.unlock(action['var_name'])
-        else:
-            raise KeyError("No such variable %s exists" % action['var_name'])
 
     def update(self, expr, value=None):
         """ Update a value of a given named expression lazily during pipeline execution
@@ -861,7 +846,7 @@ class Pipeline:
         Predictions will be stored `batch.predicted_labels`.
 
         >>> pipeline
-            .init_variable('inferred_masks', init_on_each_run=list)
+            .init_variable('inferred_masks', default=[])
             .predict_model('tf_unet', fetches='predictions', feed_dict={'x': B('images')},
                            save_to=V('inferred_masks'))
 
@@ -1416,7 +1401,8 @@ class Pipeline:
                     if callable(on_iter):
                         on_iter(batch_res)
             if is_empty:
-                logging.warning("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.")
+                warnings.warn("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.",
+                              EmptyBatchSequence, stacklevel=3)
 
         if bar:
             bar.close()

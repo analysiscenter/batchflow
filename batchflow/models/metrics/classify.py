@@ -1,7 +1,5 @@
 """ Contains two class classification metrics """
 from copy import copy
-import warnings
-warnings.filterwarnings("ignore")
 
 import numpy as np
 
