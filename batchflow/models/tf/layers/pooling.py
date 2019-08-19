@@ -4,7 +4,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
-from .utils import * #pylint: disable=wildcard-import
+from .utils import add_as_function
+
 
 
 @add_as_function

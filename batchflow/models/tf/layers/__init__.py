@@ -1,4 +1,5 @@
 """ Custom tf layers and operations """
+#pylint: disable=no-name-in-module
 from .conv_block import conv_block, upsample
 from .conv_block import ConvBlock, Upsample
 from .core import flatten, flatten2d, maxout, mip, xip, alpha_dropout
@@ -19,4 +20,3 @@ from .resize import SubpixelConv, ResizeBilinearAdditive, ResizeNn, ResizeBiline
 from .pyramid import pyramid_pooling, aspp
 from .drop_block import dropblock
 from .drop_block import Dropblock
-from .utils import * #pylint: disable=wildcard-import

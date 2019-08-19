@@ -2,8 +2,8 @@
 import numpy as np
 import tensorflow as tf
 
-from .conv import conv_transpose
-from .core import xip
+from .conv import ConvTranspose
+from .core import Xip
 
 
 
@@ -31,36 +31,32 @@ def _dynamic_calc_shape(inputs, factor, data_format):
     return shape
 
 
+
 class DepthToSpace:
-    """ Placeholder. """
+    """ 1d, 2d and 3d depth_to_space transformation.
+
+    Parameters
+    ----------
+    block_size : int
+        An int that is >= 2. The size of the spatial block.
+    name : str
+        Scope name.
+    data_format : {'channels_last', 'channels_first'}
+        Position of the channels dimension.
+
+    See also
+    --------
+    `tf.depth_to_space <https://www.tensorflow.org/api_docs/python/tf/depth_to_space>`_
+    """
     def __init__(self, *args, **kwargs):
         self.args, self.kwargs = args, kwargs
 
     def __call__(self, inputs):
         return depth_to_space(inputs, *self.args, **self.kwargs)
 
+
 def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
-    """ 1d, 2d and 3d depth_to_space transformation.
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    block_size : int
-        An int that is >= 2. The size of the spatial block
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-
-    See also
-    --------
-    `tf.depth_to_space <https://www.tensorflow.org/api_docs/python/tf/depth_to_space>`_
-    """
+    """ 1d, 2d and 3d depth_to_space transformation. """
     dim = inputs.shape.ndims - 2
     if dim == 2:
         dafo = 'NHWC' if data_format == 'channels_last' else 'NCHW'
@@ -73,10 +69,9 @@ def depth_to_space(inputs, block_size, name='d2s', data_format='channels_last'):
         x = tf.transpose(x, [0, dim+1] + list(range(1, dim+1)))
     return x
 
-
 def _depth_to_space(inputs, block_size, name='d2s'):
     dim = inputs.shape.ndims - 2
-    conv_layer = conv_transpose
+    conv_layer = ConvTranspose
 
     with tf.variable_scope(name):
         shape = inputs.get_shape().as_list()[1:]
@@ -103,7 +98,7 @@ def _depth_to_space(inputs, block_size, name='d2s'):
             fltr = np.stack(fltr, axis=-1)
             fltr = np.transpose(fltr, axes=list(range(dim))+[dim, dim+1])
             fltr = tf.constant(fltr, tf.float32)
-            x = conv_layer(inputs, fltr, output_shape, [1] + [block_size] * dim + [1])
+            x = conv_layer(fltr, output_shape, [1] + [block_size] * dim + [1])(inputs)
             if None in shape[:-1]:
                 resized_shape = shape[:-1]
             else:
@@ -115,8 +110,21 @@ def _depth_to_space(inputs, block_size, name='d2s'):
     return x
 
 
+
 class SubpixelConv:
-    """ Placeholder. """
+    """ Resize input tensor with subpixel convolution (depth to space operation).
+
+    Parameters
+    ----------
+    factor : int
+        Upsampling factor.
+    layout : str
+        Layers applied before depth-to-space transform.
+    name : str
+        Scope name.
+    data_format : {'channels_last', 'channels_first'}
+        Position of the channels dimension.
+    """
     def __init__(self, *args, **kwargs):
         self.args, self.kwargs = args, kwargs
 
@@ -125,25 +133,7 @@ class SubpixelConv:
 
 
 def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last', **kwargs):
-    """ Resize input tensor with subpixel convolution (depth to space operation)
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : int
-        upsampling factor
-    layout : str
-        layers applied before depth-to-space transform
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
+    """ Resize input tensor with subpixel convolution (depth to space operation. """
     dim = inputs.shape.ndims - 2
 
     _, channels = _calc_size(inputs, factor, data_format)
@@ -160,7 +150,19 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
 
 
 class ResizeBilinearAdditive:
-    """ Placeholder. """
+    """ Resize input tensor with bilinear additive technique.
+
+    Parameters
+    ----------
+    factor : int
+        Upsampling factor.
+    layout : str
+        Layers applied between bilinear resize and xip.
+    name : str
+        Scope name.
+    data_format : {'channels_last', 'channels_first'}
+        Position of the channels dimension.
+    """
     def __init__(self, *args, **kwargs):
         self.args, self.kwargs = args, kwargs
 
@@ -168,25 +170,7 @@ class ResizeBilinearAdditive:
         return resize_bilinear_additive(inputs, *self.args, **self.kwargs)
 
 def resize_bilinear_additive(inputs, factor=2, name='bilinear_additive', data_format='channels_last', **kwargs):
-    """ Resize input tensor with bilinear additive technique
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : int
-        upsampling factor
-    layout : str
-        layers applied between bilinear resize and xip
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
+    """ Resize input tensor with bilinear additive technique. """
     dim = inputs.shape.ndims - 2
     _, channels = _calc_size(inputs, factor, data_format)
     layout = kwargs.pop('layout', 'cna')
@@ -194,7 +178,7 @@ def resize_bilinear_additive(inputs, factor=2, name='bilinear_additive', data_fo
         from .conv_block import ConvBlock
         x = resize_bilinear(inputs, factor, name=name, data_format=data_format, **kwargs)
         x = ConvBlock(layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)(x)
-        x = xip(x, depth=factor**dim, reduction='sum', name='addition')
+        x = Xip(depth=factor**dim, reduction='sum', name='addition')(x)
     return x
 
 def resize_bilinear_1d(inputs, size, name='resize', **kwargs):
@@ -203,11 +187,11 @@ def resize_bilinear_1d(inputs, size, name='resize', **kwargs):
     Parameters
     ----------
     inputs : tf.Tensor
-        a tensor to resize
+        a tensor to resize.
     size : tf.Tensor or list
-        size of the output image
+        size of the output image.
     name : str
-        scope name
+        scope name.
 
     Returns
     -------
@@ -225,11 +209,11 @@ def resize_bilinear_3d(tensor, size, name='resize', **kwargs):
     Parameters
     ----------
     inputs : tf.Tensor
-        a tensor to resize
+        a tensor to resize.
     size : tf.Tensor or list
-        size of the output image
+        size of the output image.
     name : str
-        scope name
+        scope name.
 
     Returns
     -------
@@ -316,7 +300,19 @@ def _calc_size_after_resize(inputs, size, axis):
 
 
 class ResizeBilinear:
-    """ Placeholder. """
+    """ Resize input tensor with bilinear method,
+
+    Parameters
+    ----------
+    factor : float
+        Upsampling factor (not used if shape is specified).
+    shape : tuple of int
+        Shape to upsample to.
+    name : str
+        Scope name.
+    data_format : {'channels_last', 'channels_first'}
+        Position of the channels dimension.
+    """
     def __init__(self, *args, **kwargs):
         self.args, self.kwargs = args, kwargs
 
@@ -326,25 +322,7 @@ class ResizeBilinear:
 
 
 def resize_bilinear(inputs, factor=2, shape=None, name='resize', data_format='channels_last', **kwargs):
-    """ Resize input tensor with bilinear method
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : float
-        upsampling factor (not used if shape is specified)
-    shape : tuple of int
-        a shape to upsample to
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
+    """ Resize input tensor with bilinear method. """
     if shape is None:
         shape, _ = _calc_size(inputs, factor, data_format)
 
@@ -367,7 +345,19 @@ def resize_bilinear(inputs, factor=2, shape=None, name='resize', data_format='ch
 
 
 class ResizeNn:
-    """ Placeholder. """
+    """ Resize input tensor with nearest neighbors method.
+
+    Parameters
+    ----------
+    factor : int
+        Upsampling factor (not used if shape is specified).
+    shape : tuple of int
+        Shape to upsample to.
+    name : str
+        Scope name.
+    data_format : {'channels_last', 'channels_first'}
+        Position of the channels dimension.
+    """
     def __init__(self, *args, **kwargs):
         self.args, self.kwargs = args, kwargs
 
@@ -375,25 +365,7 @@ class ResizeNn:
         return resize_nn(inputs, *self.args, **self.kwargs)
 
 def resize_nn(inputs, factor=2, shape=None, name=None, data_format='channels_last', **kwargs):
-    """ Resize input tensor with nearest neighbors method
-
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        a tensor to resize
-    factor : int
-        upsampling factor (not used if shape is specified)
-    shape : tuple of int
-        a shape to upsample to
-    name : str
-        scope name
-    data_format : {'channels_last', 'channels_first'}
-        position of the channels dimension
-
-    Returns
-    -------
-    tf.Tensor
-    """
+    """ Resize input tensor with nearest neighbors method. """
     dim = inputs.shape.ndims
     if dim != 4:
         raise ValueError("inputs must be Tensor of rank 4 but {} was given".format(dim))

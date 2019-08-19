@@ -13,7 +13,6 @@ from .utils import add_as_function
 from ...utils import unpack_args
 
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -167,7 +166,8 @@ class ConvBlock:
         'V': 'global_pooling',
         'n': 'batch_norm',
         'd': 'dropout',
-        'D': 'dropblock',
+        'D': 'alpha_dropout',
+        'O': 'dropblock',
         'm': 'mip',
         'A': 'residual_bilinear_additive',
         'b': 'resize_bilinear',
@@ -189,8 +189,9 @@ class ConvBlock:
         'global_pooling': GlobalPooling,
         'batch_norm': K.BatchNormalization,
         'dropout': K.Dropout,
-        'mip': Mip,
+        'alpha_dropout': K.AlphaDropout,
         'dropblock': Dropblock,
+        'mip': Mip,
         'residual_bilinear_additive': None,
         'resize_bilinear': ResizeBilinear,
         'resize_bilinear_additive': ResizeBilinearAdditive,
@@ -207,6 +208,7 @@ class ConvBlock:
         .replace('v', 'p')
         .replace('V', 'P')
         .replace('D', 'd')
+        .replace('O', 'd')
         .replace('A', 'b')
         .replace('B', 'b')
         .replace('N', 'b')
@@ -229,6 +231,25 @@ class ConvBlock:
 
 
     def add_letter(self, letter, func, name=None):
+        """ Add custom letter to layout parsing procedure.
+
+        Parameters
+        ----------
+        letter : str
+            Letter to add.
+        func : class
+            Tensor-processing layer. Must have layer-like signature (both init and call overloaded).
+        name : str
+            Name of parameter dictionary. Defaults to `letter`.
+
+        Examples
+        --------
+        Add custom `Q` letter::
+
+            block = ConvBlock('cnap Q', filters=32, custom_params={'key': 'value'})
+            block.add_letter('Q', my_func, 'custom_params')
+            x = block(x)
+        """
         name = name or letter
         self.C_LAYERS.update({letter: name})
         self.FUNC_LAYERS.update({name: func})
@@ -303,26 +324,29 @@ class ConvBlock:
                     args = dict(units=units)
 
                 elif layer == 'c':
-                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides, padding=self.padding,
-                                data_format=self.data_format, dilation_rate=self.dilation_rate)
+                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides,
+                                padding=self.padding, data_format=self.data_format,
+                                dilation_rate=self.dilation_rate)
                     if self.filters is None or self.filters == 0:
                         raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
 
                 elif layer == 'C':
-                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides, padding=self.padding,
-                                data_format=self.data_format, dilation_rate=self.dilation_rate, depth_multiplier=self.depth_multiplier)
+                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides,
+                                padding=self.padding, data_format=self.data_format,
+                                dilation_rate=self.dilation_rate, depth_multiplier=self.depth_multiplier)
                     if self.filters is None or self.filters == 0:
                         raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
 
                 elif layer == 't':
-                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides, padding=self.padding,
-                                data_format=self.data_format)
+                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides,
+                                padding=self.padding, data_format=self.data_format)
                     if self.filters is None or self.filters == 0:
                         raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
 
                 elif layer == 'T':
-                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides, padding=self.padding,
-                                data_format=self.data_format, depth_multiplier=self.depth_multiplier)
+                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides,
+                                padding=self.padding, data_format=self.data_format,
+                                depth_multiplier=self.depth_multiplier)
                     if self.filters is None or self.filters == 0:
                         raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
 
@@ -338,9 +362,10 @@ class ConvBlock:
 
                 elif self.C_GROUPS[layer] == 'P':
                     pool_op = 'mean' if layer == 'V' else self.kwargs.pop('pool_op', 'max')
-                    args = dict(op=pool_op, data_format=self.data_format, keepdims=self.kwargs.get('keep_dims', False))
+                    args = dict(op=pool_op, data_format=self.data_format,
+                                keepdims=self.kwargs.get('keep_dims', False))
 
-                elif layer == 'd':
+                elif layer in ['d', 'D']:
                     if self.dropout_rate:
                         args = dict(rate=self.dropout_rate)
                         call_args.update({'training': training})
@@ -348,14 +373,15 @@ class ConvBlock:
                         logger.warning('conv_block: dropout_rate is zero or undefined, so dropout layer is skipped')
                         skip_layer = True
 
-                elif layer == 'D':
+                elif layer == 'O':
                     if not self.dropout_rate:
                         dropout_rate = layer_args.get('dropout_rate')
                     if not self.kwargs.get('block_size'):
                         block_size = layer_args.get('block_size')
                     if dropout_rate and block_size:
                         args = dict(dropout_rate=dropout_rate, block_size=block_size,
-                                    seed=self.kwargs.get('seed'), data_format=self.data_format, global_step=self.kwargs.get('global_step'))
+                                    seed=self.kwargs.get('seed'), data_format=self.data_format,
+                                    global_step=self.kwargs.get('global_step'))
                         call_args.update({'training': training})
                     else:
                         logger.warning(('conv_block/dropblock: dropout_rate or block_size is'
@@ -366,7 +392,9 @@ class ConvBlock:
                     args = dict(depth=self.kwargs.get('depth'), data_format=self.data_format)
 
                 elif layer in ['b', 'B', 'N', 'X']:
-                    args = dict(factor=self.kwargs.get('factor'), shape=self.kwargs.get('shape'), data_format=self.data_format)
+                    args = dict(factor=self.kwargs.get('factor'),
+                                shape=self.kwargs.get('shape'),
+                                data_format=self.data_format)
                     if self.kwargs.get('upsampling_layout'):
                         args['layout'] = self.kwargs.get('upsampling_layout')
 
@@ -432,7 +460,7 @@ class Upsample:
         self.factor, self.shape, self.layout = factor, shape, layout
         self.name, self.kwargs = name, kwargs
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, inputs, *args, **kwargs):
         if np.all(self.factor == 1):
             return inputs
 
@@ -442,4 +470,5 @@ class Upsample:
             if 'strides' not in kwargs:
                 self.kwargs['strides'] = self.factor
 
-        return ConvBlock(self.layout, name=self.name, factor=self.factor, shape=self.shape, **self.kwargs)(*args, **kwargs)
+        return ConvBlock(self.layout, factor=self.factor, shape=self.shape,
+                         name=self.name, **self.kwargs)(inputs, *args, **kwargs)

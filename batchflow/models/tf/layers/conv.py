@@ -3,7 +3,7 @@ from functools import partial
 import tensorflow as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
-from .utils import * #pylint: disable=wildcard-import
+from .utils import add_as_function
 
 
 
@@ -31,6 +31,7 @@ class Conv:
         return layer_fn(*self.args, **self.kwargs)(inputs)
 
 
+
 @add_as_function
 class Conv1DTranspose:
     """ Transposed 1D convolution layer.
@@ -56,6 +57,7 @@ class Conv1DTranspose:
                               strides=(1, self.strides), padding=self.padding, **self.kwargs)(x)
         x = tf.squeeze(x, [axis])
         return x
+
 
 
 @add_as_function
@@ -92,6 +94,7 @@ class Conv1DTransposeNn:
                                    self.padding, self.data_format, *self.args, **self.kwargs)
         x = tf.squeeze(x, [axis])
         return x
+
 
 
 @add_as_function
@@ -228,6 +231,7 @@ class DepthwiseConv:
         return layer_fn(*self.args, **self.kwargs)(inputs)
 
 
+
 @add_as_function
 class DepthwiseConvTranspose:
     """ Make Nd depthwise transpose convolutions that act separately on channels.
@@ -302,14 +306,13 @@ class SeparableConvND:
 
         if filters_out != self.filters:
             _kwargs = {**self.kwargs,
-                       'inputs': depthwise,
                        'filters': self.filters,
                        'kernel_size': 1,
                        'strides': 1,
                        'dilation_rate': 1,
                        'data_format': self.data_format,
                        'name': 'pointwise'}
-            output = conv(**_kwargs)
+            output = Conv(**_kwargs)(depthwise)
         else:
             output = depthwise
 

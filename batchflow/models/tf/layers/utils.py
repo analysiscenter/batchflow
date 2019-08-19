@@ -20,11 +20,3 @@ def add_as_function(cls):
     module = inspect.getmodule(inspect.stack()[1][0])
     setattr(module, func_name, func)
     return cls
-
-
-def get_channel_axis(data_format):
-    return -1 if data_format == 'channels_last' else 1
-
-
-def get_spatial_dim(inputs):
-    return inputs.shape.ndims - 2

@@ -5,37 +5,40 @@ import tensorflow as tf
 from . import conv_block, upsample
 
 
-def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pyramid=(0, 1, 2, 3, 6),
-                    flatten=False, name='psp', **kwargs):
-    """ Pyramid Pooling module
+class PyramidPooling:
+    """ Pyramid Pooling module.
 
     Zhao H. et al. "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        input tensor
     layout : str
-        layout for convolution layers
+        Layout for convolution layers.
     filters : int
-        the number of filters in each pyramid branch
+        Number of filters in each pyramid branch.
     kernel_size : int
-        kernel size
+        Kernel size
     pool_op : str
-        a pooling operation ('mean' or 'max')
+        Pooling operation ('mean' or 'max').
     pyramid : tuple of int
-        the number of feature regions in each dimension, default is (0, 1, 2, 3, 6).
+        Number of feature regions in each dimension, default is (0, 1, 2, 3, 6).
         `0` is used to include `inputs` into the output tensor.
     flatten : bool
-        if True, then the output is reshaped to a vector of constant size
-        if False, spatial shape of the inputs is preserved
+        If True, then the output is reshaped to a vector of constant size.
+        If False, spatial shape of the inputs is preserved.
     name : str
-        a layer name that will be used as a scope.
-
-    Returns
-    -------
-    tf.Tensor
+        Layer name that will be used as a scope.
     """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return pyramid_pooling(inputs, *self.args, **self.kwargs)
+
+
+def pyramid_pooling(inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean', pyramid=(0, 1, 2, 3, 6),
+                    flatten=False, name='psp', **kwargs):
+    """ Pyramid Pooling module. """
     shape = inputs.get_shape().as_list()
     data_format = kwargs.get('data_format', 'channels_last')
 
@@ -126,43 +129,48 @@ def _dynamic_pyramid_pooling(inputs, level, pool_op, num_channels, data_format):
     output = tf.reshape(tf.stack(result, axis=1), shape=(-1, level, level, num_channels))
     return output
 
-def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), image_level_features=2,
-         name='aspp', **kwargs):
-    """ Atrous Spatial Pyramid Pooling module
+
+
+class ASPP:
+    """ Atrous Spatial Pyramid Pooling module.
 
     Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation
     <https://arxiv.org/abs/1706.05587>`_"
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        input tensor
     layout : str
-        layout for convolution layers
+        Layout for convolution layers.
     filters : int
-        the number of filters in the output tensor
+        Number of filters in the output tensor.
     kernel_size : int
-        kernel size for dilated branches (default=3)
+        Kernel size for dilated branches (default=3).
     rates : tuple of int
-        dilation rates for branches, default=(6, 12, 18)
+        Dilation rates for branches, default=(6, 12, 18).
     image_level_features : int or tuple of int
-        the number of image level features in each dimension.
+        Number of image level features in each dimension.
 
         Default is 2, i.e. 2x2=4 pooling features will be calculated for 2d images,
         and 2x2x2=8 features per 3d item.
 
         Tuple allows to define several image level features, e.g (2, 3, 4).
     name : str
-        a layer name that will be used as a scope.
+        Layer name that will be used as a scope.
 
     See also
     --------
-    pyramid_pooling
-
-    Returns
-    -------
-    tf.Tensor
+    PyramidPooling
     """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return aspp(inputs, *self.args, **self.kwargs)
+
+
+def aspp(inputs, layout='cna', filters=None, kernel_size=3, rates=(6, 12, 18), image_level_features=2,
+         name='aspp', **kwargs):
+    """ Atrous Spatial Pyramid Pooling module. """
     data_format = kwargs.get('data_format', 'channels_last')
     axis = -1 if data_format == 'channels_last' else 1
     if filters is None:
