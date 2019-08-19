@@ -169,12 +169,12 @@ class EncoderDecoder(TFModel):
         kwargs = cls.fill_params('head', **kwargs)
 
         with tf.variable_scope(name):
-            x = cls.crop(inputs, targets, kwargs['data_format'])
-            x = super().head(x, name, **kwargs)
+            x = super().head(inputs, name, **kwargs)
+            x = cls.crop(x, targets, kwargs['data_format'])
 
             channels = cls.num_channels(targets)
             if cls.num_channels(x) != channels:
-                args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels)}
+                args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels, strides=1)}
                 x = conv_block(x, name='conv1x1', **args)
 
         return x

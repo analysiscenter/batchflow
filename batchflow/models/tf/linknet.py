@@ -69,7 +69,9 @@ class LinkNet(EncoderDecoder):
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/downsample'] = dict(layout=None)
-        config['body/encoder/blocks'] = dict(base=ResNet.double_block, filters=[64, 128, 256, 512], kernel_size=3)
+        config['body/encoder/blocks'] = dict(base=ResNet.double_block,
+                                             layout='cna cna',
+                                             filters=[64, 128, 256, 512], kernel_size=3)
 
         config['body/embedding'] = None
 
@@ -79,9 +81,10 @@ class LinkNet(EncoderDecoder):
                                                       [64, 64, 128],
                                                       [32, 32, 64],
                                                       [16, 16, 64]],
-                                             kernel_size=[1, 3, 1])
+                                             kernel_size=[[1, 3, 1]]*4,
+                                             strides=[[1, 2, 1]]*4)
 
-        config['head'] = dict(layout='tna cna t', filters=32, kernel_size=3, strides=[2, 3, 2])
+        config['head'] = dict(layout='tna cna t', filters=32, kernel_size=3, strides=[2, 1, 2])
 
         config['loss'] = 'ce'
 
