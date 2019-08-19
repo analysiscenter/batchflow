@@ -84,7 +84,7 @@ class LinkNet(EncoderDecoder):
                                              kernel_size=[[1, 3, 1]]*4,
                                              strides=[[1, 2, 1]]*4)
 
-        config['head'] = dict(layout='tna cna t', filters=32, kernel_size=3, strides=[2, 1, 2])
+        config['head'] = dict(layout='tna cna t', filters=32, kernel_size=[3, 3, 2], strides=[2, 1, 2])
 
         config['loss'] = 'ce'
 
