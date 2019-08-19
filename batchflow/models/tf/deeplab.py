@@ -40,7 +40,7 @@ class DeepLab(EncoderDecoder):
 
         config['body/decoder/upsample'] = dict(layout='b')
 
-        config['head'] = dict(layout='c', kernel_size=1)
+        # config['head'] = dict(layout='c', kernel_size=1)
         return config
 
 
