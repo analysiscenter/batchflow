@@ -4,7 +4,7 @@ from functools import partial
 import numpy as np
 
 from .named_expr import NamedExpression, eval_expr
-from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID
+from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID, UPDATE_ID
 
 
 class OncePipeline:
@@ -160,3 +160,30 @@ class OncePipeline:
 
     def _exec_load_model(self, action):
         self.pipeline._exec_load_model(None, action)        # pylint:disable=protected-access
+
+
+    def update(self, expr, value=None):
+        """ Update a value of a given named expression lazily during pipeline execution
+
+        Parameters
+        ----------
+        expr : NamedExpression
+            an expression
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        ``set_variable`` is imperative and may be used to change variable value within actions.
+        """
+        return self._add_action(UPDATE_ID, _args=dict(expr=expr, value=value))
+
+    def _exec_update(self, action):
+        action['expr'].set(action['value'], pipeline=self.pipeline)
