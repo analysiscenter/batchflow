@@ -57,5 +57,13 @@ def test_rebatch(batch_size, rebatch_size):
     check_batch_lengths(batch_lengths['after'], rebatch_size)
 
 
-if __name__ == '__main__':
-    test_rebatch(15, 40)
+@pytest.mark.parametrize('merge_factor', [1, 3])
+def test_merge(merge_factor):
+    """ merge `merge_factor` instances of a batch and check result's shape"""
+    data = np.vstack([np.array([i, i]) for i in range(DATASET_SIZE)])
+    b = MyBatch(index=range(DATASET_SIZE), preloaded=data)
+    merged, rest = MyBatch.merge([b] * merge_factor)
+
+    assert merged.dummy.shape[0] == b.dummy.shape[0] * merge_factor
+    assert merged.dummy.shape[1] == b.dummy.shape[1]
+    assert rest is None

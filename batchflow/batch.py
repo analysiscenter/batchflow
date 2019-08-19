@@ -147,7 +147,6 @@ class Batch:
 
         if batch_size is None:
             break_point = len(batches)
-            last_batch_len = len(batches[-1])
         else:
             break_point = len(batches) - 1
             last_batch_len = 0
