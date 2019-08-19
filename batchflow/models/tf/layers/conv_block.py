@@ -258,7 +258,9 @@ class ConvBlock:
 
     def __call__(self, inputs, training=None):
         if training is None:
-            training = self.kwargs.get('is_training') or self.kwargs.get('training')
+            training = self.kwargs.get('is_training')
+        if training is None:
+            training = self.kwargs.get('training')
 
         layout = self.layout or ''
         layout = layout.replace(' ', '')
