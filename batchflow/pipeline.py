@@ -11,7 +11,8 @@ import numpy as np
 
 from .base import Baseset
 from .config import Config
-from .exceptions import SkipBatchException
+from .decorators import deprecated
+from .exceptions import SkipBatchException, EmptyBatchSequence
 from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
@@ -41,7 +42,6 @@ def hashable(x):
     except TypeError:
         return False
     return True
-
 
 
 class Pipeline:
@@ -191,6 +191,10 @@ class Pipeline:
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
 
+    def add_namespace(self, *namespaces):
+        self._namespaces.extend(namespaces)
+        return self
+
     @property
     def _all_namespaces(self):
         return [sys.modules["__main__"], self.dataset] + self._namespaces
@@ -336,8 +340,6 @@ class Pipeline:
             a name of the variable
         default
             an initial value for the variable set when pipeline is created
-        init_on_each_run
-            an initial value for the variable to set before each run
         lock : bool
             whether to lock a variable before each update (default: True)
 
@@ -349,8 +351,8 @@ class Pipeline:
         --------
         >>> pp = dataset.p.
                     .init_variable("iterations", default=0)
-                    .init_variable("accuracy", init_on_each_run=0)
-                    .init_variable("loss_history", init_on_each_run=list)
+                    .init_variable("accuracy", 0)
+                    .init_variable("loss_history", [])
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
@@ -375,7 +377,7 @@ class Pipeline:
         Examples
         --------
         >>> pp = dataset.p
-                    .init_variables({"loss_history": dict(init_on_each_run=list),
+                    .init_variables({"loss_history": dict(default=[]),
                                      "accuracy", dict(default=0)})
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
@@ -384,7 +386,7 @@ class Pipeline:
         return self
 
     def _init_all_variables(self):
-        self.variables.init_on_run(pipeline=self)
+        self.variables.initialize(pipeline=self)
 
     def set_variable(self, name, value, mode='w', batch=None):
         """ Set a variable value
@@ -455,18 +457,34 @@ class Pipeline:
         """ Delete all variables """
         self.variables = VariableDirectory()
 
-    def inc_variable(self, name):
-        """ Increment a value of a given variable during pipeline execution """
-        return self._add_action(INC_VARIABLE_ID, _args=dict(var_name=name))
+    def update(self, expr, value=None):
+        """ Update a value of a given named expression lazily during pipeline execution
 
-    def _exec_inc_variable(self, _, action):
-        if self.has_variable(action['var_name']):
-            self.variables.lock(action['var_name'])
-            self.set_variable(action['var_name'], self.get_variable(action['var_name']) + 1)
-            self.variables.unlock(action['var_name'])
-        else:
-            raise KeyError("No such variable %s exists" % action['var_name'])
+        Parameters
+        ----------
+        expr : NamedExpression
+            an expression
 
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        ``set_variable`` is imperative and may be used to change variable value within actions.
+        """
+        return self._add_action(UPDATE_ID, _args=dict(expr=expr, value=value))
+
+    def _exec_update(self, batch, action):
+        action['expr'].set(action['value'], batch=batch)
+
+
+    @deprecated("update_variable() is deprecated. Use pipeline.update(V(name), value) instead.")
     def update_variable(self, name, value=None, mode='w'):
         """ Update a value of a given variable lazily during pipeline execution
 
@@ -498,10 +516,6 @@ class Pipeline:
         ``set_variable`` is imperative and may be used to change variable value within actions.
         """
         return self._add_action(UPDATE_VARIABLE_ID, _args=dict(var_name=name, value=value, mode=mode))
-
-    def save_to_variable(self, name, *args, **kwargs):
-        """ Save a value to a given variable during pipeline execution """
-        return self.update_variable(name, *args, **kwargs)
 
     def _exec_update_variable(self, batch, action):
         self.set_variable(action['var_name'], action['value'], action['mode'], batch=batch)
@@ -542,7 +556,7 @@ class Pipeline:
 
         Notes
         -----
-        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline, 
+        As a function from any namespace (see :meth:`~Pipeline.add_namespace`) can be called within a pipeline,
         `call` is convenient with lambdas::
 
             pipeline
@@ -558,10 +572,6 @@ class Pipeline:
             raise TypeError("Callable is expected, but got {}".format(type(fn)))
         if action['save_to'] is not None:
             self._save_output(batch, None, output, action['save_to'])
-
-    def add_namespace(self, *namespaces):
-        self._namespaces.extend(namespaces)
-        return self
 
     def _exec_from_ns(self, batch, action):
         res = action['method'](*action['args'], **action['kwargs'])
@@ -653,7 +663,6 @@ class Pipeline:
 
                 batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
 
-            batch.pipeline = self
         return batch
 
     def _needs_exec(self, batch, action):
@@ -837,7 +846,7 @@ class Pipeline:
         Predictions will be stored `batch.predicted_labels`.
 
         >>> pipeline
-            .init_variable('inferred_masks', init_on_each_run=list)
+            .init_variable('inferred_masks', default=[])
             .predict_model('tf_unet', fetches='predictions', feed_dict={'x': B('images')},
                            save_to=V('inferred_masks'))
 
@@ -1392,7 +1401,8 @@ class Pipeline:
                     if callable(on_iter):
                         on_iter(batch_res)
             if is_empty:
-                logging.warning("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.")
+                warnings.warn("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.",
+                              EmptyBatchSequence, stacklevel=3)
 
         if bar:
             bar.close()

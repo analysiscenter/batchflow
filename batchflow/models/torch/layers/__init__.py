@@ -6,3 +6,4 @@ from .core import Identity, Activation, Dense, Flatten, \
 from .conv_block import ConvBlock
 from .upsample import Upsample
 from .pyramid import PyramidPooling
+from .resize import Crop, Combine

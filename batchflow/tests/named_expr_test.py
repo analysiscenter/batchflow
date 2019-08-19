@@ -5,7 +5,7 @@ from contextlib import ExitStack as does_not_raise
 import pytest
 
 sys.path.append('..')
-from batchflow import B, C, D, F, V, L, R, P, I, Dataset
+from batchflow import B, C, D, F, L, V, R, P, I, Dataset
 
 
 @pytest.mark.parametrize('named_expr', [

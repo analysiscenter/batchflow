@@ -672,13 +672,16 @@ class ImagesBatch(BaseImagesBatch):
         size = kwargs.pop('size', self._get_image_shape(image))
         return image.transform(*args, size=size, **kwargs)
 
-    def _resize_(self, image, *args, **kwargs):
+    def _resize_(self, image, size, *args, **kwargs):
         """ Calls image.resize(*args, **kwargs)
 
         For more details see https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize
 
         Parameters
         ----------
+        size : tuple
+            the resulting size of the image. If one of the components of tuple is None,
+            corresponding dimension will be proportionally resized.
         src : str
             Component to get images from. Default is 'images'.
         dst : str
@@ -686,7 +689,16 @@ class ImagesBatch(BaseImagesBatch):
         p : float
             Probability of applying the transform. Default is 1.
         """
-        return image.resize(*args, **kwargs)
+        if size[0] is None and size[1] is None:
+            raise ValueError('At least one component of the parameter "size" must be a number.')
+        if size[0] is None:
+            new_size = (int(image.size[0] * size[1] / image.size[1]), size[1])
+        elif size[1] is None:
+            new_size = (size[0], int(image.size[1] * size[0] / image.size[0]))
+        else:
+            new_size = size
+
+        return image.resize(new_size, *args, **kwargs)
 
     def _shift_(self, image, offset, mode='const'):
         """ Shifts an image.

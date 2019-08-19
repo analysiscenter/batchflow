@@ -49,7 +49,7 @@ class BaseComponentsTuple:
         s = ''
         for comp in self.components:
             d = getattr(self, comp)
-            s += comp + '\n' + str(d) + '\n'
+            s += comp + ': ' + str(d) + '\n'
         return s
 
     def as_tuple(self, components=None):

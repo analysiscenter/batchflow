@@ -96,8 +96,18 @@ def add_ops(cls):
     return cls
 
 
+class MetaNamedExpression(type):
+    """ Meta class to allow for easy instantiation through attribution
+
+    Examples
+    --------
+    `B.images` is equal to B('images'), but requires fewer letters to type
+    """
+    def __getattr__(cls, name):
+        return cls(name)
+
 @add_ops
-class NamedExpression:
+class NamedExpression(metaclass=MetaNamedExpression):
     """ Base class for a named expression
 
     Attributes
@@ -125,6 +135,7 @@ class NamedExpression:
         self.a = a
         self.b = b
         self.params = None
+        self._call = False
 
     def __getattr__(self, name):
         return NamedExpression(AN_EXPR, op='#attr', a=self, b=name)
@@ -134,7 +145,7 @@ class NamedExpression:
 
     def __call__(self, *args, **kwargs):
         if isinstance(self, F):
-            self._call = False     # pylint: disable=attribute-defined-outside-init
+            self._call = False
         return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
 
     def str(self):
@@ -179,6 +190,8 @@ class NamedExpression:
 
     def _get_name(self, batch=None, pipeline=None, model=None):
         if isinstance(self.name, NamedExpression):
+            if self.params:
+                batch, pipeline, model = self.params
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
         return self.name
 
@@ -229,7 +242,17 @@ class NamedExpression:
 
     def assign(self, value, batch=None, pipeline=None, model=None):
         """ Assign a value to a named expression """
-        raise NotImplementedError("assign should be implemented in child classes")
+        if self.params:
+            batch, pipeline, model = self.params
+        a = eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
+        b = eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
+
+        if self.op == '#attr':
+            setattr(a, b, value)
+        elif self.op == '#slice':
+            a[b] = value
+        else:
+            raise NotImplementedError("assign should be implemented in child classes")
 
     def append(self, value, *args, **kwargs):
         """ Append a value to a named expression
@@ -309,7 +332,7 @@ class B(NamedExpression):
         """ Return a value of a batch component """
         if self.params:
             batch, pipeline, model = self.params
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
         if name is None:
@@ -320,7 +343,7 @@ class B(NamedExpression):
         """ Assign a value to a batch component """
         if self.params:
             batch, pipeline, model = self.params
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         if name is not None:
             setattr(batch, name, value)
 
@@ -339,7 +362,7 @@ class C(NamedExpression):
         """ Return a value of a pipeline config """
         if self.params:
             batch, pipeline, model = self.params
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
         try:
@@ -352,7 +375,7 @@ class C(NamedExpression):
         """ Assign a value to a pipeline config """
         if self.params:
             batch, pipeline, model = self.params
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
         config[name] = value
@@ -383,7 +406,7 @@ class F(NamedExpression):
         """ Return a value from a callable """
         if self.params:
             batch, pipeline, model = self.params
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         args = []
         if self._pass:
             if isinstance(batch, _DummyBatch) or batch is None:
@@ -401,10 +424,11 @@ class F(NamedExpression):
         _ = args, kwargs
         raise NotImplementedError("Assigning a value with a callable is not supported")
 
+
 class L(F):
     """ A function, method or any other callable """
-    def __init__(self, name, *args, mode='w', **kwargs):
-        super().__init__(name, *args, mode=mode, _pass=False, **kwargs)
+    def __init__(self, name, mode='w'):
+        super().__init__(name, mode=mode, _pass=False)
 
 
 class V(NamedExpression):
@@ -421,7 +445,7 @@ class V(NamedExpression):
         """ Return a value of a pipeline variable """
         if self.params:
             batch, pipeline, model = self.params
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         value = pipeline.get_variable(name)
         return value
@@ -430,7 +454,7 @@ class V(NamedExpression):
         """ Assign a value to a pipeline variable """
         if self.params:
             batch, pipeline, model = self.params
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         pipeline.assign_variable(name, value, batch=batch)
 
@@ -450,8 +474,8 @@ class D(NamedExpression):
         super().__init__(name, mode)
 
     def _get_name_dataset(self, batch=None, pipeline=None, model=None):
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline or pipeline
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
+        pipeline = pipeline if pipeline is not None else batch.pipeline
         dataset = pipeline.dataset if pipeline is not None else None
         dataset = dataset or batch.dataset
         if dataset is None:
@@ -512,7 +536,7 @@ class R(NamedExpression):
         """ Return a value of a random variable """
         if self.params:
             batch, pipeline, model = self.params
-        name = super()._get_name(batch=batch, pipeline=pipeline, model=model)
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         if callable(name):
             pass
         elif isinstance(name, str) and hasattr(self.random_state, name):

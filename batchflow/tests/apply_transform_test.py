@@ -59,8 +59,8 @@ def two2two(arr1, arr2, **kwargs):
 
 
 # Testing all possible combinations of SRC_COMPS and DST_COMPS
-SRC_OPTS = [DATA, 'comp1', ['comp1'], ('comp1'), ('comp1', 'comp2'), ['comp1', 'comp2']]
-DST_OPTS = [DATA, None, 'comp1', ['comp3'], ('comp2'), ('comp2', 'comp3'), ['comp1', 'comp3']]
+SRC_OPTS = [DATA, 'comp1', ['comp1'], ('comp1',), ('comp1', 'comp2'), ['comp1', 'comp2']]
+DST_OPTS = [DATA, None, 'comp1', ['comp3'], ('comp2',), ('comp2', 'comp3'), ['comp1', 'comp3']]
 
 SRC_COMPS, DST_COMPS = list(zip(*list(product(SRC_OPTS, DST_OPTS))))
 

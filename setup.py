@@ -17,7 +17,7 @@ with open('docs/index.rst', 'r') as f:
 
 
 setup(
-    name='dataset',
+    name='batchflow',
     packages=find_packages(exclude=['examples']),
     version=version,
     url='https://github.com/analysiscenter/batchflow',
@@ -45,6 +45,7 @@ setup(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
         'Topic :: Scientific/Engineering'
     ],
 )

@@ -254,7 +254,7 @@ On the other hand, such pipelines might be applied to different datasets::
 A dataset pipeline
 ------------------
 
-.. code-block:: python
+::
 
    my_pipeline = my_dataset.pipeline()
                    .some_action()
@@ -424,7 +424,7 @@ For a flexible initialization `default`, `init` and `init_on_each_run` might als
 If `create` is `False` (which is by default), then `get_variable` will raise a `KeyError` if a variable does not exist.
 
 `v()` is a shorter alias for `get_variable()`::
-    
+
     pipeline.v('var_name')
 
 To change a variable value just call `set_variable` within an action::
@@ -437,22 +437,15 @@ To change a variable value just call `set_variable` within an action::
             self.pipeline.set_variable("variable_name", new_value)
             ...
 
-Or add `update_variable` to the pipeline::
+Or add `update` to the pipeline::
 
     my_pipeline
         ...
-        .update_variable("current_batch_labels", F(MyBatch.get_labels))
-        .update_variable("all_labels", V('current_batch_labels'), mode='append')
+        .update(V("current_batch_labels"), F(MyBatch.get_labels))
+        .update(V("all_labels", mode='append'), V('current_batch_labels'))
 
-The first parameter specifies a variable name, and it can be a string or :doc:`a named expression <named_expr>`,
-returning a string.
-The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`, e.g.:
-
-* B('name') - a batch class attribute or component name
-* V('name') - a pipeline variable name
-* C('name') - a pipeline config option
-* F(name) - a callable which takes a batch (could be a batch class method or a function)
-* R('name') - a random value from a given distribution
+The first parameter specifies :doc:`a named expression <named_expr>` where the value will be stored.
+The second parameter is an updating value and it can be a value of any type or :doc:`a named expression <named_expr>`.
 
 Note that a named expression might have a mode (e.g. `V('name', mode='a')`) which could be one of:
 
@@ -493,6 +486,45 @@ And pipeline variables might be a handy place to store locks.::
                    .init_variable("my lock", init=threading.Lock)
                    .some_action()
                    ...
+
+Update
+======
+
+A pipeline might need custom calculations which can be implemented with :meth:`~Pipeline.update`::
+
+    pipeline
+        .init_variable('counter', 0)
+        ...
+        .update(V('counter'), V('counter') + 1)
+
+The first parameter is a named expression where the result will be stored, while the second parameter is an expression
+which value will be re-calculated at each iteration.
+
+Some other useful examples might include:
+
+- collecting loss history::
+
+    pipeline
+        .init_variable('loss_history', list)
+        ...
+        .update(V('list', mode='a'), V('current_loss'))
+
+- collecting predictions::
+
+    pipeline
+        .init_variable('all_predictions', list)
+        ...
+        .update(V('all_predictions', mode='e'), V('predictions'))
+
+- assessing performance::
+
+    pipeline
+        .update(B('time'), L(time.time))
+        ...
+        .update(B('time'), L(time.time) - B('time'))
+        .update(V('throughput'), B('images').nbytes / B('time'))
+        ...
+
 
 Join and merge
 ==============
