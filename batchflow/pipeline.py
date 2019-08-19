@@ -51,6 +51,7 @@ class Pipeline:
 
         if pipeline is None:
             self.dataset = dataset
+            self._dataset = None
             self.config = config or {}
             self._actions = actions or []
             self._lazy_run = None
@@ -61,6 +62,7 @@ class Pipeline:
             self._namespaces = []
         else:
             self.dataset = pipeline.dataset
+            self._dataset = None
             config = config or {}
             _config = pipeline.config or {}
             self.config = {**config, **_config}
@@ -286,6 +288,34 @@ class Pipeline:
             whether to clear the current config
         """
         return self.set_config(config, clear=False)
+
+
+    def set_dataset(self, dataset):
+        """ Link the pipeline to a dataset
+
+        Parameters
+        ----------
+        dataset : Dataset
+            a dataset to link to
+
+        Notes
+        -----
+        This method is a declarative version of ``pipeline << dataset``,
+        so it is executed only when the pipeline is run.
+
+        It is always run as the first action in the pipeline chain despite it's actual location.
+        """
+        self.dataset = dataset
+        return self
+
+    def _exec_call(self, batch, action):
+        fn = self._eval_expr(action['fn'], batch)
+        if callable(fn):
+            output = fn(batch, *action['args'], **action['kwargs'])
+        else:
+            raise TypeError("Callable is expected, but got {}".format(type(fn)))
+        if action['save_to'] is not None:
+            self._save_output(batch, None, output, action['save_to'])
 
 
     def has_variable(self, name):
@@ -562,7 +592,7 @@ class Pipeline:
             pipeline
                 .call(lambda batch: [image.shape[1] for image in batch.images], save_to=V('image_widths'))
         """
-        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, **kwargs))
+        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to), **kwargs)
 
     def _exec_call(self, batch, action):
         fn = self._eval_expr(action['fn'], batch)
@@ -1211,7 +1241,7 @@ class Pipeline:
         _action = self._actions[0]
 
         if _action['pipeline'].dataset is None:
-            pipeline = _action['pipeline'] << self.dataset
+            pipeline = _action['pipeline'] << self._dataset
         else:
             pipeline = self.from_pipeline(_action['pipeline'])
 
@@ -1317,10 +1347,11 @@ class Pipeline:
                 raise RuntimeError("gen_batch without arguments requires a lazy run at the end of the pipeline")
             args, kwargs = self._lazy_run
 
+        self._dataset = self._eval_expr(self.dataset)
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
         self.reset(reset)
-        self._iter_params = iter_params or self._iter_params or self.dataset.get_default_iter_params()
+        self._iter_params = iter_params or self._iter_params or self._dataset.get_default_iter_params()
 
         return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
 
@@ -1337,7 +1368,7 @@ class Pipeline:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
             prefetch = 0
         else:
-            batch_generator = self.dataset.gen_batch(*args, **kwargs)
+            batch_generator = self._dataset.gen_batch(*args, **kwargs)
 
         if self._not_init_vars:
             self._init_all_variables()
@@ -1463,6 +1494,8 @@ class Pipeline:
                 _args, _kwargs = self._lazy_run
                 args = _args if len(args) == 0 else args
                 kwargs = {**_kwargs, **kwargs}
+            if 'n_epochs' not in kwargs and 'n_iters' not in kwargs:
+                kwargs['n_epochs'] = 1
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
 
