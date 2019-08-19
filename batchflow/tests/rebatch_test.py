@@ -46,9 +46,9 @@ def test_rebatch(batch_size, rebatch_size):
         batch_lengths[dump].append(batch.size)
 
     p = (Pipeline()
-         .call(get_batch_len, args=('before', ))
+         .call(get_batch_len, 'before')
          .rebatch(rebatch_size)
-         .call(get_batch_len, args=('after', ))
+         .call(get_batch_len, 'after')
          ) << dataset
 
     p.run(batch_size=batch_size, n_epochs=1, bar=True)

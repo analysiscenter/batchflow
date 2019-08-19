@@ -573,7 +573,7 @@ class Pipeline:
         except OSError:
             pass
 
-    def call(self, fn, save_to=None, *args, **kwargs):
+    def call(self, fn, *args, save_to=None, **kwargs):
         """ Call any function during pipeline execution
 
         Parameters
