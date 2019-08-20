@@ -113,9 +113,6 @@ class VariableDirectory:
         if not self.exists(name):
             with self._lock:
                 if not self.exists(name):
-                    if 'init_on_each_run' in kwargs:
-                        logging.warning("`init_on_each_run` in `%s` is obsolete. Use `default` instead.", name)
-                        kwargs['default'] = kwargs.pop('init_on_each_run')
                     self.variables[name] = Variable(*args, pipeline=pipeline, **kwargs)
 
     def create_many(self, variables, pipeline=None):

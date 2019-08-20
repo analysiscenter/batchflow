@@ -1,6 +1,8 @@
 """ Once pipeline """
 import copy as cp
 from functools import partial
+import logging
+
 import numpy as np
 
 from .named_expr import NamedExpression, eval_expr
@@ -92,8 +94,6 @@ class OncePipeline:
             a name of the variable
         default
             an initial value for the variable set when pipeline is created
-        init_on_each_run
-            an initial value for the variable to set before each run
         lock : bool
             whether to lock a variable before each update (default: True)
 
@@ -105,9 +105,12 @@ class OncePipeline:
         --------
         >>> pp = dataset.p.before
                     .init_variable("iterations", default=0)
-                    .init_variable("accuracy", init_on_each_run=0)
-                    .init_variable("loss_history", init_on_each_run=list)
+                    .init_variable("accuracy")
+                    .init_variable("loss_history", [])
         """
+        if 'init_on_each_run' in kwargs:
+            logging.warning("`init_on_each_run` in `%s` is obsolete. Use `default` instead.", name)
+            default = kwargs.pop('init_on_each_run')
         self.pipeline.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
         return self
 
