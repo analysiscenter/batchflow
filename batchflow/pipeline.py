@@ -1351,7 +1351,7 @@ class Pipeline:
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
         self.reset(reset)
-        self._iter_params = iter_params or self._iter_params or self._dataset.get_default_iter_params()
+        self._iter_params = iter_params or self._iter_params or Baseset.get_default_iter_params()
 
         return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
 

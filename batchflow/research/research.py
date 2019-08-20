@@ -596,12 +596,12 @@ class Executable:
             else:
                 self.pipeline = self.pipeline << dataset
 
-    def reset_iter(self):
+    def reset(self, what='iter'):
         """ Reset iterators in pipelines """
         if self.pipeline is not None:
-            self.pipeline.reset("iter")
+            self.pipeline.reset(what)
         if self.root_pipeline is not None:
-            self.root_pipeline.reset("iter")
+            self.root_pipeline.reset(what)
 
     def _clear_result(self):
         self.result = {var: [] for var in self.variables}
