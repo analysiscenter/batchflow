@@ -167,10 +167,13 @@ class EncoderDecoder(TFModel):
     def head(cls, inputs, targets, name='head', **kwargs):
         """ Linear convolutions. """
         kwargs = cls.fill_params('head', **kwargs)
+        data_format = kwargs['data_format']
 
         with tf.variable_scope(name):
+            if cls.spatial_shape(inputs, data_format) > cls.spatial_shape(targets, data_format):
+                inputs = cls.crop(inputs, targets, data_format)
             x = super().head(inputs, name, **kwargs)
-            x = cls.crop(x, targets, kwargs['data_format'])
+            x = cls.crop(x, targets, data_format)
 
             channels = cls.num_channels(targets)
             if cls.num_channels(x) != channels:
