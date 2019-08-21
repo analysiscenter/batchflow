@@ -29,7 +29,9 @@ class Variable:
 
     def set(self, value):
         """ Assign a variable value """
+        self.lock()
         self.value = value
+        self.unlock()
 
     def initialize(self, pipeline=None):
         """ Initialize a variable value """

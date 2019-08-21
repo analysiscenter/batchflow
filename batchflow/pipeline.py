@@ -456,10 +456,8 @@ class Pipeline:
             logging.warning("Pipeline variable '%s' has not been initialized", var_name)
             self.init_variable(var_name)
 
-        self.variables.lock(var_name)
         value = self._eval_expr(value, batch=batch)
         self.variables.set(var_name, value)
-        self.variables.unlock(var_name)
 
     def delete_variable(self, name):
         """ Delete a variable
