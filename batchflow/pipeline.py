@@ -389,7 +389,7 @@ class Pipeline:
         self.before.init_variable(name, default, lock, **kwargs)
         return self
 
-    def init_variables(self, variables):
+    def init_variables(self, *variables):
         """ Create several variables
 
         Parameters
@@ -408,10 +408,13 @@ class Pipeline:
         --------
         >>> pp = dataset.p
                     .init_variables({"loss_history": dict(default=[]),
-                                     "accuracy", dict(default=0)})
+                                     "predictions", dict(default=[])})
+                    .init_variables("metrics", "counter", "worst_prediction")
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
+        if len(variables) == 1:
+            variables = variables[0]
         self.variables.create_many(variables)
         return self
 
