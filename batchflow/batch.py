@@ -445,7 +445,7 @@ class Batch:
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
             comps = components or range(len(_data))
-            res = tuple(data_item[self.get_pos(None, comp, index)] if data_item is not None else None
+            res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
             res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
