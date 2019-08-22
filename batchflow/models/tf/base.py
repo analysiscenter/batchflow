@@ -2072,6 +2072,37 @@ class TFModel(BaseModel):
         return x
 
     @classmethod
+    def scse_block(cls, inputs, ratio=2, name='scse', **kwargs):
+        """ Concurrent spatial and channel squeeze and excitation.
+
+        Roy A.G. et al. "`Concurrent Spatial and Channel ‘Squeeze & Excitation’
+        in Fully Convolutional Networks <https://arxiv.org/abs/1803.02579>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        ratio : int, optional
+            Squeeze ratio for the number of filters in spatial squeeze
+            and channel excitation block. Default is 2.
+
+        Returns
+        -------
+        tf.Tensor
+        """
+
+        with tf.variable_scope(name):
+            cse = cls.se_block(inputs, ratio, name='cse', **kwargs)
+
+            x = conv_block(inputs, **{**kwargs, 'layout': 'ca', 'filters': 1, 'kernel_size': 1,
+                                      'activation': tf.nn.sigmoid, 'name': 'sse'})
+
+            sse = tf.multiply(x, inputs)
+            scse = cse + sse
+
+        return scse
+
+    @classmethod
     def upsample(cls, inputs, factor=None, resize_to=None, layout='b', name='upsample', **kwargs):
         """ Upsample input tensor
 
