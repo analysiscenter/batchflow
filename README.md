@@ -94,7 +94,7 @@ With old-fashioned [pip](https://pip.pypa.io/en/stable/)
 pip3 install batchflow
 ```
 
-### Development vesrion
+### Development version
 
 With modern [pipenv](https://docs.pipenv.org/)
 ```
