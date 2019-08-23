@@ -41,7 +41,7 @@ class Dataset(Baseset):
     validation : Dataset
         The validation part of this dataset. It appears after splitting
     """
-    def __init__(self, index, batch_class=Batch, preloaded=None, *args, **kwargs):
+    def __init__(self, index, batch_class=Batch, preloaded=None, copy=False, *args, **kwargs):
         """ Create Dataset
 
             Parameters
@@ -55,6 +55,9 @@ class Dataset(Baseset):
             preloaded : data-type
                 For smaller dataset it might be convenient to preload all data at once
                 As a result, all created batches will contain a portion of some_data.
+
+            copy : bool
+                whether to copy data from `preloaded` when creating a batch to alow for in-place transformations
         """
         if batch_class is not Batch and not issubclass(batch_class, Batch):
             raise TypeError("batch_class should be inherited from Batch", batch_class)
@@ -62,15 +65,18 @@ class Dataset(Baseset):
         super().__init__(index, *args)
         self.batch_class = batch_class
         self.preloaded = preloaded
+        self._attrs = None
+        kwargs['_copy'] = kwargs.get('_copy', copy)
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
         """ Create attributes from kwargs """
+        self._attrs = kwargs
         for attr, value in kwargs.items():
             setattr(self, attr, value)
 
     @classmethod
-    def from_dataset(cls, dataset, index, batch_class=None, copy=False):
+    def from_dataset(cls, dataset, index, batch_class=None, copy=False, **kwargs):
         """ Create a Dataset object from another dataset with a new index
             (usually a subset of the source dataset index)
 
@@ -86,7 +92,7 @@ class Dataset(Baseset):
                 a subclass of Batch class
 
             copy : bool
-                whether to copy the dataset or use it wherever possible
+                whether to create a copy of the dataset or use the same instance wherever possible
 
             Returns
             -------
@@ -98,7 +104,7 @@ class Dataset(Baseset):
         if copy:
             index = cp.copy(index)
         bcl = batch_class if batch_class is not None else dataset.batch_class
-        return cls(index, batch_class=bcl, preloaded=dataset.preloaded)
+        return cls(index, batch_class=bcl, preloaded=dataset.preloaded, **kwargs)
 
     def __copy__(self):
         return self.from_dataset(self, self.index, copy=True)
@@ -169,7 +175,7 @@ class Dataset(Baseset):
         indices = index.indices if isinstance(index, DatasetIndex) else index
         if not np.isin(indices, self.indices).all():
             raise IndexError
-        return type(self).from_dataset(self, self.index.create_subset(index))
+        return type(self).from_dataset(self, self.index.create_subset(index), **self._attrs)
 
     def create_batch(self, index, pos=False, *args, **kwargs):
         """ Create a batch from given indices.
@@ -194,7 +200,7 @@ class Dataset(Baseset):
         """
         if not isinstance(index, DatasetIndex):
             index = self.index.create_batch(index, pos, *args, **kwargs)
-        return self.batch_class(index, preloaded=self.preloaded, dataset=self, **kwargs)
+        return self.batch_class(index, dataset=self, preloaded=self.preloaded, copy=self._copy, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow

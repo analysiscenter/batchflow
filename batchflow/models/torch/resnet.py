@@ -56,10 +56,6 @@ class ResNet(TorchModel):
                 or apply a 1x1 convolution (default is False)
             width_factor : int
                 widening factor to make WideResNet (default=1)
-            se_block : bool
-                whether to use squeeze-and-excitation blocks (default=False)
-            se_factor : int
-                squeeze-and-excitation channels ratio (default=16)
             resnext : bool
                 whether to use aggregated ResNeXt block (default=False)
             resnext_factor : int
@@ -78,8 +74,7 @@ class ResNet(TorchModel):
         config['body/block'] = dict(layout=None, post_activation=None, downsample=False,
                                     bottleneck=False, bottleneck_factor=4,
                                     width_factor=1, zero_pad=False,
-                                    resnext=False, resnext_factor=32,
-                                    se_block=False, se_factor=16)
+                                    resnext=False, resnext_factor=32)
 
         config['head'] = dict(layout='Vdf', dropout_rate=.4)
 
@@ -191,10 +186,6 @@ class ResNet(TorchModel):
             whether to use a simple (`False`) or bottleneck (`True`) block
         bottleneck_factor : int
             the filters nultiplier in the bottleneck block
-        se_block : bool
-            whether to include squeeze and excitation block
-        se_factor : int
-            se block ratio
         kwargs : dict
             ConvBlock parameters for all sub blocks
 
@@ -207,7 +198,6 @@ class ResNet(TorchModel):
         width_factor = cls.pop('width_factor', kwargs)
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
         resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
-        #se_block, se_factor = cls.pop(['se_block', 'se_factor'], kwargs)
         post_activation = cls.pop('post_activation', kwargs)
         if isinstance(post_activation, bool) and post_activation:
             post_activation = 'an'

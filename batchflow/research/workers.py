@@ -12,17 +12,10 @@ class PipelineWorker(Worker):
         i, job = self.job
         n_branches = len(job.configs)
 
-        if self.framework == 'tf':
-            prefix = '/device:GPU:'
-        elif self.framework == 'torch':
-            prefix = 'cuda:'
-        else:
-            raise ValueError('Unknown framework: {}'.format(self.framework))
-
         if len(self.gpu) <= 1:
-            self.gpu_configs = [dict(device=prefix+'0') for i in range(n_branches)]
+            self.gpu_configs = [dict(device='gpu:0') for i in range(n_branches)]
         else:
-            self.gpu_configs = [dict(device=prefix+str(i)) for i in range(n_branches)]
+            self.gpu_configs = [dict(device='gpu:'+str(i)) for i in range(n_branches)]
 
         job.init(self.worker_config, self.gpu_configs)
 
@@ -35,7 +28,7 @@ class PipelineWorker(Worker):
 
     def _execute_on_root(self, base_unit, iteration):
         _, job = self.job
-        return base_unit.action_iteration(iteration, job.n_iters) or (-1 in base_unit.execute) and job.all_stopped()
+        return base_unit.action_iteration(iteration, job.n_iters) or ('last' in base_unit.execute) and job.all_stopped()
 
     def run_job(self):
         """ Job execution. """

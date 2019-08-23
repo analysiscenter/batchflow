@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from ...utils import unpack_args
 from .core import mip, flatten
-from .conv import conv, conv_transpose, separable_conv, separable_conv_transpose
+from .conv import conv, conv_transpose, separable_conv, separable_conv_transpose, depthwise_conv
 from .pooling import pooling, global_pooling
 from .drop_block import dropblock
 
@@ -22,6 +22,7 @@ FUNC_LAYERS = {
     'transposed_conv': conv_transpose,
     'separable_conv':separable_conv,
     'separable_conv_transpose': separable_conv_transpose,
+    'depthwise_conv': depthwise_conv,
     'pooling': pooling,
     'global_pooling': global_pooling,
     'batch_norm': tf.layers.batch_normalization,
@@ -39,6 +40,7 @@ C_LAYERS = {
     'c': 'conv',
     't': 'transposed_conv',
     'C': 'separable_conv',
+    'W': 'depthwise_conv',
     'T': 'separable_conv_transpose',
     'p': 'pooling',
     'v': 'pooling',
@@ -55,6 +57,7 @@ GROUP_KEYS = (
     LAYER_KEYS
     .replace('t', 'c')
     .replace('C', 'c')
+    .replace('W', 'c')
     .replace('T', 'c')
     .replace('v', 'p')
     .replace('V', 'P')
@@ -101,7 +104,6 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
     residuals = []
     tensor = inputs
     for i, layer in enumerate(layout):
-
         layout_dict[C_GROUPS[layer]][0] += 1
         layer_name = C_LAYERS[layer]
         layer_fn = FUNC_LAYERS[layer_name]
@@ -144,6 +146,10 @@ def _conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
                             data_format=data_format, dilation_rate=dilation_rate)
                 if filters is None or filters == 0:
                     raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
+
+            elif layer == 'W':
+                args = dict(kernel_size=kernel_size, strides=strides, padding=padding,
+                            data_format=data_format, dilation_rate=dilation_rate, depth_multiplier=depth_multiplier)
 
             elif layer == 'C':
                 args = dict(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,

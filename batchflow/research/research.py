@@ -6,7 +6,7 @@ from copy import copy, deepcopy
 from collections import OrderedDict
 from math import ceil
 import json
-import warnings
+import pprint
 import dill
 import pandas as pd
 
@@ -15,6 +15,7 @@ from .distributor import Distributor
 from .workers import PipelineWorker
 from .grid import Grid, Option
 from .job import Job
+from .utils import get_metrics
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
@@ -22,25 +23,20 @@ class Research:
         self.executables = OrderedDict()
         self.loaded = False
         self.branches = 1
-        self.trails = 3
+        self.trials = 3
         self.workers = 1
         self.bar = False
-        self.initial_name = 'research'
         self.n_reps = 1
         self.name = 'research'
         self.worker_class = PipelineWorker
         self.gpu = None
-        self.n_jobs = None
-        self.jobs = None
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
         self.n_splits = None
-        self.shuffle = None
-        self.framework = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
-                     name=None, execute='%1', dump=-1, run=False, logging=False, **kwargs):
+                     name=None, execute=1, dump='last', run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
 
@@ -65,19 +61,20 @@ class Research:
             If None, pipeline will be executed without any dumping.
         name : str
             pipeline name. If None, pipeline will have name `pipeline_{index}`
-        execute : int, str or list of int or str
-            If -1, pipeline will be executed just at last iteration (if `iteration + 1 == n_iters`
+        execute : int, str or list of int and str
+            If `'last'`, pipeline will be executed just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
 
-            If positive int, pipeline will be excuted for that iteration
+            If positive int, pipeline will be executed each `step` iterations.
 
-            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
+            If str, must be `'#{it}'` or `'last'` where it is int,
+            the pipeline will be executed at this iteration (zero-based)
 
-            If list, must be list of int or str descibed above
+            If list, must be list of int or str described above
         dump : int, str or list of int or str
             iteration when results will be dumped and cleared. Similar to `execute`
         run : bool
-            if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset_iter()`.
+            if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset("iter")`.
         kwargs :
             parameters in pipeline config that depends on the names of the other pipeline.
 
@@ -97,15 +94,50 @@ class Research:
         name = name or 'pipeline_' + str(len(self.executables) + 1)
 
         if name in self.executables:
-            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
+            raise ValueError('Executable unit with name {} already exists'.format(name))
 
         unit = Executable()
-        unit.add_pipeline(root, name, branch, dataset, part, variables,
-                          execute, dump, run, logging, **kwargs)
+        unit.add_pipeline(root, name, branch, dataset, part, variables, execute, dump, run, logging, **kwargs)
         self.executables[name] = unit
         return self
 
-    def add_function(self, function, returns=None, name=None, execute='%1', dump=-1,
+    def get_metrics(self, pipeline, metrics_var, metrics_name,
+                    returns=None, execute=1, dump='last', logging=False):
+        """ Evaluate metrics.
+
+        Parameters
+        ----------
+        pipeline : str
+            pipeline name
+        metrics_var : str
+            pipeline variable which accumulate metrics
+        metrics_name : str or list of str
+            metrics to evaluate
+        returns : str, list of str or None
+            names to save metrics into results
+            if None, `function` will be executed without any saving results and dumping
+        execute : int, str or list of int and str
+            If `'last'`, metrics will be gathered just at last iteration (if `iteration + 1 == n_iters`
+            or `StopIteration` was raised)
+
+            If positive int, metrics will be gathered each `step` iterations.
+
+            If str, must be `'#{it}'` or `'last'` where it is int,
+            metrics will be gathered at this iteration (zero-based)
+
+            If list, must be list of int or str described above
+        dump : int, str or list of int or str
+            iteration when results will be dumped and cleared. Similar to execute
+        logging : bool
+            include execution information to log file or not
+        """
+        name = pipeline + '_metrics'
+        self.add_function(get_metrics, returns, name, execute, dump,
+                          False, logging, pipeline=pipeline,
+                          metrics_var=metrics_var, metrics_name=metrics_name)
+        return self
+
+    def add_function(self, function, returns=None, name=None, execute=1, dump='last',
                      on_root=False, logging=False, *args, **kwargs):
         """ Add function to research.
 
@@ -113,7 +145,7 @@ class Research:
         ----------
         function : callable
             callable object with following parameters:
-                experiment : `OrderedDict` of Executable
+                experiment : `OrderedDict` of Executable objects
                     all pipelines and functions that were added to Research
                 iteration : int
                     iteration when function is called
@@ -123,15 +155,16 @@ class Research:
             if None, `function` will be executed without any saving results and dumping
         name : str (default None)
             function name. If None, a function will have name `func_{index}`
-        execute : int, str or list of int or str
-            If -1, function will be executed just at last iteration (if `iteration + 1 == n_iters`
+        execute : int, str or list of int and str
+            If `'last'`, function will be executed just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
 
-            If positive int, function will be excuted for that iteration
+            If positive int, function will be executed each `step` iterations.
 
-            If str, must be `'%{step}'` where step is int and pipeline will be executed each `step` iterations.
+            If str, must be `'#{it}'` or `'last'` where it is int,
+            the function will be executed at this iteration (zero-based)
 
-            If list, must be list of int or str descibed above
+            If list, must be list of int or str described above
         dump : int, str or list of int or str
             iteration when results will be dumped and cleared. Similar to execute
         on_root : bool
@@ -251,7 +284,7 @@ class Research:
             raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
-            bar=False, gpu=None, worker_class=None, timeout=5, trails=2, framework='tf'):
+            bar=False, gpu=None, worker_class=None, timeout=5, trials=2):
 
         """ Run research.
 
@@ -299,38 +332,37 @@ class Research:
             if None, default gpu configuration will be used
         timeout : int
             each job will be killed if it doesn't answer more then that time in minutes
-        trails : int
-            trails to execute job
-        framework : 'tf' or 'torch'
-            depends on the format of `C('device')`: `'/device:GPU:i'` for `'tf'` and `'cuda:i'` for `'torch'`.
-
+        trials : int
+            trials to execute job
 
         **How does it work**
 
         At each iteration all pipelines and functions will be executed in the order in which were added.
         """
-        if not self.loaded:
+        if self.loaded:
+            print("Starting loaded research. All parameters passed to run except name, bar and gpu are ignored.\n",
+                  "If gpu is not provided it will be inherited")
+            if gpu:
+                self.gpu = self._get_gpu_list(gpu)
+        else:
             self.n_reps = n_reps
             self.n_iters = n_iters
             self.workers = workers
             self.branches = branches
-            self.bar = bar
             self.gpu = self._get_gpu_list(gpu)
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
-            self.trails = trails
-            self.initial_name = name
-            self.name = name
-
+            self.trials = trials
             self.n_splits = n_splits
-            self.shuffle = shuffle
-            self.framework = framework
+
+        self.name = name or self.name
+        self.bar = bar
 
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
 
-        if n_splits is not None:
-            self._cv_split(n_splits, shuffle)
+        if self.n_splits is not None:
+            self._cv_split(self.n_splits, shuffle)
 
         if self.grid_config is None:
             self.grid_config = Grid(Option('_dummy', [None]))
@@ -343,17 +375,17 @@ class Research:
             raise ValueError("Number of gpus / n_workers must be 1 \
                              or be divisible by the number of branches but {} was given".format(len(self.gpu)))
 
-        self.name = self._folder_exists(self.initial_name)
+        self._folder_exists(self.name)
 
         print("Research {} is starting...".format(self.name))
 
-        self.save()
+        self.__save()
 
-        self.jobs, self.n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
+        jobs, n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
 
-        distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trails)
-        distr.run(self.jobs, dirname=self.name, n_jobs=self.n_jobs,
-                  n_iters=self.n_iters, bar=self.bar, framework=self.framework)
+        distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trials)
+        distr.run(jobs, dirname=self.name, n_jobs=n_jobs,
+                  n_iters=self.n_iters, bar=self.bar)
         return self
 
     def __getstate__(self):
@@ -371,22 +403,16 @@ class Research:
             gpu = gpu
         return gpu
 
-    def _folder_exists(self, name):
-        name = name or 'research'
+    @staticmethod
+    def _folder_exists(name):
         if not os.path.exists(name):
-            dirname = name
+            os.makedirs(name)
         else:
-            i = 1
-            while os.path.exists(name + '_' + str(i)):
-                i += 1
-            dirname = name + '_' + str(i)
-            warnings.warn(
-                "Research with name {} already exists. That research will be renamed to {}".format(name, dirname)
+            raise ValueError(
+                "Research with name '{}' already exists".format(name)
             )
-        os.makedirs(dirname)
-        return dirname
 
-    def save(self):
+    def __save(self):
         """ Save description of the research to folder name/description. """
         dirname = os.path.join(self.name, 'description')
         if not os.path.exists(dirname):
@@ -410,13 +436,17 @@ class Research:
         description['grid_config'] = self.grid_config.value()
         return description
 
+    def describe(self):
+        pprint.pprint(self.__dict__)
+
     @classmethod
     def load(cls, name):
         """ Load description of the research from name/description. """
         with open(os.path.join(name, 'description', 'research.dill'), 'rb') as file:
-            res = dill.load(file)
-            res.loaded = True
-            return res
+            research = dill.load(file)
+            research.loaded = True
+            return research
+
 
 class Executable:
     """ Function or pipeline
@@ -473,7 +503,7 @@ class Executable:
         self.dataset = None
         self.part = None
 
-    def add_function(self, function, name, execute='%1', dump=-1, returns=None,
+    def add_function(self, function, name, execute=1, dump='last', returns=None,
                      on_root=False, logging=False, *args, **kwargs):
         """ Add function as an Executable Unit. """
         returns = returns or []
@@ -501,7 +531,7 @@ class Executable:
         self._process_iterations()
 
     def add_pipeline(self, root, name, branch=None, dataset=None, part=None, variables=None,
-                     execute='%1', dump=-1, run=False, logging=False, **kwargs):
+                     execute=1, dump='last', run=False, logging=False, **kwargs):
         """ Add pipeline as an Executable Unit """
         variables = variables or []
 
@@ -566,12 +596,12 @@ class Executable:
             else:
                 self.pipeline = self.pipeline << dataset
 
-    def reset_iter(self):
+    def reset(self, what='iter'):
         """ Reset iterators in pipelines """
         if self.pipeline is not None:
-            self.pipeline.reset_iter()
+            self.pipeline.reset(what)
         if self.root_pipeline is not None:
-            self.root_pipeline.reset_iter()
+            self.root_pipeline.reset(what)
 
     def _clear_result(self):
         self.result = {var: [] for var in self.variables}
@@ -596,7 +626,7 @@ class Executable:
     def run(self):
         """ Run pipeline """
         if self.pipeline is not None:
-            self.pipeline.reset_iter()
+            self.pipeline.reset("iter")
             self.pipeline.run()
         else:
             raise TypeError("Executable should be pipeline, not a function")
@@ -604,7 +634,7 @@ class Executable:
     def reset_root_iter(self):
         """ Reset pipeline iterator """
         if self.root_pipeline is not None:
-            self.root_pipeline.reset_iter()
+            self.root_pipeline.reset("iter")
         else:
             raise TypeError("Executable must have root")
 
@@ -676,18 +706,18 @@ class Executable:
     def action_iteration(self, iteration, n_iters=None, action='execute'):
         """ Returns does Unit should be executed at that iteration """
         rule = self.execute if action == 'execute' else self.dump
-        list_rule = [item for item in rule if isinstance(item, int)]
-        step_rule = [int(item[1:]) for item in rule if isinstance(item, str)]
 
-        in_list = iteration in list_rule
-        in_step = sum([(iteration+1) % item == 0 for item in step_rule])
+        frequencies = (item for item in rule if isinstance(item, int) and item > 0)
+        iterations = (int(item[1:]) for item in rule if isinstance(item, str) and item != 'last')
+
+        it_ok = iteration in iterations
+        freq_ok = any((iteration+1) % item == 0 for item in frequencies)
 
         if n_iters is None:
-            action_list = in_list or in_step
-        else:
-            in_final = -1 in list_rule and iteration+1 == n_iters
-            action_list = in_list or in_step or in_final
-        return action_list
+            return it_ok or freq_ok
+
+        return (iteration + 1 == n_iters and 'last' in rule) or it_ok or freq_ok
+
 
 class Results():
     """ Class for dealing with results of research
@@ -804,9 +834,9 @@ class Results():
 
             research = (Research()
             .add_pipeline(train_ppl, variables='loss', name='train')
-            .add_pipeline(test_ppl, name='test', execute='%100', run=True, import_from='train')
+            .add_pipeline(test_ppl, name='test', execute=100, run=True, import_from='train')
             .add_function(accuracy, returns='accuracy', name='test_accuracy',
-                      execute='%100', pipeline='test')
+                      execute=100, pipeline='test')
             .add_grid(grid))
 
             research.run(n_reps=2, n_iters=10000)

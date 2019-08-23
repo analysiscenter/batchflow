@@ -23,3 +23,8 @@ any_action_failed
 mjit
 ====
 .. autofunction:: batchflow.mjit
+
+
+deprecated
+===========
+.. autofunction:: batchflow.deprecated

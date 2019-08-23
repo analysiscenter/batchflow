@@ -7,7 +7,7 @@ Later every combination of encoder, embedding, decoder is combined into one mode
 import pytest
 
 from batchflow.models.tf import EncoderDecoder, VariationalAutoEncoder
-from batchflow.models.tf import ResNet, MobileNet, DenseNet
+from batchflow.models.tf import ResNet, MobileNet, DenseNet, Inception_v4
 
 
 
@@ -28,6 +28,7 @@ ENCODERS = [
 EMBEDDINGS = [
     {},
     {'base': MobileNet.block, 'width_factor': 2},
+    {'base': Inception_v4.inception_c_block, 'filters': [1, 1, 1, 1]}
 ]
 
 

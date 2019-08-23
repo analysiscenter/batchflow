@@ -4,6 +4,7 @@ import os
 import traceback
 import threading
 import warnings
+from copy import deepcopy
 
 import dill
 try:
@@ -34,7 +35,7 @@ class Batch:
     _item_class = None
     components = None
 
-    def __init__(self, index, preloaded=None, *args, **kwargs):
+    def __init__(self, index, dataset=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
@@ -43,7 +44,9 @@ class Batch:
         self._data = None
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
+        self._copy = copy
         self._local = None
+        self._dataset = dataset
         self._pipeline = None
         self.create_attrs(**kwargs)
 
@@ -51,6 +54,13 @@ class Batch:
         """ Create attributes from kwargs """
         for attr, value in kwargs.items():
             setattr(self, attr, value)
+
+    @property
+    def dataset(self):
+        """: Dataset - a dataset the batch has been taken from """
+        if self.pipeline is not None:
+            return self.pipeline.dataset
+        return self._dataset
 
     @property
     def pipeline(self):
@@ -137,9 +147,8 @@ class Batch:
 
         if batch_size is None:
             break_point = len(batches)
-            last_batch_len = len(batches[-1])
         else:
-            break_point = -1
+            break_point = len(batches) - 1
             last_batch_len = 0
             cur_size = 0
             for i, b in enumerate(batches):
@@ -165,14 +174,14 @@ class Batch:
             if batch_size is None:
                 new_comp = [b.get(component=comp) for b in batches[:break_point]]
             else:
-                b = batches[break_point]
-                last_batch_len_ = b.get_pos(None, comp, b.indices[last_batch_len - 1])
+                last_batch = batches[break_point]
+                last_batch_last_index = last_batch.get_pos(None, comp, last_batch.indices[last_batch_len - 1])
                 new_comp = [b.get(component=comp) for b in batches[:break_point]] + \
-                           [batches[break_point].get(component=comp)[:last_batch_len_ + 1]]
+                           [last_batch.get(component=comp)[:last_batch_last_index + 1]]
             new_data[i] = cls.merge_component(comp, new_comp)
 
             if batch_size is not None:
-                rest_comp = [batches[break_point].get(component=comp)[last_batch_len_ + 1:]] + \
+                rest_comp = [last_batch.get(component=comp)[last_batch_last_index + 1:]] + \
                             [b.get(component=comp) for b in batches[break_point + 1:]]
                 rest_data[i] = cls.merge_component(comp, rest_comp)
 
@@ -189,7 +198,7 @@ class Batch:
             return np.concatenate(data)
         raise TypeError("Unknown data type", type(data[0]))
 
-    def as_dataset(self, dataset):
+    def as_dataset(self, dataset=None, copy=False):
         """ Makes a new dataset from batch data
 
         Parameters
@@ -197,17 +206,21 @@ class Batch:
         dataset
             an instance or a subclass of Dataset
 
+        copy : bool
+            whether to copy batch data to allow for further inplace transformations
+
         Returns
         -------
         an instance of a class specified by `dataset` arg, preloaded with this batch data
         """
+        dataset = dataset or self._dataset
         if dataset is None:
             raise ValueError('dataset can be an instance of Dataset (sub)class or the class itself, but not None')
         if isinstance(dataset, type):
             dataset_class = dataset
         else:
             dataset_class = dataset.__class__
-        return dataset_class(self.index, batch_class=type(self), preloaded=self.data)
+        return dataset_class(self.index, batch_class=type(self), preloaded=self.data, copy=copy)
 
     @property
     def indices(self):
@@ -243,7 +256,7 @@ class Batch:
         elif type(self)._item_class is None or not local:
             comp_class = MetaComponentsTuple(type(self).__name__ + 'Components', components=self.components)
             type(self)._item_class = comp_class
-        else:
+        elif local:
             comp_class = MetaComponentsTuple(type(self).__name__ + 'Components' + str(id(self)),
                                              components=self.components)
             self._item_class = comp_class
@@ -262,7 +275,7 @@ class Batch:
         Raises
         ------
         ValueError
-            If the component with the given name already exists
+            If a component or an attribute with the given name already exists
         """
         if isinstance(components, str):
             components = (components,)
@@ -273,6 +286,9 @@ class Batch:
                 init = (None,) * len(components)
             else:
                 init = tuple(init)
+
+        if any(hasattr(self, c) for c in components):
+            raise ValueError("An attribute with the same name exists")
 
         data = self._data
         if self.components is None:
@@ -292,6 +308,31 @@ class Batch:
 
         return self
 
+    def __getattr__(self, name):
+        if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
+            attr = getattr(self.data, name)
+            return attr
+        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
+
+    def __setattr__(self, name, value):
+        if self.components is not None:
+            if name == "_data":
+                super().__setattr__(name, value)
+                if self._item_class is None:
+                    self.make_item_class()
+                if isinstance(value, self._item_class):
+                    self._data_named = value
+                else:
+                    self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
+                return
+            if name in self.components:    # pylint: disable=unsupported-membership-test
+                if self._data_named is None:
+                    _ = self.data
+                setattr(self._data_named, name, value)
+                super().__setattr__('_data', self._data_named.data)
+                return
+        super().__setattr__(name, value)
+
     def __getstate__(self):
         state = self.__dict__.copy()
         state.pop('_data_named')
@@ -305,6 +346,11 @@ class Batch:
     @property
     def _empty_data(self):
         return None if self.components is None else self._item_class()   # pylint: disable=not-callable
+
+    @property
+    def array_of_nones(self):
+        """1-D ndarray: ``NumPy`` array with ``None`` values."""
+        return np.array([None] * len(self.index))
 
     def get_pos(self, data, component, index):
         """ Return a position in data for a given index
@@ -366,41 +412,19 @@ class Batch:
             pos = index
         return pos
 
-    def __getattr__(self, name):
-        if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
-            attr = getattr(self.data, name)
-            return attr
-        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
-
-    def __setattr__(self, name, value):
-        if self.components is not None:
-            if name == "_data":
-                super().__setattr__(name, value)
-                if self._item_class is None:
-                    self.make_item_class()
-                self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
-            elif name in self.components:    # pylint: disable=unsupported-membership-test
-                if self._data_named is None:
-                    _ = self.data
-                setattr(self._data_named, name, value)
-                super().__setattr__('_data', self._data_named.data)
-            else:
-                super().__setattr__(name, value)
-        else:
-            super().__setattr__(name, value)
-
     def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
-        if self.components is None:
-            _src = data
-        else:
-            _src = data if isinstance(data, tuple) or data is None else tuple([data])
-        _src = self.get_items(self.indices, _src)
+        _src = self.get_items(self.indices, data)
+        if not isinstance(_src, (tuple, dict, self._item_class)):
+            _src = (_src,)
 
         if dst is None:
             self._data = _src
         else:
-            components = [dst] if isinstance(dst, str) else dst
+            if isinstance(dst, str):
+                components = [dst]
+            else:
+                components = dst
             for i, comp in enumerate(components):
                 if isinstance(_src, dict):
                     comp_src = _src[comp]
@@ -414,14 +438,13 @@ class Batch:
             _data = self.data
         else:
             _data = data
-        if components is None:
-            components = self.components
+        components = components or self.components
 
         if self._item_class is not None and isinstance(_data, self._item_class):
             pos = [self.get_pos(None, comp, index) for comp in components]   # pylint: disable=not-an-iterable
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
-            comps = components if components is not None else range(len(_data))
+            comps = components or range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
@@ -429,6 +452,9 @@ class Batch:
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]
+
+        if self._copy and data == self._preloaded:
+            res = deepcopy(res)
         return res
 
     def get(self, item=None, component=None):
@@ -442,8 +468,7 @@ class Batch:
             if component is None:
                 res = self[item]
             else:
-                res = self[item]
-                res = getattr(res, component)
+                res = getattr(self[item], component)
         return res
 
     def __getitem__(self, item):

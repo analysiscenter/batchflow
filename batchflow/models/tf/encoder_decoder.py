@@ -2,8 +2,9 @@
 
 import tensorflow as tf
 
-from .layers import conv_block
 from . import TFModel
+from .layers import conv_block
+from ..utils import unpack_args
 
 
 class EncoderDecoder(TFModel):
@@ -16,7 +17,7 @@ class EncoderDecoder(TFModel):
         Dictionary with 'images' (see :meth:`~.TFModel._make_inputs`)
 
     body : dict
-        encoder : dict
+        encoder : dict, optional
             base : TFModel
                 Model implementing ``make_encoder`` method which returns tensors
                 with encoded representation of the inputs.
@@ -24,27 +25,29 @@ class EncoderDecoder(TFModel):
             num_stages : int
                 Number of downsampling stages.
 
-            downsample : dict
+            downsample : dict, optional
                 Parameters for downsampling (see :func:`~.layers.conv_block`)
 
-            blocks : dict
-                Parameters for pre-processing blocks:
+            blocks : dict, optional
+                Parameters for pre-processing blocks.
 
                 base : callable
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
                 other args : dict
                     Parameters for the base block.
 
-            other args : dict
+            other args : dict, optional
                 Parameters for ``make_encoder`` method.
 
-        embedding : dict
+        embedding : dict or sequence of dicts or None, optional
+            If None no embedding block is created
+
             base : callable
                 Tensor processing function. Default is :func:`~.layers.conv_block`.
             other args
                 Parameters for the base block.
 
-        decoder : dict
+        decoder : dict, optional
             num_stages : int
                 Number of upsampling blocks.
 
@@ -64,6 +67,11 @@ class EncoderDecoder(TFModel):
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
                 other args : dict
                     Parameters for the base block.
+
+    head : dict, optional
+        parameters for the head layers, usually :func:`.conv_block` parameters
+        Note that an extra 1x1 convolution may be applied
+        in order to make predictions compatible with the shape of targets
 
     Examples
     --------
@@ -111,54 +119,65 @@ class EncoderDecoder(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
+
         config['body/encoder'] = dict(base=None, num_stages=None)
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
         config['body/encoder/blocks'] = dict(base=cls.block)
+
         config['body/embedding'] = dict(base=cls.block)
+
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=cls.block)
-        config['head'] = dict(layout='c', kernel_size=1)
+        config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
+
+        config['head/layout'] = None
+
         return config
-
-
-    def build_config(self, names=None):
-        config = super().build_config(names)
-        config['head/targets'] = self.get_from_attr('targets')
-        return config
-
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
         """ Create encoder, embedding and decoder. """
         kwargs = cls.fill_params('body', **kwargs)
         encoder = kwargs.pop('encoder')
-        embedding = kwargs.pop('embedding')
+        embeddings = kwargs.get('embedding')
         decoder = kwargs.pop('decoder')
 
         with tf.variable_scope(name):
             # Encoder: transition down
-            encoder_outputs = cls.encoder(inputs, **encoder, **kwargs)
+            encoder_args = {**kwargs, **encoder}
+            encoder_outputs = cls.encoder(inputs, name='encoder', **encoder_args)
+            x = encoder_outputs[-1]
 
-            # Bottleneck: working with compressed representation
-            x = cls.embedding(encoder_outputs[-1], **embedding, **kwargs)
+            # Bottleneck: working with compressed representation via multiple steps of processing
+            if embeddings is not None:
+                embeddings = embeddings if isinstance(embeddings, (tuple, list)) else [embeddings]
+
+                for i, embedding in enumerate(embeddings):
+                    embedding_args = {**kwargs, **embedding}
+                    x = cls.embedding(x, name='embedding-'+str(i), **embedding_args)
+
             encoder_outputs.append(x)
 
             # Decoder: transition up
-            x = cls.decoder(encoder_outputs, **decoder, **kwargs)
+            decoder_args = {**kwargs, **decoder}
+            x = cls.decoder(encoder_outputs, name='decoder', **decoder_args)
         return x
-
 
     @classmethod
     def head(cls, inputs, targets, name='head', **kwargs):
         """ Linear convolutions. """
         kwargs = cls.fill_params('head', **kwargs)
+
         with tf.variable_scope(name):
             x = cls.crop(inputs, targets, kwargs['data_format'])
-            channels = cls.num_channels(targets)
-            x = conv_block(x, filters=channels, **kwargs)
-        return x
+            x = super().head(x, name, **kwargs)
 
+            channels = cls.num_channels(targets)
+            if cls.num_channels(x) != channels:
+                args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels)}
+                x = conv_block(x, name='conv1x1', **args)
+
+        return x
 
     @classmethod
     def block(cls, inputs, name='block', **kwargs):
@@ -166,8 +185,8 @@ class EncoderDecoder(TFModel):
         By default makes 3x3 convolutions followed by batch-norm and activation.
         Does not change tensor shapes.
         """
-        layout = kwargs.pop('layout', None) or 'cna'
-        filters = kwargs.pop('filters', None) or cls.num_channels(inputs)
+        layout = kwargs.pop('layout', 'cna')
+        filters = kwargs.pop('filters', cls.num_channels(inputs))
         return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
 
 
@@ -218,16 +237,15 @@ class EncoderDecoder(TFModel):
                 for i in range(steps):
                     with tf.variable_scope('encoder-'+str(i)):
                         # Preprocess tensor with given block
-                        args = {key: value[i] for key, value in block_args.items()
-                                if isinstance(value, list)}
-                        args = {**kwargs, **block_args, **args} # enforce priority of keys
+                        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of keys
                         x = base_block(x, name='pre', **args)
 
                         # Downsampling
-                        x = conv_block(x, **{**kwargs, **downsample})
+                        if downsample.get('layout') is not None:
+                            args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
+                            x = conv_block(x, name='downsample-{}'.format(i), **args)
                         encoder_outputs.append(x)
         return encoder_outputs
-
 
     @classmethod
     def embedding(cls, inputs, name='embedding', **kwargs):
@@ -251,9 +269,8 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
-        base_block = kwargs.get('base')
+        base_block = kwargs.get('base', cls.block)
         return base_block(inputs, name=name, **kwargs)
-
 
     @classmethod
     def decoder(cls, inputs, name='decoder', **kwargs):
@@ -267,7 +284,7 @@ class EncoderDecoder(TFModel):
         name : str
             Scope name.
 
-        steps : int
+        num_stages : int
             Number of upsampling stages. Defaults to the number of downsamplings.
 
         factor : int or list of ints
@@ -309,23 +326,33 @@ class EncoderDecoder(TFModel):
         with tf.variable_scope(name):
             x = inputs[-1]
 
-            axis = cls.channels_axis(kwargs.get('data_format'))
             for i in range(steps):
                 with tf.variable_scope('decoder-'+str(i)):
+                    # Skip some of the steps
+                    if factor[i] == 1:
+                        continue
                     # Upsample by a desired factor
-                    x = cls.upsample(x, factor=factor[i], name='upsample', **{**kwargs, **upsample})
+                    if upsample.get('layout') is not None:
+                        args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
+                        x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **args)
 
                     # Post-process resulting tensor
-                    args = {key: value[i] for key, value in block_args.items()
-                            if isinstance(value, list)}
-                    args = {**kwargs, **block_args, **args} # enforce priority of subkeys
+                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}  # enforce priority of subkeys
                     x = base_block(x, name='post', **args)
 
-                    # Concatenate it with stored encoding of the ~same shape
+                    # Combine it with stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
+                        combine_op = args.get('combine_op')
+                        # inputs[-1] is embedding output and decoder's input, inputs[-2] is last encoder's output,
+                        # they both have same shape, if connection between them is needed,
+                        # it can be incorporated in embedding
+                        # input[-3] is last encoder's input that has normally different shape
+                        # so it might be connected to first decoder's output, that also has modified shape
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
-                        x = tf.concat((x, inputs[-i-3]), axis=axis, name='skip-concat')
+                        x = cls.combine([x, inputs[-i-3]], op=combine_op,
+                                        data_format=kwargs.get('data_format'))
         return x
+
 
 
 class AutoEncoder(EncoderDecoder):
@@ -370,7 +397,9 @@ class VariationalAutoEncoder(AutoEncoder):
         """
         base_block = kwargs.get('base')
 
-        mean = base_block(inputs, name='mean', **kwargs)
-        std = base_block(inputs, name='std', **kwargs)
-        eps = tf.random.normal(shape=tf.shape(mean))
-        return mean + eps*std
+        with tf.variable_scope(name):
+            mean = base_block(inputs, name='mean', **kwargs)
+            std = base_block(inputs, name='std', **kwargs)
+            eps = tf.random.normal(shape=tf.shape(mean), name='eps')
+            x = mean + eps*std
+        return x

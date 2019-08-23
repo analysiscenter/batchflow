@@ -44,6 +44,7 @@ def conv_block(inputs, layout='', filters=0, kernel_size=3, name=None,
         - t - transposed convolution
         - C - separable convolution
         - T - separable transposed convolution
+        - W - depthwise convolution
         - f - dense (fully connected)
         - n - batch normalization
         - a - activation

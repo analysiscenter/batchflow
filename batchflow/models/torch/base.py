@@ -32,6 +32,19 @@ LOSSES = {
 
 DECAYS = {
     'exp': torch.optim.lr_scheduler.ExponentialLR,
+    'lambda': torch.optim.lr_scheduler.LambdaLR,
+    'step': torch.optim.lr_scheduler.StepLR,
+    'multistep': torch.optim.lr_scheduler.MultiStepLR,
+    'cos': torch.optim.lr_scheduler.CosineAnnealingLR,
+}
+
+
+DECAYS_DEFAULTS = {
+    torch.optim.lr_scheduler.ExponentialLR : dict(gamma=0.96),
+    torch.optim.lr_scheduler.LambdaLR : dict(lr_lambda=lambda epoch: 0.96**epoch),
+    torch.optim.lr_scheduler.StepLR: dict(step_size=30),
+    torch.optim.lr_scheduler.MultiStepLR: dict(milestones=[30, 80]),
+    torch.optim.lr_scheduler.CosineAnnealingLR: dict(T_max=None)
 }
 
 
@@ -43,7 +56,7 @@ class TorchModel(BaseModel):
     ``build`` and ``load`` are inherited from :class:`.BaseModel`.
 
     device : str or torch.device
-        if str, a device name (e.g. 'cpu' or 'cuda:0').
+        if str, a device name (e.g. 'cpu' or 'gpu:0').
 
     inputs : dict
         model inputs (see :meth:`~.TorchModel._make_inputs`)
@@ -72,12 +85,15 @@ class TorchModel(BaseModel):
         - tuple (name, args)
         - dict {'name': name, **args}
 
+        .. note:: All torch decays require to have ```n_iters``` as a key in a configuration
+        dictionary that contains the number of iterations in one epoch.
+
         where name might be one of:
 
-        - short name ('exp')
+        - short name (`'exp'`, `'lambda'`, `'step'`, `'multistep'`, `'cos'`, `'cyclic'`)
         - a class name from `torch.optim.lr_scheduler
           <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate>`_
-          (e.g. 'LambdaLR')
+          (e.g. 'LambdaLR') except `ReduceLROnPlateau`.
         - a class with ``_LRScheduler`` interface
         - a callable which takes optimizer and optional args
 
@@ -170,9 +186,22 @@ class TorchModel(BaseModel):
     #. For a configured loss to work one of the inputs should have a name ``targets`` and
        the model output is considered ``predictions``.
        They will be passed to a loss function.
+
+    #. Default values for a learning rate decay algorithms are following:
+       ==========  ==========
+       Decay name  Parameters
+       ==========  ==========
+       exp         gamma = 0.96
+       lambda      lr_lambda = lambda epoch: 0.96**epoch
+       step        step_size = 30
+       multistep   milestones = [30, 80]
+       cos         T_max = n_iters
+       ==========  ==========
     """
     def __init__(self, *args, **kwargs):
         self._train_lock = threading.Lock()
+        self.n_iters = None
+        self.current_iter = 0
         self.device = None
         self.loss_fn = None
         self.lr_decay = None
@@ -186,13 +215,16 @@ class TorchModel(BaseModel):
 
         super().__init__(*args, **kwargs)
 
+    def reset(self):
+        """ Reset the trained model to allow a new training from scratch """
+        pass
+
     def build(self, *args, **kwargs):
         """ Build the model """
         config = self.build_config()
         self._full_config = config
 
-        if 'device' in config:
-            self.device = torch.device(config['device'])
+        self.device = self._get_device()
 
         self._build(config)
 
@@ -202,7 +234,6 @@ class TorchModel(BaseModel):
             self._make_optimizer(config)
 
         self.microbatch = config.get('microbatch', None)
-
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
@@ -285,6 +316,23 @@ class TorchModel(BaseModel):
             elif 'masks' in config:
                 self._inputs['targets'] = self._inputs['masks']
 
+    def _get_device(self):
+        device = self.config.get('device')
+        if isinstance(device, torch.device) or device is None:
+            _device = device
+        elif isinstance(device, str):
+            _device = device.split(':')
+            unit, index = _device if len(_device) > 1 else (device, '0')
+            if unit.lower() == 'gpu':
+                _device = torch.device('cuda', int(index))
+            elif unit.lower() == 'cpu':
+                _device = torch.device('cpu')
+            else:
+                raise ValueError('Unknown device type: ', device)
+        else:
+            raise TypeError('Wrong device type: ', type(device))
+        return _device
+
     def _make_loss(self, config):
         loss, args = unpack_fn_from_config('loss', config)
 
@@ -326,15 +374,27 @@ class TorchModel(BaseModel):
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
 
-        if decay_name is None or callable(decay_name) or isinstance(decay_name, type):
+        if decay_name is None:
+            return decay_name, decay_args
+        if 'n_iters' not in config:
+            raise ValueError('Missing required key ```n_iters``` in the cofiguration dict.')
+        self.n_iters = config.pop('n_iters')
+
+        if callable(decay_name) or isinstance(decay_name, type):
             pass
         elif isinstance(decay_name, str) and hasattr(torch.optim.lr_scheduler, decay_name):
             decay_name = getattr(torch.optim.lr_scheduler, decay_name)
         elif decay_name in DECAYS:
-            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
+            decay_name = DECAYS.get(decay_name)
         else:
             raise ValueError("Unknown learning rate decay method", decay_name)
 
+        if decay_name in DECAYS_DEFAULTS:
+            decay_dict = DECAYS_DEFAULTS.get(decay_name).copy()
+            if decay_name == DECAYS['cos']:
+                decay_dict.update(T_max=self.n_iters)
+            decay_dict.update(decay_args)
+            decay_args = decay_dict.copy()
         return decay_name, decay_args
 
     def get_tensor_config(self, tensor):
@@ -751,11 +811,7 @@ class TorchModel(BaseModel):
             self._train_lock.acquire()
 
         *inputs, targets = self._fill_input(*args)
-
         self.model.train()
-
-        if self.lr_decay:
-            self.lr_decay()
 
         if microbatch is not False:
             if microbatch is True:
@@ -788,6 +844,12 @@ class TorchModel(BaseModel):
             self.loss = self.loss_fn(self.predictions, targets)
             self.loss.backward()
             self.optimizer.step()
+
+        if self.lr_decay:
+            if self.current_iter == self.n_iters:
+                self.lr_decay.step()
+                self.current_iter = 0
+            self.current_iter += 1
 
         if use_lock:
             self._train_lock.release()
@@ -833,8 +895,8 @@ class TorchModel(BaseModel):
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
         inputs = self._fill_input(*args)
-        if targets:
-            targets = self._fill_input(targets)
+        if targets is not None:
+            targets = self._fill_input(targets)[0]
 
         self.model.eval()
 
@@ -898,17 +960,15 @@ class TorchModel(BaseModel):
 
         >>> torch_model.load(path='/path/to/models/resnet34')
 
-        >>> TorchModel(config={'device': 'cuda:2', 'load/path': '/path/to/models/resnet34'})
+        >>> TorchModel(config={'device': 'gpu:2', 'load/path': '/path/to/models/resnet34'})
 
         **How to move the model to device**
 
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args, kwargs
-        device = self.config.get('device')
+        device = self._get_device()
         if device:
-            if isinstance(device, str):
-                device = torch.device(device)
             checkpoint = torch.load(path, map_location=device)
         else:
             checkpoint = torch.load(path)

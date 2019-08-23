@@ -12,7 +12,7 @@ from .inception_v3 import Inception_v3
 from .inception_v4 import Inception_v4
 from .inception_resnet_v2 import InceptionResNet_v2
 from .squeezenet import SqueezeNet
-from .mobilenet import MobileNet, MobileNet_v2
+from .mobilenet import MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small
 from .densenet import DenseNet, DenseNet121, DenseNet169, DenseNet201, DenseNet264
 from .faster_rcnn import FasterRCNN
 from .resattention import ResNetAttention, ResNetAttention56, ResNetAttention92
@@ -22,4 +22,5 @@ from .gcn import GlobalConvolutionNetwork as GCN
 from .encoder_decoder import EncoderDecoder, AutoEncoder, VariationalAutoEncoder
 from .pyramidnet import PyramidNet, PyramidNet18, PyramidNet34, PyramidNet50, PyramidNet101, PyramidNet152
 from .tf_sampler import TfSampler
-from .deep_galerkin import DeepGalerkin
+from .xception import Xception, XceptionS
+from .deeplab import DeepLab, DeepLabXS, DeepLabX8, DeepLabX16

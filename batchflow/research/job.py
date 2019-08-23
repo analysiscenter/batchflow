@@ -38,7 +38,7 @@ class Job:
             units = OrderedDict()
             for name, unit in self.executable_units.items():
                 unit = unit.get_copy()
-                unit.reset_iter()
+                unit.reset('iter')
                 unit.cv_split = self.folds[index]
                 if unit.pipeline is not None:
                     import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
@@ -71,18 +71,19 @@ class Job:
 
     def parallel_execute_for(self, iteration, name, actions):
         """ Parallel execution of pipeline 'name' """
+        unit = self.experiments[0][name]
         run = [action['run'] for action in actions if action is not None][0]
         if run:
-            self.executable_units[name].reset_root_iter()
+            unit.reset_root_iter()
             while True:
                 try:
-                    batch = self.executable_units[name].next_batch_root()
+                    batch = unit.next_batch_root()
                     exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
                 except StopIteration:
                     break
         else:
             try:
-                batch = self.executable_units[name].next_batch_root()
+                batch = unit.next_batch_root()
             except StopIteration as e:
                 exceptions = [e] * len(self.experiments)
             else:
@@ -134,7 +135,7 @@ class Job:
         for idx, experiment in enumerate(self.experiments):
             if experiment[name].action_iteration(iteration, self.n_iters, action) and self.exceptions[idx] is None:
                 res.append(experiment[name].action)
-            elif (self.stopped[idx]) and -1 in getattr(experiment[name], action):
+            elif (self.stopped[idx]) and 'last' in getattr(experiment[name], action):
                 res.append(experiment[name].action)
             else:
                 res.append(None)
