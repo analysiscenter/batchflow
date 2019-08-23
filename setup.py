@@ -12,7 +12,7 @@ with open('batchflow/__init__.py', 'r') as f:
     version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE).group(1)
 
 
-with open('docs/index.rst', 'r') as f:
+with open('README.md', 'r') as f:
     long_description = f.read()
 
 
@@ -26,6 +26,7 @@ setup(
     author_email='rhudor@gmail.com',
     description='A framework for fast data processing and ML models training',
     long_description=long_description,
+    long_description_content_type="text/markdown",
     zip_safe=False,
     platforms='any',
     install_requires=[
