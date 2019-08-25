@@ -1,6 +1,5 @@
 # pylint: disable=undefined-variable, no-name-in-module
 """ Contains base class for tensorflow models """
-
 import os
 import glob
 import re
@@ -2054,9 +2053,16 @@ class TFModel(BaseModel):
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
             in_filters = cls.num_channels(inputs, data_format)
+            if isinstance(kwargs.get('activation'), list) and len(kwargs.get('activation')) == 2:
+                activation = kwargs.pop('activation')
+            elif kwargs.get('activation') is not None:
+                activation = [kwargs.get('activation'), tf.nn.sigmoid]
+            else:
+                activation = [tf.nn.relu, tf.nn.sigmoid]
+
             x = conv_block(inputs,
                            **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
-                              'name': 'se', 'activation': [tf.nn.relu, tf.nn.sigmoid]})
+                              'name': 'se', 'activation': activation})
 
             shape = [-1] + [1] * (cls.spatial_dim(inputs) + 1)
             axis = cls.channels_axis(data_format)

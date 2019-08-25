@@ -147,9 +147,8 @@ class Batch:
 
         if batch_size is None:
             break_point = len(batches)
-            last_batch_len = len(batches[-1])
         else:
-            break_point = -1
+            break_point = len(batches) - 1
             last_batch_len = 0
             cur_size = 0
             for i, b in enumerate(batches):
@@ -175,14 +174,14 @@ class Batch:
             if batch_size is None:
                 new_comp = [b.get(component=comp) for b in batches[:break_point]]
             else:
-                b = batches[break_point]
-                last_batch_len_ = b.get_pos(None, comp, b.indices[last_batch_len - 1])
+                last_batch = batches[break_point]
+                last_batch_last_index = last_batch.get_pos(None, comp, last_batch.indices[last_batch_len - 1])
                 new_comp = [b.get(component=comp) for b in batches[:break_point]] + \
-                           [batches[break_point].get(component=comp)[:last_batch_len_ + 1]]
+                           [last_batch.get(component=comp)[:last_batch_last_index + 1]]
             new_data[i] = cls.merge_component(comp, new_comp)
 
             if batch_size is not None:
-                rest_comp = [batches[break_point].get(component=comp)[last_batch_len_ + 1:]] + \
+                rest_comp = [last_batch.get(component=comp)[last_batch_last_index + 1:]] + \
                             [b.get(component=comp) for b in batches[break_point + 1:]]
                 rest_data[i] = cls.merge_component(comp, rest_comp)
 
@@ -446,7 +445,7 @@ class Batch:
             res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
         elif isinstance(_data, tuple):
             comps = components or range(len(_data))
-            res = tuple(data_item[self.get_pos(None, comp, index)] if data_item is not None else None
+            res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, dict):
             res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))

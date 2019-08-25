@@ -29,7 +29,9 @@ class Variable:
 
     def set(self, value):
         """ Assign a variable value """
+        self.lock()
         self.value = value
+        self.unlock()
 
     def initialize(self, pipeline=None):
         """ Initialize a variable value """
@@ -113,9 +115,6 @@ class VariableDirectory:
         if not self.exists(name):
             with self._lock:
                 if not self.exists(name):
-                    if 'init_on_each_run' in kwargs:
-                        logging.warning("`init_on_each_run` in `%s` is obsolete. Use `default` instead.", name)
-                        kwargs['default'] = kwargs.pop('init_on_each_run')
                     self.variables[name] = Variable(*args, pipeline=pipeline, **kwargs)
 
     def create_many(self, variables, pipeline=None):

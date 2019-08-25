@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 from .core import Dense, Dropout, AlphaDropout, BatchNormalization, Mip
-from .conv import Conv, ConvTranspose, SeparableConv, SeparableConvTranspose
+from .conv import Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, DepthwiseConv, DepthwiseConvTranspose
 from .pooling import Pooling, GlobalPooling
 from .drop_block import Dropblock
 from .resize import ResizeBilinearAdditive, ResizeBilinear, ResizeNn, SubpixelConv
@@ -30,6 +30,7 @@ class ConvBlock:
         - t - transposed convolution
         - C - separable convolution
         - T - separable transposed convolution
+        - W - depthwise convolution
         - f - dense (fully connected)
         - n - batch normalization
         - a - activation
@@ -160,6 +161,8 @@ class ConvBlock:
         't': 'transposed_conv',
         'C': 'separable_conv',
         'T': 'separable_conv_transpose',
+        'w': 'depthwise_conv',
+        'W': 'depthwise_conv_transpose',
         'p': 'pooling',
         'v': 'pooling',
         'P': 'global_pooling',
@@ -185,6 +188,8 @@ class ConvBlock:
         'transposed_conv': ConvTranspose,
         'separable_conv': SeparableConv,
         'separable_conv_transpose': SeparableConvTranspose,
+        'depthwise_conv': DepthwiseConv,
+        'depthwise_conv_transpose': DepthwiseConvTranspose,
         'pooling': Pooling,
         'global_pooling': GlobalPooling,
         'batch_norm': BatchNormalization,
@@ -202,9 +207,11 @@ class ConvBlock:
     LAYER_KEYS = ''.join(list(C_LAYERS.keys()))
     GROUP_KEYS = (
         LAYER_KEYS
-        .replace('t', 'c')
         .replace('C', 'c')
+        .replace('t', 'c')
         .replace('T', 'c')
+        .replace('w', 'c')
+        .replace('W', 'c')
         .replace('v', 'p')
         .replace('V', 'P')
         .replace('D', 'd')
