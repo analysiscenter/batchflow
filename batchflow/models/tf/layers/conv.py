@@ -3,12 +3,13 @@ from functools import partial
 import tensorflow as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
+from .layer import Layer
 from .utils import add_as_function
 
 
 
 @add_as_function
-class Conv:
+class Conv(Layer):
     """ Nd convolution layer. Just a wrapper around TensorFlow layers for corresponding dimensions.
 
     See also
@@ -23,12 +24,19 @@ class Conv:
         3: K.Conv3D
     }
 
-    def __init__(self, *args, **kwargs):
-        self.args, self.kwargs = args, kwargs
+    def __init__(self, filters, kernel_size, strides=(1, 1),
+                 padding='same', data_format='channels_last', dilation_rate=(1, 1), **kwargs):
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate = dilation_rate
+        self.kwargs = kwargs
+
+        if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
+            raise ValueError("Filters must be a positive integer, instead got {}".format(self.filters))
 
     def __call__(self, inputs):
         layer_fn = self.LAYERS[inputs.shape.ndims - 2]
-        return layer_fn(*self.args, **self.kwargs)(inputs)
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
 
@@ -98,7 +106,7 @@ class Conv1DTransposeNn:
 
 
 @add_as_function
-class ConvTranspose:
+class ConvTranspose(Layer):
     """ Transposed Nd convolution layer.
 
     Parameters
@@ -122,13 +130,18 @@ class ConvTranspose:
         3: K.Conv3DTranspose
     }
 
-    def __init__(self, filters, kernel_size, strides, *args, **kwargs):
+    def __init__(self, filters, kernel_size, strides=(1, 1),
+                 padding='same', data_format='channels_last', **kwargs):
         self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
-        self.args, self.kwargs = args, kwargs
+        self.padding, self.data_format = padding, data_format
+        self.kwargs = kwargs
+
+        if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
+            raise ValueError("Filters must be a positive integer, instead got {}".format(self.filters))
 
     def __call__(self, inputs):
         layer_fn = self.LAYERS[inputs.shape.ndims - 2]
-        return layer_fn(self.filters, self.kernel_size, self.strides, *self.args, **self.kwargs)(inputs)
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
 
@@ -195,7 +208,7 @@ class DepthwiseConvND:
 
 
 @add_as_function
-class DepthwiseConv:
+class DepthwiseConv(Layer):
     """ Make Nd depthwise convolutions that act separately on channels.
 
     Parameters
@@ -223,17 +236,21 @@ class DepthwiseConv:
         3: partial(DepthwiseConvND, False)
     }
 
-    def __init__(self, *args, **kwargs):
-        self.args, self.kwargs = args, kwargs
+    def __init__(self, kernel_size, strides=(1, 1), padding='same',
+                 data_format=None, dilation_rate=(1, 1), depth_multiplier=1, **kwargs):
+        self.kernel_size, self.strides = kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
+        self.kwargs = kwargs
 
     def __call__(self, inputs):
         layer_fn = self.LAYERS[inputs.shape.ndims - 2]
-        return layer_fn(*self.args, **self.kwargs)(inputs)
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
 
 @add_as_function
-class DepthwiseConvTranspose:
+class DepthwiseConvTranspose(Layer):
     """ Make Nd depthwise transpose convolutions that act separately on channels.
 
     Parameters
@@ -255,12 +272,17 @@ class DepthwiseConvTranspose:
     name : str
         The name of the layer. Default - None.
     """
-    def __init__(self, *args, **kwargs):
-        self.args, self.kwargs = args, kwargs
+    def __init__(self, kernel_size, strides=(1, 1), padding='same', data_format=None,
+                 dilation_rate=(1, 1), depth_multiplier=1, activation=None, **kwargs):
+        self.kernel_size, self.strides = kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
+        self.activation = activation
+        self.kwargs = kwargs
 
     def __call__(self, inputs):
         layer_fn = partial(DepthwiseConvND, True)
-        return layer_fn(*self.args, **self.kwargs)(inputs)
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
 
@@ -324,7 +346,7 @@ class SeparableConvND:
 
 
 @add_as_function
-class SeparableConv:
+class SeparableConv(Layer):
     """ Make Nd depthwise convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
@@ -357,17 +379,25 @@ class SeparableConv:
         3: partial(SeparableConvND, False)
     }
 
-    def __init__(self, *args, **kwargs):
-        self.args, self.kwargs = args, kwargs
+    def __init__(self, filters, kernel_size, strides=(1, 1),
+                 padding='same', data_format='channels_last',
+                 dilation_rate=(1, 1), depth_multiplier=1, **kwargs):
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
+        self.kwargs = kwargs
+
+        if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
+            raise ValueError("Filters must be a positive integer, instead got {}".format(self.filters))
 
     def __call__(self, inputs):
         layer_fn = self.LAYERS[inputs.shape.ndims - 2]
-        return layer_fn(*self.args, **self.kwargs)(inputs)
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
 
 @add_as_function
-class SeparableConvTranspose:
+class SeparableConvTranspose(Layer):
     """ Make Nd depthwise transpose convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
@@ -392,9 +422,17 @@ class SeparableConvTranspose:
     name : str
         The name of the layer. Default - None.
     """
-    def __init__(self, *args, **kwargs):
-        self.args, self.kwargs = args, kwargs
+    def __init__(self, filters, kernel_size, strides=(1, 1),
+                 padding='same', data_format='channels_last',
+                 dilation_rate=(1, 1), depth_multiplier=1, **kwargs):
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, depth_multiplier = dilation_rate, depth_multiplier
+        self.kwargs = kwargs
+
+        if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
+            raise ValueError("Filters must be a positive integer, instead got {}".format(self.filters))
 
     def __call__(self, inputs):
         layer_fn = partial(SeparableConvND, True)
-        return layer_fn(*self.args, **self.kwargs)(inputs)
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)

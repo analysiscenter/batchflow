@@ -4,12 +4,13 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
+from .layer import Layer
 from .utils import add_as_function
 
 
 
 @add_as_function
-class MaxPooling:
+class MaxPooling(Layer):
     """ Multi-dimensional max-pooling layer.
 
     Parameters
@@ -37,19 +38,21 @@ class MaxPooling:
         3: K.MaxPool3D
     }
 
-    def __init__(self, pool_size, strides, padding='same', data_format='channels_last', name=None):
-        self.pool_size, self.strides = pool_size, strides
+    def __init__(self, pool_size, pool_strides, padding='same', data_format='channels_last', name=None, **kwargs):
+        self.pool_size, self.pool_strides = pool_size, pool_strides
         self.padding, self.data_format = padding, data_format
         self.name = name
+        self.kwargs = kwargs
 
     def __call__(self, inputs):
         layer_fn = self.LAYERS[inputs.shape.ndims - 2]
-        return layer_fn(self.pool_size, self.strides, self.padding, self.data_format, name=self.name)(inputs)
+        return layer_fn(self.pool_size, self.pool_strides,
+                        self.padding, self.data_format, name=self.name, **self.kwargs)(inputs)
 
 
 
 @add_as_function
-class AveragePooling:
+class AveragePooling(Layer):
     """ Multi-dimensional average-pooling layer.
 
     Parameters
@@ -77,14 +80,16 @@ class AveragePooling:
         3: K.AveragePooling3D
     }
 
-    def __init__(self, pool_size, strides, padding='same', data_format='channels_last', name=None):
-        self.pool_size, self.strides = pool_size, strides
+    def __init__(self, pool_size, pool_strides, padding='same', data_format='channels_last', name=None, **kwargs):
+        self.pool_size, self.pool_strides = pool_size, pool_strides
         self.padding, self.data_format = padding, data_format
         self.name = name
+        self.kwargs = kwargs
 
     def __call__(self, inputs):
         layer_fn = self.LAYERS[inputs.shape.ndims - 2]
-        return layer_fn(self.pool_size, self.strides, self.padding, self.data_format, name=self.name)(inputs)
+        return layer_fn(self.pool_size, self.pool_strides,
+                        self.padding, self.data_format, name=self.name, **self.kwargs)(inputs)
 
 
 
@@ -153,7 +158,7 @@ class FractionalPooling:
 
 
 @add_as_function
-class Pooling:
+class Pooling(Layer):
     """ Multi-dimensional pooling layer.
 
     Parameters
@@ -182,18 +187,22 @@ class Pooling:
         'fractional-avg': partial(FractionalPooling, 'avg')
     }
 
-    def __init__(self, op, *args, **kwargs):
+    def __init__(self, op, pool_size, pool_strides, padding='same', data_format='channels_last', **kwargs):
         self.op = op
-        self.args, self.kwargs = args, kwargs
+        self.pool_size, self.pool_strides = pool_size, pool_strides
+        self.padding, self.data_format = padding, data_format
+        self.kwargs = kwargs
 
     def __call__(self, inputs):
-        layer_fn = self.LAYERS[self.op]
-        return layer_fn(*self.args, **self.kwargs)(inputs)
+        args = self.params_dict
+        op = args.pop('op')
+        layer_fn = self.LAYERS[op]
+        return layer_fn(**args, **self.kwargs)(inputs)
 
 
 
 @add_as_function
-class GlobalPooling:
+class GlobalPooling(Layer):
     """ Multi-dimensional global pooling layer.
 
     Parameters

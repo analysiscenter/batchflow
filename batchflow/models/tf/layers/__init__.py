@@ -1,5 +1,6 @@
 """ Custom tf layers and operations """
 #pylint: disable=no-name-in-module
+from .layer import Layer
 from .conv_block import conv_block, upsample
 from .conv_block import ConvBlock, Upsample
 from .core import flatten, flatten2d, maxout, mip, xip

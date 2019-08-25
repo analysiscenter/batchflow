@@ -3,6 +3,8 @@ Golnaz Ghiasi, Tsung-Yi Lin, Quoc V. Le "`DropBlock: A regularization method for
 <https://arxiv.org/abs/1810.12890>`_"
 """
 import tensorflow as tf
+
+from .layer import Layer
 from .pooling import MaxPooling
 
 # TODO:
@@ -12,7 +14,7 @@ from .pooling import MaxPooling
 
 
 
-class Dropblock:
+class Dropblock(Layer):
     """ Drop Block module.
 
     Parameters
@@ -38,9 +40,11 @@ class Dropblock:
         self.kwargs = kwargs
 
     def __call__(self, inputs, training):
-        return dropblock(inputs, dropout_rate=self.dropout_rate, block_size=self.block_size,
-                         is_training=training, data_format=self.data_format,
-                         global_step=self.global_step, seed=self.seed, **self.kwargs)
+        if self.dropout_rate and self.block_size:
+            return dropblock(inputs, dropout_rate=self.dropout_rate, block_size=self.block_size,
+                             is_training=training, data_format=self.data_format,
+                             global_step=self.global_step, seed=self.seed, **self.kwargs)
+        return inputs
 
 
 

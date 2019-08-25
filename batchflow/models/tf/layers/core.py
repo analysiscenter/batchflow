@@ -1,7 +1,9 @@
 """ Contains common layers """
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.layers as K #pylint: disable=import-error
 
+from .layer import Layer
 from .utils import add_as_function
 
 
@@ -9,8 +11,8 @@ from .utils import add_as_function
 @add_as_function
 class Flatten2D:
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) """
-    def __init__(self, *args, **kwargs):
-        self.args, self.kwargs = args, kwargs
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
 
     def __call__(self, inputs):
         x = tf.convert_to_tensor(inputs)
@@ -32,6 +34,54 @@ class Flatten:
         dim = np.prod(shape[1:])
         x = tf.reshape(x, [-1, dim], **self.kwargs)
         return x
+
+
+
+@add_as_function
+class Dense(Layer):
+    """ Wrapper for fully-connected layer. """
+    def __init__(self, units, **kwargs):
+        self.units = units
+        self.kwargs = kwargs
+
+    def __call__(self, inputs):
+        if inputs.shape.ndims > 2:
+            inputs = Flatten()(inputs)
+        return K.Dense(**self.params_dict, **self.kwargs)(inputs)
+
+
+
+class Dropout(Layer):
+    """ Wrapper for dropout layer. """
+    def __init__(self, dropout_rate, **kwargs):
+        self.dropout_rate = dropout_rate
+        self.kwargs = kwargs
+
+    def __call__(self, inputs, training):
+        return K.Dropout(rate=self.dropout_rate, **self.kwargs)(inputs, training)
+
+
+
+class AlphaDropout(Layer):
+    """ Wrapper for self-normalizing dropout layer. """
+    def __init__(self, dropout_rate, **kwargs):
+        self.dropout_rate = dropout_rate
+        self.kwargs = kwargs
+
+    def __call__(self, inputs, training):
+        return K.AlphaDropout(rate=self.dropout_rate, **self.kwargs)(inputs, training)
+
+
+
+class BatchNormalization(Layer):
+    """ Wrapper for batch normalization layer. """
+    def __init__(self, data_format='channels_last', **kwargs):
+        self.data_format = data_format
+        self.kwargs = kwargs
+
+    def __call__(self, inputs, training):
+        axis = -1 if self.data_format == 'channels_last' else 1
+        return K.BatchNormalization(fused=True, axis=axis, **self.kwargs)(inputs, training)
 
 
 
@@ -92,7 +142,7 @@ class Xip:
 
 
 @add_as_function
-class Mip:
+class Mip(Layer):
     """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels """
     def __init__(self, depth, data_format='channels_last', name='max'):
         self.depth, self.data_format = depth, data_format

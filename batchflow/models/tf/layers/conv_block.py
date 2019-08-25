@@ -2,9 +2,8 @@
 import logging
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras.layers as K #pylint: disable=import-error
 
-from .core import Mip, Flatten
+from .core import Dense, Dropout, AlphaDropout, BatchNormalization, Mip
 from .conv import Conv, ConvTranspose, SeparableConv, SeparableConvTranspose
 from .pooling import Pooling, GlobalPooling
 from .drop_block import Dropblock
@@ -155,6 +154,7 @@ class ConvBlock:
         'R': 'residual_start',
         '+': 'residual_end',
         '.': 'residual_end',
+        '*': 'residual_end',
         'f': 'dense',
         'c': 'conv',
         't': 'transposed_conv',
@@ -180,16 +180,16 @@ class ConvBlock:
         'activation': None,
         'residual_start': None,
         'residual_end': None,
-        'dense': K.Dense,
+        'dense': Dense,
         'conv': Conv,
         'transposed_conv': ConvTranspose,
         'separable_conv': SeparableConv,
         'separable_conv_transpose': SeparableConvTranspose,
         'pooling': Pooling,
         'global_pooling': GlobalPooling,
-        'batch_norm': K.BatchNormalization,
-        'dropout': K.Dropout,
-        'alpha_dropout': K.AlphaDropout,
+        'batch_norm': BatchNormalization,
+        'dropout': Dropout,
+        'alpha_dropout': AlphaDropout,
         'dropblock': Dropblock,
         'mip': Mip,
         'residual_bilinear_additive': None,
@@ -216,17 +216,22 @@ class ConvBlock:
     )
 
     C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
+    DEFAULT_LAYERS = C_LAYERS.keys()
 
-    def __init__(self, layout='', filters=0, kernel_size=3, name=None,
-                 strides=1, padding='same', data_format='channels_last', dilation_rate=1, depth_multiplier=1,
-                 activation=tf.nn.relu, pool_size=2, pool_strides=2, dropout_rate=0., **kwargs):
+    def __init__(self, layout='',
+                 filters=0, kernel_size=3, strides=1, dilation_rate=1, depth_multiplier=1,
+                 activation=tf.nn.relu,
+                 pool_size=2, pool_strides=2,
+                 dropout_rate=0.,
+                 padding='same', data_format='channels_last', name=None,
+                 **kwargs):
         self.layout = layout
         self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
-        self.padding, self.data_format, self.name = padding, data_format, name
         self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
-        self.pool_size, self.pool_strides = pool_size, pool_strides
         self.activation = activation
+        self.pool_size, self.pool_strides = pool_size, pool_strides
         self.dropout_rate = dropout_rate
+        self.padding, self.data_format, self.name = padding, data_format, name
         self.kwargs = kwargs
 
 
@@ -306,104 +311,39 @@ class ConvBlock:
             elif layer == '+':
                 tensor = tensor + residuals[-1]
                 residuals = residuals[:-1]
+            elif layer == '*':
+                tensor = tensor * residuals[-1]
+                residuals = residuals[:-1]
             elif layer == '.':
                 axis = -1 if self.data_format == 'channels_last' else 1
                 tensor = tf.concat([tensor, residuals[-1]], axis=axis, name='concat-%d' % i)
                 residuals = residuals[:-1]
             else:
                 layer_args = self.kwargs.get(layer_name, {})
-                skip_layer = layer_args is False or isinstance(layer_args, dict) and layer_args.get('disable', False)
+                skip_layer = layer_args is False \
+                             or isinstance(layer_args, dict) and layer_args.get('disable', False)
 
                 if skip_layer:
                     pass
-                elif layer == 'f':
-                    if tensor.shape.ndims > 2:
-                        tensor = Flatten()(tensor)
-                    units = self.kwargs.get('units')
-                    if units is None:
-                        raise ValueError('units cannot be None if layout includes dense layers')
-                    args = dict(units=units)
 
-                elif layer == 'c':
-                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides,
-                                padding=self.padding, data_format=self.data_format,
-                                dilation_rate=self.dilation_rate)
-                    if self.filters is None or self.filters == 0:
-                        raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
-
-                elif layer == 'C':
-                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides,
-                                padding=self.padding, data_format=self.data_format,
-                                dilation_rate=self.dilation_rate, depth_multiplier=self.depth_multiplier)
-                    if self.filters is None or self.filters == 0:
-                        raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
-
-                elif layer == 't':
-                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides,
-                                padding=self.padding, data_format=self.data_format)
-                    if self.filters is None or self.filters == 0:
-                        raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
-
-                elif layer == 'T':
-                    args = dict(filters=self.filters, kernel_size=self.kernel_size, strides=self.strides,
-                                padding=self.padding, data_format=self.data_format,
-                                depth_multiplier=self.depth_multiplier)
-                    if self.filters is None or self.filters == 0:
-                        raise ValueError('filters cannot be None or 0 if layout includes convolutional layers')
-
-                elif layer == 'n':
-                    axis = -1 if self.data_format == 'channels_last' else 1
-                    args = dict(fused=True, axis=axis)
-                    call_args.update({'training': training})
-
-                elif self.C_GROUPS[layer] == 'p':
-                    pool_op = 'mean' if layer == 'v' else self.kwargs.pop('pool_op', 'max')
-                    args = dict(op=pool_op, pool_size=self.pool_size, strides=self.pool_strides, padding=self.padding,
-                                data_format=self.data_format)
-
-                elif self.C_GROUPS[layer] == 'P':
-                    pool_op = 'mean' if layer == 'V' else self.kwargs.pop('pool_op', 'max')
-                    args = dict(op=pool_op, data_format=self.data_format,
-                                keepdims=self.kwargs.get('keep_dims', False))
-
-                elif layer in ['d', 'D']:
-                    if self.dropout_rate:
-                        args = dict(rate=self.dropout_rate)
-                        call_args.update({'training': training})
-                    else:
-                        logger.warning('conv_block: dropout_rate is zero or undefined, so dropout layer is skipped')
-                        skip_layer = True
-
-                elif layer == 'O':
-                    if not self.dropout_rate:
-                        dropout_rate = layer_args.get('dropout_rate')
-                    if not self.kwargs.get('block_size'):
-                        block_size = layer_args.get('block_size')
-                    if dropout_rate and block_size:
-                        args = dict(dropout_rate=dropout_rate, block_size=block_size,
-                                    seed=self.kwargs.get('seed'), data_format=self.data_format,
-                                    global_step=self.kwargs.get('global_step'))
-                        call_args.update({'training': training})
-                    else:
-                        logger.warning(('conv_block/dropblock: dropout_rate or block_size is'
-                                        ' zero or undefined, so dropblock layer is skipped'))
-                        skip_layer = True
-
-                elif layer == 'm':
-                    args = dict(depth=self.kwargs.get('depth'), data_format=self.data_format)
-
-                elif layer in ['b', 'B', 'N', 'X']:
-                    args = dict(factor=self.kwargs.get('factor'),
-                                shape=self.kwargs.get('shape'),
-                                data_format=self.data_format)
-                    if self.kwargs.get('upsampling_layout'):
-                        args['layout'] = self.kwargs.get('upsampling_layout')
+                elif layer in self.DEFAULT_LAYERS:
+                    args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
+                            for param in layer_fn.params}
 
                 else:
-                    if layer in self.C_LAYERS.keys():
-                        pass
-                    else:
+                    if layer not in self.C_LAYERS.keys():
                         raise ValueError('Unknown layer symbol - %s' % layer)
+
+                if layer in ['d', 'D', 'O', 'n']:
+                    call_args.update({'training': training})
+
+                if self.C_GROUPS[layer].lower() == 'p':
+                    pool_op = 'mean' if layer.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
+                    args['op'] = pool_op
+
+                if layer in ['b', 'B', 'N', 'X']:
+                    if self.kwargs.get('upsampling_layout'):
+                        args['layout'] = self.kwargs.get('upsampling_layout')
 
                 if not skip_layer:
                     args = {**args, **layer_args}
