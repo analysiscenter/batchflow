@@ -3,7 +3,7 @@ import inspect
 
 
 class Classproperty:
-    """ That will become the greatest docstring of all times"""
+    """ Adds property to the class, not to its instances. """
     def __init__(self, prop):
         self.prop = prop
     def __get__(self, obj, owner):
@@ -12,7 +12,11 @@ class Classproperty:
 
 
 class Layer:
-    """ That will become the greatest docstring of all times"""
+    """ Base class for different layers.
+
+    Allows to easily get list of parameters for the class,
+    as well as getting dict of (param, value) pairs for instances.
+    """
     #pylint: disable=not-an-iterable
     @Classproperty
     def params(cls):

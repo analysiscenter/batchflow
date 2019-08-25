@@ -30,7 +30,8 @@ class ConvBlock:
         - t - transposed convolution
         - C - separable convolution
         - T - separable transposed convolution
-        - W - depthwise convolution
+        - w - depthwise convolution
+        - W - depthwise transposed convolution
         - f - dense (fully connected)
         - n - batch normalization
         - a - activation
@@ -39,7 +40,8 @@ class ConvBlock:
         - P - global pooling (default is max-pooling)
         - V - global average pooling
         - d - dropout
-        - D - dropblock
+        - D - alpha dropout
+        - O - dropblock
         - m - maximum intensity projection (:func:`~.layers.mip`)
         - b - upsample with bilinear resize
         - B - upsample with bilinear additive resize
@@ -48,6 +50,7 @@ class ConvBlock:
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
         - `+` - end residual connection with summation
+        - `*` - end residual connection with multiplication
         - `.` - end residual connection with concatenation
 
         Default is ''.
@@ -313,7 +316,7 @@ class ConvBlock:
             elif layer == 'A':
                 args = dict(factor=self.kwargs.get('factor'), data_format=self.data_format)
                 args = unpack_args(args, *layout_dict[self.C_GROUPS[layer]])
-                t = self.FUNC_LAYERS['resize_bilinear_additive'](tensor, **args, name='rba-%d' % i)
+                t = self.FUNC_LAYERS['resize_bilinear_additive'](**args, name='rba-%d' % i)(tensor)
                 residuals += [t]
             elif layer == '+':
                 tensor = tensor + residuals[-1]
@@ -330,25 +333,23 @@ class ConvBlock:
                 skip_layer = layer_args is False \
                              or isinstance(layer_args, dict) and layer_args.get('disable', False)
 
+                # Create params for the layer call
                 if skip_layer:
                     pass
-
                 elif layer in self.DEFAULT_LAYERS:
                     args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
                             for param in layer_fn.params}
-
                 else:
                     if layer not in self.C_LAYERS.keys():
                         raise ValueError('Unknown layer symbol - %s' % layer)
 
+                # Additional params for some layers
                 if layer in ['d', 'D', 'O', 'n']:
                     call_args.update({'training': training})
-
-                if self.C_GROUPS[layer].lower() == 'p':
+                elif self.C_GROUPS[layer].lower() == 'p':
                     pool_op = 'mean' if layer.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
                     args['op'] = pool_op
-
-                if layer in ['b', 'B', 'N', 'X']:
+                elif layer in ['b', 'B', 'N', 'X']:
                     if self.kwargs.get('upsampling_layout'):
                         args['layout'] = self.kwargs.get('upsampling_layout')
 
