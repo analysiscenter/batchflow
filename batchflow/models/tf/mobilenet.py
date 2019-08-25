@@ -268,7 +268,7 @@ class MobileNet_v2(TFModel):
                 if k > 0:
                     strides = 1
                 num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
-                x = conv_block(inputs, 'cnaWna', [num_filters, num_filters], [1, kernel_size], strides=[1, strides],
+                x = conv_block(inputs, 'cna wna', num_filters, [1, kernel_size], strides=[1, strides],
                                name='-%d-exp' % k, **kwargs)
                 if se_block:
                     if not isinstance(se_block, dict):
