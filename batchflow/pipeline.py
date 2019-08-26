@@ -413,9 +413,7 @@ class Pipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        if len(variables) == 1:
-            variables = variables[0]
-        self.variables.create_many(variables)
+        self.before.init_variables(*variables)
         return self
 
     def _init_all_variables(self):

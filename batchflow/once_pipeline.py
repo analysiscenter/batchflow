@@ -114,6 +114,35 @@ class OncePipeline:
         self.pipeline.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
         return self
 
+    def init_variables(self, *variables):
+        """ Create several variables
+
+        Parameters
+        ----------
+        variables : dict or tuple
+            if dict
+                key : str - a variable name,
+                value : dict -  a variable value and init params (see :meth:`.init_variable`)
+            if tuple, contains variable names which will have None as default values
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Examples
+        --------
+        >>> pp = dataset.p
+                    .init_variables({"loss_history": dict(default=[]),
+                                     "predictions", dict(default=[])})
+                    .init_variables("metrics", "counter", "worst_prediction")
+                    .load('/some/path', fmt='blosc')
+                    .train_resnet()
+        """
+        if len(variables) == 1:
+            variables = variables[0]
+        self.pipeline.variables.create_many(variables)
+        return self
+
     def init_model(self, mode, model_class=None, name=None, config=None):
         """ Initialize a static or dynamic model
 
