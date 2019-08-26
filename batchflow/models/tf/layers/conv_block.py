@@ -207,26 +207,24 @@ class ConvBlock:
         'subpixel_conv': SubpixelConv
     }
 
-    LAYER_KEYS = ''.join(list(C_LAYERS.keys()))
-    GROUP_KEYS = (
-        LAYER_KEYS
-        .replace('C', 'c')
-        .replace('t', 'c')
-        .replace('T', 'c')
-        .replace('w', 'c')
-        .replace('W', 'c')
-        .replace('v', 'p')
-        .replace('V', 'P')
-        .replace('D', 'd')
-        .replace('O', 'd')
-        .replace('A', 'b')
-        .replace('B', 'b')
-        .replace('N', 'b')
-        .replace('X', 'b')
-    )
-
-    C_GROUPS = dict(zip(LAYER_KEYS, GROUP_KEYS))
     DEFAULT_LAYERS = C_LAYERS.keys()
+    C_GROUPS = dict(zip(DEFAULT_LAYERS, DEFAULT_LAYERS))
+    C_GROUPS.update({
+        'C': 'c',
+        't': 'c',
+        'T': 'c',
+        'w': 'c',
+        'W': 'c',
+        'v': 'p',
+        'V': 'P',
+        'D': 'd',
+        'O': 'd',
+        'n': 'd',
+        'A': 'b',
+        'B': 'b',
+        'N': 'b',
+        'X': 'b',
+        })
 
     def __init__(self, layout='',
                  filters=0, kernel_size=3, strides=1, dilation_rate=1, depth_multiplier=1,
@@ -272,17 +270,16 @@ class ConvBlock:
 
 
     def __call__(self, inputs, training=None):
+        layout = self.layout or ''
+        layout = layout.replace(' ', '')
+        if len(layout) == 0:
+            logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
+            return inputs
+
         if training is None:
             training = self.kwargs.get('is_training')
         if training is None:
             training = self.kwargs.get('training')
-
-        layout = self.layout or ''
-        layout = layout.replace(' ', '')
-
-        if len(layout) == 0:
-            logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
-            return inputs
 
         context = None
         if self.name is not None:
@@ -291,31 +288,33 @@ class ConvBlock:
 
         layout_dict = {}
         for layer in layout:
-            if self.C_GROUPS[layer] not in layout_dict:
-                layout_dict[self.C_GROUPS[layer]] = [-1, 0]
-            layout_dict[self.C_GROUPS[layer]][1] += 1
+            layer_group = self.C_GROUPS[layer]
+            if layer_group not in layout_dict:
+                layout_dict[layer_group] = [-1, 0]
+            layout_dict[layer_group][1] += 1
 
 
         residuals = []
         tensor = inputs
         for i, layer in enumerate(layout):
+            # Arguments for layer creating; arguments for layer call
+            args, call_args = {}, {}
 
-            layout_dict[self.C_GROUPS[layer]][0] += 1
+            layer_group = self.C_GROUPS[layer]
             layer_name = self.C_LAYERS[layer]
             layer_fn = self.FUNC_LAYERS[layer_name]
-
-            args, call_args = {}, {}
+            layout_dict[layer_group][0] += 1
 
             if layer == 'a':
                 args = dict(activation=self.activation)
-                layer_fn = unpack_args(args, *layout_dict[self.C_GROUPS[layer]])['activation']
+                layer_fn = unpack_args(args, *layout_dict[layer_group])['activation']
                 if layer_fn is not None:
                     tensor = layer_fn(tensor)
             elif layer == 'R':
                 residuals += [tensor]
             elif layer == 'A':
                 args = dict(factor=self.kwargs.get('factor'), data_format=self.data_format)
-                args = unpack_args(args, *layout_dict[self.C_GROUPS[layer]])
+                args = unpack_args(args, *layout_dict[layer_group])
                 t = self.FUNC_LAYERS['resize_bilinear_additive'](**args, name='rba-%d' % i)(tensor)
                 residuals += [t]
             elif layer == '+':
@@ -344,18 +343,21 @@ class ConvBlock:
                         raise ValueError('Unknown layer symbol - %s' % layer)
 
                 # Additional params for some layers
-                if layer in ['d', 'D', 'O', 'n']:
+                if layer_group == 'd':
+                    # Layers that behave differently during train/test
                     call_args.update({'training': training})
-                elif self.C_GROUPS[layer].lower() == 'p':
+                elif layer_group.lower() == 'p':
+                    # Choosing pooling operation
                     pool_op = 'mean' if layer.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
                     args['op'] = pool_op
-                elif layer in ['b', 'B', 'N', 'X']:
+                elif layer_group == 'b':
+                    # Additional layots for all the upsampling layers
                     if self.kwargs.get('upsampling_layout'):
                         args['layout'] = self.kwargs.get('upsampling_layout')
 
                 if not skip_layer:
                     args = {**args, **layer_args}
-                    args = unpack_args(args, *layout_dict[self.C_GROUPS[layer]])
+                    args = unpack_args(args, *layout_dict[layer_group])
 
                     with tf.variable_scope('layer-%d' % i):
                         tensor = layer_fn(**args)(tensor, **call_args)
