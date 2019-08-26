@@ -2090,7 +2090,6 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
-
         with tf.variable_scope(name):
             cse = cls.se_block(inputs, ratio, name='cse', **kwargs)
 
