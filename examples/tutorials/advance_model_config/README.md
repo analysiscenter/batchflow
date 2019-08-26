@@ -10,6 +10,7 @@ In all notebooks implied that you are familiar with the bathflow basics.
 2. [Multi-GPU](./02_device.ipynb)
     * What's the point of multi-GPU?
     * Example with several GPUs.
+    * Multi-GPU and microbathing.
 
 3. [Different training procedures](./03_train_steps.ipynb)
     * What's it?
