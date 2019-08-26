@@ -2097,9 +2097,7 @@ class TFModel(BaseModel):
             x = conv_block(inputs, **{**kwargs, 'layout': 'ca', 'filters': 1, 'kernel_size': 1,
                                       'activation': tf.nn.sigmoid, 'name': 'sse'})
 
-            sse = tf.multiply(x, inputs)
-            scse = cse + sse
-
+            scse = cse + tf.multiply(x, inputs)
         return scse
 
     @classmethod
