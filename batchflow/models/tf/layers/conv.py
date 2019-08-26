@@ -1,7 +1,9 @@
 """ Contains convolutional layers """
 from functools import partial
 import tensorflow as tf
-import tensorflow.keras.layers as K #pylint: disable=import-error
+from tensorflow.keras.layers import Conv1D, Conv2D, Conv3D, \
+                                    Conv2DTranspose, Conv3DTranspose \
+                                    DepthwiseConv2D, SeparableConv1D, SeparableConv2D
 
 from .layer import Layer
 from .utils import add_as_function
@@ -19,9 +21,9 @@ class Conv(Layer):
     `tf.layers.conv3d <https://www.tensorflow.org/api_docs/python/keras/layers/Conv3D>`_
     """
     LAYERS = {
-        1: K.Conv1D,
-        2: K.Conv2D,
-        3: K.Conv3D
+        1: Conv1D,
+        2: Conv2D,
+        3: Conv3D
     }
 
     def __init__(self, filters, kernel_size, strides=(1, 1),
@@ -61,7 +63,7 @@ class Conv1DTranspose:
     def __call__(self, inputs):
         axis = 1 if self.data_format == 'channels_last' else 2
         x = tf.expand_dims(inputs, axis=axis)
-        x = K.Conv2DTranspose(filters=self.filters, kernel_size=(1, self.kernel_size),
+        x = Conv2DTranspose(filters=self.filters, kernel_size=(1, self.kernel_size),
                               strides=(1, self.strides), padding=self.padding, **self.kwargs)(x)
         x = tf.squeeze(x, [axis])
         return x
@@ -126,8 +128,8 @@ class ConvTranspose(Layer):
     """
     LAYERS = {
         1: Conv1DTranspose,
-        2: K.Conv2DTranspose,
-        3: K.Conv3DTranspose
+        2: Conv2DTranspose,
+        3: Conv3DTranspose
     }
 
     def __init__(self, filters, kernel_size, strides=(1, 1),
@@ -232,7 +234,7 @@ class DepthwiseConv(Layer):
     """
     LAYERS = {
         1: partial(DepthwiseConvND, False),
-        2: K.DepthwiseConv2D,
+        2: DepthwiseConv2D,
         3: partial(DepthwiseConvND, False)
     }
 
@@ -374,8 +376,8 @@ class SeparableConv(Layer):
         The name of the layer. Default - None.
     """
     LAYERS = {
-        1: K.SeparableConv1D,
-        2: K.SeparableConv2D,
+        1: SeparableConv1D,
+        2: SeparableConv2D,
         3: partial(SeparableConvND, False)
     }
 
