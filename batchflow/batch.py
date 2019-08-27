@@ -105,7 +105,7 @@ class Batch:
 
     @classmethod
     def from_data(cls, index, data):
-        """ Create batch from a given dataset """
+        """ Create a batch from data given """
         # this is roughly equivalent to self.data = data
         if index is None:
             index = np.arange(len(data))
@@ -114,7 +114,7 @@ class Batch:
     @classmethod
     def from_batch(cls, batch):
         """ Create batch from another batch """
-        return cls(batch.index, preloaded=batch._data)  # pylint: disable=protected-access
+        return cls(batch.index, preloaded=batch.data)
 
 
     @classmethod
@@ -415,18 +415,24 @@ class Batch:
     def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
         _src = self.get_items(self.indices, data)
-        if not isinstance(_src, (tuple, dict, self._item_class)):
-            _src = (_src,)
 
-        if dst is None:
+        types = tuple, dict, pd.DataFrame
+        if isinstance(self._item_class, type):
+            types = types + (self._item_class,)
+
+        if self.components is None:
             self._data = _src
         else:
-            if isinstance(dst, str):
+            if not isinstance(_src, types):
+                _src = (_src,)
+            if dst is None:
+                components = self.components
+            elif isinstance(dst, str):
                 components = [dst]
             else:
                 components = dst
             for i, comp in enumerate(components):
-                if isinstance(_src, dict):
+                if isinstance(_src, (dict, pd.DataFrame)):
                     comp_src = _src[comp]
                 else:
                     comp_src = _src[i]
@@ -447,7 +453,8 @@ class Batch:
             comps = components or range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
-        elif isinstance(_data, dict):
+        elif isinstance(_data, (dict, pd.DataFrame)):
+            components = components or _data.keys()
             res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
         else:
             pos = self.get_pos(data, None, index)
