@@ -153,7 +153,7 @@ class ConvBlock:
         x = ConvBlock('R nac nac +', [16, 16, 64], [1, 3, 1])(x)
 
     """
-    C_LAYERS = {
+    LETTERS_LAYERS = {
         'a': 'activation',
         'R': 'residual_start',
         '+': 'residual_end',
@@ -182,7 +182,7 @@ class ConvBlock:
         'X': 'subpixel_conv'
     }
 
-    FUNC_LAYERS = {
+    LAYERS_CLASSES = {
         'activation': None,
         'residual_start': None,
         'residual_end': None,
@@ -207,9 +207,9 @@ class ConvBlock:
         'subpixel_conv': SubpixelConv
     }
 
-    DEFAULT_LAYERS = C_LAYERS.keys()
-    C_GROUPS = dict(zip(DEFAULT_LAYERS, DEFAULT_LAYERS))
-    C_GROUPS.update({
+    DEFAULT_LETTERS = LETTERS_LAYERS.keys()
+    LETTERS_GROUPS = dict(zip(DEFAULT_LETTERS, DEFAULT_LETTERS))
+    LETTERS_GROUPS.update({
         'C': 'c',
         't': 'c',
         'T': 'c',
@@ -243,14 +243,14 @@ class ConvBlock:
         self.kwargs = kwargs
 
 
-    def add_letter(self, letter, func, name=None):
+    def add_letter(self, letter, cls, name=None):
         """ Add custom letter to layout parsing procedure.
 
         Parameters
         ----------
         letter : str
             Letter to add.
-        func : class
+        cls : class
             Tensor-processing layer. Must have layer-like signature (both init and call overloaded).
         name : str
             Name of parameter dictionary. Defaults to `letter`.
@@ -264,9 +264,9 @@ class ConvBlock:
             x = block(x)
         """
         name = name or letter
-        self.C_LAYERS.update({letter: name})
-        self.FUNC_LAYERS.update({name: func})
-        self.C_GROUPS.update({letter: letter})
+        self.LETTERS_LAYERS.update({letter: name})
+        self.LAYERS_CLASSES.update({name: cls})
+        self.LETTERS_GROUPS.update({letter: letter})
 
 
     def __call__(self, inputs, training=None):
@@ -276,6 +276,7 @@ class ConvBlock:
             logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
             return inputs
 
+        # Getting `training` indicator from kwargs by its aliases
         if training is None:
             training = self.kwargs.get('is_training')
         if training is None:
@@ -288,7 +289,7 @@ class ConvBlock:
 
         layout_dict = {}
         for layer in layout:
-            layer_group = self.C_GROUPS[layer]
+            layer_group = self.LETTERS_GROUPS[layer]
             if layer_group not in layout_dict:
                 layout_dict[layer_group] = [-1, 0]
             layout_dict[layer_group][1] += 1
@@ -300,22 +301,22 @@ class ConvBlock:
             # Arguments for layer creating; arguments for layer call
             args, call_args = {}, {}
 
-            layer_group = self.C_GROUPS[layer]
-            layer_name = self.C_LAYERS[layer]
-            layer_fn = self.FUNC_LAYERS[layer_name]
+            layer_group = self.LETTERS_GROUPS[layer]
+            layer_name = self.LETTERS_LAYERS[layer]
+            layer_class = self.LAYERS_CLASSES[layer_name]
             layout_dict[layer_group][0] += 1
 
             if layer == 'a':
                 args = dict(activation=self.activation)
-                layer_fn = unpack_args(args, *layout_dict[layer_group])['activation']
-                if layer_fn is not None:
-                    tensor = layer_fn(tensor)
+                activation_fn = unpack_args(args, *layout_dict[layer_group])['activation']
+                if activation_fn is not None:
+                    tensor = activation_fn(tensor)
             elif layer == 'R':
                 residuals += [tensor]
             elif layer == 'A':
                 args = dict(factor=self.kwargs.get('factor'), data_format=self.data_format)
                 args = unpack_args(args, *layout_dict[layer_group])
-                t = self.FUNC_LAYERS['resize_bilinear_additive'](**args, name='rba-%d' % i)(tensor)
+                t = self.LAYERS_CLASSES['resize_bilinear_additive'](**args, name='rba-%d' % i)(tensor)
                 residuals += [t]
             elif layer == '+':
                 tensor = tensor + residuals[-1]
@@ -335,11 +336,11 @@ class ConvBlock:
                 # Create params for the layer call
                 if skip_layer:
                     pass
-                elif layer in self.DEFAULT_LAYERS:
+                elif layer in self.DEFAULT_LETTERS:
                     args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
-                            for param in layer_fn.params}
+                            for param in layer_class.params}
                 else:
-                    if layer not in self.C_LAYERS.keys():
+                    if layer not in self.LETTERS_LAYERS.keys():
                         raise ValueError('Unknown layer symbol - %s' % layer)
 
                 # Additional params for some layers
@@ -360,7 +361,7 @@ class ConvBlock:
                     args = unpack_args(args, *layout_dict[layer_group])
 
                     with tf.variable_scope('layer-%d' % i):
-                        tensor = layer_fn(**args)(tensor, **call_args)
+                        tensor = layer_class(**args)(tensor, **call_args)
         tensor = tf.identity(tensor, name='_output')
 
         if context is not None:
@@ -390,9 +391,9 @@ def update_layers(letter, func, name=None):
         x = block(x)
     """
     name = name or letter
-    ConvBlock.C_LAYERS.update({letter: name})
-    ConvBlock.FUNC_LAYERS.update({name: func})
-    ConvBlock.C_GROUPS.update({letter: letter})
+    ConvBlock.LETTERS_LAYERS.update({letter: name})
+    ConvBlock.LAYERS_CLASSES.update({name: func})
+    ConvBlock.LETTERS_GROUPS.update({letter: letter})
 
 
 
