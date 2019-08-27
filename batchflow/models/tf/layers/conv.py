@@ -3,8 +3,7 @@ from functools import partial
 import tensorflow as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
-from .layer import Layer
-from .utils import add_as_function
+from .layer import Layer, add_as_function
 
 
 

@@ -8,7 +8,7 @@ from .conv import Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, De
 from .pooling import Pooling, GlobalPooling
 from .drop_block import Dropblock
 from .resize import ResizeBilinearAdditive, ResizeBilinear, ResizeNn, SubpixelConv
-from .utils import add_as_function
+from .layer import add_as_function
 from ...utils import unpack_args
 
 
