@@ -170,14 +170,8 @@ class EncoderDecoder(TFModel):
         data_format = kwargs['data_format']
 
         with tf.variable_scope(name):
-            inputs_shape = cls.spatial_shape(inputs, data_format, True)
-            targets_shape = cls.spatial_shape(targets, data_format, True)
-            cond = tf.reduce_min(inputs_shape - targets_shape) > 0
-
-            inputs = tf.cond(cond, lambda: cls.crop(inputs, targets, data_format), lambda: inputs)
             x = super().head(inputs, name, **kwargs)
             x = cls.crop(x, targets, data_format)
-
             channels = cls.num_channels(targets)
             if cls.num_channels(x) != channels:
                 args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels, strides=1)}
