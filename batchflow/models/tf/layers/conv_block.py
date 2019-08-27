@@ -350,7 +350,7 @@ class ConvBlock:
                     pool_op = 'mean' if letter.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
                     args['op'] = pool_op
                 elif letter_group == 'b':
-                    # Additional layots for all the upsampling layers
+                    # Additional layouts for all the upsampling layers
                     if self.kwargs.get('upsampling_layout'):
                         args['layout'] = self.kwargs.get('upsampling_layout')
 
@@ -360,6 +360,8 @@ class ConvBlock:
 
                     with tf.variable_scope('layer-%d' % i):
                         tensor = layer_class(**args)(tensor, **call_args)
+
+        # Allows to easily get output from graph by name
         tensor = tf.identity(tensor, name='_output')
 
         if context is not None:

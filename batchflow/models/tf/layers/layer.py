@@ -5,8 +5,8 @@ import inspect
 
 def add_as_function(cls):
     """ Decorator for classes. Automatically adds functional interface for `call` method of class.
-    For example, `ConvBlock` class is transformed to `conv_block` function, while
-    `Conv1DTranspose` class is transformed to `conv1d_transpose` function.
+    For example, `ConvBlock` class is transformed into `conv_block` function, while
+    `Conv1DTranspose` class is transformed into `conv1d_transpose` function.
     """
     name = cls.__name__
     func_name = ''.join('_' + c.lower()
@@ -14,6 +14,7 @@ def add_as_function(cls):
                         for i, c in enumerate(name)).strip('_')
 
     def func(inputs, *args, **kwargs):
+        # We also want to use `training` or `is_training` indicators as arguments for call
         call_args = []
         training = kwargs.get('training') or kwargs.get('is_training')
         if training is not None:
