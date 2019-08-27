@@ -21,11 +21,20 @@ logger = logging.getLogger('SmallImagenet')
 
 
 class SmallImagenet(ImagesOpenset):
-    """ Base class for ImagenetLike datasets """
-    SOURCE_URL = None
+    """ Base class for ImagenetLike datasets
 
-    def __init__(self, *args, bar=False, preloaded=None, train_test=True, **kwargs):
-        self.bar = tqdm.tqdm(total=3) if  bar else None
+    Notes
+    -----
+    - Datasets contain both grayscale and colored images.
+      Argument `drop_grayscale` controls whether grayscale images should be dropped.
+
+    """
+    SOURCE_URL = None
+    num_classes = 10
+
+    def __init__(self, *args, drop_grayscale=True, bar=False, preloaded=None, train_test=True, **kwargs):
+        self.bar = tqdm.tqdm(total=2) if  bar else None
+        self.drop_grayscale = drop_grayscale
         super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
         if self.bar:
             self.bar.close()
@@ -51,6 +60,11 @@ class SmallImagenet(ImagesOpenset):
             images = np.array([_extract(archive, file) for file in files], dtype=object)
             labels = np.array([_image_class(file.name) for file in files])
             labels_encoded = LabelEncoder().fit_transform(labels)
+
+            if self.drop_grayscale:
+                rgb_mask = [i for i in range(len(images)) if images[i].mode == 'RGB']
+                return images[rgb_mask], labels_encoded[rgb_mask]
+
             return images, labels_encoded
 
         if path is None:
