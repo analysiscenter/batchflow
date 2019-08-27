@@ -2,8 +2,7 @@
 from functools import partial
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import MaxPool1D, MaxPool2D, MaxPool3D \
-                                    AveragePooling1D, AveragePooling2D, AveragePooling3D
+import tensorflow.keras.layers as K #pylint: disable=import-error
 
 from .layer import Layer
 from .utils import add_as_function
@@ -34,9 +33,9 @@ class MaxPooling(Layer):
     `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/keras/layers/MaxPool3D>`_
     """
     LAYERS = {
-        1: MaxPool1D,
-        2: MaxPool2D,
-        3: MaxPool3D
+        1: K.MaxPool1D,
+        2: K.MaxPool2D,
+        3: K.MaxPool3D
     }
 
     def __init__(self, pool_size, pool_strides, padding='same', data_format='channels_last', name=None, **kwargs):
@@ -76,9 +75,9 @@ class AveragePooling(Layer):
     `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/keras/layers/AveragePooling3D>`_
     """
     LAYERS = {
-        1: AveragePooling1D,
-        2: AveragePooling2D,
-        3: AveragePooling3D
+        1: K.AveragePooling1D,
+        2: K.AveragePooling2D,
+        3: K.AveragePooling3D
     }
 
     def __init__(self, pool_size, pool_strides, padding='same', data_format='channels_last', name=None, **kwargs):

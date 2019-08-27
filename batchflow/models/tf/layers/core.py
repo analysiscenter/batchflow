@@ -1,7 +1,7 @@
 """ Contains common layers """
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Dense, Dropout, AlphaDropout, BatchNormalization
+import tensorflow.keras.layers as K #pylint: disable=import-error
 
 from .layer import Layer
 from .utils import add_as_function
@@ -47,7 +47,7 @@ class Dense(Layer):
     def __call__(self, inputs):
         if inputs.shape.ndims > 2:
             inputs = Flatten()(inputs)
-        return Dense(**self.params_dict, **self.kwargs)(inputs)
+        return K.Dense(**self.params_dict, **self.kwargs)(inputs)
 
 
 
@@ -58,7 +58,7 @@ class Dropout(Layer):
         self.kwargs = kwargs
 
     def __call__(self, inputs, training):
-        return Dropout(rate=self.dropout_rate, **self.kwargs)(inputs, training)
+        return K.Dropout(rate=self.dropout_rate, **self.kwargs)(inputs, training)
 
 
 
@@ -69,7 +69,7 @@ class AlphaDropout(Layer):
         self.kwargs = kwargs
 
     def __call__(self, inputs, training):
-        return AlphaDropout(rate=self.dropout_rate, **self.kwargs)(inputs, training)
+        return K.AlphaDropout(rate=self.dropout_rate, **self.kwargs)(inputs, training)
 
 
 
@@ -81,7 +81,7 @@ class BatchNormalization(Layer):
 
     def __call__(self, inputs, training):
         axis = -1 if self.data_format == 'channels_last' else 1
-        return BatchNormalization(fused=True, axis=axis, **self.kwargs)(inputs, training)
+        return K.BatchNormalization(fused=True, axis=axis, **self.kwargs)(inputs, training)
 
 
 
