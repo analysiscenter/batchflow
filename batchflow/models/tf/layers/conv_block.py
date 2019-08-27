@@ -18,13 +18,12 @@ logger = logging.getLogger(__name__)
 
 @add_as_function
 class ConvBlock:
-    """ Complex multi-dimensional block with a sequence of convolutions, batch normalization, activation, pooling,
-    dropout and even dense layers.
+    """ Complex multi-dimensional block to apply sequence of different operations.
 
     Parameters
     ----------
     layout : str
-        A sequence of operations:
+        A sequence of letters, each letter meaning individual operation:
 
         - c - convolution
         - t - transposed convolution
@@ -42,11 +41,11 @@ class ConvBlock:
         - d - dropout
         - D - alpha dropout
         - O - dropblock
-        - m - maximum intensity projection (:func:`~.layers.mip`)
+        - m - maximum intensity projection (:class:`~.layers.Mip`)
         - b - upsample with bilinear resize
         - B - upsample with bilinear additive resize
         - N - upsample with nearest neighbors resize
-        - X - upsample with subpixel convolution (:func:`~.layers.subpixel_conv`)
+        - X - upsample with subpixel convolution (:class:`~.layers.SubpixelConv`)
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
         - `+` - end residual connection with summation
@@ -239,7 +238,8 @@ class ConvBlock:
         self.activation = activation
         self.pool_size, self.pool_strides = pool_size, pool_strides
         self.dropout_rate = dropout_rate
-        self.padding, self.data_format, self.name = padding, data_format, name
+        self.padding, self.data_format = padding, data_format
+        self.name = name
         self.kwargs = kwargs
 
 
@@ -260,7 +260,7 @@ class ConvBlock:
         Add custom `Q` letter::
 
             block = ConvBlock('cnap Q', filters=32, custom_params={'key': 'value'})
-            block.add_letter('Q', my_func, 'custom_params')
+            block.add_letter('Q', my_layer_class, 'custom_params')
             x = block(x)
         """
         name = name or letter
@@ -288,43 +288,41 @@ class ConvBlock:
             context.__enter__()
 
         layout_dict = {}
-        for layer in layout:
-            layer_group = self.LETTERS_GROUPS[layer]
-            if layer_group not in layout_dict:
-                layout_dict[layer_group] = [-1, 0]
-            layout_dict[layer_group][1] += 1
+        for letter in layout:
+            letter_group = self.LETTERS_GROUPS[letter]
+            letter_counts = layout_dict.setdefault(letter_group, [-1, 0])
+            letter_counts[1] += 1
 
-
-        residuals = []
         tensor = inputs
-        for i, layer in enumerate(layout):
+        residuals = []
+        for i, letter in enumerate(layout):
             # Arguments for layer creating; arguments for layer call
             args, call_args = {}, {}
 
-            layer_group = self.LETTERS_GROUPS[layer]
-            layer_name = self.LETTERS_LAYERS[layer]
+            letter_group = self.LETTERS_GROUPS[letter]
+            layer_name = self.LETTERS_LAYERS[letter]
             layer_class = self.LAYERS_CLASSES[layer_name]
-            layout_dict[layer_group][0] += 1
+            layout_dict[letter_group][0] += 1
 
-            if layer == 'a':
+            if letter == 'a':
                 args = dict(activation=self.activation)
-                activation_fn = unpack_args(args, *layout_dict[layer_group])['activation']
+                activation_fn = unpack_args(args, *layout_dict[letter_group])['activation']
                 if activation_fn is not None:
                     tensor = activation_fn(tensor)
-            elif layer == 'R':
+            elif letter == 'R':
                 residuals += [tensor]
-            elif layer == 'A':
+            elif letter == 'A':
                 args = dict(factor=self.kwargs.get('factor'), data_format=self.data_format)
-                args = unpack_args(args, *layout_dict[layer_group])
+                args = unpack_args(args, *layout_dict[letter_group])
                 t = self.LAYERS_CLASSES['resize_bilinear_additive'](**args, name='rba-%d' % i)(tensor)
                 residuals += [t]
-            elif layer == '+':
+            elif letter == '+':
                 tensor = tensor + residuals[-1]
                 residuals = residuals[:-1]
-            elif layer == '*':
+            elif letter == '*':
                 tensor = tensor * residuals[-1]
                 residuals = residuals[:-1]
-            elif layer == '.':
+            elif letter == '.':
                 axis = -1 if self.data_format == 'channels_last' else 1
                 tensor = tf.concat([tensor, residuals[-1]], axis=axis, name='concat-%d' % i)
                 residuals = residuals[:-1]
@@ -336,29 +334,29 @@ class ConvBlock:
                 # Create params for the layer call
                 if skip_layer:
                     pass
-                elif layer in self.DEFAULT_LETTERS:
+                elif letter in self.DEFAULT_LETTERS:
                     args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
                             for param in layer_class.params}
                 else:
-                    if layer not in self.LETTERS_LAYERS.keys():
-                        raise ValueError('Unknown layer symbol - %s' % layer)
+                    if letter not in self.LETTERS_LAYERS.keys():
+                        raise ValueError('Unknown letter symbol - %s' % letter)
 
                 # Additional params for some layers
-                if layer_group == 'd':
+                if letter_group == 'd':
                     # Layers that behave differently during train/test
                     call_args.update({'training': training})
-                elif layer_group.lower() == 'p':
+                elif letter_group.lower() == 'p':
                     # Choosing pooling operation
-                    pool_op = 'mean' if layer.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
+                    pool_op = 'mean' if letter.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
                     args['op'] = pool_op
-                elif layer_group == 'b':
+                elif letter_group == 'b':
                     # Additional layots for all the upsampling layers
                     if self.kwargs.get('upsampling_layout'):
                         args['layout'] = self.kwargs.get('upsampling_layout')
 
                 if not skip_layer:
                     args = {**args, **layer_args}
-                    args = unpack_args(args, *layout_dict[layer_group])
+                    args = unpack_args(args, *layout_dict[letter_group])
 
                     with tf.variable_scope('layer-%d' % i):
                         tensor = layer_class(**args)(tensor, **call_args)
