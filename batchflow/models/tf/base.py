@@ -957,6 +957,11 @@ class TFModel(BaseModel):
         config = {**config, **kwargs}
         return config
 
+    def _set_learning_phase(self, mode):
+        if isinstance(mode, bool):
+            mode = int(mode)
+        tf.keras.backend.set_learning_phase(mode)
+
     def _map_name(self, name, device=None):
         if isinstance(name, str):
             return self.get_from_attr(name, device)
