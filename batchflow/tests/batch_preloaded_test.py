@@ -157,3 +157,23 @@ class TestBatchPreloadedAddComponents:
         assert batch.nodata1 is None
         assert batch.nodata2 is None
         assert (batch.new == np.arange(20, 40, 2)).all()
+
+
+class TestFromBatchPreloadedComponents:
+    def test_tuple(self):
+        labels = np.arange(DATASET_SIZE)
+        images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
+        # we cannot omit data for nodata1 component, so we pass None
+        data = images, None, labels
+        dataset = Dataset(DATASET_SIZE, batch_class=MyBatch, preloaded=data)
+
+        #skip 2 batches
+        dataset.next_batch(10)
+        dataset.next_batch(10)
+        batch = dataset.next_batch(10)
+        batch = batch.from_batch(batch)
+
+        assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
+        assert (batch.labels == np.arange(20, 30)).all()
+        assert batch.nodata1 is None
+        assert batch.nodata2 is None
