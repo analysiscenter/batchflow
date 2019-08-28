@@ -70,6 +70,7 @@ class TestBatchPreloadedComponents:
     def test_tuple(self):
         labels = np.arange(DATASET_SIZE)
         images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
+        # we cannot omit data for nodata1 component, so we pass None
         data = images, None, labels
         dataset = Dataset(DATASET_SIZE, batch_class=MyBatch, preloaded=data)
 
@@ -103,7 +104,7 @@ class TestBatchPreloadedComponents:
         index = (np.arange(100)+ 1000).astype('str')
         comp1 = np.arange(DATASET_SIZE) + 100
         comp2 = np.arange(DATASET_SIZE) + 1000
-        data = pd.DataFrame({'images': comp1, 'labels': comp2}, index=index)
+        data = pd.DataFrame({'images': comp1, 'labels': comp2, 'nodata1': None}, index=index)
         dataset = Dataset(index, batch_class=MyBatch, preloaded=data)
 
         #skip 2 batches
@@ -113,7 +114,8 @@ class TestBatchPreloadedComponents:
 
         assert (batch.images == np.arange(120, 130)).all()
         assert (batch.labels == np.arange(1020, 1030)).all()
-        assert batch.nodata1 is None
+        # since nodata1 is a pd.Series of None
+        assert (batch.nodata1.to_numpy() == batch.array_of_nones).all()
         assert batch.nodata2 is None
 
 
