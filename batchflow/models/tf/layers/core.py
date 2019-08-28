@@ -73,14 +73,22 @@ class AlphaDropout(Layer):
 
 
 class BatchNormalization(Layer):
-    """ Wrapper for batch normalization layer. """
+    """ Wrapper for batch normalization layer.
+
+    Note that Keras layers does not add update operations to `UPDATE_OPS` collection,
+    so we must do it manually.
+    """
     def __init__(self, data_format='channels_last', **kwargs):
         self.data_format = data_format
         self.kwargs = kwargs
 
     def __call__(self, inputs, training):
         axis = -1 if self.data_format == 'channels_last' else 1
-        return K.BatchNormalization(fused=True, axis=axis, **self.kwargs)(inputs, training)
+        bn_layer = K.BatchNormalization(fused=True, axis=axis, **self.kwargs)
+        output = bn_layer(inputs, training)
+        tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, bn_layer.updates[0])
+        tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, bn_layer.updates[1])
+        return output
 
 
 
