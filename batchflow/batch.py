@@ -290,6 +290,8 @@ class Batch:
         if any(hasattr(self, c) for c in components):
             raise ValueError("An attribute with the same name exists")
 
+        # preload data if needed
+        data = self.data
         data = self._data
         if self.components is None:
             self.components = tuple()
@@ -435,7 +437,7 @@ class Batch:
                 if isinstance(_src, (dict, pd.DataFrame)):
                     comp_src = _src[comp]
                 else:
-                    comp_src = _src[i]
+                    comp_src = _src[i] if i < len(_src) else None
                 setattr(self, comp, comp_src)
 
     def get_items(self, index, data=None, components=None):
@@ -455,7 +457,9 @@ class Batch:
                         for comp, data_item in zip(comps, _data))
         elif isinstance(_data, (dict, pd.DataFrame)):
             components = components or _data.keys()
-            res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
+            check = lambda comp: comp in _data and _data[comp] is not None
+            data_comps = (_data[comp][self.get_pos(data, comp, index)] if check(comp) else None for comp in components)
+            res = dict(zip(components, data_comps))
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]

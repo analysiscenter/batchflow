@@ -57,6 +57,11 @@ class BaseComponentsTuple:
         components = tuple(components or self.components)
         return tuple(getattr(self, comp) for comp in components)
 
+    def __add__(self, other):
+        if not isinstance(other, tuple):
+            raise TypeError("Tuple is expected, while got %s" % type(other))
+        self.data = self.data + other
+
 
 class MetaComponentsTuple(type):
     """ Class factory for a component tuple """
