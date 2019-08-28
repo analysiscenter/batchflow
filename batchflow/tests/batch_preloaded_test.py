@@ -18,8 +18,8 @@ class TestBatchPreloadedNoComponents:
         #skip 2 batches
         dataset.next_batch(10)
         dataset.next_batch(10)
-
         batch = dataset.next_batch(10)
+
         assert (batch.data == np.arange(120, 130)).all()
 
     def test_tuple(self):
@@ -29,8 +29,8 @@ class TestBatchPreloadedNoComponents:
         #skip 2 batches
         dataset.next_batch(10)
         dataset.next_batch(10)
-
         batch = dataset.next_batch(10)
+
         assert (batch.data[0] == np.arange(120, 130)).all()
         assert (batch.data[1] == np.arange(1020, 1030)).all()
 
@@ -41,8 +41,8 @@ class TestBatchPreloadedNoComponents:
         #skip 2 batches
         dataset.next_batch(10)
         dataset.next_batch(10)
-
         batch = dataset.next_batch(10)
+
         assert (batch.data['comp1'] == np.arange(120, 130)).all()
         assert (batch.data['comp2'] == np.arange(1020, 1030)).all()
 
@@ -56,8 +56,8 @@ class TestBatchPreloadedNoComponents:
         #skip 2 batches
         dataset.next_batch(10)
         dataset.next_batch(10)
-
         batch = dataset.next_batch(10)
+
         assert (batch.data['comp1'] == np.arange(120, 130)).all()
         assert (batch.data['comp2'] == np.arange(1020, 1030)).all()
 
@@ -76,8 +76,8 @@ class TestBatchPreloadedComponents:
         #skip 2 batches
         dataset.next_batch(10)
         dataset.next_batch(10)
-
         batch = dataset.next_batch(10)
+
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
         assert batch.nodata1 is None
@@ -92,8 +92,8 @@ class TestBatchPreloadedComponents:
         #skip 2 batches
         dataset.next_batch(10)
         dataset.next_batch(10)
-
         batch = dataset.next_batch(10)
+
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
         assert batch.nodata1 is None
@@ -109,7 +109,6 @@ class TestBatchPreloadedComponents:
         #skip 2 batches
         dataset.next_batch(10)
         dataset.next_batch(10)
-
         batch = dataset.next_batch(10)
 
         assert (batch.images == np.arange(120, 130)).all()
@@ -130,8 +129,8 @@ class TestBatchPreloadedAddComponents:
         #skip 2 batches
         pipeline.next_batch(10)
         pipeline.next_batch(10)
-
         batch = pipeline.next_batch(10)
+
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
         assert batch.nodata1 is None
@@ -149,8 +148,8 @@ class TestBatchPreloadedAddComponents:
         #skip 2 batches
         pipeline.next_batch(10)
         pipeline.next_batch(10)
-
         batch = pipeline.next_batch(10)
+
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
         assert batch.nodata1 is None
