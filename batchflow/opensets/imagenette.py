@@ -21,7 +21,7 @@ logger = logging.getLogger('SmallImagenet')
 
 
 class Imagenette(ImagesOpenset):
-    """ Imagenette dataset. 
+    """ Imagenette dataset.
     Contains 12894 train and 500 test images. Total size 1.4GB.
 
     Notes
