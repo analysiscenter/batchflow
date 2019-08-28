@@ -57,6 +57,12 @@ class BaseComponentsTuple:
         components = tuple(components or self.components)
         return tuple(getattr(self, comp) for comp in components)
 
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, item):
+        return self.data[item]
+
     def __add__(self, other):
         if not isinstance(other, tuple):
             raise TypeError("Tuple is expected, while got %s" % type(other))
