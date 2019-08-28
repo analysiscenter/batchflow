@@ -1,6 +1,5 @@
 # pylint: disable=missing-docstring, redefined-outer-name
 
-import pytest
 import numpy as np
 import pandas as pd
 
@@ -81,8 +80,8 @@ class TestBatchPreloadedComponents:
         batch = dataset.next_batch(10)
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
-        assert (batch.nodata1 is None)
-        assert (batch.nodata2 is None)
+        assert batch.nodata1 is None
+        assert batch.nodata2 is None
 
     def test_dict(self):
         labels = np.arange(DATASET_SIZE)
@@ -97,8 +96,8 @@ class TestBatchPreloadedComponents:
         batch = dataset.next_batch(10)
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
-        assert (batch.nodata1 is None)
-        assert (batch.nodata2 is None)
+        assert batch.nodata1 is None
+        assert batch.nodata2 is None
 
     def test_df(self):
         index = (np.arange(100)+ 1000).astype('str')
@@ -115,8 +114,8 @@ class TestBatchPreloadedComponents:
 
         assert (batch.images == np.arange(120, 130)).all()
         assert (batch.labels == np.arange(1020, 1030)).all()
-        assert (batch.nodata1 is None)
-        assert (batch.nodata2 is None)
+        assert batch.nodata1 is None
+        assert batch.nodata2 is None
 
 
 class TestBatchPreloadedAddComponents:
@@ -135,9 +134,9 @@ class TestBatchPreloadedAddComponents:
         batch = pipeline.next_batch(10)
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
-        assert (batch.nodata1 is None)
-        assert (batch.nodata2 is None)
-        assert (batch.new is None)
+        assert batch.nodata1 is None
+        assert batch.nodata2 is None
+        assert batch.new is None
 
     def test_array(self):
         labels = np.arange(DATASET_SIZE)
@@ -154,6 +153,6 @@ class TestBatchPreloadedAddComponents:
         batch = pipeline.next_batch(10)
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
-        assert (batch.nodata1 is None)
-        assert (batch.nodata2 is None)
+        assert batch.nodata1 is None
+        assert batch.nodata2 is None
         assert (batch.new == np.arange(20, 40, 2)).all()
