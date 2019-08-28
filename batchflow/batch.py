@@ -48,12 +48,20 @@ class Batch:
         self._local = None
         self._dataset = dataset
         self._pipeline = None
+        self._attrs = None
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
         """ Create attributes from kwargs """
+        self._attrs = list(kwargs.keys())
         for attr, value in kwargs.items():
             setattr(self, attr, value)
+
+    def get_attrs(self):
+        """ Return additional attrs as kwargs """
+        if self._attrs is None:
+            return {}
+        return {attr: getattr(self, attr, None) for attr in self._attrs}
 
     @property
     def dataset(self):
@@ -114,7 +122,7 @@ class Batch:
     @classmethod
     def from_batch(cls, batch):
         """ Create batch from another batch """
-        return cls(batch.index, preloaded=batch.data)
+        return cls(batch.index, preloaded=batch.data, **batch.get_attrs())
 
 
     @classmethod
@@ -218,9 +226,11 @@ class Batch:
             raise ValueError('dataset can be an instance of Dataset (sub)class or the class itself, but not None')
         if isinstance(dataset, type):
             dataset_class = dataset
+            attrs = {}
         else:
             dataset_class = dataset.__class__
-        return dataset_class(self.index, batch_class=type(self), preloaded=self.data, copy=copy)
+            attrs = dataset.get_attrs()
+        return dataset_class(self.index, batch_class=type(self), preloaded=self.data, copy=copy, **attrs)
 
     @property
     def indices(self):
@@ -297,12 +307,11 @@ class Batch:
             self.components = tuple()
             data = tuple()
             warnings.warn("All batch data is erased")
-
-        exists_component = set(components) & set(self.components)
-        if exists_component:
-            raise ValueError("Component(s) with name(s) '{}' already exists".format("', '".join(exists_component)))
-
-        self.components = self.components + components
+        else:
+            exists_component = set(components) & set(self.components)
+            if exists_component:
+                raise ValueError("Component(s) with name(s) '{}' already exists".format("', '".join(exists_component)))
+            self.components = self.components + components
 
         self.make_item_class(local=True)
         if data is not None:
