@@ -35,7 +35,7 @@ class Batch:
     _item_class = None
     components = None
 
-    def __init__(self, index, dataset=None, preloaded=None, copy=False, *args, **kwargs):
+    def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
@@ -47,7 +47,7 @@ class Batch:
         self._copy = copy
         self._local = None
         self._dataset = dataset
-        self._pipeline = None
+        self._pipeline = pipeline
         self._attrs = None
         self.create_attrs(**kwargs)
 
@@ -122,7 +122,8 @@ class Batch:
     @classmethod
     def from_batch(cls, batch):
         """ Create batch from another batch """
-        return cls(batch.index, preloaded=batch.data, **batch.get_attrs())
+        return cls(batch.index, dataset=batch.dataset, pipeline=batch.pipeline, preloaded=batch.data,
+                   **batch.get_attrs())
 
 
     @classmethod
@@ -147,11 +148,11 @@ class Batch:
             If component is `None` in some batches and not `None` in others.
         """
         def _make_index(data):
-            return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
+            return DatasetIndex(data.shape[0]) if data is not None and data.shape[0] > 0 else None
 
         def _make_batch(data):
             index = _make_index(data[0])
-            return cls(index, preloaded=tuple(data)) if index is not None else None
+            return cls.from_data(index, tuple(data)) if index is not None else None
 
         if batch_size is None:
             break_point = len(batches)
@@ -230,7 +231,7 @@ class Batch:
         else:
             dataset_class = dataset.__class__
             attrs = dataset.get_attrs()
-        return dataset_class(self.index, batch_class=type(self), preloaded=self.data, copy=copy, **attrs)
+        return dataset_class(self.index, batch_class=type(self), preloaded=self._data, copy=copy, **attrs)
 
     @property
     def indices(self):
@@ -256,7 +257,7 @@ class Batch:
                 if self._data is None and self._preloaded is not None:
                     self.load(src=self._preloaded)
         res = self._data if self.components is None else self._data_named
-        return res if res is not None else self._empty_data
+        return res
 
     def make_item_class(self, local=False):
         """ Create a class to handle data components """
@@ -355,10 +356,6 @@ class Batch:
             setattr(self, k, v)
 
     @property
-    def _empty_data(self):
-        return None if self.components is None else self._item_class()   # pylint: disable=not-callable
-
-    @property
     def array_of_nones(self):
         """1-D ndarray: ``NumPy`` array with ``None`` values."""
         return np.array([None] * len(self.index))
@@ -426,6 +423,8 @@ class Batch:
     def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
         _src = self.get_items(self.indices, data)
+        if self._copy and data is self._preloaded:
+            res = deepcopy(res)
 
         types = tuple, dict, pd.DataFrame
         if isinstance(self._item_class, type):
@@ -442,6 +441,7 @@ class Batch:
                 components = [dst]
             else:
                 components = dst
+
             for i, comp in enumerate(components):
                 if isinstance(_src, (dict, pd.DataFrame)):
                     comp_src = _src[comp]
@@ -472,9 +472,6 @@ class Batch:
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]
-
-        if self._copy and data == self._preloaded:
-            res = deepcopy(res)
         return res
 
     def get(self, item=None, component=None):
