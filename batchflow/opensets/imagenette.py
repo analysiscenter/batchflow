@@ -21,11 +21,12 @@ logger = logging.getLogger('SmallImagenet')
 
 
 class Imagenette(ImagesOpenset):
-    """ Base class for ImagenetLike datasets
+    """ Imagenette dataset. 
+    Contains 12894 train and 500 test images. Total size 1.4GB.
 
     Notes
     -----
-    - Datasets contain both grayscale and colored images.
+    - Datasets contain both grayscale and colored images, ratio ~ 1:100
       Argument `drop_grayscale` controls whether grayscale images should be dropped.
 
     """
@@ -105,6 +106,7 @@ class Imagenette(ImagesOpenset):
 class Imagenette320(Imagenette):
     """ The '320px' version of Imagenette.
     The shortest size resized to that size with their aspect ratio maintained.
+    Contains 12894 train and 500 test images. Total size 325MB.
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette-320.tgz'
 
@@ -112,12 +114,14 @@ class Imagenette320(Imagenette):
 class Imagenette160(Imagenette):
     """ The '160px' version of Imagenette.
     The shortest size resized to that size with their aspect ratio maintained.
+    Contains 12894 train and 500 test images. Total size 98MB.
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette-160.tgz'
 
 
 class ImageWoof(Imagenette):
     """ Imagewoof dataset. See the https://github.com/fastai/imagenette for details.
+    Contains 12454 train and 500 test images. Total size 1.3GB
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof.tgz'
 
@@ -125,6 +129,7 @@ class ImageWoof(Imagenette):
 class ImageWoof320(Imagenette):
     """ The '320px' version of Imagewoof.
     The shortest size resized to that size with their aspect ratio maintained.
+    Contains 12454 train and 500 test images. Total size 313MB.
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof-320.tgz'
 
@@ -132,5 +137,6 @@ class ImageWoof320(Imagenette):
 class ImageWoof160(Imagenette):
     """ The '160px' version of Imagewoof.
     The shortest size resized to that size with their aspect ratio maintained.
+    Contains 12454 train and 500 test images. Total size 88MB
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof-160.tgz'
