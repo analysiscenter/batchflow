@@ -439,6 +439,11 @@ class ImagesBatch(BaseImagesBatch):
             elif origin == 'random':
                 origin = (np.random.randint(background_shape[0]-image_shape[0]+1),
                           np.random.randint(background_shape[1]-image_shape[1]+1))
+        elif all(0 < elem < 1 for elem in origin):
+            region = ((background_shape[0]-image_shape[0]+1),
+                      (background_shape[1]-image_shape[1]+1))
+            origin = np.asarray(origin) * region
+
         return np.asarray(origin, dtype=np.int)
 
     def _scale_(self, image, factor, preserve_shape=False, origin='center', resample=0):
