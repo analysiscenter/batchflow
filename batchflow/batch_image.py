@@ -353,10 +353,10 @@ class ImagesBatch(BaseImagesBatch):
         """
         image = np.array(image)
         if len(image.shape) == 2:
-            if channels == 'last':
-                image = image[..., None]
-            else:
-                image = image[None, ...]
+            image = image[:, :, np.newaxis]
+
+        if channels != 'last':
+            image = np.moveaxis(image, -1, 0)
 
         if dtype is not None:
             image = image.astype(dtype)
