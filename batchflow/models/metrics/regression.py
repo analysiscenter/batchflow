@@ -108,19 +108,24 @@ class RegressionMetrics(Metrics):
 
     def r2_score(self):
         """ r2_score """
-        numerator = (self.predictions - self.targets) ** 2
-        denominator = (self.targets - np.average(self.targets)) ** 2
-        return np.mean(1 - (numerator / denominator))
+        if self.weights is not None:
+            weight = self.weights[:, np.newaxis]
+        else:
+            weight = 1
+        numerator = (weight * (self.predictions - self.targets) ** 2).sum(axis=0)
+        targets_avg = np.average(self.targets, axis=0, weights=self.weights)
+        denominator = (weight * (self.targets - targets_avg) ** 2).sum(axis=0)
+        return 1 - (numerator / denominator)
 
     def explained_variance_ratio(self):
         """ explained_variance """
-        diff_avg = np.average(self.predictions - self.targets, weights=self.weights)
-        numerator = np.average(self.predictions - self.targets - diff_avg, weights=self.weights)
-        targets_avg = np.average(self.targets, weights=self.weights)
-        denominator = np.average((self.targets - targets_avg) ** 2, weights=self.weights)
-        return np.mean(1 - (numerator / denominator))
+        diff_avg = np.average(self.predictions - self.targets, axis=0, weights=self.weights)
+        numerator = np.average(self.predictions - self.targets - diff_avg, axis=0, weights=self.weights)
+        targets_avg = np.average(self.targets, axis=0, weights=self.weights)
+        denominator = np.average((self.targets - targets_avg) ** 2, axis=0, weights=self.weights)
+        return 1 - (numerator / denominator)
 
     def accuracy(self):
-        return np.sum(np.abs(self.predictions - self.targets) < self.gap) \
-               / self.predictions.size
+        return np.sum(np.abs(self.predictions - self.targets) < self.gap, axis=0) \
+               / self.targes.shape[0]
     
