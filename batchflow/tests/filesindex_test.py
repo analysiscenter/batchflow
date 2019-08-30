@@ -5,16 +5,18 @@ import pytest
 
 from batchflow import FilesIndex
 
-@pytest.mark.parametrize('path', ['', [], ['']])
+@pytest.mark.parametrize('path', ['', [], ['', '']])
 def test_build_index_empty(path):
     findex = FilesIndex(path=path)
     assert len(findex) == 0
     assert findex.index == []
 
-@pytest.mark.parametrize('path', [1, [2, 3], [None]])
-def test_build_index_non_path(path):
+@pytest.mark.parametrize('path,error', [(1, TypeError),
+                                      ([2, 3], AttributeError),
+                                      ([None], AttributeError)])
+def test_build_index_non_path(path, error):
     """ `path` should be string or list of strings """
-    with pytest.raises(AttributeError):
+    with pytest.raises(error):
         FilesIndex(path=path)
 
 def test_build_no_ext():
