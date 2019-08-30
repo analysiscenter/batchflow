@@ -957,7 +957,7 @@ class TFModel(BaseModel):
         config = {**config, **kwargs}
         return config
 
-    def _set_learning_phase(self, mode):
+    def eval(self, mode):
         if isinstance(mode, bool):
             mode = int(mode)
         tf.keras.backend.set_learning_phase(mode)
