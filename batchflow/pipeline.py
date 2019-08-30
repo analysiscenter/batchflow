@@ -27,7 +27,7 @@ METRICS = dict(
     classification=ClassificationMetrics,
     segmentation=SegmentationMetricsByPixels,
     mask=SegmentationMetricsByPixels,
-    instance=SegmentationMetricsByInstance,
+    instance=SegmentationMetricsByInstances,
     regression=RegressionMetrics
 )
 
