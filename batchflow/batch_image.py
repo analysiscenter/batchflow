@@ -441,6 +441,9 @@ class ImagesBatch(BaseImagesBatch):
             elif origin == 'random':
                 origin = (np.random.randint(background_shape[0]-image_shape[0]+1),
                           np.random.randint(background_shape[1]-image_shape[1]+1))
+            else:
+                raise ValueError("If string, origin should be one of ['center', 'top_left', 'top_right', "
+                                 "'bottom_left', 'bottom_right', 'random']. Got '{}'.".format(origin))
         elif all(0 <= elem < 1 for elem in origin):
             region = ((background_shape[0]-image_shape[0]+1),
                       (background_shape[1]-image_shape[1]+1))
