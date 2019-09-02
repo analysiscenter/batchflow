@@ -416,7 +416,8 @@ class ImagesBatch(BaseImagesBatch):
                                an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
-            - other - place the upper-left corner of the input image on the given position in the background.
+            - other - sequence of ints or sequence of floats in [0, 1) interval;
+                      place the upper-left corner of the input image on the given position in the background.
                       If `origin` is a sequence of floats in [0, 1), it defines a relative position of
                       the origin in a valid region of image.
         background_shape : sequence
@@ -448,6 +449,9 @@ class ImagesBatch(BaseImagesBatch):
             region = ((background_shape[0]-image_shape[0]+1),
                       (background_shape[1]-image_shape[1]+1))
             origin = np.asarray(origin) * region
+        elif not all(isinstance(elem, int) for elem in origin):
+            raise ValueError('If not a string, origin should be either a sequence of ints or sequence of '
+                             'floats in [0, 1) interval. Got {}'.format(origin))
 
         return np.asarray(origin, dtype=np.int)
 
@@ -483,7 +487,8 @@ class ImagesBatch(BaseImagesBatch):
                                an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            - array_like - sequence of ints or sequence of floats in [0, 1) interval;
+                           place the upper-left corner of the input image on the given position in the background.
                            If `origin` is a sequence of floats in [0, 1), it defines a relative position
                            of the origin in a valid region of image.
         resample: int
@@ -533,7 +538,8 @@ class ImagesBatch(BaseImagesBatch):
                            an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            - array_like - sequence of ints or sequence of floats in [0, 1) interval;
+                           place the upper-left corner of the input image on the given position in the background.
                            If `origin` is a sequence of floats in [0, 1), it defines a relative position
                            of the origin in a valid region of image.
         shape : sequence
@@ -586,7 +592,8 @@ class ImagesBatch(BaseImagesBatch):
                            an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            - array_like - sequence of ints or sequence of floats in [0, 1) interval;
+                           place the upper-left corner of the input image on the given position in the background.
                            If `origin` is a sequence of floats in [0, 1), it defines a relative position
                            of the origin in a valid region of image.
         mask : None, PIL.Image, np.ndarray of np.uint8
@@ -634,7 +641,8 @@ class ImagesBatch(BaseImagesBatch):
                                an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            - array_like - sequence of ints or sequence of floats in [0, 1) interval;
+                           place the upper-left corner of the input image on the given position in the background.
                            If `origin` is a sequence of floats in [0, 1), it defines a relative position
                            of the origin in a valid region of image.
         crop_origin: array-like, {'center', 'top_left', 'random'}
@@ -1048,7 +1056,8 @@ class ImagesBatch(BaseImagesBatch):
             - 'center' - crop an image such that centers of
                          an image and the filled box coincide.
             - 'random' - place the upper-left corner of the filled box at a random position.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            - array_like - sequence of ints or sequence of floats in [0, 1) interval;
+                           place the upper-left corner of the input image on the given position in the background.
                            If `origin` is a sequence of floats in [0, 1), it defines a relative position
                            of the origin in a valid region of image.
         shape : sequence, int
