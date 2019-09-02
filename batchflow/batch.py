@@ -35,7 +35,7 @@ class Batch:
     _item_class = None
     components = None
 
-    def __init__(self, index, dataset=None, preloaded=None, copy=False, *args, **kwargs):
+    def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
@@ -47,13 +47,21 @@ class Batch:
         self._copy = copy
         self._local = None
         self._dataset = dataset
-        self._pipeline = None
+        self._pipeline = pipeline
+        self._attrs = None
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
         """ Create attributes from kwargs """
+        self._attrs = list(kwargs.keys())
         for attr, value in kwargs.items():
             setattr(self, attr, value)
+
+    def get_attrs(self):
+        """ Return additional attrs as kwargs """
+        if self._attrs is None:
+            return {}
+        return {attr: getattr(self, attr, None) for attr in self._attrs}
 
     @property
     def dataset(self):
@@ -105,7 +113,7 @@ class Batch:
 
     @classmethod
     def from_data(cls, index, data):
-        """ Create batch from a given dataset """
+        """ Create a batch from data given """
         # this is roughly equivalent to self.data = data
         if index is None:
             index = np.arange(len(data))
@@ -114,7 +122,8 @@ class Batch:
     @classmethod
     def from_batch(cls, batch):
         """ Create batch from another batch """
-        return cls(batch.index, preloaded=batch._data)  # pylint: disable=protected-access
+        return cls(batch.index, dataset=batch.dataset, pipeline=batch.pipeline, preloaded=batch.data,
+                   **batch.get_attrs())
 
 
     @classmethod
@@ -139,11 +148,11 @@ class Batch:
             If component is `None` in some batches and not `None` in others.
         """
         def _make_index(data):
-            return DatasetIndex(np.arange(data.shape[0])) if data is not None and data.shape[0] > 0 else None
+            return DatasetIndex(data.shape[0]) if data is not None and data.shape[0] > 0 else None
 
         def _make_batch(data):
             index = _make_index(data[0])
-            return cls(index, preloaded=tuple(data)) if index is not None else None
+            return cls.from_data(index, tuple(data)) if index is not None else None
 
         if batch_size is None:
             break_point = len(batches)
@@ -218,9 +227,11 @@ class Batch:
             raise ValueError('dataset can be an instance of Dataset (sub)class or the class itself, but not None')
         if isinstance(dataset, type):
             dataset_class = dataset
+            attrs = {}
         else:
             dataset_class = dataset.__class__
-        return dataset_class(self.index, batch_class=type(self), preloaded=self.data, copy=copy)
+            attrs = dataset.get_attrs()
+        return dataset_class(self.index, batch_class=type(self), preloaded=self._data, copy=copy, **attrs)
 
     @property
     def indices(self):
@@ -246,7 +257,7 @@ class Batch:
                 if self._data is None and self._preloaded is not None:
                     self.load(src=self._preloaded)
         res = self._data if self.components is None else self._data_named
-        return res if res is not None else self._empty_data
+        return res
 
     def make_item_class(self, local=False):
         """ Create a class to handle data components """
@@ -290,17 +301,18 @@ class Batch:
         if any(hasattr(self, c) for c in components):
             raise ValueError("An attribute with the same name exists")
 
+        # preload data if needed
+        data = self.data
         data = self._data
         if self.components is None:
             self.components = tuple()
             data = tuple()
             warnings.warn("All batch data is erased")
-
-        exists_component = set(components) & set(self.components)
-        if exists_component:
-            raise ValueError("Component(s) with name(s) '{}' already exists".format("', '".join(exists_component)))
-
-        self.components = self.components + components
+        else:
+            exists_component = set(components) & set(self.components)
+            if exists_component:
+                raise ValueError("Component(s) with name(s) '{}' already exists".format("', '".join(exists_component)))
+            self.components = self.components + components
 
         self.make_item_class(local=True)
         if data is not None:
@@ -342,10 +354,6 @@ class Batch:
         for k, v in state.items():
             # this warrants that all hidden objects are reconstructed upon unpickling
             setattr(self, k, v)
-
-    @property
-    def _empty_data(self):
-        return None if self.components is None else self._item_class()   # pylint: disable=not-callable
 
     @property
     def array_of_nones(self):
@@ -415,21 +423,30 @@ class Batch:
     def put_into_data(self, data, dst=None):
         """ Load data into :attr:`_data` property """
         _src = self.get_items(self.indices, data)
-        if not isinstance(_src, (tuple, dict, self._item_class)):
-            _src = (_src,)
+        if self._copy and data is self._preloaded:
+            res = deepcopy(res)
 
-        if dst is None:
+        types = tuple, dict, pd.DataFrame
+        if isinstance(self._item_class, type):
+            types = types + (self._item_class,)
+
+        if self.components is None:
             self._data = _src
         else:
-            if isinstance(dst, str):
+            if not isinstance(_src, types):
+                _src = (_src,)
+            if dst is None:
+                components = self.components
+            elif isinstance(dst, str):
                 components = [dst]
             else:
                 components = dst
+
             for i, comp in enumerate(components):
-                if isinstance(_src, dict):
+                if isinstance(_src, (dict, pd.DataFrame)):
                     comp_src = _src[comp]
                 else:
-                    comp_src = _src[i]
+                    comp_src = _src[i] if i < len(_src) else None
                 setattr(self, comp, comp_src)
 
     def get_items(self, index, data=None, components=None):
@@ -447,14 +464,14 @@ class Batch:
             comps = components or range(len(_data))
             res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
                         for comp, data_item in zip(comps, _data))
-        elif isinstance(_data, dict):
-            res = dict(zip(components, (_data[comp][self.get_pos(data, comp, index)] for comp in components)))
+        elif isinstance(_data, (dict, pd.DataFrame)):
+            components = components or _data.keys()
+            check = lambda comp: comp in _data and _data[comp] is not None
+            data_comps = (_data[comp][self.get_pos(data, comp, index)] if check(comp) else None for comp in components)
+            res = dict(zip(components, data_comps))
         else:
             pos = self.get_pos(data, None, index)
             res = _data[pos]
-
-        if self._copy and data == self._preloaded:
-            res = deepcopy(res)
         return res
 
     def get(self, item=None, component=None):
