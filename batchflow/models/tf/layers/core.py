@@ -73,6 +73,7 @@ class Dropout(Layer):
         self.kwargs = kwargs
 
     def __call__(self, inputs, training):
+        #pylint: disable=singleton-comparison
         d_layer = K.Dropout(rate=self.dropout_rate, **self.kwargs)
 
         if self.multisample != False:
@@ -92,7 +93,7 @@ class Dropout(Layer):
                     sizes = tf.cast(tf.math.round(sizes), dtype=tf.int32)
             elif isinstance(self.multisample, tf.Tensor):
                 sizes = self.multisample
-            print(sizes)
+
             splitted = tf.split(inputs, sizes, axis=0, name='mdropout_split')
             dropped = [d_layer(branch, training) for branch in splitted]
             output = tf.concat(dropped, axis=0, name='mdropout_concat')
