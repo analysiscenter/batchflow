@@ -13,7 +13,8 @@ IMAGE_SHAPE = 10, 10
 def get_batch(data, pipeline, batch_class=Batch):
     dataset = Dataset(DATASET_SIZE, preloaded=data, batch_class=batch_class)
 
-    template_pipeline = (Pipeline()
+    template_pipeline = (
+        Pipeline()
         .update(V('dummy'), B.data)     # touch batch data to fire preloading
     )
 
