@@ -4,8 +4,8 @@ import numpy as np
 from . import Metrics
 
 METRICS_ALIASES = {'mae': 'mean_absolute_error',
-                   'mse': 'mean_squar_error',
-                   'rmse': 'root_mean_square_error',
+                   'mse': 'mean_squared_error',
+                   'rmse': 'root_mean_squared_error',
                    'r2': 'r2_score',
                    'acc': 'accuracy'}
 
@@ -23,7 +23,7 @@ class RegressionMetrics(Metrics):
         Estimated target values
 
     multi: bool
-        Whether the targets are multi ouput (default is False)
+        Whether the task is multiouput (default is False)
 
     weights : array-like of shape (n_samples)
         Sample weights.
@@ -36,10 +36,10 @@ class RegressionMetrics(Metrics):
     -----
     - Accuracy metric for regression task stands for the ratio of samples for which `abs(targets-predictions) < gap`.
 
-    - For all the metrics, except max_error and accuracy you can compute sample-wise weighing.
+    - For all the metrics, except max error, accuracy and median absolute error, you can compute sample-wise weighting.
     For that purpose specify `weight` argument, which must be the same size as inputs.
 
-    In a multioutput case metrics might be calculated with or without outputs averaging.
+    In the multioutput case metrics might be calculated with or without outputs averaging.
 
     Available methods are:
 
@@ -50,11 +50,11 @@ class RegressionMetrics(Metrics):
     All metrics return:
 
     - a single value if targets are single output i.e. have shape (n_samples, ).
-    - a single value if targets are multi output i.e have shape (n_samples, n_outputs) and `agg` set to `mean`
-    - a vector with (n_outputs, ) items if targets are multi output and `agg` set to `None`
+    - a single value if targets are multioutput i.e have shape (n_samples, n_outputs) and `agg` set to `mean`
+    - a vector with (n_outputs, ) items if targets are multioutput and `agg` set to `None`
     """
 
-    def __init__(self, targets, predictions, weights=None, gap=3, multi=False):
+    def __init__(self, targets, predictions, weights=None, multi=False):
         super().__init__()
 
         # if-else block bellow process the case when the inputs and targets are list
@@ -75,10 +75,12 @@ class RegressionMetrics(Metrics):
             self.targets = np.concatenate(targets, axis=0)
             self.predictions = np.concatenate(predictions, axis=0)
 
-        self.weights = np.array(weights).flatten()
-        self.gap = gap
-        self.multi = multi
+        if weights is not None:
+            self.weights = np.array(weights).flatten()
+        else:
+            self.weights = None
 
+        self.multi = multi
         self._agg_fn_dict = {
             'mean': lambda x: np.mean(x),
         }
@@ -90,42 +92,43 @@ class RegressionMetrics(Metrics):
         return object.__getattribute__(self, name)
 
     def mean_absolute_error(self):
-        return np.average(np.abs(self.predictions - self.targets), axis=0,
-                          weights=self.weights)
+        return np.average(np.abs(self.predictions - self.targets), axis=0, weights=self.weights)
 
     def mean_squared_error(self):
-        return np.average((self.predictions - self.targets) ** 2, axis=0,
-                          weights=self.weights)
+        return np.average((self.predictions - self.targets) ** 2, axis=0, weights=self.weights)
 
-    def median_absilute_error(self):
-        return np.median(np.abs(self.predictions - self.targets))
+    def median_absolute_error(self):
+        return np.median(np.abs(self.predictions - self.targets), axis=0)
 
     def max_error(self):
-        return np.max(np.abs(self.predictions - self.targets))
+        return np.max(np.abs(self.predictions - self.targets), axis=0)
 
-    def root_mean_square_error(self):
+    def root_mean_squared_error(self):
         return np.sqrt(self.mean_squared_error())
 
     def r2_score(self):
-        """ r2_score """
+        # pylint: disable=missing-docstring
         if self.weights is not None:
             weight = self.weights[:, np.newaxis]
         else:
             weight = 1
         numerator = (weight * (self.predictions - self.targets) ** 2).sum(axis=0)
+
         targets_avg = np.average(self.targets, axis=0, weights=self.weights)
         denominator = (weight * (self.targets - targets_avg) ** 2).sum(axis=0)
         return 1 - (numerator / denominator)
 
     def explained_variance_ratio(self):
-        """ explained_variance """
+        # pylint: disable=missing-docstring
         diff_avg = np.average(self.predictions - self.targets, axis=0, weights=self.weights)
-        numerator = np.average(self.predictions - self.targets - diff_avg, axis=0, weights=self.weights)
+        numerator = np.average((self.predictions - self.targets - diff_avg) ** 2, axis=0, weights=self.weights)
+
         targets_avg = np.average(self.targets, axis=0, weights=self.weights)
         denominator = np.average((self.targets - targets_avg) ** 2, axis=0, weights=self.weights)
         return 1 - (numerator / denominator)
 
-    def accuracy(self):
-        return np.sum(np.abs(self.predictions - self.targets) < self.gap, axis=0) \
-               / self.targes.shape[0]
+    def accuracy(self, gap=3):
+        """ Accuracy metric in the regression task can be interpreted as the ratio of samples
+         for which `abs(target-predictoin) < gap`"""
+        return (np.abs(self.predictions - self.targets) < gap).sum(axis=0) / self.targets.shape[0]
     
