@@ -957,6 +957,20 @@ class TFModel(BaseModel):
         config = {**config, **kwargs}
         return config
 
+    def eval(self, mode):
+        """ Change model learning phase. Important to use to control behaviour of layers, that
+        perform different operations on train/inference (dropout, batch-norm).
+
+        Parameters
+        ----------
+        mode : bool or int
+            If evaluates to True, then all the layers are set to use `train` behaviour.
+            If evaluates to False, then all the layers are set to use `test` behaviour.
+        """
+        if isinstance(mode, bool):
+            mode = int(mode)
+        tf.keras.backend.set_learning_phase(mode)
+
     def _map_name(self, name, device=None):
         if isinstance(name, str):
             return self.get_from_attr(name, device)

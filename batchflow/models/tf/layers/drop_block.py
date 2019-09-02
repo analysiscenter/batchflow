@@ -2,22 +2,23 @@
 Golnaz Ghiasi, Tsung-Yi Lin, Quoc V. Le "`DropBlock: A regularization method for convolutional networks
 <https://arxiv.org/abs/1810.12890>`_"
 """
-
 import tensorflow as tf
-from .pooling import max_pooling
+
+from .layer import Layer
+from .pooling import MaxPooling
 
 # TODO:
 # When max_pooling allows for dynamic kernel size, implement block_size as fraction
 # of spatial_dims.
 # Write predefined callables to control dropout_rate
 
-def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global_step=None, seed=None, **kwargs):
+
+
+class Dropblock(Layer):
     """ Drop Block module.
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        Input tensor.
     dropout_rate : float, tf.Tensor or callable.
         Default is 0
     block_size : int or tuple of ints
@@ -32,11 +33,23 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
         first positional argument.
     seed : int
         Seed to use in tf.distributions.Bernoulli.sample method.
-
-    Returns
-    -------
-    tf.Tensor
     """
+    def __init__(self, dropout_rate, block_size, data_format, global_step=None, seed=None, **kwargs):
+        self.dropout_rate, self.block_size = dropout_rate, block_size
+        self.data_format, self.global_step, self.seed = data_format, global_step, seed
+        self.kwargs = kwargs
+
+    def __call__(self, inputs, training):
+        if self.dropout_rate and self.block_size:
+            return dropblock(inputs, dropout_rate=self.dropout_rate, block_size=self.block_size,
+                             is_training=training, data_format=self.data_format,
+                             global_step=self.global_step, seed=self.seed, **self.kwargs)
+        return inputs
+
+
+
+def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global_step=None, seed=None, **kwargs):
+    """ Drop Block module. """
     if callable(dropout_rate):
         dropout_rate = dropout_rate(global_step, **kwargs)
 
@@ -44,6 +57,7 @@ def dropblock(inputs, dropout_rate, block_size, is_training, data_format, global
                    true_fn=lambda: inputs,
                    false_fn=lambda: _dropblock(inputs, dropout_rate, block_size, seed, data_format),
                    name='dropblock')
+
 
 def _dropblock(inputs, dropout_rate, block_size, seed, data_format):
     """
@@ -101,8 +115,7 @@ def _dropblock(inputs, dropout_rate, block_size, seed, data_format):
     # Using max pool operation to extend sampled points to blocks of desired size
     pool_size = block_size
     strides = [1] * spatial_ndim
-    mask = max_pooling(mask, pool_size=pool_size, strides=strides,
-                       data_format=data_format, padding='same')
+    mask = MaxPooling(pool_size=pool_size, strides=strides, data_format=data_format, padding='same')(mask)
     mask = tf.cast(1 - mask, tf.float32)
     output = tf.multiply(inputs, mask)
 

@@ -79,7 +79,7 @@ class Inception_v3(Inception):
             branch_1_3_3 = conv_block(inputs, layout*3, [filters[0]]+[filters[2]]*2, [1, 3, 3], name='conv_1_3_3',
                                       **kwargs)
 
-            branch_pool = conv_block(inputs, 'p'+layout, filters[3], 1, 'c_pool', **{**kwargs, 'pool_strides': 1})
+            branch_pool = conv_block(inputs, 'p'+layout, filters[3], 1, name='c_pool', **{**kwargs, 'pool_strides': 1})
 
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_1, branch_1_3, branch_1_3_3, branch_pool], axis=axis, name='output')
