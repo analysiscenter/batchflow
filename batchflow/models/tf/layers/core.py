@@ -50,13 +50,14 @@ class Dense(Layer):
 
 
 
-class Dropout(Layer):
-    """ Wrapper for dropout layer.
+class BaseDropout(Layer):
+    """ Base class for dropout layers.
 
     Parameters
     ----------
-    dropout_prob : float
-        Fraction of the input units to drop.
+    dropout_prob : float, tf.Tensor, callable
+        If float or Tensor, then fraction of the input units to drop.
+        If callable, then function to be called on `global_step`. Must return tensor of size 1.
     multisample: bool, number, sequence
         If evaluates to True, then batch is split into multiple parts,
         dropout applied to each of them separately and then parts are concatenated back.
@@ -67,17 +68,21 @@ class Dropout(Layer):
         If sequence of ints, then batch is split into parts of given sizes. Must sum up to the batch size.
         If sequence of floats, then each float means proportion of sizes in batch and must sum up to 1.
     """
-    def __init__(self, dropout_rate, multisample=False, **kwargs):
+    def __init__(self, dropout_rate, multisample=False, global_step=None, **kwargs):
         self.dropout_rate = dropout_rate
+        self.global_step = global_step
         self.multisample = multisample
         self.kwargs = kwargs
 
     def __call__(self, inputs, training):
         #pylint: disable=singleton-comparison
-        d_layer = K.Dropout(rate=self.dropout_rate, **self.kwargs)
+        if callable(self.dropout_rate):
+            step = tf.cast(self.global_step, dtype=tf.float32)
+            self.dropout_rate = self.dropout_rate(step)
+        d_layer = self.LAYER(rate=self.dropout_rate, **self.kwargs)
 
-        if self.multisample != False:
-            if self.multisample == True:
+        if self.multisample is not False:
+            if self.multisample is True:
                 self.multisample = 2
             elif isinstance(self.multisample, float):
                 self.multisample = [self.multisample, 1 - self.multisample]
@@ -102,15 +107,14 @@ class Dropout(Layer):
         return output
 
 
+class Dropout(BaseDropout):
+    """ Wrapper for dropout layer. """
+    LAYER = K.Dropout
 
-class AlphaDropout(Layer):
+
+class AlphaDropout(BaseDropout):
     """ Wrapper for self-normalizing dropout layer. """
-    def __init__(self, dropout_rate, **kwargs):
-        self.dropout_rate = dropout_rate
-        self.kwargs = kwargs
-
-    def __call__(self, inputs, training):
-        return K.AlphaDropout(rate=self.dropout_rate, **self.kwargs)(inputs, training)
+    LAYER = K.AlphaDropout
 
 
 
