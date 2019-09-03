@@ -55,15 +55,16 @@ class BaseDropout(Layer):
 
     Parameters
     ----------
-    dropout_prob : float, tf.Tensor, callable
+    dropout_rate : float, tf.Tensor, callable
         If float or Tensor, then fraction of the input units to drop.
         If callable, then function to be called on `global_step`. Must return tensor of size 1.
+
     multisample: bool, number, sequence
         If evaluates to True, then batch is split into multiple parts,
         dropout applied to each of them separately and then parts are concatenated back.
 
         If True, then batch is split evenly into two parts.
-        If integer, then batch is split evenly into that number of parts; must be a divisor of batch size.
+        If integer, then different dropouts are applied to whole batch, then averaged.
         If float, then batch is split into parts of `multisample` and `1 - multisample` sizes.
         If sequence of ints, then batch is split into parts of given sizes. Must sum up to the batch size.
         If sequence of floats, then each float means proportion of sizes in batch and must sum up to 1.
@@ -75,7 +76,6 @@ class BaseDropout(Layer):
         self.kwargs = kwargs
 
     def __call__(self, inputs, training):
-        #pylint: disable=singleton-comparison
         if callable(self.dropout_rate):
             step = tf.cast(self.global_step, dtype=tf.float32)
             self.dropout_rate = self.dropout_rate(step)
@@ -87,21 +87,26 @@ class BaseDropout(Layer):
             elif isinstance(self.multisample, float):
                 self.multisample = [self.multisample, 1 - self.multisample]
 
-            if isinstance(self.multisample, int):
-                sizes = self.multisample
-            elif isinstance(self.multisample, (tuple, list)):
-                if all([isinstance(item, int) for item in self.multisample]):
+            if isinstance(self.multisample, int): # dropout to the whole batch, then average
+                dropped = [d_layer(inputs, training) for _ in range(self.multisample)]
+                output = tf.reduce_mean(tf.stack(dropped, axis=0), axis=0)
+            else: # split batch into separate-dropout branches
+                if isinstance(self.multisample, (tuple, list)):
+                    if all([isinstance(item, int) for item in self.multisample]):
+                        sizes = self.multisample
+                    elif all([isinstance(item, float) for item in self.multisample]):
+                        batch_size = tf.cast(tf.shape(inputs)[0], dtype=tf.float32)
+                        sizes = tf.convert_to_tensor([batch_size*item for item in self.multisample[:-1]])
+                        sizes = tf.cast(tf.math.round(sizes), dtype=tf.int32)
+                        residual = tf.convert_to_tensor(tf.shape(inputs)[0] - tf.reduce_sum(sizes))
+                        residual = tf.reshape(residual, shape=(1,))
+                        sizes = tf.concat([sizes, residual], axis=0)
+                else: # case of Tensor
                     sizes = self.multisample
-                elif all([isinstance(item, float) for item in self.multisample]):
-                    batch_size = tf.cast(tf.shape(inputs)[0], dtype=tf.float32)
-                    sizes = tf.convert_to_tensor([batch_size*item for item in self.multisample])
-                    sizes = tf.cast(tf.math.round(sizes), dtype=tf.int32)
-            elif isinstance(self.multisample, tf.Tensor):
-                sizes = self.multisample
 
-            splitted = tf.split(inputs, sizes, axis=0, name='mdropout_split')
-            dropped = [d_layer(branch, training) for branch in splitted]
-            output = tf.concat(dropped, axis=0, name='mdropout_concat')
+                splitted = tf.split(inputs, sizes, axis=0, name='mdropout_split')
+                dropped = [d_layer(branch, training) for branch in splitted]
+                output = tf.concat(dropped, axis=0, name='mdropout_concat')
         else:
             output = d_layer(inputs, training)
         return output
