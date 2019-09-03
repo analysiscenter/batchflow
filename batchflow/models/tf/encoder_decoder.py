@@ -25,6 +25,9 @@ class EncoderDecoder(TFModel):
             num_stages : int
                 Number of downsampling stages.
 
+            order : sequence
+                Determines order of applying layers: block->downsampling or downsampling->block.
+
             downsample : dict, optional
                 Parameters for downsampling (see :func:`~.layers.conv_block`)
 
@@ -57,6 +60,10 @@ class EncoderDecoder(TFModel):
 
             skip : bool
                 Whether to concatenate upsampled tensor with stored pre-downsample encoding.
+
+            order : sequence
+                Determines order of applying layers: upsampling->block or block->upsampling.
+
             upsample : dict
                 Parameters for upsampling (see :func:`~.layers.upsample`).
 
@@ -120,13 +127,15 @@ class EncoderDecoder(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
-        config['body/encoder'] = dict(base=None, num_stages=None, reverse_order=False)
+        config['body/encoder'] = dict(base=None, num_stages=None,
+                                      order=['block', 'downsampling'])
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
         config['body/encoder/blocks'] = dict(base=cls.block)
 
         config['body/embedding'] = dict(base=cls.block)
 
-        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None, reverse_order=False)
+        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None,
+                                      order=['upsampling', 'block'])
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
         return config
@@ -206,6 +215,9 @@ class EncoderDecoder(TFModel):
         num_stages : int
             Number of downsampling stages.
 
+        order : sequence
+            Determines order of applying layers: block->downsampling or downsampling->block.
+
         blocks : dict
             Parameters for tensor processing before downsampling.
 
@@ -220,9 +232,8 @@ class EncoderDecoder(TFModel):
         list of tf.Tensors
         """
         base_class = kwargs.pop('base')
-        steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
-        reverse_order = kwargs.pop('reverse_order')
-        print('REVERSE ORDER', reverse_order)
+        steps, downsample, block_args, order = cls.pop(['num_stages', 'downsample', 'blocks', 'order'], kwargs)
+        order = ''.join([item[0] for item in order])
 
         if base_class is not None:
             encoder_outputs = base_class.make_encoder(inputs, name=name, **kwargs)
@@ -238,14 +249,16 @@ class EncoderDecoder(TFModel):
                         args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of keys
                         downsample_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
 
-                        if not reverse_order: # block -> downsample
+                        if order in ['bd', 'bp']: # block -> downsample
                             x = base_block(x, name='pre', **args)
                             if downsample.get('layout') is not None:
                                 x = conv_block(x, name='downsample-{}'.format(i), **downsample_args)
-                        else: # downsample -> block
+                        elif order in ['db', 'pb']: # downsample -> block
                             if downsample.get('layout') is not None:
                                 x = conv_block(x, name='downsample-{}'.format(i), **downsample_args)
                             x = base_block(x, name='pre', **args)
+                        else:
+                            raise ValueError('Unknown order, use one of {"bd", "db"}')
                         encoder_outputs.append(x)
         return encoder_outputs
 
@@ -296,6 +309,9 @@ class EncoderDecoder(TFModel):
         skip : bool
             Whether to concatenate upsampled tensor with stored pre-downsample encoding.
 
+        order : sequence
+            Determines order of applying layers: upsampling->block or block->upsampling.
+
         upsample : dict
             Parameters for upsampling.
 
@@ -316,10 +332,10 @@ class EncoderDecoder(TFModel):
         """
         steps = kwargs.pop('num_stages') or len(inputs)-2
         factor = kwargs.pop('factor') or [2]*steps
-        reverse_order = kwargs.pop('reverse_order')
-        skip, upsample, block_args = cls.pop(['skip', 'upsample', 'blocks'], kwargs)
+        skip, upsample, block_args, order = cls.pop(['skip', 'upsample', 'blocks', 'order'], kwargs)
+        order = ''.join([item[0] for item in order])
         base_block = block_args.get('base')
-        print('DECODER RO', reverse_order)
+
         if isinstance(factor, int):
             factor = int(factor ** (1/steps))
             factor = [factor] * steps
@@ -338,14 +354,16 @@ class EncoderDecoder(TFModel):
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}  # enforce priority of subkeys
                     upsample_args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
 
-                    if not reverse_order:
+                    if order == 'ub':
                         if upsample.get('layout') is not None:
                             x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **upsample_args)
                         x = base_block(x, name='post', **args)
+                    elif order == 'bu':
+                        x = base_block(x, name='post', **args)
+                        if upsample.get('layout') is not None:
+                            x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **upsample_args)
                     else:
-                        x = base_block(x, name='post', **args)
-                        if upsample.get('layout') is not None:
-                            x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **upsample_args)
+                        raise ValueError('Unknown order, use one of {"ub", "bu"}')
 
                     # Combine it with stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
