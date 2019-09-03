@@ -90,7 +90,7 @@ class Combine(Layer):
                     inputs[i] = ConvBlock(layout='c', filters=filters, kernel_size=1,
                                           name='conv', **self.kwargs)(inputs[i])
                 return tf.add_n(inputs, name='combine-softsum')
-        raise ValueError('Unknown operation {}.'.format(combine_type))
+        raise ValueError('Unknown operation {}.'.format(self.op))
 
 
 
