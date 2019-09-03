@@ -199,6 +199,8 @@ class Pipeline:
 
     @property
     def _all_namespaces(self):
+        if isinstance(self.dataset, NamedExpression):
+            return [sys.modules["__main__"]] + self._namespaces
         return [sys.modules["__main__"], self.dataset] + self._namespaces
 
     def is_method_from_ns(self, name):
@@ -216,10 +218,10 @@ class Pipeline:
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
             raise AttributeError('Unknown magic method: %s' % name)
-        if self._is_batch_method(name):
-            return partial(self._add_action, name)
         if self.is_method_from_ns(name):
             return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
+        if self._is_batch_method(name):
+            return partial(self._add_action, name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @property
