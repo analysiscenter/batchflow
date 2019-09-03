@@ -308,16 +308,6 @@ class Pipeline:
         self.dataset = dataset
         return self
 
-    def _exec_call(self, batch, action):
-        fn = self._eval_expr(action['fn'], batch)
-        if callable(fn):
-            output = fn(batch, *action['args'], **action['kwargs'])
-        else:
-            raise TypeError("Callable is expected, but got {}".format(type(fn)))
-        if action['save_to'] is not None:
-            self._save_output(batch, None, output, action['save_to'])
-
-
     def has_variable(self, name):
         """ Check if a variable exists
 
