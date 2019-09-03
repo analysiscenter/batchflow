@@ -336,7 +336,8 @@ class ConvBlock:
                     pass
                 elif letter in self.DEFAULT_LETTERS:
                     args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
-                            for param in layer_class.params}
+                            for param in layer_class.params
+                            if (hasattr(self, param) or (param in self.kwargs))}
                 else:
                     if letter not in self.LETTERS_LAYERS.keys():
                         raise ValueError('Unknown letter symbol - %s' % letter)
