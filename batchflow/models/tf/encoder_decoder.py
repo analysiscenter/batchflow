@@ -120,13 +120,13 @@ class EncoderDecoder(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
-        config['body/encoder'] = dict(base=None, num_stages=None)
+        config['body/encoder'] = dict(base=None, num_stages=None, reverse_order=False)
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
         config['body/encoder/blocks'] = dict(base=cls.block)
 
         config['body/embedding'] = dict(base=cls.block)
 
-        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
+        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None, reverse_order=False)
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
         return config
@@ -221,6 +221,8 @@ class EncoderDecoder(TFModel):
         """
         base_class = kwargs.pop('base')
         steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
+        reverse_order = kwargs.pop('reverse_order')
+        print('REVERSE ORDER', reverse_order)
 
         if base_class is not None:
             encoder_outputs = base_class.make_encoder(inputs, name=name, **kwargs)
@@ -233,14 +235,17 @@ class EncoderDecoder(TFModel):
 
                 for i in range(steps):
                     with tf.variable_scope('encoder-'+str(i)):
-                        # Preprocess tensor with given block
                         args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of keys
-                        x = base_block(x, name='pre', **args)
+                        downsample_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
 
-                        # Downsampling
-                        if downsample.get('layout') is not None:
-                            args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
-                            x = conv_block(x, name='downsample-{}'.format(i), **args)
+                        if not reverse_order: # block -> downsample
+                            x = base_block(x, name='pre', **args)
+                            if downsample.get('layout') is not None:
+                                x = conv_block(x, name='downsample-{}'.format(i), **downsample_args)
+                        else: # downsample -> block
+                            if downsample.get('layout') is not None:
+                                x = conv_block(x, name='downsample-{}'.format(i), **downsample_args)
+                            x = base_block(x, name='pre', **args)
                         encoder_outputs.append(x)
         return encoder_outputs
 
@@ -311,9 +316,10 @@ class EncoderDecoder(TFModel):
         """
         steps = kwargs.pop('num_stages') or len(inputs)-2
         factor = kwargs.pop('factor') or [2]*steps
+        reverse_order = kwargs.pop('reverse_order')
         skip, upsample, block_args = cls.pop(['skip', 'upsample', 'blocks'], kwargs)
         base_block = block_args.get('base')
-
+        print('DECODER RO', reverse_order)
         if isinstance(factor, int):
             factor = int(factor ** (1/steps))
             factor = [factor] * steps
@@ -328,14 +334,18 @@ class EncoderDecoder(TFModel):
                     # Skip some of the steps
                     if factor[i] == 1:
                         continue
-                    # Upsample by a desired factor
-                    if upsample.get('layout') is not None:
-                        args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
-                        x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **args)
 
-                    # Post-process resulting tensor
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}  # enforce priority of subkeys
-                    x = base_block(x, name='post', **args)
+                    upsample_args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
+
+                    if not reverse_order:
+                        if upsample.get('layout') is not None:
+                            x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **upsample_args)
+                        x = base_block(x, name='post', **args)
+                    else:
+                        x = base_block(x, name='post', **args)
+                        if upsample.get('layout') is not None:
+                            x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **upsample_args)
 
                     # Combine it with stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
