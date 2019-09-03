@@ -1339,7 +1339,6 @@ class Pipeline:
             args, kwargs = self._lazy_run
 
         self._dataset = self._eval_expr(self.dataset)
-        print(self._actions)
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
         self.reset(reset)
