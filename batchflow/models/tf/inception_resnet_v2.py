@@ -35,7 +35,7 @@ class InceptionResNet_v2(Inception):
                                        pool_size=3, pool_strides=2)
         config['body']['layout'] = 'A'*5 + 'a' + 'B'*10 +'b' + 'C'*5
         config['body']['arch'] = _DEFAULT_ARCH
-        config['head'].update(dict(layout='Vdf', dropout_rate=.8))
+        config['head'].update(dict(layout='Vdf', dropout_rate=.2))
         config['loss'] = 'ce'
 
         return config
