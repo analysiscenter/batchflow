@@ -15,7 +15,7 @@ from ..utils import unpack_fn_from_config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
 from .losses import softmax_cross_entropy, dice
-from .train import piecewise_constant
+from .nn import piecewise_constant
 
 
 LOSSES = {
