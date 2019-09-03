@@ -216,10 +216,10 @@ class Pipeline:
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
             raise AttributeError('Unknown magic method: %s' % name)
-        if self.is_method_from_ns(name):
-            return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         if self._is_batch_method(name):
             return partial(self._add_action, name)
+        if self.is_method_from_ns(name):
+            return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @property
@@ -1339,6 +1339,7 @@ class Pipeline:
             args, kwargs = self._lazy_run
 
         self._dataset = self._eval_expr(self.dataset)
+        print(self._actions)
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
         self.reset(reset)
