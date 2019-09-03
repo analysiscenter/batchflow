@@ -50,6 +50,50 @@ class Dense(Layer):
 
 
 
+@add_as_function
+class Combine(Layer):
+    """ Combine inputs into one tensor via various transformations.
+
+    Parameters
+    ----------
+    op : str {'concat', 'sum', 'conv'}
+        If 'concat', inputs are concated along channels axis.
+        If 'sum', inputs are summed.
+        If 'softsum', every tensor is passed through 1x1 convolution in order to have
+        the same number of channels as the first tensor, and then summed.
+
+    data_format : str {'channels_last', 'channels_first'}
+        Data format.
+    kwargs : dict
+        Arguments for :class:`.ConvBlock`.
+    """
+    def __init__(self, op='softsum', data_format='channels_last', name='combine', **kwargs):
+        self.op = op
+        self.data_format, self.name = data_format, name
+        self.kwargs = kwargs
+
+    def __call__(self, inputs):
+        with tf.variable_scope(self.name):
+            axis = 1 if self.data_format == "channels_first" or self.data_format.startswith("NC") else -1
+
+            if self.op == 'concat':
+                return tf.concat(inputs, axis=axis, name='combine-concat')
+            if self.op in ['avg', 'average', 'mean']:
+                return tf.reduce_mean(tf.stack(inputs, axis=0), axis=0, name='combine-mean')
+            if self.op in ['sum', 'add']:
+                return tf.add_n(inputs, name='combine-sum')
+            if self.op in ['softsum', 'convsum']:
+                from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+                filters = inputs[0].get_shape().as_list()[axis]
+
+                for i in range(1, len(inputs)):
+                    inputs[i] = ConvBlock(layout='c', filters=filters, kernel_size=1,
+                                          name='conv', **self.kwargs)(inputs[i])
+                return tf.add_n(inputs, name='combine-softsum')
+        raise ValueError('Unknown operation {}.'.format(combine_type))
+
+
+
 class BaseDropout(Layer):
     """ Base class for dropout layers.
 
@@ -89,7 +133,7 @@ class BaseDropout(Layer):
 
             if isinstance(self.multisample, int): # dropout to the whole batch, then average
                 dropped = [d_layer(inputs, training) for _ in range(self.multisample)]
-                output = tf.reduce_mean(tf.stack(dropped, axis=0), axis=0)
+                output = Combine(op='avg')(dropped)
             else: # split batch into separate-dropout branches
                 if isinstance(self.multisample, (tuple, list)):
                     if all([isinstance(item, int) for item in self.multisample]):

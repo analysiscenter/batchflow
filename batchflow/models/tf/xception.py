@@ -6,7 +6,7 @@ François Chollet. "`Xception: Deep Learning with Depthwise Separable Convolutio
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block, depthwise_conv
+from .layers import conv_block, depthwise_conv, combine
 from ..utils import unpack_args
 
 
@@ -106,8 +106,8 @@ class Xception(TFModel):
                 x = cls.separable_block(x, filter_, strides=strides[i],
                                         name='separable_conv-{}'.format(i), **kwargs)
 
-            outputs = cls.combine([x, inputs], op=combine_op, strides=strides[1],
-                                  data_format=kwargs.get('data_format'))
+            outputs = combine([x, inputs], op=combine_op, strides=strides[1],
+                              data_format=kwargs.get('data_format'))
         return outputs
 
     @classmethod
