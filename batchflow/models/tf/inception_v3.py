@@ -47,7 +47,7 @@ class Inception_v3(Inception):
                                        pool_size=3, pool_strides=2, padding='valid')
         config['body']['layout'] = 'bbbrffffmee'
         config['body']['arch'] = _DEFAULT_V3_ARCH
-        config['head'].update(dict(layout='Vdf', dropout_rate=.8))
+        config['head'].update(dict(layout='Vdf', dropout_rate=.2))
         config['loss'] = 'ce'
 
         return config
