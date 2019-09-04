@@ -126,7 +126,7 @@ class Pipeline:
     def concat(cls, pipe1, pipe2):
         """ Create a new pipeline concatenating two given pipelines """
         # pylint: disable=protected-access
-        if pipe1.dataset != pipe2.dataset and pipe1.dataset is not None and pipe2.dataset is not None:
+        if pipe1.dataset != pipe2.dataset and pipe1._dataset is not None and pipe2._dataset is not None:
             raise ValueError("Cannot add pipelines with different datasets")
 
         new_p1 = cls.from_pipeline(pipe1)
@@ -185,8 +185,8 @@ class Pipeline:
         raise TypeError("Pipeline might take only Dataset or Config. Use as pipeline << dataset or pipeine << config")
 
     def _is_batch_method(self, name, namespace=None):
-        if namespace is None and self.dataset is not None:
-            namespace = self.dataset.batch_class
+        if namespace is None and self._dataset is not None:
+            namespace = self._dataset.batch_class
         else:
             return True
         if hasattr(namespace, name) and callable(getattr(namespace, name)):
@@ -199,9 +199,11 @@ class Pipeline:
 
     @property
     def _all_namespaces(self):
+        common_namespaces = [sys.modules["__main__"]]
         if isinstance(self.dataset, NamedExpression):
-            return [sys.modules["__main__"]] + self._namespaces
-        return [sys.modules["__main__"], self.dataset] + self._namespaces
+            if self._dataset is not None:
+                common_namespaces.append(self._dataset)
+        return common_namespaces + self._namespaces
 
     def is_method_from_ns(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)
@@ -253,7 +255,7 @@ class Pipeline:
     @property
     def index(self):
         """ Return index of the source dataset """
-        return self.dataset.index
+        return self._dataset.index
 
     @property
     def indices(self):
@@ -1374,7 +1376,7 @@ class Pipeline:
 
         if bar:
             bar = create_bar(bar, batch_size, n_iters, n_epochs,
-                             drop_last, len(self.dataset.index))
+                             drop_last, len(self._dataset.index))
 
 
         if self.before:
@@ -1437,7 +1439,7 @@ class Pipeline:
 
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all lazy actions """
-        batch = self.dataset.create_batch(batch_index, *args, **kwargs)
+        batch = self._dataset.create_batch(batch_index, *args, **kwargs)
         batch_res = self.execute_for(batch)
         return batch_res
 
