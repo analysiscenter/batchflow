@@ -881,11 +881,8 @@ class Results():
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
 
-        if iterations is None:
-            if self.research.n_iters is not None:
-                iterations = list(range(self.research.n_iters))
-            else:
-                iterations = None
+        if iterations is None and self.research.n_iters is not None:
+            iterations = list(range(self.research.n_iters))
 
         self.names = self._get_list(names)
         self.repetitions = self._get_list(repetitions)
