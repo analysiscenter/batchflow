@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block
+from .layers import conv_block, combine
 from ..utils import unpack_args
 
 
@@ -374,8 +374,8 @@ class EncoderDecoder(TFModel):
                         # input[-3] is last encoder's input that has normally different shape
                         # so it might be connected to first decoder's output, that also has modified shape
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
-                        x = cls.combine([x, inputs[-i-3]], op=combine_op,
-                                        data_format=kwargs.get('data_format'))
+                        x = combine([x, inputs[-i-3]], op=combine_op,
+                                    data_format=kwargs.get('data_format'))
         return x
 
 

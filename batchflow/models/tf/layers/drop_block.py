@@ -75,7 +75,7 @@ def _dropblock(inputs, dropout_rate, block_size, seed, data_format):
 
     if isinstance(block_size, int):
         block_size = [block_size] * spatial_ndim
-        block_size_tf = tf.convert_to_tensor(block_size)
+        block_size_tf = tf.convert_to_tensor(block_size, dtype=tf.int32)
     elif isinstance(block_size, tuple):
         if len(block_size) != spatial_ndim:
             raise ValueError('Length of `block_size` should be the same as spatial dimensions of input.')
@@ -115,7 +115,7 @@ def _dropblock(inputs, dropout_rate, block_size, seed, data_format):
     # Using max pool operation to extend sampled points to blocks of desired size
     pool_size = block_size
     strides = [1] * spatial_ndim
-    mask = MaxPooling(pool_size=pool_size, strides=strides, data_format=data_format, padding='same')(mask)
+    mask = MaxPooling(pool_size=pool_size, pool_strides=strides, data_format=data_format, padding='same')(mask)
     mask = tf.cast(1 - mask, tf.float32)
     output = tf.multiply(inputs, mask)
 
