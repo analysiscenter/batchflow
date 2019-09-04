@@ -15,11 +15,11 @@ def add_as_function(cls):
 
     def func(inputs, *args, **kwargs):
         # We also want to use `training` or `is_training` indicators as arguments for call
-        call_args = []
+        call_args = [inputs]
         training = kwargs.get('training') or kwargs.get('is_training')
-        if training is not None:
-            call_args = [training]
-        return cls(*args, **kwargs)(inputs, *call_args)
+        if (training is not None) and (len(inspect.getfullargspec(cls.__call__)[0]) == 3):
+            call_args.append(training)
+        return cls(*args, **kwargs)(*call_args)
 
     module = inspect.getmodule(inspect.stack()[1][0])
     setattr(module, func_name, func)
