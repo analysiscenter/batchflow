@@ -4,6 +4,7 @@ import tensorflow as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
 from .layer import Layer, add_as_function
+from .conv import Conv
 
 
 
@@ -56,10 +57,12 @@ class Combine(Layer):
 
     Parameters
     ----------
-    op : str {'concat', 'sum', 'conv'}
+    op : str
+        Which operation to use for combining tensors.
         If 'concat', inputs are concated along channels axis.
-        If 'sum', inputs are summed.
-        If 'softsum', every tensor is passed through 1x1 convolution in order to have
+        If one of 'avg', 'mean', takes average of inputs.
+        If one of 'sum', 'add', inputs are summed.
+        If one of 'softsum', 'convsum', every tensor is passed through 1x1 convolution in order to have
         the same number of channels as the first tensor, and then summed.
 
     data_format : str {'channels_last', 'channels_first'}
@@ -83,14 +86,11 @@ class Combine(Layer):
             if self.op in ['sum', 'add']:
                 return tf.add_n(inputs, name='combine-sum')
             if self.op in ['softsum', 'convsum']:
-                from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
                 filters = inputs[0].get_shape().as_list()[axis]
-
                 for i in range(1, len(inputs)):
-                    inputs[i] = ConvBlock(layout='c', filters=filters, kernel_size=1,
-                                          name='conv', **self.kwargs)(inputs[i])
+                    inputs[i] = Conv(filters=filters, kernel_size=1, name='combine-conv', **self.kwargs)(inputs[i])
                 return tf.add_n(inputs, name='combine-softsum')
-        raise ValueError('Unknown operation {}.'.format(self.op))
+            raise ValueError('Unknown operation {}.'.format(self.op))
 
 
 
@@ -103,15 +103,17 @@ class BaseDropout(Layer):
         If float or Tensor, then fraction of the input units to drop.
         If callable, then function to be called on `global_step`. Must return tensor of size 1.
 
-    multisample: bool, number, sequence
-        If evaluates to True, then batch is split into multiple parts,
-        dropout applied to each of them separately and then parts are concatenated back.
+    multisample: bool, number, sequence, tf.Tensor
+        If evaluates to True, then either multiple dropout applied to the whole batch and then averaged, or
+        batch is split into multiple parts, each passed through dropout and then concatenated back.
 
-        If True, then batch is split evenly into two parts.
-        If integer, then different dropouts are applied to whole batch, then averaged.
+        If True, then two different dropouts are applied to whole batch.
+        If integer, then that number of different dropouts are applied to whole batch.
         If float, then batch is split into parts of `multisample` and `1 - multisample` sizes.
         If sequence of ints, then batch is split into parts of given sizes. Must sum up to the batch size.
         If sequence of floats, then each float means proportion of sizes in batch and must sum up to 1.
+        If Tensor, then it is used as the second parameter for splitting function, see
+        `tf.split <https://www.tensorflow.org/api_docs/python/tf/split>`_,.
     """
     def __init__(self, dropout_rate, multisample=False, global_step=None, **kwargs):
         self.dropout_rate = dropout_rate
