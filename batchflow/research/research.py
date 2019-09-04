@@ -749,8 +749,12 @@ class Results():
         files = OrderedDict(sorted(files.items(), key=lambda x: x[1]))
         result = []
         start = 0
+        iterations = [item for item in iterations if item is not None]
         for name, end in files.items():
-            intersection = pd.np.intersect1d(iterations, pd.np.arange(start, end))
+            if len(iterations) == 0:
+                intersection = pd.np.arange(start, end)
+            else:
+                intersection = pd.np.intersect1d(iterations, pd.np.arange(start, end))
             if len(intersection) > 0:
                 result.append((name, intersection))
             start = end
@@ -878,7 +882,10 @@ class Results():
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
 
         if iterations is None:
-            iterations = list(range(self.research.n_iters))
+            if self.research.n_iters is not None:
+                iterations = list(range(self.research.n_iters))
+            else:
+                iterations = None
 
         self.names = self._get_list(names)
         self.repetitions = self._get_list(repetitions)
