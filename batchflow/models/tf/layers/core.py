@@ -4,7 +4,6 @@ import tensorflow as tf
 import tensorflow.keras.layers as K #pylint: disable=import-error
 
 from .layer import Layer, add_as_function
-from .conv import Conv
 
 
 
@@ -86,9 +85,11 @@ class Combine(Layer):
             if self.op in ['sum', 'add']:
                 return tf.add_n(inputs, name='combine-sum')
             if self.op in ['softsum', 'convsum']:
+                from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
                 filters = inputs[0].get_shape().as_list()[axis]
+                args = {'layout': 'c', 'filters': filters, 'kernel_size': 1, **self.kwargs}
                 for i in range(1, len(inputs)):
-                    inputs[i] = Conv(filters=filters, kernel_size=1, name='combine-conv', **self.kwargs)(inputs[i])
+                    inputs[i] = ConvBlock(name='combine-conv', **args)(inputs[i])
                 return tf.add_n(inputs, name='combine-softsum')
             raise ValueError('Unknown operation {}.'.format(self.op))
 
@@ -125,7 +126,7 @@ class BaseDropout(Layer):
         if callable(self.dropout_rate):
             step = tf.cast(self.global_step, dtype=tf.float32)
             self.dropout_rate = self.dropout_rate(step)
-        d_layer = self.LAYER(rate=self.dropout_rate, **self.kwargs)
+        d_layer = self.LAYER(rate=self.dropout_rate)
 
         if self.multisample is not False:
             if self.multisample is True:
@@ -135,7 +136,7 @@ class BaseDropout(Layer):
 
             if isinstance(self.multisample, int): # dropout to the whole batch, then average
                 dropped = [d_layer(inputs, training) for _ in range(self.multisample)]
-                output = Combine(op='avg')(dropped)
+                output = Combine(op='avg', **self.kwargs)(dropped)
             else: # split batch into separate-dropout branches
                 if isinstance(self.multisample, (tuple, list)):
                     if all([isinstance(item, int) for item in self.multisample]):
