@@ -154,8 +154,11 @@ class EncoderDecoder(TFModel):
 
         with tf.variable_scope(name):
             # Encoder: transition down
-            encoder_args = {**kwargs, **encoder}
-            encoder_outputs = cls.encoder(inputs, name='encoder', **encoder_args)
+            if encoder is not None:
+                encoder_args = {**kwargs, **encoder}
+                encoder_outputs = cls.encoder(inputs, name='encoder', **encoder_args)
+            else:
+                encoder_outputs = [inputs]
             x = encoder_outputs[-1]
 
             # Bottleneck: working with compressed representation via multiple steps of processing
@@ -165,12 +168,12 @@ class EncoderDecoder(TFModel):
                 for i, embedding in enumerate(embeddings):
                     embedding_args = {**kwargs, **embedding}
                     x = cls.embedding(x, name='embedding-'+str(i), **embedding_args)
-
             encoder_outputs.append(x)
 
             # Decoder: transition up
-            decoder_args = {**kwargs, **decoder}
-            x = cls.decoder(encoder_outputs, name='decoder', **decoder_args)
+            if decoder is not None:
+                decoder_args = {**kwargs, **decoder}
+                x = cls.decoder(encoder_outputs, name='decoder', **decoder_args)
         return x
 
     @classmethod
@@ -374,31 +377,29 @@ class EncoderDecoder(TFModel):
                     if factor[i] == 1:
                         continue
 
-                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}  # enforce priority of subkeys
-                    upsample_args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
+                    # Make all the args
+                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
+                    upsample_args = {'factor': factor[i],
+                                     **kwargs, **upsample, **unpack_args(upsample, i, steps)}
+                    combine_args = {'op': args.get('combine_op'),
+                                    'data_format': args.get('data_format'),
+                                    **(skip if isinstance(skip, dict) else {})}
 
-                    if order == 'ub':
+                    if order == 'ub': # upsample -> block
                         if upsample.get('layout') is not None:
-                            x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **upsample_args)
-                        x = base_block(x, name='post', **args)
-                    elif order == 'bu':
-                        x = base_block(x, name='post', **args)
+                            x = cls.upsample(x, name='upsample', **upsample_args)
+                        x = base_block(x, name='block-', **args)
+                    elif order == 'bu': # block -> upsample
+                        x = base_block(x, name='block', **args)
                         if upsample.get('layout') is not None:
-                            x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **upsample_args)
+                            x = cls.upsample(x, name='upsample', **upsample_args)
                     else:
                         raise ValueError('Unknown order, use one of {"ub", "bu"}')
 
-                    # Combine it with stored encoding of the ~same shape
+                    # Combine result with the stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
-                        combine_op = args.get('combine_op')
-                        # inputs[-1] is embedding output and decoder's input, inputs[-2] is last encoder's output,
-                        # they both have same shape, if connection between them is needed,
-                        # it can be incorporated in embedding
-                        # input[-3] is last encoder's input that has normally different shape
-                        # so it might be connected to first decoder's output, that also has modified shape
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
-                        x = combine([x, inputs[-i-3]], op=combine_op,
-                                    data_format=kwargs.get('data_format'))
+                        x = combine([x, inputs[-i-3]], **combine_args)
         return x
 
 
