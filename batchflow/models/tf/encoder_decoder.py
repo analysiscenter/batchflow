@@ -58,8 +58,10 @@ class EncoderDecoder(TFModel):
                 If int, the total upsampling factor for all stages combined.
                 If list, upsampling factors for each stage.
 
-            skip : bool
-                Whether to concatenate upsampled tensor with stored pre-downsample encoding.
+            skip : bool, dict
+                If bool, then whether to combine upsampled tensor with stored pre-downsample encoding.
+                If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
+                see :class:`~.layers.Combine`.
 
             order : sequence
                 Determines order of applying layers: upsampling->block or block->upsampling.
@@ -72,6 +74,8 @@ class EncoderDecoder(TFModel):
 
                 base : callable
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
+                combine_op : str
+                    Operation for combining tensors, see :class:`~.layers.Combine`.
                 other args : dict
                     Parameters for the base block.
 
@@ -221,6 +225,11 @@ class EncoderDecoder(TFModel):
         blocks : dict
             Parameters for tensor processing before downsampling.
 
+            base : callable
+                Tensor processing function. Default is :func:`~.layers.conv_block`.
+            other args : dict
+                Parameters for the base block.
+
         downsample : dict
             Parameters for downsampling.
 
@@ -246,17 +255,18 @@ class EncoderDecoder(TFModel):
 
                 for i in range(steps):
                     with tf.variable_scope('encoder-'+str(i)):
-                        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of keys
+                        # Make all the args
+                        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
                         downsample_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
 
                         if order in ['bd', 'bp']: # block -> downsample
-                            x = base_block(x, name='pre', **args)
+                            x = base_block(x, name='block', **args)
                             if downsample.get('layout') is not None:
-                                x = conv_block(x, name='downsample-{}'.format(i), **downsample_args)
+                                x = conv_block(x, name='downsample', **downsample_args)
                         elif order in ['db', 'pb']: # downsample -> block
                             if downsample.get('layout') is not None:
-                                x = conv_block(x, name='downsample-{}'.format(i), **downsample_args)
-                            x = base_block(x, name='pre', **args)
+                                x = conv_block(x, name='downsample', **downsample_args)
+                            x = base_block(x, name='block', **args)
                         else:
                             raise ValueError('Unknown order, use one of {"bd", "db"}')
                         encoder_outputs.append(x)
@@ -293,8 +303,8 @@ class EncoderDecoder(TFModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
-            Input tensor.
+        inputs : sequence
+            Input tensors.
 
         name : str
             Scope name.
@@ -318,8 +328,21 @@ class EncoderDecoder(TFModel):
         blocks : dict
             Parameters for post-processing blocks.
 
+            base : callable
+                Tensor processing function. Default is :func:`~.layers.conv_block`.
+            combine_op : str
+                Operation for combining tensors, see :class:`~.layers.Combine`.
+            other args : dict
+                Parameters for the base block.
+
         kwargs : dict
             Parameters for ``upsample`` method.
+
+        Notes
+        -----
+        Inputs must be a sequence of encodings, where the last item (inputs[-1]) and
+        the second last (inputs[-2]) have the same spatial shape and thus not used as skip-connections.
+        inputs[-3] has bigger spatial shape and can be used as skip-connection to the first upsampled output.
 
         Returns
         -------
