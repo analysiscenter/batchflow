@@ -3,7 +3,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from pandas import ewma
+try:
+    from pandas import ewma
+except ImportError:
+    pass
 
 
 plt.style.use('seaborn-poster')
@@ -197,7 +200,7 @@ def plot_weights(model_names, model_weights, model_params, colors, num_axis, num
     for names, weights, num_params in separate(model_names, model_weights, model_params, bottleneck, num_blocks):
         for name, weight, num in zip(names, weights, num_params):
 
-            if name != 'shortcut' and name != 0:
+            if name not in ('shortcut', 0):
                 name = dict_names[bottle][name]
 
             subplot[num_plot].set_title('Number of parameners={}\n{}'.format(num, name), fontsize=18)
@@ -331,3 +334,52 @@ def calculate_accuracy(batch, pipeline, predict_name):
     top1 = np.mean(np.argmax(predict[-1], axis=1) == batch.labels)
     top3 = np.mean([1 if batch.labels[i] in pred else 0 for i, pred in enumerate(predict_top3)])
     return top1, top3
+
+def plot_images_predictions(images, targets, pred_proba, in_row=5, class_names=None, channels='first', **kwargs):
+    """ Plot images with true label and predicted class proba
+
+    Parameters
+    ----------
+    images : np.array
+        batch of images
+
+    targets : array-like
+        images labels
+
+    pred_proba: np.array with the shape (n_images, n_classes)
+        predicted probabilities for each class
+
+    in_row: int
+        number of images to plot in a row (default 5)
+
+    class_names: list of strings
+        class names
+
+    channels: string
+        images channel format (default 'first')
+
+    kwargs : dict
+            Additional keyword arguments for plt.subplots().
+    """
+    n_items = len(images)
+
+    if class_names is None:
+        class_names = [str(i) for i in range(pred_proba.shape[1])]
+
+    if channels == 'first':
+        images = np.transpose(images, (0, 2, 3, 1)).astype(int)
+
+    n_rows = (n_items // in_row) + 1
+    fig, ax = plt.subplots(n_rows, in_row, **kwargs)
+    ax = ax.flatten()
+    for i in range(n_items):
+        ax[i].imshow(images[i])
+        class_pred = np.argmax(pred_proba, axis=1)[i]
+        class_proba = pred_proba[i][class_pred]
+        pred_class_name = class_names[class_pred]
+        true_class_name = class_names[targets[i]]
+        ax[i].title.set_text('True: {0}\nPred: {1}, p = {2:.2f}'.format(true_class_name, pred_class_name, class_proba))
+        ax[i].grid(b=None)
+
+    for i in range(n_items, n_rows * in_row):
+        fig.delaxes(ax[i])

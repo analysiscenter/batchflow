@@ -541,6 +541,7 @@ class TorchModel(BaseModel):
         if isinstance(config[name], nn.Module):
             block = config[name]
         elif isinstance(config[name], dict):
+            inputs = config[name].pop('inputs', None) or inputs
             block = getattr(self, name)(inputs=inputs, **{**config['common'], **config[name]})
         else:
             raise TypeError('block can be configured as a Module or a dict with parameters')
