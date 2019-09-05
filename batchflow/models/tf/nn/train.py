@@ -48,7 +48,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, m
     A scalar `Tensor` of the same type as `learning_rate`. The cyclic
     learning rate.
     """
-    with ops.name_scope_v2(name or "CyclicLearningRate") as name:
+    with ops.name_scope_v2(name or "CyclicLearningRate"):
         learning_rate = ops.convert_to_tensor(learning_rate, name="learning_rate")
         dtype = learning_rate.dtype
         global_step = math_ops.cast(global_step, dtype)
