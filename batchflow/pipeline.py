@@ -11,6 +11,7 @@ import numpy as np
 
 from .base import Baseset
 from .config import Config
+from .batch import Batch
 from .decorators import deprecated
 from .exceptions import SkipBatchException, EmptyBatchSequence
 from .named_expr import NamedExpression, V, eval_expr
@@ -126,18 +127,18 @@ class Pipeline:
     def concat(cls, pipe1, pipe2):
         """ Create a new pipeline concatenating two given pipelines """
         # pylint: disable=protected-access
-        if pipe1.dataset != pipe2.dataset and pipe1._dataset is not None and pipe2._dataset is not None:
-            raise ValueError("Cannot add pipelines with different datasets")
-
         new_p1 = cls.from_pipeline(pipe1)
         new_p1._actions += pipe2._actions[:]
         new_p1.config.update(pipe2.config)
         new_p1.variables += pipe2.variables
         new_p1.models += pipe2.models
-        new_p1.dataset = new_p1.dataset or pipe2.dataset
+        if new_p1.dataset is None:
+            new_p1.dataset = pipe2.dataset
         new_p1._lazy_run = new_p1._lazy_run or pipe2._lazy_run
         new_p1.before = pipe1.before.concat(pipe1.before, pipe2.before)
+        new_p1.before.pipeline = new_p1
         new_p1.after = pipe1.after.concat(pipe1.after, pipe2.after)
+        new_p1.after.pipeline = new_p1
         return new_p1
 
     def get_last_action_proba(self):
@@ -184,11 +185,9 @@ class Pipeline:
             return new_p
         raise TypeError("Pipeline might take only Dataset or Config. Use as pipeline << dataset or pipeine << config")
 
-    def _is_batch_method(self, name, namespace=None):
-        if namespace is None and self._dataset is not None:
-            namespace = self._dataset.batch_class
-        else:
-            return True
+    def _is_batch_method(self, name, namespace=Batch):
+        if self._dataset is not None:
+            namespace = namespace or self._dataset.batch_class
         if hasattr(namespace, name) and callable(getattr(namespace, name)):
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
@@ -203,9 +202,11 @@ class Pipeline:
         if isinstance(self.dataset, NamedExpression):
             if self._dataset is not None:
                 common_namespaces.append(self._dataset)
+        else:
+            common_namespaces.append(self.dataset)
         return common_namespaces + self._namespaces
 
-    def is_method_from_ns(self, name):
+    def _is_method_from_ns(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)
 
     def get_method(self, name):
@@ -220,10 +221,10 @@ class Pipeline:
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
             raise AttributeError('Unknown magic method: %s' % name)
-        if self.is_method_from_ns(name):
-            return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         if self._is_batch_method(name):
             return partial(self._add_action, name)
+        if self._is_method_from_ns(name):
+            return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @property
