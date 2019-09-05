@@ -15,7 +15,7 @@ from ..utils import unpack_fn_from_config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
 from .losses import softmax_cross_entropy, dice
-from .nn import piecewise_constant
+from .nn import piecewise_constant, cyclic_learning_rate
 
 
 LOSSES = {
@@ -39,6 +39,7 @@ DECAYS = {
     'naturalexp': tf.train.natural_exp_decay,
     'const': piecewise_constant,
     'poly': tf.train.polynomial_decay,
+    'cycle': cyclic_learning_rate,
 }
 
 
