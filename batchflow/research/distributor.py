@@ -9,7 +9,7 @@ import psutil
 
 class Distributor:
     """ Distributor of jobs between workers. """
-    def __init__(self, workers, gpu, worker_class=None, timeout=5, trials=3):
+    def __init__(self, workers, devices, worker_class=None, timeout=5, trials=3):
         """
         Parameters
         ----------
@@ -19,7 +19,7 @@ class Distributor:
         """
         self.workers = workers
         self.worker_class = worker_class
-        self.gpu = gpu
+        self.devices = devices
         self.timeout = timeout
         self.trials = trials
         self.logfile = None
@@ -48,16 +48,6 @@ class Distributor:
         """ Write error message into log. """
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.error(obj, exc_info=True)
-
-    def _get_worker_gpu(self, n_workers, index):
-        if len(self.gpu) == 1:
-            gpu = [self.gpu[0]]
-        else:
-            length = len(self.gpu) // n_workers
-            start = index * length
-            end = start + length
-            gpu = self.gpu[start:end]
-        return gpu
 
     def run(self, jobs, dirname, n_jobs, n_iters, logfile=None, errorfile=None, bar=False, *args, **kwargs):
         """ Run disributor and workers.
@@ -93,7 +83,7 @@ class Distributor:
 
         if isinstance(self.workers, int):
             workers = [self.worker_class(
-                gpu=self._get_worker_gpu(self.workers, i),
+                devices=devices[i],
                 worker_name=i,
                 timeout=self.timeout,
                 trials=self.trials,
@@ -102,7 +92,7 @@ class Distributor:
                        for i in range(self.workers)]
         else:
             workers = [
-                self.worker_class(gpu=self._get_worker_gpu(len(self.workers), i), worker_name=i, config=config,
+                self.worker_class(devices=devices[i], worker_name=i, config=config,
                                   timeout=self.timeout, trials=self.trials, *args, **kwargs)
                 for i, config in enumerate(self.workers)
             ]
@@ -180,7 +170,7 @@ class Worker:
     Worker get queue of jobs, pop one job and execute it in subprocess. That subprocess
     call init, run_job and post class methods.
     """
-    def __init__(self, gpu, worker_name=None, logfile=None, errorfile=None,
+    def __init__(self, devices, worker_name=None, logfile=None, errorfile=None,
                  config=None, timeout=5, trials=2, *args, **kwargs):
         """
         Parameters
@@ -200,10 +190,9 @@ class Worker:
         self.worker_config = config or dict()
         self.args = args
         self.kwargs = kwargs
-        self.gpu = gpu
+        self.devices = devices
         self.timeout = timeout
         self.trials = trials
-        self.gpu_configs = None
         self.finished_iterations = None
         self.queue = None
         self.feedback_queue = None
@@ -259,11 +248,7 @@ class Worker:
         results : multiprocessing.Queue
             queue for feedback
         """
-        _gpu = 'default' if len(self.gpu) == 0 else self.gpu
-        self.log_info('Start {} [id:{}] (gpu: {})'.format(self.name, os.getpid(), _gpu), filename=self.logfile)
-
-        if len(self.gpu) > 0:
-            os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(gpu) for gpu in self.gpu])
+        self.log_info('Start {} [id:{}] (devices: {})'.format(self.name, os.getpid(), self.devices), filename=self.logfile)
 
         try:
             job = queue.get()
@@ -279,8 +264,8 @@ class Worker:
                         sub_queue.put(job)
                         feedback_queue = mp.JoinableQueue()
 
-                        worker = mp.Process(target=self._run_job, args=(sub_queue, feedback_queue, self.name, trial))
-                        worker.start()
+                        task = mp.Process(target=self._run_job, args=(sub_queue, feedback_queue, trial))
+                        task.start()
                         pid = feedback_queue.get()
                         silence = 0
                         default_signal = Signal(self.name, job[0], 0, job[1].n_iters, trial, False, None)
@@ -324,11 +309,10 @@ class Worker:
             queue.task_done()
 
 
-    def _run_job(self, queue, feedback_queue, worker, trial):
+    def _run_job(self, queue, feedback_queue, trial):
         exception = None
         try:
             self.feedback_queue = feedback_queue
-            self.worker = worker
             self.trial = trial
 
             feedback_queue.put(os.getpid())
@@ -346,7 +330,7 @@ class Worker:
             self.log_error(exception, filename=self.errorfile)
         self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.name),
                       filename=self.logfile)
-        signal = Signal(self.worker, self.job[0], self.finished_iterations, self.job[1].n_iters,
+        signal = Signal(self.name, self.job[0], self.finished_iterations, self.job[1].n_iters,
                         self.trial, True, [exception]*len(self.job[1].experiments))
         self.feedback_queue.put(signal)
         queue.task_done()

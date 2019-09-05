@@ -29,7 +29,7 @@ class Research:
         self.n_reps = 1
         self.name = 'research'
         self.worker_class = PipelineWorker
-        self.gpu = None
+        self.devices = None
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
@@ -284,7 +284,7 @@ class Research:
             raise ValueError('At least one pipeline must have dataset to perform cross-validation')
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
-            bar=False, gpu=None, worker_class=None, timeout=5, trials=2):
+            bar=False, devices=None, worker_class=None, timeout=5, trials=2):
 
         """ Run research.
 
@@ -318,8 +318,8 @@ class Research:
         bar : bool or callable
             Whether to show a progress bar.
             If callable, it must have the same signature as `tqdm`.
-        gpu : str, list or None
-            all gpu devices available for the research.
+        devices : str, list or None
+            all devices available for the research.
 
             Must be of length 1 or be divisible
             by the number of workers.
@@ -340,16 +340,16 @@ class Research:
         At each iteration all pipelines and functions will be executed in the order in which were added.
         """
         if self.loaded:
-            print("Starting loaded research. All parameters passed to run except name, bar and gpu are ignored.\n",
-                  "If gpu is not provided it will be inherited")
-            if gpu:
-                self.gpu = self._get_gpu_list(gpu)
+            print("Starting loaded research. All parameters passed to run except name, bar and `devices` are ignored.\n",
+                  "If `devices` is not provided it will be inherited")
+            if devices is not None:
+                self.devices = self._get_devices(devices)
         else:
             self.n_reps = n_reps
             self.n_iters = n_iters
             self.workers = workers
             self.branches = branches
-            self.gpu = self._get_gpu_list(gpu)
+            self.devices = self._get_devices(devices)
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
             self.trials = trials
@@ -367,13 +367,13 @@ class Research:
         if self.grid_config is None:
             self.grid_config = Grid(Option('_dummy', [None]))
 
-        if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
-            raise ValueError("Number of gpus must be 1 or be divisible \
-                             by the number of workers but {} was given".format(len(self.gpu)))
+        # if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
+        #     raise ValueError("Number of gpus must be 1 or be divisible \
+        #                      by the number of workers but {} was given".format(len(self.gpu)))
 
-        if len(self.gpu) > 1 and len(self.gpu) // n_workers > 1 and (len(self.gpu) // n_workers) % n_branches != 0:
-            raise ValueError("Number of gpus / n_workers must be 1 \
-                             or be divisible by the number of branches but {} was given".format(len(self.gpu)))
+        # if len(self.gpu) > 1 and len(self.gpu) // n_workers > 1 and (len(self.gpu) // n_workers) % n_branches != 0:
+        #     raise ValueError("Number of gpus / n_workers must be 1 \
+        #                      or be divisible by the number of branches but {} was given".format(len(self.gpu)))
 
         self._folder_exists(self.name)
 
@@ -383,7 +383,7 @@ class Research:
 
         jobs, n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
 
-        distr = Distributor(self.workers, self.gpu, self.worker_class, self.timeout, self.trials)
+        distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
         distr.run(jobs, dirname=self.name, n_jobs=n_jobs,
                   n_iters=self.n_iters, bar=self.bar)
         return self
@@ -394,14 +394,14 @@ class Research:
     def __setstate__(self, d):
         self.__dict__.update(d)
 
-    def _get_gpu_list(self, gpu):
-        if gpu is None:
-            gpu = []
-        elif isinstance(gpu, str):
-            gpu = [int(item) for item in gpu.split(',')]
+    def _get_devices(self, devices):
+        if devices is None:
+            devices = []
+        elif isinstance(devices, str):
+            devices = [int(item) for item in devices.split(',')]
         else:
-            gpu = gpu
-        return gpu
+            devices = devices
+        return devices
 
     @staticmethod
     def _folder_exists(name):

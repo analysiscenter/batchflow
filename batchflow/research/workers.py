@@ -12,12 +12,9 @@ class PipelineWorker(Worker):
         i, job = self.job
         n_branches = len(job.configs)
 
-        if len(self.gpu) <= 1:
-            self.gpu_configs = [dict(device='gpu:0') for i in range(n_branches)]
-        else:
-            self.gpu_configs = [dict(device='gpu:'+str(i)) for i in range(n_branches)]
+        self.device_configs = [dict(device=str(self.devices[i])) for i in range(n_branches)]
 
-        job.init(self.worker_config, self.gpu_configs)
+        job.init(self.worker_config, self.device_configs)
 
         description = job.get_description()
         self.log_info('Job {} has the following configs:\n{}'.format(i, description), filename=self.logfile)
