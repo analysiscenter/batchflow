@@ -25,8 +25,12 @@ class EncoderDecoder(TFModel):
             num_stages : int
                 Number of downsampling stages.
 
-            order : sequence
-                Determines order of applying layers: block->downsampling or downsampling->block.
+            order : str, sequence of str
+                Determines order of applying layers.
+                If str, then each letter stands for operation: 'b' for block, 'd'/'p' for downsampling.
+                If sequence, than the first letter of each item stands for operation:
+                'b' for block, 'd' for downsampling.
+                For example, `'bd'` allows to use block->downsampling.
 
             downsample : dict, optional
                 Parameters for downsampling (see :func:`~.layers.conv_block`)
@@ -59,12 +63,16 @@ class EncoderDecoder(TFModel):
                 If list, upsampling factors for each stage.
 
             skip : bool, dict
-                If bool, then whether to combine upsampled tensor with stored pre-downsample encoding.
+                If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by
+                using `combine_op`, that can be specified for each of blocks separately.
                 If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
                 see :class:`~.layers.Combine`.
 
-            order : sequence
-                Determines order of applying layers: upsampling->block or block->upsampling.
+            order : str, sequence of str
+                Determines order of applying layers.
+                If str, then each letter stands for operation: 'b' for block, 'u' for upsampling.
+                If sequence, than the first letter of each item stands for operation: 'b' for block, 'u' for upsampling.
+                For example, `'ub'` allows to use upsampling->block.
 
             upsample : dict
                 Parameters for upsampling (see :func:`~.layers.upsample`).
@@ -74,8 +82,9 @@ class EncoderDecoder(TFModel):
 
                 base : callable
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
-                combine_op : str
-                    Operation for combining tensors, see :class:`~.layers.Combine`.
+                combine_op : str, dict
+                    If str, then operation for combining tensors, see :class:`~.layers.Combine`.
+                    If dict, then parameters for combining tensors, see :class:`~.layers.Combine`.
                 other args : dict
                     Parameters for the base block.
 
@@ -222,8 +231,11 @@ class EncoderDecoder(TFModel):
         num_stages : int
             Number of downsampling stages.
 
-        order : sequence
-            Determines order of applying layers: block->downsampling or downsampling->block.
+        order : str, sequence of str
+            Determines order of applying layers.
+            If str, then each letter stands for operation: 'b' for block, 'd'/'p' for downsampling.
+            If sequence, than the first letter of each item stands for operation: 'b' for block, 'd' for downsampling.
+            For example, `'bd'` allows to use block->downsampling.
 
         blocks : dict
             Parameters for tensor processing before downsampling.
@@ -262,16 +274,14 @@ class EncoderDecoder(TFModel):
                         args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
                         downsample_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
 
-                        if order in ['bd', 'bp']: # block -> downsample
-                            x = base_block(x, name='block', **args)
-                            if downsample.get('layout') is not None:
-                                x = conv_block(x, name='downsample', **downsample_args)
-                        elif order in ['db', 'pb']: # downsample -> block
-                            if downsample.get('layout') is not None:
-                                x = conv_block(x, name='downsample', **downsample_args)
-                            x = base_block(x, name='block', **args)
-                        else:
-                            raise ValueError('Unknown order {}, use one of ("bd", "db")'.format(order))
+                        for letter in order:
+                            if letter == 'b':
+                                x = base_block(x, name='block', **args)
+                            elif letter in ['d', 'p']:
+                                if downsample.get('layout') is not None:
+                                    x = conv_block(x, name='downsample', **downsample_args)
+                            else:
+                                raise ValueError('Unknown letter in order {}, use one of "b", "d", "p"'.format(letter))
                         encoder_outputs.append(x)
         return encoder_outputs
 
@@ -317,13 +327,19 @@ class EncoderDecoder(TFModel):
 
         factor : int or list of ints
             If int, the total upsampling factor for all stages combined.
-            If list, upsampling factors for each stage.s, then each entry is increase of size on i-th upsampling stage.
+            If list, upsampling factors for each stages, then each entry is increase of size on i-th upsampling stage.
 
-        skip : bool
-            Whether to concatenate upsampled tensor with stored pre-downsample encoding.
+        skip : bool, dict
+            If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by using `combine_op`,
+            that can be specified for each of blocks separately..
+            If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
+            see :class:`~.layers.Combine`.
 
-        order : sequence
-            Determines order of applying layers: upsampling->block or block->upsampling.
+        order : str, sequence of str
+            Determines order of applying layers.
+            If str, then each letter stands for operation: 'b' for block, 'u' for upsampling.
+            If sequence, than the first letter of each item stands for operation: 'b' for block, 'u' for upsampling.
+            For example, `'ub'` allows to use upsampling->block.
 
         upsample : dict
             Parameters for upsampling.
@@ -333,8 +349,9 @@ class EncoderDecoder(TFModel):
 
             base : callable
                 Tensor processing function. Default is :func:`~.layers.conv_block`.
-            combine_op : str
-                Operation for combining tensors, see :class:`~.layers.Combine`.
+            combine_op : str, dict
+                If str, then operation for combining tensors, see :class:`~.layers.Combine`.
+                If dict, then parameters for combining tensors, see :class:`~.layers.Combine`.
             other args : dict
                 Parameters for the base block.
 
@@ -343,9 +360,9 @@ class EncoderDecoder(TFModel):
 
         Notes
         -----
-        Inputs must be a sequence of encodings, where the last item (inputs[-1]) and
-        the second last (inputs[-2]) have the same spatial shape and thus not used as skip-connections.
-        inputs[-3] has bigger spatial shape and can be used as skip-connection to the first upsampled output.
+        Inputs must be a sequence of encodings, where the last item (`inputs[-1]`) and
+        the second last (`inputs[-2]`) have the same spatial shape and thus are not used as skip-connections.
+        `inputs[-3]` has bigger spatial shape and can be used as skip-connection to the first upsampled output.
 
         Returns
         -------
@@ -381,23 +398,24 @@ class EncoderDecoder(TFModel):
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
                     upsample_args = {'factor': factor[i],
                                      **kwargs, **upsample, **unpack_args(upsample, i, steps)}
-                    combine_args = {'op': args.get('combine_op'),
+
+                    combine_op = args.get('combine_op')
+                    combine_args = {'op': combine_op if isinstance(combine_op, str) else '',
                                     'data_format': args.get('data_format'),
+                                    **(combine_op if isinstance(combine_op, dict) else {}),
                                     **(skip if isinstance(skip, dict) else {})}
 
-                    if order == 'ub': # upsample -> block
-                        if upsample.get('layout') is not None:
-                            x = cls.upsample(x, name='upsample', **upsample_args)
-                        x = base_block(x, name='block-', **args)
-                    elif order == 'bu': # block -> upsample
-                        x = base_block(x, name='block', **args)
-                        if upsample.get('layout') is not None:
-                            x = cls.upsample(x, name='upsample', **upsample_args)
-                    else:
-                        raise ValueError('Unknown order {}, use one of ("ub", "bu")'.format(order))
+                    for letter in order:
+                        if letter == 'b':
+                            x = base_block(x, name='block', **args)
+                        elif letter in ['u']:
+                            if upsample.get('layout') is not None:
+                                x = cls.upsample(x, name='upsample', **upsample_args)
+                        else:
+                            raise ValueError('Unknown letter in order {}, use one of ("b", "u")'.format(letter))
 
                     # Combine result with the stored encoding of the ~same shape
-                    if skip and (i < len(inputs)-2):
+                    if (skip or isinstance(skip, dict)) and (i < len(inputs)-2):
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
                         x = combine([x, inputs[-i-3]], **combine_args)
         return x
