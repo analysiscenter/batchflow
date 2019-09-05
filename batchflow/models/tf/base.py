@@ -327,7 +327,12 @@ class TFModel(BaseModel):
                 for device in self.devices:
                     with tf.device(device):
                         with tf.variable_scope(self.device_to_scope[device]):
+                            default_config = self.default_config()
+                            self.full_config = default_config + self.config
+                            self._make_inputs(config=self.full_config['inputs'],
+                                              data_format=self.full_config.get('common/data_format', 'channels_last'))
                             config = self.build_config()
+
                             self._full_config = config
                             self._build(config)
 
@@ -384,7 +389,7 @@ class TFModel(BaseModel):
                 return self.scope_to_device[device_scope]
         return None
 
-    def _make_inputs(self, names=None, config=None):
+    def _make_inputs(self, names=None, config=None, data_format='channels_last'):
         """ Create model input data from config provided
 
         In the config's inputs section it looks for ``names``, creates placeholders required, and
@@ -464,102 +469,100 @@ class TFModel(BaseModel):
                 an input tensor after transformations
         """
         # pylint:disable=too-many-statements
-        full_config = config
-        config = full_config.get('inputs')
+        with tf.variable_scope('inputs'):
+            device = self._get_current_device()
 
-        device = self._get_current_device()
+            names = names or []
+            missing_names = set(names) - set(config.keys())
+            if len(missing_names) > 0:
+                raise KeyError("Inputs should contain {} names".format(missing_names))
 
-        names = names or []
-        missing_names = set(names) - set(config.keys())
-        if len(missing_names) > 0:
-            raise KeyError("Inputs should contain {} names".format(missing_names))
+            placeholder_names = set(config.keys())
+            tensor_names = set(x.get('name') for x in config.values() if isinstance(x, dict) and x.get('name'))
+            wrong_names = placeholder_names & tensor_names
+            if len(wrong_names) > 0:
+                raise ValueError('Inputs contain duplicate names:', wrong_names)
 
-        placeholder_names = set(config.keys())
-        tensor_names = set(x.get('name') for x in config.values() if isinstance(x, dict) and x.get('name'))
-        wrong_names = placeholder_names & tensor_names
-        if len(wrong_names) > 0:
-            raise ValueError('Inputs contain duplicate names:', wrong_names)
+            # add default aliases
+            if 'labels' in config and 'targets' not in config:
+                config['targets'] = 'labels'
+            elif 'masks' in config and 'targets' not in config:
+                config['targets'] = 'masks'
+            # if targets is defined in the input dict, these implicit aliases will be overwritten.
 
-        # add default aliases
-        if 'labels' in config and 'targets' not in config:
-            config['targets'] = 'labels'
-        elif 'masks' in config and 'targets' not in config:
-            config['targets'] = 'masks'
-        # if targets is defined in the input dict, these implicit aliases will be overwritten.
+            param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
+            defaults = dict(data_format=data_format)
 
-        param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
-        defaults = dict(data_format=full_config.get('common/data_format', default='channels_last'))
+            placeholders = dict()
+            tensors = dict()
+            _inputs = dict()
+            for input_name, input_config in config.items():
+                if isinstance(input_config, str):
+                    continue
+                elif isinstance(input_config, (tuple, list)):
+                    input_config = list(input_config) + [None for _ in param_names]
+                    input_config = input_config[:len(param_names)]
+                    input_config = dict(zip(param_names, input_config))
+                    input_config = dict((k, v) for k, v in input_config.items() if v is not None)
+                input_config = {**defaults, **input_config}
 
-        placeholders = dict()
-        tensors = dict()
-        _inputs = dict()
-        for input_name, input_config in config.items():
-            if isinstance(input_config, str):
-                continue
-            elif isinstance(input_config, (tuple, list)):
-                input_config = list(input_config) + [None for _ in param_names]
-                input_config = input_config[:len(param_names)]
-                input_config = dict(zip(param_names, input_config))
-                input_config = dict((k, v) for k, v in input_config.items() if v is not None)
-            input_config = {**defaults, **input_config}
+                reshape = None
+                shape = input_config.get('shape')
+                if isinstance(shape, int):
+                    shape = (shape,)
+                if shape:
+                    input_config['shape'] = shape
+                    shape = [None] + list(shape)
 
-            reshape = None
-            shape = input_config.get('shape')
-            if isinstance(shape, int):
-                shape = (shape,)
-            if shape:
-                input_config['shape'] = shape
-                shape = [None] + list(shape)
+                _inputs[input_name] = dict(config=input_config)
+                self.store_to_attr('_inputs', _inputs)
 
-            _inputs[input_name] = dict(config=input_config)
+                if self.has_classes(input_name):
+                    dtype = input_config.get('dtype', tf.int64)
+                    shape = shape or (None,)
+                else:
+                    dtype = input_config.get('dtype', 'float')
+                tensor = tf.placeholder(dtype, shape, input_name)
+                placeholders[input_name] = tensor
+                self.store_to_attr(input_name, tensor, device)
+
+                if 'df' in input_config and 'data_format' not in input_config:
+                    input_config['data_format'] = input_config['df']
+                if input_config.get('data_format') == 'l':
+                    input_config['data_format'] = 'channels_last'
+                elif input_config.get('data_format') == 'f':
+                    input_config['data_format'] = 'channels_first'
+
+                _inputs[input_name] = dict(config=input_config)
+                self.store_to_attr('_inputs', _inputs)
+                tensor = self._make_transform(input_name, tensor, input_config)
+
+                if isinstance(reshape, (list, tuple)):
+                    tensor = tf.reshape(tensor, [-1] + list(reshape))
+
+                name = input_config.get('name')
+                if name is not None:
+                    tensor = tf.identity(tensor, name=name)
+                    self.store_to_attr(name, tensor, device)
+
+                tensors[input_name] = tensor
+
+                _inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
+                if name is not None:
+                    _inputs[name] = _inputs[input_name]
+                self.store_to_attr('_inputs', _inputs)
+
+            # check for aliases
+            for input_name, input_config in config.items():
+                if isinstance(input_config, str) and input_name not in _inputs:
+                    _inputs[input_name] = _inputs[input_config]
+                    tensors[input_name] = tensors[input_config]
+                    placeholders[input_name] = placeholders[input_config]
+                    tensor = tf.identity(tensors[input_name], name=input_name)
+                    self.store_to_attr(input_name, tensors[input_name], device)
+
             self.store_to_attr('_inputs', _inputs)
-
-            if self.has_classes(input_name):
-                dtype = input_config.get('dtype', tf.int64)
-                shape = shape or (None,)
-            else:
-                dtype = input_config.get('dtype', 'float')
-            tensor = tf.placeholder(dtype, shape, input_name)
-            placeholders[input_name] = tensor
-            self.store_to_attr(input_name, tensor, device)
-
-            if 'df' in input_config and 'data_format' not in input_config:
-                input_config['data_format'] = input_config['df']
-            if input_config.get('data_format') == 'l':
-                input_config['data_format'] = 'channels_last'
-            elif input_config.get('data_format') == 'f':
-                input_config['data_format'] = 'channels_first'
-
-            _inputs[input_name] = dict(config=input_config)
-            self.store_to_attr('_inputs', _inputs)
-            tensor = self._make_transform(input_name, tensor, input_config)
-
-            if isinstance(reshape, (list, tuple)):
-                tensor = tf.reshape(tensor, [-1] + list(reshape))
-
-            name = input_config.get('name')
-            if name is not None:
-                tensor = tf.identity(tensor, name=name)
-                self.store_to_attr(name, tensor, device)
-
-            tensors[input_name] = tensor
-
-            _inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
-            if name is not None:
-                _inputs[name] = _inputs[input_name]
-            self.store_to_attr('_inputs', _inputs)
-
-        # check for aliases
-        for input_name, input_config in config.items():
-            if isinstance(input_config, str) and input_name not in _inputs:
-                _inputs[input_name] = _inputs[input_config]
-                tensors[input_name] = tensors[input_config]
-                placeholders[input_name] = placeholders[input_config]
-                tensor = tf.identity(tensors[input_name], name=input_name)
-                self.store_to_attr(input_name, tensors[input_name], device)
-
-        self.store_to_attr('_inputs', _inputs)
-        self.store_to_attr('inputs', tensors)
+            self.store_to_attr('inputs', tensors)
         return placeholders, tensors
 
     def _make_transform(self, input_name, tensor, config):
@@ -1729,7 +1732,7 @@ class TFModel(BaseModel):
         config = {**config['common'], **_config}
         return config
 
-    def build_config(self, names=None):
+    def build_config(self, config=None, names=None):
         """ Define a model architecture configuration
 
         It takes just 2 steps:
@@ -1753,28 +1756,20 @@ class TFModel(BaseModel):
                 config['head']['num_classes'] = self.num_classes('targets')
                 return config
         """
-        config = self.default_config()
+        config = config or self.full_config
+        inputs = config.get('initial_block/inputs')
 
-        config = config + self.config
-
-        if config.get('inputs'):
-            with tf.variable_scope('inputs'):
-                self._make_inputs(names, config)
-            inputs = config.get('initial_block/inputs')
-
-            if isinstance(inputs, str):
-                if not config.get('common/data_format'):
-                    config['common/data_format'] = self.data_format(inputs)
-                config['initial_block/inputs'] = self.get_from_attr('inputs')[inputs]
-
-            elif isinstance(inputs, list):
-                config['initial_block/inputs'] = [self.get_from_attr('inputs')[name]
-                                                  for name in inputs]
-            else:
-                raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
+        if isinstance(inputs, str):
+            if not config.get('common/data_format'):
+                config['common/data_format'] = self.data_format(inputs)
+            config['initial_block/inputs'] = self.get_from_attr('inputs')[inputs]
+        elif isinstance(inputs, list):
+            config['initial_block/inputs'] = [self.get_from_attr('inputs')[name]
+                                              for name in inputs]
+        else:
+            raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
 
         config['head/targets'] = self.get_from_attr('targets')
-
         return config
 
     def _add_block(self, name, config, inputs):
