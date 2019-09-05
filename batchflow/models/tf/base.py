@@ -333,10 +333,7 @@ class TFModel(BaseModel):
                                               data_format=self.full_config.get('common/data_format', 'channels_last'))
                             config = self.build_config()
 
-                            self._full_config = config
                             self._build(config)
-
-                self.microbatch = config.get('microbatch')
 
                 if self.session is None:
                     self.create_session(config)
@@ -635,6 +632,8 @@ class TFModel(BaseModel):
         return tensor
 
     def _make_train_steps(self, config, init=True):
+        self.microbatch = config.get('microbatch')
+
         # Wrap parameters from config root as `train_steps`
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
