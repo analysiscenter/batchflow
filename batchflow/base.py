@@ -1,6 +1,8 @@
 """ Base class """
 import numpy as np
 
+from .decorators import deprecated
+
 
 class Baseset:
     """ Base class """
@@ -12,7 +14,7 @@ class Baseset:
         self.validation = None
 
         self._iter_params = None
-        self.reset_iter()
+        self.reset('iter')
 
     @staticmethod
     def build_index(index, *args, **kwargs):
@@ -159,11 +161,16 @@ class Baseset:
         """ Return iteration params with default values to start iteration from scratch """
         return dict(_stop_iter=False, _start_index=0, _order=None, _n_iters=0, _n_epochs=0, _random_state=None)
 
+    @deprecated("Use reset('iter').")
     def reset_iter(self):
+        self.reset('iter')
+
+    def reset(self, what='iter'):
         """ Clear all iteration metadata in order to start iterating from scratch """
-        self._iter_params = self.get_default_iter_params()
-        if isinstance(self.index, Baseset):
-            self.index.reset_iter()
+        if what == 'iter':
+            self._iter_params = self.get_default_iter_params()
+            if isinstance(self.index, Baseset):
+                self.index.reset('iter')
 
     def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
                   bar=False, bar_desc=None, *args, **kwargs):

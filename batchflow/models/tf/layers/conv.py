@@ -1,199 +1,223 @@
 """ Contains convolutional layers """
+from functools import partial
 import tensorflow as tf
+import tensorflow.keras.layers as K #pylint: disable=import-error
 
-CONV_LAYERS = {
-    1: tf.layers.conv1d,
-    2: tf.layers.conv2d,
-    3: tf.layers.conv3d
-}
+from .layer import Layer, add_as_function
 
-def conv(inputs, *args, **kwargs):
-    """ Nd convolution layer. Just a wrapper around ``tf.layers.conv1d``, ``conv2d``, ``conv3d``.
 
-    Parameters
-    ----------
-    inputs : tf.Tensor
-        input tensor
+
+@add_as_function
+class Conv(Layer):
+    """ Nd convolution layer. Just a wrapper around TensorFlow layers for corresponding dimensions.
 
     See also
     --------
-    `tf.layers.conv1d <https://www.tensorflow.org/api_docs/python/tf/layers/conv1d>`_,
-    `tf.layers.conv2d <https://www.tensorflow.org/api_docs/python/tf/layers/conv2d>`_,
-    `tf.layers.conv3d <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d>`_
+    `tf.layers.conv1d <https://www.tensorflow.org/api_docs/python/keras/layers/Conv1D>`_,
+    `tf.layers.conv2d <https://www.tensorflow.org/api_docs/python/keras/layers/Conv2D>`_,
+    `tf.layers.conv3d <https://www.tensorflow.org/api_docs/python/keras/layers/Conv3D>`_
     """
-    dim = inputs.shape.ndims - 2
-    layer_fn = CONV_LAYERS[dim]
-    return layer_fn(inputs, *args, **kwargs)
+    LAYERS = {
+        1: K.Conv1D,
+        2: K.Conv2D,
+        3: K.Conv3D
+    }
+
+    def __init__(self, filters, kernel_size, strides=(1, 1),
+                 padding='same', data_format='channels_last', dilation_rate=(1, 1), **kwargs):
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate = dilation_rate
+        self.kwargs = kwargs
+
+        if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
+            raise ValueError("Filters must be a positive integer, instead got {}".format(self.filters))
+
+    def __call__(self, inputs):
+        layer_fn = self.LAYERS[inputs.shape.ndims - 2]
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
-def conv1d_transpose(inputs, filters, kernel_size, strides=1, padding='valid', data_format='channels_last',
-                     **kwargs):
-    """ Transposed 1D convolution layer
+
+@add_as_function
+class Conv1DTranspose:
+    """ Transposed 1D convolution layer.
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        input tensor
     filters : int
-        number of filters in the ouput tensor
+        Number of filters in the ouput tensor.
     kernel_size : int
-        kernel size
+        Kernel size.
     strides : int
-        convolution stride. Default is 1.
-
-    Returns
-    -------
-    tf.Tensor
-
-    See also
-    --------
-    `tf.layers.conv2d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv2d_transpose>`_,
-    `tf.layers.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d_transpose>`_
+        Convolution stride. Default is 1.
     """
-    axis = 1 if data_format == 'channels_last' else 2
-    x = tf.expand_dims(inputs, axis=axis)
-    x = tf.layers.conv2d_transpose(x, filters=filters, kernel_size=(1, kernel_size),
-                                   strides=(1, strides), padding=padding, **kwargs)
-    x = tf.squeeze(x, [axis])
-    return x
+    def __init__(self, filters, kernel_size, strides=1, padding='valid', data_format='channels_last', *args, **kwargs):
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.args, self.kwargs = args, kwargs
 
-def conv1d_transpose_nn(value, filters, output_shape, strides,
-                        padding='SAME', data_format='NWC', name=None):
+    def __call__(self, inputs):
+        axis = 1 if self.data_format == 'channels_last' else 2
+        x = tf.expand_dims(inputs, axis=axis)
+        x = K.Conv2DTranspose(filters=self.filters, kernel_size=(1, self.kernel_size),
+                              strides=(1, self.strides), padding=self.padding, **self.kwargs)(x)
+        x = tf.squeeze(x, [axis])
+        return x
+
+
+
+@add_as_function
+class Conv1DTransposeNn:
     """ Transposed 1D convolution layer. Analogue of the tf.nn.conv2d_transpose.
 
     Parameters
     ----------
-    value : tf.Tensor
-        input tensor
     filters : tf.Tensor
-        convolutional filter
+        Convolutional filter.
     output_shape : tf.Tensor
-        the output shape of the deconvolution op
+        The output shape of the deconvolution op.
     strides : list
-        the stride of the sliding window for each dimension of the input tensor
+        The stride of the sliding window for each dimension of the input tensor.
     padding : str
         'VALID' or 'SAME'. Default - 'SAME'.
     data_format : str
         'NWC' or 'NCW'. Default - 'NWC'.
     name : str
-        scope name
-
-    Returns
-    -------
-    tf.Tensor
-
-    See also
-    --------
-    `tf.nn.conv2d_transpose <https://www.tensorflow.org/api_docs/python/tf/nn/conv2d_transpose>`_,
-    `tf.nn.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/nn/conv3d_transpose>`_
+        Scope name
     """
-    axis = 1 if data_format == 'NWC' else 2
-    value = tf.expand_dims(value, axis=axis)
-    filters = tf.expand_dims(filters, axis=0)
-    output_shape = tf.concat([output_shape[:axis], (1, ), output_shape[axis:]], axis=-1)
-    strides = strides[:axis] + [1] + strides[axis:]
-    x = tf.nn.conv2d_transpose(value, filters, output_shape, strides,
-                               padding, data_format, name)
-    x = tf.squeeze(x, [axis])
-    return x
+    def __init__(self, filters, output_shape, strides, padding='SAME', data_format='NWC', *args, **kwargs):
+        self.filters, self.output_shape, self.strides = filters, output_shape, strides
+        self.padding, self.data_format = padding, data_format
+        self.args, self.kwargs = args, kwargs
 
-def conv_transpose(inputs, filters, kernel_size, strides, *args, **kwargs):
-    """ Transposed Nd convolution layer
+    def __call__(self, inputs):
+        axis = 1 if self.data_format == 'NWC' else 2
+        inputs = tf.expand_dims(inputs, axis=axis)
+        filters = tf.expand_dims(self.filters, axis=0)
+        output_shape = tf.concat([self.output_shape[:axis], (1, ), self.output_shape[axis:]], axis=-1)
+        strides = self.strides[:axis] + [1] + self.strides[axis:]
+        x = tf.nn.conv2d_transpose(inputs, filters, output_shape, strides,
+                                   self.padding, self.data_format, *self.args, **self.kwargs)
+        x = tf.squeeze(x, [axis])
+        return x
+
+
+
+@add_as_function
+class ConvTranspose(Layer):
+    """ Transposed Nd convolution layer.
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        input tensor
     filters : int
-        number of filters in the ouput tensor
+        Number of filters in the ouput tensor.
     kernel_size : int
-        kernel size
+        Kernel size.
     strides : int
-        convolution stride. Default is 1.
-
-    Returns
-    -------
-    tf.Tensor
+        Convolution stride. Default is 1.
 
     See also
     --------
     :func:`.conv1d_transpose`,
-    `tf.layers.conv2d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv2d_transpose>`_,
-    `tf.layers.conv3d_transpose <https://www.tensorflow.org/api_docs/python/tf/layers/conv3d_transpose>`_
+    `tf.layers.conv2d_transpose <https://www.tensorflow.org/api_docs/python/keras/layers/Conv2DTranspose>`_,
+    `tf.layers.conv3d_transpose <https://www.tensorflow.org/api_docs/python/keras/layers/Conv3DTranspose>`_
     """
-    dim = inputs.shape.ndims - 2
-    if dim == 1:
-        output = conv1d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
-    elif dim == 2:
-        output = tf.layers.conv2d_transpose(inputs, filters, kernel_size, strides, *args, **kwargs)
-    elif dim == 3:
-        output = tf.layers.conv3d_transpose(inputs, filters, kernel_size, strides, *args, use_bias=False, **kwargs)
-    return output
+    LAYERS = {
+        1: Conv1DTranspose,
+        2: K.Conv2DTranspose,
+        3: K.Conv3DTranspose
+    }
+
+    def __init__(self, filters, kernel_size, strides=(1, 1),
+                 padding='same', data_format='channels_last', **kwargs):
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.kwargs = kwargs
+
+        if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
+            raise ValueError("Filters must be a positive integer, instead got {}".format(self.filters))
+
+    def __call__(self, inputs):
+        layer_fn = self.LAYERS[inputs.shape.ndims - 2]
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
-def _depthwise_conv(transpose, inputs, kernel_size, strides=1, padding='same', data_format='channels_last',
-                    dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
-    context = None
-    if name is not None:
-        context = tf.variable_scope(name)
-        context.__enter__()
 
-    if transpose:
-        conv_layer = conv_transpose
-    else:
-        conv_layer = conv
-        kwargs['dilation_rate'] = dilation_rate
+class DepthwiseConvND:
+    """ TensorFlow implementation of depthwise convolution, applicable to any shape. """
+    def __init__(self, transpose, kernel_size, strides=1, padding='same', data_format='channels_last',
+                 dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
+        self.transpose = transpose
+        self.kernel_size, self.strides = kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
+        self.activation = activation
+        self.name = name
+        self.kwargs = kwargs
 
-    kwargs = {**kwargs,
-              'kernel_size': kernel_size,
-              'filters': depth_multiplier,
-              'strides': strides,
-              'padding': padding,
-              'activation': activation,
-              'data_format': data_format}
+    def __call__(self, inputs):
+        context = None
+        if self.name is not None:
+            context = tf.variable_scope(self.name)
+            context.__enter__()
 
-    # Get all the shapes
-    inputs_shape = inputs.get_shape().as_list()
-    axis = -1 if data_format == 'channels_last' else 1
-    size = [-1] * inputs.shape.ndims
-    size[axis] = 1
-    channels_in = inputs_shape[axis]
+        if self.transpose:
+            conv_layer = ConvTranspose
+        else:
+            conv_layer = Conv
+            self.kwargs['dilation_rate'] = self.dilation_rate
 
-    # Loop through feature maps
-    depthwise_layers = []
-    for channel in range(channels_in):
-        start = [0] * inputs.shape.ndims
-        start[axis] = channel
+        kwargs = {**self.kwargs,
+                  'kernel_size': self.kernel_size,
+                  'filters': self.depth_multiplier,
+                  'strides': self.strides,
+                  'padding': self.padding,
+                  'activation': self.activation,
+                  'data_format': self.data_format}
 
-        input_slice = tf.slice(inputs, start, size)
+        # Get all the shapes
+        inputs_shape = inputs.get_shape().as_list()
+        axis = -1 if self.data_format == 'channels_last' else 1
+        size = [-1] * inputs.shape.ndims
+        size[axis] = 1
+        channels_in = inputs_shape[axis]
 
-        _kwargs = {**kwargs,
-                   'inputs': input_slice,
-                   'name': 'slice-%d' % channel}
-        slice_conv = conv_layer(**_kwargs)
-        depthwise_layers.append(slice_conv)
+        # Loop through feature maps
+        depthwise_layers = []
+        for channel in range(channels_in):
+            start = [0] * inputs.shape.ndims
+            start[axis] = channel
 
-    # Concatenate the per-channel convolutions along the channel dimension.
-    output = tf.concat(depthwise_layers, axis=axis)
+            input_slice = tf.slice(inputs, start, size)
 
-    if context is not None:
-        context.__exit__(None, None, None)
+            _kwargs = {**kwargs,
+                       'name': 'slice-%d' % channel}
+            slice_conv = conv_layer(**_kwargs)(input_slice)
+            depthwise_layers.append(slice_conv)
 
-    return output
+        # Concatenate the per-channel convolutions along the channel dimension.
+        output = tf.concat(depthwise_layers, axis=axis)
 
-def depthwise_conv(inputs, *args, **kwargs):
+        if context is not None:
+            context.__exit__(None, None, None)
+
+        return output
+
+
+
+@add_as_function
+class DepthwiseConv(Layer):
     """ Make Nd depthwise convolutions that act separately on channels.
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        input tensor
     kernel_size : int
-        kernel size
+        Kernel size.
     strides : int
-        convolution stride. Default is 1.
+        Convolution stride. Default is 1.
     padding : str
-        padding mode, can be 'same' or 'valid'. Default - 'same'.
+        Padding mode, can be 'same' or 'valid'. Default - 'same'.
     data_format : str
         'channels_last' or 'channels_first'. Default - 'channels_last'.
     depth_multiplier : int
@@ -204,29 +228,38 @@ def depthwise_conv(inputs, *args, **kwargs):
         Default is None: linear activation.
     name : str
         The name of the layer. Default - None.
-
-    Returns
-    -------
-    tf.Tensor
     """
-    if inputs.shape.ndims == 4:
-        return tf.keras.layers.DepthwiseConv2D(*args, **kwargs)(inputs)
-    return _depthwise_conv(False, inputs, *args, **kwargs)
+    LAYERS = {
+        1: partial(DepthwiseConvND, False),
+        2: K.DepthwiseConv2D,
+        3: partial(DepthwiseConvND, False)
+    }
+
+    def __init__(self, kernel_size, strides=(1, 1), padding='same',
+                 data_format=None, dilation_rate=(1, 1), depth_multiplier=1, **kwargs):
+        self.kernel_size, self.strides = kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
+        self.kwargs = kwargs
+
+    def __call__(self, inputs):
+        layer_fn = self.LAYERS[inputs.shape.ndims - 2]
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
-def depthwise_conv_transpose(inputs, *args, **kwargs):
+
+@add_as_function
+class DepthwiseConvTranspose(Layer):
     """ Make Nd depthwise transpose convolutions that act separately on channels.
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        input tensor
     kernel_size : int
-        kernel size
+        Kernel size.
     strides : int
-        convolution stride. Default is 1.
+        Convolution stride. Default is 1.
     padding : str
-        padding mode, can be 'same' or 'valid'. Default - 'same'.
+        Padding mode, can be 'same' or 'valid'. Default - 'same'.
     data_format : str
         'channels_last' or 'channels_first'. Default - 'channels_last'.
     depth_multiplier : int
@@ -237,78 +270,95 @@ def depthwise_conv_transpose(inputs, *args, **kwargs):
         Default is None: linear activation.
     name : str
         The name of the layer. Default - None.
-
-    Returns
-    -------
-    tf.Tensor
     """
-    return _depthwise_conv(True, inputs, *args, **kwargs)
+    def __init__(self, kernel_size, strides=(1, 1), padding='same', data_format=None,
+                 dilation_rate=(1, 1), depth_multiplier=1, activation=None, **kwargs):
+        self.kernel_size, self.strides = kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
+        self.activation = activation
+        self.kwargs = kwargs
+
+    def __call__(self, inputs):
+        layer_fn = partial(DepthwiseConvND, True)
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
 
 
-def _separable_conv(transpose, inputs, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
-                    dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
-    context = None
-    if name is not None:
-        context = tf.variable_scope(name)
-        context.__enter__()
 
-    # Make arguments for depthwise part and call it
-    if transpose:
-        depthwise_layer = depthwise_conv_transpose
-    else:
-        depthwise_layer = depthwise_conv
+class SeparableConvND:
+    """ TensorFlow implementation of separable convolution, applicable to any shape. """
+    def __init__(self, transpose, filters, kernel_size, strides=1, padding='same', data_format='channels_last',
+                 dilation_rate=1, depth_multiplier=1, activation=None, name=None, **kwargs):
+        self.transpose = transpose
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
+        self.activation = activation
+        self.name = name
+        self.kwargs = kwargs
 
-    _kwargs = {**kwargs,
-               'inputs': inputs,
-               'kernel_size': kernel_size,
-               'strides': strides,
-               'dilation_rate': dilation_rate,
-               'depth_multiplier': depth_multiplier,
-               'activation': activation,
-               'padding': padding,
-               'data_format': data_format,
-               'name': 'depthwise'}
-    depthwise = depthwise_layer(**_kwargs)
+    def __call__(self, inputs):
+        context = None
+        if self.name is not None:
+            context = tf.variable_scope(self.name)
+            context.__enter__()
 
-    # If needed, make arguments for pointwise part and call it
-    shape_out = depthwise.get_shape().as_list()
-    axis = -1 if data_format == 'channels_last' else 1
-    filters_out = shape_out[axis]
+        # Make arguments for depthwise part and call it
+        if self.transpose:
+            depthwise_layer = DepthwiseConvTranspose
+        else:
+            depthwise_layer = DepthwiseConv
 
-    if filters_out != filters:
-        _kwargs = {**kwargs,
-                   'inputs': depthwise,
-                   'filters': filters,
-                   'kernel_size': 1,
-                   'strides': 1,
-                   'dilation_rate': 1,
-                   'data_format': data_format,
-                   'name': 'pointwise'}
-        output = conv(**_kwargs)
-    else:
-        output = depthwise
+        _kwargs = {**self.kwargs,
+                   'kernel_size': self.kernel_size,
+                   'strides': self.strides,
+                   'dilation_rate': self.dilation_rate,
+                   'depth_multiplier': self.depth_multiplier,
+                   'activation': self.activation,
+                   'padding': self.padding,
+                   'data_format': self.data_format,
+                   'name': 'depthwise'}
+        depthwise = depthwise_layer(**_kwargs)(inputs)
 
-    if context is not None:
-        context.__exit__(None, None, None)
+        # If needed, make arguments for pointwise part and call it
+        shape_out = depthwise.get_shape().as_list()
+        axis = -1 if self.data_format == 'channels_last' else 1
+        filters_out = shape_out[axis]
 
-    return output
+        if filters_out != self.filters:
+            _kwargs = {**self.kwargs,
+                       'filters': self.filters,
+                       'kernel_size': 1,
+                       'strides': 1,
+                       'dilation_rate': 1,
+                       'data_format': self.data_format,
+                       'name': 'pointwise'}
+            output = Conv(**_kwargs)(depthwise)
+        else:
+            output = depthwise
 
-def separable_conv(inputs, *args, **kwargs):
+        if context is not None:
+            context.__exit__(None, None, None)
+
+        return output
+
+
+
+@add_as_function
+class SeparableConv(Layer):
     """ Make Nd depthwise convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        input tensor
     filters : int
-        number of filters in the output tensor
+        Number of filters in the output tensor.
     kernel_size : int
-        kernel size
+        Kernel size.
     strides : int
-        convolution stride. Default is 1.
+        Convolution stride. Default is 1.
     padding : str
-        padding mode, can be 'same' or 'valid'. Default - 'same',
+        Padding mode, can be 'same' or 'valid'. Default - 'same',
     data_format : str
         'channels_last' or 'channels_first'. Default - 'channels_last'.
     dilation_rate : int
@@ -321,34 +371,45 @@ def separable_conv(inputs, *args, **kwargs):
         Default is `tf.nn.relu`.
     name : str
         The name of the layer. Default - None.
-
-    Returns
-    -------
-    tf.Tensor
-
     """
-    dim = inputs.shape.ndims - 2
+    LAYERS = {
+        1: K.SeparableConv1D,
+        2: K.SeparableConv2D,
+        3: partial(SeparableConvND, False)
+    }
 
-    if dim == 2:
-        return tf.layers.separable_conv2d(inputs, *args, **kwargs)
-    return _separable_conv(False, inputs, *args, **kwargs)
+    def __init__(self, filters, kernel_size, strides=(1, 1),
+                 padding='same', data_format='channels_last',
+                 dilation_rate=(1, 1), depth_multiplier=1, **kwargs):
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
+        self.kwargs = kwargs
 
-def separable_conv_transpose(inputs, *args, **kwargs):
+        if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
+            raise ValueError("Filters must be a positive integer, instead got {}".format(self.filters))
+
+    def __call__(self, inputs):
+        layer_fn = self.LAYERS[inputs.shape.ndims - 2]
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)
+
+
+
+@add_as_function
+class SeparableConvTranspose(Layer):
     """ Make Nd depthwise transpose convolutions that acts separately on channels,
     followed by a pointwise convolution that mixes channels.
 
     Parameters
     ----------
-    inputs : tf.Tensor
-        input tensor
     filters : int
-        number of filters in the output tensor
+        Number of filters in the output tensor.
     kernel_size : int
-        kernel size
+        Kernel size.
     strides : int
-        convolution stride. Default is 1.
+        Convolution stride. Default is 1.
     padding : str
-        padding mode, can be 'same' or 'valid'. Default - 'same'.
+        Padding mode, can be 'same' or 'valid'. Default - 'same'.
     data_format : str
         'channels_last' or 'channels_first'. Default - 'channels_last'.
     depth_multiplier : int
@@ -359,10 +420,18 @@ def separable_conv_transpose(inputs, *args, **kwargs):
         Default is `tf.nn.relu`.
     name : str
         The name of the layer. Default - None.
-
-    Returns
-    -------
-    tf.Tensor
-
     """
-    return _separable_conv(True, inputs, *args, **kwargs)
+    def __init__(self, filters, kernel_size, strides=(1, 1),
+                 padding='same', data_format='channels_last',
+                 dilation_rate=(1, 1), depth_multiplier=1, **kwargs):
+        self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
+        self.padding, self.data_format = padding, data_format
+        self.dilation_rate, depth_multiplier = dilation_rate, depth_multiplier
+        self.kwargs = kwargs
+
+        if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
+            raise ValueError("Filters must be a positive integer, instead got {}".format(self.filters))
+
+    def __call__(self, inputs):
+        layer_fn = partial(SeparableConvND, True)
+        return layer_fn(**self.params_dict, **self.kwargs)(inputs)

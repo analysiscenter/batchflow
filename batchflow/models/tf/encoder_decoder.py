@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block
+from .layers import conv_block, combine
 from ..utils import unpack_args
 
 
@@ -129,9 +129,6 @@ class EncoderDecoder(TFModel):
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
-
-        config['head/layout'] = None
-
         return config
 
     @classmethod
@@ -167,14 +164,14 @@ class EncoderDecoder(TFModel):
     def head(cls, inputs, targets, name='head', **kwargs):
         """ Linear convolutions. """
         kwargs = cls.fill_params('head', **kwargs)
+        data_format = kwargs['data_format']
 
         with tf.variable_scope(name):
-            x = cls.crop(inputs, targets, kwargs['data_format'])
-            x = super().head(x, name, **kwargs)
-
+            x = super().head(inputs, name, **kwargs)
+            x = cls.crop(x, targets, data_format)
             channels = cls.num_channels(targets)
             if cls.num_channels(x) != channels:
-                args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels)}
+                args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels, strides=1)}
                 x = conv_block(x, name='conv1x1', **args)
 
         return x
@@ -349,8 +346,8 @@ class EncoderDecoder(TFModel):
                         # input[-3] is last encoder's input that has normally different shape
                         # so it might be connected to first decoder's output, that also has modified shape
                         x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
-                        x = cls.combine([x, inputs[-i-3]], op=combine_op,
-                                        data_format=kwargs.get('data_format'))
+                        x = combine([x, inputs[-i-3]], op=combine_op,
+                                    data_format=kwargs.get('data_format'))
         return x
 
 

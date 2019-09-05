@@ -591,12 +591,12 @@ class Executable:
             else:
                 self.pipeline = self.pipeline << dataset
 
-    def reset_iter(self):
+    def reset(self, what='iter'):
         """ Reset iterators in pipelines """
         if self.pipeline is not None:
-            self.pipeline.reset("iter")
+            self.pipeline.reset(what)
         if self.root_pipeline is not None:
-            self.root_pipeline.reset("iter")
+            self.root_pipeline.reset(what)
 
     def _clear_result(self):
         self.result = {var: [] for var in self.variables}
@@ -744,8 +744,12 @@ class Results():
         files = OrderedDict(sorted(files.items(), key=lambda x: x[1]))
         result = []
         start = 0
+        iterations = [item for item in iterations if item is not None]
         for name, end in files.items():
-            intersection = pd.np.intersect1d(iterations, pd.np.arange(start, end))
+            if len(iterations) == 0:
+                intersection = pd.np.arange(start, end)
+            else:
+                intersection = pd.np.intersect1d(iterations, pd.np.arange(start, end))
             if len(intersection) > 0:
                 result.append((name, intersection))
             start = end
@@ -871,9 +875,6 @@ class Results():
 
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
-
-        if iterations is None:
-            iterations = list(range(self.research.n_iters))
 
         self.names = self._get_list(names)
         self.repetitions = self._get_list(repetitions)

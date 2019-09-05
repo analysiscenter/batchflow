@@ -11,6 +11,7 @@ import numpy as np
 
 from .base import Baseset
 from .config import Config
+from .batch import Batch
 from .decorators import deprecated
 from .exceptions import SkipBatchException, EmptyBatchSequence
 from .named_expr import NamedExpression, V, eval_expr
@@ -51,6 +52,7 @@ class Pipeline:
 
         if pipeline is None:
             self.dataset = dataset
+            self._dataset = None
             self.config = config or {}
             self._actions = actions or []
             self._lazy_run = None
@@ -61,6 +63,7 @@ class Pipeline:
             self._namespaces = []
         else:
             self.dataset = pipeline.dataset
+            self._dataset = None
             config = config or {}
             _config = pipeline.config or {}
             self.config = {**config, **_config}
@@ -124,18 +127,18 @@ class Pipeline:
     def concat(cls, pipe1, pipe2):
         """ Create a new pipeline concatenating two given pipelines """
         # pylint: disable=protected-access
-        if pipe1.dataset != pipe2.dataset and pipe1.dataset is not None and pipe2.dataset is not None:
-            raise ValueError("Cannot add pipelines with different datasets")
-
         new_p1 = cls.from_pipeline(pipe1)
         new_p1._actions += pipe2._actions[:]
         new_p1.config.update(pipe2.config)
         new_p1.variables += pipe2.variables
         new_p1.models += pipe2.models
-        new_p1.dataset = new_p1.dataset or pipe2.dataset
+        if new_p1.dataset is None:
+            new_p1.dataset = pipe2.dataset
         new_p1._lazy_run = new_p1._lazy_run or pipe2._lazy_run
         new_p1.before = pipe1.before.concat(pipe1.before, pipe2.before)
+        new_p1.before.pipeline = new_p1
         new_p1.after = pipe1.after.concat(pipe1.after, pipe2.after)
+        new_p1.after.pipeline = new_p1
         return new_p1
 
     def get_last_action_proba(self):
@@ -182,11 +185,9 @@ class Pipeline:
             return new_p
         raise TypeError("Pipeline might take only Dataset or Config. Use as pipeline << dataset or pipeine << config")
 
-    def _is_batch_method(self, name, namespace=None):
-        if namespace is None and self.dataset is not None:
-            namespace = self.dataset.batch_class
-        else:
-            return True
+    def _is_batch_method(self, name, namespace=Batch):
+        if self._dataset is not None:
+            namespace = namespace or self._dataset.batch_class
         if hasattr(namespace, name) and callable(getattr(namespace, name)):
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
@@ -197,9 +198,15 @@ class Pipeline:
 
     @property
     def _all_namespaces(self):
-        return [sys.modules["__main__"], self.dataset] + self._namespaces
+        common_namespaces = [sys.modules["__main__"]]
+        if isinstance(self.dataset, NamedExpression):
+            if self._dataset is not None:
+                common_namespaces.append(self._dataset)
+        else:
+            common_namespaces.append(self.dataset)
+        return common_namespaces + self._namespaces
 
-    def is_method_from_ns(self, name):
+    def _is_method_from_ns(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)
 
     def get_method(self, name):
@@ -214,10 +221,10 @@ class Pipeline:
         if name[:2] == '__' and name[-2:] == '__':
             # if a magic method is not defined, throw an error
             raise AttributeError('Unknown magic method: %s' % name)
-        if self.is_method_from_ns(name):
-            return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         if self._is_batch_method(name):
             return partial(self._add_action, name)
+        if self._is_method_from_ns(name):
+            return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @property
@@ -249,7 +256,7 @@ class Pipeline:
     @property
     def index(self):
         """ Return index of the source dataset """
-        return self.dataset.index
+        return self._dataset.index
 
     @property
     def indices(self):
@@ -287,6 +294,24 @@ class Pipeline:
         """
         return self.set_config(config, clear=False)
 
+
+    def set_dataset(self, dataset):
+        """ Link the pipeline to a dataset
+
+        Parameters
+        ----------
+        dataset : Dataset
+            a dataset to link to
+
+        Notes
+        -----
+        This method is a declarative version of ``pipeline << dataset``,
+        so it is executed only when the pipeline is run.
+
+        It is always run as the first action in the pipeline chain despite it's actual location.
+        """
+        self.dataset = dataset
+        return self
 
     def has_variable(self, name):
         """ Check if a variable exists
@@ -359,7 +384,7 @@ class Pipeline:
         self.before.init_variable(name, default, lock, **kwargs)
         return self
 
-    def init_variables(self, variables):
+    def init_variables(self, *variables):
         """ Create several variables
 
         Parameters
@@ -378,10 +403,13 @@ class Pipeline:
         --------
         >>> pp = dataset.p
                     .init_variables({"loss_history": dict(default=[]),
-                                     "accuracy", dict(default=0)})
+                                     "predictions", dict(default=[])})
+                    .init_variables("metrics", "counter", "worst_prediction")
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
+        if len(variables) == 1:
+            variables = variables[0]
         self.variables.create_many(variables)
         return self
 
@@ -426,10 +454,8 @@ class Pipeline:
             logging.warning("Pipeline variable '%s' has not been initialized", var_name)
             self.init_variable(var_name)
 
-        self.variables.lock(var_name)
         value = self._eval_expr(value, batch=batch)
         self.variables.set(var_name, value)
-        self.variables.unlock(var_name)
 
     def delete_variable(self, name):
         """ Delete a variable
@@ -543,7 +569,7 @@ class Pipeline:
         except OSError:
             pass
 
-    def call(self, fn, save_to=None, *args, **kwargs):
+    def call(self, fn, *args, save_to=None, **kwargs):
         """ Call any function during pipeline execution
 
         Parameters
@@ -562,7 +588,7 @@ class Pipeline:
             pipeline
                 .call(lambda batch: [image.shape[1] for image in batch.images], save_to=V('image_widths'))
         """
-        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to, **kwargs))
+        return self._add_action(CALL_ID, *args, _args=dict(fn=fn, save_to=save_to), **kwargs)
 
     def _exec_call(self, batch, action):
         fn = self._eval_expr(action['fn'], batch)
@@ -1211,11 +1237,11 @@ class Pipeline:
         _action = self._actions[0]
 
         if _action['pipeline'].dataset is None:
-            pipeline = _action['pipeline'] << self.dataset
+            pipeline = _action['pipeline'] << self._dataset
         else:
             pipeline = self.from_pipeline(_action['pipeline'])
 
-        iter_params = kwargs.get('iter_params', None)
+        kwargs.setdefault('iter_params', None)
 
         self._rest_batch = None
         while True:
@@ -1228,7 +1254,7 @@ class Pipeline:
                 self._rest_batch = None
             while cur_len < _action['batch_size']:
                 try:
-                    new_batch = pipeline.next_batch(*args, iter_params=iter_params, **kwargs)
+                    new_batch = pipeline.next_batch(*args, **kwargs)
                 except StopIteration:
                     break
                 else:
@@ -1317,10 +1343,11 @@ class Pipeline:
                 raise RuntimeError("gen_batch without arguments requires a lazy run at the end of the pipeline")
             args, kwargs = self._lazy_run
 
+        self._dataset = self._eval_expr(self.dataset)
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
         self.reset(reset)
-        self._iter_params = iter_params or self._iter_params or self.dataset.get_default_iter_params()
+        self._iter_params = iter_params or self._iter_params or Baseset.get_default_iter_params()
 
         return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
 
@@ -1337,7 +1364,7 @@ class Pipeline:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
             prefetch = 0
         else:
-            batch_generator = self.dataset.gen_batch(*args, **kwargs)
+            batch_generator = self._dataset.gen_batch(*args, **kwargs)
 
         if self._not_init_vars:
             self._init_all_variables()
@@ -1350,7 +1377,7 @@ class Pipeline:
 
         if bar:
             bar = create_bar(bar, batch_size, n_iters, n_epochs,
-                             drop_last, len(self.dataset.index))
+                             drop_last, len(self._dataset.index))
 
 
         if self.before:
@@ -1413,7 +1440,7 @@ class Pipeline:
 
     def create_batch(self, batch_index, *args, **kwargs):
         """ Create a new batch by given indices and execute all lazy actions """
-        batch = self.dataset.create_batch(batch_index, *args, **kwargs)
+        batch = self._dataset.create_batch(batch_index, *args, **kwargs)
         batch_res = self.execute_for(batch)
         return batch_res
 
@@ -1463,6 +1490,8 @@ class Pipeline:
                 _args, _kwargs = self._lazy_run
                 args = _args if len(args) == 0 else args
                 kwargs = {**_kwargs, **kwargs}
+            if 'n_epochs' not in kwargs and 'n_iters' not in kwargs:
+                kwargs['n_epochs'] = 1
             if 'n_epochs' in kwargs and kwargs['n_epochs'] is None:
                 warnings.warn('Pipeline will never stop as n_epochs=None')
 

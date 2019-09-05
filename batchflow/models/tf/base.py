@@ -1,6 +1,5 @@
 # pylint: disable=undefined-variable, no-name-in-module
 """ Contains base class for tensorflow models """
-
 import os
 import glob
 import re
@@ -958,6 +957,20 @@ class TFModel(BaseModel):
         config = {**config, **kwargs}
         return config
 
+    def eval(self, mode):
+        """ Change model learning phase. Important to use to control behaviour of layers, that
+        perform different operations on train/inference (dropout, batch-norm).
+
+        Parameters
+        ----------
+        mode : bool or int
+            If evaluates to True, then all the layers are set to use `train` behaviour.
+            If evaluates to False, then all the layers are set to use `test` behaviour.
+        """
+        if isinstance(mode, bool):
+            mode = int(mode)
+        tf.keras.backend.set_learning_phase(mode)
+
     def _map_name(self, name, device=None):
         if isinstance(name, str):
             return self.get_from_attr(name, device)
@@ -1452,40 +1465,6 @@ class TFModel(BaseModel):
         x = tf.cond(cond, lambda: tf.slice(inputs, begin=begin, size=size), lambda: inputs)
         x.set_shape(output_shape)
         return x
-
-    @classmethod
-    def combine(cls, inputs, name='combine', op='conv', data_format='channels_last', **kwargs):
-        """ Combine inputs into one tensor via various transformations.
-
-        Parameters
-        ----------
-        inputs : sequence of tf.Tensor
-            tensors to combine
-        op : str {'concat', 'sum', 'conv'}
-            if 'concat', inputs are concated along channels axis
-            if 'sum', inputs are summed
-            if 'softsum', every tensor is passed through 1x1 convolution in order to have
-            the same number of channels as the first tensor, and then summed
-        data_format : str {'channels_last', 'channels_first'}
-            data format
-        kwargs : dict
-            arguments for :func:`.conv_block`
-        """
-        with tf.variable_scope(name):
-            if op == 'concat':
-                axis = cls.channels_axis(data_format)
-                return tf.concat(inputs, axis=axis, name='combine-concat')
-            if op == 'sum':
-                return tf.add_n(inputs, name='combine-sum')
-            if op == 'softsum':
-                filters = cls.num_channels(inputs[0], data_format=data_format)
-
-                for i in range(1, len(inputs)):
-                    inputs[i] = conv_block(inputs[i], layout='c', filters=filters,
-                                           kernel_size=1, name='conv', **kwargs)
-                return tf.add_n(inputs, name='combine-softsum')
-
-        raise ValueError('`op` must be one of `concat`, `sum`, `softsum`, got {}.'.format(combine_type))
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
@@ -2054,9 +2033,16 @@ class TFModel(BaseModel):
         with tf.variable_scope(name):
             data_format = kwargs.get('data_format')
             in_filters = cls.num_channels(inputs, data_format)
+            if isinstance(kwargs.get('activation'), list) and len(kwargs.get('activation')) == 2:
+                activation = kwargs.pop('activation')
+            elif kwargs.get('activation') is not None:
+                activation = [kwargs.get('activation'), tf.nn.sigmoid]
+            else:
+                activation = [tf.nn.relu, tf.nn.sigmoid]
+
             x = conv_block(inputs,
                            **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
-                              'name': 'se', 'activation': [tf.nn.relu, tf.nn.sigmoid]})
+                              'name': 'se', 'activation': activation})
 
             shape = [-1] + [1] * (cls.spatial_dim(inputs) + 1)
             axis = cls.channels_axis(data_format)
@@ -2064,6 +2050,34 @@ class TFModel(BaseModel):
             scale = tf.reshape(x, shape)
             x = inputs * scale
         return x
+
+    @classmethod
+    def scse_block(cls, inputs, ratio=2, name='scse', **kwargs):
+        """ Concurrent spatial and channel squeeze and excitation.
+
+        Roy A.G. et al. "`Concurrent Spatial and Channel ‘Squeeze & Excitation’
+        in Fully Convolutional Networks <https://arxiv.org/abs/1803.02579>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        ratio : int, optional
+            Squeeze ratio for the number of filters in spatial squeeze
+            and channel excitation block. Default is 2.
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        with tf.variable_scope(name):
+            cse = cls.se_block(inputs, ratio, name='cse', **kwargs)
+
+            x = conv_block(inputs, **{**kwargs, 'layout': 'ca', 'filters': 1, 'kernel_size': 1,
+                                      'activation': tf.nn.sigmoid, 'name': 'sse'})
+
+            scse = cse + tf.multiply(x, inputs)
+        return scse
 
     @classmethod
     def upsample(cls, inputs, factor=None, resize_to=None, layout='b', name='upsample', **kwargs):

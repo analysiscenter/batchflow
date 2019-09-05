@@ -7,10 +7,10 @@ from tensorflow.test import is_gpu_available
 
 from batchflow import Pipeline
 from batchflow import B, V, C
-from batchflow.models.tf import VGG7, ResNet18, Inception_v1, MobileNet
+from batchflow.models.tf import VGG7, ResNet18, Inception_v1, MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small
 
 
-MODELS = [VGG7, ResNet18, Inception_v1, MobileNet]
+MODELS = [VGG7, ResNet18, Inception_v1, MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small]
 LOCATIONS = set(['initial_block', 'body', 'block', 'head'])
 NO_GPU = pytest.mark.skipif(not is_gpu_available(), reason='No GPU')
 
