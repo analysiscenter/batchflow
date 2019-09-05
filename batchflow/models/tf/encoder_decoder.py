@@ -271,7 +271,7 @@ class EncoderDecoder(TFModel):
                                 x = conv_block(x, name='downsample', **downsample_args)
                             x = base_block(x, name='block', **args)
                         else:
-                            raise ValueError('Unknown order {}, use one of {"bd", "db"}'.format(order))
+                            raise ValueError('Unknown order {}, use one of ("bd", "db")'.format(order))
                         encoder_outputs.append(x)
         return encoder_outputs
 
@@ -394,7 +394,7 @@ class EncoderDecoder(TFModel):
                         if upsample.get('layout') is not None:
                             x = cls.upsample(x, name='upsample', **upsample_args)
                     else:
-                        raise ValueError('Unknown order {}, use one of {"ub", "bu"}'.format(order))
+                        raise ValueError('Unknown order {}, use one of ("ub", "bu")'.format(order))
 
                     # Combine result with the stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
