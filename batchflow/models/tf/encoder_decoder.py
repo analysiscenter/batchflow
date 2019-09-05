@@ -244,7 +244,7 @@ class EncoderDecoder(TFModel):
         list of tf.Tensors
         """
         base_class = kwargs.pop('base')
-        steps, downsample, block_args, order = cls.pop(['num_stages', 'downsample', 'blocks', 'order'], kwargs)
+        steps, order, downsample, block_args = cls.pop(['num_stages', 'order', 'downsample', 'blocks'], kwargs)
         order = ''.join([item[0] for item in order])
 
         if base_class is not None:
@@ -271,7 +271,7 @@ class EncoderDecoder(TFModel):
                                 x = conv_block(x, name='downsample', **downsample_args)
                             x = base_block(x, name='block', **args)
                         else:
-                            raise ValueError('Unknown order, use one of {"bd", "db"}')
+                            raise ValueError('Unknown order {}, use one of {"bd", "db"}'.format(order))
                         encoder_outputs.append(x)
         return encoder_outputs
 
@@ -358,7 +358,7 @@ class EncoderDecoder(TFModel):
         """
         steps = kwargs.pop('num_stages') or len(inputs)-2
         factor = kwargs.pop('factor') or [2]*steps
-        skip, upsample, block_args, order = cls.pop(['skip', 'upsample', 'blocks', 'order'], kwargs)
+        skip, order, upsample, block_args = cls.pop(['skip', 'order', 'upsample', 'blocks'], kwargs)
         order = ''.join([item[0] for item in order])
         base_block = block_args.get('base')
 
@@ -394,7 +394,7 @@ class EncoderDecoder(TFModel):
                         if upsample.get('layout') is not None:
                             x = cls.upsample(x, name='upsample', **upsample_args)
                     else:
-                        raise ValueError('Unknown order, use one of {"ub", "bu"}')
+                        raise ValueError('Unknown order {}, use one of {"ub", "bu"}'.format(order))
 
                     # Combine result with the stored encoding of the ~same shape
                     if skip and (i < len(inputs)-2):
