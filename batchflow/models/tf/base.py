@@ -236,10 +236,10 @@ class TFModel(BaseModel):
     """
 
     def __init__(self, *args, **kwargs):
+        self.full_config = Config()
         self.session = kwargs.get('session', None)
         self.graph = tf.Graph() if self.session is None else self.session.graph
         self._graph_context = None
-        self._full_config = Config()
         self._train_lock = threading.Lock()
 
         # Parameters of batch processing: splitting batches into parts and/or using multiple devices to process data
@@ -343,7 +343,7 @@ class TFModel(BaseModel):
 
     def create_session(self, config=None):
         """ Create TF session """
-        config = config if config is not None else self.config
+        config = config or self.full_config
         session_config = config.get('session', default={})
         session_config = {**session_config, **{'allow_soft_placement': True}}
         self.session = tf.Session(config=tf.ConfigProto(**session_config))
@@ -631,7 +631,8 @@ class TFModel(BaseModel):
             self.store_to_attr('_to_classes', input_name, tensor)
         return tensor
 
-    def _make_train_steps(self, config, init=True):
+    def _make_train_steps(self, config=None, init=True):
+        config = config or self.full_config
         self.microbatch = config.get('microbatch')
 
         # Wrap parameters from config root as `train_steps`
@@ -950,7 +951,7 @@ class TFModel(BaseModel):
                 config = {}
             else:
                 shape = tensor.get_shape().as_list()[1:]
-                data_format = self._full_config.get('common/data_format') or 'channels_last'
+                data_format = self.full_config.get('common/data_format') or 'channels_last'
                 config = dict(dtype=tensor.dtype, shape=shape,
                               name=tensor.name, data_format=data_format)
         else:
@@ -1083,7 +1084,7 @@ class TFModel(BaseModel):
             self.microbatch = microbatch
 
             if (microbatch) and (len(list(train_steps.values())[0]) == 1):
-                self._make_train_steps(self._full_config, init=False)
+                self._make_train_steps(self.full_config, init=False)
 
             if microbatch is True: # if config option is set to True, but train option left unspectified,
                 microbatch = False # it is faster to pretend that there is no microbatching
@@ -1731,7 +1732,7 @@ class TFModel(BaseModel):
         config = {**config['common'], **_config}
         return config
 
-    def build_config(self, config=None, names=None):
+    def build_config(self, config=None):
         """ Define a model architecture configuration
 
         It takes just 2 steps:
@@ -1763,6 +1764,10 @@ class TFModel(BaseModel):
                 config['common/data_format'] = self.data_format(inputs)
             config['initial_block/inputs'] = self.get_from_attr('inputs')[inputs]
         elif isinstance(inputs, list):
+            # If inputs use different data formats, you need to manually control this parameter
+            # in model parts (initial_block, body, head).
+            if not config.get('common/data_format'):
+                config['common/data_format'] = self.data_format(inputs[0])
             config['initial_block/inputs'] = [self.get_from_attr('inputs')[name]
                                               for name in inputs]
         else:
@@ -1784,6 +1789,7 @@ class TFModel(BaseModel):
         return block
 
     def _build(self, config=None):
+        config = config or self.full_config
         inputs = config.pop('initial_block/inputs')
         x = self._add_block('initial_block', config, inputs=inputs)
         x = self._add_block('body', config, inputs=x)
