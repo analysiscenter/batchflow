@@ -83,7 +83,7 @@ class Distributor:
 
         if isinstance(self.workers, int):
             workers = [self.worker_class(
-                devices=devices[i],
+                devices=self.devices[i],
                 worker_name=i,
                 timeout=self.timeout,
                 trials=self.trials,
@@ -92,7 +92,7 @@ class Distributor:
                        for i in range(self.workers)]
         else:
             workers = [
-                self.worker_class(devices=devices[i], worker_name=i, config=config,
+                self.worker_class(devices=self.devices[i], worker_name=i, config=config,
                                   timeout=self.timeout, trials=self.trials, *args, **kwargs)
                 for i, config in enumerate(self.workers)
             ]
@@ -198,6 +198,7 @@ class Worker:
         self.feedback_queue = None
         self.trial = 3
         self.worker = None
+        self.device_configs = None
 
         if isinstance(worker_name, int):
             self.name = "Worker " + str(worker_name)
@@ -248,7 +249,8 @@ class Worker:
         results : multiprocessing.Queue
             queue for feedback
         """
-        self.log_info('Start {} [id:{}] (devices: {})'.format(self.name, os.getpid(), self.devices), filename=self.logfile)
+        self.log_info('Start {} [id:{}] (devices: {})'.format(self.name, os.getpid(), self.devices),
+                      filename=self.logfile)
 
         try:
             job = queue.get()

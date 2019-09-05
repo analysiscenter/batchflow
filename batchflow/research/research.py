@@ -340,7 +340,7 @@ class Research:
         At each iteration all pipelines and functions will be executed in the order in which were added.
         """
         if self.loaded:
-            print("Starting loaded research. All parameters passed to run except name, bar and `devices` are ignored.\n",
+            print("Starting loaded research. All parameters passed to run except name, bar and devices are ignored.\n",
                   "If `devices` is not provided it will be inherited")
             if devices is not None:
                 self.devices = self._get_devices(devices)
@@ -358,8 +358,8 @@ class Research:
         self.name = name or self.name
         self.bar = bar
 
-        n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
-        n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
+        # n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
+        # n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
 
         if self.n_splits is not None:
             self._cv_split(self.n_splits, shuffle)
@@ -395,12 +395,7 @@ class Research:
         self.__dict__.update(d)
 
     def _get_devices(self, devices):
-        if devices is None:
-            devices = []
-        elif isinstance(devices, str):
-            devices = [int(item) for item in devices.split(',')]
-        else:
-            devices = devices
+        # TODO: process `device` to simplify nested list construction
         return devices
 
     @staticmethod
