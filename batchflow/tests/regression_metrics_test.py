@@ -55,10 +55,10 @@ def test_both_zero(multi, mode, metric_name, exp_res):
         targets = np.random.randint(10, size=size)
         predictions = targets
     elif mode == 'both':
-        targets = np.random.randint(1, size=size)
+        targets = np.zeros(shape=size)
         predictions = targets
     else:
-        targets = np.random.randint(1, size=size)
+        targets = np.zeros(shape=size)
         predictions = np.random.randint(10, size=size)
 
     metrics = RegressionMetrics(targets, predictions, multi=multi)
@@ -68,7 +68,7 @@ def test_both_zero(multi, mode, metric_name, exp_res):
     if np.isnan(exp_res).all():
         assert np.isnan(res).all()
     else:
-        assert res == exp_res
+        assert res == exp_res, 'failed on targets: {0}, predictions: {1}'.format(targets, predictions)
 
 PARAMS_SINGLE = [('mae', 1), ('mse', 1), ('median_absolute_error', 1), ('max_error', 1),
                  ('rmse', 1), ('r2', -np.inf), ('explained_variance_ratio', np.nan), ('acc', 1)]
