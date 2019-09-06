@@ -28,14 +28,6 @@ class Distributor:
         self.answers = None
         self.queue = None
 
-    def _jobs_to_queue(self, jobs):
-        queue = mp.JoinableQueue()
-        for idx, job in enumerate(jobs):
-            queue.put((idx, job))
-        for _ in range(self.workers):
-            queue.put(None) # to mark the end of the queue
-        return queue
-
     @classmethod
     def log_info(cls, message, filename):
         """ Write message into log. """
@@ -48,12 +40,12 @@ class Distributor:
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.error(obj, exc_info=True)
 
-    def run(self, jobs, dirname, n_jobs, n_iters, logfile=None, errorfile=None, bar=False, *args, **kwargs):
+    def run(self, queue, dirname, n_jobs, n_iters, logfile=None, errorfile=None, bar=False, *args, **kwargs):
         """ Run disributor and workers.
 
         Parameters
         ----------
-        jobs : iterable
+        queue : queue of tasks
 
         dirname : str
 
@@ -66,6 +58,8 @@ class Distributor:
         args, kwargs
             will be used in worker
         """
+        self.queue = queue
+
         if isinstance(bar, bool):
             bar = tqdm if bar else None
 
@@ -102,7 +96,6 @@ class Distributor:
             ]
         try:
             self.log_info('Create queue of jobs', filename=self.logfile)
-            self.queue = self._jobs_to_queue(jobs)
             self.results = mp.JoinableQueue()
         except Exception as exception: #pylint:disable=broad-except
             logging.error(exception, exc_info=True)
@@ -113,6 +106,7 @@ class Distributor:
                 msg = 'Run {} worker'
             self.log_info(msg.format(len(workers)), filename=self.logfile)
             for worker in workers:
+                self.queue.put(None)
                 worker.log_info = self.log_info
                 worker.log_error = self.log_error
                 try:
@@ -126,17 +120,20 @@ class Distributor:
             if bar is not None:
                 if n_iters is not None:
                     print("Distributor has {} jobs with {} iterations. Totally: {}"
-                          .format(n_jobs, n_iters, n_jobs*n_iters))
+                          .format(n_jobs, n_iters, n_jobs*n_iters), flush=True)
                     with bar(total=n_jobs*n_iters) as progress:
                         while True:
-                            position = self._get_position()
+                            signal = self.results.get()
+                            position = self._get_position(signal)
+                            if signal.done:
+                                self.finished_jobs.append(signal.job)
                             progress.n = position
                             progress.refresh()
                             if len(self.finished_jobs) == n_jobs:
                                 break
                 else:
                     print("Distributor has {} jobs"
-                          .format(n_jobs))
+                          .format(n_jobs), flush=True)
                     with bar(total=n_jobs) as progress:
                         while True:
                             answer = self.results.get()
@@ -152,20 +149,14 @@ class Distributor:
         self.log_info('All workers have finished the work', filename=self.logfile)
         logging.shutdown()
 
-
-
-    def _get_position(self, fixed_iterations=True):
-        answer = self.results.get()
-        if answer.done:
-            self.finished_jobs.append(answer.job)
+    def _get_position(self, signal, fixed_iterations=True):
         if fixed_iterations:
-            if answer.done:
-                self.answers[answer.job] = answer.n_iters
+            if signal.done:
+                self.answers[signal.job] = signal.n_iters
             else:
-                self.answers[answer.job] = answer.iteration+1
-            return sum(self.answers)
-
-        self.answers[answer.job] += 1
+                self.answers[signal.job] = signal.iteration+1
+        else:
+            self.answers[signal.job] += 1
         return sum(self.answers)
 
 class Signal:

@@ -53,9 +53,9 @@ class Job:
 
             self.experiments.append(units)
             self.exceptions.append(None)
-        self.clear_stopped()
+        self.clear_stopped_list()
 
-    def clear_stopped(self):
+    def clear_stopped_list(self):
         """ Clear list of stopped experiments for the current iteration """
         self.stopped = [False for _ in range(len(self.experiments))]
 
@@ -102,7 +102,6 @@ class Job:
         _ = name, actions
         if execute is not None:
             item.execute_for(batch, iteration)
-            print('run:', item.pipeline, id(item.pipeline.v('device')))
 
     def _parallel_init_run(self, iteration, name, batch, actions):
         _ = iteration, batch
@@ -128,7 +127,6 @@ class Job:
         """ Add values of pipeline variables to results """
         for experiment, execute in zip(self.experiments, actions):
             if execute is not None:
-                print(experiment[name].pipeline, id(experiment[name].pipeline.v('device')))
                 experiment[name].put_result(iteration)
 
     def get_actions(self, iteration, name, action='execute'):

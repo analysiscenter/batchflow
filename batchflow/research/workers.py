@@ -117,7 +117,9 @@ class Worker:
                         task.start()
                         pid = feedback_queue.get()
                         silence = 0
-                        default_signal = Signal(self.worker_name, job[0], 0, job[1].n_iters, trial, False, None)
+                        default_signal = Signal(worker=self.worker_name, job=job[0], iteration=0,
+                                                n_iters=job[1].n_iters, trial=trial, done=False,
+                                                exception=None)
 
                         while True:
                             try:
@@ -179,8 +181,9 @@ class Worker:
             self.log_error(exception, filename=self.errorfile)
         self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.worker_name),
                       filename=self.logfile)
-        signal = Signal(self.worker_name, self.job[0], self.finished_iterations, self.job[1].n_iters,
-                        self.trial, True, [exception]*len(self.job[1].experiments))
+        signal = Signal(worker=self.worker_name, job=self.job[0], iteration=self.finished_iterations,
+                        n_iters=self.job[1].n_iters, trial=self.trial, done=True,
+                        exception=[exception]*len(self.job[1].experiments))
         self.feedback_queue.put(signal)
         queue.task_done()
 
@@ -223,9 +226,8 @@ class PipelineWorker(Worker):
 
         iteration = 0
         self.finished_iterations = iteration
-        print([item['train'].pipeline.config for item in job.experiments])
         while (job.n_iters is None or iteration < job.n_iters) and job.alive_experiments() > 0:
-            job.clear_stopped()
+            job.clear_stopped_list() # list with flags for each experiment
             for unit_name, base_unit in job.executable_units.items():
                 exec_actions = job.get_actions(iteration, unit_name) # for each experiment is None if experiment mustn't
                                                                      # be exuted for that iteration and dict else
@@ -255,7 +257,7 @@ class PipelineWorker(Worker):
                                             .format(idx_job, os.getpid(), iteration+1, unit_name, i))
                     exceptions = job.parallel_call(iteration, unit_name, exec_actions)
 
-                # select units that raise exceptions on that iterartion
+                # select units that raise exceptions on that iteration
                 for i, exception in enumerate(exceptions):
                     if exception is not None:
                         message = ("J {} [{}] I {}: '{}' [{}]: exception {}"
@@ -275,8 +277,9 @@ class PipelineWorker(Worker):
                     for message in messages:
                         self.log_info(message, filename=self.logfile)
                 job.update_exceptions(exceptions)
-                signal = Signal(self.worker, idx_job, iteration, job.n_iters, self.trial,
-                                False, job.exceptions, exec_actions, dump_actions)
+                signal = Signal(worker=self.worker, job=idx_job, iteration=iteration, n_iters=job.n_iters,
+                                trial=self.trial, done=False, exception=job.exceptions, exec_actions=exec_actions,
+                                dump_actions=dump_actions)
                 self.feedback_queue.put(signal)
             iteration += 1
             self.finished_iterations = iteration

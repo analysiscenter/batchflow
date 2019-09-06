@@ -9,6 +9,7 @@ import json
 import pprint
 import dill
 import pandas as pd
+import multiprocess as mp
 
 from .. import Config, Pipeline
 from .distributor import Distributor
@@ -259,7 +260,16 @@ class Research:
 
         n_jobs = ceil(len(configs_with_repetitions) / n_models)
 
+        jobs = self._jobs_to_queue(jobs)
+
         return jobs, n_jobs
+
+    @staticmethod
+    def _jobs_to_queue(jobs):
+        queue = mp.JoinableQueue()
+        for idx, job in enumerate(jobs):
+            queue.put((idx, job))
+        return queue
 
     def _chunks(self, array, size):
         """ Divide array into chunks of the fixed size.
