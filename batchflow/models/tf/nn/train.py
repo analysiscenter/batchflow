@@ -21,8 +21,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, m
 
     Args:
     learning_rate: A scalar `float32` or `float64` `Tensor` or a
-        Python number.  The initial learning rate which is the lower bound
-        of the cycle.
+        Python number. The minimun learning rate boundary.
     global_step: A scalar `int32` or `int64` `Tensor` or a Python number.
         Global step to use for the cyclic computation.  Must not be negative.
     max_lr:  A scalar. The maximum learning rate boundary.
@@ -58,17 +57,18 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, m
         # (max_lr - learning_rate)/2 * sin(pi * global_step/step_size - pi) + (max_lr + learning_rate)/2
             first_factor = math_ops.divide(math_ops.subtract(learning_rate, max_lr), 2.)
             second_factor = sin(math_ops.divide(math_ops.multiply(pi, global_step), step_size))
-        elif mode in ('triangular', 'triangular wave', 'zigzag'):
+            second_comp = math_ops.divide(math_ops.add(learning_rate, max_lr), 2.)
+            return math_ops.add(math_ops.multiply(first_factor, second_factor), second_comp)
+        if mode in ('triangular', 'triangular wave', 'zigzag'):
         # ((max_lr - learning_rate)/pi) * asin(sin(((2 * -pi)/step_size) * global_step)) + (max_lr + learning_rate)/2
             first_factor = math_ops.divide(math_ops.subtract(max_lr, learning_rate), pi)
             inside_sin = math_ops.multiply(math_ops.divide(math_ops.multiply(2., -pi), step_size), global_step)
             second_factor = asin(sin(inside_sin))
-        elif mode in ('sawtooth', 'saw', 'sawtooth wave', 'saw wave'):
+            second_comp = math_ops.divide(math_ops.add(learning_rate, max_lr), 2.)
+            return math_ops.add(math_ops.multiply(first_factor, second_factor), second_comp)
+        if mode in ('sawtooth', 'saw', 'sawtooth wave', 'saw wave'):
         # (max_lr - learning_rate) * (global_step/step_size - floor(global_step/step_size)) + learning_rate
             first_factor = math_ops.subtract(max_lr, learning_rate)
             divided_global_step = math_ops.divide(global_step, step_size)
             second_factor = math_ops.subtract(divided_global_step, floor(divided_global_step))
             return math_ops.add(math_ops.multiply(first_factor, second_factor), learning_rate)
-
-        second_comp = math_ops.divide(math_ops.add(learning_rate, max_lr), 2.)
-        return math_ops.add(math_ops.multiply(first_factor, second_factor), second_comp)
