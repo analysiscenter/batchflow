@@ -62,8 +62,8 @@ def test_build_dirs(files_setup):    #pylint: disable=redefined-outer-name
 def test_same_name_in_differen_folders(files_setup):    #pylint: disable=redefined-outer-name
     path, _, _ = files_setup
     path = os.path.join(path, '*', '*')
-    findex = FilesIndex(path=path)
-    assert len(findex.indices) == len(findex._paths)
+    with pytest.raises(ValueError):
+        findex = FilesIndex(path=path)
 
 def test_build_from_index(files_setup):    #pylint: disable=redefined-outer-name
     path, _, _ = files_setup

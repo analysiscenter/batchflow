@@ -58,6 +58,10 @@ def test_build_index(constructor):
         constructor = constructor()
     assert (dsi.index == constructor).all()
 
+def test_build_non_unique_indices_warning():
+    with pytest.warns(UserWarning):
+        DatasetIndex([1, 1, 1])
+
 def test_build_index_empty():
     with pytest.raises(ValueError):
         DatasetIndex([])
