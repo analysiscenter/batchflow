@@ -39,7 +39,7 @@ DECAYS = {
     'naturalexp': tf.train.natural_exp_decay,
     'const': piecewise_constant,
     'poly': tf.train.polynomial_decay,
-    'cycle': cyclic_learning_rate,
+    'cyclic': cyclic_learning_rate,
 }
 
 
