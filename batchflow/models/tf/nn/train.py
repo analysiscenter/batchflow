@@ -72,7 +72,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, m
     -------
     tf.Tensor
     """
-    with tf.name_scope_v2(name or "CyclicLearningRate"):
+    with tf.name_scope(name or "CyclicLearningRate"):
         learning_rate = tf.cast(learning_rate, dtype=tf.float32)
         global_step = tf.cast(global_step, dtype=tf.float32)
         step_size = tf.cast(step_size, dtype=tf.float32)
