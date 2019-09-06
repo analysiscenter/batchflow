@@ -28,7 +28,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
     step_size: int
         the number of iterations in half a cycle (default=10)
     mode:
-        If 'sin' or 'sine' or 'sine wave':
+        If 'sin':
             Learning rate changes as a sine wave, starting
             from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
             It is computed as:
@@ -40,7 +40,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
 
             ```
 
-        If 'triangular' or 'triangular wave' or 'zigzag':
+        If 'tri':
             Default, linearly increasing then linearly decreasing the
             learning rate at each cycle. Learning rate starting
             from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
@@ -53,7 +53,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
 
             ```
 
-        If 'sawtooth' or 'saw' or 'sawtooth wave' or 'saw wave':
+        If 'saw':
             Learning rate linearly increasing from `learning_rate` to `max_lr`
             and then sharply drops to `learning_rate` at each cycle.
             Learning rate starting from `learning_rate` then increasing.
