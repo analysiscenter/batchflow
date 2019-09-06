@@ -73,9 +73,23 @@ def test_build_from_index(files_setup):    #pylint: disable=redefined-outer-name
     findex = FilesIndex(index=dsindex, paths=paths, dirs=False)
     assert len(dsindex) == len(findex)
 
+def test_get_full_path(files_setup):    #pylint: disable=redefined-outer-name
+    path, _, _ = files_setup
+    findex = FilesIndex(path=os.path.join(path, '*'))
+    file_name = 'file_1.txt'
+    full_path = findex.get_fullpath(file_name)
+    assert os.path.dirname(full_path) == path
+    assert os.path.basename(full_path) == file_name
 
-# def test_get_full_path():
-#     pass
-
-# def test_create_subset():
-#     pass
+@pytest.mark.parametrize('index', [DatasetIndex(['file_1.txt']),
+                                   ['file_1.txt']])
+def test_create_subset(files_setup, index):    #pylint: disable=redefined-outer-name
+    path, _, _ = files_setup
+    findex = FilesIndex(path=os.path.join(path, '*'))
+    new_findex = findex.create_subset(index)
+    file_name = 'file_1.txt'
+    full_path = new_findex.get_fullpath()
+    assert len(new_findex) == 1
+    assert isinstance(new_findex.indices, np.ndarray)
+    assert os.path.dirname(full_path) == path
+    assert os.path.basename(full_path) == file_name
