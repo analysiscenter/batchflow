@@ -132,7 +132,7 @@ class VariableDirectory:
 
         for name, var in variables.items():
             var = var or {}
-            var.pop('name')
+            var.pop('name', '')
             var.pop('args', ())
             kwargs = var.pop('kwargs', {})
             self.create(name, **var, **kwargs, pipeline=pipeline)
