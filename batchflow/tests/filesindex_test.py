@@ -1,6 +1,7 @@
 """ Tests for FilesIndex class. """
 # pylint: disable=missing-docstring
 # pylint: disable=protected-access
+# pylint: disable=redefined-outer-name
 import os
 import shutil
 
@@ -45,27 +46,27 @@ def test_build_index_non_path(path, error):
     with pytest.raises(error):
         FilesIndex(path=path)
 
-def test_build_no_ext(files_setup):    #pylint: disable=redefined-outer-name
+def test_build_no_ext(files_setup):
     path, _, _ = files_setup
     path = os.path.join(path, '*')
     findex = FilesIndex(path=path, no_ext=True)
     assert len(findex) == 3
     assert os.path.splitext(findex.indices[0])[1] == ''
 
-def test_build_dirs(files_setup):    #pylint: disable=redefined-outer-name
+def test_build_dirs(files_setup):
     path, folder1, _ = files_setup
     path = os.path.join(path, '*')
     findex = FilesIndex(path=path, dirs=True, sort=True)
     assert len(findex) == 2
     assert findex.indices[0] == os.path.split(folder1)[1]
 
-def test_same_name_in_differen_folders(files_setup):    #pylint: disable=redefined-outer-name
+def test_same_name_in_differen_folders(files_setup):
     path, _, _ = files_setup
     path = os.path.join(path, '*', '*')
     with pytest.raises(ValueError):
-        findex = FilesIndex(path=path)
+        FilesIndex(path=path)
 
-def test_build_from_index(files_setup):    #pylint: disable=redefined-outer-name
+def test_build_from_index(files_setup):
     path, _, _ = files_setup
     files = ['file_{}.txt'.format(i) for i in range(3)]
     paths = dict(zip(files, [os.path.join(path, f) for f in files]))
@@ -73,7 +74,7 @@ def test_build_from_index(files_setup):    #pylint: disable=redefined-outer-name
     findex = FilesIndex(index=dsindex, paths=paths, dirs=False)
     assert len(dsindex) == len(findex)
 
-def test_get_full_path(files_setup):    #pylint: disable=redefined-outer-name
+def test_get_full_path(files_setup):
     path, _, _ = files_setup
     findex = FilesIndex(path=os.path.join(path, '*'))
     file_name = 'file_1.txt'
@@ -83,7 +84,7 @@ def test_get_full_path(files_setup):    #pylint: disable=redefined-outer-name
 
 @pytest.mark.parametrize('index', [DatasetIndex(['file_1.txt']),
                                    ['file_1.txt']])
-def test_create_subset(files_setup, index):    #pylint: disable=redefined-outer-name
+def test_create_subset(files_setup, index):
     path, _, _ = files_setup
     findex = FilesIndex(path=os.path.join(path, '*'))
     new_findex = findex.create_subset(index)
