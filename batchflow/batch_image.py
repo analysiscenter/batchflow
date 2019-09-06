@@ -341,7 +341,7 @@ class ImagesBatch(BaseImagesBatch):
                 array_result[:] = result
                 setattr(self, component, array_result)
 
-    def _to_array_(self, image, dtype=None, channels='last'):
+    def _to_array_(self, image, dtype=None, channels=False):
         """converts images in Batch to np.ndarray format
 
         Parameters
@@ -355,8 +355,8 @@ class ImagesBatch(BaseImagesBatch):
         if len(image.shape) == 2:
             image = image[:, :, np.newaxis]
 
-        if channels != 'last':
-            image = np.moveaxis(image, -1, 0)
+        if channels:
+            image = np.swapaxes(image, 0, -1)
 
         if dtype is not None:
             image = image.astype(dtype)
