@@ -8,7 +8,8 @@ from .named_expr import eval_expr
 
 class Variable:
     """ Pipeline variable """
-    def __init__(self, default=None, lock=True, pipeline=None):
+    def __init__(self, name, default=None, lock=True, pipeline=None):
+        self.name = name
         self.default = default
         self._lock = threading.Lock() if lock else None
         self.value = None
@@ -81,7 +82,7 @@ class VariableDirectory:
             self.variables[name].unlock()
 
     def copy(self):
-        return cp.copy(self)
+        return cp.deepcopy(self)
 
     def __copy__(self):
         """ Make a shallow copy of the directory """
@@ -89,12 +90,19 @@ class VariableDirectory:
         new_dir.variables = {**self.variables}
         return new_dir
 
+    def __deepcopy__(self, memo):
+        """ Make a deep copy of the directory """
+        _ = memo
+        new_dir = VariableDirectory()
+        new_dir.create_many(self)
+        return new_dir
+
     def __add__(self, other):
         if not isinstance(other, VariableDirectory):
             raise TypeError("VariableDirectory is expected, but given '%s'" % type(other).__name__)
 
         new_dir = self.copy()
-        new_dir.variables.update(other.variables)
+        new_dir.create_many(other)
         return new_dir
 
     def items(self):
@@ -115,7 +123,7 @@ class VariableDirectory:
         if not self.exists(name):
             with self._lock:
                 if not self.exists(name):
-                    self.variables[name] = Variable(*args, pipeline=pipeline, **kwargs)
+                    self.variables[name] = Variable(name, *args, pipeline=pipeline, **kwargs)
 
     def create_many(self, variables, pipeline=None):
         """ Create many variables at once """
@@ -124,6 +132,7 @@ class VariableDirectory:
 
         for name, var in variables.items():
             var = var or {}
+            var.pop('name')
             var.pop('args', ())
             kwargs = var.pop('kwargs', {})
             self.create(name, **var, **kwargs, pipeline=pipeline)
