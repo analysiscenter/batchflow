@@ -102,6 +102,7 @@ class Job:
         _ = name, actions
         if execute is not None:
             item.execute_for(batch, iteration)
+            print('run:', item.pipeline, id(item.pipeline.v('device')))
 
     def _parallel_init_run(self, iteration, name, batch, actions):
         _ = iteration, batch
@@ -127,6 +128,7 @@ class Job:
         """ Add values of pipeline variables to results """
         for experiment, execute in zip(self.experiments, actions):
             if execute is not None:
+                print(experiment[name].pipeline, id(experiment[name].pipeline.v('device')))
                 experiment[name].put_result(iteration)
 
     def get_actions(self, iteration, name, action='execute'):
