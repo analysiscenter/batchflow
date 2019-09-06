@@ -112,4 +112,7 @@ class SklearnModel(BaseModel):
         array
             Predicted value per sample, shape (n_samples,)
         """
-        return self.estimator.predict(X, *args, **kwargs)
+        if hasattr(self.estimator, 'predict_proba'):
+            return self.estimator.predict_proba(X, *args, **kwargs)
+        else:
+            return self.estimator.predict(X, *args, **kwargs)

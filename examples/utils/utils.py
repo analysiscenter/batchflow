@@ -335,8 +335,9 @@ def calculate_accuracy(batch, pipeline, predict_name):
     top3 = np.mean([1 if batch.labels[i] in pred else 0 for i, pred in enumerate(predict_top3)])
     return top1, top3
 
-def plot_images_predictions(images, targets, proba, in_row=5, classes_names=None, **kwargs):
-    """ Plot images with true label and predicted class proba
+def plot_images_predictions(images, targets, proba, in_row=5, classes_names=None, models_names=None, **kwargs):
+    """ Plot images with true label and predicted class proba.
+    Plots predictions of several models in case proba is a list containing each model predictions.
 
     Parameters
     ----------
@@ -346,8 +347,8 @@ def plot_images_predictions(images, targets, proba, in_row=5, classes_names=None
     targets : array-like
         images labels
 
-    proba: np.array with the shape (n_images, n_classes)
-        predicted probabilities for each class
+    proba: np.array with the shape (n_images, n_classes) or list of such arrays
+        predicted probabilities for each class for each model
 
     in_row: int
         number of images to plot in a row (default 5)
@@ -358,21 +359,31 @@ def plot_images_predictions(images, targets, proba, in_row=5, classes_names=None
     kwargs : dict
         additional keyword arguments for plt.subplots().
     """
-    n_items = len(images)
+    if not isinstance(proba, list):
+        proba = [proba]
+        if models_names is None:
+            models_names = ['']
+    else:
+        if models_names is None:
+            models_names = ['Model ' + str(i+1) for i in range(len(proba))]
 
+    n_items = len(images)
     if classes_names is None:
-        classes_names = [str(i) for i in range(proba.shape[1])]
+        classes_names = [str(i) for i in range(proba[0].shape[1])]
 
     n_rows = (n_items // in_row) + 1
     fig, ax = plt.subplots(n_rows, in_row, **kwargs)
     ax = ax.flatten()
     for i in range(n_items):
         ax[i].imshow(images[i])
-        class_pred = np.argmax(proba, axis=1)[i]
-        class_proba = proba[i][class_pred]
-        pred_class_name = classes_names[class_pred]
         true_class_name = classes_names[targets[i]]
-        ax[i].title.set_text('True: {0}\nPred: {1}, p = {2:.2f}'.format(true_class_name, pred_class_name, class_proba))
+        title = 'True: {}'.format(true_class_name)
+        for j, model_proba in enumerate(proba):
+            class_pred = np.argmax(model_proba, axis=1)[i]
+            class_proba = model_proba[i][class_pred]
+            pred_class_name = classes_names[class_pred]
+            title += '\n {0} pred: {1}, p = {2:.2f}'.format(models_names[j], pred_class_name, class_proba)
+        ax[i].title.set_text(title)
         ax[i].grid(b=None)
 
     for i in range(n_items, n_rows * in_row):
