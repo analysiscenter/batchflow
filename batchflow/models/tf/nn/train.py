@@ -37,9 +37,9 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, m
             learning rate at each cycle. Learning rate starting
             from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
         If 'sawtooth' or 'saw' or 'sawtooth wave' or 'saw wave':
-            Linearly increasing to `max_lr` then again increasing from `learning_rate`
-            learning rate at each cycle. Learning rate starting from `learning_rate`
-            then increasing.
+            Learning rate linearly increasing from `learning_rate` to `max_lr`
+            and then sharply drops to `learning_rate` at each cycle.
+            Learning rate starting from `learning_rate` then increasing.
     name: String.  Optional name of the operation.  Defaults to
         'CyclicLearningRate'.
 
@@ -58,17 +58,16 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, m
             first_factor = math_ops.divide(math_ops.subtract(learning_rate, max_lr), 2.)
             second_factor = sin(math_ops.divide(math_ops.multiply(pi, global_step), step_size))
             second_comp = math_ops.divide(math_ops.add(learning_rate, max_lr), 2.)
-            return math_ops.add(math_ops.multiply(first_factor, second_factor), second_comp)
-        if mode in ('triangular', 'triangular wave', 'zigzag'):
+        elif mode in ('triangular', 'triangular wave', 'zigzag'):
         # ((max_lr - learning_rate)/pi) * asin(sin(((2 * -pi)/step_size) * global_step)) + (max_lr + learning_rate)/2
             first_factor = math_ops.divide(math_ops.subtract(max_lr, learning_rate), pi)
             inside_sin = math_ops.multiply(math_ops.divide(math_ops.multiply(2., -pi), step_size), global_step)
             second_factor = asin(sin(inside_sin))
             second_comp = math_ops.divide(math_ops.add(learning_rate, max_lr), 2.)
-            return math_ops.add(math_ops.multiply(first_factor, second_factor), second_comp)
-        if mode in ('sawtooth', 'saw', 'sawtooth wave', 'saw wave'):
+        elif mode in ('sawtooth', 'saw', 'sawtooth wave', 'saw wave'):
         # (max_lr - learning_rate) * (global_step/step_size - floor(global_step/step_size)) + learning_rate
             first_factor = math_ops.subtract(max_lr, learning_rate)
             divided_global_step = math_ops.divide(global_step, step_size)
             second_factor = math_ops.subtract(divided_global_step, floor(divided_global_step))
             return math_ops.add(math_ops.multiply(first_factor, second_factor), learning_rate)
+        return math_ops.add(math_ops.multiply(first_factor, second_factor), second_comp)
