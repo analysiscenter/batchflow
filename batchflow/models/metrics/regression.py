@@ -10,7 +10,10 @@ METRICS_ALIASES = {'mae': 'mean_absolute_error',
                    'acc': 'accuracy'}
 
 class RegressionMetrics(Metrics):
-    """ Metrics to assess regression models
+    """ Metrics to assess regression models.
+
+    Available metrics: mae, mse, rmse, r2_score, explained_variance_ratio,
+                       median absolute error, max error, accuracy.
 
     Parameters
     ----------
@@ -39,12 +42,21 @@ class RegressionMetrics(Metrics):
     - For all the metrics, except max error, accuracy and median absolute error, you can compute sample-wise weighting.
     For that purpose specify `weight` argument, which must be the same size as inputs.
 
+    Multioutput task restricted to the case where each target is 1D array.
     In the multioutput case metrics might be calculated with or without outputs averaging.
 
     Available methods are:
 
     - `None` - no averaging, calculate metrics for each output individually
     - `mean` - calculate metrics for each output, and take their mean.
+
+    Examples
+    --------
+    ::
+
+        metrics = RegressionMetrics(targets, predictions, multi=True)
+        metrics.evaluate('mae', agg='mean')
+        metrics.evaluate(['accuracy', 'mse'], agg=None)
 
     **Metrics**
     All metrics return:
@@ -68,7 +80,10 @@ class RegressionMetrics(Metrics):
         # In the first case concatenating such arrays do not have any sence. To separate such cases we introduce
         # 'multi' argument.
 
-        if np.ndim(targets) == 1 or (np.ndim(targets) == 2 and multi):
+        if np.ndim(targets) == 0 or (np.ndim(targets) == 1 and multi):
+            self.targets = np.array([targets])
+            self.predictions = np.array([predictions])
+        elif np.ndim(targets) == 1 or (np.ndim(targets) == 2 and multi):
             self.targets = np.array(targets)
             self.predictions = np.array(predictions)
         else:
@@ -80,10 +95,7 @@ class RegressionMetrics(Metrics):
         else:
             self.weights = None
 
-        self.multi = multi
-        self._agg_fn_dict = {
-            'mean': lambda x: np.mean(x),
-        }
+        self._agg_fn_dict.update(mean=lambda x: np.mean(x))
 
     def __getattr__(self, name):
         if name == "METRICS_ALIASES":
