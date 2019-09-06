@@ -86,6 +86,9 @@ class Option:
         grid = Grid(self)
         return grid.gen_configs(n_items)
 
+    def __len__(self):
+        return len(self.values)
+
 class ConfigAlias:
     """ Class for config and alias which is represenation of config where all keys and values are str.
 
@@ -182,7 +185,7 @@ class Grid:
         if self.grid is None:
             x = 0
         else:
-            x = len(self.grid)
+            x = sum([reduce(lambda a, b: a*b, [len(option) for option in item]) for item in self.grid])
         return x
 
     def __mul__(self, other):
@@ -224,7 +227,7 @@ class Grid:
     def __eq__(self, other):
         return self.grid() == other.grid()
 
-    def gen_configs(self, n_items=1):
+    def gen_configs(self, n_items=1, include_index=False):
         """ Generate Configs from grid
 
         Parameters
@@ -232,20 +235,25 @@ class Grid:
         n_items : int
             how much configs return on each iteration
         """
+        i = 0
         for item in self.grid:
             keys = [option.parameter for option in item]
             values = [option.values for option in item]
             if n_items == 1:
                 for parameters in product(*values):
-                    yield ConfigAlias(list(zip(keys, parameters)))
+                    i += 1
+                    config = ConfigAlias(list(zip(keys, parameters)))
+                    yield (i, config) if include_index else config
             else:
                 res = []
                 for parameters in product(*values):
                     if len(res) < n_items:
-                        res.append(ConfigAlias(list(zip(keys, parameters))))
+                        config = ConfigAlias(list(zip(keys, parameters)))
+                        res.append((i, config) if include_index else config)
                     else:
                         yield res
-                        res = [ConfigAlias(list(zip(keys, parameters)))]
+                        config = ConfigAlias(list(zip(keys, parameters)))
+                        res = [(i, config) if include_index else config]
                 yield res
 
     def subset(self, grid, by_alias=True):

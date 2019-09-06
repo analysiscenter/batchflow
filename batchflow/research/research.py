@@ -1,4 +1,4 @@
-""" Classes Research and Results for multiple experiments. """
+""" Classes Research and auxiliary classes for multiple experiments. """
 
 import os
 import glob
@@ -34,7 +34,6 @@ class Research:
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
-        self.n_splits = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
                      name=None, execute=1, dump='last', run=False, logging=False, **kwargs):
@@ -218,59 +217,6 @@ class Research:
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
-    def _create_jobs(self, n_reps, n_iters, folds, branches, name):
-        """ Create generator of jobs. If `branches=1` or `len(branches)=1` then each job is one repetition
-        for each config from grid_config. Else each job contains several pairs `(repetition, config)`.
-
-        Parameters
-        ----------
-        n_reps : int
-
-        n_iters : int
-
-        branches : int or list of Configs
-            if int, branches is a number of branches for one root
-            if list then each element is additional Configs for pipelines
-        name : str
-            name of research.
-        """
-        if isinstance(branches, int):
-            n_models = branches
-        elif branches is None:
-            n_models = 1
-        else:
-            n_models = len(branches)
-
-        folds = range(folds) if isinstance(folds, int) else [None]
-
-        # Create all combinations of possible paramaters, cv partitions and indices of repetitions
-        configs_with_repetitions = [(idx, configs, cv_split)
-                                    for idx in range(n_reps)
-                                    for configs in self.grid_config.gen_configs()
-                                    for cv_split in folds]
-
-        # Split all combinations into chunks that will use the same roots
-        configs_chunks = self._chunks(configs_with_repetitions, n_models)
-
-        jobs = (Job(self.executables, n_iters,
-                    list(zip(*chunk))[0], list(zip(*chunk))[1], list(zip(*chunk))[2],
-                    branches, name)
-                for chunk in configs_chunks
-               )
-
-        n_jobs = ceil(len(configs_with_repetitions) / n_models)
-
-        jobs = self._jobs_to_queue(jobs)
-
-        return jobs, n_jobs
-
-    @staticmethod
-    def _jobs_to_queue(jobs):
-        queue = mp.JoinableQueue()
-        for idx, job in enumerate(jobs):
-            queue.put((idx, job))
-        return queue
-
     def _chunks(self, array, size):
         """ Divide array into chunks of the fixed size.
 
@@ -284,16 +230,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def _cv_split(self, n_splits, shuffle):
-        has_dataset = False
-        for unit in self.executables:
-            if getattr(self.executables[unit], 'dataset', None):
-                has_dataset = True
-                self.executables[unit].dataset.cv_split(n_splits=n_splits, shuffle=shuffle)
-        if not has_dataset:
-            raise ValueError('At least one pipeline must have dataset to perform cross-validation')
-
-    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, n_splits=None, shuffle=False, name=None,
+    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, shuffle=False, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):
 
         """ Run research.
@@ -319,8 +256,6 @@ class Research:
             from `root`.
 
             If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
-        n_splits : int or None
-            number of folds for cross-validation.
         shuffle : bool
             cross-validation parameter
         name : str or None
@@ -363,27 +298,12 @@ class Research:
             self.worker_class = worker_class or PipelineWorker
             self.timeout = timeout
             self.trials = trials
-            self.n_splits = n_splits
 
         self.name = name or self.name
         self.bar = bar
 
-        # n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
-        # n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
-
-        if self.n_splits is not None:
-            self._cv_split(self.n_splits, shuffle)
-
         if self.grid_config is None:
             self.grid_config = Grid(Option('_dummy', [None]))
-
-        # if len(self.gpu) > 1 and len(self.gpu) % n_workers != 0:
-        #     raise ValueError("Number of gpus must be 1 or be divisible \
-        #                      by the number of workers but {} was given".format(len(self.gpu)))
-
-        # if len(self.gpu) > 1 and len(self.gpu) // n_workers > 1 and (len(self.gpu) // n_workers) % n_branches != 0:
-        #     raise ValueError("Number of gpus / n_workers must be 1 \
-        #                      or be divisible by the number of branches but {} was given".format(len(self.gpu)))
 
         self._folder_exists(self.name)
 
@@ -391,11 +311,11 @@ class Research:
 
         self.__save()
 
-        jobs, n_jobs = self._create_jobs(self.n_reps, self.n_iters, self.n_splits, self.branches, self.name)
+        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.n_iters, self.executables, self.name)
 
         distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
-        distr.run(jobs, dirname=self.name, n_jobs=n_jobs,
-                  n_iters=self.n_iters, bar=self.bar)
+        distr.run(jobs_queue, dirname=self.name, n_iters=self.n_iters, bar=self.bar)
+
         return self
 
     def __getstate__(self):
@@ -452,6 +372,53 @@ class Research:
             research.loaded = True
             return research
 
+class DynamicQueue:
+    def __init__(self, branches, grid, n_iters, executables, research_path):
+        self.branches = branches
+        self.grid = grid
+        self.n_iters = n_iters
+        self.executables = executables
+
+        self.n_branches = branches if isinstance(branches, int) else len(branches)
+        self.generator = grid.gen_configs()
+        self.research_path = research_path
+
+        self._queue = mp.JoinableQueue()
+    
+    def next_tasks(self, n_tasks=1):
+        results = Results(path=self.research_path).load()
+        print(results)
+        configs = []
+        prepared_tasks = 0
+        for i in range(n_tasks):
+            branch_tasks = []
+            try:
+                for j in range(self.n_branches):
+                    branch_tasks.append(next(self.generator))
+                configs.append(branch_tasks)
+            except StopIteration:
+                break
+        if len(branch_tasks) > 0:
+            configs.append(branch_tasks)
+        for i, config in enumerate(configs):
+            self.put((prepared_tasks + i, Job(self.executables, self.n_iters, config, self.branches, self.research_path)))
+
+        n_tasks = len(configs)
+        prepared_tasks += n_tasks
+
+        return n_tasks
+
+    def join(self):
+        self._queue.join()
+
+    def get(self):
+        return self._queue.get()
+
+    def put(self, value):
+        self._queue.put(value)
+    
+    def task_done(self):
+        self._queue.task_done()
 
 class Results():
     """ Class for dealing with results of research
@@ -532,7 +499,7 @@ class Results():
         return result
 
 
-    def load(self, names=None, repetitions=None, folds=None, variables=None, iterations=None,
+    def load(self, names=None, variables=None, iterations=None,
              configs=None, aliases=None, use_alias=False):
         """ Load results as pandas.DataFrame.
 
@@ -540,10 +507,6 @@ class Results():
         ----------
         names : str, list or None
             names of units (pipleines and functions) to load
-        repetitions : int, list or None
-            numbers of repetitions to load
-        folds : int, list or None
-            split of dataset
         variables : str, list or None
             names of variables to load
         iterations : int, list or None
@@ -557,14 +520,14 @@ class Results():
         Returns
         -------
         pandas.DataFrame or dict
-            will have columns: iteration, repetition, name (of pipeline/function)
+            will have columns: iteration, name (of pipeline/function)
             and column for config. Also it will have column for each variable of pipeline
             and output of the function that was saved as a result of the research.
 
         **How to perform slicing**
             Method `load` with default parameters will create pandas.DataFrame with all dumped
             parameters. To specify subset of results one can define names of pipelines/functions,
-            produced variables/outputs of them, repetitions, iterations and configs. For example,
+            produced variables/outputs of them, iterations and configs. For example,
             we have the following research:
 
             ```
@@ -581,17 +544,17 @@ class Results():
             ```
             The code
             ```
-            Results(research=research).load(repetitions=0, iterations=np.arange(5000, 10000),
+            Results(research=research).load(iterations=np.arange(5000, 10000),
                                             variables='accuracy', names='test_accuracy',
                                             configs=Option('layout', ['cna', 'can']))
             ```
-            will load output of ``accuracy`` function at the first repetitions for configs
+            will load output of ``accuracy`` function for configs
             that contain layout 'cna' or 'can' for iterations starting with 5000.
-            The resulting dataframe will have columns 'repetition', 'iteration', 'name',
+            The resulting dataframe will have columns 'iteration', 'name',
             'accuracy', 'layout', 'model'. One can get the same in the follwing way:
             ```
             results = Results(research=research).load()
-            results = results[(results.repetition == 0) & (results.iterations >= 5000) &
+            results = results[(results.iterations >= 5000) &
                               (results.name == 'test_accuracy') & results.layout.isin(['cna', 'can'])]
             ```
         """
@@ -606,52 +569,38 @@ class Results():
         if names is None:
             names = list(self.research.executables.keys())
 
-        if repetitions is None:
-            repetitions = list(range(self.research.n_reps))
-
-        if folds is None:
-            folds = list(range(self.research.n_splits)) if self.research.n_splits is not None else [None]
-
         if variables is None:
             variables = [variable for unit in self.research.executables.values() for variable in unit.variables]
 
         self.names = self._get_list(names)
-        self.repetitions = self._get_list(repetitions)
         self.variables = self._get_list(variables)
         self.iterations = self._get_list(iterations)
-        self.folds = self._get_list(folds)
 
         all_results = []
 
         for config_alias in self.configs:
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
-            for repetition in self.repetitions:
-                for cv_split in self.folds:
-                    for unit in self.names:
-                        path = os.path.join(self.path, 'results', alias_str, str(repetition))
-                        cv_folder = 'cv_'+str(cv_split) if cv_split is not None else ''
-                        files = glob.glob(os.path.join(glob.escape(path), cv_folder, unit + '_[0-9]*'))
-                        files = self._sort_files(files, self.iterations)
-                        if len(files) != 0:
-                            res = []
-                            for filename, iterations_to_load in files.items():
-                                with open(filename, 'rb') as file:
-                                    res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
-                            res = self._concat(res, self.variables)
-                            self._fix_length(res)
-                            if '_dummy' not in alias:
-                                if use_alias:
-                                    res['config'] = alias_str
-                                else:
-                                    res.update(alias)
-                            if cv_split is not None:
-                                res['cv_split'] = cv_split
-                            all_results.append(
-                                pd.DataFrame({
-                                    'repetition': repetition,
-                                    'name': unit,
-                                    **res
-                                })
-                                )
+            for unit in self.names:
+                path = os.path.join(self.path, 'results', alias_str)
+                files = glob.glob(os.path.join(glob.escape(path), unit + '_[0-9]*'))
+                files = self._sort_files(files, self.iterations)
+                if len(files) != 0:
+                    res = []
+                    for filename, iterations_to_load in files.items():
+                        with open(filename, 'rb') as file:
+                            res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
+                    res = self._concat(res, self.variables)
+                    self._fix_length(res)
+                    if '_dummy' not in alias:
+                        if use_alias:
+                            res['config'] = alias_str
+                        else:
+                            res.update(alias)
+                    all_results.append(
+                        pd.DataFrame({
+                            'name': unit,
+                            **res
+                        })
+                        )
         return pd.concat(all_results).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)

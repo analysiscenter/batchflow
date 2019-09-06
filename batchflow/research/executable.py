@@ -255,8 +255,7 @@ class Executable:
     def create_folder(self, name):
         """ Create folder if it doesn't exist """
         cv_folder = 'cv_' + str(self.cv_split) if self.cv_split is not None else ''
-        self.path = os.path.join(name, 'results', self.config.alias(as_string=True),
-                                 str(self.repetition), cv_folder)
+        self.path = os.path.join(name, 'results', self.config.alias(as_string=True), cv_folder)
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
