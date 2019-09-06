@@ -9,7 +9,8 @@ def piecewise_constant(global_step, *args, **kwargs):
     """ Constant learning rate decay (uses global_step param instead of x) """
     return tf.train.piecewise_constant(global_step, *args, **kwargs)
 
-def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, mode='triangular', name=None):
+def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
+                         mode='triangular', name='CyclicLearningRate'):
     """ Applies cyclic learning rate (CLR).
     https://arxiv.org/abs/1506.01186.
     This function varies the learning rate between the
@@ -72,22 +73,22 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, m
     -------
     tf.Tensor
     """
-    with tf.name_scope(name or "CyclicLearningRate"):
+    with tf.name_scope(name):
         learning_rate = tf.cast(learning_rate, dtype=tf.float32)
         global_step = tf.cast(global_step, dtype=tf.float32)
         step_size = tf.cast(step_size, dtype=tf.float32)
         max_lr = tf.cast(max_lr, dtype=tf.float32)
 
-        if mode in ('sin', 'sine', 'sine wave'):
+        if mode == 'sin':
             first_factor = (learning_rate - max_lr) / 2.
             second_factor = sin((pi * global_step)/step_size)
             second_comp = (learning_rate + max_lr) / 2.
-        elif mode in ('triangular', 'triangular wave', 'zigzag'):
+        elif mode == 'tri':
             first_factor = (learning_rate-max_lr) / pi
             inside_sin = 2. * pi  / step_size * global_step
             second_factor = asin(sin(inside_sin))
             second_comp = (learning_rate + max_lr) / 2.
-        elif mode in ('sawtooth', 'saw', 'sawtooth wave', 'saw wave'):
+        elif mode == 'saw':
             first_factor = learning_rate - max_lr
             divided_global_step = global_step / step_size
             second_factor = floor(divided_global_step) - divided_global_step
