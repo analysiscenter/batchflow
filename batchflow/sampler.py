@@ -23,7 +23,8 @@ ALIASES = {
     'mnm': {'np': 'multinomial', 'ss': 'multinomial', 'tf': 'Multinomial'},
     'b' : {'np': 'binomial', 'ss': 'binom'},
     'be' : {'np': 'beta', 'ss': 'beta', 'tf': 'Beta'},
-    'chi2': {'np': 'chisquare', 'ss': 'chi2'}
+    'chi2': {'np': 'chisquare', 'ss': 'chi2'},
+    'c': {'np': 'choice'}
 }
 
 def _get_method_by_alias(alias, module, tf_distributions=None):
