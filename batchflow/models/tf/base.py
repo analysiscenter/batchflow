@@ -1035,7 +1035,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None, use_lock=False, train_mode='', microbatch=None, **kwargs):
+    def train(self, fetches=None, feed_dict=None, use_lock=True, train_mode='', microbatch=None, **kwargs):
         """ Train the model with the data provided
 
         Parameters
