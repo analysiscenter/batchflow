@@ -2,7 +2,6 @@
 from math import pi
 
 import tensorflow as tf
-from tensorflow.python.framework import ops # pylint: disable=no-name-in-module
 from tensorflow.math import sin, asin, floor # pylint: disable=import-error
 
 
@@ -73,8 +72,8 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10, m
     -------
     tf.Tensor
     """
-    with ops.name_scope_v2(name or "CyclicLearningRate"):
-        learning_rate = tf.cast(learning_rate, dtype=tf.float32, name="learning_rate")
+    with tf.name_scope_v2(name or "CyclicLearningRate"):
+        learning_rate = tf.cast(learning_rate, dtype=tf.float32)
         global_step = tf.cast(global_step, dtype=tf.float32)
         step_size = tf.cast(step_size, dtype=tf.float32)
         max_lr = tf.cast(max_lr, dtype=tf.float32)
