@@ -89,7 +89,7 @@ def test_create_subset(files_setup, index):
     findex = FilesIndex(path=os.path.join(path, '*'))
     new_findex = findex.create_subset(index)
     file_name = 'file_1.txt'
-    full_path = new_findex.get_fullpath()
+    full_path = new_findex.get_fullpath(file_name)
     assert len(new_findex) == 1
     assert isinstance(new_findex.indices, np.ndarray)
     assert os.path.dirname(full_path) == path

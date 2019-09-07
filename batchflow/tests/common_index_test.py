@@ -30,17 +30,14 @@ def files_setup(request):
     request.addfinalizer(fin)
     return path, [name for name in os.listdir(path) if name.endswith('txt')]
 
-@pytest.fixture(params=[DatasetIndex, FilesIndex])
+@pytest.fixture(params=[5, ['a', 'b', 'c', 'd', 'e'], None])
 def index(request, files_setup):
-    if request.param is DatasetIndex:
-        return DatasetIndex(5), np.arange(5)
+    if isinstance(request.param, int):
+        return DatasetIndex(request.param), np.arange(request.param)
+    if isinstance(request.param, list):
+        return DatasetIndex(request.param), request.param
     path, files = files_setup
     return FilesIndex(path=os.path.join(path, '*')), files
-
-@pytest.fixture()
-def index_str():
-    elements = ['a', 'b', 'c', 'd', 'e']
-    return DatasetIndex(elements), elements
 
 @pytest.fixture(params=[DatasetIndex, FilesIndex])
 def small_index(request, files_setup):
@@ -49,9 +46,6 @@ def small_index(request, files_setup):
     path, _ = files_setup
     return FilesIndex(path=os.path.join(path, '*1.txt'))
 
-@pytest.fixture(params=['index', 'index_str'])
-def fixture_controller(request, index, index_str):
-    return {'index':index, 'index_str':index_str}[request.param]
 
 def test_len(index):
     index, _ = index
@@ -99,17 +93,20 @@ def test_split_correctness(index):
                                 | set(index.validation.index))
 
 
-# def test_get_pos(fixture_controller):
-#     index, values = fixture_controller
-#     assert index.get_pos(4) == values[4]
+def test_get_pos(index):
+    index, values = index
+    elem = values[4]
+    assert index.get_pos(elem) == 4
 
-# def test_get_pos_slice(fixture_controller):
-#     index, values = fixture_controller
-#     assert index.get_pos(slice(0, 4, 2)) == values[slice(0, 4, 2)]
+def test_get_pos_slice(index):
+    index, values = index
+    elem = values[slice(0, 4, 2)]
+    assert (index.get_pos(elem) == np.array([0, 2])).all()
 
-# def test_get_pos_iterable(fixture_controller):
-#     index, values = fixture_controller
-#     assert (index.get_pos(np.arange(5)) == values[:5]).all()
+def test_get_pos_iterable(index):
+    index, values = index
+    elem = values
+    assert (index.get_pos(elem) == np.arange(len(values))).all()
 
 
 def test_shuffle_bool_false(index):
@@ -147,16 +144,16 @@ def test_shuffle_bool_callable(index):
     assert (left == right).all()
 
 
-def test_create_batch_pos_true(fixture_controller):
+def test_create_batch_pos_true(index):
     """ When 'pos' is True, method creates new batch by specified positions. """
-    index, values = fixture_controller
+    index, values = index
     right = values[:5]
     left = index.create_batch(range(5), pos=True).index
     assert (left == right).all()
 
-def test_create_batch_pos_false_str(fixture_controller):
+def test_create_batch_pos_false_str(index):
     """ When 'pos' is False, method returns the same, as its first argument. """
-    index, values = fixture_controller
+    index, values = index
     right = np.array([values[0], values[-1]])
     left = index.create_batch(right, pos=False).index
     assert (left == right).all()
