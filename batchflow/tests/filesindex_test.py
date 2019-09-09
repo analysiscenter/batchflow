@@ -35,7 +35,7 @@ def files_setup(request):
 
 
 @pytest.mark.parametrize('path,expectation', [['', does_not_raise()],
-                                              [[], pytest.raises(ValueError)], 
+                                              [[], pytest.raises(ValueError)],
                                               [['', ''], does_not_raise()]
                                               ])
 def test_build_index_empty(path, expectation):
