@@ -351,12 +351,17 @@ class B(NamedExpression):
 class C(NamedExpression):
     """ A pipeline config option
 
+    Notes
+    -----
+    ``C()`` return config itself.
+
     Examples
     --------
     ::
 
         C('model_class')
         C('GPU')
+        C()
     """
     def __init__(self, name=None, mode='w'):
         super().__init__(name, mode)
