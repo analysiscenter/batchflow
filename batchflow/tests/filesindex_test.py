@@ -88,16 +88,14 @@ def test_get_full_path(files_setup):
     assert os.path.dirname(full_path) == path
     assert os.path.basename(full_path) == file_name
 
-@pytest.mark.parametrize('index,expectation', [[DatasetIndex(['file_1.txt']), does_not_raise()],
-                                               [['file_1.txt'], pytest.raises(TypeError)]])
-def test_create_subset(files_setup, index, expectation):
+@pytest.mark.parametrize('index', [DatasetIndex(['file_1.txt']), ['file_1.txt']])
+def test_create_subset(files_setup, index):
     path, _, _ = files_setup
-    with expectation:
-        findex = FilesIndex(path=os.path.join(path, '*'))
-        new_findex = findex.create_subset(index)
-        file_name = 'file_1.txt'
-        full_path = new_findex.get_fullpath(file_name)
-        assert len(new_findex) == 1
-        assert isinstance(new_findex.indices, np.ndarray)
-        assert os.path.dirname(full_path) == path
-        assert os.path.basename(full_path) == file_name
+    findex = FilesIndex(path=os.path.join(path, '*'))
+    new_findex = findex.create_subset(index)
+    file_name = 'file_1.txt'
+    full_path = new_findex.get_fullpath(file_name)
+    assert len(new_findex) == 1
+    assert isinstance(new_findex.indices, np.ndarray)
+    assert os.path.dirname(full_path) == path
+    assert os.path.basename(full_path) == file_name
