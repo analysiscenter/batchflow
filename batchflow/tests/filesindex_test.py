@@ -5,6 +5,8 @@
 import os
 import shutil
 
+from contextlib import ExitStack as does_not_raise
+
 import pytest
 import numpy as np
 
@@ -32,11 +34,15 @@ def files_setup(request):
     return path, folder1, folder2
 
 
-@pytest.mark.parametrize('path', ['', [], ['', '']])
-def test_build_index_empty(path):
-    findex = FilesIndex(path=path)
-    assert len(findex) == 0
-    assert isinstance(findex.index, np.ndarray)
+@pytest.mark.parametrize('path,expectation', [['', does_not_raise()],
+                                              [[], pytest.raises(ValueError)], 
+                                              [['', ''], does_not_raise()]
+                                              ])
+def test_build_index_empty(path, expectation):
+    with expectation:
+        findex = FilesIndex(path=path)
+        assert len(findex) == 0
+        assert isinstance(findex.index, np.ndarray)
 
 @pytest.mark.parametrize('path,error', [(1, TypeError),
                                         ([2, 3], AttributeError),
@@ -82,15 +88,16 @@ def test_get_full_path(files_setup):
     assert os.path.dirname(full_path) == path
     assert os.path.basename(full_path) == file_name
 
-@pytest.mark.parametrize('index', [DatasetIndex(['file_1.txt']),
-                                   ['file_1.txt']])
-def test_create_subset(files_setup, index):
+@pytest.mark.parametrize('index,expectation', [[DatasetIndex(['file_1.txt']), does_not_raise()],
+                                               [['file_1.txt'], pytest.raises(TypeError)]])
+def test_create_subset(files_setup, index, expectation):
     path, _, _ = files_setup
-    findex = FilesIndex(path=os.path.join(path, '*'))
-    new_findex = findex.create_subset(index)
-    file_name = 'file_1.txt'
-    full_path = new_findex.get_fullpath(file_name)
-    assert len(new_findex) == 1
-    assert isinstance(new_findex.indices, np.ndarray)
-    assert os.path.dirname(full_path) == path
-    assert os.path.basename(full_path) == file_name
+    with expectation:
+        findex = FilesIndex(path=os.path.join(path, '*'))
+        new_findex = findex.create_subset(index)
+        file_name = 'file_1.txt'
+        full_path = new_findex.get_fullpath(file_name)
+        assert len(new_findex) == 1
+        assert isinstance(new_findex.indices, np.ndarray)
+        assert os.path.dirname(full_path) == path
+        assert os.path.basename(full_path) == file_name
