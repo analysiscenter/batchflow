@@ -3,6 +3,7 @@ import os
 import math
 import glob
 from collections.abc import Iterable
+import warnings
 import numpy as np
 
 from .base import Baseset
@@ -105,6 +106,9 @@ class DatasetIndex(Baseset):
 
         if len(_index.shape) > 1:
             raise TypeError("Index should be 1-dimensional")
+
+        if len(np.unique(_index)) != len(_index):
+            warnings.warn("Index contains non-unique elements")
 
         return _index
 
@@ -586,13 +590,21 @@ class FilesIndex(DatasetIndex):
     def build_index(self, index=None, path=None, *args, **kwargs):
         """ Build index from a path string or an index given. """
         if path is None:
-            return self.build_from_index(index, *args, **kwargs)
-        return self.build_from_path(path, *args, **kwargs)
+            _index = self.build_from_index(index, *args, **kwargs)
+        else:
+            _index = self.build_from_path(path, *args, **kwargs)
+
+        if len(_index) != len(self._paths):
+            raise ValueError("Index contains non-unique elements, which leads to path collision")
+        return _index
 
     def build_from_index(self, index, paths, dirs):
         """ Build index from another index for indices given. """
         if isinstance(index, DatasetIndex):
             index = index.indices
+        else:
+            index = DatasetIndex(index).indices
+
         if isinstance(paths, dict):
             self._paths = dict((file, paths[file]) for file in index)
         else:
@@ -606,6 +618,10 @@ class FilesIndex(DatasetIndex):
             paths = [path]
         else:
             paths = path
+
+        if len(paths) == 0:
+            raise ValueError("`path` cannot be empty. "
+                             "Got '{}'.".format(path))
 
         _all_index = None
         _all_paths = dict()
@@ -633,7 +649,7 @@ class FilesIndex(DatasetIndex):
             _index = _full_index[:, 0]
             _paths = _full_index[:, 1]
         else:
-            _index, _paths = [], []
+            _index, _paths = np.empty(0), np.empty(0)
         _paths = dict(zip(_index, _paths))
         return _index, _paths
 
