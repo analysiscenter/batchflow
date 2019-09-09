@@ -10,20 +10,21 @@ def piecewise_constant(global_step, *args, **kwargs):
     return tf.train.piecewise_constant(global_step, *args, **kwargs)
 
 def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
-                         mode='triangular', name='CyclicLearningRate'):
-    """ Applies cyclic learning rate (CLR).
-    https://arxiv.org/abs/1506.01186.
-    This function varies the learning rate between the
+                         mode='tri', name='CyclicLearningRate'):
+    """ This function varies the learning rate between the
     minimum (learning_rate) and the maximum (max_lr).
     It returns the decayed learning rate.
 
+    Leslie N. Smith "`Cyclical Learning Rates
+    for Training Neural Networks <https://arxiv.org/abs/1506.01186>`_"
+
     Parameters
     ----------
-    learning_rate: float of tf.Tensor
+    learning_rate: float or tf.Tensor
         the minimum learning rate boundary
-    global_step: int of tf.Tensor.
-        global step to use for the cyclic computation.  Must not be negative
-    max_lr:  float
+    global_step: int or tf.Tensor
+        global step to use for the cyclic computation. Must not be negative
+    max_lr: float
         the maximum learning rate boundary (default=0.1)
     step_size: int
         the number of iterations in half a cycle (default=10)
@@ -66,8 +67,8 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
 
             ```
 
-    name: str
-        Optional name of the operation (default='CyclicLearningRate')
+    name: str, optional
+        Name of the operation (default='CyclicLearningRate')
 
     Returns
     -------
@@ -85,7 +86,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
             second_comp = (learning_rate + max_lr) / 2.
         elif mode == 'tri':
             first_factor = (learning_rate-max_lr) / pi
-            inside_sin = 2. * pi  / step_size * global_step
+            inside_sin = 2. * pi / step_size * global_step
             second_factor = asin(sin(inside_sin))
             second_comp = (learning_rate + max_lr) / 2.
         elif mode == 'saw':
