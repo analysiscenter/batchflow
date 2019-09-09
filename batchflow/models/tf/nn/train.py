@@ -2,14 +2,12 @@
 from math import pi
 
 import tensorflow as tf
-from tensorflow.math import sin, asin, floor # pylint: disable=import-error
-
 
 def piecewise_constant(global_step, *args, **kwargs):
     """ Constant learning rate decay (uses global_step param instead of x) """
     return tf.train.piecewise_constant(global_step, *args, **kwargs)
 
-def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
+def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
                          mode='tri', name='CyclicLearningRate'):
     """ This function varies the learning rate between the
     minimum (learning_rate) and the maximum (max_lr).
@@ -20,26 +18,16 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
 
     Parameters
     ----------
-    learning_rate: float or tf.Tensor
-        the minimum learning rate boundary
+    learning_rate : float or tf.Tensor
+        The minimum learning rate boundary.
     global_step: int or tf.Tensor
-        global step to use for the cyclic computation. Must not be negative
-    max_lr: float
-        the maximum learning rate boundary (default=0.1)
-    step_size: int
-        the number of iterations in half a cycle (default=10)
-    mode:
-        If 'sin':
-            Learning rate changes as a sine wave, starting
-            from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
-            It is computed as:
-
-             ```python
-            decayed_learning_rate = (max_lr - learning_rate) / 2 *
-                                     sin(pi * global_step / step_size) +
-                                    (max_lr + learning_rate) / 2
-
-            ```
+        Global step to use for the cyclic computation. Must not be negative.
+    max_lr : float
+        The maximum learning rate boundary.
+    step_size : int, optional
+        The number of iterations in half a cycle (the default is 10).
+    mode : {'tri', 'sin', 'saw'}, opional
+        Set the learning rate change function.
 
         If 'tri':
             Default, linearly increasing then linearly decreasing the
@@ -50,6 +38,18 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
             ```python
             decayed_learning_rate = (max_lr - learning_rate) / pi *
                                      asin(sin(2 * pi / step_size * global_step)) +
+                                    (max_lr + learning_rate) / 2
+
+            ```
+
+        If 'sin':
+            Learning rate changes as a sine wave, starting
+            from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
+            It is computed as:
+
+             ```python
+            decayed_learning_rate = (max_lr - learning_rate) / 2 *
+                                     sin(pi * global_step / step_size) +
                                     (max_lr + learning_rate) / 2
 
             ```
@@ -67,8 +67,8 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
 
             ```
 
-    name: str, optional
-        Name of the operation (default='CyclicLearningRate')
+    name : str, optional
+        Name of the operation (the default is 'CyclicLearningRate').
 
     Returns
     -------
@@ -80,18 +80,18 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr=0.1, step_size=10,
         step_size = tf.cast(step_size, dtype=tf.float32)
         max_lr = tf.cast(max_lr, dtype=tf.float32)
 
-        if mode == 'sin':
-            first_factor = (learning_rate - max_lr) / 2.
-            second_factor = sin((pi * global_step)/step_size)
-            second_comp = (learning_rate + max_lr) / 2.
-        elif mode == 'tri':
+        if mode == 'tri':
             first_factor = (learning_rate-max_lr) / pi
             inside_sin = 2. * pi / step_size * global_step
-            second_factor = asin(sin(inside_sin))
+            second_factor = tf.math.asin(tf.math.sin(inside_sin))
+            second_comp = (learning_rate + max_lr) / 2.
+        elif mode == 'sin':
+            first_factor = (learning_rate - max_lr) / 2.
+            second_factor = tf.math.sin((pi * global_step)/step_size)
             second_comp = (learning_rate + max_lr) / 2.
         elif mode == 'saw':
             first_factor = learning_rate - max_lr
             divided_global_step = global_step / step_size
-            second_factor = floor(divided_global_step) - divided_global_step
+            second_factor = tf.math.floor(divided_global_step) - divided_global_step
             second_comp = learning_rate
         return first_factor * second_factor + second_comp
