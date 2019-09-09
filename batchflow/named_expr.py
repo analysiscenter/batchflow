@@ -358,6 +358,9 @@ class C(NamedExpression):
         C('model_class')
         C('GPU')
     """
+    def __init__(self, name=None, mode='w'):
+        super().__init__(name, mode)
+
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline config """
         if self.params:
@@ -365,6 +368,8 @@ class C(NamedExpression):
         name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
+        if name is None:
+            return config
         try:
             value = config[name]
         except KeyError:
