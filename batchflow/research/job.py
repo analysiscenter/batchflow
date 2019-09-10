@@ -28,7 +28,7 @@ class Job:
         """ Create experiments. """
         self.worker_config = worker_config
 
-        for index, config in enumerate(self.configs):
+        for index, (config, additional_config) in enumerate(self.configs):
             if isinstance(self.branches, list):
                 branch_config = self.branches[index]
             else:
@@ -42,10 +42,12 @@ class Job:
                     unit.set_dataset()
                 else:
                     import_config = dict()
-                unit.set_config(config, {**branch_config, **gpu_configs[index]}, worker_config, import_config)
+                unit.set_config(config, additional_config, {**branch_config, **gpu_configs[index]}, worker_config, import_config)
+                unit.dump_config(self.research_path)
                 unit.index = index
                 unit.create_folder(self.research_path)
                 units[name] = unit
+
 
             self.experiments.append(units)
             self.exceptions.append(None)
@@ -58,10 +60,10 @@ class Job:
     def get_description(self):
         """ Get description of job. """
         if isinstance(self.branches, list):
-            description = '\n'.join([str({**config.alias(), **_config, **self.worker_config})
+            description = '\n'.join([str({**config[0].alias(), **_config, **self.worker_config})
                                      for config, _config in zip(self.configs, self.branches)])
         else:
-            description = '\n'.join([str({**config.alias(), **self.worker_config})
+            description = '\n'.join([str({**config[0].alias(), **self.worker_config})
                                      for config in self.configs])
         return description
 

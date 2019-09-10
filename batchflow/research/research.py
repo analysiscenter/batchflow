@@ -4,6 +4,7 @@ import os
 import glob
 from copy import copy
 from collections import OrderedDict
+from functools import lru_cache
 from math import ceil
 import json
 import pprint
@@ -13,7 +14,7 @@ import multiprocess as mp
 
 from .distributor import Distributor
 from .workers import PipelineWorker
-from .grid import Grid, Option
+from .grid import Grid, Option, ConfigAlias
 from .job import Job
 from .utils import get_metrics
 from .executable import Executable
@@ -34,6 +35,7 @@ class Research:
         self.grid_config = None
         self.n_iters = None
         self.timeout = 5
+        self.process_function = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
                      name=None, execute=1, dump='last', run=False, logging=False, **kwargs):
@@ -213,6 +215,16 @@ class Research:
         self.grid_config = Grid(grid_config)
         return self
 
+    def process_config(self, function, parameters=None, cache=0):
+        if parameters is None:
+            parameters = []
+        self.process_function = {
+            'func': function,
+            'params': parameters,
+            'cache': cache
+        }
+        return self
+
     def load_results(self, *args, **kwargs):
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
@@ -311,7 +323,7 @@ class Research:
 
         self.__save()
 
-        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.n_iters, self.executables, self.name)
+        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.n_iters, self.executables, self.name, self.process_function)
 
         distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
         distr.run(jobs_queue, dirname=self.name, n_iters=self.n_iters, bar=self.bar)
@@ -373,23 +385,42 @@ class Research:
             return research
 
 class DynamicQueue:
-    def __init__(self, branches, grid, n_iters, executables, research_path):
+    def __init__(self, branches, grid, n_iters, executables, research_path, process_function):
         self.branches = branches
         self.grid = grid
         self.n_iters = n_iters
         self.executables = executables
-
-        self.n_branches = branches if isinstance(branches, int) else len(branches)
-        self.generator = grid.gen_configs()
         self.research_path = research_path
 
+        if process_function['cache'] > 0:
+            process_function['func'] = lru_cache(maxsize=process_function['cache'])(process_function['func'])
+
+        self.process_function = process_function
+
+        self.n_branches = branches if isinstance(branches, int) else len(branches)
+        self.generator = self._generate_config(grid)
+
         self._queue = mp.JoinableQueue()
+
+    def _generate_config(self, grid):
+        _generator = grid.gen_configs()
+        while True:
+            try:
+                config_from_grid = next(_generator)
+                config_from_func = dict()
+                if self.process_function is not None:
+                    _config_slice = {key: config_from_grid.config().get(key) for key in self.process_function['params']}
+                    config_from_func = self.process_function['func'](**_config_slice)
+                config_from_func = config_from_func if isinstance(config_from_func, list) else [config_from_func]
+                for config in config_from_func:
+                    yield (config_from_grid, ConfigAlias(config.items()))
+            except StopIteration:
+                break
+
     
-    def next_tasks(self, n_tasks=1):
-        results = Results(path=self.research_path).load()
-        print(results)
+    def next_jobs(self, n_tasks=1):
         configs = []
-        prepared_tasks = 0
+        generated_jobs = 0
         for i in range(n_tasks):
             branch_tasks = []
             try:
@@ -401,10 +432,10 @@ class DynamicQueue:
         if len(branch_tasks) > 0:
             configs.append(branch_tasks)
         for i, config in enumerate(configs):
-            self.put((prepared_tasks + i, Job(self.executables, self.n_iters, config, self.branches, self.research_path)))
+            self.put((generated_jobs + i, Job(self.executables, self.n_iters, config, self.branches, self.research_path)))
 
         n_tasks = len(configs)
-        prepared_tasks += n_tasks
+        generated_jobs += n_tasks
 
         return n_tasks
 
@@ -492,11 +523,15 @@ class Results():
         result = None
         if config is None and alias is None:
             raise ValueError('At least one of parameters config and alias must be not None')
-        if config is not None:
-            result = self.configs.subset(config, by_alias=False)
-        else:
-            result = self.configs.subset(alias, by_alias=True)
-        return result
+        result = []
+        for supconfig in self.configs:
+            if config is not None:
+                _config = supconfig.config()
+            else:
+                _config = supconfig.alias()
+            if all(item in _config.items() for item in alias.items()):
+                result.append(_config)
+        self.configs = result
 
 
     def load(self, names=None, variables=None, iterations=None,
@@ -558,13 +593,14 @@ class Results():
                               (results.name == 'test_accuracy') & results.layout.isin(['cna', 'can'])]
             ```
         """
-        self.configs = self.research.grid_config
-        if configs is None and aliases is None:
-            self.configs = list(self.configs.gen_configs())
-        elif configs is not None:
-            self.configs = self._filter_configs(config=configs)
-        else:
-            self.configs = self._filter_configs(alias=aliases)
+        self.configs = []
+        for filename in glob.glob(os.path.join(self.path, 'configs', '*')):
+            with open(filename, 'rb') as f:
+                self.configs.append(dill.load(f))
+        if configs is not None:
+            self._filter_configs(config=configs)
+        elif aliases is not None:
+            self._filter_configs(alias=aliases)
 
         if names is None:
             names = list(self.research.executables.keys())

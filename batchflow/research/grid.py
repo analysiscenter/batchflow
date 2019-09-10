@@ -4,6 +4,7 @@ from itertools import product
 from functools import reduce # Valid in Python 2.6+, required in Python 3
 import operator
 import collections
+from copy import deepcopy
 
 from .. import Config
 
@@ -97,12 +98,13 @@ class ConfigAlias:
     config : list of (key, value)
         keys and values are KV or objects
     """
-    def __init__(self, config):
+    def __init__(self, config=None):
         _config = []
-        for item in config:
-            key = item[0] if isinstance(item[0], KV) else KV(item[0])
-            value = item[1] if isinstance(item[1], KV) else KV(item[1])
-            _config.append((key, value))
+        if config is not None:
+            for item in config:
+                key = item[0] if isinstance(item[0], KV) else KV(item[0])
+                value = item[1] if isinstance(item[1], KV) else KV(item[1])
+                _config.append((key, value))
         self._config = _config
 
     def alias(self, as_string=False, delim='-'):
@@ -119,6 +121,11 @@ class ConfigAlias:
 
     def __repr__(self):
         return 'ConfigAlias(' + str(self.alias()) + ')'
+    
+    def __add__(self, other):
+        config = ConfigAlias()
+        config._config = deepcopy(self._config) + deepcopy(other._config)
+        return config
 
 class Grid:
     """ Class for grid of parameters. `Grid` is a list of list of Options. Each list of Options

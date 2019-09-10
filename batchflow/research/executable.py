@@ -53,6 +53,8 @@ class Executable:
         self.kwargs = dict()
         self.path = None
         self.config = None
+        self.config_from_grid = None
+        self.config_from_func = None
         self.logging = None
         self.additional_config = None
         self.action = None
@@ -164,13 +166,23 @@ class Executable:
         self.result = {var: [] for var in self.variables}
         self.result['iteration'] = []
 
-    def set_config(self, config, worker_config, branch_config, import_config):
+    def set_config(self, config_from_grid, config_from_func, worker_config, branch_config, import_config):
         """ Set new config for pipeline """
-        self.config = config
+        self.config_from_grid = config_from_grid
+        self.config_from_func = config_from_func
+
+        self.config = config_from_grid + config_from_func
         self.additional_config = Config(worker_config) + Config(branch_config) + Config(import_config)
 
         if self.pipeline is not None:
-            self.pipeline.set_config(config.config() + self.additional_config)
+            self.pipeline.set_config(self.config.config() + self.additional_config)
+
+    def dump_config(self, name):
+        path = os.path.join(name, 'configs')
+        if not os.path.exists(path):
+            os.makedirs(path)
+        with open(os.path.join(path, self.config.alias(as_string=True)), 'wb') as file:
+            dill.dump(self.config, file)
 
     def next_batch(self):
         """ Next batch from pipeline """
@@ -254,8 +266,7 @@ class Executable:
 
     def create_folder(self, name):
         """ Create folder if it doesn't exist """
-        cv_folder = 'cv_' + str(self.cv_split) if self.cv_split is not None else ''
-        self.path = os.path.join(name, 'results', self.config.alias(as_string=True), cv_folder)
+        self.path = os.path.join(name, 'results', self.config.alias(as_string=True))
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
