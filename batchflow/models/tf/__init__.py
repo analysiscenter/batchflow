@@ -24,3 +24,5 @@ from .pyramidnet import PyramidNet, PyramidNet18, PyramidNet34, PyramidNet50, Py
 from .tf_sampler import TfSampler
 from .xception import Xception, XceptionS
 from .deeplab import DeepLab, DeepLabXS, DeepLabX8, DeepLabX16
+from .efficientnet import ScalableModel, EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3, \
+    EfficientNetB4, EfficientNetB5, EfficientNetB6, EfficientNetB7
