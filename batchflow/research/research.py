@@ -5,7 +5,6 @@ import glob
 from copy import copy
 from collections import OrderedDict
 from functools import lru_cache
-from math import ceil
 import json
 import pprint
 import dill
@@ -215,9 +214,14 @@ class Research:
         self.grid_config = Grid(grid_config)
         return self
 
-    def process_config(self, function, parameters=None, cache=0):
-        if parameters is None:
-            parameters = []
+    def update_config(self, function, parameters=None, cache=0):
+        """ Add function to update config from grid.
+
+        Parameters
+        ----------
+        grid_config : dict, Grid or Option
+            if dict it should have items parameter_name: list of values.
+        """
         self.process_function = {
             'func': function,
             'params': parameters,
@@ -242,7 +246,7 @@ class Research:
         for i in range(0, len(array), size):
             yield array[i:i + size]
 
-    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, shuffle=False, name=None,
+    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):
 
         """ Run research.
@@ -268,8 +272,6 @@ class Research:
             from `root`.
 
             If list of dicts (Configs) - list of dicts with additional configs to each pipeline.
-        shuffle : bool
-            cross-validation parameter
         name : str or None
             name folder to save research. By default is 'research'.
         bar : bool or callable
@@ -323,10 +325,11 @@ class Research:
 
         self.__save()
 
-        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.n_iters, self.executables, self.name, self.process_function)
+        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.n_iters, self.executables,
+                                  self.name, self.process_function)
 
         distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
-        distr.run(jobs_queue, dirname=self.name, n_iters=self.n_iters, bar=self.bar)
+        distr.run(jobs_queue, dirname=self.name, bar=self.bar)
 
         return self
 
@@ -392,7 +395,7 @@ class DynamicQueue:
         self.executables = executables
         self.research_path = research_path
 
-        if process_function['cache'] > 0:
+        if process_function is not None and process_function['cache'] > 0:
             process_function['func'] = lru_cache(maxsize=process_function['cache'])(process_function['func'])
 
         self.process_function = process_function
@@ -409,22 +412,25 @@ class DynamicQueue:
                 config_from_grid = next(_generator)
                 config_from_func = dict()
                 if self.process_function is not None:
-                    _config_slice = {key: config_from_grid.config().get(key) for key in self.process_function['params']}
-                    config_from_func = self.process_function['func'](**_config_slice)
+                    if self.process_function['params'] is None:
+                        config_from_func = self.process_function['func'](config_from_grid.config())
+                    else:
+                        _config_slice = {key: config_from_grid.config().get(key)
+                                         for key in self.process_function['params']}
+                        config_from_func = self.process_function['func'](**_config_slice)
                 config_from_func = config_from_func if isinstance(config_from_func, list) else [config_from_func]
                 for config in config_from_func:
                     yield (config_from_grid, ConfigAlias(config.items()))
             except StopIteration:
                 break
 
-    
     def next_jobs(self, n_tasks=1):
         configs = []
         generated_jobs = 0
         for i in range(n_tasks):
             branch_tasks = []
             try:
-                for j in range(self.n_branches):
+                for _ in range(self.n_branches):
                     branch_tasks.append(next(self.generator))
                 configs.append(branch_tasks)
             except StopIteration:
@@ -432,7 +438,8 @@ class DynamicQueue:
         if len(branch_tasks) > 0:
             configs.append(branch_tasks)
         for i, config in enumerate(configs):
-            self.put((generated_jobs + i, Job(self.executables, self.n_iters, config, self.branches, self.research_path)))
+            self.put((generated_jobs + i,
+                      Job(self.executables, self.n_iters, config, self.branches, self.research_path)))
 
         n_tasks = len(configs)
         generated_jobs += n_tasks
@@ -447,7 +454,7 @@ class DynamicQueue:
 
     def put(self, value):
         self._queue.put(value)
-    
+
     def task_done(self):
         self._queue.task_done()
 
@@ -470,6 +477,8 @@ class Results():
         else:
             self.research = Research().load(path)
             self.path = path
+
+        self.configs = None
 
     def _get_list(self, value):
         if not isinstance(value, list):

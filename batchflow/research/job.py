@@ -42,7 +42,8 @@ class Job:
                     unit.set_dataset()
                 else:
                     import_config = dict()
-                unit.set_config(config, additional_config, {**branch_config, **gpu_configs[index]}, worker_config, import_config)
+                unit.set_config(config, additional_config,
+                                {**branch_config, **gpu_configs[index]}, worker_config, import_config)
                 unit.dump_config(self.research_path)
                 unit.index = index
                 unit.create_folder(self.research_path)

@@ -40,7 +40,7 @@ class Distributor:
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
         logging.error(obj, exc_info=True)
 
-    def run(self, jobs_queue, dirname, n_iters, logfile=None, errorfile=None, bar=False, *args, **kwargs):
+    def run(self, jobs_queue, dirname, logfile=None, errorfile=None, bar=False, *args, **kwargs):
         """ Run disributor and workers.
 
         Parameters

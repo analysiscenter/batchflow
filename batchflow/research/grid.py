@@ -121,7 +121,7 @@ class ConfigAlias:
 
     def __repr__(self):
         return 'ConfigAlias(' + str(self.alias()) + ')'
-    
+
     def __add__(self, other):
         config = ConfigAlias()
         config._config = deepcopy(self._config) + deepcopy(other._config)
