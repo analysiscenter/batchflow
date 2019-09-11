@@ -97,8 +97,8 @@ class ScalableModel(TFModel):
             return new_kwargs
 
         w_factor = new_kwargs.get('width_factor')
-        filters = new_kwargs.pop('filters', None)
-        if filters:
+        filters = new_kwargs.get('filters')
+        if filters and w_factor > 1:
             if isinstance(filters, int):
                 new_kwargs['filters'] = cls.round_filters(filters, w_factor)
             elif isinstance(filters, list):
@@ -108,7 +108,7 @@ class ScalableModel(TFModel):
 
         d_factor = kwargs.get('depth_factor')
         repeats = kwargs.get('repeats')
-        if repeats:
+        if repeats and d_factor > 1:
             new_kwargs['repeats'] = cls.round_repeats(repeats, d_factor)
 
         return new_kwargs
@@ -196,6 +196,8 @@ class EfficientNetB1(EfficientNetB0):
 
         config['head/dropout_rate'] = 0.2
 
+        return config
+
 
 class EfficientNetB2(EfficientNetB0):
 
@@ -209,6 +211,8 @@ class EfficientNetB2(EfficientNetB0):
         config['common/depth_factor'] = 1.2
 
         config['head/dropout_rate'] = 0.3
+
+        return config
 
 
 class EfficientNetB3(EfficientNetB0):
@@ -224,6 +228,8 @@ class EfficientNetB3(EfficientNetB0):
 
         config['head/dropout_rate'] = 0.3
 
+        return config
+
 
 class EfficientNetB4(EfficientNetB0):
 
@@ -237,6 +243,8 @@ class EfficientNetB4(EfficientNetB0):
         config['common/depth_factor'] = 1.8
 
         config['head/dropout_rate'] = 0.4
+
+        return config
 
 
 class EfficientNetB5(EfficientNetB0):
@@ -252,6 +260,8 @@ class EfficientNetB5(EfficientNetB0):
 
         config['head/dropout_rate'] = 0.4
 
+        return config
+
 
 class EfficientNetB6(EfficientNetB0):
 
@@ -266,6 +276,8 @@ class EfficientNetB6(EfficientNetB0):
 
         config['head/dropout_rate'] = 0.5
 
+        return config
+
 
 class EfficientNetB7(EfficientNetB0):
 
@@ -279,3 +291,5 @@ class EfficientNetB7(EfficientNetB0):
         config['common/depth_factor'] = 3.1
 
         config['head/dropout_rate'] = 0.5
+
+        return config
