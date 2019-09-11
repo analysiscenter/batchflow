@@ -14,9 +14,8 @@ class ScalableModel(TFModel):
     def default_config(cls):
         config = super().default_config()
 
-        config['initial_block'] = dict(layout='cna cna', kernel_size=3, filters=8)
         config['body/blocks'] = [
-            dict(repeats=1, scalable=True, base=conv_block, layout='cna cna', kernel_size=3, filters=16)
+            dict(repeats=1, scalable=True, layout='cna cna', kernel_size=3, filters=8)
         ]
         config['head'] = dict(layout='Pf')
 
@@ -46,12 +45,7 @@ class ScalableModel(TFModel):
     def non_repeated_block(cls, inputs, name, **kwargs):
         kwargs = cls.fill_params(name, **kwargs)
         if kwargs.get('layout'):
-            base_block = kwargs.pop('base', None)
-            if base_block is None:
-                base_block = conv_block
-
-            new_kwargs = cls.update_layer_params(0, kwargs)
-            return base_block(inputs, name=name, **new_kwargs)
+            return cls.block(inputs, name=name, **kwargs)
         return inputs
 
     @classmethod
@@ -66,17 +60,8 @@ class ScalableModel(TFModel):
             blocks = kwargs.pop('blocks')
             x = inputs
             for i, block_args in enumerate(blocks):
-                with tf.variable_scope('block-%d' % i):
-                    layer_args = {**kwargs, **block_args}
-                    base_block = layer_args.pop('base', None)
-                    if base_block is None:
-                        base_block = conv_block
+                x = cls.block(x, name='block-%d' % i, **{**kwargs, **block_args})
 
-                    repeats = cls.get_repeats(layer_args)
-                    for j in range(repeats):
-                        name = 'block-%d-layer-%d' % (i, j)
-                        new_layer_args = cls.update_layer_params(j, layer_args)
-                        x = base_block(x, name=name, **new_layer_args)
             return x
 
     @classmethod
@@ -84,39 +69,49 @@ class ScalableModel(TFModel):
         return cls.non_repeated_block(inputs, name, **kwargs)
 
     @classmethod
-    def update_layer_params(cls, repetition, kwargs):
+    def block(cls, inputs, name, **block_args):
+        base_block = block_args.pop('base', None)
+        if base_block is None:
+            base_block = cls.conv_block
 
-        new_kwargs = dict(**kwargs)
-
-        w_factor = new_kwargs.get('width_factor')
-        scalable = new_kwargs.get('scalable', False)
-
-        filters = new_kwargs.pop('filters', None)
-        factor = w_factor if scalable else 1
-        if filters is None:
-            pass
-        elif isinstance(filters, int):
-            new_kwargs['filters'] = cls.round_filters(filters, factor)
-        elif isinstance(filters, list):
-            new_kwargs['filters'] = [cls.round_filters(f, factor) for f in filters]
-        else:
-            raise ValueError("filters should be int or list, {} given".format(type(filters)))
-
-        if repetition > 0 and 'strides' in new_kwargs:
-            new_kwargs['strides'] = 1
-
-        return new_kwargs
+        new_layer_args = cls.update_layer_params(block_args)
+        return base_block(inputs, name=name, **new_layer_args)
 
     @classmethod
-    def get_repeats(cls, kwargs):
-        d_factor = kwargs.get('depth_factor')
-        scalable = kwargs.get('scalable', False)
+    def conv_block(cls, inputs, name, **kwargs):
+        with tf.variable_scope(name):
+            repeats = kwargs.get('repeats', 1)
+            x = inputs
+            for i in range(repeats):
+                x = conv_block(x, name='layer-%d' % i, **kwargs)
 
+        return x
+
+    @classmethod
+    def update_layer_params(cls, kwargs):
+
+        new_kwargs = dict(**kwargs)
+        scalable = new_kwargs.get('scalable', False)
+
+        if not scalable:
+            return new_kwargs
+
+        w_factor = new_kwargs.get('width_factor')
+        filters = new_kwargs.pop('filters', None)
+        if filters:
+            if isinstance(filters, int):
+                new_kwargs['filters'] = cls.round_filters(filters, w_factor)
+            elif isinstance(filters, list):
+                new_kwargs['filters'] = [cls.round_filters(f, w_factor) for f in filters]
+            else:
+                raise ValueError("filters should be int or list, {} given".format(type(filters)))
+
+        d_factor = kwargs.get('depth_factor')
         repeats = kwargs.get('repeats')
         if repeats:
-            repeats = cls.round_repeats(repeats, d_factor if scalable else 1)
+            new_kwargs['repeats'] = cls.round_repeats(repeats, d_factor)
 
-        return repeats
+        return new_kwargs
 
 
 class EfficientNetB0(ScalableModel):
@@ -169,7 +164,6 @@ class EfficientNetB0(ScalableModel):
         config['head'] = dict(scalable=True, layout='cna V df', kernel_size=1, strides=1, filters=1280,
                               activation=tf.nn.swish, dropout_rate=0.2)
 
-        config['loss'] = 'ce'
         return config
 
     @classmethod
