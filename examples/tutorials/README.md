@@ -16,7 +16,7 @@ A fast intro into how to create and train ready to use models like ResNet, VGG a
 Next you might want some more tutorials.
 
 * [Research](./research). Tutorials of research module.
-* [Advance model config](./advance_model_config). Tutorials on model config options.
+* [Advance model config](./advance_model_config). Tutorials on model configuration options.
 
 Also you might be interested in [the experiments](./../experiments/experiments.ipynb).
 
