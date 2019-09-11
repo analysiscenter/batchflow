@@ -628,7 +628,7 @@ class P(W):
         if isinstance(name, R):
             if name.size is None:
                 name.size = B('size')
-            elif isinstance(name.size, int):
+            elif isinstance(name.size, (int, NamedExpression)):
                 name.size = B('size'), name.size
             else:
                 name.size = (B('size'),) + tuple(name.size)
