@@ -138,6 +138,9 @@ class Sampler():
         """
         raise NotImplementedError('The method should be implemented in child-classes!')
 
+    def iterator(self, squeeze=False):
+        yield self.sample(1, squeeze)
+
     def __or__(self, other):
         """ Implementation of '|' operation for two instances of Sampler-class.
 
@@ -206,12 +209,14 @@ class Sampler():
 
         # when other is a Sampler
         elif isinstance(other, Sampler):
-            def concat_sample(size):
+            def concat_sample(size, squeeze=False):
                 """ Sampling procedure of a product of two samplers.
                 """
-                _left = self.sample(size)
-                _right = other.sample(size)
-                return np.concatenate([_left, _right], axis=1)
+                _left = self.sample(size, squeeze=False)
+                _right = other.sample(size, squeeze=False)
+                samples = np.concatenate([_left, _right], axis=1)
+                samples = _squeeze(samples) if squeeze else samples
+                return samples
 
             result.sample = concat_sample
 
@@ -361,6 +366,40 @@ class ConstantSampler(Sampler):
         """
         return np.repeat(self.constant, repeats=size, axis=0)
 
+class SequenceSampler(Sampler):
+    """ Sampler of a elements of array.
+
+    Parameters
+    ----------
+    constant : int, str, float, list
+        constant, associated with the Sampler. Can be multidimensional,
+        e.g. list or np.ndarray.
+
+    Attributes
+    ----------
+    constant : np.array
+        vectorized constant, associated with the Sampler.
+
+    """
+    def __init__(self, array, shuffle=False, **kwargs):
+        self.array = np.array(array)
+        _permutation = lambda x: np.random.choice(x, size=len(x), replace=False) if shuffle else x
+        self.array = _permutation(self.array)
+        if self.array.ndim != 1:
+            raise ValueError('Array must be 1-dimensional but {}-dimensional were given'.format(self.array.ndim))
+        super().__init__(array, **kwargs)
+
+    def sample(self, size, squeeze=False):
+        sample = np.random.choice(self.array, size=size).reshape(-1, 1)
+        sample = _squeeze(sample) if squeeze else sample
+        return sample
+
+    def iterator(self, shuffle=False):
+        return iter(self.array)
+
+    def __str__(self):
+        return 'SequenceSampler(' + str(self.array) + ')'
+
 class NumpySampler(Sampler):
     """ Sampler based on a distribution from np.random.
 
@@ -386,9 +425,10 @@ class NumpySampler(Sampler):
         name = _get_method_by_alias(name, 'np')
         self.name = name
         self._params = copy(kwargs)
+        self.seed = seed
         self.state = np.random.RandomState(seed=seed)
 
-    def sample(self, size):
+    def sample(self, size, squeeze=False):
         """ Sampling method of ``NumpySampler``.
 
         Generates random samples from distribution ``self.name``.
@@ -407,7 +447,11 @@ class NumpySampler(Sampler):
         sample = sampler(size=size, **self._params)
         if len(sample.shape) == 1:
             sample = sample.reshape(-1, 1)
+        sample = _squeeze(sample) if squeeze else sample
         return sample
+
+    def __str__(self):
+        return 'NumpySampler({}, seed={}, params={})'.format(self.name, self.seed, self._params)
 
 class ScipySampler(Sampler):
     """ Sampler based on a distribution from `scipy.stats`.
@@ -429,14 +473,29 @@ class ScipySampler(Sampler):
     state : int
         sampler's random state.
     """
-    def __init__(self, name, seed=None, **kwargs):
+    def __init__(self, name, seed=None, percentiles=None, drop_inf=True, shuffle=False, **kwargs):
         super().__init__(name, seed, **kwargs)
         name = _get_method_by_alias(name, 'ss')
         self.name = name
+        self.seed = seed
+        self.percentiles = percentiles
+        self.drop_inf = drop_inf
+        self._params = copy(kwargs)
         self.state = np.random.RandomState(seed=seed)
+
         self.distr = getattr(ss, self.name)(**kwargs)
 
-    def sample(self, size):
+        if percentiles is not None:
+            if isinstance(percentiles, float):
+                percentiles = np.arange(0, 1+percentiles, percentiles)
+                percentiles = self.distr.ppf(percentiles)
+            if drop_inf:
+                percentiles = percentiles[~np.isinf(np.abs(percentiles))]
+            seq_sampler = SequenceSampler(percentiles, shuffle, **kwargs)
+            self.sample = seq_sampler.sample
+            self.iterator = seq_sampler.iterator
+
+    def sample(self, size, squeeze=False):
         """ Sampling method of ``ScipySampler``.
 
         Generates random samples from distribution ``self.name``.
@@ -455,7 +514,11 @@ class ScipySampler(Sampler):
         sample = sampler(size=size, random_state=self.state)
         if len(sample.shape) == 1:
             sample = sample.reshape(-1, 1)
+        sample = _squeeze(sample) if squeeze else sample
         return sample
+
+    def __str__(self):
+        return 'ScipySampler({}, seed={}, percentiles={}, drop_inf={}, params={})'.format(self.name, self.seed, self.percentiles, self.drop_inf, self._params)
 
 class HistoSampler(Sampler):
     """ Sampler based on a histogram, output of `np.histogramdd`.
@@ -575,3 +638,9 @@ def sample_histodd(histo, size, state=None):
     low, high = l_all[bin_nums], h_all[bin_nums]
     sampler = np.random.uniform if state is None else state.uniform
     return sampler(low=low, high=high)
+
+def _squeeze(x):
+    res =  np.squeeze(x)
+    if res.ndim == 0:
+        res = np.asscalar(res)
+    return res

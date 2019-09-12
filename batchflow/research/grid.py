@@ -5,8 +5,9 @@ from functools import reduce # Valid in Python 2.6+, required in Python 3
 import operator
 import collections
 from copy import deepcopy
+import numpy as np
 
-from .. import Config
+from .. import Config, Sampler, SequenceSampler
 
 class KV:
     """ Class for value and alias
@@ -49,32 +50,23 @@ class Option:
 
     values : list of KV or lis of obj
     """
-    def __init__(self, parameter, values):
+    def __init__(self, parameter, values, shuffle=False):
         self.parameter = KV(parameter)
-        self.values = [KV(value) for value in values]
+        if isinstance(values, Sampler):
+            self._values = None
+            self.values = values
+        else:
+            self._values = [KV(value) for value in values]
+            self.values = SequenceSampler(self._values, shuffle)
 
-    def alias(self):
-        """ Returns alias of the Option """
-        return {self.parameter.alias: [value.alias for value in self.values]}
-
-    def option(self):
-        """ Returns config """
-        return {self.parameter.value: [value.value for value in self.values]}
-
-    @classmethod
-    def product(cls, *args):
-        """ Element-wise product of options """
-        lens = [len(item.values) for item in args]
-        if len(set(lens)) != 1:
-            raise ValueError('Options must be of the same length.')
-
-        grid = Grid()
-        for i in range(lens[0]):
-            grid += reduce(operator.mul, [Option(item.parameter, [item.values[i]]) for item in args])
+    def __matmul__(self, other):
+        if self._values is None or other._values is None:
+            grid = self * other
+        elif len(self._values) == len(other._values):
+            grid = Grid()
+            for item in zip(self._values, other._values):
+                grid += Option(self.parameter, [item[0]]) * Option(other.parameter, [item[1]])
         return grid
-
-    def __repr__(self):
-        return 'Option(' + str(self.alias()) + ')'
 
     def __mul__(self, other):
         return Grid(self) * Grid(other)
@@ -82,13 +74,23 @@ class Option:
     def __add__(self, other):
         return Grid(self) + Grid(other)
 
+    def __repr__(self):
+        if self._values is None:
+            return 'Option({}, {})'.format(self.parameter.alias, self.values)
+        else:
+            return 'Option({}, {})'.format(self.parameter.alias, [item.alias for item in self._values])
+
+    def sample(self, size, squeeze=True):
+        return [ConfigAlias([[self.parameter, self.values.sample(1, squeeze)]]) for _ in range(size)]
+
+    def iterator(self, squeeze=True):
+        for value in self.values.iterator(squeeze):
+            yield ConfigAlias([[self.parameter, value]])
+
     def gen_configs(self, n_items=1):
         """ Returns Configs created from the option """
         grid = Grid(self)
         return grid.gen_configs(n_items)
-
-    def __len__(self):
-        return len(self.values)
 
 class ConfigAlias:
     """ Class for config and alias which is represenation of config where all keys and values are str.
@@ -164,37 +166,6 @@ class Grid:
             _grid.append(Option(key, value))
         return [_grid]
 
-    def alias(self):
-        """ Returns alias of Grid. """
-        return [[option.alias() for option in options] for options in self.grid]
-
-    def value(self):
-        """ Returns config of Grid. """
-        return [[option.option() for option in options] for options in self.grid]
-
-    def description(self):
-        """ Return description of used aliases.
-        Returns
-        -------
-        dict
-        """
-        options = [option for grid_item in self.grid for option in grid_item]
-        descr = dict()
-        for option in options:
-            values = {value.alias: value.value for value in option.values}
-            if option.parameter.alias not in descr:
-                descr[option.parameter.alias] = {'name': option.parameter.value, 'values': values}
-            else:
-                descr[option.parameter.alias]['values'].update(values)
-        return descr
-
-    def __len__(self):
-        if self.grid is None:
-            x = 0
-        else:
-            x = sum([reduce(lambda a, b: a*b, [len(option) for option in item]) for item in self.grid])
-        return x
-
     def __mul__(self, other):
         if self.grid is None:
             result = other
@@ -233,6 +204,39 @@ class Grid:
 
     def __eq__(self, other):
         return self.grid() == other.grid()
+    
+    def sample(self, size):
+        cubes = np.random.choice(np.array(self.grid + [None])[:-1], size=size)
+        return [ConfigAlias([(option.parameter, KV(option.values.sample(1)[0, 0])) for option in cube]) for cube in cubes]
+    
+    def iterator(self, n_reps):
+        for cube in self.grid:
+            _seq_options = [option for option in cube if option._values is not None]
+            _sampler_options = [option for option in cube if option._values is None]
+            res = []
+
+            for item in product(*[option.iterator() for option in _seq_options]):
+                item = sum(item, ConfigAlias())
+                for _option in _sampler_options:
+                    item += _option.sample(1)[0]
+                yield item
+                
+
+    def description(self):
+        """ Return description of used aliases.
+        Returns
+        -------
+        dict
+        """
+        options = [option for grid_item in self.grid for option in grid_item]
+        descr = dict()
+        for option in options:
+            values = {value.alias: value.value for value in option.values}
+            if option.parameter.alias not in descr:
+                descr[option.parameter.alias] = {'name': option.parameter.value, 'values': values}
+            else:
+                descr[option.parameter.alias]['values'].update(values)
+        return descr
 
     def gen_configs(self, n_items=1, include_index=False):
         """ Generate Configs from grid
