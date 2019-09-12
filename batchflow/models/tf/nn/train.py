@@ -37,7 +37,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
 
             ```python
             decayed_learning_rate = (max_lr - learning_rate) / pi *
-                                     asin(sin(2 * pi / step_size * global_step)) +
+                                     asin(sin(2 * -pi / step_size * global_step)) +
                                     (max_lr + learning_rate) / 2
 
             ```
@@ -81,17 +81,16 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
         max_lr = tf.cast(max_lr, dtype=tf.float32)
 
         if mode == 'tri':
-            first_factor = (learning_rate-max_lr) / pi
-            inside_sin = 2. * pi / step_size * global_step
-            second_factor = tf.math.asin(tf.math.sin(inside_sin))
-            second_comp = (learning_rate + max_lr) / 2.
+            periodic_comp = tf.mod(((global_step + step_size / 4) / step_size), 1)
+            first_factor = tf.abs(periodic_comp - 0.5)
+            second_factor = 2 * (max_lr - learning_rate)
+            second_comp = learning_rate
         elif mode == 'sin':
             first_factor = (learning_rate - max_lr) / 2.
             second_factor = tf.math.sin((pi * global_step)/step_size)
             second_comp = (learning_rate + max_lr) / 2.
         elif mode == 'saw':
-            first_factor = learning_rate - max_lr
-            divided_global_step = global_step / step_size
-            second_factor = tf.math.floor(divided_global_step) - divided_global_step
+            first_factor = max_lr - learning_rate
+            second_factor = tf.mod(global_step / step_size, 1)
             second_comp = learning_rate
         return first_factor * second_factor + second_comp
