@@ -478,7 +478,6 @@ class ScipySampler(Sampler):
         name = _get_method_by_alias(name, 'ss')
         self.name = name
         self.seed = seed
-        self.percentiles = percentiles
         self.drop_inf = drop_inf
         self._params = copy(kwargs)
         self.state = np.random.RandomState(seed=seed)
@@ -494,6 +493,8 @@ class ScipySampler(Sampler):
             seq_sampler = SequenceSampler(percentiles, shuffle, **kwargs)
             self.sample = seq_sampler.sample
             self.iterator = seq_sampler.iterator
+        
+        self.percentiles = percentiles
 
     def sample(self, size, squeeze=False):
         """ Sampling method of ``ScipySampler``.

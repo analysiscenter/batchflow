@@ -52,8 +52,11 @@ class Option:
     """
     def __init__(self, parameter, values, shuffle=False):
         self.parameter = KV(parameter)
-        if isinstance(values, Sampler):
-            self._values = None
+        if isinstance(values, SequenceSampler):
+            self._values = values.array
+            self.values = values
+        elif isinstance(values, Sampler):
+            self._values = values.percentiles if hasattr(values, 'percentiles') else None
             self.values = values
         else:
             self._values = [KV(value) for value in values]
@@ -220,7 +223,6 @@ class Grid:
                 for _option in _sampler_options:
                     item += _option.sample(1)[0]
                 yield item
-                
 
     def description(self):
         """ Return description of used aliases.
