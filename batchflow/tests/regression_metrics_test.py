@@ -1,9 +1,6 @@
 """ Tests for regression metrics """
-import sys
+# pylint: disable=import-error, no-name-in-module
 import pytest
-
-sys.path.append('../..')
-
 import numpy as np
 
 from batchflow.models.metrics import RegressionMetrics
@@ -52,14 +49,14 @@ def test_both_zero(multi, mode, metric_name, exp_res):
     exp_res = [exp_res, exp_res] if multi else exp_res
 
     if mode == 'eq':
-        targets = np.random.randint(10, size=size)
+        targets = np.arange(np.prod(size)).reshape(size)
         predictions = targets
     elif mode == 'both':
         targets = np.zeros(shape=size)
         predictions = targets
     else:
         targets = np.zeros(shape=size)
-        predictions = np.random.randint(10, size=size)
+        predictions = np.arange(np.prod(size)).reshape(size)
 
     metrics = RegressionMetrics(targets, predictions, multi=multi)
     res = metrics.evaluate(metrics=metric_name, agg=None)
