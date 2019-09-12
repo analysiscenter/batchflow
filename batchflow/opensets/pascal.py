@@ -59,7 +59,7 @@ class BasePascal(ImagesOpenset):
             chunk_size = 1024
             num_bars = int(file_size / chunk_size)
             with open(localname, 'wb') as f:
-                for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, unit='MB',
+                for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, unit='KB',
                                        desc=filename, leave=True):
                     f.write(chunk)
 
