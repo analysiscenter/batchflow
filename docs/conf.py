@@ -46,7 +46,7 @@ source_parsers = {
 master_doc = 'index'
 
 project = 'BatchFlow'
-copyright = '2017, Analysis Center'
+copyright = '2017-2019, Analysis Center'
 author = 'Analysis Center'
 
 
@@ -124,7 +124,7 @@ intersphinx_mapping = {
     'pandas': ('http://pandas-docs.github.io/pandas-docs-travis/', None),
 }
 
-viewcode_import = True
+viewcode_follow_imported_members = True
 
 # -- Options for HTMLHelp output ------------------------------------------
 
