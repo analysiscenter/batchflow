@@ -1777,16 +1777,26 @@ class TFModel(BaseModel):
         return config
 
     def _add_block(self, name, config, inputs):
+        tensor = inputs
         defaults = {'is_training': self.get_from_attr('is_training'),
                     'global_step': self.get_from_attr('global_step'),
                     **config['common']}
-        if callable(config[name]):
-            block = config[name](inputs, **defaults)
-        elif isinstance(config[name], dict):
-            block = getattr(self, name)(inputs=inputs, **{**defaults, **config[name]})
-        else:
-            raise TypeError('block can be configured as a function or a dict with parameters')
-        return block
+
+        block_configs = config[name]
+        block_configs = [block_configs] if isinstance(block_configs, dict) else block_configs
+
+        for i, block in enumerate(block_configs):
+            args = {} if i == 0 else {'name': '{}_{}'.format(name, i)}
+
+            if callable(block):
+                tensor = block(tensor, **{**args, **defaults})
+            elif isinstance(block, dict):
+                block_class = block.get('block_class') or self
+                tensor = getattr(block_class, name)(inputs=tensor, **{**args, **defaults, **block})
+            else:
+                raise TypeError('NN blocks can be configured as a function, a dict with parameters or \
+                                 sequence of these, instead got {} in {}'.format(type(block), name))
+        return tensor
 
     def _build(self, config=None):
         config = config or self.full_config
