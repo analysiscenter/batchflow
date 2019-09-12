@@ -5,18 +5,16 @@ from os.path import dirname, basename
 from io import BytesIO
 import tarfile
 import tempfile
-import urllib
 from collections import defaultdict
-import logging
 
 import PIL
 import tqdm
 import numpy as np
+import requests
 
 from . import ImagesOpenset
 from .. import DatasetIndex
 
-logger = logging.getLogger('PascalVOCdataset')
 
 class BasePascal(ImagesOpenset):
     """ The base class for PascalVOC dataset.
@@ -32,37 +30,43 @@ class BasePascal(ImagesOpenset):
 
     Notes
     -----
-    - Each track contains only the subset of the total images with labels provided.
+    Each track contains only the subset of the total images with labels provided.
     """
     SOURCE_URL = 'http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar'
-    sets_path = 'VOCdevkit/VOC2012/ImageSets'
+    SETS_PATH = 'VOCdevkit/VOC2012/ImageSets'
     task = None
 
-    def __init__(self, *args, bar=False, preloaded=None, train_test=True, **kwargs):
-        self.bar = tqdm.tqdm(total=2) if bar else None
+    def __init__(self, *args, preloaded=None, train_test=True, **kwargs):
         super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
-        if self.bar:
-            self.bar.close()
 
     def download_archive(self, path=None):
-        """ Download archive if not yet on the disk """
+        """ Download archive"""
         if path is None:
             path = tempfile.gettempdir()
         filename = os.path.basename(self.SOURCE_URL)
         localname = os.path.join(path, filename)
 
         if not os.path.isfile(localname):
-            logger.info("Downloading %s", filename)
-            urllib.request.urlretrieve(self.SOURCE_URL, localname)
-            logger.info("Downloaded %s", filename)
-            if self.bar:
-                self.bar.update(1)
+            r = requests.get(self.SOURCE_URL, stream=True)
+            file_size = int(r.headers['Content-Length'])
+            chunk = 1
+            chunk_size = 1024
+            num_bars = int(file_size / chunk_size)
+            with open(localname, 'wb') as f:
+                for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, unit='MB',
+                                       desc=filename, leave=True):
+                    f.write(chunk)
 
         return localname
 
-    def _name(self, file):
+
+    def _name(self, path):
         """ Return file name without format """
-        return basename(file.name).split('.')[0]
+        return basename(path).split('.')[0]
+
+    def _imagepath(self, name):
+        """ Return the path to the .jpg image in the archive by its name """
+        return os.path.join(dirname(self.SETS_PATH), 'JPEGImages', name + '.jpg')
 
     def _extract(self, archive, file):
         data = archive.extractfile(file).read()
@@ -70,54 +74,42 @@ class BasePascal(ImagesOpenset):
 
     def _get_ids(self, archive, part):
         """ Train and test images ids are located in specific for each task folder"""
-        part_path = os.path.join(self.sets_path, self.task, part) + '.txt'
+        part_path = os.path.join(self.SETS_PATH, self.task, part) + '.txt'
         raw_ids = archive.extractfile(part_path)
         list_ids = raw_ids.read().decode().split('\n')
-        return list_ids
-
-    def _is_train_image(self, file, train_ids):
-        return self._name(file) in train_ids \
-               and basename(dirname(file.name)) == 'JPEGImages'
-
-    def _is_test_image(self, file, test_ids):
-        return self._name(file) in test_ids \
-               and basename(dirname(file.name)) == 'JPEGImages'
-
+        return list_ids[:-1]
 
 class PascalSegmentation(BasePascal):
     """ Contains 2913 images and masks.
 
     Notes
     -----
-    - Index 0 corresponds to background and index 255 corresponds to 'void' or unlabelled.
+    Index 0 corresponds to background and index 255 corresponds to 'void' or unlabelled.
     """
     task = 'Segmentation'
-    name_classes = ['background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair',
-                    'cow', 'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa',
-                    'train', 'tvmonitor', 'void']
+    classes = ['background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair',
+               'cow', 'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa',
+               'train', 'tvmonitor']
 
-    def _is_train_mask(self, file, train_ids):
-        return self._name(file) in train_ids and basename(dirname(file.name)) == 'SegmentationClass'
-
-    def _is_test_mask(self, file, test_ids):
-        return self._name(file) in test_ids and basename(dirname(file.name)) == 'SegmentationClass'
+    def _maskpath(self, name):
+        """ Return the path in the archive to the mask .png image by its name"""
+        return os.path.join(dirname(self.SETS_PATH), 'SegmentationClass', name + '.png')
 
     def download(self, path):
         localname = self.download_archive(path)
         with tarfile.open(localname, "r") as archive:
-            files_in_archive = archive.getmembers()
             train_ids = self._get_ids(archive, 'train')
             test_ids = self._get_ids(archive, 'val')
 
-            train_images = np.array([self._extract(archive, file) for file in files_in_archive
-                                     if self._is_train_image(file, train_ids)], dtype=object)
-            train_masks = np.array([self._extract(archive, file) for file in files_in_archive
-                                    if self._is_train_mask(file, train_ids)], dtype=object)
+            train_images = np.array([self._extract(archive, self._imagepath(name)) \
+                                     for name in train_ids], dtype=object)
+            test_images = np.array([self._extract(archive, self._imagepath(name)) \
+                                    for name in test_ids], dtype=object)
 
-            test_images = np.array([self._extract(archive, file) for file in files_in_archive
-                                    if self._is_test_image(file, train_ids)], dtype=object)
-            test_masks = np.array([self._extract(archive, file) for file in files_in_archive
-                                   if self._is_test_mask(file, test_ids)], dtype=object)
+            train_masks = np.array([self._extract(archive, self._maskpath(name)) \
+                                    for name in train_ids], dtype=object)
+            test_masks = np.array([self._extract(archive, self._maskpath(name)) \
+                                   for name in test_ids], dtype=object)
 
             self._train_index = DatasetIndex(np.arange(len(train_images)))
             self._test_index = DatasetIndex(np.arange(len(test_images)))
@@ -133,23 +125,17 @@ class PascalClassification(BasePascal):
     - Labels are represented by the one-hot vector of size 20. '1' stands for the presence of at least one object from
     coresponding class on the image. '-1' stands for the absence. '0' indicates that the object is presented,
     but can hardly be detected.
-     """
+    """
     task = 'Main'
-    name_classes = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
-                    'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train',
-                    'tvmonitor']
-
-    def _is_class_file(self, file):
-        """ Whether file contains labels for specific class. 20 files total. """
-        return basename(dirname(file.name)) == self.task and '_trainval.txt' in file.name
+    classes = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
+               'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train',
+               'tvmonitor']
 
     def download(self, path):
         localname = self.download_archive(path)
         with tarfile.open(localname, "r") as archive:
-            files_in_archive = archive.getmembers()
-
             d = defaultdict(list)
-            class_files = [file for file in files_in_archive if self._is_class_file(file)]
+            class_files = [os.path.join(self.SETS_PATH, self.task, name) + '_trainval.txt' for name in self.classes]
             for class_file in class_files:
                 data = archive.extractfile(class_file).read()
                 for row in data.decode().split('\n')[:-1]:
@@ -160,15 +146,11 @@ class PascalClassification(BasePascal):
             train_ids = self._get_ids(archive, 'train')
             test_ids = self._get_ids(archive, 'val')
 
-            train_images = np.array([self._extract(archive, file) for file in files_in_archive \
-                                     if self._is_train_image(file, train_ids)], dtype=object)
-            train_labels = np.array([d[self._name(file)] for file in files_in_archive
-                                     if self._is_train_image(file, train_ids)])
+            train_images = np.array([self._extract(archive, self._imagepath(name)) for name in train_ids], dtype=object)
+            test_images = np.array([self._extract(archive, self._imagepath(name)) for name in test_ids], dtype=object)
 
-            test_images = np.array([self._extract(archive, file) for file in files_in_archive \
-                            if self._is_train_image(file, test_ids)], dtype=object)
-            test_labels = np.array([d[self._name(file)] for file in files_in_archive
-                                    if self._is_test_image(file, test_ids)])
+            train_labels = np.array([d[self._name(name)] for name in train_ids])
+            test_labels = np.array([d[self._name(name)] for name in test_ids])
 
             self._train_index = DatasetIndex(np.arange(len(train_images)))
             self._test_index = DatasetIndex(np.arange(len(test_images)))
