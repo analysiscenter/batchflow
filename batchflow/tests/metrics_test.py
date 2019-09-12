@@ -53,9 +53,7 @@ BAD_PREDICTIONS = [(LABELS[0], 'labels', None), # predictions ndim is less then 
                    (LOGITS, 'logits', None)] # axis is None for multiclass logits
 
 class TestAssembly:
-    """
-    This class checks metrics creation process.
-    """
+    """Check metrics creation process."""
 
     @pytest.mark.parametrize('SegmentationMetrics', [SegmentationMetricsByPixels, SegmentationMetricsByInstances])
     @pytest.mark.parametrize('predictions, fmt, axis', BAD_PREDICTIONS)
@@ -129,7 +127,7 @@ class TestAssembly:
 
 class TestShape:
     """
-    This class checks the shape of metrics' return value for various parameters combinations.
+    Check the shape of metrics' return value for various parameters combinations.
 
     There is a following pattern in both tests:
     0. Each function is preceded by data for it's parametrization.
@@ -146,7 +144,6 @@ class TestShape:
               ('mean', None, lambda l: (NUM_CLASSES - l,)),
               ('mean', 'micro', None),
               ('mean', 'macro', None)]
-
     @pytest.mark.parametrize('metric_name', METRICS_LIST)
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_shape', params)
@@ -185,7 +182,6 @@ class TestShape:
                                              num_classes=NUM_CLASSES, axis=axis, skip_bg=skip_bg)
         res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
         res_shape = res.shape if isinstance(res, np.ndarray) else None
-
         assert res_shape == exp_shape
 
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
@@ -215,12 +211,11 @@ class TestShape:
         metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
         res = metric.evaluate(metrics='accuracy', agg=batch_agg)
         res_shape = res.shape if isinstance(res, np.ndarray) else None
-
         assert res_shape == exp_shape
 
 class TestResult:
     """
-    This class checks the contents of metrics' return value for for various parameters combinations.
+    Check the contents of metrics' return value for for various parameters combinations.
 
     There is a following pattern in both tests:
     0. Each function is preceded by data for it's parametrization.
@@ -321,7 +316,6 @@ class TestResult:
                                  'dor' : np.array([0.00]),
                                  'f1s' : np.array([0.70]),
                                  'jac' : np.array([0.54])})]
-
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_dict', params)
     def test_result(self, predictions, fmt, axis, batch_agg, multi_agg, exp_dict):
@@ -354,7 +348,6 @@ class TestResult:
         for metric_name, exp in exp_dict.items():
             res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
             res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
-
             assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format(metric_name)
 
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
@@ -384,16 +377,16 @@ class TestResult:
         metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
         res = metric.evaluate(metrics='accuracy', agg=batch_agg)
         res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
-
         assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format('accuracy')
 
 class TestSubsampling:
     """
-    This class checks the correctness of confusion matrix subsampling for SegmentationMetricsByInstances class
+    Check the correctness of confusion matrix subsampling for SegmentationMetricsByInstances class
     (e.g. true_positive subsample, total_population subsample). Test functions here act as an equivalent of TestResult
     functions for SegmentationMetricsByInstances class, since it differs from SegmentationMetricsByPixels only in
     redefined subsampling functions (and also confusion matrix assembly process, which is checked in TestAssembly).
     """
+
     params = [('true_positive', np.array([[1, 0],
                                           [1, 0]])),
               ('condition_positive', np.array([[1, 1],
@@ -402,7 +395,6 @@ class TestSubsampling:
                                                 [1, 1]])),
               ('total_population', np.array([[2, 1],
                                              [1, 1]]))]
-
     @pytest.mark.parametrize('subsample_name, exp_subsample', params)
     def test_subsampling(self, subsample_name, exp_subsample):
         """
@@ -418,13 +410,10 @@ class TestSubsampling:
         """
         metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
         res_subsample = getattr(metric, subsample_name)()
-
         assert np.array_equal(res_subsample, exp_subsample)
 
     def test_subsampling_true_negative(self):
-        """
-        Check if subsampling true negative from confusion matrix raises ValueError.
-        """
+        """Check if subsampling true negative from confusion matrix raises ValueError."""
         metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
         with pytest.raises(ValueError):
             getattr(metric, 'true_negative')()
