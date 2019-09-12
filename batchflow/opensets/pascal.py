@@ -19,6 +19,7 @@ from .. import DatasetIndex
 class BasePascal(ImagesOpenset):
     """ The base class for PascalVOC dataset.
     The archive contains 17125 images. Total size 1.9GB.
+    You can unpack the archive to the directory its been downloaded by specifing `unpack` flag.
 
     Tracks of the PascalVOC challenge:
         1. Classification
@@ -36,8 +37,12 @@ class BasePascal(ImagesOpenset):
     SETS_PATH = 'VOCdevkit/VOC2012/ImageSets'
     task = None
 
-    def __init__(self, *args, preloaded=None, train_test=True, **kwargs):
+    def __init__(self, *args, unpack=False, preloaded=None, train_test=True, **kwargs):
+        self.localname = None
         super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
+        if unpack:
+            with tarfile.open((self.localname), "r") as archive:
+                archive.extractall(dirname(self.localname))
 
     def download_archive(self, path=None):
         """ Download archive"""
@@ -45,6 +50,7 @@ class BasePascal(ImagesOpenset):
             path = tempfile.gettempdir()
         filename = os.path.basename(self.SOURCE_URL)
         localname = os.path.join(path, filename)
+        self.localname = localname
 
         if not os.path.isfile(localname):
             r = requests.get(self.SOURCE_URL, stream=True)
@@ -56,9 +62,6 @@ class BasePascal(ImagesOpenset):
                 for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, unit='MB',
                                        desc=filename, leave=True):
                     f.write(chunk)
-
-        return localname
-
 
     def _name(self, path):
         """ Return file name without format """
@@ -92,12 +95,12 @@ class PascalSegmentation(BasePascal):
                'train', 'tvmonitor']
 
     def _maskpath(self, name):
-        """ Return the path in the archive to the mask .png image by its name"""
+        """ Return the path in the archive to the mask which is .png image by its name"""
         return os.path.join(dirname(self.SETS_PATH), 'SegmentationClass', name + '.png')
 
     def download(self, path):
-        localname = self.download_archive(path)
-        with tarfile.open(localname, "r") as archive:
+        self.download_archive(path)
+        with tarfile.open(self.localname, "r") as archive:
             train_ids = self._get_ids(archive, 'train')
             test_ids = self._get_ids(archive, 'val')
 
@@ -132,8 +135,8 @@ class PascalClassification(BasePascal):
                'tvmonitor']
 
     def download(self, path):
-        localname = self.download_archive(path)
-        with tarfile.open(localname, "r") as archive:
+        self.download_archive()
+        with tarfile.open(self.localname, "r") as archive:
             d = defaultdict(list)
             class_files = [os.path.join(self.SETS_PATH, self.task, name) + '_trainval.txt' for name in self.classes]
             for class_file in class_files:
