@@ -1,12 +1,12 @@
 """
-This file contains tests for SegmentationMetricsByPixels and SegmentationMetricsByInstances classes.
+Tests for SegmentationMetricsByPixels and SegmentationMetricsByInstances classes.
 At the same time they act as tests for ClassificationMetrics, since it's identical to SegmentationMetricsByPixels.
 
-Structurally, file consists of four classes.
-First one tests basic assembly process (shapes compatibility, confusion matrix corectness) for both classes.
-Second tests evaluated result shape for SegmemtationMetricsByPixels for all implemented metrics functions.
-Third similarly tests evaluated result contents.
-Fourth class tests so-called "subsampling" functions of SegmentationMetricsByInstances.
+Structurally, file consists of four classes, which respectively check:
+- basic assembly process (shapes compatibility, confusion matrix corectness) for both classes;
+- evaluated result shape for SegmemtationMetricsByPixels for all implemented metrics functions'
+- similarly, evaluated result contents;
+- so-called "subsampling" functions of SegmentationMetricsByInstances.
 
 Test data is pre-defined, it's shape and contents were chosen for reasons of balance between visual simplicity
 and test coverage diversity.
@@ -36,6 +36,7 @@ LABELS = np.array([[[0, 1],
 
                    [[2, 0],
                     [1, 1]]])
+
 # Onehots are basically like probas, just with all 0 and a single 1.
 PROBA = np.eye(NUM_CLASSES)[LABELS]
 # Logit function gives ±infs on degenerate case of 0s and 1s, but it's okay for sigmoid function.
@@ -60,7 +61,7 @@ class TestAssembly:
     @pytest.mark.parametrize('predictions, fmt, axis', BAD_PREDICTIONS)
     def test_incompatibility_processing(self, SegmentationMetrics, predictions, fmt, axis):
         """
-        Function attempts to create metrics class given targets and predictions of different length.
+        Create metrics class given targets and predictions of different length, expecting ValueError.
 
         Parameters
         ----------
@@ -103,7 +104,7 @@ class TestAssembly:
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     def test_confusion_matrix(self, SegmentationMetrics, exp_matrix, predictions, fmt, axis):
         """
-        Function compares contents of actual confusion matrix with expected ones for metrics with given params.
+        Compare contents of actual confusion matrix with expected ones for metrics with given params.
 
         Parameters
         ----------
@@ -152,7 +153,7 @@ class TestShape:
     @pytest.mark.parametrize('skip_bg', [False, True])
     def test_shape(self, metric_name, predictions, fmt, axis, batch_agg, multi_agg, exp_shape, skip_bg):
         """
-        Function compares expected return value shape with actual return value shape
+        Compare expected return value shape with actual return value shape
         of metric evaluation with given params for all metrics from METRICS_LIST.
 
         Parameters
@@ -191,7 +192,7 @@ class TestShape:
     @pytest.mark.parametrize('batch_agg, exp_shape', [(None, (BATCH_SIZE,)), ('mean', None)])
     def test_shape_accuracy(self, predictions, fmt, axis, batch_agg, exp_shape):
         """
-        Function compares expected return value shape with actual return value shape
+        Compare expected return value shape with actual return value shape
         of accuracy metric evaluation with given params.
 
         Parameters
@@ -325,7 +326,7 @@ class TestResult:
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_dict', params)
     def test_result(self, predictions, fmt, axis, batch_agg, multi_agg, exp_dict):
         """
-        Function compares expected return value contents with contents of actual return value
+        Compare expected return value contents with contents of actual return value
         of metric evaluation with given params for all metrics from METRICS_DICT.
 
         Parameters
@@ -360,7 +361,7 @@ class TestResult:
     @pytest.mark.parametrize('batch_agg, exp', [(None, np.array([0.50, 0.75])), ('mean', np.array([0.62]))])
     def test_result_accuracy(self, predictions, fmt, axis, batch_agg, exp):
         """
-        Function compares expected return value contents with contents of actual return value
+        Compare expected return value contents with contents of actual return value
         of accuracy metric evaluation with given params.
 
         Parameters
@@ -405,7 +406,7 @@ class TestSubsampling:
     @pytest.mark.parametrize('subsample_name, exp_subsample', params)
     def test_subsampling(self, subsample_name, exp_subsample):
         """
-        Function compares expected subsample with actual one.
+        Compare expected subsample with actual one.
 
         Parameters
         ----------
@@ -422,7 +423,7 @@ class TestSubsampling:
 
     def test_subsampling_true_negative(self):
         """
-        Function checks if subsampling true negative from confusion matrix raises ValueError.
+        Check if subsampling true negative from confusion matrix raises ValueError.
         """
         metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
         with pytest.raises(ValueError):
