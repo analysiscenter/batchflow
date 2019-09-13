@@ -71,21 +71,18 @@ class ScalableModel(TFModel):
     @classmethod
     def block(cls, inputs, name, **block_args):
         base_block = block_args.pop('base', None)
-        if base_block is None:
-            base_block = cls.conv_block
 
         new_layer_args = cls.update_layer_params(block_args)
-        return base_block(inputs, name=name, **new_layer_args)
+        if base_block is None:
+            with tf.variable_scope(name):
+                repeats = new_layer_args.get('repeats', 1)
+                x = inputs
+                for i in range(repeats):
+                    x = conv_block(x, name='layer-%d' % i, **new_layer_args)
 
-    @classmethod
-    def conv_block(cls, inputs, name, **kwargs):
-        with tf.variable_scope(name):
-            repeats = kwargs.get('repeats', 1)
-            x = inputs
-            for i in range(repeats):
-                x = conv_block(x, name='layer-%d' % i, **kwargs)
-
-        return x
+                return x
+        else:
+            return base_block(inputs, name=name, **new_layer_args)
 
     @classmethod
     def update_layer_params(cls, kwargs):
