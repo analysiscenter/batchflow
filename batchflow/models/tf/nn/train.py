@@ -28,51 +28,55 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
         The number of iterations in half a cycle (the default is 10).
     mode : {'tri', 'sin', 'saw'}, opional
         Set the learning rate change function.
-
-        If 'tri':
-            Default, linearly increasing then linearly decreasing the
-            learning rate at each cycle. Learning rate starting
-            from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
-            It is computed as:
-
-            ```python
-            decayed_learning_rate = (max_lr - learning_rate) / pi *
-                                     asin(sin(2 * -pi / step_size * global_step)) +
-                                    (max_lr + learning_rate) / 2
-
-            ```
-
-        If 'sin':
-            Learning rate changes as a sine wave, starting
-            from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
-            It is computed as:
-
-             ```python
-            decayed_learning_rate = (max_lr - learning_rate) / 2 *
-                                     sin(pi * global_step / step_size) +
-                                    (max_lr + learning_rate) / 2
-
-            ```
-
-        If 'saw':
-            Learning rate linearly increasing from `learning_rate` to `max_lr`
-            and then sharply drops to `learning_rate` at each cycle.
-            Learning rate starting from `learning_rate` then increasing.
-            It is computed as:
-
-            ```python
-            decayed_learning_rate = (max_lr - learning_rate) *
-                                    (floor(global_step / step_size) - global_step / step_size) +
-                                     learning_rate
-
-            ```
-
     name : str, optional
         Name of the operation (the default is 'CyclicLearningRate').
 
     Returns
     -------
     tf.Tensor
+
+    Notes
+    -----
+    More detailed information about `mode`.
+
+    If 'tri':
+        Default, linearly increasing then linearly decreasing the
+        learning rate at each cycle. Learning rate starting
+        from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
+        It is computed as:
+
+        ```python
+        decayed_learning_rate = abs(mod((global_step + step_size / 4) / step_size, 1) - 0.5) *
+                                2 * (max_lr - learning_rate) +
+                                learning_rate
+
+        ```
+
+    If 'sin':
+        Learning rate changes as a sine wave, starting
+        from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
+        It is computed as:
+
+        ```python
+        decayed_learning_rate = (learning_rate - max_lr) / 2 *
+                                sin(pi * global_step / step_size) +
+                                (max_lr + learning_rate) / 2
+
+        ```
+
+    If 'saw':
+        Learning rate linearly increasing from `learning_rate` to `max_lr`
+        and then sharply drops to `learning_rate` at each cycle.
+        Learning rate starting from `learning_rate` then increasing.
+        It is computed as:
+
+        ```python
+        decayed_learning_rate = (max_lr - learning_rate) *
+                                (floor(global_step / step_size) - global_step / step_size) +
+                                learning_rate
+
+        ```
+
     """
     with tf.name_scope(name):
         learning_rate = tf.cast(learning_rate, dtype=tf.float32)
@@ -81,7 +85,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
         max_lr = tf.cast(max_lr, dtype=tf.float32)
 
         if mode == 'tri':
-            periodic_comp = tf.mod(((global_step + step_size / 4) / step_size), 1)
+            periodic_comp = tf.mod((global_step + step_size / 4) / step_size, 1)
             first_factor = tf.abs(periodic_comp - 0.5)
             second_factor = 2 * (max_lr - learning_rate)
             second_comp = learning_rate
