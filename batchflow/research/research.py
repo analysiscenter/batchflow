@@ -202,16 +202,17 @@ class Research:
 
         return self
 
-    def add_grid(self, grid_config):
+    def add_grid(self, grid_config, update_func=None):
         """ Add grid of pipeline parameters. Configs from that grid will be generated
         and then substitute into pipelines.
 
         Parameters
         ----------
-        grid_config : dict, Grid or Option
+        grid_config : Grid or Option
             if dict it should have items parameter_name: list of values.
         """
-        self.grid_config = Grid(grid_config)
+        self.grid_config = grid_config
+        self.update_func = update_func
         return self
 
     def update_config(self, function, parameters=None, cache=0):
@@ -232,19 +233,6 @@ class Research:
     def load_results(self, *args, **kwargs):
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
-
-    def _chunks(self, array, size):
-        """ Divide array into chunks of the fixed size.
-
-        Parameters
-        ----------
-        array : list or np.ndarray
-
-        size : int
-            chunk size
-        """
-        for i in range(0, len(array), size):
-            yield array[i:i + size]
 
     def run(self, n_reps=1, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):
@@ -318,6 +306,7 @@ class Research:
 
         if self.grid_config is None:
             self.grid_config = Grid(Option('_dummy', [None]))
+            self.update_func = None
 
         self._folder_exists(self.name)
 
@@ -325,7 +314,7 @@ class Research:
 
         self.__save()
 
-        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.n_iters, self.executables,
+        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.update_func, self.n_iters, self.executables,
                                   self.name, self.process_function)
 
         distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
@@ -362,7 +351,7 @@ class Research:
         with open(os.path.join(self.name, 'description', 'research.json'), 'w') as file:
             file.write(json.dumps(self._json(), default=self._set_default_json))
         with open(os.path.join(self.name, 'description', 'alias.json'), 'w') as file:
-            file.write(json.dumps(self.grid_config.description(), default=self._set_default_json))
+            file.write(json.dumps(str(self.grid_config), default=self._set_default_json))
 
     def _set_default_json(self, obj):
         try:
@@ -373,7 +362,7 @@ class Research:
 
     def _json(self):
         description = copy(self.__dict__)
-        description['grid_config'] = self.grid_config.value()
+        description['grid_config'] = str(self.grid_config)
         return description
 
     def describe(self):
@@ -388,9 +377,10 @@ class Research:
             return research
 
 class DynamicQueue:
-    def __init__(self, branches, grid, n_iters, executables, research_path, process_function):
+    def __init__(self, branches, grid, update_func, n_iters, executables, research_path, process_function):
         self.branches = branches
         self.grid = grid
+        self.update_func = update_func
         self.n_iters = n_iters
         self.executables = executables
         self.research_path = research_path
@@ -406,7 +396,7 @@ class DynamicQueue:
         self._queue = mp.JoinableQueue()
 
     def _generate_config(self, grid):
-        _generator = grid.gen_configs()
+        _generator = grid.iterator(brute_force=True, n_iters=None, n_reps=1)
         while True:
             try:
                 config_from_grid = next(_generator)
@@ -423,6 +413,12 @@ class DynamicQueue:
                     yield (config_from_grid, ConfigAlias(config.items()))
             except StopIteration:
                 break
+
+    def update(self, finished_jobs):
+        if self.update_func is not None:
+            res = self.update_func(finished_jobs, self.research_path)
+            if res is not None:
+                self.generator = self._generate_config(res)
 
     def next_jobs(self, n_tasks=1):
         configs = []

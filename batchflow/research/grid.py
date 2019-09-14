@@ -1,6 +1,6 @@
 """ Options and configs. """
 
-from itertools import product
+from itertools import product, islice
 from functools import reduce # Valid in Python 2.6+, required in Python 3
 import operator
 import collections
@@ -86,8 +86,8 @@ class Option:
     def sample(self, size, squeeze=True):
         return [ConfigAlias([[self.parameter, self.values.sample(1, squeeze)]]) for _ in range(size)]
 
-    def iterator(self, squeeze=True):
-        for value in self.values.iterator(squeeze):
+    def iterator(self, brute_force=False, n_iters=None, squeeze=True):
+        for value in self.values.iterator(brute_force, n_iters, squeeze):
             yield ConfigAlias([[self.parameter, value]])
 
     def gen_configs(self, n_items=1):
@@ -180,7 +180,7 @@ class Grid:
                 res = [item[0] + item[1] for item in res]
             result = Grid(res)
         elif isinstance(other, Option):
-            result = self * Grid([[other]])
+            result = self * Grid(other)
         else:
             raise TypeError('Arguments must be Grids or Options')
         return result
@@ -200,98 +200,97 @@ class Grid:
         return result
 
     def __repr__(self):
-        return 'Grid(' + str(self.alias()) + ')'
+        return 'Grid(' + str(self.grid) + ')'
 
     def __getitem__(self, index):
         return Grid([self.grid[index]])
 
     def __eq__(self, other):
         return self.grid() == other.grid()
-    
+
     def sample(self, size):
         cubes = np.random.choice(np.array(self.grid + [None])[:-1], size=size)
-        return [ConfigAlias([(option.parameter, KV(option.values.sample(1)[0, 0])) for option in cube]) for cube in cubes]
-    
-    def iterator(self, n_reps):
+        return [sum([option.sample(1)[0] for option in cube], ConfigAlias()) for cube in cubes]
+
+    def samples_iterator(self, n_iters=None):
+        if n_iters is None:
+            while True:
+                yield self.sample(1)[0]
+        else:
+            for i in range(n_iters):
+                yield self.sample(1)[0]
+
+    def brute_force(self, n_iters=None):
+        iteration = 0
         for cube in self.grid:
             _seq_options = [option for option in cube if option._values is not None]
             _sampler_options = [option for option in cube if option._values is None]
-            res = []
-
-            for item in product(*[option.iterator() for option in _seq_options]):
+            for item in product(*[option.iterator(brute_force=True) for option in _seq_options]):
                 item = sum(item, ConfigAlias())
                 for _option in _sampler_options:
                     item += _option.sample(1)[0]
                 yield item
-
-    def description(self):
-        """ Return description of used aliases.
-        Returns
-        -------
-        dict
-        """
-        options = [option for grid_item in self.grid for option in grid_item]
-        descr = dict()
-        for option in options:
-            values = {value.alias: value.value for value in option.values}
-            if option.parameter.alias not in descr:
-                descr[option.parameter.alias] = {'name': option.parameter.value, 'values': values}
+                iteration += 1
+                if n_iters is not None and iteration == n_iters:
+                    break
             else:
-                descr[option.parameter.alias]['values'].update(values)
-        return descr
+                continue
+            break
 
-    def gen_configs(self, n_items=1, include_index=False):
-        """ Generate Configs from grid
+    def iterator(self, brute_force=False, n_iters=None, n_reps=1, repeat_each=100):
+        """ Iterator to get all possible values from Sampler.
 
         Parameters
         ----------
-        n_items : int
-            how much configs return on each iteration
+        brute_force : bool
+            if True, iterator will return all possible values from sampler, else values will be
+            independently sampled.
+        n_iters : int or None
+
+        n_reps : int
+
+        repeat_each : int
         """
-        i = 0
-        for item in self.grid:
-            keys = [option.parameter for option in item]
-            values = [option.values for option in item]
-            if n_items == 1:
-                for parameters in product(*values):
-                    i += 1
-                    config = ConfigAlias(list(zip(keys, parameters)))
-                    yield (i, config) if include_index else config
-            else:
-                res = []
-                for parameters in product(*values):
-                    if len(res) < n_items:
-                        config = ConfigAlias(list(zip(keys, parameters)))
-                        res.append((i, config) if include_index else config)
-                    else:
-                        yield res
-                        config = ConfigAlias(list(zip(keys, parameters)))
-                        res = [(i, config) if include_index else config]
-                yield res
-
-    def subset(self, grid, by_alias=True):
-        """ Get grid subset produces by another grid
-
-        Parameters
-        ----------
-        grid : Grid
-
-        by_alias : bool
-            if True, perform subsetting by aliases, else by real values
-        """
-        results = []
-        if isinstance(grid, (Config, dict)):
-            slice_configs = [ConfigAlias(grid.items())]
+        generator = self.brute_force(n_iters) if brute_force else self.samples_iterator(n_iters)
+        if n_reps == 1:
+            yield from generator
         else:
-            slice_configs = list(grid.gen_configs())
-        for full_config in self.gen_configs():
-            for partial_config in slice_configs:
-                if by_alias:
-                    small = partial_config.alias()
-                    large = full_config.alias()
-                else:
-                    small = partial_config.config().flatten()
-                    large = full_config.config().flatten()
-                if len(set(small.items()) - set(large.items())) == 0:
-                    results.append(full_config)
-        return results
+            if n_iters is not None or repeat_each is None:
+                results = list(generator)
+                for repetition in range(n_reps):
+                    for res in results:
+                        yield res + ConfigAlias([('repetition', repetition)])
+            else:
+                results = list(islice(generator, repeat_each))
+                while len(results) > 0:
+                    for repetition in range(n_reps):
+                        for res in results:
+                            yield res + ConfigAlias([('repetition', repetition)])
+                    results = list(islice(generator, repeat_each))
+
+    # def subset(self, grid, by_alias=True):
+    #     """ Get grid subset produces by another grid
+
+    #     Parameters
+    #     ----------
+    #     grid : Grid
+
+    #     by_alias : bool
+    #         if True, perform subsetting by aliases, else by real values
+    #     """
+    #     results = []
+    #     if isinstance(grid, (Config, dict)):
+    #         slice_configs = [ConfigAlias(grid.items())]
+    #     else:
+    #         slice_configs = list(grid.gen_configs())
+    #     for full_config in self.gen_configs():
+    #         for partial_config in slice_configs:
+    #             if by_alias:
+    #                 small = partial_config.alias()
+    #                 large = full_config.alias()
+    #             else:
+    #                 small = partial_config.config().flatten()
+    #                 large = full_config.config().flatten()
+    #             if len(set(small.items()) - set(large.items())) == 0:
+    #                 results.append(full_config)
+    #     return results

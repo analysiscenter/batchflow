@@ -123,13 +123,16 @@ class Sampler():
             # redefine sample of self
             self.sample = stacked.sample
 
-    def sample(self, size):
+    def sample(self, size, squeeze=False):
         """ Sampling method of a sampler.
 
         Parameters
         ----------
         size : int
             lentgh of sample to be generated.
+        squeeze : bool
+            remove or not single-dimensional entries from the shape of an array. If the squeezed array
+            will have ndim=0, return constant.
 
         Returns
         -------
@@ -138,8 +141,46 @@ class Sampler():
         """
         raise NotImplementedError('The method should be implemented in child-classes!')
 
-    def iterator(self, squeeze=False):
-        yield self.sample(1, squeeze)
+    def brute_force(self, squeeze=False):
+        """ Generator to get all possible values from Sampler.
+
+        Parameters
+        ----------
+        squeeze : bool
+            remove or not single-dimensional entries from the shape of an array. If the squeezed array
+            will have ndim=0, return constant.
+        """
+        raise NotImplementedError('The method should be implemented in child-classes!')
+
+    def iterator(self, brute_force=False, n_iters=None, squeeze=False):
+        """ Iterator to get all possible values from Sampler.
+
+        Parameters
+        ----------
+        brute_force : bool
+            if True, iterator will return all possible values from sampler, else values will be
+            independently sampled.
+        squeeze : bool
+            remove or not single-dimensional entries from the shape of an array. If the squeezed array
+            will have ndim=0, return constant.
+        """
+        if brute_force:
+            generator = self.brute_force(squeeze)
+            if n_iters is None:
+                yield from generator
+            else:
+                try:
+                    for i in range(n_iters):
+                        yield next(generator)
+                except StopIteration:
+                    raise StopIteration('Iterator has only {} elements but n_iters={}'.format(i, n_iters))
+        else:
+            if n_iters is None:
+                while True:
+                    yield self.sample(1, squeeze)
+            else:
+                for _ in range(n_iters):
+                    yield self.sample(1, squeeze)
 
     def __or__(self, other):
         """ Implementation of '|' operation for two instances of Sampler-class.
@@ -366,20 +407,22 @@ class ConstantSampler(Sampler):
         """
         return np.repeat(self.constant, repeats=size, axis=0)
 
+    def brute_force(self, squeeze=False):
+        yield self.constant
+
 class SequenceSampler(Sampler):
     """ Sampler of a elements of array.
 
     Parameters
     ----------
-    constant : int, str, float, list
-        constant, associated with the Sampler. Can be multidimensional,
-        e.g. list or np.ndarray.
+    array : iterable
+        array of elements to sample from.
+    shuffle : bool
+        shuffle or not elements of array. Significant for `iterator`, not `sample`.
 
     Attributes
     ----------
-    constant : np.array
-        vectorized constant, associated with the Sampler.
-
+    array : np.array
     """
     def __init__(self, array, shuffle=False, **kwargs):
         self.array = np.array(array)
@@ -390,12 +433,16 @@ class SequenceSampler(Sampler):
         super().__init__(array, **kwargs)
 
     def sample(self, size, squeeze=False):
-        sample = np.random.choice(self.array, size=size).reshape(-1, 1)
+        sample = np.random.choice(self.array, size=size)
         sample = _squeeze(sample) if squeeze else sample
         return sample
 
-    def iterator(self, shuffle=False):
-        return iter(self.array)
+    def brute_force(self, squeeze=False):
+        iterator = iter(self.array)
+        for value in iterator:
+            if not squeeze:
+                value = value.reshape(-1, 1)
+            yield value
 
     def __str__(self):
         return 'SequenceSampler(' + str(self.array) + ')'
@@ -473,28 +520,15 @@ class ScipySampler(Sampler):
     state : int
         sampler's random state.
     """
-    def __init__(self, name, seed=None, percentiles=None, drop_inf=True, shuffle=False, **kwargs):
+    def __init__(self, name, seed=None, **kwargs):
         super().__init__(name, seed, **kwargs)
         name = _get_method_by_alias(name, 'ss')
         self.name = name
         self.seed = seed
-        self.drop_inf = drop_inf
         self._params = copy(kwargs)
         self.state = np.random.RandomState(seed=seed)
 
         self.distr = getattr(ss, self.name)(**kwargs)
-
-        if percentiles is not None:
-            if isinstance(percentiles, float):
-                percentiles = np.arange(0, 1+percentiles, percentiles)
-                percentiles = self.distr.ppf(percentiles)
-            if drop_inf:
-                percentiles = percentiles[~np.isinf(np.abs(percentiles))]
-            seq_sampler = SequenceSampler(percentiles, shuffle, **kwargs)
-            self.sample = seq_sampler.sample
-            self.iterator = seq_sampler.iterator
-        
-        self.percentiles = percentiles
 
     def sample(self, size, squeeze=False):
         """ Sampling method of ``ScipySampler``.
@@ -519,7 +553,7 @@ class ScipySampler(Sampler):
         return sample
 
     def __str__(self):
-        return 'ScipySampler({}, seed={}, percentiles={}, drop_inf={}, params={})'.format(self.name, self.seed, self.percentiles, self.drop_inf, self._params)
+        return 'ScipySampler({}, seed={}, params={})'.format(self.name, self.seed, self._params)
 
 class HistoSampler(Sampler):
     """ Sampler based on a histogram, output of `np.histogramdd`.
@@ -641,7 +675,7 @@ def sample_histodd(histo, size, state=None):
     return sampler(low=low, high=high)
 
 def _squeeze(x):
-    res =  np.squeeze(x)
+    res = np.squeeze(x)
     if res.ndim == 0:
         res = np.asscalar(res)
     return res

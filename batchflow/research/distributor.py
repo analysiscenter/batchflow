@@ -114,10 +114,13 @@ class Distributor:
                     mp.Process(target=worker, args=(self.jobs_queue, self.results)).start()
                 except Exception as exception: #pylint:disable=broad-except
                     logging.error(exception, exc_info=True)
-            n_jobs = self.jobs_queue.next_jobs(2 * len(workers))
+            n_jobs = self.jobs_queue.next_jobs(len(workers)+1)
+            finished_jobs = 0
             while n_jobs > 0:
                 signal = self.results.get()
                 if signal.done:
+                    finished_jobs += 1
+                    self.jobs_queue.update(finished_jobs)
                     n_jobs = self.jobs_queue.next_jobs(1)
 
             # self.answers = [0 for _ in range(n_jobs)]
