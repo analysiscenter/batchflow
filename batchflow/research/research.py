@@ -202,7 +202,7 @@ class Research:
 
         return self
 
-    def add_grid(self, grid_config, update_func=None):
+    def add_grid(self, grid_config, update_func=None, each=None):
         """ Add grid of pipeline parameters. Configs from that grid will be generated
         and then substitute into pipelines.
 
@@ -213,6 +213,7 @@ class Research:
         """
         self.grid_config = grid_config
         self.update_func = update_func
+        self.each = each
         return self
 
     def update_config(self, function, parameters=None, cache=0):
@@ -305,8 +306,7 @@ class Research:
         self.bar = bar
 
         if self.grid_config is None:
-            self.grid_config = Grid(Option('_dummy', [None]))
-            self.update_func = None
+            self.grid_config = Grid(Option('_dummy', [None])).iterator(brute_force=True, n_iters=None, n_reps=1)
 
         self._folder_exists(self.name)
 
@@ -314,7 +314,7 @@ class Research:
 
         self.__save()
 
-        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.update_func, self.n_iters, self.executables,
+        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.n_iters, self.executables,
                                   self.name, self.process_function)
 
         distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
@@ -323,7 +323,8 @@ class Research:
         return self
 
     def __getstate__(self):
-        return self.__dict__
+        d = {k: v for k, v in self.__dict__.items() if k != 'grid_config'}
+        return d
 
     def __setstate__(self, d):
         self.__dict__.update(d)
@@ -377,10 +378,9 @@ class Research:
             return research
 
 class DynamicQueue:
-    def __init__(self, branches, grid, update_func, n_iters, executables, research_path, process_function):
+    def __init__(self, branches, grid, n_iters, executables, research_path, process_function):
         self.branches = branches
         self.grid = grid
-        self.update_func = update_func
         self.n_iters = n_iters
         self.executables = executables
         self.research_path = research_path
@@ -391,15 +391,15 @@ class DynamicQueue:
         self.process_function = process_function
 
         self.n_branches = branches if isinstance(branches, int) else len(branches)
+        self.grid = grid
         self.generator = self._generate_config(grid)
 
         self._queue = mp.JoinableQueue()
 
     def _generate_config(self, grid):
-        _generator = grid.iterator(brute_force=True, n_iters=None, n_reps=1)
         while True:
             try:
-                config_from_grid = next(_generator)
+                config_from_grid = next(grid)
                 config_from_func = dict()
                 if self.process_function is not None:
                     if self.process_function['params'] is None:
@@ -414,11 +414,13 @@ class DynamicQueue:
             except StopIteration:
                 break
 
-    def update(self, finished_jobs):
-        if self.update_func is not None:
-            res = self.update_func(finished_jobs, self.research_path)
+    def update(self, n_updates):
+        if self.grid.update_func is not None:
+            res = self.grid.update_func(n_updates, self.research_path)
             if res is not None:
                 self.generator = self._generate_config(res)
+                return True
+            return False
 
     def next_jobs(self, n_tasks=1):
         configs = []
@@ -430,9 +432,9 @@ class DynamicQueue:
                     branch_tasks.append(next(self.generator))
                 configs.append(branch_tasks)
             except StopIteration:
+                if len(branch_tasks) > 0:
+                    configs.append(branch_tasks)
                 break
-        if len(branch_tasks) > 0:
-            configs.append(branch_tasks)
         for i, config in enumerate(configs):
             self.put((generated_jobs + i,
                       Job(self.executables, self.n_iters, config, self.branches, self.research_path)))
@@ -441,6 +443,10 @@ class DynamicQueue:
         generated_jobs += n_tasks
 
         return n_tasks
+
+    def stop_workers(self, n_workers):
+        for _ in range(n_workers):
+            self.put(None)
 
     def join(self):
         self._queue.join()

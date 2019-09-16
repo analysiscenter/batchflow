@@ -160,6 +160,9 @@ class Grid:
         else:
             self.grid = grid
 
+        self.update_func = None
+        self.each = None
+
         if len(kwargs) > 0:
             self.grid.append(self._dict_to_grid(kwargs))
 
@@ -268,29 +271,19 @@ class Grid:
                             yield res + ConfigAlias([('repetition', repetition)])
                     results = list(islice(generator, repeat_each))
 
-    # def subset(self, grid, by_alias=True):
-    #     """ Get grid subset produces by another grid
+    def set_iterator(self, brute_force=False, n_iters=None, n_reps=1, repeat_each=100):
+        self._brute_force = brute_force # Do we need it?
+        self.n_iters = n_iters
+        self.n_reps = n_reps
+        self.repeat_each = repeat_each
 
-    #     Parameters
-    #     ----------
-    #     grid : Grid
+        self._iterator = self.iterator(brute_force, n_iters, n_reps, repeat_each)
 
-    #     by_alias : bool
-    #         if True, perform subsetting by aliases, else by real values
-    #     """
-    #     results = []
-    #     if isinstance(grid, (Config, dict)):
-    #         slice_configs = [ConfigAlias(grid.items())]
-    #     else:
-    #         slice_configs = list(grid.gen_configs())
-    #     for full_config in self.gen_configs():
-    #         for partial_config in slice_configs:
-    #             if by_alias:
-    #                 small = partial_config.alias()
-    #                 large = full_config.alias()
-    #             else:
-    #                 small = partial_config.config().flatten()
-    #                 large = full_config.config().flatten()
-    #             if len(set(small.items()) - set(large.items())) == 0:
-    #                 results.append(full_config)
-    #     return results
+    def set_update(self, update_func, each=None):
+        self.update_func = update_func
+        self.each = each
+
+    def __next__(self):
+        if self._iterator is None:
+            self._iterator = self.iterator(True, None, 1, 100)
+        return next(self._iterator)

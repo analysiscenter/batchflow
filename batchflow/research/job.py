@@ -27,7 +27,6 @@ class Job:
     def init(self, worker_config, gpu_configs):
         """ Create experiments. """
         self.worker_config = worker_config
-
         for index, (config, additional_config) in enumerate(self.configs):
             if isinstance(self.branches, list):
                 branch_config = self.branches[index]

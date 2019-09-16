@@ -114,59 +114,32 @@ class Distributor:
                     mp.Process(target=worker, args=(self.jobs_queue, self.results)).start()
                 except Exception as exception: #pylint:disable=broad-except
                     logging.error(exception, exc_info=True)
-            n_jobs = self.jobs_queue.next_jobs(len(workers)+1)
-            finished_jobs = 0
-            while n_jobs > 0:
-                signal = self.results.get()
-                if signal.done:
-                    finished_jobs += 1
-                    self.jobs_queue.update(finished_jobs)
-                    n_jobs = self.jobs_queue.next_jobs(1)
-
-            # self.answers = [0 for _ in range(n_jobs)]
-            # self.finished_jobs = []
-
-            # if bar is not None:
-            #     if n_iters is not None:
-            #         print("Distributor has {} jobs with {} iterations. Totally: {}"
-            #               .format(n_jobs, n_iters, n_jobs*n_iters), flush=True)
-            #         with bar(total=n_jobs*n_iters) as progress:
-            #             while True:
-            #                 signal = self.results.get()
-            #                 position = self._get_position(signal)
-            #                 if signal.done:
-            #                     self.finished_jobs.append(signal.job)
-            #                 progress.n = position
-            #                 progress.refresh()
-            #                 if len(self.finished_jobs) == n_jobs:
-            #                     break
-            #     else:
-            #         print("Distributor has {} jobs"
-            #               .format(n_jobs), flush=True)
-            #         with bar(total=n_jobs) as progress:
-            #             while True:
-            #                 answer = self.results.get()
-            #                 if answer.done:
-            #                     self.finished_jobs.append(answer.job)
-            #                 position = len(self.finished_jobs)
-            #                 progress.n = position
-            #                 progress.refresh()
-            #                 if len(self.finished_jobs) == n_jobs:
-            #                     break
-            # else:
-            self.jobs_queue.join()
+            grid_updates = 0
+            while True:
+                finished_jobs = 0
+                n_jobs = self.jobs_queue.next_jobs(len(workers)+1)
+                jobs_in_queue = n_jobs
+                while finished_jobs != jobs_in_queue:
+                    signal = self.results.get()
+                    if signal.done:
+                        finished_jobs += 1
+                        if isinstance(self.jobs_queue.grid.each, int) and finished_jobs % self.jobs_queue.grid.each == 0:
+                            self.jobs_queue.update(grid_updates)
+                            grid_updates += 1
+                        if n_jobs > 0:
+                            n_jobs = self.jobs_queue.next_jobs(1)
+                            jobs_in_queue += n_jobs
+                if self.jobs_queue.grid.each == 'last':
+                    was_updated = self.jobs_queue.update(grid_updates)
+                    grid_updates += 1
+                    if not was_updated:
+                        break
+                else:
+                    self.jobs_queue.stop_workers(len(workers))
+                    self.jobs_queue.join()
+                    break
         self.log_info('All workers have finished the work', filename=self.logfile)
         logging.shutdown()
-
-    # def _get_position(self, signal, fixed_iterations=True):
-    #     if fixed_iterations:
-    #         if signal.done:
-    #             self.answers[signal.job] = signal.n_iters
-    #         else:
-    #             self.answers[signal.job] = signal.iteration+1
-    #     else:
-    #         self.answers[signal.job] += 1
-    #     return sum(self.answers)
 
 class Signal:
     """ Class for feedback from jobs and workers """

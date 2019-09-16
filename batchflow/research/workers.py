@@ -154,6 +154,7 @@ class Worker:
                 else:
                     default_signal.exception = RuntimeError('Job {} [{}] failed {} times in {}'
                                                             .format(job[0], pid, self.trials, self.worker_name))
+                    default_signal.done = True
                     results.put(default_signal)
                 queue.task_done()
                 job = queue.get()
@@ -205,7 +206,6 @@ class PipelineWorker(Worker):
         """ Run before job execution. """
         i, job = self.job
         n_branches = len(job.configs)
-
         self.device_configs = [dict(device=str(self.devices[i])) for i in range(n_branches)]
 
         job.init(self.worker_config, self.device_configs)
