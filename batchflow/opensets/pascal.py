@@ -67,15 +67,15 @@ class BasePascal(ImagesOpenset):
         """ Return file name without format """
         return basename(path).split('.')[0]
 
-    def _imagepath(self, name):
+    def _image_path(self, name):
         """ Return the path to the .jpg image in the archive by its name """
         return os.path.join(dirname(self.SETS_PATH), 'JPEGImages', name + '.jpg')
 
-    def _extract(self, archive, file):
+    def _extract_image(self, archive, file):
         data = archive.extractfile(file).read()
         return PIL.Image.open(BytesIO(data))
 
-    def _get_ids(self, archive, part):
+    def _extract_ids(self, archive, part):
         """ Train and test images ids are located in specific for each task folder"""
         part_path = os.path.join(self.SETS_PATH, self.task, part) + '.txt'
         raw_ids = archive.extractfile(part_path)
@@ -87,31 +87,31 @@ class PascalSegmentation(BasePascal):
 
     Notes
     -----
-    Index 0 corresponds to background and index 255 corresponds to 'void' or unlabelled.
+    Class 0 corresponds to background and class 255 corresponds to 'void' or unlabelled.
     """
     task = 'Segmentation'
     classes = ['background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair',
-               'cow', 'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa',
-               'train', 'tvmonitor']
+               'cow', 'dining table', 'dog', 'horse', 'motorbike', 'person', 'potted plant', 'sheep', 'sofa',
+               'train', 'TV/monitor']
 
-    def _maskpath(self, name):
+    def _mask_path(self, name):
         """ Return the path in the archive to the mask which is .png image by its name"""
         return os.path.join(dirname(self.SETS_PATH), 'SegmentationClass', name + '.png')
 
     def download(self, path):
         self.download_archive(path)
         with tarfile.open(self.localname, "r") as archive:
-            train_ids = self._get_ids(archive, 'train')
-            test_ids = self._get_ids(archive, 'val')
+            train_ids = self._extract_ids(archive, 'train')
+            test_ids = self._extract_ids(archive, 'val')
 
-            train_images = np.array([self._extract(archive, self._imagepath(name)) \
+            train_images = np.array([self._extract_image(archive, self._image_path(name)) \
                                      for name in train_ids], dtype=object)
-            test_images = np.array([self._extract(archive, self._imagepath(name)) \
+            test_images = np.array([self._extract_image(archive, self._image_path(name)) \
                                     for name in test_ids], dtype=object)
 
-            train_masks = np.array([self._extract(archive, self._maskpath(name)) \
+            train_masks = np.array([self._extract_image(archive, self._mask_path(name)) \
                                     for name in train_ids], dtype=object)
-            test_masks = np.array([self._extract(archive, self._maskpath(name)) \
+            test_masks = np.array([self._extract_image(archive, self._mask_path(name)) \
                                    for name in test_ids], dtype=object)
 
             self._train_index = DatasetIndex(np.arange(len(train_images)))
@@ -125,7 +125,7 @@ class PascalClassification(BasePascal):
 
     Notes
     -----
-    - Labels are represented by the one-hot vector of size 20. '1' stands for the presence of at least one object from
+    Labels are represented by the vector of size 20. '1' stands for the presence of at least one object from
     coresponding class on the image. '-1' stands for the absence. '0' indicates that the object is presented,
     but can hardly be detected.
     """
@@ -146,11 +146,13 @@ class PascalClassification(BasePascal):
                     value = int(row.split()[1])
                     d[key].append(value)
 
-            train_ids = self._get_ids(archive, 'train')
-            test_ids = self._get_ids(archive, 'val')
+            train_ids = self._extract_ids(archive, 'train')
+            test_ids = self._extract_ids(archive, 'val')
 
-            train_images = np.array([self._extract(archive, self._imagepath(name)) for name in train_ids], dtype=object)
-            test_images = np.array([self._extract(archive, self._imagepath(name)) for name in test_ids], dtype=object)
+            train_images = np.array([self._extract_image(archive, self._image_path(name)) \
+                                     for name in train_ids], dtype=object)
+            test_images = np.array([self._extract_image(archive, self._image_path(name)) \
+                                    for name in test_ids], dtype=object)
 
             train_labels = np.array([d[self._name(name)] for name in train_ids])
             test_labels = np.array([d[self._name(name)] for name in test_ids])
