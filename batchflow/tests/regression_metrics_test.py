@@ -28,7 +28,7 @@ def test_defined_values(targets, predictions, weights, output_agg, metric_name, 
     """ Test that expected values match the real ones for some non border values """
     metrics = RegressionMetrics(targets, predictions, weights=weights, multi=True)
     res = metrics.evaluate(metrics=metric_name, agg=output_agg)
-    assert np.allclose(res, exp_res, atol=0.01, rtol=0), 'failed on metric {}'.format(metric_name)
+    assert np.allclose(res, exp_res, atol=0.01, rtol=0)
 
 
 PARAMS = [('eq', 'mae', 0), ('eq', 'mse', 0), ('eq', 'median_absolute_error', 0), ('eq', 'max_error', 0),

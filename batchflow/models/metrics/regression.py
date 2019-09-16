@@ -70,10 +70,10 @@ class RegressionMetrics(Metrics):
         super().__init__()
 
         # if-else block bellow process the case when the inputs and targets are list
-        # of arrays-like. Thats happening when we accumulating targets and predictions in the pipeline
+        # of arrays-like. That's happening when we accumulate targets and predictions in the pipeline
         # via `.update(V('targets', mode='a'), value)`.
         # Since we are not interested in across batch aggregation we only need to concatenate this arrays along 0 axis
-        # In this scenario tho we can mess with 2 cases:
+        # In this scenario we can mess with 2 cases:
         # 1. targets is a single batch of multioutput targets and has the following structure [[], [], ..].
         # 2. targets is a list of data come from couple of batches in a single output task
         # and has the same structure [[], [], ..].
