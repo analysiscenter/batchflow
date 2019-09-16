@@ -117,7 +117,7 @@ class SklearnModel(BaseModel):
         """
         if predict_proba and not hasattr(self.estimator, 'predict_proba'):
             raise NotImplementedError('{} does not support predict_proba '.format(self.estimator))
-        
+
         if predict_proba and hasattr(self.estimator, 'predict_proba'):
             return self.estimator.predict_proba(X, *args, **kwargs)
 
