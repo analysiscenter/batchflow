@@ -13,7 +13,7 @@ import multiprocess as mp
 
 from .distributor import Distributor
 from .workers import PipelineWorker
-from .grid import Grid, Option, ConfigAlias
+from .domain import Domain, Option, ConfigAlias
 from .job import Job
 from .utils import get_metrics
 from .executable import Executable
@@ -31,7 +31,7 @@ class Research:
         self.name = 'research'
         self.worker_class = PipelineWorker
         self.devices = None
-        self.grid_config = None
+        self.domain = None
         self.n_iters = None
         self.timeout = 5
         self.process_function = None
@@ -45,12 +45,12 @@ class Research:
         ----------
         root : Pipeline
             a pipeline to execute when the research is run. It must contain `run` action with `lazy=True`.
-            Only if `branch` is None, `root` may contain parameters that can be defined by grid.
+            Only if `branch` is None, `root` may contain parameters that can be defined by domain.
         branch : Pipeline or None
             a parallelized pipeline to execute within the research.
             Several copies of branch pipeline will be executed in parallel per each batch
             received from the root pipeline.
-            May contain parameters that can be defined by grid.
+            May contain parameters that can be defined by domain.
         dataset : Dataset or None
             dataset that will be used with pipelines (see also `part`). If None, root or branch
             must contain datatset.
@@ -89,8 +89,8 @@ class Research:
 
         **How to define changing parameters**
 
-        All parameters in `root` or `branch` that are defined in grid should be defined
-        as `C('parameter_name')`. Corresponding parameter in grid must have the same `'parameter_name'`.
+        All parameters in `root` or `branch` that are defined in domain should be defined
+        as `C('parameter_name')`. Corresponding parameter in domain must have the same `'parameter_name'`.
         """
         name = name or 'pipeline_' + str(len(self.executables) + 1)
 
@@ -202,26 +202,29 @@ class Research:
 
         return self
 
-    def add_grid(self, grid_config, update_func=None, each=None):
-        """ Add grid of pipeline parameters. Configs from that grid will be generated
+    def init_domain(self, domain):
+        """ Add domain of pipeline parameters. Configs from that domain will be generated
         and then substitute into pipelines.
 
         Parameters
         ----------
-        grid_config : Grid or Option
+        domain : Domain or Option
             if dict it should have items parameter_name: list of values.
         """
-        self.grid_config = grid_config
-        self.update_func = update_func
-        self.each = each
+        self.domain = domain
+        return self
+    
+    def update_domain(self, update_func=None, each='last'):
+        if update_func is not None:
+            self._update_domain = update_func, each
         return self
 
     def update_config(self, function, parameters=None, cache=0):
-        """ Add function to update config from grid.
+        """ Add function to update config from domain.
 
         Parameters
         ----------
-        grid_config : dict, Grid or Option
+        domain : dict, Domain or Option
             if dict it should have items parameter_name: list of values.
         """
         self.process_function = {
@@ -243,7 +246,7 @@ class Research:
         Parameters
         ----------
         n_reps : int
-            number of repetitions with each combination of parameters from `grid_config`
+            number of repetitions with each combination of parameters from `domain`
         n_iters: int or None
             number of iterations for each configurations. If None, wait StopIteration exception for at least
             one pipeline.
@@ -305,8 +308,9 @@ class Research:
         self.name = name or self.name
         self.bar = bar
 
-        if self.grid_config is None:
-            self.grid_config = Grid(Option('_dummy', [None])).iterator(brute_force=True, n_iters=None, n_reps=1)
+        if self.domain is None:
+            self.domain = Domain(Option('_dummy', [None]))
+            self.domain.set_iterator(brute_force=True, n_iters=None, n_reps=1)
 
         self._folder_exists(self.name)
 
@@ -314,8 +318,8 @@ class Research:
 
         self.__save()
 
-        jobs_queue = DynamicQueue(self.branches, self.grid_config, self.n_iters, self.executables,
-                                  self.name, self.process_function)
+        jobs_queue = DynamicQueue(self.branches, self.domain, self.n_iters, self.executables,
+                                  self.name, self.process_function, self._update_domain)
 
         distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
         distr.run(jobs_queue, dirname=self.name, bar=self.bar)
@@ -323,7 +327,7 @@ class Research:
         return self
 
     def __getstate__(self):
-        d = {k: v for k, v in self.__dict__.items() if k != 'grid_config'}
+        d = {k: v for k, v in self.__dict__.items() if k != 'domain'}
         return d
 
     def __setstate__(self, d):
@@ -352,7 +356,7 @@ class Research:
         with open(os.path.join(self.name, 'description', 'research.json'), 'w') as file:
             file.write(json.dumps(self._json(), default=self._set_default_json))
         with open(os.path.join(self.name, 'description', 'alias.json'), 'w') as file:
-            file.write(json.dumps(str(self.grid_config), default=self._set_default_json))
+            file.write(json.dumps(str(self.domain), default=self._set_default_json))
 
     def _set_default_json(self, obj):
         try:
@@ -363,7 +367,7 @@ class Research:
 
     def _json(self):
         description = copy(self.__dict__)
-        description['grid_config'] = str(self.grid_config)
+        description['domain'] = str(self.domain)
         return description
 
     def describe(self):
@@ -378,9 +382,9 @@ class Research:
             return research
 
 class DynamicQueue:
-    def __init__(self, branches, grid, n_iters, executables, research_path, process_function):
+    def __init__(self, branches, domain, n_iters, executables, research_path, process_function, update_domain):
         self.branches = branches
-        self.grid = grid
+        self.domain = domain
         self.n_iters = n_iters
         self.executables = executables
         self.research_path = research_path
@@ -391,35 +395,43 @@ class DynamicQueue:
         self.process_function = process_function
 
         self.n_branches = branches if isinstance(branches, int) else len(branches)
-        self.grid = grid
-        self.generator = self._generate_config(grid)
+        self.domain = domain
+        self.update_function, self.update_each = update_domain
+
+        self.domain.update = self.update_function
+        self.domain.each = self.update_each
+        
+        self.generator = self._generate_config(self.domain)
 
         self._queue = mp.JoinableQueue()
 
-    def _generate_config(self, grid):
+    def _generate_config(self, domain):
         while True:
             try:
-                config_from_grid = next(grid)
+                config_from_domain = next(domain)
                 config_from_func = dict()
                 if self.process_function is not None:
                     if self.process_function['params'] is None:
-                        config_from_func = self.process_function['func'](config_from_grid.config())
+                        config_from_func = self.process_function['func'](config_from_domain.config())
                     else:
-                        _config_slice = {key: config_from_grid.config().get(key)
+                        _config_slice = {key: config_from_domain.config().get(key)
                                          for key in self.process_function['params']}
                         config_from_func = self.process_function['func'](**_config_slice)
                 config_from_func = config_from_func if isinstance(config_from_func, list) else [config_from_func]
                 for config in config_from_func:
-                    yield (config_from_grid, ConfigAlias(config.items()))
+                    yield (config_from_domain, ConfigAlias(config.items()))
             except StopIteration:
                 break
 
-    def update(self, n_updates):
-        if self.grid.update_func is not None:
-            res = self.grid.update_func(n_updates, self.research_path)
-            if res is not None:
-                self.generator = self._generate_config(res)
-                return True
+    def update(self):
+        new_domain = self.domain.update(self.research_path)
+        if new_domain is not None:
+            self.domain = new_domain
+            self.domain.each = self.update_each
+            self.domain.update = self.update_function
+            self.generator = self._generate_config(self.domain)
+            return True
+        else:
             return False
 
     def next_jobs(self, n_tasks=1):
@@ -557,11 +569,11 @@ class Results():
             names of variables to load
         iterations : int, list or None
             iterations to load
-        configs, aliases : dict, Config, Option, Grid or None
+        configs, aliases : dict, Config, Option, Domain or None
             configs to load
         use_alias : bool
             if True, the resulting DataFrame will have one column with alias, else it will
-            have column for each option in grid
+            have column for each option in domain
 
         Returns
         -------
@@ -577,14 +589,14 @@ class Results():
             we have the following research:
 
             ```
-            grid = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
+            domain = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
 
             research = (Research()
             .add_pipeline(train_ppl, variables='loss', name='train')
             .add_pipeline(test_ppl, name='test', execute=100, run=True, import_from='train')
             .add_function(accuracy, returns='accuracy', name='test_accuracy',
                       execute=100, pipeline='test')
-            .add_grid(grid))
+            .add_domain(domain))
 
             research.run(n_reps=2, n_iters=10000)
             ```
