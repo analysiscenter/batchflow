@@ -14,10 +14,10 @@ class ScalableModel(TFModel):
     def default_config(cls):
         config = super().default_config()
 
-        config['body/blocks'] = [
+        config['body'].update(dict(blocks=[
             dict(repeats=1, scalable=True, layout='cna cna', kernel_size=3, filters=8)
-        ]
-        config['head'] = dict(layout='Pf')
+        ]))
+        config['head'].update(dict(layout='Pf'))
 
         config['common/width_factor'] = 1.0
         config['common/depth_factor'] = 1.0
@@ -128,38 +128,38 @@ class EfficientNetB0(ScalableModel):
     @classmethod
     def default_config(cls):
         config = super().default_config()
+        act = tf.nn.swish # tf.nn.relu6 #h_swish
 
-        config['initial_block'] = dict(scalable=True, layout='cna', kernel_size=3, strides=2, filters=32,
-                                       activation=tf.nn.swish)
+        config['initial_block'].update(dict(scalable=True, layout='cna', kernel_size=3, strides=2, filters=32,
+                                            activation=act))
 
-        config['body/base'] = MobileNet_v2.block
-        config['body/blocks'] = [
-            # NB! when expansion_factor=1 original implementaion skips expansion convolution
+        config['body'].update(dict(base=MobileNet_v2.block, blocks=[
+            # NB! when expansion_factor=1 original efficientnet implementation skips expansion convolution
             dict(repeats=1, scalable=True, kernel_size=3, strides=1, filters=16,
                  expansion_factor=1,
-                 se_block=dict(ratio=0.25), activation=tf.nn.swish),
+                 se_block=dict(ratio=4), activation=act),
             dict(repeats=2, scalable=True, kernel_size=3, strides=2, filters=24,
                  expansion_factor=6,
-                 se_block=dict(ratio=0.25), activation=tf.nn.swish),
+                 se_block=dict(ratio=4), activation=act),
             dict(repeats=2, scalable=True, kernel_size=5, strides=2, filters=40,
                  expansion_factor=6,
-                 se_block=dict(ratio=0.25), activation=tf.nn.swish),
+                 se_block=dict(ratio=4), activation=act),
             dict(repeats=3, scalable=True, kernel_size=3, strides=2, filters=80,
                  expansion_factor=6,
-                 se_block=dict(ratio=0.25), activation=tf.nn.swish),
+                 se_block=dict(ratio=4), activation=act),
             dict(repeats=3, scalable=True, kernel_size=5, strides=1, filters=112,
                  expansion_factor=6,
-                 se_block=dict(ratio=0.25), activation=tf.nn.swish),
+                 se_block=dict(ratio=4), activation=act),
             dict(repeats=4, scalable=True, kernel_size=5, strides=2, filters=192,
                  expansion_factor=6,
-                 se_block=dict(ratio=0.25), activation=tf.nn.swish),
+                 se_block=dict(ratio=4), activation=act),
             dict(repeats=1, scalable=True, kernel_size=3, strides=1, filters=320,
                  expansion_factor=6,
-                 se_block=dict(ratio=0.25), activation=tf.nn.swish),
-        ]
+                 se_block=dict(ratio=4), activation=act),
+        ]))
 
-        config['head'] = dict(scalable=True, layout='cna V df', kernel_size=1, strides=1, filters=1280,
-                              activation=tf.nn.swish, dropout_rate=0.2)
+        config['head'].update(dict(scalable=True, layout='cna V df', kernel_size=1, strides=1, filters=1280,
+                                   activation=act, dropout_rate=0.2))
 
         return config
 
