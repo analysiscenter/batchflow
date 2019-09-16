@@ -13,22 +13,20 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
     minimum (learning_rate) and the maximum (max_lr).
     It returns the decayed learning rate.
 
-    Leslie N. Smith "`Cyclical Learning Rates
-    for Training Neural Networks <https://arxiv.org/abs/1506.01186>`_"
-
     Parameters
     ----------
     learning_rate : float or tf.Tensor
         The minimum learning rate boundary.
-    global_step: int or tf.Tensor
-        Global step to use for the cyclic computation. Must not be negative.
-    max_lr : float
+    global_step : int or tf.Tensor
+        Global_step refers to the number of batches seen by the model.
+        It is use for the cyclic computation. Must not be negative.
+    max_lr : float or tf.Tensor
         The maximum learning rate boundary.
-    step_size : int, optional
+    step_size : int or tf.Tensor
         The number of iterations in half a cycle (the default is 10).
-    mode : {'tri', 'sin', 'saw'}, opional
+    mode : {'tri', 'sin', 'saw'}
         Set the learning rate change function.
-    name : str, optional
+    name : str
         Name of the operation (the default is 'CyclicLearningRate').
 
     Returns
@@ -43,6 +41,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
         Default, linearly increasing then linearly decreasing the
         learning rate at each cycle. Learning rate starting
         from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
+        Published in article [1]_.
         It is computed as:
 
         ```python
@@ -76,6 +75,11 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
                                 learning_rate
 
         ```
+
+    References
+    ----------
+    .. [1] Leslie N. Smith, "Cyclical Learning Rates
+       for Training Neural Networks", https://arxiv.org/abs/1506.01186
 
     """
     with tf.name_scope(name):
