@@ -1,6 +1,9 @@
-""" EfficientNet """
-# pylint: disable=missing-docstring
+""" Base class for scalable models and EfficientNet
 
+Mingxing Tan, Quoc V. Le "`EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks
+<https://arxiv.org/abs/1905.11946>`_"
+
+"""
 import numpy as np
 import tensorflow as tf
 
@@ -9,14 +12,53 @@ from .layers import conv_block
 
 
 class ScalableModel(TFModel):
+    """ Base class for scalable models.
+    Scaling can be done by depth and/or by width
+
+    **Configuration**
+
+    inputs : dict
+        dict with 'images' and 'labels' (see :meth:`.TFModel._make_inputs`)
+
+    initial_block : dict
+        parameters for the initial block
+        base :
+            Base block. default is :func:`~.layers.conv_block`
+        repeats : int
+            number of repeats of the block
+        scalable : bool
+            indicates whether the block can be scaled
+        other parameters :
+            see :func:`~.layers.conv_block` or base block documentation
+
+    body : dict
+        base : function
+            Base block. default is :func:`~.layers.conv_block`
+        blocks : list of dict
+            parameters for each block
+            repeats : int
+                number of repeats of the block
+            scalable : bool
+                indicates whether the block can be scaled
+            other parameters :
+                see :func:`~.layers.conv_block` or base block documentation
+
+    head : dict
+        parameters for head
+
+    common : dict
+        common parameters
+        width_factor :
+        depth_factor : float
+            scaling factors
+    """
 
     @classmethod
     def default_config(cls):
         config = super().default_config()
 
-        config['body'].update(dict(blocks=[
-            dict(repeats=1, scalable=True, layout='cna cna', kernel_size=3, filters=8)
-        ]))
+        config['body'].update(dict(base=None,
+                                   blocks=[dict(repeats=1, scalable=True, layout='cna cna', kernel_size=3, filters=8)]))
         config['head'].update(dict(layout='Pf'))
 
         config['common/width_factor'] = 1.0
@@ -35,22 +77,20 @@ class ScalableModel(TFModel):
 
     @classmethod
     def round_filters(cls, filters, factor):
+        """ Round number of filters based on width multiplier. """
         return int(filters * factor)
 
     @classmethod
     def round_repeats(cls, repeats, factor):
+        """ Round number of layers based on depth multiplier. """
         return int(np.ceil(repeats * factor))
 
     @classmethod
-    def non_repeated_block(cls, inputs, name, **kwargs):
+    def initial_block(cls, inputs, name='initial_block', **kwargs):
         kwargs = cls.fill_params(name, **kwargs)
         if kwargs.get('layout'):
             return cls.block(inputs, name=name, **kwargs)
         return inputs
-
-    @classmethod
-    def initial_block(cls, inputs, name='initial_block', **kwargs):
-        return cls.non_repeated_block(inputs, name, **kwargs)
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
@@ -66,10 +106,14 @@ class ScalableModel(TFModel):
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
-        return cls.non_repeated_block(inputs, name, **kwargs)
+        kwargs = cls.fill_params(name, **kwargs)
+        if kwargs.get('layout'):
+            return cls.block(inputs, name=name, **kwargs)
+        return inputs
 
     @classmethod
     def block(cls, inputs, name, **block_args):
+        """ block of repeated layers of same structure"""
         base_block = block_args.pop('base', None)
 
         new_layer_args = cls.update_layer_params(block_args)
@@ -86,7 +130,7 @@ class ScalableModel(TFModel):
 
     @classmethod
     def update_layer_params(cls, kwargs):
-
+        """ calculate filters and number of repeats depending on scaling factors """
         new_kwargs = dict(**kwargs)
         scalable = new_kwargs.get('scalable', False)
 
@@ -113,17 +157,15 @@ class ScalableModel(TFModel):
 
 class EfficientNetB0(ScalableModel):
     """
+    EfficientNetB0
 
-    phi - scaling parameter
-    alpha - depth scaling base, depth factor `d=alpha^phi`
-    beta - width (number of channels) scaling base, width factor `w=beta^phi`
-    resolution is set explicitly via inputs resolution.
-    helper function `get_resolution_factor` is provided to calculate resolution factor `r`
-    by given `alpha`, `beta`, `phi`, so that :math: `r^2 * w^2 * d \approx 2^phi`
+    **Configuration**
+        see :class:`ScalableModel`
+        Base block is :meth:`.MobileNet_v2.block`
 
     """
 
-    resolution = 224
+    resolution = 224  # image resolution used in original paper
 
     @classmethod
     def default_config(cls):
@@ -156,24 +198,9 @@ class EfficientNetB0(ScalableModel):
 
         return config
 
-    @classmethod
-    def round_filters(cls, filters, factor):
-        """Round number of filters based on depth multiplier."""
-        divisor = 8
-        min_depth = 8
-        if not factor:
-            return filters
-
-        filters *= factor
-        min_depth = min_depth or divisor
-        new_filters = max(min_depth, int(filters + divisor / 2) // divisor * divisor)
-        # Make sure that round down does not go down by more than 10%.
-        if new_filters < 0.9 * filters:
-            new_filters += divisor
-        return int(new_filters)
-
 
 class EfficientNetB1(EfficientNetB0):
+    """ EfficientNetB1 """
 
     resolution = 240
 
@@ -190,6 +217,7 @@ class EfficientNetB1(EfficientNetB0):
 
 
 class EfficientNetB2(EfficientNetB0):
+    """ EfficientNetB2 """
 
     resolution = 260
 
@@ -206,6 +234,7 @@ class EfficientNetB2(EfficientNetB0):
 
 
 class EfficientNetB3(EfficientNetB0):
+    """ EfficientNetB3 """
 
     resolution = 300
 
@@ -222,6 +251,7 @@ class EfficientNetB3(EfficientNetB0):
 
 
 class EfficientNetB4(EfficientNetB0):
+    """ EfficientNetB4 """
 
     resolution = 380
 
@@ -238,6 +268,7 @@ class EfficientNetB4(EfficientNetB0):
 
 
 class EfficientNetB5(EfficientNetB0):
+    """ EfficientNetB5 """
 
     resolution = 456
 
@@ -254,6 +285,7 @@ class EfficientNetB5(EfficientNetB0):
 
 
 class EfficientNetB6(EfficientNetB0):
+    """ EfficientNetB6 """
 
     resolution = 528
 
@@ -270,6 +302,7 @@ class EfficientNetB6(EfficientNetB0):
 
 
 class EfficientNetB7(EfficientNetB0):
+    """ EfficientNetB7 """
 
     resolution = 600
 
