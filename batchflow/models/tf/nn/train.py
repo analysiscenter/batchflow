@@ -95,7 +95,7 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
             second_comp = learning_rate
         elif mode == 'sin':
             first_factor = (learning_rate - max_lr) / 2.
-            second_factor = tf.sin((pi * global_step)/step_size)
+            second_factor = tf.sin((pi * global_step) / step_size)
             second_comp = (learning_rate + max_lr) / 2.
         elif mode == 'saw':
             first_factor = max_lr - learning_rate
