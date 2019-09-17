@@ -125,20 +125,34 @@ class PascalClassification(BasePascal):
 
     Notes
     -----
-    Labels are represented by the vector of size 20. '1' stands for the presence of at least one object from
+    - Labels are represented by the vector of size 20. '1' stands for the presence of at least one object from
     coresponding class on the image. '-1' stands for the absence. '0' indicates that the object is presented,
     but can hardly be detected.
+
+    - You can control zeros among targets via `process_zero` keyword argument:
+    Setting `process_zero=0` leaves the targets as it is.
+    Setting `process_zero=1` or any other positive number replaces `0` with `1`
+    Setting `process_zero=-1` or any other negative number replaces `0` with `-1`
     """
     task = 'Main'
     classes = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
-               'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train',
+               'dining table', 'dog', 'horse', 'motorbike', 'person', 'potted plant', 'sheep', 'sofa', 'train',
                'tvmonitor']
+    def __init__(self, *args, replace_zero=-1, unpack=False, preloaded=None, train_test=True, **kwargs):
+        self.replace_zero = replace_zero
+        super().__init__(*args, unpack=unpack, preloaded=preloaded, train_test=train_test, **kwargs)
+
+    def _process_targets(self, targets):
+        np.place(targets, targets == 0, np.sign(self.replace_zero))
+        labels = (targets > 0).astype(int)
+        return labels
 
     def download(self, path):
         self.download_archive()
         with tarfile.open(self.localname, "r") as archive:
             d = defaultdict(list)
-            class_files = [os.path.join(self.SETS_PATH, self.task, name) + '_trainval.txt' for name in self.classes]
+            class_files = [os.path.join(self.SETS_PATH, self.task, name.replace(' ', '')) + '_trainval.txt'
+                           for name in self.classes]
             for class_file in class_files:
                 data = archive.extractfile(class_file).read()
                 for row in data.decode().split('\n')[:-1]:
@@ -154,8 +168,11 @@ class PascalClassification(BasePascal):
             test_images = np.array([self._extract_image(archive, self._image_path(name)) \
                                     for name in test_ids], dtype=object)
 
-            train_labels = np.array([d[self._name(name)] for name in train_ids])
-            test_labels = np.array([d[self._name(name)] for name in test_ids])
+            train_targets = np.array([d[self._name(name)] for name in train_ids])
+            train_labels = self._process_targets(train_targets)
+
+            test_targets = np.array([d[self._name(name)] for name in test_ids])
+            test_labels = self._process_targets(test_targets)
 
             self._train_index = DatasetIndex(np.arange(len(train_images)))
             self._test_index = DatasetIndex(np.arange(len(test_images)))
