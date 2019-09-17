@@ -701,4 +701,4 @@ class Results():
                                 **res
                             })
                             )
-        return pd.concat(all_results).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
+        return pd.concat(all_results, sort=False).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)
