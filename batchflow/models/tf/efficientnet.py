@@ -128,38 +128,31 @@ class EfficientNetB0(ScalableModel):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        act = tf.nn.swish # tf.nn.relu6 #h_swish
 
-        config['initial_block'].update(dict(scalable=True, layout='cna', kernel_size=3, strides=2, filters=32,
-                                            activation=act))
+        config['initial_block'].update(dict(scalable=True, layout='cna', kernel_size=3, strides=2, filters=32))
 
         config['body'].update(dict(base=MobileNet_v2.block, blocks=[
             # NB! when expansion_factor=1 original efficientnet implementation skips expansion convolution
             dict(repeats=1, scalable=True, kernel_size=3, strides=1, filters=16,
-                 expansion_factor=1,
-                 se_block=dict(ratio=4), activation=act),
+                 expansion_factor=1, se_block=dict(ratio=4)),
             dict(repeats=2, scalable=True, kernel_size=3, strides=2, filters=24,
-                 expansion_factor=6,
-                 se_block=dict(ratio=4), activation=act),
+                 expansion_factor=6, se_block=dict(ratio=4)),
             dict(repeats=2, scalable=True, kernel_size=5, strides=2, filters=40,
-                 expansion_factor=6,
-                 se_block=dict(ratio=4), activation=act),
+                 expansion_factor=6, se_block=dict(ratio=4)),
             dict(repeats=3, scalable=True, kernel_size=3, strides=2, filters=80,
-                 expansion_factor=6,
-                 se_block=dict(ratio=4), activation=act),
+                 expansion_factor=6, se_block=dict(ratio=4)),
             dict(repeats=3, scalable=True, kernel_size=5, strides=1, filters=112,
-                 expansion_factor=6,
-                 se_block=dict(ratio=4), activation=act),
+                 expansion_factor=6, se_block=dict(ratio=4)),
             dict(repeats=4, scalable=True, kernel_size=5, strides=2, filters=192,
-                 expansion_factor=6,
-                 se_block=dict(ratio=4), activation=act),
+                 expansion_factor=6, se_block=dict(ratio=4)),
             dict(repeats=1, scalable=True, kernel_size=3, strides=1, filters=320,
-                 expansion_factor=6,
-                 se_block=dict(ratio=4), activation=act),
+                 expansion_factor=6, se_block=dict(ratio=4)),
         ]))
 
         config['head'].update(dict(scalable=True, layout='cna V df', kernel_size=1, strides=1, filters=1280,
-                                   activation=act, dropout_rate=0.2))
+                                   dropout_rate=0.2))
+
+        config['common'].update(activation=tf.nn.swish)
 
         return config
 
