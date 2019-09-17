@@ -215,8 +215,7 @@ class Research:
         return self
     
     def update_domain(self, update_func=None, each='last'):
-        if update_func is not None:
-            self._update_domain = update_func, each
+        self._update_domain = update_func, each
         return self
 
     def update_config(self, function, parameters=None, cache=0):
@@ -395,11 +394,10 @@ class DynamicQueue:
         self.process_function = process_function
 
         self.n_branches = branches if isinstance(branches, int) else len(branches)
+        
         self.domain = domain
-        self.update_function, self.update_each = update_domain
-
-        self.domain.update = self.update_function
-        self.domain.each = self.update_each
+        self.update_domain = update_domain
+        self.domain.set_update(*self.update_domain)
         
         self.generator = self._generate_config(self.domain)
 
@@ -427,8 +425,7 @@ class DynamicQueue:
         new_domain = self.domain.update(self.research_path)
         if new_domain is not None:
             self.domain = new_domain
-            self.domain.each = self.update_each
-            self.domain.update = self.update_function
+            self.domain.set_update(*self.update_domain)
             self.generator = self._generate_config(self.domain)
             return True
         else:
