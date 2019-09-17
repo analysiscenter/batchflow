@@ -206,7 +206,7 @@ class PipelineWorker(Worker):
         """ Run before job execution. """
         i, job = self.job
         n_branches = len(job.configs)
-        self.device_configs = [dict(device=str(self.devices[i])) for i in range(n_branches)]
+        self.device_configs = [self.devices[i] for i in range(n_branches)]
 
         job.init(self.worker_config, self.device_configs)
         description = job.get_description()

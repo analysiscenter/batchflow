@@ -4,6 +4,7 @@ import os
 import glob
 from copy import copy
 from collections import OrderedDict
+import itertools
 from functools import lru_cache
 import json
 import pprint
@@ -22,19 +23,21 @@ class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
     def __init__(self):
         self.executables = OrderedDict()
-        self.loaded = False
+        self.loaded = False # TODO: Think about it. Do we need load?
         self.branches = 1
         self.trials = 3
         self.workers = 1
-        self.bar = False
-        self.n_reps = 1
+        self.bar = False # TODO: We need progress bar
         self.name = 'research'
         self.worker_class = PipelineWorker
         self.devices = None
         self.domain = None
         self.n_iters = None
-        self.timeout = 5
+        self.timeout = 5 # TODO: If we will run heavy pipeline with run, worker will be killed. Fix it.
         self.process_function = None
+
+        self._update_config = None
+        self._update_domain = None
 
     def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
                      name=None, execute=1, dump='last', run=False, logging=False, **kwargs):
@@ -214,8 +217,11 @@ class Research:
         self.domain = domain
         return self
     
-    def update_domain(self, update_func=None, each='last'):
-        self._update_domain = update_func, each
+    def update_domain(self, func=None, each='last'):
+        self._update_domain = {
+            'func': func,
+            'each': each
+        }
         return self
 
     def update_config(self, function, parameters=None, cache=0):
@@ -226,8 +232,8 @@ class Research:
         domain : dict, Domain or Option
             if dict it should have items parameter_name: list of values.
         """
-        self.process_function = {
-            'func': function,
+        self._update_config = {
+            'function': function,
             'params': parameters,
             'cache': cache
         }
@@ -237,15 +243,13 @@ class Research:
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
         return Results(research=self).load(*args, **kwargs)
 
-    def run(self, n_reps=1, n_iters=None, workers=1, branches=1, name=None,
+    def run(self, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):
 
         """ Run research.
 
         Parameters
         ----------
-        n_reps : int
-            number of repetitions with each combination of parameters from `domain`
         n_iters: int or None
             number of iterations for each configurations. If None, wait StopIteration exception for at least
             one pipeline.
@@ -295,7 +299,6 @@ class Research:
             if devices is not None:
                 self.devices = self._get_devices(devices)
         else:
-            self.n_reps = n_reps
             self.n_iters = n_iters
             self.workers = workers
             self.branches = branches
@@ -318,7 +321,7 @@ class Research:
         self.__save()
 
         jobs_queue = DynamicQueue(self.branches, self.domain, self.n_iters, self.executables,
-                                  self.name, self.process_function, self._update_domain)
+                                  self.name, self._update_config, self._update_domain)
 
         distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
         distr.run(jobs_queue, dirname=self.name, bar=self.bar)
@@ -326,24 +329,57 @@ class Research:
         return self
 
     def __getstate__(self):
-        d = {k: v for k, v in self.__dict__.items() if k != 'domain'}
-        return d
+        return self.__dict__
 
     def __setstate__(self, d):
         self.__dict__.update(d)
 
     def _get_devices(self, devices):
         # TODO: process `device` to simplify nested list construction
+        n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
+        n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
+        if devices is None:
+            devices = [[[None]] * n_branches] * n_workers
+        if isinstance(devices, int):
+            devices = [devices]
+        if isinstance(devices[0], int):
+            if n_workers * n_branches % len(devices) == 0:
+                branches_per_device = n_workers * n_branches // len(devices)
+                devices = list(itertools.chain.from_iterable(itertools.repeat(x, branches_per_device) for x in devices))
+            if len(devices) % (n_workers * n_branches) == 0:
+                devices_per_branch = len(devices) // (n_workers * n_branches)
+                devices = [
+                    [
+                        [
+                            devices[n_branches * devices_per_branch * i + devices_per_branch * j + k]
+                            for k in range(devices_per_branch)
+                        ] for j in range(n_branches)
+                    ] for i in range(n_workers)
+                ]              
+            else:
+                raise ValueError('????')
+        if isinstance(devices[0], list):
+            def _transform_item(x):
+                if len(x) > 1:
+                    values = [str(item) for item in x]
+                else:
+                    values = str(x[0])
+                return dict(device=values) if x is not None else dict()
+
+            devices = [[_transform_item(branch_config) for branch_config in worker_config] for worker_config in devices]
         return devices
 
     @staticmethod
     def _folder_exists(name):
         if not os.path.exists(name):
             os.makedirs(name)
+            config_path = os.path.join(name, 'configs')
+            if not os.path.exists(config_path):
+                os.makedirs(config_path)  
         else:
             raise ValueError(
                 "Research with name '{}' already exists".format(name)
-            )
+            )     
 
     def __save(self):
         """ Save description of the research to folder name/description. """
@@ -381,23 +417,25 @@ class Research:
             return research
 
 class DynamicQueue:
-    def __init__(self, branches, domain, n_iters, executables, research_path, process_function, update_domain):
+    def __init__(self, branches, domain, n_iters, executables, research_path, update_config, update_domain):
         self.branches = branches
         self.domain = domain
         self.n_iters = n_iters
         self.executables = executables
         self.research_path = research_path
 
-        if process_function is not None and process_function['cache'] > 0:
-            process_function['func'] = lru_cache(maxsize=process_function['cache'])(process_function['func'])
+        if update_config is not None and update_config['cache'] > 0:
+            update_config['function'] = lru_cache(maxsize=update_config['cache'])(update_config['function'])
 
-        self.process_function = process_function
+        self.update_config = update_config
 
         self.n_branches = branches if isinstance(branches, int) else len(branches)
         
         self.domain = domain
         self.update_domain = update_domain
-        self.domain.set_update(*self.update_domain)
+        
+        if self.update_domain is not None:
+            self.domain.set_update(**self.update_domain)
         
         self.generator = self._generate_config(self.domain)
 
@@ -408,13 +446,13 @@ class DynamicQueue:
             try:
                 config_from_domain = next(domain)
                 config_from_func = dict()
-                if self.process_function is not None:
-                    if self.process_function['params'] is None:
-                        config_from_func = self.process_function['func'](config_from_domain.config())
+                if self.update_config is not None:
+                    if self.update_config['params'] is None:
+                        config_from_func = self.update_config['function'](config_from_domain.config())
                     else:
                         _config_slice = {key: config_from_domain.config().get(key)
-                                         for key in self.process_function['params']}
-                        config_from_func = self.process_function['func'](**_config_slice)
+                                         for key in self.update_config['params']}
+                        config_from_func = self.update_config['function'](**_config_slice)
                 config_from_func = config_from_func if isinstance(config_from_func, list) else [config_from_func]
                 for config in config_from_func:
                     yield (config_from_domain, ConfigAlias(config.items()))
@@ -422,10 +460,11 @@ class DynamicQueue:
                 break
 
     def update(self):
-        new_domain = self.domain.update(self.research_path)
+        new_domain = self.domain.update_domain(self.research_path)
         if new_domain is not None:
             self.domain = new_domain
-            self.domain.set_update(*self.update_domain)
+            if self.update_domain is not None:
+                self.domain.set_update(**self.update_domain)
             self.generator = self._generate_config(self.domain)
             return True
         else:
@@ -517,7 +556,7 @@ class Results():
         if len(iterations) > 0:
             elements_to_load = pd.np.array([pd.np.isin(it, iterations_to_load) for it in iterations])
             res = OrderedDict()
-            for variable in ['iteration', *variables]:
+            for variable in ['iteration', 'sample_index', *variables]:
                 if variable in dumped_file:
                     res[variable] = pd.np.array(dumped_file[variable])[elements_to_load]
         else:
@@ -525,7 +564,7 @@ class Results():
         return res
 
     def _concat(self, results, variables):
-        res = {key: [] for key in [*variables, 'iteration']}
+        res = {key: [] for key in [*variables, 'iteration', 'sample_index']}
         for chunk in results:
             if chunk is not None:
                 for key, values in res.items():
@@ -595,7 +634,7 @@ class Results():
                       execute=100, pipeline='test')
             .add_domain(domain))
 
-            research.run(n_reps=2, n_iters=10000)
+            research.run(n_iters=10000)
             ```
             The code
             ```
@@ -637,26 +676,29 @@ class Results():
         for config_alias in self.configs:
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
+            path = os.path.join(self.path, 'results', alias_str)
+
             for unit in self.names:
-                path = os.path.join(self.path, 'results', alias_str)
-                files = glob.glob(os.path.join(glob.escape(path), unit + '_[0-9]*'))
-                files = self._sort_files(files, self.iterations)
-                if len(files) != 0:
-                    res = []
-                    for filename, iterations_to_load in files.items():
-                        with open(filename, 'rb') as file:
-                            res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
-                    res = self._concat(res, self.variables)
-                    self._fix_length(res)
-                    if '_dummy' not in alias:
-                        if use_alias:
-                            res['config'] = alias_str
-                        else:
-                            res.update(alias)
-                    all_results.append(
-                        pd.DataFrame({
-                            'name': unit,
-                            **res
-                        })
-                        )
+                sample_folders = glob.glob(os.path.join(glob.escape(path), '*'))
+                for sample_folder in sample_folders:
+                    files = glob.glob(os.path.join(sample_folder, unit + '_[0-9]*'))
+                    files = self._sort_files(files, self.iterations)
+                    if len(files) != 0:
+                        res = []
+                        for filename, iterations_to_load in files.items():
+                            with open(filename, 'rb') as file:
+                                res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
+                        res = self._concat(res, self.variables)
+                        self._fix_length(res)
+                        if '_dummy' not in alias:
+                            if use_alias:
+                                res['config'] = alias_str
+                            else:
+                                res.update(alias)
+                        all_results.append(
+                            pd.DataFrame({
+                                'name': unit,
+                                **res
+                            })
+                            )
         return pd.concat(all_results).reset_index(drop=True) if len(all_results) > 0 else pd.DataFrame(None)

@@ -24,7 +24,7 @@ class Job:
         self.exceptions = []
         self.stopped = []
 
-    def init(self, worker_config, gpu_configs):
+    def init(self, worker_config, device_configs):
         """ Create experiments. """
         self.worker_config = worker_config
         for index, (config, additional_config) in enumerate(self.configs):
@@ -42,7 +42,7 @@ class Job:
                 else:
                     import_config = dict()
                 unit.set_config(config, additional_config,
-                                {**branch_config, **gpu_configs[index]}, worker_config, import_config)
+                                {**branch_config, **device_configs[index]}, worker_config, import_config)
                 unit.dump_config(self.research_path)
                 unit.index = index
                 unit.create_folder(self.research_path)

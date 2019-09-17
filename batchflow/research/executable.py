@@ -178,10 +178,7 @@ class Executable:
             self.pipeline.set_config(self.config.config() + self.additional_config)
 
     def dump_config(self, name):
-        path = os.path.join(name, 'configs')
-        if not os.path.exists(path):
-            os.makedirs(path)
-        with open(os.path.join(path, self.config.alias(as_string=True)), 'wb') as file:
+        with open(os.path.join(name, 'configs', self.config.alias(as_string=True)), 'wb') as file:
             dill.dump(self.config, file)
 
     def next_batch(self):
@@ -259,7 +256,10 @@ class Executable:
     def dump_result(self, iteration, filename):
         """ Dump pipeline results """
         if len(self.variables) > 0:
-            path = os.path.join(self.path, filename + '_' + str(iteration))
+            n_samples = len(os.listdir(self.path))
+            os.makedirs(os.path.join(self.path, str(n_samples)))
+            self.result['sample_index'] = [n_samples] * len(self.result['iteration'])
+            path = os.path.join(self.path, str(n_samples), filename + '_' + str(iteration))
             with open(path, 'wb') as file:
                 dill.dump(self.result, file)
         self._clear_result()
@@ -267,8 +267,10 @@ class Executable:
     def create_folder(self, name):
         """ Create folder if it doesn't exist """
         self.path = os.path.join(name, 'results', self.config.alias(as_string=True))
-        if not os.path.exists(self.path):
+        try:
             os.makedirs(self.path)
+        except FileExistsError:
+            pass
 
     def action_iteration(self, iteration, n_iters=None, action='execute'):
         """ Returns does Unit should be executed at that iteration """

@@ -318,11 +318,11 @@ class Sampler():
         if low is not None:
             low = np.array(low).reshape(1, -1)
 
-        def truncated(size):
+        def truncated(size, **kwargs):
             """ Truncated sampling method.
             """
             if size == 0:
-                return self.sample(size=0)
+                return self.sample(size=0, **kwargs)
 
             # set batch-size
             expectation = size / prob
@@ -335,7 +335,7 @@ class Sampler():
             samples = []
             while cumulated < size:
                 # sample points and compute condition-vector
-                sample = self.sample(size=batch_size)
+                sample = self.sample(size=batch_size, **kwargs)
                 cond = np.ones(shape=batch_size).astype(np.bool)
                 if low is not None:
                     if expr is not None:
