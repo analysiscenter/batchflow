@@ -5,6 +5,26 @@ import logging
 import multiprocess as mp
 from tqdm import tqdm
 
+class _DummyBar:
+    def __init__(self, *args, **kwargs):
+        self.n = None
+        self.total = None
+
+    def set_description(self, *args, **kwargs):
+        pass
+
+    def refresh(self, *args, **kwargs):
+        pass
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def __enter__(self, *args, **kwargs):
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        pass
+
 class Distributor:
     """ Distributor of jobs between workers. """
     def __init__(self, workers, devices, worker_class=None, timeout=5, trials=3):
@@ -63,7 +83,7 @@ class Distributor:
         self.jobs_queue = jobs_queue
 
         if isinstance(bar, bool):
-            bar = tqdm if bar else None
+            bar = tqdm if bar else _DummyBar()
 
         self.logfile = logfile or 'research.log'
         self.errorfile = errorfile or 'errors.log'
