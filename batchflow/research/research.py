@@ -9,6 +9,7 @@ from functools import lru_cache
 import json
 import pprint
 import dill
+import numpy as np
 import pandas as pd
 import multiprocess as mp
 
@@ -433,15 +434,17 @@ class DynamicQueue:
         
         self.domain = domain
         self.update_domain = update_domain
+        self._domain_size = self.domain.size
         
         if self.update_domain is not None:
             self.domain.set_update(**self.update_domain)
-        
+
         self.generator = self._generate_config(self.domain)
 
         self._queue = mp.JoinableQueue()
 
     def _generate_config(self, domain):
+        self.each_config_produce = []
         while True:
             try:
                 config_from_domain = next(domain)
@@ -454,15 +457,23 @@ class DynamicQueue:
                                          for key in self.update_config['params']}
                         config_from_func = self.update_config['function'](**_config_slice)
                 config_from_func = config_from_func if isinstance(config_from_func, list) else [config_from_func]
+                self.each_config_produce.append(len(config_from_func))
                 for config in config_from_func:
                     yield (config_from_domain, ConfigAlias(config.items()))
             except StopIteration:
                 break
 
+    @property
+    def total(self):
+        #return self._domain_size * np.mean(self.each_config_produce)
+        rolling_mean = pd.Series(self.each_config_produce).rolling(window=10, min_periods=1).mean().round().values[-1]
+        return np.sum(self.each_config_produce) + (self._domain_size - len(self.each_config_produce)) * rolling_mean
+
     def update(self):
         new_domain = self.domain.update_domain(self.research_path)
         if new_domain is not None:
             self.domain = new_domain
+            self._domain_size = self.domain.size
             if self.update_domain is not None:
                 self.domain.set_update(**self.update_domain)
             self.generator = self._generate_config(self.domain)
