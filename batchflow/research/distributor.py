@@ -134,26 +134,30 @@ class Distributor:
                     mp.Process(target=worker, args=(self.jobs_queue, self.results)).start()
                 except Exception as exception: #pylint:disable=broad-except
                     logging.error(exception, exc_info=True)
-            total_finished_jobs = 0
+            previous_domain_jobs = 0
             n_updates = 0
             with bar(total=0) as progress:
                 while True:
-                    progress.set_description('Domain updated: ' + str(n_updates))
-                    finished_jobs = 0
                     n_jobs = self.jobs_queue.next_jobs(len(workers)+1)
                     jobs_in_queue = n_jobs
+                    finished_jobs = 0
+                    rest_of_generator = 0
                     while finished_jobs != jobs_in_queue:
-                        progress.total = total_finished_jobs+self.jobs_queue.total
+                        progress.set_description('Domain updated: ' + str(n_updates))
+                        progress.total = rest_of_generator + previous_domain_jobs + self.jobs_queue.total
+                        progress.refresh()
                         signal = self.results.get()
                         if signal.done:
                             finished_jobs += 1
                             if isinstance(self.jobs_queue.domain.each, int) and finished_jobs % self.jobs_queue.domain.each == 0:
-                                self.jobs_queue.update()
-                                n_updates += 1
+                                was_updated = self.jobs_queue.update()
+                                if was_updated:
+                                    rest_of_generator = jobs_in_queue
+                                n_updates += was_updated
                             if n_jobs > 0:
                                 n_jobs = self.jobs_queue.next_jobs(1)
                                 jobs_in_queue += n_jobs
-                            progress.n = total_finished_jobs+finished_jobs
+                            progress.n += 1
                             progress.refresh()
                     if self.jobs_queue.domain.each == 'last':
                         was_updated = self.jobs_queue.update()
@@ -164,7 +168,7 @@ class Distributor:
                         self.jobs_queue.stop_workers(len(workers))
                         self.jobs_queue.join()
                         break
-                    total_finished_jobs += finished_jobs
+                    previous_domain_jobs += finished_jobs
         self.log_info('All workers have finished the work', filename=self.logfile)
         logging.shutdown()
 
