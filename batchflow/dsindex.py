@@ -613,7 +613,27 @@ class FilesIndex(DatasetIndex):
         return index
 
     def build_from_path(self, path, dirs=False, no_ext=False, sort=False):
-        """ Build index from a path/glob or a sequence of paths/globs. """
+        """Create indices from a path/glob or a sequence of paths/globs.
+
+        Parameters
+        ----------
+        path : str, list of str
+            Parameter `path` contains a string of glob/path or strings of paths/globs.
+        dirs : bool
+            If True, this means that each string in `path` is directory.
+            Defaults to False.
+        no_ext : bool
+            If True, then delete extension in index when index creating from full path name.
+            Defaults to False.
+        sort : bool
+            If True, then indices are sorted by name. Defaults to False.
+
+        Returns
+        -------
+        numpy.array
+            Created indecies.
+
+        """
         if isinstance(path, str):
             paths = [path]
         else:
