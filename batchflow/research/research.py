@@ -343,7 +343,7 @@ class Research:
             devices = [[[None]] * n_branches] * n_workers
         if isinstance(devices, int):
             devices = [devices]
-        if isinstance(devices[0], int):
+        if isinstance(devices[0], (int, str)):
             if n_workers * n_branches % len(devices) == 0:
                 branches_per_device = n_workers * n_branches // len(devices)
                 devices = list(itertools.chain.from_iterable(itertools.repeat(x, branches_per_device) for x in devices))
