@@ -337,8 +337,8 @@ class EncoderDecoder(TFModel):
 
         order : str, sequence of str
             Determines order of applying layers.
-            If str, then each letter stands for operation: 'b' for block, 'u' for upsampling.
-            If sequence, than the first letter of each item stands for operation: 'b' for block, 'u' for upsampling.
+            If str, then each letter stands for operation: 'b' for block, 'u' for upsampling, 'c' for concatenation.
+            If sequence, than the first letter of each item stands for operation.
             For example, `'ub'` allows to use upsampling->block.
 
         upsample : dict
@@ -411,13 +411,14 @@ class EncoderDecoder(TFModel):
                         elif letter in ['u']:
                             if upsample.get('layout') is not None:
                                 x = cls.upsample(x, name='upsample', **upsample_args)
+                        elif letter == 'c':
+                            # Combine result with the stored encoding of the ~same shape
+                            if (skip or isinstance(skip, dict)) and (i < len(inputs) - 2):
+                                x = cls.crop(x, inputs[-i - 3], data_format=kwargs.get('data_format'))
+                                x = combine([x, inputs[-i - 3]], **combine_args)
                         else:
-                            raise ValueError('Unknown letter in order {}, use one of ("b", "u")'.format(letter))
+                            raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
 
-                    # Combine result with the stored encoding of the ~same shape
-                    if (skip or isinstance(skip, dict)) and (i < len(inputs)-2):
-                        x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
-                        x = combine([x, inputs[-i-3]], **combine_args)
         return x
 
 
