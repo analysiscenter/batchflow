@@ -59,15 +59,35 @@ class UNet(EncoderDecoder):
     def default_config(cls):
         config = super().default_config()
 
-        config['initial_block'] = dict(layout='cna cna', kernel_size=3, filters=64)
+        config['initial_block'] = dict(layout='cna cna', kernel_size=3)
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/order'] = ['downsampling', 'block']
-        config['body/encoder/blocks'].update(dict(layout='cna cna', kernel_size=3, filters=[128, 256, 512, 1024]))
+        config['body/encoder/blocks'].update(dict(layout='cna cna', kernel_size=3))
         config['body/embedding'] = None
         config['body/decoder/order'] = ['upsampling', 'concat', 'block']
-        config['body/decoder/blocks'].update(dict(layout='cna cna', kernel_size=3, filters=[512, 256, 128, 64]))
-        config['body/decoder/upsample'].update(dict(filters=[512, 256, 128, 64]))
+        config['body/decoder/blocks'].update(dict(layout='cna cna', kernel_size=3))
 
         config['loss'] = 'ce'
+        return config
+
+    def build_config(self, names=None):
+        config = super().build_config(names)
+
+        ibf = config.get('initial_block/filters')
+        if ibf is None:
+            config['initial_block/filters'] = ibf = 64
+
+        num_stages = config.get('body/encoder/num_stages')
+
+        if config.get('body/encoder/blocks/filters') is None:
+            config['body/encoder/blocks/filters'] = [ibf * 2 * 2**i for i in range(num_stages)]
+
+        if config.get('body/decoder/blocks/filters') is None:
+            enc_filters = config.get('body/encoder/blocks/filters')
+            config['body/decoder/blocks/filters'] = [f for f in reversed(enc_filters[:-1])] + [ibf]
+
+        if config.get('body/decoder/upsample/filters') is None:
+            config['body/decoder/upsample/filters'] = config.get('body/decoder/blocks/filters')
+
         return config
