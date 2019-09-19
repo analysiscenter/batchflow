@@ -605,7 +605,7 @@ class Results():
 
 
     def load(self, names=None, variables=None, iterations=None,
-             configs=None, aliases=None, use_alias=False):
+             configs=None, aliases=None, use_alias=True, concat_config=False):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -686,6 +686,7 @@ class Results():
 
         for config_alias in self.configs:
             alias = config_alias.alias(as_string=False)
+            config = config_alias.config()
             alias_str = config_alias.alias(as_string=True)
             path = os.path.join(self.path, 'results', alias_str)
 
@@ -703,9 +704,12 @@ class Results():
                         self._fix_length(res)
                         if '_dummy' not in alias:
                             if use_alias:
-                                res['config'] = alias_str
+                                if concat_config:
+                                    res['config'] = alias
+                                else:
+                                    res.update(alias)
                             else:
-                                res.update(alias)
+                                res.update(config)
                         all_results.append(
                             pd.DataFrame({
                                 'name': unit,

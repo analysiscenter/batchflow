@@ -60,6 +60,7 @@ class BaseCIFAR(ImagesOpenset):
 
         logger.info("Extracting...")
         with tarfile.open(localname, "r:gz") as archive_file:
+            print(localname)
             files_in_archive = archive_file.getmembers()
 
             data_files = [one_file for one_file in files_in_archive if self.TRAIN_NAME_ID in one_file.name]

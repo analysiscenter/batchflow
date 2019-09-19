@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 class _DummyBar:
     def __init__(self, *args, **kwargs):
-        self.n = None
+        self.n = 0
         self.total = None
 
     def set_description(self, *args, **kwargs):
