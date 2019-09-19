@@ -783,7 +783,7 @@ class TorchModel(BaseModel):
             arguments to be passed directly into the model
 
         fetches : tuple, list
-            a sequence of `tf.Operation` and/or `tf.Tensor` to calculate
+            a sequence of tensor names to calculate and return
 
         use_lock : bool
             if True, the whole train step is locked, thus allowing for multithreading.

@@ -206,7 +206,7 @@ class Pipeline:
             common_namespaces.append(self.dataset)
         return common_namespaces + self._namespaces
 
-    def _is_method_from_ns(self, name):
+    def is_method_from_ns(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)
 
     def get_method(self, name):
@@ -223,7 +223,7 @@ class Pipeline:
             raise AttributeError('Unknown magic method: %s' % name)
         if self._is_batch_method(name):
             return partial(self._add_action, name)
-        if self._is_method_from_ns(name):
+        if self.is_method_from_ns(name):
             return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 

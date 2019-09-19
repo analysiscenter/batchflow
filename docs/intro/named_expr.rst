@@ -279,8 +279,8 @@ Every image in the batch gets a noise of the same intensity (7%), but of a diffe
 
     pipeline
         .some_action(P(V('loss_history')))
-        .other_action(P(C('model_class')))
+        .other_action(P(C('apriori_info')))
         .yet_other_action(P(B('sensor_data')))
+        .do_something(n=P([1, 2, 3, 4, 5]))
 
-However, more often ``P`` is applied to ``R``-expressions. That is why ``R`` might be omitted for brevity,
-i.e. ``P('normal', 0, 1))`` is equivalent to ``P(R('normal', 0, 1)))``, but a bit shorter.
+However, more often ``P`` is applied to ``R``-expressions.
