@@ -148,7 +148,7 @@ class EncoderDecoder(TFModel):
         config['body/embedding'] = dict(base=cls.block)
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None,
-                                      order=['upsampling', 'block'])
+                                      order=['upsampling', 'block', 'concat'])
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
         return config
