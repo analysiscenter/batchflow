@@ -27,7 +27,7 @@ class _DummyBar:
 
 class Distributor:
     """ Distributor of jobs between workers. """
-    def __init__(self, workers, devices, worker_class=None, timeout=5, trials=3):
+    def __init__(self, n_iters, workers, devices, worker_class=None, timeout=5, trials=3):
         """
         Parameters
         ----------
@@ -35,6 +35,7 @@ class Distributor:
 
         worker_class : Worker subclass or None
         """
+        self.n_iters = n_iters
         self.workers = workers
         self.devices = devices
         self.worker_class = worker_class

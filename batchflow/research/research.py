@@ -324,7 +324,7 @@ class Research:
         jobs_queue = DynamicQueue(self.branches, self.domain, self.n_iters, self.executables,
                                   self.name, self._update_config, self._update_domain)
 
-        distr = Distributor(self.workers, self.devices, self.worker_class, self.timeout, self.trials)
+        distr = Distributor(self.n_iters, self.workers, self.devices, self.worker_class, self.timeout, self.trials)
         distr.run(jobs_queue, dirname=self.name, bar=self.bar)
 
         return self

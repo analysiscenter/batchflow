@@ -249,7 +249,7 @@ class Domain:
                 continue
             break
 
-    def iterator(self, brute_force=False, n_iters=None, n_reps=1, repeat_each=100):
+    def iterator(self, brute_force=True, n_iters=None, n_reps=1, repeat_each=100):
         """ Iterator to get all possible values from Sampler.
 
         Parameters
@@ -280,7 +280,7 @@ class Domain:
                             yield res + ConfigAlias([('repetition', repetition)])
                     results = list(islice(generator, repeat_each))
 
-    def set_iterator(self, brute_force=False, n_iters=None, n_reps=1, repeat_each=100):
+    def set_iterator(self, brute_force=True, n_iters=None, n_reps=1, repeat_each=100):
         self._brute_force = brute_force # Do we need it?
         self.n_iters = n_iters
         self.n_reps = n_reps
