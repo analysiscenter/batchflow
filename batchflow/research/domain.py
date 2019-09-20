@@ -281,6 +281,7 @@ class Domain:
                     results = list(islice(generator, repeat_each))
 
     def set_iterator(self, brute_force=False, n_iters=None, n_reps=1, repeat_each=100):
+        self._iterator = None
         self._brute_force = brute_force # Do we need it?
         self.n_iters = n_iters
         self.n_reps = n_reps
