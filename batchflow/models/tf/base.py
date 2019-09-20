@@ -103,7 +103,7 @@ class TFModel(BaseModel):
 
         where name might be one of:
 
-        - short name ('exp', 'invtime', 'naturalexp', 'const', 'poly')
+        - short name ('exp', 'invtime', 'naturalexp', 'const', 'poly', 'cyclic')
         - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
           (e.g. 'exponential_decay')
         - a callable
