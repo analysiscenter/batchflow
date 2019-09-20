@@ -313,6 +313,11 @@ class Domain:
             self.update_domain = classmethod()(func)
         self.each = each
 
+    def __iter__(self):
+        if self._iterator is None:
+            self._iterator = self.iterator(self._brute_force, self.n_iters, self.n_reps, self.repeat_each)
+        return self._iterator        
+
     def __next__(self):
         if self._iterator is None:
             self._iterator = self.iterator(self._brute_force, self.n_iters, self.n_reps, self.repeat_each)
