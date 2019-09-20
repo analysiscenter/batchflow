@@ -1,4 +1,5 @@
 """ Dataset """
+import warnings
 import copy as cp
 import numpy as np
 
@@ -6,6 +7,7 @@ from .base import Baseset
 from .batch import Batch
 from .dsindex import DatasetIndex
 from .pipeline import Pipeline
+from .components import create_item_class
 
 
 class Dataset(Baseset):
@@ -65,6 +67,7 @@ class Dataset(Baseset):
         super().__init__(index, *args)
         self.batch_class = batch_class
         self.preloaded = preloaded
+        self._data_named = None
         self._attrs = None
         kwargs['_copy'] = kwargs.get('_copy', copy)
         self.n_splits = None
@@ -82,6 +85,24 @@ class Dataset(Baseset):
         if self._attrs is None:
             return {}
         return {attr: getattr(self, attr, None) for attr in self._attrs}
+
+    @property
+    def data(self):
+        """ Return preloaded data """
+        if self.preloaded is None:
+            return None
+        if self.batch_class.components is not None and self._data_named is None:
+            self._data_named = create_item_class(self.batch_class.components, data=self.preloaded)
+        if self._data_named is not None:
+            return self._data_named
+        return self.preloaded
+
+    def __getattr__(self, name):
+        if name[:2] == 'cv' and name[2:].isdigit():
+            raise AttributeError("To access cross-validation call cv_split() first.")
+        if self.batch_class.components is not None and name in self.batch_class.components:
+            return getattr(self.data, name)
+        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @classmethod
     def from_dataset(cls, dataset, index, batch_class=None, copy=False, **kwargs):
@@ -120,11 +141,6 @@ class Dataset(Baseset):
     def copy(self):
         """ Make a shallow copy of the dataset object """
         return cp.copy(self)
-
-    def __getattr__(self, name):
-        if name[:2] == 'cv' and name[2:].isdigit():
-            raise AttributeError("To access cross-validation call cv_split() first.")
-        raise AttributeError()
 
     @staticmethod
     def build_index(index, *args, **kwargs):
@@ -208,7 +224,7 @@ class Dataset(Baseset):
         """
         if not isinstance(index, DatasetIndex):
             index = self.index.create_batch(index, pos, *args, **kwargs)
-        return self.batch_class(index, dataset=self, preloaded=self.preloaded, copy=self._copy, **kwargs)
+        return self.batch_class(index, dataset=self, preloaded=self.data, copy=self._copy, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow

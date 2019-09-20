@@ -532,9 +532,6 @@ class R(NamedExpression):
         R(['metro', 'taxi', 'bike'], p=[.6, .1, .3], size=10)
     """
     def __init__(self, name, *args, state=None, seed=None, size=None, **kwargs):
-        if not (callable(name) or isinstance(name, (str, NamedExpression))):
-            args = (name,) + args
-            name = 'choice'
         super().__init__(name)
         if isinstance(state, np.random.RandomState):
             self.random_state = state
@@ -549,13 +546,17 @@ class R(NamedExpression):
         if self.params:
             batch, pipeline, model = self.params
         name = self._get_name(batch=batch, pipeline=pipeline, model=model)
-        if callable(name):
-            pass
-        elif isinstance(name, str) and hasattr(self.random_state, name):
+        args = self.args
+
+        if not isinstance(name, str):
+            args = (name,) + args
+            name = 'choice'
+        if isinstance(name, str) and hasattr(self.random_state, name):
             name = getattr(self.random_state, name)
         else:
-            raise TypeError('Random distribution should be a callable or a numpy distribution')
-        args = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
+            raise TypeError('An expression should be an int, an iterable or a numpy distribution name')
+
+        args = eval_expr(args, batch=batch, pipeline=pipeline, model=model)
         if self.size is not None:
             self.kwargs['size'] = self.size
         kwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)

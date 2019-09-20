@@ -1,7 +1,7 @@
 # pylint: disable=missing-docstring, redefined-outer-name
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 from batchflow import Pipeline, Dataset, Batch, B, L, V
 
@@ -15,6 +15,7 @@ def get_batch(data, pipeline, batch_class=Batch):
 
     template_pipeline = (
         Pipeline()
+        .init_variable('dummy')
         .update(V('dummy'), B.data)     # touch batch data to fire preloading
     )
 
@@ -142,20 +143,3 @@ class TestBatchPreloadedAddComponents:
         assert batch.nodata1 is None
         assert batch.nodata2 is None
         assert (batch.new == np.arange(20, 40, 2)).all()
-
-
-@pytest.mark.parametrize('pipeline', [False, True])
-class TestFromBatchPreloadedComponents:
-    def test_tuple(self, pipeline):
-        labels = np.arange(DATASET_SIZE)
-        images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
-        # we cannot omit data for nodata1 component, so we pass None
-        data = images, None, labels + 1000
-
-        batch = get_batch(data, pipeline, MyBatch)
-        batch = batch.from_batch(batch)
-
-        assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
-        assert (batch.labels == np.arange(1020, 1030)).all()
-        assert batch.nodata1 is None
-        assert batch.nodata2 is None
