@@ -294,18 +294,15 @@ class Domain:
 
     @property
     def size(self):
-        if self._brute_force:
+        if self.n_iters is not None:
+            return self.n_reps * self.n_iters
+        elif self.n_iters is None and self._brute_force:
             size = 0
             for cube in self.domain:
                 _seq_options = [option for option in cube if option._values is not None]
                 opt_sizes = [len(list(option.iterator(brute_force=True))) for option in _seq_options]
                 size += np.product(opt_sizes)
-            if self.n_iters is None:
-                return size * self.n_reps
-            else:
-                return min(size, self.n_iters) * self.n_reps
-        elif self.n_iters is not None:
-            return self.n_reps * self.n_iters
+            return size * self.n_reps
         else:
             return None
 

@@ -169,11 +169,12 @@ class Sampler():
             if n_iters is None:
                 yield from generator
             else:
-                try:
-                    for i in range(n_iters):
+                for i in range(n_iters):
+                    try:
                         yield next(generator)
-                except StopIteration:
-                    raise StopIteration('Iterator has only {} elements but n_iters={}'.format(i, n_iters))
+                    except StopIteration:
+                        generator = self.brute_force(squeeze)
+                        yield next(generator)
         else:
             if n_iters is None:
                 while True:
