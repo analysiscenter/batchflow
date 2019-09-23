@@ -285,7 +285,8 @@ class EncoderDecoder(TFModel):
                                 if downsample.get('layout') is not None:
                                     x = conv_block(x, name='downsample', **downsample_args)
                             else:
-                                raise ValueError('Unknown letter in order {}, use one of "b", "d", "p"'.format(letter))
+                                raise ValueError('Unknown letter in order {}, use one of "b", "d", "p", "s"'
+                                                 .format(letter))
 
                 encoder_outputs.append(x)
 
