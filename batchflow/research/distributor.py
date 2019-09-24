@@ -170,7 +170,7 @@ class Distributor:
                         if self.n_iters is not None:
                             progress.n = sum(finished_iterations.values())
                         else:
-                            progress.n += 1
+                            progress.n += signal.done
                         progress.refresh()
                     if self.jobs_queue.domain.each == 'last':
                         was_updated = self.jobs_queue.update()

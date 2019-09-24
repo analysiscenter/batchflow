@@ -341,7 +341,7 @@ class Research:
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         if devices is None:
             devices = [[[None]] * n_branches] * n_workers
-        if isinstance(devices, int):
+        if isinstance(devices, (int, str)):
             devices = [devices]
         if isinstance(devices[0], (int, str)):
             if n_workers * n_branches % len(devices) == 0:
@@ -358,7 +358,7 @@ class Research:
                     ] for i in range(n_workers)
                 ]
             else:
-                raise ValueError('????')
+                raise ValueError('n_workers * n_branches must be divisible by n_devices or vice versa')
         if isinstance(devices[0], list):
             def _transform_item(x):
                 if len(x) > 1:

@@ -99,7 +99,8 @@ class Worker:
         results : multiprocessing.Queue
             queue for feedback
         """
-        self.log_info('Start {} [id:{}] (devices: {})'.format(self.worker_name, os.getpid(), self.devices),
+        _devices = [item['device'] for item in self.devices]
+        self.log_info('Start {} [id:{}] (devices: {})'.format(self.worker_name, os.getpid(), _devices),
                       filename=self.logfile)
 
         try:
