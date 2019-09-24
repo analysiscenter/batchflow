@@ -21,8 +21,6 @@ class Executable:
         dataset for pipelines
     part : str or None
         part of dataset to use
-    cv_split : int or None
-        partition of dataset
     result : dict
         current results of the `Executable`. Keys are names of variables (for pipeline)
         or returns (for function) values are lists of variable values
@@ -59,9 +57,7 @@ class Executable:
         self.logging = None
         self.additional_config = None
         self.action = None
-        self.cv_split = None
         self.dataset = None
-        self.part = None
 
         self.last_update_time = None
 
@@ -92,7 +88,7 @@ class Executable:
         self._clear_result()
         self._process_iterations()
 
-    def add_pipeline(self, root, name, branch=None, dataset=None, part=None, variables=None,
+    def add_pipeline(self, root, name, branch=None, dataset=None, variables=None,
                      execute=1, dump='last', run=False, logging=False, **kwargs):
         """ Add pipeline as an Executable Unit """
         variables = variables or []
@@ -111,7 +107,6 @@ class Executable:
         self.pipeline = pipeline
         self.root_pipeline = root_pipeline
         self.dataset = dataset
-        self.part = part
         self.variables = variables
         self.execute = execute
         self.dump = dump
@@ -151,12 +146,10 @@ class Executable:
     def set_dataset(self):
         """ Add dataset to root if root exists or create root pipeline on the base of dataset. """
         if self.dataset is not None:
-            fold = getattr(self.dataset, 'cv'+str(self.cv_split)) if self.cv_split is not None else self.dataset
-            dataset = getattr(fold, self.part) if self.part else fold
             if self.root_pipeline is not None:
-                self.root_pipeline = self.root_pipeline << dataset
+                self.root_pipeline = self.root_pipeline << self.dataset
             else:
-                self.pipeline = self.pipeline << dataset
+                self.pipeline = self.pipeline << self.dataset
 
     def reset(self, what='iter'):
         """ Reset iterators in pipelines """

@@ -40,7 +40,7 @@ class Research:
         self._update_config = None
         self._update_domain = None
 
-    def add_pipeline(self, root, branch=None, dataset=None, part=None, variables=None,
+    def add_pipeline(self, root, branch=None, dataset=None, variables=None,
                      name=None, execute=1, dump='last', run=False, logging=False, **kwargs):
         """ Add new pipeline to research. Pipeline can be divided into root and branch. In that case root pipeline
         will prepare batch that can be used by different branches with different configs.
@@ -102,7 +102,7 @@ class Research:
             raise ValueError('Executable unit with name {} already exists'.format(name))
 
         unit = Executable()
-        unit.add_pipeline(root, name, branch, dataset, part, variables, execute, dump, run, logging, **kwargs)
+        unit.add_pipeline(root, name, branch, dataset, variables, execute, dump, run, logging, **kwargs)
         self.executables[name] = unit
         return self
 
