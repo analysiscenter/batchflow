@@ -12,6 +12,7 @@ import dill
 import numpy as np
 import pandas as pd
 import multiprocess as mp
+import warnings
 
 from .distributor import Distributor
 from .workers import PipelineWorker
@@ -315,6 +316,9 @@ class Research:
             self.domain = Domain(Option('_dummy', [None]))
             self.domain.set_iterator(brute_force=True, n_iters=None, n_reps=1)
 
+        if self.domain.size is None and (self._update_domain is None or self._update_domain['each'] == 'last'):
+            warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
+                          stacklevel=2)
         self._folder_exists(self.name)
 
         print("Research {} is starting...".format(self.name))
