@@ -1,6 +1,8 @@
 """ Workers for research. """
 
 import os
+from copy import copy
+import time
 from queue import Empty as EmptyException
 import multiprocess as mp
 import psutil
@@ -54,6 +56,8 @@ class Worker:
         self.trial = 3
         self.worker = None
         self.device_configs = None
+
+        self.last_update_time = None
 
     def set_args_kwargs(self, args, kwargs):
         """
@@ -112,12 +116,12 @@ class Worker:
                         one_job_queue = mp.JoinableQueue()
                         one_job_queue.put(job)
                         feedback_queue = mp.JoinableQueue()
+                        last_update_time = mp.Value('d', time.time())
 
-                        task = mp.Process(target=self._run_task, args=(one_job_queue, feedback_queue, trial))
+                        task = mp.Process(target=self._run_task, args=(one_job_queue, feedback_queue, trial, last_update_time))
                         task.start()
                         pid = feedback_queue.get()
-                        silence = 0
-                        default_signal = Signal(worker=self.worker_name, job=job[0], iteration=0,
+                        final_signal = Signal(worker=self.worker_name, job=job[0], iteration=0,
                                                 n_iters=job[1].n_iters, trial=trial, done=False,
                                                 exception=None)
 
@@ -126,46 +130,45 @@ class Worker:
                                 signal = feedback_queue.get(timeout=1)
                             except EmptyException:
                                 signal = None
-                                silence += 1
-                            if signal is None and silence / 60 > self.timeout:
+                            if signal is None and (time.time() - last_update_time.value) / 60 > self.timeout:
                                 p = psutil.Process(pid)
                                 p.terminate()
                                 message = 'Job {} [{}] failed in {}'.format(job[0], pid, self.worker_name)
                                 self.log_info(message, filename=self.logfile)
-                                default_signal.exception = TimeoutError(message)
-                                results.put(default_signal)
+                                final_signal.exception = TimeoutError(message)
+                                results.put(copy(final_signal))
                                 break
                             elif signal is not None and signal.done:
                                 finished = True
-                                default_signal = signal
+                                final_signal = signal
                                 break
                             elif signal is not None:
-                                default_signal = signal
-                                results.put(default_signal)
-                                silence = 0
+                                final_signal = signal
+                                results.put(copy(final_signal))
                         if finished:
                             break
                 except Exception as exception: #pylint:disable=broad-except
                     self.log_error(exception, filename=self.errorfile)
-                    default_signal.exception = exception
-                    results.put(default_signal)
-                if default_signal.done:
-                    results.put(default_signal)
+                    final_signal.exception = exception
+                    results.put(copy(final_signal))
+                if final_signal.done:
+                    results.put(copy(final_signal))
                 else:
-                    default_signal.exception = RuntimeError('Job {} [{}] failed {} times in {}'
+                    final_signal.exception = RuntimeError('Job {} [{}] failed {} times in {}'
                                                             .format(job[0], pid, self.trials, self.worker_name))
-                    default_signal.done = True
-                    results.put(default_signal)
+                    final_signal.done = True
+                    results.put(copy(final_signal))
                 queue.task_done()
                 job = queue.get()
             queue.task_done()
 
 
-    def _run_task(self, queue, feedback_queue, trial):
+    def _run_task(self, queue, feedback_queue, trial, last_update_time):
         exception = None
         try:
             self.feedback_queue = feedback_queue
             self.trial = trial
+            self.last_update_time = last_update_time
 
             feedback_queue.put(os.getpid())
             self.job = queue.get()
@@ -208,7 +211,7 @@ class PipelineWorker(Worker):
         n_branches = len(job.configs)
         self.device_configs = [self.devices[i] for i in range(n_branches)]
 
-        job.init(self.worker_config, self.device_configs)
+        job.init(self.worker_config, self.device_configs, self.last_update_time)
         description = job.get_description()
         self.log_info('Job {} has the following configs:\n{}'.format(i, description), filename=self.logfile)
 

@@ -1,9 +1,10 @@
 """ Executable class: wrapper for pipelines and functions. """
 
 import os
+import time
 from copy import copy, deepcopy
 import dill
-from .. import Config, Pipeline
+from .. import Config, Pipeline, V, L
 
 class Executable:
     """ Function or pipeline
@@ -61,6 +62,8 @@ class Executable:
         self.cv_split = None
         self.dataset = None
         self.part = None
+
+        self.last_update_time = None
 
     def add_function(self, function, name, execute=1, dump='last', returns=None,
                      on_root=False, logging=False, *args, **kwargs):
@@ -286,3 +289,11 @@ class Executable:
             return it_ok or freq_ok
 
         return (iteration + 1 == n_iters and 'last' in rule) or it_ok or freq_ok
+
+    def set_shared_value(self, last_update_time):
+        self.last_update_time = last_update_time
+        if self.pipeline is not None:
+            self.pipeline += (Pipeline()
+                              .init_variable('_time', default=last_update_time)
+                              .update(V('_time').value, L(time.time))
+                              )

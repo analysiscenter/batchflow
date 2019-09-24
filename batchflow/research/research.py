@@ -443,6 +443,8 @@ class DynamicQueue:
 
         self._queue = mp.JoinableQueue()
 
+        self.generated_jobs = 0
+
     def _generate_config(self, domain):
         self.each_config_produce = []
         while True:
@@ -483,7 +485,6 @@ class DynamicQueue:
 
     def next_jobs(self, n_tasks=1):
         configs = []
-        generated_jobs = 0
         for i in range(n_tasks):
             branch_tasks = []
             try:
@@ -495,11 +496,11 @@ class DynamicQueue:
                     configs.append(branch_tasks)
                 break
         for i, config in enumerate(configs):
-            self.put((generated_jobs + i,
+            self.put((self.generated_jobs + i,
                       Job(self.executables, self.n_iters, config, self.branches, self.research_path)))
 
         n_tasks = len(configs)
-        generated_jobs += n_tasks
+        self.generated_jobs += n_tasks
 
         return n_tasks
 

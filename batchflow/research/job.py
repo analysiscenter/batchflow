@@ -1,5 +1,6 @@
 """ Classes Job and Experiment. """
 
+import time
 from collections import OrderedDict
 
 from .. import inbatch_parallel
@@ -24,9 +25,10 @@ class Job:
         self.exceptions = []
         self.stopped = []
 
-    def init(self, worker_config, device_configs):
+    def init(self, worker_config, device_configs, last_update_time):
         """ Create experiments. """
         self.worker_config = worker_config
+        self.last_update_time = last_update_time
         for index, (config, additional_config) in enumerate(self.configs):
             if isinstance(self.branches, list):
                 branch_config = self.branches[index]
@@ -35,6 +37,7 @@ class Job:
             units = OrderedDict()
             for name, unit in self.executable_units.items():
                 unit = unit.get_copy()
+                unit.set_shared_value(last_update_time)
                 unit.reset('iter')
                 if unit.pipeline is not None:
                     import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
@@ -87,6 +90,7 @@ class Job:
             else:
                 exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
         self.put_all_results(iteration, name, actions)
+        self.last_update_time.value = time.time()
         return exceptions
 
     def update_exceptions(self, exceptions):
@@ -108,6 +112,7 @@ class Job:
 
     def _parallel_post(self, results, *args, **kwargs):
         _ = args, kwargs
+        self.last_update_time.value = time.time()
         return results
 
     @inbatch_parallel(init='_parallel_init_call', post='_parallel_post')
