@@ -234,20 +234,23 @@ class Domain:
 
     def brute_force(self, n_iters=None):
         iteration = 0
-        for cube in self.domain:
-            _seq_options = [option for option in cube if option._values is not None]
-            _sampler_options = [option for option in cube if option._values is None]
-            for item in product(*[option.iterator(brute_force=True) for option in _seq_options]):
-                item = sum(item, ConfigAlias())
-                for _option in _sampler_options:
-                    item += _option.sample(1)[0]
-                yield item
-                iteration += 1
-                if n_iters is not None and iteration == n_iters:
-                    break
-            else:
-                continue
-            break
+        while True:
+            for cube in self.domain:
+                _seq_options = [option for option in cube if option._values is not None]
+                _sampler_options = [option for option in cube if option._values is None]
+                for item in product(*[option.iterator(brute_force=True) for option in _seq_options]):
+                    item = sum(item, ConfigAlias())
+                    for _option in _sampler_options:
+                        item += _option.sample(1)[0]
+                    yield item
+                    iteration += 1
+                    if n_iters is not None and iteration == n_iters:
+                        break
+                else:
+                    continue
+                break
+            if n_iters is None or iteration == n_iters:
+                break
 
     def iterator(self, brute_force=False, n_iters=None, n_reps=1, repeat_each=100):
         """ Iterator to get all possible values from Sampler.
@@ -308,7 +311,7 @@ class Domain:
 
     def set_update(self, func=None, each=None):
         if func is not None:
-            self.update_domain = classmethod()(func)
+            self.update_domain = func
         self.each = each
 
     def __iter__(self):
