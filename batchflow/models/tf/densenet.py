@@ -45,12 +45,12 @@ class DenseNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
-        config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=16, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
         config['body/block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=32, bottleneck=True, skip=True)
         config['body/transition_layer'] = dict(layout='nacv', kernel_size=1, strides=1,
                                                pool_size=2, pool_strides=2, reduction_factor=1)
-        config['head'] = dict(layout='Vf')
+        config['head'] += dict(layout='Vf')
 
         config['loss'] = 'ce'
 
