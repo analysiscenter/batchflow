@@ -169,7 +169,7 @@ class Sampler():
             if n_iters is None:
                 yield from generator
             else:
-                for i in range(n_iters):
+                for _ in range(n_iters):
                     try:
                         yield next(generator)
                     except StopIteration:

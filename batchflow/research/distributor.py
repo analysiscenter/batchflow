@@ -158,7 +158,8 @@ class Distributor:
                         if signal.done:
                             finished_jobs += 1
                             finished_iterations[signal.job] = self.n_iters
-                            if isinstance(self.jobs_queue.domain.each, int) and finished_jobs % self.jobs_queue.domain.each == 0:
+                            each = self.jobs_queue.domain.each
+                            if isinstance(each, int) and finished_jobs % each == 0:
                                 was_updated = self.jobs_queue.update()
                                 if was_updated:
                                     rest_of_generator = jobs_in_queue

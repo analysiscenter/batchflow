@@ -118,12 +118,13 @@ class Worker:
                         feedback_queue = mp.JoinableQueue()
                         last_update_time = mp.Value('d', time.time())
 
-                        task = mp.Process(target=self._run_task, args=(one_job_queue, feedback_queue, trial, last_update_time))
+                        task = mp.Process(target=self._run_task, args=(one_job_queue, feedback_queue,
+                                                                       trial, last_update_time))
                         task.start()
                         pid = feedback_queue.get()
                         final_signal = Signal(worker=self.worker_name, job=job[0], iteration=0,
-                                                n_iters=job[1].n_iters, trial=trial, done=False,
-                                                exception=None)
+                                              n_iters=job[1].n_iters, trial=trial, done=False,
+                                              exception=None)
 
                         while True:
                             try:
@@ -155,7 +156,7 @@ class Worker:
                     results.put(copy(final_signal))
                 else:
                     final_signal.exception = RuntimeError('Job {} [{}] failed {} times in {}'
-                                                            .format(job[0], pid, self.trials, self.worker_name))
+                                                          .format(job[0], pid, self.trials, self.worker_name))
                     final_signal.done = True
                     results.put(copy(final_signal))
                 queue.task_done()

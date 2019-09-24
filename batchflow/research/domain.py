@@ -1,8 +1,6 @@
 """ Options and configs. """
 
 from itertools import product, islice
-from functools import reduce # Valid in Python 2.6+, required in Python 3
-import operator
 import collections
 import warnings
 from copy import deepcopy
@@ -229,7 +227,7 @@ class Domain:
             while True:
                 yield self.sample(1)[0]
         else:
-            for i in range(n_iters):
+            for _ in range(n_iters):
                 yield self.sample(1)[0]
 
     def brute_force(self, n_iters=None):
@@ -317,15 +315,17 @@ class Domain:
     def __iter__(self):
         if self._iterator is None:
             self._iterator = self.iterator(self._brute_force, self.n_iters, self.n_reps, self.repeat_each)
-        return self._iterator        
+        return self._iterator
 
     def __next__(self):
         if self._iterator is None:
             self._iterator = self.iterator(self._brute_force, self.n_iters, self.n_reps, self.repeat_each)
         return next(self._iterator)
-    
+
     def update_domain(self, *args, **kwargs):
+        _ = args, kwargs
         return None
-    
+
     def update_config(self, *args, **kwargs):
+        _ = args, kwargs
         return None

@@ -217,7 +217,7 @@ class Research:
         """
         self.domain = domain
         return self
-    
+
     def update_domain(self, func=None, each='last'):
         self._update_domain = {
             'func': func,
@@ -356,7 +356,7 @@ class Research:
                             for k in range(devices_per_branch)
                         ] for j in range(n_branches)
                     ] for i in range(n_workers)
-                ]              
+                ]
             else:
                 raise ValueError('????')
         if isinstance(devices[0], list):
@@ -376,11 +376,11 @@ class Research:
             os.makedirs(name)
             config_path = os.path.join(name, 'configs')
             if not os.path.exists(config_path):
-                os.makedirs(config_path)  
+                os.makedirs(config_path)
         else:
             raise ValueError(
                 "Research with name '{}' already exists".format(name)
-            )     
+            )
 
     def __save(self):
         """ Save description of the research to folder name/description. """
@@ -431,11 +431,11 @@ class DynamicQueue:
         self.update_config = update_config
 
         self.n_branches = branches if isinstance(branches, int) else len(branches)
-        
+
         self.domain = domain
         self.update_domain = update_domain
         self._domain_size = self.domain.size
-        
+
         if self.update_domain is not None:
             self.domain.set_update(**self.update_domain)
 

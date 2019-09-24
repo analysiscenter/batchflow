@@ -24,6 +24,7 @@ class Job:
 
         self.exceptions = []
         self.stopped = []
+        self.last_update_time = None
 
     def init(self, worker_config, device_configs, last_update_time):
         """ Create experiments. """
