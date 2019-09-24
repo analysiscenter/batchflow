@@ -467,10 +467,13 @@ class DynamicQueue:
 
     @property
     def total(self):
-        rolling_mean = pd.Series(self.each_config_produce).rolling(window=10, min_periods=1).mean().round().values[-1]
-        num = np.sum(self.each_config_produce)
-        estimated_num = (self._domain_size - len(self.each_config_produce)) * rolling_mean
-        return np.ceil((num +  estimated_num) / self.n_branches)
+        if self._domain_size is not None:
+            rolling_mean = pd.Series(self.each_config_produce).rolling(window=10, min_periods=1).mean().round().values[-1]
+            num = np.sum(self.each_config_produce)
+            estimated_num = (self._domain_size - len(self.each_config_produce)) * rolling_mean
+            return np.ceil((num +  estimated_num) / self.n_branches)
+        else:
+            return None
 
     def update(self):
         new_domain = self.domain.update_domain(self.research_path)

@@ -139,7 +139,7 @@ class Distributor:
             previous_domain_jobs = 0
             n_updates = 0
             finished_iterations = dict()
-            with bar(total=0) as progress:
+            with bar(total=None) as progress:
                 while True:
                     n_jobs = self.jobs_queue.next_jobs(len(workers)+1)
                     jobs_in_queue = n_jobs
@@ -148,10 +148,12 @@ class Distributor:
                     while finished_jobs != jobs_in_queue:
                         progress.set_description('Domain updated: ' + str(n_updates))
 
-                        total = rest_of_generator + previous_domain_jobs + self.jobs_queue.total
-                        if self.n_iters is not None:
-                            total *= self.n_iters
-                        progress.total = total
+                        estimated_size = self.jobs_queue.total
+                        if estimated_size is not None:
+                            total = rest_of_generator + previous_domain_jobs + estimated_size
+                            if self.n_iters is not None:
+                                total *= self.n_iters
+                            progress.total = total
                         signal = self.results.get()
                         if self.n_iters is not None:
                             finished_iterations[signal.job] = signal.iteration
