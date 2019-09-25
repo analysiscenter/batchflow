@@ -242,6 +242,27 @@ def test_add():
     result = augend + addend
     assert result.flatten() == exp_flat
 
+def test_iadd_items():
+    """
+    Tests Config.config.__iadd__()
+    For inner structure check Config.flatten() is used.
+    """
+    config_old = Config({'a/b': 1, 'a/c': 2})
+    config_old['a'] = 0
+    exp_flat = {'a': 0}
+    assert config_old.flatten() == exp_flat
+
+    config_old = Config({'a/b': 1, 'a/c': 2})
+    config_old['a'] = dict(b=0, d=3)
+    exp_flat = {'a/b': 0, 'a/d': 3}
+    assert config_old.flatten() == exp_flat
+
+    config_old = Config({'a/b': 1, 'a/c': 2})
+    config_old['a'] += dict(b=0, d=3)
+    exp_flat = {'a/b': 0, 'a/c': 2, 'a/d': 3}
+    assert config_old.flatten() == exp_flat
+
+
 def test_items():
     """
     Tests Config.items()

@@ -74,8 +74,8 @@ class ResNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
-        config['initial_block'] = dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
 
         config['body/block'] = dict(layout=None, post_activation=None, downsample=False,
                                     bottleneck=False, bottleneck_factor=4,
@@ -83,7 +83,7 @@ class ResNet(TFModel):
                                     resnext=False, resnext_factor=32,
                                     se_block=None)
 
-        config['head'] = dict(layout='Vdf', dropout_rate=.4)
+        config['head'] += dict(layout='Vdf', dropout_rate=.4)
 
         config['loss'] = 'ce'
 

@@ -435,7 +435,7 @@ class AutoEncoder(EncoderDecoder):
     @classmethod
     def default_config(cls):
         config = EncoderDecoder.default_config()
-        config['body/decoder'] = dict(skip=False)
+        config['body/decoder'] += dict(skip=False)
         return config
 
 
