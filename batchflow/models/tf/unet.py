@@ -20,7 +20,7 @@ class UNet(EncoderDecoder):
             blocks : dict
                 Parameters for pre-processing blocks:
 
-                filters : int, list of ints or list of lists of ints
+                filters : None, int, list of ints or list of lists of ints
                     The number of filters in the output tensor.
                     If int, same number of filters applies to all layers on all stages
                     If list of ints, specifies number of filters in each layer of different stages
@@ -28,7 +28,8 @@ class UNet(EncoderDecoder):
                     If not given or None, filters parameters in encoder/blocks, decoder/blocks and decoder/upsample
                     default to values which make number of filters double
                     on each stage of encoding and halve on each stage of decoding,
-                    provided that `decoder/skip` is `True`.
+                    provided that `decoder/skip` is `True`. Specify `filters=None` explicitly
+                    if you want to use custom `num_steps` and infer `filters`
 
         decoder : dict
             num_stages : int
@@ -42,7 +43,7 @@ class UNet(EncoderDecoder):
             blocks : dict
                 Parameters for post-processing blocks:
 
-                filters : int, list of ints or list of lists of ints
+                filters : None, int, list of ints or list of lists of ints
                     same as encoder/blocks/filters
 
             upsample : dict
