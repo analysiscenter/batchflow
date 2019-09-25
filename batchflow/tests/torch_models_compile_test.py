@@ -1,7 +1,4 @@
-""" Test for EncoderDecoder model architecture.
-First of all, we define possible types of encoders, embeddings and decoders.
-Later every combination of encoder, embedding, decoder is combined into one model and we initialize it.
-"""
+""" Test that all Torch can be constructed """
 # pylint: disable=import-error, no-name-in-module
 # pylint: disable=redefined-outer-name
 import pytest
@@ -28,7 +25,7 @@ MODELS_CLF = [
 
 @pytest.fixture()
 def base_config_segment():
-    """ Fixture to hold default configuration. """
+    """ Fixture to hold default configuration for segmentation. """
     config = {
         'inputs': {'images': {'shape': (1, 16, 16)},
                    'masks': {'name': 'targets', 'shape': (1, 16, 16)}},
@@ -40,7 +37,7 @@ def base_config_segment():
 
 @pytest.fixture()
 def base_config_clf():
-    """ Fixture to hold default configuration. """
+    """ Fixture to hold default configuration for classification. """
     config = {'inputs/images/shape': (1, 16, 16),
               'inputs/labels/classes': 10,
               'initial_block/inputs': 'images'}
@@ -50,16 +47,12 @@ def base_config_clf():
 @pytest.mark.slow
 @pytest.mark.parametrize('model', MODELS_SEG)
 def test_seg(base_config_segment, model):
-    """ Create encoder-decoder architecture from every possible combination
-    of encoder, embedding, decoder, listed in global variables defined above.
-    """
+    """ Test models for segmentation """
     _ = model(base_config_segment)
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize('model', MODELS_CLF)
 def test_clf(base_config_clf, model):
-    """ Create encoder-decoder architecture from every possible combination
-    of encoder, embedding, decoder, listed in global variables defined above.
-    """
+    """ Test models for classification """
     _ = model(base_config_clf)
