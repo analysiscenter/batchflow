@@ -198,7 +198,6 @@ class OncePipeline:
         return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, pipeline=pipeline, model_name=name))
 
     def _exec_import_model(self, action):
-        print(action)
         model_name = eval_expr(action['model_name'])
         source = eval_expr(action['source'])
         pipeline = eval_expr(action['pipeline'])
