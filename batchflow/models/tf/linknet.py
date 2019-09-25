@@ -64,27 +64,27 @@ class LinkNet(EncoderDecoder):
     def default_config(cls):
         config = super().default_config()
 
-        config['initial_block'] = dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
 
         config['body/encoder/num_stages'] = 4
-        config['body/encoder/downsample'] = dict(layout=None)
-        config['body/encoder/blocks'] = dict(base=ResNet.double_block,
-                                             layout='cna cna',
-                                             filters=[64, 128, 256, 512], kernel_size=3)
+        config['body/encoder/downsample'] += dict(layout=None)
+        config['body/encoder/blocks'] += dict(base=ResNet.double_block,
+                                              layout='cna cna',
+                                              filters=[64, 128, 256, 512], kernel_size=3)
 
         config['body/embedding'] = None
 
-        config['body/decoder/upsample'] = dict(layout=None)
-        config['body/decoder/blocks'] = dict(layout='cna tna cna',
-                                             filters=[[128, 128, 256],
-                                                      [64, 64, 128],
-                                                      [32, 32, 64],
-                                                      [16, 16, 64]],
-                                             kernel_size=[[1, 3, 1]]*4,
-                                             strides=[[1, 2, 1]]*4)
+        config['body/decoder/upsample'] += dict(layout=None)
+        config['body/decoder/blocks'] += dict(layout='cna tna cna',
+                                              filters=[[128, 128, 256],
+                                                       [64, 64, 128],
+                                                       [32, 32, 64],
+                                                       [16, 16, 64]],
+                                              kernel_size=[[1, 3, 1]]*4,
+                                              strides=[[1, 2, 1]]*4)
 
-        config['head'] = dict(layout='tna cna t', filters=32, kernel_size=[3, 3, 2], strides=[2, 1, 2])
+        config['head'] += dict(layout='tna cna t', filters=32, kernel_size=[3, 3, 2], strides=[2, 1, 2])
 
         config['loss'] = 'ce'
 

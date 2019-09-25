@@ -101,7 +101,7 @@ class EncoderDecoder(TorchModel):
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
-        config['head'] = dict(layout='c', kernel_size=1)
+        config['head'] += dict(layout='c', kernel_size=1)
         return config
 
     def build_config(self, names=None):

@@ -306,8 +306,10 @@ class Batch:
         data = self._data
         if self.components is None:
             self.components = tuple()
+            if data is not None:
+                warnings.warn("All batch data is erased")
             data = tuple()
-            warnings.warn("All batch data is erased")
+            self.components = components
         else:
             exists_component = set(components) & set(self.components)
             if exists_component:

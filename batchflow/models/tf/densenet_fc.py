@@ -34,7 +34,7 @@ class DenseNetFC(TFModel):
         config = TFModel.default_config()
 
         config['common/conv/use_bias'] = False
-        config['initial_block'] = dict(layout='c', filters=48, kernel_size=3, strides=1)
+        config['initial_block'] += dict(layout='c', filters=48, kernel_size=3, strides=1)
 
         config['body']['block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=12, bottleneck=False)
         config['body']['transition_up'] = dict(layout='t', factor=2, kernel_size=3)
