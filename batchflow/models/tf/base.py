@@ -497,7 +497,7 @@ class TFModel(BaseModel):
             for input_name, input_config in config.items():
                 if isinstance(input_config, str):
                     continue
-                elif isinstance(input_config, (tuple, list)):
+                if isinstance(input_config, (tuple, list)):
                     input_config = list(input_config) + [None for _ in param_names]
                     input_config = input_config[:len(param_names)]
                     input_config = dict(zip(param_names, input_config))
