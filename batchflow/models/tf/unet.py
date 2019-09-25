@@ -20,7 +20,7 @@ class UNet(EncoderDecoder):
             blocks : dict
                 Parameters for pre-processing blocks:
 
-                filters : int, list of ints or list of lists of ints
+                filters : None, int, list of ints or list of lists of ints
                     The number of filters in the output tensor.
                     If int, same number of filters applies to all layers on all stages
                     If list of ints, specifies number of filters in each layer of different stages
@@ -28,9 +28,8 @@ class UNet(EncoderDecoder):
                     If not given or None, filters parameters in encoder/blocks, decoder/blocks and decoder/upsample
                     default to values which make number of filters double
                     on each stage of encoding and halve on each stage of decoding,
-                    provided that `decoder/skip` is `True`. Number of filters on the first stage of encoding will be
-                    doubled number of filters in initial_block's output
-                    When defining filters manually mind the filters defined in initial_block and head
+                    provided that `decoder/skip` is `True`. Specify `filters=None` explicitly
+                    if you want to use custom `num_steps` and infer `filters`
 
         decoder : dict
             num_stages : int
@@ -44,7 +43,7 @@ class UNet(EncoderDecoder):
             blocks : dict
                 Parameters for post-processing blocks:
 
-                filters : int, list of ints or list of lists of ints
+                filters : None, int, list of ints or list of lists of ints
                     same as encoder/blocks/filters
 
             upsample : dict
@@ -60,7 +59,6 @@ class UNet(EncoderDecoder):
         config = super().default_config()
 
         config['initial_block'] += dict(layout='cna cna', kernel_size=3, filters=64)
-
         config['body/encoder/num_stages'] = 4
         config['body/encoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[128, 256, 512, 1024])
         config['body/embedding'] = None
@@ -69,4 +67,24 @@ class UNet(EncoderDecoder):
         config['head'] += dict(layout='cna cna', kernel_size=3, filters=64)
 
         config['loss'] = 'ce'
+        return config
+
+    def build_config(self, names=None):
+        config = super().build_config(names)
+
+        num_stages = config.get('body/encoder/num_stages')
+
+        if config.get('body/encoder/blocks/filters') is None:
+            config['body/encoder/blocks/filters'] = [64 * 2**i for i in range(num_stages)]
+
+        if config.get('body/embedding/filters') is None:
+            config['body/embedding/filters'] = 64 * 2**num_stages
+
+        if config.get('body/decoder/blocks/filters') is None:
+            enc_filters = config.get('body/encoder/blocks/filters')
+            config['body/decoder/blocks/filters'] = enc_filters[::-1]
+
+        if config.get('body/decoder/upsample/filters') is None:
+            config['body/decoder/upsample/filters'] = config.get('body/decoder/blocks/filters')
+
         return config
