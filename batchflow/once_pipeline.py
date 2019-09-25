@@ -138,7 +138,7 @@ class OncePipeline:
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
         """
-        if len(variables) == 1:
+        if isinstance(variables[0], dict):
             variables = variables[0]
         self.pipeline.variables.create_many(variables)
         return self
