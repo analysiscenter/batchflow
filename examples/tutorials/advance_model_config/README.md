@@ -1,11 +1,13 @@
-These notebooks are focus on some of parameters of model config. This parameters allow you to more flexibly tune the model for tasks and achieve better results.
+# Advance model configuration
 
-In all notebooks implied that you are familiar with the bathflow basics.
-(If not, look at [03_ready_to_use_model_tf](../03_ready_to_use_model_tf.ipynb) notebook)
+These notebooks focus on some of parameters of model config. These parameters allow you to more flexibly tune the model and achieve better results.
+
+In all notebooks, it is implied that you are familiar with the bathflow basics.
+(To refresh the basics, look at [03_ready_to_use_model_tf](../03_ready_to_use_model_tf.ipynb) notebook)
 
 1. [Microbatching](./01_microbatch.ipynb)
     * What's the point of microbathing?
-    * Example with/without microbatch.
+    * Example with microbatch.
 
 2. [Multi-GPU](./02_device.ipynb)
     * What's the point of multi-GPU?
