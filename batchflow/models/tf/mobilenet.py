@@ -10,7 +10,7 @@ Howard A. et al. "`Searching for MobileNetV3
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block
+from .layers import conv_block, combine
 from .nn import h_swish, h_sigmoid
 
 _V1_DEFAULT_BODY = {
@@ -268,7 +268,7 @@ class MobileNet_v2(TFModel):
                 if k > 0:
                     strides = 1
                 num_filters = int(cls.num_channels(inputs, kwargs.get('data_format')) * expansion_factor * width_factor)
-                x = conv_block(inputs, 'cnaWna', [num_filters, num_filters], [1, kernel_size], strides=[1, strides],
+                x = conv_block(inputs, 'cna wna', num_filters, [1, kernel_size], strides=[1, strides],
                                name='-%d-exp' % k, **kwargs)
                 if se_block:
                     if not isinstance(se_block, dict):
@@ -277,7 +277,7 @@ class MobileNet_v2(TFModel):
                     x = cls.se_block(x, name='-%d-se' % k, **{**kwargs, **se_block})
                 x = conv_block(x, 'cn', filters, 1, name='-%d-down' % k, **kwargs)
                 if residual or k > 0:
-                    x = cls.combine((inputs, x), op=residual_agg)
+                    x = combine((inputs, x), op=residual_agg)
                 inputs = x
         return x
 

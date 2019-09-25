@@ -15,7 +15,7 @@ from ..utils import unpack_fn_from_config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
 from .losses import softmax_cross_entropy, dice
-from .train import piecewise_constant
+from .nn import piecewise_constant, cyclic_learning_rate
 
 
 LOSSES = {
@@ -39,6 +39,7 @@ DECAYS = {
     'naturalexp': tf.train.natural_exp_decay,
     'const': piecewise_constant,
     'poly': tf.train.polynomial_decay,
+    'cyclic': cyclic_learning_rate,
 }
 
 
@@ -236,10 +237,10 @@ class TFModel(BaseModel):
     """
 
     def __init__(self, *args, **kwargs):
+        self.full_config = Config()
         self.session = kwargs.get('session', None)
         self.graph = tf.Graph() if self.session is None else self.session.graph
         self._graph_context = None
-        self._full_config = Config()
         self._train_lock = threading.Lock()
 
         # Parameters of batch processing: splitting batches into parts and/or using multiple devices to process data
@@ -327,11 +328,13 @@ class TFModel(BaseModel):
                 for device in self.devices:
                     with tf.device(device):
                         with tf.variable_scope(self.device_to_scope[device]):
+                            default_config = self.default_config()
+                            self.full_config = default_config + self.config
+                            self._make_inputs(config=self.full_config['inputs'],
+                                              data_format=self.full_config.get('common/data_format', 'channels_last'))
                             config = self.build_config()
-                            self._full_config = config
-                            self._build(config)
 
-                self.microbatch = config.get('microbatch')
+                            self._build(config)
 
                 if self.session is None:
                     self.create_session(config)
@@ -341,7 +344,7 @@ class TFModel(BaseModel):
 
     def create_session(self, config=None):
         """ Create TF session """
-        config = config if config is not None else self.config
+        config = config or self.full_config
         session_config = config.get('session', default={})
         session_config = {**session_config, **{'allow_soft_placement': True}}
         self.session = tf.Session(config=tf.ConfigProto(**session_config))
@@ -384,7 +387,7 @@ class TFModel(BaseModel):
                 return self.scope_to_device[device_scope]
         return None
 
-    def _make_inputs(self, names=None, config=None):
+    def _make_inputs(self, names=None, config=None, data_format='channels_last'):
         """ Create model input data from config provided
 
         In the config's inputs section it looks for ``names``, creates placeholders required, and
@@ -464,102 +467,100 @@ class TFModel(BaseModel):
                 an input tensor after transformations
         """
         # pylint:disable=too-many-statements
-        full_config = config
-        config = full_config.get('inputs')
+        with tf.variable_scope('inputs'):
+            device = self._get_current_device()
 
-        device = self._get_current_device()
+            names = names or []
+            missing_names = set(names) - set(config.keys())
+            if len(missing_names) > 0:
+                raise KeyError("Inputs should contain {} names".format(missing_names))
 
-        names = names or []
-        missing_names = set(names) - set(config.keys())
-        if len(missing_names) > 0:
-            raise KeyError("Inputs should contain {} names".format(missing_names))
+            placeholder_names = set(config.keys())
+            tensor_names = set(x.get('name') for x in config.values() if isinstance(x, dict) and x.get('name'))
+            wrong_names = placeholder_names & tensor_names
+            if len(wrong_names) > 0:
+                raise ValueError('Inputs contain duplicate names:', wrong_names)
 
-        placeholder_names = set(config.keys())
-        tensor_names = set(x.get('name') for x in config.values() if isinstance(x, dict) and x.get('name'))
-        wrong_names = placeholder_names & tensor_names
-        if len(wrong_names) > 0:
-            raise ValueError('Inputs contain duplicate names:', wrong_names)
+            # add default aliases
+            if 'labels' in config and 'targets' not in config:
+                config['targets'] = 'labels'
+            elif 'masks' in config and 'targets' not in config:
+                config['targets'] = 'masks'
+            # if targets is defined in the input dict, these implicit aliases will be overwritten.
 
-        # add default aliases
-        if 'labels' in config and 'targets' not in config:
-            config['targets'] = 'labels'
-        elif 'masks' in config and 'targets' not in config:
-            config['targets'] = 'masks'
-        # if targets is defined in the input dict, these implicit aliases will be overwritten.
+            param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
+            defaults = dict(data_format=data_format)
 
-        param_names = ('dtype', 'shape', 'classes', 'data_format', 'transform', 'name')
-        defaults = dict(data_format=full_config.get('common/data_format', default='channels_last'))
+            placeholders = dict()
+            tensors = dict()
+            _inputs = dict()
+            for input_name, input_config in config.items():
+                if isinstance(input_config, str):
+                    continue
+                elif isinstance(input_config, (tuple, list)):
+                    input_config = list(input_config) + [None for _ in param_names]
+                    input_config = input_config[:len(param_names)]
+                    input_config = dict(zip(param_names, input_config))
+                    input_config = dict((k, v) for k, v in input_config.items() if v is not None)
+                input_config = {**defaults, **input_config}
 
-        placeholders = dict()
-        tensors = dict()
-        _inputs = dict()
-        for input_name, input_config in config.items():
-            if isinstance(input_config, str):
-                continue
-            elif isinstance(input_config, (tuple, list)):
-                input_config = list(input_config) + [None for _ in param_names]
-                input_config = input_config[:len(param_names)]
-                input_config = dict(zip(param_names, input_config))
-                input_config = dict((k, v) for k, v in input_config.items() if v is not None)
-            input_config = {**defaults, **input_config}
+                reshape = None
+                shape = input_config.get('shape')
+                if isinstance(shape, int):
+                    shape = (shape,)
+                if shape:
+                    input_config['shape'] = shape
+                    shape = [None] + list(shape)
 
-            reshape = None
-            shape = input_config.get('shape')
-            if isinstance(shape, int):
-                shape = (shape,)
-            if shape:
-                input_config['shape'] = shape
-                shape = [None] + list(shape)
+                _inputs[input_name] = dict(config=input_config)
+                self.store_to_attr('_inputs', _inputs)
 
-            _inputs[input_name] = dict(config=input_config)
+                if self.has_classes(input_name):
+                    dtype = input_config.get('dtype', tf.int64)
+                    shape = shape or (None,)
+                else:
+                    dtype = input_config.get('dtype', 'float')
+                tensor = tf.placeholder(dtype, shape, input_name)
+                placeholders[input_name] = tensor
+                self.store_to_attr(input_name, tensor, device)
+
+                if 'df' in input_config and 'data_format' not in input_config:
+                    input_config['data_format'] = input_config['df']
+                if input_config.get('data_format') == 'l':
+                    input_config['data_format'] = 'channels_last'
+                elif input_config.get('data_format') == 'f':
+                    input_config['data_format'] = 'channels_first'
+
+                _inputs[input_name] = dict(config=input_config)
+                self.store_to_attr('_inputs', _inputs)
+                tensor = self._make_transform(input_name, tensor, input_config)
+
+                if isinstance(reshape, (list, tuple)):
+                    tensor = tf.reshape(tensor, [-1] + list(reshape))
+
+                name = input_config.get('name')
+                if name is not None:
+                    tensor = tf.identity(tensor, name=name)
+                    self.store_to_attr(name, tensor, device)
+
+                tensors[input_name] = tensor
+
+                _inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
+                if name is not None:
+                    _inputs[name] = _inputs[input_name]
+                self.store_to_attr('_inputs', _inputs)
+
+            # check for aliases
+            for input_name, input_config in config.items():
+                if isinstance(input_config, str) and input_name not in _inputs:
+                    _inputs[input_name] = _inputs[input_config]
+                    tensors[input_name] = tensors[input_config]
+                    placeholders[input_name] = placeholders[input_config]
+                    tensor = tf.identity(tensors[input_name], name=input_name)
+                    self.store_to_attr(input_name, tensors[input_name], device)
+
             self.store_to_attr('_inputs', _inputs)
-
-            if self.has_classes(input_name):
-                dtype = input_config.get('dtype', tf.int64)
-                shape = shape or (None,)
-            else:
-                dtype = input_config.get('dtype', 'float')
-            tensor = tf.placeholder(dtype, shape, input_name)
-            placeholders[input_name] = tensor
-            self.store_to_attr(input_name, tensor, device)
-
-            if 'df' in input_config and 'data_format' not in input_config:
-                input_config['data_format'] = input_config['df']
-            if input_config.get('data_format') == 'l':
-                input_config['data_format'] = 'channels_last'
-            elif input_config.get('data_format') == 'f':
-                input_config['data_format'] = 'channels_first'
-
-            _inputs[input_name] = dict(config=input_config)
-            self.store_to_attr('_inputs', _inputs)
-            tensor = self._make_transform(input_name, tensor, input_config)
-
-            if isinstance(reshape, (list, tuple)):
-                tensor = tf.reshape(tensor, [-1] + list(reshape))
-
-            name = input_config.get('name')
-            if name is not None:
-                tensor = tf.identity(tensor, name=name)
-                self.store_to_attr(name, tensor, device)
-
-            tensors[input_name] = tensor
-
-            _inputs[input_name] = dict(config=input_config, placeholder=placeholders[input_name], tensor=tensor)
-            if name is not None:
-                _inputs[name] = _inputs[input_name]
-            self.store_to_attr('_inputs', _inputs)
-
-        # check for aliases
-        for input_name, input_config in config.items():
-            if isinstance(input_config, str) and input_name not in _inputs:
-                _inputs[input_name] = _inputs[input_config]
-                tensors[input_name] = tensors[input_config]
-                placeholders[input_name] = placeholders[input_config]
-                tensor = tf.identity(tensors[input_name], name=input_name)
-                self.store_to_attr(input_name, tensors[input_name], device)
-
-        self.store_to_attr('_inputs', _inputs)
-        self.store_to_attr('inputs', tensors)
+            self.store_to_attr('inputs', tensors)
         return placeholders, tensors
 
     def _make_transform(self, input_name, tensor, config):
@@ -631,7 +632,10 @@ class TFModel(BaseModel):
             self.store_to_attr('_to_classes', input_name, tensor)
         return tensor
 
-    def _make_train_steps(self, config, init=True):
+    def _make_train_steps(self, config=None, init=True):
+        config = config or self.full_config
+        self.microbatch = config.get('microbatch')
+
         # Wrap parameters from config root as `train_steps`
         if config.get('train_steps') is None:
             config.update({'train_steps': {'': {key: config.get(key) for key in
@@ -948,7 +952,7 @@ class TFModel(BaseModel):
                 config = {}
             else:
                 shape = tensor.get_shape().as_list()[1:]
-                data_format = self._full_config.get('common/data_format') or 'channels_last'
+                data_format = self.full_config.get('common/data_format') or 'channels_last'
                 config = dict(dtype=tensor.dtype, shape=shape,
                               name=tensor.name, data_format=data_format)
         else:
@@ -956,6 +960,20 @@ class TFModel(BaseModel):
 
         config = {**config, **kwargs}
         return config
+
+    def eval(self, mode):
+        """ Change model learning phase. Important to use to control behaviour of layers, that
+        perform different operations on train/inference (dropout, batch-norm).
+
+        Parameters
+        ----------
+        mode : bool or int
+            If evaluates to True, then all the layers are set to use `train` behaviour.
+            If evaluates to False, then all the layers are set to use `test` behaviour.
+        """
+        if isinstance(mode, bool):
+            mode = int(mode)
+        tf.keras.backend.set_learning_phase(mode)
 
     def _map_name(self, name, device=None):
         if isinstance(name, str):
@@ -1018,7 +1036,7 @@ class TFModel(BaseModel):
 
         return output
 
-    def train(self, fetches=None, feed_dict=None, use_lock=False, train_mode='', microbatch=None, **kwargs):
+    def train(self, fetches=None, feed_dict=None, use_lock=True, train_mode='', microbatch=None, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -1067,7 +1085,7 @@ class TFModel(BaseModel):
             self.microbatch = microbatch
 
             if (microbatch) and (len(list(train_steps.values())[0]) == 1):
-                self._make_train_steps(self._full_config, init=False)
+                self._make_train_steps(self.full_config, init=False)
 
             if microbatch is True: # if config option is set to True, but train option left unspectified,
                 microbatch = False # it is faster to pretend that there is no microbatching
@@ -1453,40 +1471,6 @@ class TFModel(BaseModel):
         return x
 
     @classmethod
-    def combine(cls, inputs, name='combine', op='conv', data_format='channels_last', **kwargs):
-        """ Combine inputs into one tensor via various transformations.
-
-        Parameters
-        ----------
-        inputs : sequence of tf.Tensor
-            tensors to combine
-        op : str {'concat', 'sum', 'conv'}
-            if 'concat', inputs are concated along channels axis
-            if 'sum', inputs are summed
-            if 'softsum', every tensor is passed through 1x1 convolution in order to have
-            the same number of channels as the first tensor, and then summed
-        data_format : str {'channels_last', 'channels_first'}
-            data format
-        kwargs : dict
-            arguments for :func:`.conv_block`
-        """
-        with tf.variable_scope(name):
-            if op == 'concat':
-                axis = cls.channels_axis(data_format)
-                return tf.concat(inputs, axis=axis, name='combine-concat')
-            if op == 'sum':
-                return tf.add_n(inputs, name='combine-sum')
-            if op == 'softsum':
-                filters = cls.num_channels(inputs[0], data_format=data_format)
-
-                for i in range(1, len(inputs)):
-                    inputs[i] = conv_block(inputs[i], layout='c', filters=filters,
-                                           kernel_size=1, name='conv', **kwargs)
-                return tf.add_n(inputs, name='combine-softsum')
-
-        raise ValueError('`op` must be one of `concat`, `sum`, `softsum`, got {}.'.format(combine_type))
-
-    @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
         """ Transform inputs with a convolution block
 
@@ -1749,7 +1733,7 @@ class TFModel(BaseModel):
         config = {**config['common'], **_config}
         return config
 
-    def build_config(self, names=None):
+    def build_config(self, config=None):
         """ Define a model architecture configuration
 
         It takes just 2 steps:
@@ -1773,28 +1757,24 @@ class TFModel(BaseModel):
                 config['head']['num_classes'] = self.num_classes('targets')
                 return config
         """
-        config = self.default_config()
+        config = config or self.full_config
+        inputs = config.get('initial_block/inputs')
 
-        config = config + self.config
-
-        if config.get('inputs'):
-            with tf.variable_scope('inputs'):
-                self._make_inputs(names, config)
-            inputs = config.get('initial_block/inputs')
-
-            if isinstance(inputs, str):
-                if not config.get('common/data_format'):
-                    config['common/data_format'] = self.data_format(inputs)
-                config['initial_block/inputs'] = self.get_from_attr('inputs')[inputs]
-
-            elif isinstance(inputs, list):
-                config['initial_block/inputs'] = [self.get_from_attr('inputs')[name]
-                                                  for name in inputs]
-            else:
-                raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
+        if isinstance(inputs, str):
+            if not config.get('common/data_format'):
+                config['common/data_format'] = self.data_format(inputs)
+            config['initial_block/inputs'] = self.get_from_attr('inputs')[inputs]
+        elif isinstance(inputs, list):
+            # If inputs use different data formats, you need to manually control this parameter
+            # in model parts (initial_block, body, head).
+            if not config.get('common/data_format'):
+                config['common/data_format'] = self.data_format(inputs[0])
+            config['initial_block/inputs'] = [self.get_from_attr('inputs')[name]
+                                              for name in inputs]
+        else:
+            raise ValueError('initial_block/inputs should be specified with a name or a list of names.')
 
         config['head/targets'] = self.get_from_attr('targets')
-
         return config
 
     def _add_block(self, name, config, inputs):
@@ -1810,6 +1790,7 @@ class TFModel(BaseModel):
         return block
 
     def _build(self, config=None):
+        config = config or self.full_config
         inputs = config.pop('initial_block/inputs')
         x = self._add_block('initial_block', config, inputs=inputs)
         x = self._add_block('body', config, inputs=x)
@@ -2070,6 +2051,34 @@ class TFModel(BaseModel):
             scale = tf.reshape(x, shape)
             x = inputs * scale
         return x
+
+    @classmethod
+    def scse_block(cls, inputs, ratio=2, name='scse', **kwargs):
+        """ Concurrent spatial and channel squeeze and excitation.
+
+        Roy A.G. et al. "`Concurrent Spatial and Channel ‘Squeeze & Excitation’
+        in Fully Convolutional Networks <https://arxiv.org/abs/1803.02579>`_"
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            input tensor
+        ratio : int, optional
+            Squeeze ratio for the number of filters in spatial squeeze
+            and channel excitation block. Default is 2.
+
+        Returns
+        -------
+        tf.Tensor
+        """
+        with tf.variable_scope(name):
+            cse = cls.se_block(inputs, ratio, name='cse', **kwargs)
+
+            x = conv_block(inputs, **{**kwargs, 'layout': 'ca', 'filters': 1, 'kernel_size': 1,
+                                      'activation': tf.nn.sigmoid, 'name': 'sse'})
+
+            scse = cse + tf.multiply(x, inputs)
+        return scse
 
     @classmethod
     def upsample(cls, inputs, factor=None, resize_to=None, layout='b', name='upsample', **kwargs):
