@@ -1556,12 +1556,12 @@ class TFModel(BaseModel):
                               inputs=inputs, defaults=kwargs)
 
             scope = tf.get_default_graph().get_name_scope()
-            template_name = '/'.join([scope, 'body',
-                                      '{}group-{}', 'output:0'])
+            template_name = '/'.join([scope, 'body{}',
+                                      'group-{}', 'output:0'])
 
             encoder_tensors = [inputs]
             for i in range(steps):
-                tensor_name = template_name.format('{}/'.format(order[0]) if order else '', i)
+                tensor_name = template_name.format('/{}'.format(order[0]) if order else '', i)
                 x = tf.get_default_graph().get_tensor_by_name(tensor_name)
                 encoder_tensors.append(x)
         return encoder_tensors
@@ -1820,7 +1820,6 @@ class TFModel(BaseModel):
         return config
 
     def _add_block(self, name, config, inputs, defaults=None):
-        tensor = inputs
         if defaults is None:
             defaults = {'is_training': self.get_from_attr('is_training'),
                         'global_step': self.get_from_attr('global_step'),
@@ -1829,6 +1828,7 @@ class TFModel(BaseModel):
         config = config[name]
         order = config.get('order') or [None]
 
+        tensor = inputs
         for i, item in enumerate(order):
             block = config if item is None else config[item]
             args = {'name': '{}/{}'.format(name, item) if item else '{}'.format(name),
