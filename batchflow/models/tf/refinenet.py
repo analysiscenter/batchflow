@@ -39,8 +39,8 @@ class RefineNet(TFModel):
         config = TFModel.default_config()
 
         filters = 64   # number of filters in the first block
-        config['initial_block'] = dict(layout='cna cna', filters=filters, kernel_size=3,
-                                       strides=1, pool_strides=1)
+        config['initial_block'] += dict(layout='cna cna', filters=filters, kernel_size=3,
+                                        strides=1, pool_strides=1)
         config['body']['encoder'] = dict(base_class=ResNet101)
         config['body']['filters'] = [512, 256, 256, 256]
         config['body']['upsample'] = dict(layout='b', factor=2)

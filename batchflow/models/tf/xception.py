@@ -157,17 +157,17 @@ class Xception41(Xception):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/entry'] = dict(num_stages=3,
-                                    filters=[[128]*3,
-                                             [256]*3,
-                                             [728]*3])
+        config['body/entry'] += dict(num_stages=3,
+                                     filters=[[128]*3,
+                                              [256]*3,
+                                              [728]*3])
 
-        config['body/middle'] = dict(num_stages=8,
-                                     filters=[[728]*3]*8)
+        config['body/middle'] += dict(num_stages=8,
+                                      filters=[[728]*3]*8)
 
-        config['body/exit'] = dict(num_stages=2, strides=[2, 1],
-                                   filters=[[728, 1024, 1024],
-                                            [1536, 1536, 2048]])
+        config['body/exit'] += dict(num_stages=2, strides=[2, 1],
+                                    filters=[[728, 1024, 1024],
+                                             [1536, 1536, 2048]])
         return config
 
 
@@ -176,17 +176,17 @@ class Xception64(Xception):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/entry'] = dict(num_stages=3,
-                                    filters=[[128]*3,
-                                             [256]*3,
-                                             [728]*3])
+        config['body/entry'] += dict(num_stages=3,
+                                     filters=[[128]*3,
+                                              [256]*3,
+                                              [728]*3])
 
-        config['body/middle'] = dict(num_stages=16,
-                                     filters=[[728]*3]*16)
+        config['body/middle'] += dict(num_stages=16,
+                                      filters=[[728]*3]*16)
 
-        config['body/exit'] = dict(num_stages=2, strides=[2, 1],
-                                   filters=[[728, 1024, 1024],
-                                            [1536, 1536, 2048]])
+        config['body/exit'] += dict(num_stages=2, strides=[2, 1],
+                                    filters=[[728, 1024, 1024],
+                                             [1536, 1536, 2048]])
         return config
 
 
@@ -195,12 +195,12 @@ class XceptionS(Xception):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/entry'] = dict(num_stages=2,
-                                    filters=[[6]*3,
-                                             [12]*3,])
-        config['body/middle'] = dict(num_stages=2,
-                                     filters=[[12]*3]*2)
-        config['body/exit'] = dict(num_stages=2, strides=[2, 1],
-                                   filters=[[12]*3,
-                                            [15]*3,])
+        config['body/entry'] += dict(num_stages=2,
+                                     filters=[[6]*3,
+                                              [12]*3,])
+        config['body/middle'] += dict(num_stages=2,
+                                      filters=[[12]*3]*2)
+        config['body/exit'] += dict(num_stages=2, strides=[2, 1],
+                                    filters=[[12]*3,
+                                             [15]*3,])
         return config
