@@ -111,7 +111,7 @@ class SqueezeNetBody(nn.Module):
             if b == 'b':
                 bypass = x
                 continue
-            elif b == 'f':
+            if b == 'f':
                 x = FireBlock(x, filters=filters[block_no], **{**kwargs, **block})
                 block_no += 1
                 self.add_module('fire%d' % i, x)
@@ -139,7 +139,7 @@ class SqueezeNetBody(nn.Module):
             if block == 'b':
                 bypass = x
                 continue
-            elif block == 'f':
+            if block == 'f':
                 x = getattr(self, 'fire%d' % i)(x)
             elif block == 'm':
                 x = getattr(self, 'pool%d' % i)(x)

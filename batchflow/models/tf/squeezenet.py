@@ -86,7 +86,7 @@ class SqueezeNet(TFModel):
                 if b == 'b':
                     bypass = x
                     continue
-                elif b == 'f':
+                if b == 'f':
                     x = cls.fire_block(x, filters=filters[block_no], name='fire-block-%d' % i, **{**kwargs, **block})
                     block_no += 1
                 elif b == 'm':
