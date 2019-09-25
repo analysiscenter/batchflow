@@ -133,7 +133,7 @@ class OncePipeline:
         --------
         >>> pp = dataset.p
                     .init_variables({"loss_history": dict(default=[]),
-                                     "predictions", dict(default=[])})
+                                     "predictions": dict(default=[])})
                     .init_variables("metrics", "counter", "worst_prediction")
                     .load('/some/path', fmt='blosc')
                     .train_resnet()
@@ -198,7 +198,11 @@ class OncePipeline:
         return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, pipeline=pipeline, model_name=name))
 
     def _exec_import_model(self, action):
-        self.pipeline._exec_import_model(None, action)      # pylint:disable=protected-access
+        print(action)
+        model_name = eval_expr(action['model_name'])
+        source = eval_expr(action['source'])
+        pipeline = eval_expr(action['pipeline'])
+        self.pipeline.models.import_model(source, pipeline, model_name)
 
     def update(self, expr, value=None):
         """ Update a value of a given named expression lazily during pipeline execution

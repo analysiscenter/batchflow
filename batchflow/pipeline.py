@@ -18,7 +18,8 @@ from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
-from ._const import *       # pylint:disable=wildcard-import
+from ._const import ACTIONS, JOIN_ID, MERGE_ID, REBATCH_ID, PIPELINE_ID, TRAIN_MODEL_ID, PREDICT_MODEL_ID, CALL_ID, \
+     SAVE_MODEL_ID, LOAD_MODEL_ID, GATHER_METRICS_ID, UPDATE_VARIABLE_ID, UPDATE_ID, PRINT_ID, CALL_FROM_NS_ID
 from .utils import create_bar, update_bar
 
 
@@ -772,13 +773,8 @@ class Pipeline:
         name : str
             a name with which the model is stored in this pipeline
         """
-        return self._add_action(IMPORT_MODEL_ID, _args=dict(source=model, pipeline=pipeline, model_name=name))
-
-    def _exec_import_model(self, batch, action):
-        model_name = self._eval_expr(action['model_name'], batch=batch)
-        source = self._eval_expr(action['source'], batch=batch)
-        pipeline = self._eval_expr(action['pipeline'], batch=batch)
-        self.models.import_model(source, pipeline, model_name)
+        self.before.import_model(model, pipeline, name)
+        return self
 
     def train_model(self, name, *args, make_data=None, save_to=None, **kwargs):
         """ Train a model
