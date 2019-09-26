@@ -44,48 +44,70 @@ DECAYS = {
 
 
 class TFModel(BaseModel):
-    r""" Base class for all tensorflow models
+    r""" Base class for all TensorFlow models.
+    Allows to easily define complex neural networks via configuration dictionaries.
 
-    **Configuration**
-
-    ``build`` and ``load`` are inherited from :class:`.BaseModel`.
-
-    device : str or sequence of str
-        device name(s), e.g. '/device:GPU:0' (TensorFlow-like format), 'gpu:1:, 'CPU:0'.
-        Regular expressions are allowed, e.g. 'GPU:*'.
-        Default behaviour is to use the first available GPU (or CPU if no GPUs are detected).
-        See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
-
-        If multiple devices are at use, batch size must be divisible by the number of used devices.
-        If microbatch is also used, then microbatch size must be divisible by the number of devices.
-
-    session : dict
-        parameters for session configuration. 'allow_soft_placement' is always True. To learn more, check
-        `Tensorflow ConfigProto parameters <https://www.tensorflow.org/api_docs/python/tf/ConfigProto`_.
-
+    Parameters
+    ----------
     inputs : dict
-        model inputs (see :meth:`.TFModel._make_inputs`)
+        Mapping from placeholder names (e.g. `images`, `labels`, `masks`) to arguments of its initialization.
+        Allows to create placeholders of needed format (shape, dtype, data format) with specified name
+        and apply some typical transformations (like one-hot-encoding), if needed.
 
-    loss - a loss function, might be defined in one of three formats:
-        - name
-        - tuple (name, args)
-        - dict {'name': name, \**args}
+        If value is a string, then it must point to another key from the input-dict, effectively making an alias.
+        By default, `targets` is aliased to `labels` or `masks`, if present.
+        If value is a tuple, then it must contain all of the arguments below in the same order. `None` is reserved
+        for using default value.
+        If value is a dictionary, then it can omit some of the parameters (default values will be at use).
 
-        where name might be one of:
-            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            dtype : str or tf.DType
+                Data type. Default is 'float32'.
+
+            shape : int, None, sequence of ints or Nones
+                Tensor shape with channels and without batch size. Default is None.
+
+            classes : int, array-like or None
+                If int, then number of classes.
+                If array-like, then labels of classes (can be strings or anything else).
+                If None, then tensor has no classes. Default is None.
+
+            data_format : str {'channels_first', 'channels_last', 'f', 'l'}
+                The ordering of the dimensions in the inputs. Can be shortened to ``df`` for brevity.
+                Default is 'channels_last'.
+
+            transform : str, callable or None
+                If str, then one of predefined transform is used.
+                If callable, then it is immediately applied to tensor.
+                If None, no transform is applied. Default is None.
+
+                Predefined transforms are:
+                    - ``ohe`` - one-hot encoding.
+                    - ``mip @ d`` - max intensity projection :class:`~.tf.layers.Mip` with depth ``d`` (should be int).
+                    - ``downsample @ d`` - downsampling with a factor ``d`` (should be int).
+
+            name : str
+                Name for the transformed tensor.
+
+    loss : str, tuple, dict
+        Loss function, might be defined in multiple formats.
+
+        If str, then short ``name``.
+        If tuple, then ``(name, args)``.
+        If dict, then ``{'name': name, **args}``.
+
+        Name must be one of:
+            - short name (e.g. `'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
             - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
               (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
             - callable
 
         It is possible to compute loss not only with network output and ground truth, but with
-        any named Tensors in model by passing `'predictions'` and `'targets'` keywords.
+        any named tensors in model by passing their names as ``predictions`` and ``targets`` parameters.
 
-        If loss is a callable, then it should add the result to a loss collection.
-        Otherwise, ``add_loss`` should be set to True. An optional collection might also be specified through
-        ``loss_collection`` parameter.
+        If loss is a callable, then either ``add_loss`` should be set to True, or the callable should
+        manually add the result to a loss collection.
 
-        .. note:: Losses from non-default collections won't be detected automatically,
-                  so you should process them within your code.
+        ``loss_collection`` parameter can be used to specify collection of losses.
 
         Examples:
 
@@ -97,47 +119,19 @@ class TFModel(BaseModel):
         - ``{'loss': external_loss_fn_without_add_loss, 'add_loss': True}``
         - ``{'loss': external_loss_fn_to_collection, 'add_loss': True, 'loss_collection': tf.GraphKeys.LOSSES}``
 
-    decay - a learning rate decay algorithm might be defined in one of three formats:
-        - name
-        - tuple (name, args)
-        - dict {'name': name, **args}
+    optimizer : str, tuple, dict
+        Optimizer, might be defined in multiple formats.
 
-        where name might be one of:
+        If str, then short ``name``.
+        If tuple, then ``(name, args)``.
+        If dict, then ``{'name': name, **args}``.
 
-        - short name ('exp', 'invtime', 'naturalexp', 'const', 'poly')
-        - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
-          (e.g. 'exponential_decay')
-        - a callable
-
-        Examples:
-
-        - ``{'decay': 'exp'}``
-        - ``{'decay': ('polynomial_decay', {'decay_steps': 10000})}``
-        - ``{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}``
-
-    scope - subset of variables to optimize during training. Can be either string or sequence of strings.
-        Value `''` is reserved for optimizing all trainable variables.
-        Putting `-` sign before name stands for complement: optimize everything but the passed scope.
-
-        Examples:
-
-        - ``{'scope': ''}``
-        - ``{'scope': 'body/custom_layer'}``
-        - ``{'scope': '-body/custom_layer'}``
-        - ``{'scope': ['body/custom_layer_1', 'head/custom_layer_2']}``
-
-    optimizer - an optimizer might be defined in one of three formats:
-            - name
-            - tuple (name, args)
-            - dict {'name': name, \**args}
-
-            where name might be one of:
-
-            - short name (e.g. 'Adam', 'Adagrad', any optimizer from
-              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ without a word `Optimizer`)
+        Name must be one of:
+            - short name (e.g. `'Adam'`, `'Adagrad'`, any optimizer from
+              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ with or without a word `Optimizer`)
             - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
               (e.g. 'FtlrOptimizer')
-            - a callable
+            - callable
 
         Examples:
 
@@ -147,34 +141,78 @@ class TFModel(BaseModel):
         - ``{'optimizer': functools.partial(tf.train.MomentumOptimizer, momentum=0.95)}``
         - ``{'optimizer': some_optimizer_fn}``
 
-    train_steps - configuration of different training procedures.
-        Must be a mapping from string names to dictionary with train parameters like
-        loss, decay, scope, optimizer. Those keys support syntax defined above.
-        If any of loss, decay, scope, optimizer is defined in config, it serves as default
-        value for every train step.
-        Optimizer and decay, created at one train step, can be used in another. To do so, one can
-        pass 'use' key with value corresponding to the name of train step from which you want to borrow optimizer.
-        Note that in this case you are still free to change loss-function or scope.
+    decay : str, tuple, dict
+        Learning rate decay algorithm, might be defined in multiple formats.
 
-        In order to use particular train step during train, one must pass `train_mode` argument
-        to `train` method.
+        If str, then short ``name``.
+        If tuple, then ``(name, args)``.
+        If dict, then ``{'name': name, **args}``.
+
+        Name must be one of:
+            - short name (e.g. `'exp'`, `'invtime'`, `'naturalexp'`, `'const'`, `'poly'`)
+            - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
+              (e.g. 'exponential_decay')
+            - callable
 
         Examples:
 
-        - ``{'train_steps': {'all': {'loss': 'ce', 'optimizer': 'Adam', 'scope': ''},
-                             'body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}}
-                             'custom': {'use': 'body', 'loss': 'ce', 'scope': 'head'}}``
+        - ``{'decay': 'exp'}``
+        - ``{'decay': ('polynomial_decay', {'decay_steps': 10000})}``
+        - ``{'decay': {'name': tf.train.inverse_time_decay, 'decay_rate': .5}``
+
+    scope : str or sequence of str
+        Subset of variables to optimize during training.
+        Value ``''`` is reserved for optimizing all trainable variables.
+        Putting ``-`` sign before name stands for complement: optimize everything but the passed scope.
+
+        Examples:
+
+        - ``{'scope': ''}``
+        - ``{'scope': 'body/custom_layer'}``
+        - ``{'scope': '-body/custom_layer'}``
+        - ``{'scope': ['body/custom_layer_1', 'head/custom_layer_2']}``
+
+    train_steps : dict
+        Configuration of different training procedures.
+        Must be a mapping from string names to dictionary with train parameters like
+        loss, decay, scope, optimizer. Those keys support syntax defined above.
+
+        If any of loss, decay, scope, optimizer is defined directly in config, it serves as the default
+        value for every train step.
+
+        Optimizer and decay, created at one train step, can be re-used in another. To do so, one can
+        pass 'use' key with value corresponding to the name of train step from which you want to borrow optimizer.
+        Note that in this case you are still free to change loss-function or scope.
+
+        In order to use particular train step during train, one must pass `train_mode` argument to `train` method.
+
+        Examples:
+
+        .. code-block:: python
+
+            {'train_steps': {'all': {'loss': 'ce', 'optimizer': 'Adam', 'scope': ''},
+                             'body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}},
+                             'custom': {'use': 'body', 'loss': 'ce', 'scope': 'head'}}
+
+    session : dict
+        Parameters for session configuration. `allow_soft_placement` is always True.
+        See `Tensorflow Session parameters <https://www.tensorflow.org/api_docs/python/tf/Session>`_.
+
+    device : str or sequence of str
+        Device name(s), e.g. ``'/device:GPU:0'`` (TensorFlow-like format), ``['gpu:1', 'CPU:0']``.
+        Regular expressions are also allowed, e.g. ``'GPU:*'``.
+        Default behaviour is to use the first available GPU (or CPU if no GPUs are detected).
+        See `tf.device <https://www.tensorflow.org/api_docs/python/tf/device>`_ for details.
+
+        Batch size must be divisible by number of devices.
 
     microbatch : int
-        size of chunks to split every batch in. Allows to process given data sequentially, accumulating gradients
+        Size of chunks to split every batch in. Allows to process given data sequentially, accumulating gradients
         from microbatches and applying them once in the end. Can be changed later in the `train` method.
-        Note that the microbatch size must be a divisor of the batch size.
-
-    common : dict
-        default parameters for all :func:`.conv_block`
+        Batch size must be divisible by microbatch size.
 
     initial_block : dict
-        parameters for the input block, usually :func:`.conv_block` parameters.
+        Parameters for the input block, usually :class:`~.tf.layers.ConvBlock` parameters.
 
         The only required parameter here is ``initial_block/inputs`` which should contain a name or
         a list of names from ``inputs`` which tensors will be passed to ``initial_block`` as ``inputs``.
@@ -182,60 +220,70 @@ class TFModel(BaseModel):
         Examples:
 
         - ``{'initial_block/inputs': 'images'}``
-        - ``{'initial_block': dict(inputs='features')}``
-        - ``{'initial_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
+        - ``{'initial_block': {'inputs': 'features'}}``
+        - ``{'initial_block': {'inputs': 'images', 'layout': 'nac', 'filters':64, 'kernel_size': 7, 'strides': 2}}``
 
     body : dict
-        parameters for the base network layers, usually :func:`.conv_block` parameters
+        Parameters for the base network layers, usually :class:`~.tf.layers.ConvBlock` parameters.
 
     head : dict
-        parameters for the head layers, usually :func:`.conv_block` parameters
+        Parameters for the head layers, usually :class:`~.tf.layers.ConvBlock` parameters.
 
     predictions : str or callable
-        an operation applied to the head output to make the predictions tensor which is used in the loss function.
+        An operation applied to the head output to make the predictions tensor which is used in the loss function.
+        See see :meth:`.TFModel.output` for details.
 
     output : dict or list
-        auxiliary operations
+        Auxiliary operations to apply to the network output. See see :meth:`.TFModel.output` for details.
 
-    For more details about predictions and auxiliary output operations see :meth:`.TFModel.output`.
+    common : dict
+        Parameters to pass to every part of the network (e.g. initial block, body, head),
+        usually :class:`~.tf.layers.ConvBlock` parameters.
 
-    **How to create your own model**
 
-    #. Take a look at :func:`~.layers.conv_block` since it is widely used as a building block almost everywhere.
+    **In order to create your own model, it is recommended to:**
 
-    #. Define model defaults (e.g. number of filters, batch normalization options, etc)
-       by overriding :meth:`.TFModel.default_config`.
-       Or skip it and hard code all the parameters in unpredictable places without the possibility to
-       change them easily through model's config.
+    * Take a look at :class:`.BaseModel`: ``build`` and ``load`` methods inherited from it.
 
-    #. Define build configuration (e.g. number of classes, etc)
-       by overriding :meth:`~.TFModel.build_config`.
+    * Take a look at :class:`~.tf.layers.ConvBlock`. It is a widely used as a building block,
+      capable of chaining various operations (convolutions, batch normalizations, etc).
 
-    #. Override :meth:`~.TFModel.initial_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
-       In many cases defaults and build config are just enough to build a network without additional code writing.
+    * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding
+      :meth:`.TFModel.default_config`. Those parameters are updated with external configuration dictionary.
 
-    Things worth mentioning:
+    * Define config post-processing by overriding :meth:`~.TFModel.build_config`.
+      It's main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
 
-    #. Input data and its parameters should be defined in configuration under ``inputs`` key.
-       See :meth:`.TFModel._make_inputs` for details.
+    * Override :meth:`~.TFModel.initial_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
+      You can either use usual tf-functions, or predefined layers like :class:`~tf.layers.ASPP`.
+      Conveniently, 'initial_block' is used to make pre-processing (e.g. reshaping or agressive pooling) of inputs,
+      'body' contains the meat of the network flow,
+      and 'head' makes sure that the output is compatible with targets.
 
-    #. You might want to use a convenient multidimensional :func:`.conv_block`,
-       as well as :func:`~.layers.global_average_pooling`, :func:`~.layers.mip`, or other predefined layers.
-       Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
+    * To use layers that behave differently at train/test times, ``is_training`` tensor is predefined and passed
+      to model parts (initial block, body, head) as keyword argument.
+      You can also get it via :meth:`.TFModel.get_from_attr`.
 
-    #. If you make dropout, batch norm, etc by hand, you might use a predefined ``is_training`` tensor. You can get it
-       by :meth:`~.TFModel.get_from_attr`.
+    * To use layers or decays that behave differently depending on number of iterations done, ``global_step`` tensor is
+      predefined and passed to model parts (initial block, body, head) as keyword argument.
+      You can also get it via :meth:`.TFModel.get_from_attr`.
 
-    #. For decay and training control there is a predefined ``global_step`` tensor. You can get it
-       by :meth:`~.TFModel.get_from_attr`.
 
-    #. In many cases there is no need to write a loss function, learning rate decay and optimizer
-       as they might be defined through config.
+    **In order to use existing model, it is recommended to define following keys in configuration dictionary:**
 
-    #. If you have defined your own loss function, call `tf.losses.add_loss(...)
-       <https://www.tensorflow.org/api_docs/python/tf/losses/add_loss>`_.
+    * ``inputs``: defines input data together with parameters like shape, dtype, number of classes.
+      See :meth:`.TFModel._make_inputs` for details.
+
+    * ``loss``, ``optimizer``, ``decay``, ``scope``
+
+    * ``initial_block`` sub-dictionary must contain ``inputs`` key with names of tensors to use as network inputs.
+
+    * ``initial_block``, ``body``, ``head``: used to define behaviour of respective part of the network.
+      Default behaviour is to support all of the :class:`~.tf.layers.ConvBlock` options.
+      For complex models, take a look at default config of the chosen model to learn
+      which parameters should be configured.
+
     """
-
     def __init__(self, *args, **kwargs):
         self.full_config = Config()
         self.session = kwargs.get('session', None)
@@ -388,84 +436,6 @@ class TFModel(BaseModel):
         return None
 
     def _make_inputs(self, names=None, config=None, data_format='channels_last'):
-        """ Create model input data from config provided
-
-        In the config's inputs section it looks for ``names``, creates placeholders required, and
-        makes some typical transformations (like one-hot-encoding), if needed.
-
-        **Configuration**
-
-        inputs : dict
-            - key : str
-                a placeholder name
-            - values : str or dict or tuple
-                each input's config
-
-        Input config:
-
-        ``dtype`` : str or tf.DType (by default 'float32')
-            data type
-
-        ``shape`` : int, tuple, list or None (default)
-            a tensor shape which includes the number of channels/classes and doesn't include a batch size.
-
-        ``classes`` : int, array-like or None (default)
-            a number of class or an array of class labels if data labels are strings or anything else except
-            ``np.arange(num_classes)``.
-
-        ``data_format`` : str {'channels_first', 'channels_last'} or {'f', 'l'}
-            The ordering of the dimensions in the inputs. Default is 'channels_last'.
-            For brevity ``data_format`` may be shortened to ``df``.
-
-        ``transform`` : str or callable
-            Predefined transforms are
-
-            - ``ohe`` - one-hot encoding
-            - ``mip @ d`` - maximum intensity projection :func:`~.layers.mip` with depth ``d`` (should be int)
-            - ``downsample @ d`` - NN downsampling with a factor ``d`` (should be int)
-
-        ``name`` : str
-            a name for the transformed tensor.
-
-        If an input config is a tuple, it should contain all items exactly in the order shown above:
-        dtype, shape, classes, data_format, transform, name.
-        If an item is None, the default value will be used instead.
-
-        **How it works**
-
-        A placholder with ``dtype``, ``shape`` and with a name ``key`` is created first.
-        Then it is transformed with a ``transform`` function in accordance with ``data_format``.
-        The resulting tensor will have the name ``name``.
-
-        **Aliases**
-        If an input config is a string, it should point to another key from inputs dict.
-        This creates an alias to another input which might be convenient to substitute tensor names.
-
-        By default, `targets` is aliased to `labels` or `masks` if present.
-
-        Parameters
-        ----------
-        names : list
-            placeholder names that are expected in the config's 'inputs' section
-
-        Raises
-        ------
-        KeyError if there is any name missing in the config's 'inputs' section.
-        ValueError if there are duplicate names.
-
-        Returns
-        -------
-        placeholders : dict
-            key : str
-                a placeholder name
-            value : tf.Tensor
-                placeholder tensor
-        tensors : dict
-            key : str
-                a placeholder name
-            value : tf.Tensor
-                an input tensor after transformations
-        """
         # pylint:disable=too-many-statements
         with tf.variable_scope('inputs'):
             device = self._get_current_device()
@@ -921,11 +891,12 @@ class TFModel(BaseModel):
         return np.sum(arr)
 
     def get_tensor_config(self, tensor, **kwargs):
-        """ Return tensor configuration
+        """ Return tensor configuration.
 
         Parameters
         ----------
         tensor : str or tf.Tensor
+            If str, then name of tensor.
 
         Returns
         -------
@@ -1042,39 +1013,41 @@ class TFModel(BaseModel):
         Parameters
         ----------
         fetches : tuple, list
-            a sequence of `tf.Operation` and/or `tf.Tensor` to calculate
+            Sequence of `tf.Operation` and/or `tf.Tensor` to calculate.
         feed_dict : dict
-            input data, where key is a placeholder name and value is a numpy value
+            Input data, where key is a placeholder name and value is a numpy value.
         use_lock : bool
-            if True, the whole train step is locked, thus allowing for multithreading.
+            If True, the whole train step is locked, thus allowing for multithreading.
         train_mode : str or sequence of str
-            name(s) of train step to optimize. Regular expressions are allowed.
+            Name(s) of train step to optimize. Regular expressions are allowed.
         microbatch : int
-            size of chunks to split every batch in. Note that if this option was not specified
+            Size of chunks to split every batch in. Note that if this option was not specified
             in the model configuration, the first invocation of this method would create additional operations.
 
         Returns
         -------
-        Calculated values of tensors in `fetches` in the same structure
+        tuple, list
+            Calculated values of tensors in `fetches` in the same structure.
+
+        Notes
+        -----
+        ``feed_dict`` is not required as all placeholder names and their data can be passed directly as named arguments.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            model.train(fetches='loss', feed_dict={'images': B('images'), 'labels': B('labels')})
+
+        The same as:
+
+        .. code-block:: python
+
+            model.train(fetches='loss', images=B('images'), labels=B('labels'))
 
         See also
         --------
         `Tensorflow Session run <https://www.tensorflow.org/api_docs/python/tf/Session#run>`_
-
-        Notes
-        -----
-        ``feed_dict`` is not required as all placeholder names and their data can be passed directly as named arguments
-
-        Examples
-        --------
-
-        ::
-
-            model.train(fetches='loss', feed_dict={'images': B('images'), 'labels': B('labels')})
-
-        The same as::
-
-            model.train(fetches='loss', images=B('images'), labels=B('labels'))
         """
         with self.graph.as_default():
             train_steps = self.get_from_attr('train_steps')
@@ -1244,17 +1217,14 @@ class TFModel(BaseModel):
         Parameters
         ----------
         fetches : tuple, list
-            a sequence of `tf.Operation` and/or `tf.Tensor` to calculate
+            Sequence of `tf.Operation` and/or `tf.Tensor` to calculate.
         feed_dict : dict
-            input data, where key is a placeholder name and value is a numpy value
+            Input data, where key is a placeholder name and value is a numpy value.
 
         Returns
         -------
-        Calculated values of tensors in `fetches` in the same structure
-
-        See also
-        --------
-        `Tensorflow Session run <https://www.tensorflow.org/api_docs/python/tf/Session#run>`_
+        tuple, list
+            Calculated values of tensors in `fetches` in the same structure.
 
         Notes
         -----
@@ -1262,15 +1232,19 @@ class TFModel(BaseModel):
 
         Examples
         --------
-
-        ::
+        .. code-block:: python
 
             model.predict(fetches='loss', feed_dict={'images': B('images'), 'labels': B('labels')})
 
-        The same as::
+        The same as:
+
+        .. code-block:: python
 
             model.predict(fetches='loss', images=B('images'), labels=B('labels'))
 
+        See also
+        --------
+        `Tensorflow Session run <https://www.tensorflow.org/api_docs/python/tf/Session#run>`_
         """
         with self.graph.as_default():
             feed_dict = {} if feed_dict is None else feed_dict
@@ -1283,22 +1257,17 @@ class TFModel(BaseModel):
     def save(self, path, *args, **kwargs):
         """ Save tensorflow model and most of important attributes.
 
-        Note
-        ----
-        All of tuples (for example, shapes) are converted to lists due to usage of JSON format.
-
         Parameters
         ----------
         path : str
-            a path to a directory where all model files will be stored
+            Path to a directory where all model files will be stored.
 
         Examples
         --------
-        >>> tf_model = ResNet34()
+        .. code-block:: python
 
-        Now save the model
-
-        >>> tf_model.save('/path/to/models/resnet34')
+            tf_model = ResNet34()
+            tf_model.save('/path/to/models/resnet34')
 
         The model will be saved to /path/to/models/resnet34
         """
@@ -1338,24 +1307,22 @@ class TFModel(BaseModel):
     def load(self, path, graph=None, checkpoint=None, *args, **kwargs):
         """ Load a TensorFlow model and most important attributes from files
 
-        Note
-        ----
-        All of tuples (for example, shapes) are loaded as lists due to usage of JSON format.
-
         Parameters
         ----------
         path : str
-            a directory where a model is stored
+            Directory where a model is stored.
         graph : str
-            a filename for a metagraph file
-        checkpoint : str
-            a checkpoint file name or None to load the latest checkpoint
+            Filename for a metagraph file.
+        checkpoint : str or None
+            If str, then checkpoint file name.
+            If None, then load the latest checkpoint.
 
         Examples
         --------
-        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
+        .. code-block:: python
 
-        >>> tf_model.load(path='/path/to/models/resnet34')
+            resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
+            tf_model.load(path='/path/to/models/resnet34')
         """
         _ = args, kwargs
         self.graph = tf.Graph()
@@ -1423,13 +1390,12 @@ class TFModel(BaseModel):
         Parameters
         ----------
         inputs : tf.Tensor
-            input tensor
+            Input tensor.
         resize_to : tf.Tensor
-            a tensor which shape the inputs should be resized to
+            Tensor which shape the inputs should be resized to.
         data_format : str {'channels_last', 'channels_first'}
-            data format
+            Data format.
         """
-
         static_shape = cls.spatial_shape(resize_to, data_format, False)
         dynamic_shape = cls.spatial_shape(resize_to, data_format, True)
 
@@ -1472,18 +1438,19 @@ class TFModel(BaseModel):
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
-        """ Transform inputs with a convolution block
+        """ Transform inputs with a convolution block. Usually used for initial preprocessing,
+        e.g. reshaping, downsampling etc.
 
         Parameters
         ----------
         inputs : tf.Tensor
-            input tensor
+            Input tensor.
         name : str
-            scope name
+            Scope name.
 
         Notes
         -----
-        For other parameters see :func:`.conv_block`.
+        For other parameters see :class:`~.tf.layers.ConvBlock`.
 
         Returns
         -------
@@ -1496,18 +1463,18 @@ class TFModel(BaseModel):
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
-        """ Base layers which produce a network embedding
+        """ Base layers which produce a network embedding.
 
         Parameters
         ----------
         inputs : tf.Tensor
-            input tensor
+            Input tensor.
         name : str
-            scope name
+            Scope name.
 
         Notes
         -----
-        For other parameters see :func:`.conv_block`.
+        For other parameters see :class:`~.tf.layers.ConvBlock`.
 
         Returns
         -------
@@ -1515,7 +1482,7 @@ class TFModel(BaseModel):
 
         Examples
         --------
-        ::
+        .. code-block:: python
 
             MyModel.body(inputs, layout='ca ca ca', filters=[128, 256, 512], kernel_size=3)
         """
@@ -1526,18 +1493,19 @@ class TFModel(BaseModel):
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
-        """ The last network layers which produce predictions
+        """ The last network layers which produce predictions. Usually used to make network output
+        compatible with the `targets` tensor.
 
         Parameters
         ----------
         inputs : tf.Tensor
-            input tensor
+            Input tensor.
         name : str
-            scope name
+            Scope name.
 
         Notes
         -----
-        For other parameters see :func:`.conv_block`.
+        For other parameters see :class:`~.tf.layers.ConvBlock`.
 
         Returns
         -------
@@ -1547,9 +1515,13 @@ class TFModel(BaseModel):
         --------
         A fully convolutional head with 3x3 and 1x1 convolutions and global max pooling:
 
+        .. code-block:: python
+
             MyModel.head(network_embedding, layout='cacaP', filters=[128, num_classes], kernel_size=[3, 1])
 
-        A fully connected head with dropouts, a dense layer with 1000 units and final dense layer with class logits::
+        A fully connected head with dropouts, a dense layer with 1000 units and final dense layer with class logits:
+
+        .. code-block:: python
 
             MyModel.head(network_embedding, layout='dfadf', units=[1000, num_classes], dropout_rate=.15)
         """
@@ -1567,21 +1539,24 @@ class TFModel(BaseModel):
             input tensors
 
         predictions : str or callable
-            an operation applied to inputs to get `predictions` tensor which is used in a loss function:
+            Operation to apply to the network output to obtain tensor which is used in loss computation.
 
-            - 'sigmoid' - ``sigmoid(inputs)``
-            - 'proba' - ``softmax(inputs)``
-            - 'labels' - ``argmax(inputs)``
-            - 'softplus' - ``softplus(inputs)``
-            - callable - a user-defined operation
+            If str, then one of predefined operations:
+                - 'sigmoid' - ``sigmoid(inputs)``
+                - 'proba' - ``softmax(inputs)``
+                - 'labels' - ``argmax(inputs)``
+                - 'softplus' - ``softplus(inputs)``
 
-        ops : a sequence of operations or an ordered dict
-            auxiliary operations
+            If callable, then user-defined operation.
 
-            If dict:
+        ops : sequence, dict or OrderedDict
+            Auxiliary operations to apply.
 
-            - key - a prefix for each input
-            - value - a sequence of aux operations
+            If sequence, then operations to apply. Transformed tensors are stored with the same name, as operation
+            If dict, then mapping from prefixes to operations. Transformed tensors are stored with
+            the prefixed name of the operation.
+
+            For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
 
         Raises
         ------
@@ -1590,8 +1565,7 @@ class TFModel(BaseModel):
 
         Examples
         --------
-
-        ::
+        .. code-block:: python
 
             config = {
                 'output': ['proba', 'labels']
@@ -1600,15 +1574,15 @@ class TFModel(BaseModel):
         However, if one of the placeholders also has a name 'labels', then it will be lost as the model
         will rewrite the name 'labels' with an output.
 
-        That is where a dict might be convenient::
+        That is where a dict might be convenient:
+
+        .. code-block:: python
 
             config = {
                 'output': {'predicted': ['proba', 'labels']}
             }
 
         Now the output will be stored under names 'predicted_proba' and 'predicted_labels'.
-
-        For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
         """
         if ops is None:
             ops = []
@@ -1689,7 +1663,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def default_config(cls):
-        """ Define model defaults
+        """ Define model defaultsю
 
         You need to override this method if you expect your model or its blocks to serve as a base for other models
         (e.g. VGG for FCN, ResNet for LinkNet, etc).
@@ -1699,7 +1673,9 @@ class TFModel(BaseModel):
 
         These defaults can be changed in :meth:`~.TFModel.build_config` or when calling :meth:`.Pipeline.init_model`.
 
-        Usually, it looks like::
+        Examples
+        --------
+        .. code-block:: python
 
             @classmethod
             def default_config(cls):
@@ -1734,26 +1710,21 @@ class TFModel(BaseModel):
         return config
 
     def build_config(self, config=None):
-        """ Define a model architecture configuration
+        """ Define a model architecture configuration.
 
-        It takes just 2 steps:
+        * Don't forget to call ``super().build_config(names)`` in the beginning.
 
-        #. Define names for all placeholders and make input tensors by calling ``super().build_config(names)``.
+        * Define parameters for :meth:`.TFModel.initial_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head`,
+          which depend on inputs.
 
-           If the model config does not contain any name from ``names``, :exc:`KeyError` is raised.
+        * Dont forget to return ``config`` at the end.
 
-           See :meth:`.TFModel._make_inputs` for details.
+        Examples
+        --------
+        .. code-block:: python
 
-        #. Define parameters for :meth:`.TFModel.initial_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head`
-           which depend on inputs.
-
-        #. Don't forget to return ``config``.
-
-        Typically it looks like this::
-
-            def build_config(self, names=None):
-                names = names or ['images', 'labels']
-                config = super().build_config(names)
+            def build_config(self, config=None):
+                config = super().build_config(config)
                 config['head']['num_classes'] = self.num_classes('targets')
                 return config
         """
@@ -1798,7 +1769,7 @@ class TFModel(BaseModel):
         self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
 
     def data_format(self, tensor, **kwargs):
-        """ Return the tensor data format (channels_last or channels_first)
+        """ Return the tensor data format (channels_last or channels_first).
 
         Parameters
         ----------
@@ -1812,13 +1783,13 @@ class TFModel(BaseModel):
         return config.get('data_format')
 
     def has_classes(self, tensor):
-        """ Check if a tensor has classes defined in the config """
+        """ Check if a tensor has classes defined in the config. """
         config = self.get_tensor_config(tensor)
         has = config.get('classes') is not None
         return has
 
     def classes(self, tensor):
-        """ Return the classes """
+        """ Return the classes. """
         config = self.get_tensor_config(tensor)
         classes = config.get('classes')
         if isinstance(classes, int):
@@ -1826,14 +1797,14 @@ class TFModel(BaseModel):
         return np.asarray(classes)
 
     def num_classes(self, tensor):
-        """ Return the  number of classes """
+        """ Return the number of classes. """
         if self.has_classes(tensor):
             classes = self.classes(tensor)
             return classes if isinstance(classes, int) else len(classes)
         return self.get_num_channels(tensor)
 
     def get_num_channels(self, tensor, **kwargs):
-        """ Return the number of channels in the tensor
+        """ Return the number of channels in the tensor.
 
         Parameters
         ----------
@@ -1850,7 +1821,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def num_channels(cls, tensor, data_format='channels_last'):
-        """ Return number of channels in the input tensor
+        """ Return number of channels in the input tensor.
 
         Parameters
         ----------
@@ -1865,7 +1836,7 @@ class TFModel(BaseModel):
         return shape[axis]
 
     def get_shape(self, tensor, **kwargs):
-        """ Return the tensor shape without batch dimension
+        """ Return the tensor shape without batch dimension.
 
         Parameters
         ----------
@@ -1880,14 +1851,14 @@ class TFModel(BaseModel):
 
     @classmethod
     def shape(cls, tensor, dynamic=False):
-        """ Return shape of the input tensor without batch size
+        """ Return shape of the input tensor without batch size.
 
         Parameters
         ----------
         tensor : tf.Tensor
 
         dynamic : bool
-            if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
+            If True, returns tensor which represents shape. If False, returns list of ints and/or Nones.
 
         Returns
         -------
@@ -1900,7 +1871,7 @@ class TFModel(BaseModel):
         return shape[1:]
 
     def get_spatial_dim(self, tensor, **kwargs):
-        """ Return the tensor spatial dimensionality (without batch and channels dimensions)
+        """ Return the tensor spatial dimensionality (without batch and channels dimensions).
 
         Parameters
         ----------
@@ -1915,7 +1886,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def spatial_dim(cls, tensor):
-        """ Return spatial dim of the input tensor (without channels and batch dimension)
+        """ Return spatial dim of the input tensor (without channels and batch dimension).
 
         Parameters
         ----------
@@ -1928,7 +1899,7 @@ class TFModel(BaseModel):
         return len(tensor.get_shape().as_list()) - 2
 
     def get_spatial_shape(self, tensor, **kwargs):
-        """ Return the tensor spatial shape (without batch and channels dimensions)
+        """ Return the tensor spatial shape (without batch and channels dimensions).
 
         Parameters
         ----------
@@ -1945,14 +1916,14 @@ class TFModel(BaseModel):
 
     @classmethod
     def spatial_shape(cls, tensor, data_format='channels_last', dynamic=False):
-        """ Return spatial shape of the input tensor
+        """ Return the tensor spatial shape (without batch and channels dimensions).
 
         Parameters
         ----------
         tensor : tf.Tensor
 
         dynamic : bool
-            if True, returns tensor which represents shape. If False, returns list of ints and/or Nones
+            If True, returns tensor which represents shape. If False, returns list of ints and/or Nones.
 
         Returns
         -------
@@ -1966,11 +1937,12 @@ class TFModel(BaseModel):
         return shape[axis]
 
     def get_batch_size(self, tensor):
-        """ Return batch size (the length of the first dimension) of the input tensor
+        """ Return batch size (the length of the first dimension) of the input tensor.
 
         Parameters
         ----------
         tensor : str or tf.Tensor
+            If str, then name of pre-stored tensor.
 
         Returns
         -------
@@ -1987,7 +1959,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def batch_size(cls, tensor):
-        """ Return batch size (the length of the first dimension) of the input tensor
+        """ Return batch size (the length of the first dimension) of the input tensor.
 
         Parameters
         ----------
@@ -2002,30 +1974,21 @@ class TFModel(BaseModel):
 
     @classmethod
     def channels_axis(cls, data_format='channels_last'):
-        """ Return the channels axis for the tensor
-
-        Parameters
-        ----------
-        data_format : str {'channels_last', 'channels_first', 'N***'} or None
-
-        Returns
-        -------
-        int
-        """
+        """ Return the integer channels axis based on string data format. """
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
     @classmethod
     def se_block(cls, inputs, ratio, name='se', **kwargs):
-        """ Squeeze and excitation block
+        """ Squeeze and excitation block.
 
         Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
 
         Parameters
         ----------
         inputs : tf.Tensor
-            input tensor
+            Input tensor.
         ratio : int
-            squeeze ratio for the number of filters
+            Squeeze ratio for the number of filters.
 
         Returns
         -------
@@ -2062,7 +2025,7 @@ class TFModel(BaseModel):
         Parameters
         ----------
         inputs : tf.Tensor
-            input tensor
+            Input tensor.
         ratio : int, optional
             Squeeze ratio for the number of filters in spatial squeeze
             and channel excitation block. Default is 2.
@@ -2082,19 +2045,18 @@ class TFModel(BaseModel):
 
     @classmethod
     def upsample(cls, inputs, factor=None, resize_to=None, layout='b', name='upsample', **kwargs):
-        """ Upsample input tensor
+        """ Upsample input tensor.
 
         Parameters
         ----------
         inputs : tf.Tensor or tuple of two tf.Tensor
-            a tensor to resize and a tensor which size to resize to
+            Tensor to resize.
         factor : int
-            an upsamping scale
+            Upsamping scale.
         resize_to : tf.Tensor
-            a tensor which shape the output should be resized to
+            Tensor which shape the output should be resized to.
         layout : str
-            a resizing technique, a sequence of:
-
+            Resizing technique, a sequence of:
             - R - use residual connection with bilinear additive upsampling (must be the first symbol)
             - b - bilinear resize
             - B - bilinear additive upsampling
