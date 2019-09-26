@@ -76,43 +76,40 @@ todo_include_todos = False
 
 # -- Options for HTML output ----------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
-html_theme = 'classic'
-#html_theme = 'nature'
-html_theme = 'bizstyle'
-#html_theme = 'sphinx_rtd_theme'
+# choose html theme with custom css template
+### haiku, classic, bizstyle, sphinx_rtd_theme
+html_theme = 'sphinx_rtd_theme'
+
 
 html_theme_options = {
-#    "rightsidebar": "false"
+   # "rightsidebar": "false"
 #    'collapsiblesidebar': True,
 #    'navigation_depth': 3,
 }
 
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+def setup(app):
+    app.add_stylesheet('custom.css')
 
-# Custom sidebar templates, must be a dictionary that maps document names
-# to template names.
-#
-# This is required for the alabaster theme
-# refs: http://alabaster.readthedocs.io/en/latest/installation.html#sidebars
-"""
-html_theme = 'alabaster'
-html_sidebars = {
-    '**': [
-        'about.html',
-        'navigation.html',
-        'relations.html',  # needs 'show_related': True theme option to display
-        'searchbox.html',
-        'donate.html',
-    ]
-}
-"""
+
+####### alabaster theme ############
+# html_theme = 'alabaster'
+# html_theme_options = {
+#     "github_user": "analysiscenter",
+#     "github_repo": "batchflow",
+#     "github_button": 'true',
+#     "fixed_sidebar": 'true',
+#     "page_width": 'auto',
+#     # "sidebar_width": '20vw'
+# }
+# html_sidebars = {
+#     '**': [
+#         'about.html',
+#         'navigation.html',
+#         'searchbox.html',
+#     ]
+# }
+
 
 autoclass_content = 'class'
 add_module_names = False
@@ -123,7 +120,7 @@ intersphinx_mapping = {
     'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),
     'pandas': ('http://pandas-docs.github.io/pandas-docs-travis/', None),
 }
-
+autodoc_mock_imports = ['torch']
 viewcode_follow_imported_members = True
 
 # -- Options for HTMLHelp output ------------------------------------------
