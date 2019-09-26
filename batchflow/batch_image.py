@@ -708,7 +708,8 @@ class ImagesBatch(BaseImagesBatch):
     def _transform_(self, image, *args, **kwargs):
         """ Calls ``image.transform(*args, **kwargs)``
 
-        For more information see `<http://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.transform>_`.
+        For more information see
+        `<http://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.transform>_`.
 
         Parameters
         ----------
