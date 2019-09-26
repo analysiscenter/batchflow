@@ -1830,7 +1830,7 @@ class TFModel(BaseModel):
         order = config.get('order') or [None]
 
         tensor = inputs
-        for i, item in enumerate(order):
+        for item in order:
             block = config if item is None else config[item]
             args = {'name': '{}/{}'.format(name, item) if item else '{}'.format(name),
                     **defaults}
@@ -1848,6 +1848,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def add_block(cls, name, config, inputs, defaults=None):
+        """ Add all model parts of the same type. """
         if name not in config:
             config = {name: config}
         defaults = defaults or {}

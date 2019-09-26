@@ -5,8 +5,11 @@ def unpack_args(args, layer_no, layers_max):
     """ Return layer parameters """
     new_args = {}
     for arg in args:
-        if isinstance(args[arg], list) and len(args[arg]) >= layers_max and layers_max > 1:
-            arg_value = args[arg][layer_no]
+        if isinstance(args[arg], list) and layers_max > 1:
+            if len(args[arg]) >= layers_max:
+                arg_value = args[arg][layer_no]
+            else:
+                arg_value = args[arg]
         else:
             arg_value = args[arg]
         new_args.update({arg: arg_value})
