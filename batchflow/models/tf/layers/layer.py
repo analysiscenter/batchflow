@@ -20,6 +20,7 @@ def add_as_function(cls):
         if (training is not None) and (len(inspect.getfullargspec(cls.__call__)[0]) > 2):
             call_args.append(training)
         return cls(*args, **kwargs)(*call_args)
+    func.__doc__ = cls.__doc__
 
     module = inspect.getmodule(inspect.stack()[1][0])
     setattr(module, func_name, func)
