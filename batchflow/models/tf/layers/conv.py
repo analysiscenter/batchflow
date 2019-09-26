@@ -426,7 +426,7 @@ class SeparableConvTranspose(Layer):
                  dilation_rate=(1, 1), depth_multiplier=1, **kwargs):
         self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
         self.padding, self.data_format = padding, data_format
-        self.dilation_rate, depth_multiplier = dilation_rate, depth_multiplier
+        self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
         self.kwargs = kwargs
 
         if self.filters is None or not isinstance(self.filters, int) or self.filters <= 0:
