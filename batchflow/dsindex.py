@@ -599,7 +599,26 @@ class FilesIndex(DatasetIndex):
         return _index
 
     def build_from_index(self, index, paths, dirs):
-        """ Build index from another index for indices given. """
+        """ Build index from another index for indices given.
+
+        Parameters
+        ----------
+        index : 1-d array-like or DatasetIndex
+            If `paths` dict, `index` is subset of `paths` keys.
+            If `paths` 1-d array-like, `index` contains indices for `paths` elements.
+        paths : dict or 1-d array-like
+            Parameter `paths` contains one or more path strings.
+            If dict, then keys are indices and values are paths.
+        dirs : bool
+            If True, this means that each path string in `paths` is directory.
+            Defaults to False.
+
+        Returns
+        -------
+        numpy.array
+            Created indecies.
+
+        """
         if isinstance(index, DatasetIndex):
             index = index.indices
         else:
@@ -608,12 +627,12 @@ class FilesIndex(DatasetIndex):
         if isinstance(paths, dict):
             self._paths = dict((file, paths[file]) for file in index)
         else:
-            self._paths = dict((file, paths[pos]) for pos, file in np.ndenumerate(index))
+            self._paths = dict((file, paths[pos]) for pos, file in enumerate(index))
         self.dirs = dirs
         return index
 
     def build_from_path(self, path, dirs=False, no_ext=False, sort=False):
-        """Create indices from a path/glob or a sequence of paths/globs.
+        """ Create indices from a path/glob or a sequence of paths/globs.
 
         Parameters
         ----------
@@ -627,6 +646,11 @@ class FilesIndex(DatasetIndex):
             Defaults to False.
         sort : bool
             If True, then indices are sorted by name. Defaults to False.
+
+        Raises
+        ------
+        ValueError
+            When `path` empty.
 
         Returns
         -------
