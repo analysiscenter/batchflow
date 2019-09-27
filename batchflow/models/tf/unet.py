@@ -60,11 +60,11 @@ class UNet(EncoderDecoder):
 
         config['initial_block'] += dict(layout='cna cna', kernel_size=3, filters=64)
         config['body/encoder/num_stages'] = 4
-        config['body/encoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[128, 256, 512, 1024])
-        config['body/embedding'] = None
+        config['body/encoder/order'] = ['block', 'skip', 'downsampling']
+        config['body/encoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[64, 128, 256, 512])
+        config['body/embedding'] += dict(layout='cna cna', kernel_size=3, filters=1024)
+        config['body/decoder/order'] = ['upsampling', 'combine', 'block']
         config['body/decoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[512, 256, 128, 64])
-
-        config['head'] += dict(layout='cna cna', kernel_size=3, filters=64)
 
         config['loss'] = 'ce'
         return config
