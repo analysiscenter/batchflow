@@ -58,7 +58,6 @@ class UNet(EncoderDecoder):
     def default_config(cls):
         config = super().default_config()
 
-        config['initial_block'] += dict(layout='cna cna', kernel_size=3, filters=64)
         config['body/encoder/num_stages'] = 4
         config['body/encoder/order'] = ['block', 'skip', 'downsampling']
         config['body/encoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[64, 128, 256, 512])
