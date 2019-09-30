@@ -38,6 +38,7 @@ class RegressionMetrics(Metrics):
     Notes
     -----
     - Accuracy metric for regression task stands for the ratio of samples for which `abs(targets-predictions) < gap`.
+    Used for validating models in First Break picking task with the default value `gap=3`.
 
     - For all the metrics, except max error, accuracy and median absolute error, you can compute sample-wise weighting.
     For that purpose specify `weight` argument, which must be the same size as inputs.
@@ -141,6 +142,12 @@ class RegressionMetrics(Metrics):
 
     def accuracy(self, gap=3):
         """ Accuracy metric in the regression task can be interpreted as the ratio of samples
-         for which `abs(target-predictoin) < gap`"""
+         for which `abs(target-predictoin) < gap`.
+
+         Parameters
+         ----------
+         gap : int, default 3
+            The maximum difference between pred and true values to classify sample as correct.
+         """
         return (np.abs(self.predictions - self.targets) < gap).sum(axis=0) / self.targets.shape[0]
     
