@@ -50,13 +50,13 @@ class TFModel(BaseModel):
     Parameters
     ----------
     inputs : dict
-        Mapping from placeholder names (e.g. `images`, `labels`, `masks`) to arguments of its initialization.
+        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of its initialization.
         Allows to create placeholders of needed format (shape, dtype, data format) with specified name
         and apply some typical transformations (like one-hot-encoding), if needed.
 
         If value is a string, then it must point to another key from the input-dict, effectively making an alias.
-        By default, `targets` is aliased to `labels` or `masks`, if present.
-        If value is a tuple, then it must contain all of the arguments below in the same order. `None` is reserved
+        By default, ``targets`` is aliased to ``labels`` or ``masks``, if present.
+        If value is a tuple, then it must contain all of the arguments below in the same order. ``None`` is reserved
         for using default value.
         If value is a dictionary, then it can omit some of the parameters (default values will be at use).
 
@@ -71,7 +71,7 @@ class TFModel(BaseModel):
                 If array-like, then labels of classes (can be strings or anything else).
                 If None, then tensor has no classes. Default is None.
 
-            data_format : str {'channels_first', 'channels_last', 'f', 'l'}
+            data_format : {'channels_first', 'channels_last', 'f', 'l'}
                 The ordering of the dimensions in the inputs. Can be shortened to ``df`` for brevity.
                 Default is 'channels_last'.
 
@@ -96,9 +96,10 @@ class TFModel(BaseModel):
         If dict, then ``{'name': name, **args}``.
 
         Name must be one of:
-            - short name (e.g. `'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
+              ``'huber'``, ``'logloss'``, ``'dice'``)
             - a function name from `tf.losses <https://www.tensorflow.org/api_docs/python/tf/losses>`_
-              (e.g. `'absolute_difference'` or `'sparse_softmax_cross_entropy'`)
+              (e.g. ``'absolute_difference'`` or ``'sparse_softmax_cross_entropy'``)
             - callable
 
         It is possible to compute loss not only with network output and ground truth, but with
@@ -127,10 +128,10 @@ class TFModel(BaseModel):
         If dict, then ``{'name': name, **args}``.
 
         Name must be one of:
-            - short name (e.g. `'Adam'`, `'Adagrad'`, any optimizer from
-              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ with or without a word `Optimizer`)
+            - short name (e.g. ``'Adam'``, ``'Adagrad'``, any optimizer from
+              `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_ with or without word `Optimizer`)
             - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
-              (e.g. 'FtlrOptimizer')
+              (e.g. ``'FtlrOptimizer'``)
             - callable
 
         Examples:
@@ -149,9 +150,9 @@ class TFModel(BaseModel):
         If dict, then ``{'name': name, **args}``.
 
         Name must be one of:
-            - short name (e.g. `'exp'`, `'invtime'`, `'naturalexp'`, `'const'`, `'poly'`)
+            - short name (e.g. ``'exp'``, ``'invtime'``, ``'naturalexp'``, ``'const'``, ``'poly'``, ``'cyclic'``)
             - a function name from `tf.train <https://www.tensorflow.org/api_docs/python/tf/train>`_
-              (e.g. 'exponential_decay')
+              (e.g. ``'exponential_decay'``)
             - callable
 
         Examples:
@@ -1506,8 +1507,8 @@ class TFModel(BaseModel):
 
         Notes
         -----
-        In order to use custom class as encoder, `body` must create `group-i/output` tensors.
-        An example of this can be seen in :class:`Xception`.
+        In order to use custom class as encoder, body of the network must create ``group-i/output`` tensors.
+        An example of this can be seen in :class:`~.Xception`.
         """
         config = cls.fill_params('body', **kwargs)
         order = config.get('order')
@@ -1706,7 +1707,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def default_config(cls):
-        """ Define model defaultsю
+        """ Define model defaults.
 
         You need to override this method if you expect your model or its blocks to serve as a base for other models
         (e.g. VGG for FCN, ResNet for LinkNet, etc).

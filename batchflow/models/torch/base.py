@@ -49,22 +49,22 @@ DECAYS_DEFAULTS = {
 
 
 class TorchModel(BaseModel):
-    r""" Base class for Torch models
+    r""" Base class for Torch models.
 
     Parameters
     ----------
     inputs : dict
-        Mapping from placeholder names (e.g. `images`, `labels`, `masks`) to arguments of its initialization.
+        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of its initialization.
         Allows to create placeholders of needed format (shape, dtype, data format) with specified name
         and apply some typical transformations (like one-hot-encoding), if needed.
 
         If value is a string, then it must point to another key from the input-dict, effectively making an alias.
-        By default, `targets` is aliased to `labels` or `masks`, if present.
-        If value is a tuple, then it must contain all of the arguments below in the same order. `None` is reserved
+        By default, ``targets`` is aliased to ``labels`` or ``masks``, if present.
+        If value is a tuple, then it must contain all of the arguments below in the same order. ``None`` is reserved
         for using default value.
         If value is a dictionary, then it can omit some of the parameters (default values will be at use).
 
-            dtype : str or tf.DType
+            dtype : str or torch.dtype
                 Data type. Default is 'float32'.
 
             shape : int, None, sequence of ints or Nones
@@ -75,7 +75,7 @@ class TorchModel(BaseModel):
                 If array-like, then labels of classes (can be strings or anything else).
                 If None, then tensor has no classes. Default is None.
 
-            data_format : str {'channels_first', 'channels_last', 'f', 'l'}
+            data_format : {'channels_first', 'channels_last', 'f', 'l'}
                 The ordering of the dimensions in the inputs. Can be shortened to ``df`` for brevity.
                 Default is 'channels_last'.
 
@@ -87,9 +87,10 @@ class TorchModel(BaseModel):
         If dict, then ``{'name': name, **args}``.
 
         Name must be one of:
-            - short name (e.g. `'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
+              ``'huber'``, ``'logloss'``, ``'dice'``)
             - a class name from `torch losses <https://pytorch.org/docs/stable/nn.html#loss-functions>`_
-              (e.g. `'PoissonNLL'` or `'TripletMargin'`)
+              (e.g. ``'PoissonNLL'`` or ``'TripletMargin'``)
             - callable
 
         Examples:
@@ -107,7 +108,7 @@ class TorchModel(BaseModel):
         If dict, then ``{'name': name, **args}``.
 
         Name must be one of:
-            - short name (e.g. 'Adam', 'Adagrad', any optimizer from
+            - short name (e.g. ``'Adam'``, ``'Adagrad'``, any optimizer from
               `torch.optim <https://pytorch.org/docs/stable/optim.html#algorithms>`_)
             - a class with ``Optimizer`` interface
             - a callable which takes model parameters and optional args
@@ -130,10 +131,10 @@ class TorchModel(BaseModel):
 
         Name must be one of:
 
-        - short name ('exp', 'invtime', 'naturalexp', 'const', 'poly')
+        - short name (``'exp'``, ``'invtime'``, ``'naturalexp'``, ``'const'``, ``'poly'``)
         - a class name from `torch.optim.lr_scheduler
           <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate>`_
-          (e.g. 'LambdaLR') except `ReduceLROnPlateau`.
+          (e.g. ``'LambdaLR'``) except ``'ReduceLROnPlateau'``.
         - a class with ``_LRScheduler`` interface
         - a callable which takes optimizer and optional args
 
@@ -934,6 +935,7 @@ class TorchModel(BaseModel):
         Examples
         --------
         .. code-block:: python
+
             torch_model = ResNet34()
 
         Now save the model

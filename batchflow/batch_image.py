@@ -706,7 +706,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))
 
     def _transform_(self, image, *args, **kwargs):
-        """ Calls ``image.transform(*args, **kwargs)``
+        """ Calls ``image.transform(*args, **kwargs)``.
 
         For more information see
         `<http://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.transform>_`.
@@ -777,9 +777,9 @@ class ImagesBatch(BaseImagesBatch):
         return image
 
     def _pad_(self, image, *args, **kwargs):
-        """ Calls PIL.ImageOps.expand.
+        """ Calls ``PIL.ImageOps.expand``.
 
-        For more details see http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand
+        For more details see `<http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand>`_.
 
         Parameters
         ----------
@@ -1028,7 +1028,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.astype(dtype)
 
     def _pil_convert_(self, image, mode="L"):
-        """ Convert image. Actually calls image.convert(mode)
+        """ Convert image. Actually calls ``image.convert(mode)``.
 
         Parameters
         ----------
@@ -1227,7 +1227,7 @@ class ImagesBatch(BaseImagesBatch):
         """ Deformation of images as described by Simard, Steinkraus and Platt, `Best Practices for Convolutional
         Neural Networks applied to Visual Document Analysis <http://cognitivemedium.com/assets/rmnist/Simard.pdf>_`.
 
-        Code slightly differs with https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a
+        Code slightly differs with `<https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a>`_.
 
         Parameters
         ----------

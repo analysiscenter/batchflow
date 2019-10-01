@@ -656,7 +656,7 @@ class I(NamedExpression):
     Parameters
     ----------
     name : str
-        One of predefined values:
+        Determines returned value. One of:
             - 'current' or its substring - current iteration number, default.
             - 'maximum' or its substring - total number of iterations to be performed.
               If total number is not defined, raises an error.
