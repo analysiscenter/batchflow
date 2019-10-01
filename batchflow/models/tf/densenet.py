@@ -45,12 +45,12 @@ class DenseNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
-        config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=16, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
         config['body/block'] = dict(layout='nacd', dropout_rate=.2, growth_rate=32, bottleneck=True, skip=True)
         config['body/transition_layer'] = dict(layout='nacv', kernel_size=1, strides=1,
                                                pool_size=2, pool_strides=2, reduction_factor=1)
-        config['head'] = dict(layout='Vf')
+        config['head'] += dict(layout='Vf')
 
         config['loss'] = 'ce'
 
@@ -154,37 +154,6 @@ class DenseNet(TFModel):
         reduction_factor = cls.get('reduction_factor', config=kwargs)
         num_filters = cls.num_channels(inputs, kwargs.get('data_format'))
         return conv_block(inputs, filters=num_filters * reduction_factor, name=name, **kwargs)
-
-
-    @classmethod
-    def make_encoder(cls, inputs, name='encoder', **kwargs):
-        """ Build the body and return encoder tensors
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        name : str
-            scope name
-        kwargs : dict
-            body params
-
-        Returns
-        -------
-        tf.Tensor
-        """
-        num_layers = cls.get('num_layers', config=cls.fill_params('body', **kwargs))
-
-        with tf.variable_scope(name):
-            x = cls.body(inputs, name='body', **kwargs)
-
-            scope = tf.get_default_graph().get_name_scope()
-            encoder_tensors = []
-            for i, _ in enumerate(num_layers):
-                tensor_name = scope + '/body/group-%d'%i + '/output:0'
-                x = tf.get_default_graph().get_tensor_by_name(tensor_name)
-                encoder_tensors.append(x)
-        return encoder_tensors
 
 
 

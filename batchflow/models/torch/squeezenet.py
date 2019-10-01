@@ -35,8 +35,8 @@ class SqueezeNet(TorchModel):
     def default_config(cls):
         config = TorchModel.default_config()
 
-        config['initial_block'] = dict(layout='cnap', filters=96, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=96, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
         config['body/layout'] = 'fffmffffmf'
         #config['body/layout'] = 'ffbfmbffbffmbf'
 
@@ -45,7 +45,7 @@ class SqueezeNet(TorchModel):
         layers_filters = np.repeat(layers_filters, 2)[:num_blocks].tolist()
         config['body/filters'] = layers_filters
 
-        config['head'] = dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5)
+        config['head'] += dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5)
 
         config['loss'] = 'ce'
 
@@ -111,7 +111,7 @@ class SqueezeNetBody(nn.Module):
             if b == 'b':
                 bypass = x
                 continue
-            elif b == 'f':
+            if b == 'f':
                 x = FireBlock(x, filters=filters[block_no], **{**kwargs, **block})
                 block_no += 1
                 self.add_module('fire%d' % i, x)
@@ -139,7 +139,7 @@ class SqueezeNetBody(nn.Module):
             if block == 'b':
                 bypass = x
                 continue
-            elif block == 'f':
+            if block == 'f':
                 x = getattr(self, 'fire%d' % i)(x)
             elif block == 'm':
                 x = getattr(self, 'pool%d' % i)(x)

@@ -19,9 +19,9 @@ IMAGE_SIZE = 2
 NUM_CLASSES = 3
 
 # Set targets.
-TARGETS = np.array([0, 1, 2, 2, 0, 0, 1, 1]).reshape(BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE)
+TARGETS = np.array([0, 1, 2, 2, 0, 0, 1, 1]).reshape((BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE))
 # Set predictions as 'labels'.
-LABELS = np.array([0, 1, 1, 0, 2, 0, 1, 1]).reshape(BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE)
+LABELS = np.array([0, 1, 1, 0, 2, 0, 1, 1]).reshape((BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE))
 # Onehots are basically like probas, just with all 0 and a single 1.
 PROBA = np.eye(NUM_CLASSES)[LABELS]
 # Logit function gives ±infs on degenerate case of 0s and 1s, but it's okay for sigmoid function.

@@ -399,8 +399,6 @@ class Research:
             gpu = []
         elif isinstance(gpu, str):
             gpu = [int(item) for item in gpu.split(',')]
-        else:
-            gpu = gpu
         return gpu
 
     @staticmethod
