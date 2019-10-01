@@ -1,5 +1,5 @@
 """ Contains basic Batch classes """
-
+# pylint: disable=ungrouped-imports
 import os
 import traceback
 import threading
