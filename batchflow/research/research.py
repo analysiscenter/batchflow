@@ -8,11 +8,11 @@ import itertools
 from functools import lru_cache
 import json
 import pprint
+import warnings
 import dill
 import numpy as np
 import pandas as pd
 import multiprocess as mp
-import warnings
 
 from .distributor import Distributor
 from .workers import PipelineWorker
@@ -27,18 +27,19 @@ class Research:
         self.executables = OrderedDict()
         self.loaded = False # TODO: Think about it. Do we need load?
         self.branches = 1
-        self.trials = 3
+        self.trials = 2
         self.workers = 1
-        self.bar = False # TODO: We need progress bar
+        self.bar = False
         self.name = 'research'
         self.worker_class = PipelineWorker
         self.devices = None
         self.domain = None
         self.n_iters = None
-        self.timeout = 5 # TODO: If we will run heavy pipeline with run, worker will be killed. Fix it.
-        self.process_function = None
+        self.timeout = 5
 
+        # update parameters for config. None or dict with keys (function, params, cache)
         self._update_config = None
+        # update parameters for domain. None or dict with keys (funct, each)
         self._update_domain = None
 
     def add_pipeline(self, root, branch=None, dataset=None, variables=None,
@@ -57,10 +58,7 @@ class Research:
             received from the root pipeline.
             May contain parameters that can be defined by domain.
         dataset : Dataset or None
-            dataset that will be used with pipelines (see also `part`). If None, root or branch
-            must contain datatset.
-        part : str or None
-            part of dataset to use (for example, `train`)
+            dataset that will be used with pipelines. If None, root or branch must contain dataset.
         variables : str, list of str or None
             names of pipeline variables to save after each iteration into results. All of them must be
             defined in `root` if `branch` is None or be defined in `branch` if `branch` is not None.
@@ -81,6 +79,8 @@ class Research:
             iteration when results will be dumped and cleared. Similar to `execute`
         run : bool
             if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset("iter")`.
+        logging : bool
+            include execution information to log file or not
         kwargs :
             parameters in pipeline config that depends on the names of the other pipeline.
 
@@ -88,8 +88,6 @@ class Research:
             if test pipeline imports model from the other pipeline with name `'train'` in Research,
             corresponding parameter in `import_model` must be `C('import_from')` and `add_pipeline`
             must be called with parameter `import_from='train'`.
-        logging : bool
-            include execution information to log file or not
 
 
         **How to define changing parameters**
@@ -219,9 +217,9 @@ class Research:
         self.domain = domain
         return self
 
-    def update_domain(self, func=None, each='last'):
+    def update_domain(self, function=None, each='last'):
         self._update_domain = {
-            'func': func,
+            'function': function,
             'each': each
         }
         return self

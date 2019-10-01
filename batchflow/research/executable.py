@@ -236,6 +236,12 @@ class Executable:
         else:
             self._call_function(iteration, *args, **kwargs)
 
+    def get_args_kwargs(self, iteration, *args, **kwargs):
+        for i, var in enumerate(args):
+            if isinstance(var, ResearchNamedExpression):
+                var.get(iteration)
+
+
     def put_result(self, iteration, result=None):
         """ Put result from pipeline to self.result """
         if len(self.variables) > 0:

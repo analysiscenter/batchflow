@@ -3,6 +3,7 @@
 import time
 from collections import OrderedDict
 
+from .named_expr import ResearchNamedExpression
 from .. import inbatch_parallel
 
 class Job:
@@ -41,12 +42,19 @@ class Job:
                 unit.set_shared_value(last_update_time)
                 unit.reset('iter')
                 if unit.pipeline is not None:
-                    import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
+                    # import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
+                    kwargs_config = {}
+                    for key in unit.kwargs:
+                        if isinstance(key, ResearchNamedExpression):
+                            kwargs_config[key] = unit.kwargs[key].get(self, None, units)
+                        else:
+                            kwargs_config[key] = unit.kwargs[key]
                     unit.set_dataset()
+                    print(unit.kwargs, kwargs_config)
                 else:
-                    import_config = dict()
+                    kwargs_config = dict()
                 unit.set_config(config, additional_config,
-                                {**branch_config, **device_configs[index]}, worker_config, import_config)
+                                {**branch_config, **device_configs[index]}, worker_config, kwargs_config)
                 unit.dump_config(self.research_path)
                 unit.index = index
                 unit.create_folder(self.research_path)

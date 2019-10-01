@@ -307,9 +307,9 @@ class Domain:
         else:
             return None
 
-    def set_update(self, func=None, each=None):
-        if func is not None:
-            self.update_domain = func
+    def set_update(self, function=None, each=None):
+        if function is not None:
+            self.update_domain = function
         self.each = each
 
     def __iter__(self):
