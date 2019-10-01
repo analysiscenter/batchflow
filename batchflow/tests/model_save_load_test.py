@@ -55,14 +55,14 @@ class TestModelSaveLoad:
             config.update({'model_class': model_class, 'model_config': model_config})
 
             save_pipeline = (Pipeline()
-                             .init_variable('predictions', init_on_each_run=list)
+                             .init_variable('predictions', default=[])
                              .init_model('dynamic', C('model_class'), 'model', C('model_config'))
                              .to_array(channels=C('channels'), dtype=C('dtype'))
                              .predict_model('model', *predict_args,
                                             fetches='predictions', save_to=V('predictions', mode='a'),
                                             **predict_kwargs))
             load_pipeline = (Pipeline()
-                             .init_variable('predictions', init_on_each_run=list)
+                             .init_variable('predictions', default=[])
                              .to_array(channels=C('channels'), dtype=C('dtype'))
                              .predict_model('model', *predict_args,
                                             fetches='predictions', save_to=V('predictions', mode='a'),

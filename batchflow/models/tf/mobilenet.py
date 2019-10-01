@@ -81,7 +81,7 @@ class MobileNet(TFModel):
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['initial_block'] = dict(layout='cna', filters=32, kernel_size=3, strides=2)
+        config['initial_block'] += dict(layout='cna', filters=32, kernel_size=3, strides=2)
         config['body'].update(_V1_DEFAULT_BODY)
         config['head'].update(dict(layout='Vf'))
         config['loss'] = 'ce'

@@ -30,8 +30,8 @@ class SqueezeNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
-        config['initial_block'] = dict(layout='cnap', filters=96, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=96, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
         config['body/layout'] = 'fffmffffmf'
         #config['body/layout'] = 'ffbfmbffbffmbf'
 
@@ -40,7 +40,7 @@ class SqueezeNet(TFModel):
         layers_filters = np.repeat(layers_filters, 2)[:num_blocks].tolist()
         config['body/filters'] = layers_filters
 
-        config['head'] = dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5)
+        config['head'] += dict(layout='dcnaV', kernel_size=1, strides=1, dropout_rate=.5)
 
         config['loss'] = 'ce'
 

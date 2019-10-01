@@ -37,9 +37,9 @@ class Inception_v1(Inception):
     def default_config(cls):
         config = Inception.default_config()
         config['common']['layout'] = 'cn'
-        config['initial_block'] = dict(layout='cnp cn cn p', filters=[64, 64, 192],
-                                       kernel_size=[7, 3, 3], strides=[2, 1, 1],
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnp cn cn p', filters=[64, 64, 192],
+                                        kernel_size=[7, 3, 3], strides=[2, 1, 1],
+                                        pool_size=3, pool_strides=2)
         config['body']['arch'] = _DEFAULT_V1_ARCH
         config['body']['layout'] = 'bbrbbbbbrbb'
         config['head'].update(dict(layout='Vdf', dropout_rate=.4))
