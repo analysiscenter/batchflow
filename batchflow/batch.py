@@ -4,7 +4,6 @@ import os
 import traceback
 import threading
 import warnings
-from copy import deepcopy
 
 import dill
 try:
@@ -320,7 +319,7 @@ class Batch:
                     else:
                         self._data_named = create_item_class(self.components, self._data)
                 return
-            elif name in self.components:    # pylint: disable=unsupported-membership-test
+            if name in self.components:    # pylint: disable=unsupported-membership-test
                 # preload data if needed
                 _ = self.data
                 if self._data_named is None or self._data_named.components != self.components:
