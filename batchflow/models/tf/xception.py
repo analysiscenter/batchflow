@@ -41,6 +41,7 @@ class Xception(TFModel):
         config['body/middle'] = dict(num_stages=None, filters=None, strides=1, combine_op='sum')
         config['body/exit'] = dict(num_stages=None, filters=None, strides=1,
                                    depth_activation=True, combine_op='softsum')
+        config['body/order'] = ['entry', 'middle', 'exit']
         return config
 
     def build_config(self, names=None):
@@ -54,37 +55,18 @@ class Xception(TFModel):
 
     @classmethod
     def body(cls, inputs, name='body', **kwargs):
-        """ Entry, middle and exit flows consequently. """
+        """ Multiple consecutive blocks. """
         kwargs = cls.fill_params('body', **kwargs)
-        entry = kwargs.pop('entry')
-        middle = kwargs.pop('middle')
-        exit = kwargs.pop('exit')
 
         with tf.variable_scope(name):
             x = inputs
 
-            # Entry flow: downsample the inputs
-            with tf.variable_scope('entry'):
-                entry_stages = entry.pop('num_stages', 0)
-                for i in range(entry_stages):
-                    with tf.variable_scope('group-'+str(i)):
-                        args = {**kwargs, **entry, **unpack_args(entry, i, entry_stages)}
-                        x = cls.block(x, name='block-'+str(i), **args)
-                        x = tf.identity(x, name='output')
-
-            # Middle flow: thorough processing
-            with tf.variable_scope('middle'):
-                middle_stages = middle.pop('num_stages', 0)
-                for i in range(middle_stages):
-                    args = {**kwargs, **middle, **unpack_args(middle, i, middle_stages)}
+            steps = kwargs.pop('num_stages', 0)
+            for i in range(steps):
+                with tf.variable_scope('group-'+str(i)):
+                    args = {**kwargs, **unpack_args(kwargs, i, steps)}
                     x = cls.block(x, name='block-'+str(i), **args)
-
-            # Exit flow: final increase in number of feature maps
-            with tf.variable_scope('exit'):
-                exit_stages = exit.pop('num_stages', 0)
-                for i in range(exit_stages):
-                    args = {**kwargs, **exit, **unpack_args(exit, i, exit_stages)}
-                    x = cls.block(x, name='block-'+str(i), **args)
+                    x = tf.identity(x, name='output')
         return x
 
     @classmethod
@@ -122,33 +104,6 @@ class Xception(TFModel):
                                data_format=data_format, padding='same', name='depthwise')
             x = conv_block(x, layout, filters=filters, kernel_size=1, **kwargs)
         return x
-
-
-    @classmethod
-    def make_encoder(cls, inputs, name='encoder', **kwargs):
-        """ Build the body and return the last tensors of each spatial resolution.
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        name : str
-            scope name
-        kwargs : dict
-            body params
-        """
-        steps = cls.get('entry/num_stages', config=cls.fill_params('body', **kwargs))
-
-        with tf.variable_scope(name):
-            x = cls.body(inputs, name='body', **kwargs)
-
-            scope = tf.get_default_graph().get_name_scope()
-            encoder_tensors = [inputs]
-            for i in range(steps):
-                tensor_name = scope + '/body/entry/group-'+str(i) + '/output:0'
-                x = tf.get_default_graph().get_tensor_by_name(tensor_name)
-                encoder_tensors.append(x)
-        return encoder_tensors
 
 
 
