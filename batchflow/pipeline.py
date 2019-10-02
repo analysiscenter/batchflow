@@ -206,7 +206,7 @@ class Pipeline:
             common_namespaces.append(self.dataset)
         return common_namespaces + self._namespaces
 
-    def _is_method_from_ns(self, name):
+    def is_method_from_ns(self, name):
         return any(hasattr(namespace, name) for namespace in self._all_namespaces)
 
     def get_method(self, name):
@@ -223,7 +223,7 @@ class Pipeline:
             raise AttributeError('Unknown magic method: %s' % name)
         if self._is_batch_method(name):
             return partial(self._add_action, name)
-        if self._is_method_from_ns(name):
+        if self.is_method_from_ns(name):
             return partial(self._add_action, CALL_FROM_NS_ID, _name=name)
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
@@ -1145,20 +1145,20 @@ class Pipeline:
                 self._prefetch_queue.task_done()
                 self._batch_queue.put(None)
                 break
-            else:
-                try:
-                    batch = future.result()
-                except SkipBatchException:
-                    skip_batch = True
-                except Exception:   # pylint: disable=broad-except
-                    exc = future.exception()
-                    print("Exception in a thread:", exc)
-                    traceback.print_tb(exc.__traceback__)
-                finally:
-                    if not skip_batch:
-                        self._batch_queue.put(batch, block=True)
-                        skip_batch = False
-                    self._prefetch_queue.task_done()
+
+            try:
+                batch = future.result()
+            except SkipBatchException:
+                skip_batch = True
+            except Exception:   # pylint: disable=broad-except
+                exc = future.exception()
+                print("Exception in a thread:", exc)
+                traceback.print_tb(exc.__traceback__)
+            finally:
+                if not skip_batch:
+                    self._batch_queue.put(batch, block=True)
+                    skip_batch = False
+                self._prefetch_queue.task_done()
 
     def _clear_queue(self, queue):
         if queue is not None:
@@ -1262,12 +1262,12 @@ class Pipeline:
                     cur_len += len(new_batch)
             if len(batches) == 0:
                 break
+
+            if _action['fn'] is None:
+                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
             else:
-                if _action['fn'] is None:
-                    batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
-                else:
-                    batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'])
-                yield batch
+                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'])
+            yield batch
 
 
     def gen_batch(self, *args, iter_params=None, reset='iter', **kwargs):

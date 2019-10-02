@@ -128,6 +128,8 @@ class NamedExpression(metaclass=MetaNamedExpression):
                 or set.update https://docs.python.org/3/library/stdtypes.html#frozenset.update)
 
     """
+    __slots__ = ('__dict__', )
+
     def __init__(self, name, mode='w', op=None, a=None, b=None):
         self.name = name
         self.mode = mode
@@ -351,13 +353,21 @@ class B(NamedExpression):
 class C(NamedExpression):
     """ A pipeline config option
 
+    Notes
+    -----
+    ``C()`` return config itself.
+
     Examples
     --------
     ::
 
         C('model_class')
         C('GPU')
+        C()
     """
+    def __init__(self, name=None, mode='w'):
+        super().__init__(name, mode)
+
     def get(self, batch=None, pipeline=None, model=None):
         """ Return a value of a pipeline config """
         if self.params:
@@ -365,6 +375,8 @@ class C(NamedExpression):
         name = self._get_name(batch=batch, pipeline=pipeline, model=model)
         pipeline = batch.pipeline if batch is not None else pipeline
         config = pipeline.config or {}
+        if name is None:
+            return config
         try:
             value = config[name]
         except KeyError:
@@ -607,27 +619,35 @@ class P(W):
         pipeline
             .calc_route(P(R(['metro', 'taxi', 'bike'], p=[.6, 0.1, 0.3], size=3))
 
-    Notes
-    -----
-    As P-wrapper is often used for ``R``-expressions, ``R`` can be omitted for brevity.
-    So ``P('normal', 0, 1))`` is equivalent to ``P(R('normal', 0, 1)))``, but a bit shorter.
-    """
-    def __init__(self, name, *args, **kwargs):
-        if not isinstance(name, NamedExpression):
-            name = R(name, *args, **kwargs)
-        if isinstance(name, R):
-            if name.size is None:
-                name.size = B('size')
-            elif isinstance(name.size, int):
-                name.size = B('size'), name.size
-            else:
-                name.size = (B('size'),) + tuple(name.size)
-        super().__init__(name)
+    Generate random number of random samples for each batch item::
 
+        pipeline
+            .some_action(P(R('normal', 0, 1, size=R('randint', 3, 8))))
+
+    ``P`` works with arbitrary iterables too::
+
+        pipeline
+            .do_something(n=P([1, 2, 3, 4, 5]))
+
+    The first batch item will get ``n=1``, the second ``n=2`` and so on.
+
+    See also
+    --------
+    :func:`~batchflow.inbatch_parallel`
+    """
     def get(self, batch=None, pipeline=None, model=None, parallel=False):   # pylint:disable=arguments-differ
         """ Return a wrapped named expression """
         if parallel:
-            return self.name.get(batch=batch, pipeline=pipeline, model=model)
+            if isinstance(self.name, R):
+                val = np.array([self.name.get(batch=batch, pipeline=pipeline, model=model) for _ in batch])
+            elif isinstance(self.name, NamedExpression):
+                val = self.name.get(batch=batch, pipeline=pipeline, model=model)
+            else:
+                val = self.name
+            if len(val) < len(batch):
+                raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
+                                 % (self, len(val), len(batch)))
+            return val
         return self
 
 class I(NamedExpression):

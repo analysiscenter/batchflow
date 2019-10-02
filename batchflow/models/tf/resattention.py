@@ -39,10 +39,10 @@ class ResNetAttention(TFModel):
         config = TFModel.default_config()
 
         filters = 64   # number of filters in the first block
-        config['initial_block'] = dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=filters, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
 
-        config['body'] = dict(bottleneck=True, downsample=False)
+        config['body'] += dict(bottleneck=True, downsample=False)
         config['body']['trunk'] = dict(bottleneck=True, downsample=False)
         config['body']['mask'] = dict(bottleneck=True, pool_size=3, pool_strides=2)
         config['body']['mask']['upsample'] = dict(layout='b', factor=2)
@@ -50,7 +50,7 @@ class ResNetAttention(TFModel):
         config['head']['layout'] = 'Vf'
 
         config['loss'] = 'ce'
-        config['common'] = dict(conv=dict(use_bias=False))
+        config['common'] += dict(conv=dict(use_bias=False))
 
         return config
 

@@ -15,7 +15,7 @@ from ..utils import unpack_fn_from_config
 from ..base import BaseModel
 from .layers import mip, conv_block, upsample
 from .losses import softmax_cross_entropy, dice
-from .train import piecewise_constant
+from .nn import piecewise_constant, cyclic_learning_rate
 
 
 LOSSES = {
@@ -39,6 +39,7 @@ DECAYS = {
     'naturalexp': tf.train.natural_exp_decay,
     'const': piecewise_constant,
     'poly': tf.train.polynomial_decay,
+    'cyclic': cyclic_learning_rate,
 }
 
 
@@ -496,7 +497,7 @@ class TFModel(BaseModel):
             for input_name, input_config in config.items():
                 if isinstance(input_config, str):
                     continue
-                elif isinstance(input_config, (tuple, list)):
+                if isinstance(input_config, (tuple, list)):
                     input_config = list(input_config) + [None for _ in param_names]
                     input_config = input_config[:len(param_names)]
                     input_config = dict(zip(param_names, input_config))
@@ -1524,6 +1525,49 @@ class TFModel(BaseModel):
         return inputs
 
     @classmethod
+    def make_encoder(cls, inputs, name='encoder', **kwargs):
+        """ Build the body and return the last tensors of each spatial resolution.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            Input tensor.
+        name : str
+            Scope name.
+        kwargs : dict
+            Body params.
+
+        Notes
+        -----
+        In order to use custom class as encoder, `body` must create `group-i/output` tensors.
+        An example of this can be seen in :class:`Xception`.
+        """
+        config = cls.fill_params('body', **kwargs)
+        order = config.get('order')
+        config = config[order[0]] if order else config
+
+        steps = None
+        for loc in ['num_stages', 'num_blocks', 'num_layers']:
+            _steps = cls.get(loc, config=config)
+            _steps = len(_steps) if hasattr(_steps, '__len__') else _steps
+            steps = steps or _steps
+
+        with tf.variable_scope(name):
+            x = cls.add_block('body', config=cls.fill_params('body', **kwargs),
+                              inputs=inputs, defaults=kwargs)
+
+            scope = tf.get_default_graph().get_name_scope()
+            template_name = '/'.join([scope, 'body{}',
+                                      'group-{}', 'output:0'])
+
+            encoder_tensors = [inputs]
+            for i in range(steps):
+                tensor_name = template_name.format('/{}'.format(order[0]) if order else '', i)
+                x = tf.get_default_graph().get_tensor_by_name(tensor_name)
+                encoder_tensors.append(x)
+        return encoder_tensors
+
+    @classmethod
     def head(cls, inputs, name='head', **kwargs):
         """ The last network layers which produce predictions
 
@@ -1776,17 +1820,40 @@ class TFModel(BaseModel):
         config['head/targets'] = self.get_from_attr('targets')
         return config
 
-    def _add_block(self, name, config, inputs):
-        defaults = {'is_training': self.get_from_attr('is_training'),
-                    'global_step': self.get_from_attr('global_step'),
-                    **config['common']}
-        if callable(config[name]):
-            block = config[name](inputs, **defaults)
-        elif isinstance(config[name], dict):
-            block = getattr(self, name)(inputs=inputs, **{**defaults, **config[name]})
-        else:
-            raise TypeError('block can be configured as a function or a dict with parameters')
-        return block
+    def _add_block(self, name, config, inputs, defaults=None):
+        if defaults is None:
+            defaults = {'is_training': self.get_from_attr('is_training'),
+                        'global_step': self.get_from_attr('global_step'),
+                        **config['common']}
+
+        config = config[name]
+        order = config.get('order') or [None]
+
+        tensor = inputs
+        for item in order:
+            block = config if item is None else config[item]
+            args = {'name': '{}/{}'.format(name, item) if item else '{}'.format(name),
+                    **defaults}
+
+            if callable(block):
+                tensor = block(tensor, **args)
+            elif isinstance(block, dict):
+                args = {**args, **block}
+                block_class = block.get('block_class') or self
+                tensor = getattr(block_class, name)(inputs=tensor, **args)
+            else:
+                raise TypeError('NN blocks can be configured as a function, a dict with parameters or \
+                                 sequence of these, instead got {} in {}'.format(type(block), name))
+        return tensor
+
+    @classmethod
+    def add_block(cls, name, config, inputs, defaults=None):
+        """ Add all model parts of the same type. """
+        if name not in config:
+            config = {name: config}
+        defaults = defaults or {}
+        tensor = cls._add_block(cls, name, config, inputs, defaults)
+        return tensor
 
     def _build(self, config=None):
         config = config or self.full_config

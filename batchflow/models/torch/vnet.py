@@ -40,7 +40,7 @@ class VNet(TorchModel):
         config['body/filters'] = (2 ** np.arange(num_blocks) * filters).tolist()
         config['body/kernel_size'] = 5
         config['body/upsample'] = dict(layout='tna', factor=2)
-        config['head'] = dict(layout='c', kernel_size=1)
+        config['head'] += dict(layout='c', kernel_size=1)
 
         config['loss'] = 'ce'
 

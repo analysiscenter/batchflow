@@ -166,9 +166,9 @@ class Batch:
                     break_point = i
                     last_batch_len = batch_size - cur_size
                     break
-                else:
-                    cur_size += cur_batch_len
-                    last_batch_len = cur_batch_len
+
+                cur_size += cur_batch_len
+                last_batch_len = cur_batch_len
 
         components = batches[0].components or (None,)
         new_data = list(None for _ in components)
@@ -177,7 +177,7 @@ class Batch:
             none_components_in_batches = [b.get(component=comp) is None for b in batches]
             if np.all(none_components_in_batches):
                 continue
-            elif np.any(none_components_in_batches):
+            if np.any(none_components_in_batches):
                 raise ValueError('Component {} is None in some batches'.format(comp))
 
             if batch_size is None:
@@ -306,8 +306,10 @@ class Batch:
         data = self._data
         if self.components is None:
             self.components = tuple()
+            if data is not None:
+                warnings.warn("All batch data is erased")
             data = tuple()
-            warnings.warn("All batch data is erased")
+            self.components = components
         else:
             exists_component = set(components) & set(self.components)
             if exists_component:

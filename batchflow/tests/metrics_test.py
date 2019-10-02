@@ -26,6 +26,7 @@ IMAGE_SIZE = 2
 NUM_CLASSES = 3
 
 # Set targets.
+<<<<<<< HEAD:batchflow/tests/metrics_test.py
 TARGETS = np.array([[[0, 1],
                      [2, 2]],
 
@@ -38,6 +39,11 @@ LABELS = np.array([[[0, 1],
                    [[2, 0],
                     [1, 1]]])
 
+=======
+TARGETS = np.array([0, 1, 2, 2, 0, 0, 1, 1]).reshape((BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE))
+# Set predictions as 'labels'.
+LABELS = np.array([0, 1, 1, 0, 2, 0, 1, 1]).reshape((BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE))
+>>>>>>> e6d1bab51cc41a84075d8246c70551c7e3cc34f4:batchflow/tests/segmentation_metrics_by_pixels_test.py
 # Onehots are basically like probas, just with all 0 and a single 1.
 PROBA = np.eye(NUM_CLASSES)[LABELS]
 

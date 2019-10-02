@@ -74,8 +74,8 @@ class ResNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
-        config['initial_block'] = dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
 
         config['body/block'] = dict(layout=None, post_activation=None, downsample=False,
                                     bottleneck=False, bottleneck_factor=4,
@@ -83,7 +83,7 @@ class ResNet(TFModel):
                                     resnext=False, resnext_factor=32,
                                     se_block=None)
 
-        config['head'] = dict(layout='Vdf', dropout_rate=.4)
+        config['head'] += dict(layout='Vdf', dropout_rate=.4)
 
         config['loss'] = 'ce'
 
@@ -410,47 +410,6 @@ class ResNet(TFModel):
 
         return x
 
-    @classmethod
-    def make_encoder(cls, inputs, name='encoder', **kwargs):
-        """ Build the body and return encoder tensors
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        name : str
-            scope name
-        kwargs : dict
-            body params
-
-        Returns
-        -------
-        tf.Tensor
-
-        Raises
-        ------
-        ValueError
-            If `filters` is not specified or number of `num_blocks` not equal to number of `filters` provided.
-        """
-        num_blocks = cls.get('num_blocks', config=cls.fill_params('body', **kwargs))
-
-        if kwargs.get('filters') is None:
-            raise ValueError('Specify number of filters')
-
-        if len(num_blocks) != len(kwargs.get('filters')):
-            msg = '{} encoder requires {} filters instead of {}'
-            raise ValueError(msg.format(cls.__name__, len(num_blocks), len(kwargs.get('filters'))))
-
-        with tf.variable_scope(name):
-            x = cls.body(inputs, name='body', **kwargs)
-
-            scope = tf.get_default_graph().get_name_scope()
-            encoder_tensors = []
-            for i, _ in enumerate(num_blocks):
-                tensor_name = scope + '/body/group-%d'%i + '/output:0'
-                x = tf.get_default_graph().get_tensor_by_name(tensor_name)
-                encoder_tensors.append(x)
-        return encoder_tensors
 
 
 class ResNet18(ResNet):

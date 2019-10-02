@@ -59,3 +59,23 @@ class TestConfig:
 
     def test_pop_nested_missing_key_with_default(self, config):
         assert config.pop('key2/missing key', default=1) == 1
+
+    def test_setitem_key(self, config):
+        config['key1'] = 'new_val1'
+        assert config['key1'] == config.config['key1']
+        assert config.config['key1'] == 'new_val1'
+
+    def test_setitem_nested_key(self, config):
+        config['key2/subkey1'] = 'new_val21'
+        assert config['key2/subkey1'] == config.config['key2']['subkey1']
+        assert config.config['key2']['subkey1'] == 'new_val21'
+
+    def test_setitem_new_key(self, config):
+        config['key0'] = 'new_val0'
+        assert config['key0'] == config.config['key0']
+        assert config.config['key0'] == 'new_val0'
+
+    def test_setitem_nested_new_key(self, config):
+        config['key2/subkey2'] = 'new_val22'
+        assert config['key2/subkey2'] == config.config['key2']['subkey2']
+        assert config.config['key2']['subkey2'] == 'new_val22'
