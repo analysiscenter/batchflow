@@ -83,8 +83,8 @@ class TorchModel(BaseModel):
         Loss function, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, args)``.
-        If dict, then ``{'name': name, **args}``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
 
         Name must be one of:
             - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
@@ -104,8 +104,8 @@ class TorchModel(BaseModel):
         Optimizer, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, args)``.
-        If dict, then ``{'name': name, **args}``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
 
         Name must be one of:
             - short name (e.g. ``'Adam'``, ``'Adagrad'``, any optimizer from
@@ -126,8 +126,8 @@ class TorchModel(BaseModel):
         dictionary that contains the number of iterations in one epoch.
 
         If str, then short ``name``.
-        If tuple, then ``(name, args)``.
-        If dict, then ``{'name': name, **args}``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
 
         Name must be one of:
 

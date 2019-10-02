@@ -92,8 +92,8 @@ class TFModel(BaseModel):
         Loss function, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, args)``.
-        If dict, then ``{'name': name, **args}``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
 
         Name must be one of:
             - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
@@ -117,15 +117,15 @@ class TFModel(BaseModel):
         - ``{'loss': (tf.losses.huber_loss, {'reduction': tf.losses.Reduction.MEAN})}``
         - ``{'loss': {'name': 'dice', 'predictions': 'body_output', 'targets': 'body_targets'}``
         - ``{'loss': external_loss_fn_with_add_loss_inside}``
-        - ``{'loss': external_loss_fn_without_add_loss, 'add_loss': True}``
-        - ``{'loss': external_loss_fn_to_collection, 'add_loss': True, 'loss_collection': tf.GraphKeys.LOSSES}``
+        - ``{'loss': {'name': external_loss_fn_without_add_loss, 'add_loss': True}}``
+        - ``{'loss': {'name': external_loss_fn, 'add_loss': True, 'loss_collection': tf.GraphKeys.LOSSES}}``
 
     optimizer : str, tuple, dict
         Optimizer, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, args)``.
-        If dict, then ``{'name': name, **args}``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
 
         Name must be one of:
             - short name (e.g. ``'Adam'``, ``'Adagrad'``, any optimizer from
@@ -146,8 +146,8 @@ class TFModel(BaseModel):
         Learning rate decay algorithm, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, args)``.
-        If dict, then ``{'name': name, **args}``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
 
         Name must be one of:
             - short name (e.g. ``'exp'``, ``'invtime'``, ``'naturalexp'``, ``'const'``, ``'poly'``, ``'cyclic'``)
