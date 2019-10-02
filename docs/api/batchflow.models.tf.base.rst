@@ -7,5 +7,3 @@ TFModel
     :members:
     :undoc-members:
     :show-inheritance:
-
-.. automethod:: batchflow.models.tf.TFModel._make_inputs

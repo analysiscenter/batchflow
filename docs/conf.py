@@ -77,38 +77,15 @@ todo_include_todos = False
 # -- Options for HTML output ----------------------------------------------
 
 # choose html theme with custom css template
-### haiku, classic, bizstyle, sphinx_rtd_theme
 html_theme = 'sphinx_rtd_theme'
 
 
 html_theme_options = {
-   # "rightsidebar": "false"
-#    'collapsiblesidebar': True,
-#    'navigation_depth': 3,
 }
 
 html_static_path = ['_static']
 def setup(app):
     app.add_stylesheet('custom.css')
-
-
-####### alabaster theme ############
-# html_theme = 'alabaster'
-# html_theme_options = {
-#     "github_user": "analysiscenter",
-#     "github_repo": "batchflow",
-#     "github_button": 'true',
-#     "fixed_sidebar": 'true',
-#     "page_width": 'auto',
-#     # "sidebar_width": '20vw'
-# }
-# html_sidebars = {
-#     '**': [
-#         'about.html',
-#         'navigation.html',
-#         'searchbox.html',
-#     ]
-# }
 
 
 autoclass_content = 'class'
@@ -163,7 +140,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'dataset', 'BatchFlow Documentation',
+    (master_doc, 'BatchFlow', 'BatchFlow Documentation',
      [author], 1)
 ]
 

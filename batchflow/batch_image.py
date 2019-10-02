@@ -546,24 +546,7 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         origin : sequence, str
-            Location of the cropping box. Can be one of:
-                - 'center' - place the center of the input image on the center of the background and crop
-                  the input image accordingly.
-                - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
-                  and crop the input image accordingly.
-                - 'top_right' - crop an image such that upper-right corners of
-                  an image and the cropping box coincide
-                - 'bottom_left' - crop an image such that lower-left corners of
-                  an image and the cropping box coincide
-                - 'bottom_right' - crop an image such that lower-right corners of
-                  an image and the cropping box coincide
-                - 'random' - place the upper-left corner of the input image on the randomly sampled position
-                  in the background. Position is sampled uniformly such that there is no need for cropping.
-                - array_like - sequence of ints or sequence of floats in [0, 1) interval;
-                  place the upper-left corner of the input image on the given position in the background.
-                  If `origin` is a sequence of floats in [0, 1), it defines a relative position
-                  of the origin in a valid region of image.
-
+            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.
         shape : sequence
             crop size in the form of (rows, columns)
         crop_boundaries : bool
@@ -602,24 +585,7 @@ class ImagesBatch(BaseImagesBatch):
         background : PIL.Image, np.ndarray of np.uint8
             Blank background to put image on.
         origin : sequence, str
-            Location of the cropping box. Can be one of:
-                - 'center' - place the center of the input image on the center of the background and crop
-                  the input image accordingly.
-                - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
-                  and crop the input image accordingly.
-                - 'top_right' - crop an image such that upper-right corners of
-                  an image and the cropping box coincide
-                - 'bottom_left' - crop an image such that lower-left corners of
-                  an image and the cropping box coincide
-                - 'bottom_right' - crop an image such that lower-right corners of
-                  an image and the cropping box coincide
-                - 'random' - place the upper-left corner of the input image on the randomly sampled position
-                  in the background. Position is sampled uniformly such that there is no need for cropping.
-                - array_like - sequence of ints or sequence of floats in [0, 1) interval;
-                  place the upper-left corner of the input image on the given position in the background.
-                  If `origin` is a sequence of floats in [0, 1), it defines a relative position
-                  of the origin in a valid region of image.
-
+            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.
         mask : None, PIL.Image, np.ndarray of np.uint8
             mask passed to PIL.Image.paste
 
@@ -1069,23 +1035,7 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         origin : sequence, str
-            Location of the cropping box. Can be one of:
-                - 'top_left' - crop an image such that upper-left corners of
-                  an image and the filled box coincide.
-                - 'top_right' - crop an image such that upper-right corners of
-                  an image and the cropping box coincide
-                - 'bottom_left' - crop an image such that lower-left corners of
-                  an image and the cropping box coincide
-                - 'bottom_right' - crop an image such that lower-right corners of
-                  an image and the cropping box coincide
-                - 'center' - crop an image such that centers of
-                  an image and the filled box coincide.
-                - 'random' - place the upper-left corner of the filled box at a random position.
-                - array_like - sequence of ints or sequence of floats in [0, 1) interval;
-                  place the upper-left corner of the input image on the given position in the background.
-                  If `origin` is a sequence of floats in [0, 1), it defines a relative position
-                  of the origin in a valid region of image.
-
+            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.
         shape : sequence, int
             Shape of a filled box. Can be one of:
                 - sequence - crop size in the form of (rows, columns)
@@ -1227,7 +1177,7 @@ class ImagesBatch(BaseImagesBatch):
         """ Deformation of images as described by Simard, Steinkraus and Platt, `Best Practices for Convolutional
         Neural Networks applied to Visual Document Analysis <http://cognitivemedium.com/assets/rmnist/Simard.pdf>_`.
 
-        Code slightly differs with `<https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a>`_.
+        Code slightly differs from `<https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a>`_.
 
         Parameters
         ----------

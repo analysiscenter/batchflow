@@ -54,7 +54,7 @@ class TorchModel(BaseModel):
     Parameters
     ----------
     inputs : dict
-        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of its initialization.
+        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of their initialization.
         Allows to create placeholders of needed format (shape, dtype, data format) with specified name
         and apply some typical transformations (like one-hot-encoding), if needed.
 
@@ -148,7 +148,7 @@ class TorchModel(BaseModel):
         If str, a device name (e.g. 'cpu' or 'gpu:0').
 
     microbatch : int
-        Size of chunks to split every batch in. Allows to process given data sequentially, accumulating gradients
+        Size of chunks to split every batch into. Allows to process given data sequentially, accumulating gradients
         from microbatches and applying them once in the end. Can be changed later in the `train` method.
         Batch size must be divisible by microbatch size.
 
@@ -480,7 +480,7 @@ class TorchModel(BaseModel):
 
     @classmethod
     def default_config(cls):
-        """ Define model defaultsю
+        """ Define model defaults.
 
         You need to override this method if you expect your model or its blocks to serve as a base for other models
         (e.g. VGG for FCN, ResNet for LinkNet, etc).
@@ -488,7 +488,7 @@ class TorchModel(BaseModel):
         Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
         specific to the model, but independent of anything else (like image shapes, number of classes, etc).
 
-        These defaults can be changed in :meth:`~.TFModel.build_config` or when calling :meth:`.Pipeline.init_model`.
+        These defaults can be changed in :meth:`~.TorchModel.build_config` or when calling :meth:`.Pipeline.init_model`.
 
         Examples
         --------
@@ -496,7 +496,7 @@ class TorchModel(BaseModel):
 
             @classmethod
             def default_config(cls):
-                config = TFModel.default_config()
+                config = TorchModel.default_config()
                 config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
                                                pool_size=3, pool_strides=2)
                 config['body/filters'] = 32
@@ -526,11 +526,11 @@ class TorchModel(BaseModel):
         return config
 
     def build_config(self, names=None):
-        """ Define a model architecture configuration.
+        """ Define model's architecture configuration.
 
         * Don't forget to call ``super().build_config(names)`` in the beginning.
 
-        * Define parameters for :meth:`.TFModel.initial_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head`,
+        * Define parameters for :meth:`.TorchModel.initial_block`, :meth:`.TorchModel.body`, :meth:`.TorchModel.head`,
           which depend on inputs.
 
         * Dont forget to return ``config`` at the end.
@@ -541,7 +541,7 @@ class TorchModel(BaseModel):
 
             def build_config(self, names=None):
                 config = super().build_config(names)
-                config['head']['num_classes'] = self.num_classes('targets')
+                config['head/num_classes'] = self.num_classes('targets')
                 return config
         """
         config = self.default_config()
@@ -582,8 +582,7 @@ class TorchModel(BaseModel):
 
     @classmethod
     def initial_block(cls, **kwargs):
-        """ Transform inputs with a convolution block. Usually used for initial preprocessing,
-        e.g. reshaping, downsampling etc.
+        """ Transform inputs. Usually used for initial preprocessing, e.g. reshaping, downsampling etc.
 
         Notes
         -----
@@ -675,9 +674,7 @@ class TorchModel(BaseModel):
             }
 
         However, if one of the placeholders also has a name 'labels', then it will be lost as the model
-        will rewrite the name 'labels' with an output.
-
-        That is where a dict might be convenient:
+        will rewrite the name 'labels' with an output. In this case dict might be more convenient:
 
         .. code-block:: python
 
@@ -811,12 +808,12 @@ class TorchModel(BaseModel):
             If True, the whole train step is locked, thus allowing for multithreading.
 
         microbatch : int or None
-            Size of chunks to split every batch in. Allows to process given data sequentially, accumulating gradients
+            Size of chunks to split every batch into. Allows to process given data sequentially, accumulating gradients
             from microbatches and applying them once in the end.
 
         Returns
         -------
-        Calculated values of tensors in `fetches` in the same structure.
+        Calculated values of tensors in `fetches` in the same order.
 
         Examples
         --------
@@ -897,7 +894,7 @@ class TorchModel(BaseModel):
 
         Returns
         -------
-        Calculated values of tensors in `fetches` in the same structure.
+        Calculated values of tensors in `fetches` in the same order.
 
         Examples
         --------

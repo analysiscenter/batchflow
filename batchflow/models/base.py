@@ -58,6 +58,16 @@ class BaseModel:
         return Config().put(variable, value, config)
 
     def _make_inputs(self, names=None, config=None):
+        """ Make model input data using config
+
+        Parameters
+        ----------
+        names : a sequence of str - names for input variables
+
+        Returns
+        -------
+        None or dict - where key is a variable name and a value is a corresponding variable after configuration
+        """
         _ = names, config
         return None
 

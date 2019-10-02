@@ -50,7 +50,7 @@ class TFModel(BaseModel):
     Parameters
     ----------
     inputs : dict
-        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of its initialization.
+        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of their initialization.
         Allows to create placeholders of needed format (shape, dtype, data format) with specified name
         and apply some typical transformations (like one-hot-encoding), if needed.
 
@@ -185,15 +185,22 @@ class TFModel(BaseModel):
         pass 'use' key with value corresponding to the name of train step from which you want to borrow optimizer.
         Note that in this case you are still free to change loss-function or scope.
 
-        In order to use particular train step during train, one must pass `train_mode` argument to `train` method.
+        In order to use particular train step during train, one must pass `train_mode` argument to
+        :meth:`.TFModel.train` method.
 
         Examples:
 
+        Create multiple training procedures:
+            - one to optimize the whole network to minimize cross-entropy loss with Adam
+            - one to optimize weights only in body to minimize Dice-coefficient loss with RMSProp
+            - one to optimize weights in initial block and head to minimize cross-entropy loss with re-used
+              optimizer from body
+
         .. code-block:: python
 
-            {'train_steps': {'all': {'loss': 'ce', 'optimizer': 'Adam', 'scope': ''},
-                             'body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}},
-                             'custom': {'use': 'body', 'loss': 'ce', 'scope': 'head'}}
+            {'train_steps': {'whole_network': {'loss': 'ce', 'optimizer': 'Adam', 'scope': ''},
+                             'only_body': {'loss': 'dice', 'optimizer': 'RMSProp', 'scope': 'body'}},
+                             'ib_and_head': {'loss': 'ce', 'use': 'body', 'scope': ['initial_block', 'head']}}
 
     session : dict
         Parameters for session configuration. `allow_soft_placement` is always True.
@@ -208,9 +215,9 @@ class TFModel(BaseModel):
         Batch size must be divisible by number of devices.
 
     microbatch : int
-        Size of chunks to split every batch in. Allows to process given data sequentially, accumulating gradients
-        from microbatches and applying them once in the end. Can be changed later in the `train` method.
-        Batch size must be divisible by microbatch size.
+        Size of chunks to split every batch into. Allows to process given data sequentially, accumulating gradients
+        from microbatches and applying them once in the end. Batch size must be divisible by microbatch size.
+        Can be changed later via `microbatch` argument of :meth:`.TFModel.train`.
 
     initial_block : dict
         Parameters for the input block, usually :class:`~.tf.layers.ConvBlock` parameters.
@@ -253,7 +260,7 @@ class TFModel(BaseModel):
       :meth:`.TFModel.default_config`. Those parameters are updated with external configuration dictionary.
 
     * Define config post-processing by overriding :meth:`~.TFModel.build_config`.
-      It's main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
+      Its main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
 
     * Override :meth:`~.TFModel.initial_block`, :meth:`~.TFModel.body` and :meth:`~.TFModel.head`, if needed.
       You can either use usual tf-functions, or predefined layers like :class:`~tf.layers.ASPP`.
@@ -273,9 +280,8 @@ class TFModel(BaseModel):
     **In order to use existing model, it is recommended to define following keys in configuration dictionary:**
 
     * ``inputs``: defines input data together with parameters like shape, dtype, number of classes.
-      See :meth:`.TFModel._make_inputs` for details.
 
-    * ``loss``, ``optimizer``, ``decay``, ``scope``
+    * ``loss``, ``optimizer``, ``decay``, ``scope``.
 
     * ``initial_block`` sub-dictionary must contain ``inputs`` key with names of tensors to use as network inputs.
 
@@ -1020,15 +1026,17 @@ class TFModel(BaseModel):
         use_lock : bool
             If True, the whole train step is locked, thus allowing for multithreading.
         train_mode : str or sequence of str
-            Name(s) of train step to optimize. Regular expressions are allowed.
+            Name(s) of train step(s) to optimize. Regular expressions are allowed.
+            If multiple train steps are selected (either via passing a sequence or by using regular expression),
+            then all of them are optimized sequentially.
         microbatch : int
-            Size of chunks to split every batch in. Note that if this option was not specified
+            Size of chunks to split every batch into. Note that if this option was not specified
             in the model configuration, the first invocation of this method would create additional operations.
 
         Returns
         -------
         tuple, list
-            Calculated values of tensors in `fetches` in the same structure.
+            Calculated values of tensors in `fetches` in the same order.
 
         Notes
         -----
@@ -1225,7 +1233,7 @@ class TFModel(BaseModel):
         Returns
         -------
         tuple, list
-            Calculated values of tensors in `fetches` in the same structure.
+            Calculated values of tensors in `fetches` in the same order.
 
         Notes
         -----
@@ -1439,8 +1447,7 @@ class TFModel(BaseModel):
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
-        """ Transform inputs with a convolution block. Usually used for initial preprocessing,
-        e.g. reshaping, downsampling etc.
+        """ Transform inputs. Usually used for initial preprocessing, e.g. reshaping, downsampling etc.
 
         Parameters
         ----------
@@ -1616,9 +1623,7 @@ class TFModel(BaseModel):
             }
 
         However, if one of the placeholders also has a name 'labels', then it will be lost as the model
-        will rewrite the name 'labels' with an output.
-
-        That is where a dict might be convenient:
+        will rewrite the name 'labels' with an output. In this case dict might be more convenient:
 
         .. code-block:: python
 
@@ -1754,14 +1759,14 @@ class TFModel(BaseModel):
         return config
 
     def build_config(self, config=None):
-        """ Define a model architecture configuration.
+        """ Define model's architecture configuration.
 
         * Don't forget to call ``super().build_config(names)`` in the beginning.
 
         * Define parameters for :meth:`.TFModel.initial_block`, :meth:`.TFModel.body`, :meth:`.TFModel.head`,
           which depend on inputs.
 
-        * Dont forget to return ``config`` at the end.
+        * Don't forget to return ``config`` at the end.
 
         Examples
         --------
@@ -1769,7 +1774,7 @@ class TFModel(BaseModel):
 
             def build_config(self, config=None):
                 config = super().build_config(config)
-                config['head']['num_classes'] = self.num_classes('targets')
+                config['head/num_classes'] = self.num_classes('targets')
                 return config
         """
         config = config or self.full_config
@@ -2121,7 +2126,7 @@ class TFModel(BaseModel):
         factor : int
             Upsamping scale.
         resize_to : tf.Tensor
-            Tensor which shape the output should be resized to.
+            Tensor which shape is used to resize the output.
         layout : str
             Resizing technique, a sequence of:
             - R - use residual connection with bilinear additive upsampling (must be the first symbol)

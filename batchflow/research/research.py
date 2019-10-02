@@ -144,7 +144,7 @@ class Research:
         Parameters
         ----------
         function : callable
-            callable object. must include with following named parameters:
+            callable object. must include following named parameters:
                 experiment : `OrderedDict` of Executable objects
                     all pipelines and functions that were added to Research
                 iteration : int
@@ -473,7 +473,7 @@ class Executable:
 
         If positive int, function will be executed each `step` iterations.
 
-        If str, must be `'#{it}'` or `'last'` where it is int,
+        If str, must be `'#{it}'` or `'last'` where `{it}` is an int,
         the function will be executed at this iteration (zero-based)
 
         If list, must be list of int or str described above
