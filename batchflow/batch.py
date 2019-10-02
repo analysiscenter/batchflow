@@ -896,11 +896,13 @@ class Batch:
         return self
 
     def _load_from_source(self, dst, src):
+        """ Load data from a memroy object (tuple, ndarray, pd.DataFrame, etc) """
         if dst is None:
             self._data = create_item_class(self.components, data=src, indices=self.indices, crop=True)
         else:
+            source = create_item_class(dst, data=src, indices=self.indices, crop=True)
             for comp in dst:
-                setattr(self, comp, create_item_class(comp, data=src, indices=self.indices, crop=True))
+                setattr(self, comp, getattr(source, comp))
 
     @action
     def load(self, *args, src=None, fmt=None, dst=None, **kwargs):
@@ -919,9 +921,17 @@ class Batch:
 
         **kwargs :
             other parameters to pass to format-specific loaders
+        
+        Notes
+        -----
+        Loading creates new components if necessary.
         """
         _ = args
-        components = [dst] if isinstance(dst, str) else dst
+        if  isinstance(dst, str):
+            components = (dst,)
+            src = (src,)
+        else:
+            components = dst
         if components is not None:
             self.add_components(np.setdiff1d(components, self.components).tolist())
 

@@ -152,15 +152,15 @@ def use_source(components, data=None, indices=None, crop=False, copy=False):
 
 def create_item_class(components, data=None, indices=None, crop=False, copy=False):
     """ Create components class """
-    if isinstance(data, (dict, pd.DataFrame, ComponentsDict)):
+    if data is None and components is not None:
+        # default components storage
+        item_class = ComponentsDict
+    elif isinstance(data, (dict, pd.DataFrame, ComponentsDict)):
         item_class = ComponentsDict
     elif isinstance(data, (list, tuple, ComponentsTuple)):
         item_class = ComponentsTuple
-    elif data is None and components is not None:
-        item_class = ComponentsDict
     else:
-        if data is not None and components is not None and len(components) == 1 and len(data) != 1:
-            data = (data,)
+        # source is a memory-like object (ndarray, hdf5 storage, etc)
         item_class = use_source
 
     item = item_class(components, data=data, indices=indices, crop=crop, copy=copy)
