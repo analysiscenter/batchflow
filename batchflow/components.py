@@ -159,6 +159,8 @@ def create_item_class(components, data=None, indices=None, crop=False, copy=Fals
     elif data is None and components is not None:
         item_class = ComponentsDict
     else:
+        if data is not None and components is not None and len(components) == 1 and len(data) != 1:
+            data = (data,)
         item_class = use_source
 
     item = item_class(components, data=data, indices=indices, crop=crop, copy=copy)
