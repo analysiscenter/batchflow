@@ -921,7 +921,7 @@ class Batch:
 
         **kwargs :
             other parameters to pass to format-specific loaders
-        
+
         Notes
         -----
         Loading creates new components if necessary.
