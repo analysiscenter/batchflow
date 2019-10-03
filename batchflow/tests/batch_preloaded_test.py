@@ -77,11 +77,12 @@ class TestBatchPreloadedOneComponent:
     def test_array(self, pipeline):
         labels = np.arange(DATASET_SIZE)
         data = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
-        data = (data,)
 
         batch = get_batch(data, pipeline, MyBatch1, skip=2)
 
-        assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
+        with pytest.raises(AttributeError) as execinfo:
+            _ = batch.images
+        assert "'numpy.ndarray' object has no attribute 'images'" in str(execinfo.value)
 
     def test_tuple(self, pipeline):
         labels = np.arange(DATASET_SIZE)
@@ -103,13 +104,14 @@ class TestBatchPreloadedOneComponent:
 
     def test_df(self, pipeline):
         index = (np.arange(100)+ 1000).astype('str')
-        comp1 = np.arange(DATASET_SIZE) + 100
-        comp2 = np.arange(DATASET_SIZE) + 1000
-        data = pd.DataFrame({'images': comp1, 'labels': comp2, 'nodata1': None}, index=index)
+        labels = np.arange(DATASET_SIZE)
+        images = np.arange(DATASET_SIZE)
+        data = dict(images=images, labels=labels)
+        data = pd.DataFrame(data, index=index)
 
         batch = get_batch(data, pipeline, MyBatch1, skip=2)
 
-        assert (batch.images == np.arange(120, 130)).all()
+        assert (batch.images == np.arange(20, 30)).all()
 
 
 class MyBatch4(Batch):
