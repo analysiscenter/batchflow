@@ -77,6 +77,7 @@ class TestBatchPreloadedOneComponent:
     def test_array(self, pipeline):
         labels = np.arange(DATASET_SIZE)
         data = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
+        data = (data,)
 
         batch = get_batch(data, pipeline, MyBatch1, skip=2)
 
