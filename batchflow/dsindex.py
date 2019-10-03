@@ -642,7 +642,7 @@ class FilesIndex(DatasetIndex):
 
     def build_from_one_path(self, path, dirs=False, no_ext=False):
         """ Build index from a path/glob. """
-        if not isinstance(path, (str, bytes, os.PathLike)):
+        if not isinstance(path, str):
             raise TypeError('Each path must be a string, instead got {}'.format(path))
 
         check_fn = os.path.isdir if dirs else os.path.isfile
