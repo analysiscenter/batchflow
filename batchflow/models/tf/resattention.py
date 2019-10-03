@@ -189,7 +189,8 @@ class ResNetAttention56(ResNetAttention):
 
         filters = config['initial_block']['filters']   # number of filters in the first block
         config['body']['layout'] = 'r2r1r0rrr'
-        config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 2, 2, 3, 3, 3]) * filters
+        config['body']['filters'] = [filters * 2**p for p in [0, 0, 1, 1, 2, 2, 3, 3, 3]]
+        # config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 2, 2, 3, 3, 3]) * filters
 
         return config
 
@@ -201,6 +202,7 @@ class ResNetAttention92(ResNetAttention):
 
         filters = config['initial_block']['filters']   # number of filters in the first block
         config['body']['layout'] = 'r2r11r000rrr'
-        config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3]) * filters
+        config['body']['filters'] = [filters * 2**p for p in [0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3]]
+        # config['body']['filters'] = 2 ** np.array([0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3]) * filters
 
         return config
