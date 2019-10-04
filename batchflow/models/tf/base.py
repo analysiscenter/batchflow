@@ -702,37 +702,46 @@ class TFModel(BaseModel):
 
     def _make_loss(self, config, device):
         loss, args = unpack_fn_from_config('loss', config)
+        add_loss = args.pop('add_loss', False)
+        loss_collection = args.pop('loss_collection', tf.GraphKeys.LOSSES)
 
-        add_loss = False
-        if loss is None:
+        # Make loss callable
+        if loss is None or callable(loss):
             pass
-        elif isinstance(loss, str):
-            loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
         elif isinstance(loss, str) and hasattr(tf.losses, loss):
             loss = getattr(tf.losses, loss)
-        elif callable(loss):
-            pass
+        elif isinstance(loss, str):
+            loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
         else:
             raise ValueError("Unknown loss", loss)
 
+        # Use existing loss from graph or make a new one
         if loss is None:
             if len(tf.losses.get_losses()) == 0:
                 raise ValueError("Loss is not defined in the model %s" % self)
+            tensor_loss = tf.losses.get_losses(loss_collection=loss_collection)
         else:
-            predictions_name = args.pop('predictions', 'predictions')
-            targets_name = args.pop('targets', 'targets')
-            predictions = self.get_from_attr(predictions_name, device)
-            targets = self.get_from_attr(targets_name, device)
+            # Fetch all the needed tensors
+            inputs = args.pop('inputs', None)
+            if inputs is not None:
+                if isinstance(inputs, (tuple, list)):
+                    tensors = [self.get_from_attr(name, device) for name in inputs]
+                elif isinstance(inputs, (dict, Config)):
+                    tensors = {name: self.get_from_attr(value, device) for name, value in inputs.items()}
+            else:
+                predictions_name = args.pop('predictions', 'predictions')
+                targets_name = args.pop('targets', 'targets')
+                predictions = self.get_from_attr(predictions_name, device)
+                targets = self.get_from_attr(targets_name, device)
+                tensors = [targets, predictions]
 
-            add_loss = args.pop('add_loss', False)
+            if isinstance(tensors, list):
+                tensor_loss = loss(*tensors, **args)
+            elif isinstance(tensors, dict):
+                tensor_loss = loss(**tensors, **args)
+
             if add_loss:
-                loss_collection = args.pop('loss_collection', None)
-            tensor_loss = loss(targets, predictions, **args)
-            if add_loss:
-                if loss_collection:
-                    tf.losses.add_loss(tensor_loss, loss_collection)
-                else:
-                    tf.losses.add_loss(tensor_loss)
+                tf.losses.add_loss(tensor_loss, loss_collection)
         return tensor_loss
 
     def _make_optimizer(self, config):
@@ -762,13 +771,11 @@ class TFModel(BaseModel):
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
 
-        if decay_name is None:
-            pass
-        elif callable(decay_name):
+        if decay_name is None or callable(decay_name):
             pass
         elif isinstance(decay_name, str) and hasattr(tf.train, decay_name):
             decay_name = getattr(tf.train, decay_name)
-        elif decay_name in DECAYS:
+        elif isinstance(decay_name, str):
             decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
         else:
             raise ValueError("Unknown learning rate decay method", decay_name)
