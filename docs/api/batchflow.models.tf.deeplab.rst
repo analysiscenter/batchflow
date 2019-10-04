@@ -1,8 +1,8 @@
 =======
-TFModel
+DeepLab
 =======
 
-.. automodule:: batchflow.models.tf.base
+.. automodule:: batchflow.models.tf.deeplab
     :member-order: bysource
     :members:
     :undoc-members:

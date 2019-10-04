@@ -25,7 +25,7 @@ class Inception_v3(Inception):
     -----
     Since the article misses some important details (e.g. the number of filters in all convolutions),
     this class is based on `Google's implementation
-    <https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py>`_
+    <https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py>`__.
 
     **Configuration**
 
