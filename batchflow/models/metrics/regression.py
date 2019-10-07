@@ -33,8 +33,8 @@ class RegressionMetrics(Metrics):
     multi: bool
         Whether the task is multioutput (default is False).
 
-    weights : array-like of shape (n_samples)
-        Sample weights.
+    weights : array-like
+        Sample weights. The shape must be (n_samples).
 
     gap : float
         Max difference between target and prediction for sample to be considered as properly classified (default is 3).
