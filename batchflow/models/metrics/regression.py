@@ -12,28 +12,32 @@ METRICS_ALIASES = {'mae': 'mean_absolute_error',
 class RegressionMetrics(Metrics):
     """ Metrics to assess regression models.
 
-    Available metrics: mae, mse, rmse, r2_score, explained_variance_ratio,
-                       median absolute error, max error, accuracy.
+    Available metrics:
+    - mae
+    - mse
+    - rmse
+    - r2_score
+    - explained_variance_ratio
+    - median absolute error
+    - max error
+    - accuracy
 
     Parameters
     ----------
-    targets : array-like of shape = (n_samples) or (n_samples, n_outputs) \
-              or list of such arrays
-        Ground truth (correct) target values.
+    targets : array-like
+        Correct target values. The shape must be (n_samples) or (n_samples, n_outputs) or list of such arrays.
 
-    predictions : array-like of shape = (n_samples) or (n_samples, n_outputs) \
-                  or list of such arrays
-        Estimated target values
+    predictions : array-like
+        Estimated target values. The shape must be (n_samples) or (n_samples, n_outputs) or list of such arrays.
 
     multi: bool
-        Whether the task is multiouput (default is False)
+        Whether the task is multioutput (default is False).
 
     weights : array-like of shape (n_samples)
         Sample weights.
 
     gap : float
-        Max difference between target and prediction for sample to be \
-        considered as properly classified (default is 3)
+        Max difference between target and prediction for sample to be considered as properly classified (default is 3).
 
     Notes
     -----
