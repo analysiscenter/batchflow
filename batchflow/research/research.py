@@ -144,12 +144,11 @@ class Research:
         Parameters
         ----------
         function : callable
-            callable object with following parameters:
+            callable object. must include following named parameters:
                 experiment : `OrderedDict` of Executable objects
                     all pipelines and functions that were added to Research
                 iteration : int
                     iteration when function is called
-                **args, **kwargs
         returns : str, list of str or None
             names for function returns to save into results
             if None, `function` will be executed without any saving results and dumping
@@ -468,16 +467,29 @@ class Executable:
         or returns (for function) values are lists of variable values
     path : str
         path to the folder where results will be dumped
-    exec : int, list of ints or None
+    execute : int, list of ints or None
+        If `'last'`, function will be executed just at last iteration (if `iteration + 1 == n_iters`
+        or `StopIteration` was raised)
+
+        If positive int, function will be executed each `step` iterations.
+
+        If str, must be `'#{it}'` or `'last'` where `{it}` is an int,
+        the function will be executed at this iteration (zero-based)
+
+        If list, must be list of int or str described above
     dump : int, list of ints or None
+        iteration when results will be dumped and cleared. Similar to execute
     to_run : bool
+        if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset("iter")`.
     variables : list
         variables (for pipeline) or returns (for function)
     on_root : bool
-
+        if False, function will be called with parameters `(iteration, experiment, *args, **kwargs)`,
+        else with `(iteration, experiments, *args, **kwargs)` where `experiments` is a list of single experiments
     args : list
-
-    kwargs : dict()
+        other positional arguments
+    kwargs : dict
+        other named arguments
     """
     def __init__(self):
         self.function = None

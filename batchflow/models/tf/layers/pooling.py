@@ -27,9 +27,9 @@ class MaxPooling(Layer):
 
     See also
     --------
-    `tf.layers.max_pooling1d <https://www.tensorflow.org/api_docs/python/keras/layers/MaxPool1D>`_,
-    `tf.layers.max_pooling2d <https://www.tensorflow.org/api_docs/python/keras/layers/MaxPool2D>`_,
-    `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/keras/layers/MaxPool3D>`_
+    `tf.layers.max_pooling1d <https://www.tensorflow.org/api_docs/python/keras/layers/MaxPool1D>`__,
+    `tf.layers.max_pooling2d <https://www.tensorflow.org/api_docs/python/keras/layers/MaxPool2D>`__,
+    `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/keras/layers/MaxPool3D>`__.
     """
     LAYERS = {
         1: K.MaxPool1D,
@@ -69,9 +69,9 @@ class AveragePooling(Layer):
 
     See also
     --------
-    `tf.layers.max_pooling1d <https://www.tensorflow.org/api_docs/python/keras/layers/AveragePooling1D>`_,
-    `tf.layers.max_pooling2d <https://www.tensorflow.org/api_docs/python/keras/layers/AveragePooling2D>`_,
-    `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/keras/layers/AveragePooling3D>`_
+    `tf.layers.max_pooling1d <https://www.tensorflow.org/api_docs/python/keras/layers/AveragePooling1D>`__,
+    `tf.layers.max_pooling2d <https://www.tensorflow.org/api_docs/python/keras/layers/AveragePooling2D>`__,
+    `tf.layers.max_pooling3d <https://www.tensorflow.org/api_docs/python/keras/layers/AveragePooling3D>`__.
     """
     LAYERS = {
         1: K.AveragePooling1D,

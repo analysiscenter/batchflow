@@ -66,7 +66,7 @@ class EncoderDecoder(TFModel):
                 If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by
                 using `combine_op`, that can be specified for each of blocks separately.
                 If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
-                see :class:`~.layers.Combine`.
+                see :class:`~.tf.layers.Combine`.
 
             order : str, sequence of str
                 Determines order of applying layers.
@@ -84,8 +84,8 @@ class EncoderDecoder(TFModel):
                 base : callable
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
                 combine_op : str, dict
-                    If str, then operation for combining tensors, see :class:`~.layers.Combine`.
-                    If dict, then parameters for combining tensors, see :class:`~.layers.Combine`.
+                    If str, then operation for combining tensors, see :class:`~.tf.layers.Combine`.
+                    If dict, then parameters for combining tensors, see :class:`~.tf.layers.Combine`.
                 other args : dict
                     Parameters for the base block.
 
@@ -340,7 +340,7 @@ class EncoderDecoder(TFModel):
             If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by using `combine_op`,
             that can be specified for each of blocks separately..
             If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
-            see :class:`~.layers.Combine`.
+            see :class:`~.tf.layers.Combine`.
 
         order : str, sequence of str
             Determines order of applying layers.
@@ -357,8 +357,8 @@ class EncoderDecoder(TFModel):
             base : callable
                 Tensor processing function. Default is :func:`~.layers.conv_block`.
             combine_op : str, dict
-                If str, then operation for combining tensors, see :class:`~.layers.Combine`.
-                If dict, then parameters for combining tensors, see :class:`~.layers.Combine`.
+                If str, then operation for combining tensors, see :class:`~.tf.layers.Combine`.
+                If dict, then parameters for combining tensors, see :class:`~.tf.layers.Combine`.
             other args : dict
                 Parameters for the base block.
 

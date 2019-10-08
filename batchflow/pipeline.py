@@ -391,10 +391,8 @@ class Pipeline:
         Parameters
         ----------
         variables : dict or tuple
-            if dict
-                key : str - a variable name,
-                value : dict -  a variable value and init params (see :meth:`.init_variable`)
             if tuple, contains variable names which will have None as default values
+            if dict, then mapping from variable names to values and init params (see :meth:`.init_variable`)
 
         Returns
         -------
