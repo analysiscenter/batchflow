@@ -37,9 +37,9 @@ class Inception_v1(Inception):
     def default_config(cls):
         config = Inception.default_config()
         config['common']['layout'] = 'cn'
-        config['initial_block'] = dict(layout='cnp cn cn p', filters=[64, 64, 192],
-                                       kernel_size=[7, 3, 3], strides=[2, 1, 1],
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnp cn cn p', filters=[64, 64, 192],
+                                        kernel_size=[7, 3, 3], strides=[2, 1, 1],
+                                        pool_size=3, pool_strides=2)
         config['body']['arch'] = _DEFAULT_V1_ARCH
         config['body']['layout'] = 'bbrbbbbbrbb'
         config['head'].update(dict(layout='Vdf', dropout_rate=.4))
@@ -78,7 +78,8 @@ class Inception_v1(Inception):
 
             branch_5 = conv_block(inputs, layout*2, [filters[3], filters[4]], [1, 5], name='conv_5', **kwargs)
 
-            branch_pool = conv_block(inputs, 'p'+layout, filters[5], 1, 'conv_pool', **{**kwargs, 'pool_strides': 1})
+            branch_pool = conv_block(inputs, 'p'+layout, filters[5], 1,
+                                     name='conv_pool', **{**kwargs, 'pool_strides': 1})
 
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_1, branch_3, branch_5, branch_pool], axis, name='output')

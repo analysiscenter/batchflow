@@ -23,13 +23,28 @@ def get_scipy_transforms():
 
     Function is included if it has 'input : ndarray' or 'input : array_like' in its docstring.
     """
-
     scipy_transformations = {}
+    ref_counter = 1001
     hooks = ['input : ndarray', 'input : array_like']
+
     for function_name in scipy.ndimage.__dict__['__all__']:
         function = getattr(scipy.ndimage, function_name)
         doc = getattr(function, '__doc__')
         if doc is not None and (hooks[0] in doc or hooks[1] in doc):
+            # Re-enumerate references in docs and add missing links
+            for i in range(5):
+                ref = '[{}]'.format(i)
+
+                if ref in doc[doc.find('References'):]:
+                    place = doc.find('Parameters') - 6
+                    doc = '\n'.join([doc[:place],
+                                     '\n    See [{}]_ for more details.'.format(ref_counter),
+                                     doc[place:]])
+                if ref in doc:
+                    doc = doc.replace(ref, '[{}]'.format(ref_counter))
+                    ref_counter += 1
+            function.__doc__ = doc
+
             scipy_transformations[function_name] = function
     return scipy_transformations
 
@@ -255,15 +270,16 @@ class ImagesBatch(BaseImagesBatch):
 
     Images are stored as numpy arrays of PIL.Image.
 
-    PIL.Image has the following system of coordinates:
-                       X
-      0 -------------- >
-      |
-      |
-      |  images's pixels
-      |
-      |
-    Y v
+    PIL.Image has the following system of coordinates::
+
+                           X
+          0 -------------- >
+          |
+          |
+          |  images's pixels
+          |
+          |
+        Y v
 
     Pixel's position is defined as (x, y)
     """
@@ -403,20 +419,24 @@ class ImagesBatch(BaseImagesBatch):
         image_shape : sequence
             shape of the input image.
         origin : array_like, sequence, {'center', 'top_left', 'top_right', 'bottom_left', 'bottom_right', 'random'}
-            Position of the input image with respect to the background.
-            - 'center' - place the center of the input image on the center of the background and crop
-                         the input image accordingly.
-            - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
-                           and crop the input image accordingly.
-            - 'top_right' - crop an image such that upper-right corners of
-                            an image and the cropping box coincide
-            - 'bottom_left' - crop an image such that lower-left corners of
-                              an image and the cropping box coincide
-            - 'bottom_right' - crop an image such that lower-right corners of
-                               an image and the cropping box coincide
-            - 'random' - place the upper-left corner of the input image on the randomly sampled position
-                         in the background. Position is sampled uniformly such that there is no need for cropping.
-            - other - place the upper-left corner of the input image on the given position in the background.
+            Position of the input image with respect to the background. Can be one of:
+                - 'center' - place the center of the input image on the center of the background and crop
+                  the input image accordingly.
+                - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
+                  and crop the input image accordingly.
+                - 'top_right' - crop an image such that upper-right corners of
+                  an image and the cropping box coincide
+                - 'bottom_left' - crop an image such that lower-left corners of
+                  an image and the cropping box coincide
+                - 'bottom_right' - crop an image such that lower-right corners of
+                  an image and the cropping box coincide
+                - 'random' - place the upper-left corner of the input image on the randomly sampled position
+                  in the background. Position is sampled uniformly such that there is no need for cropping.
+                - other - sequence of ints or sequence of floats in [0, 1) interval;
+                  place the upper-left corner of the input image on the given position in the background.
+                  If `origin` is a sequence of floats in [0, 1), it defines a relative position of
+                  the origin in a valid region of image.
+
         background_shape : sequence
             shape of the background image.
 
@@ -439,6 +459,17 @@ class ImagesBatch(BaseImagesBatch):
             elif origin == 'random':
                 origin = (np.random.randint(background_shape[0]-image_shape[0]+1),
                           np.random.randint(background_shape[1]-image_shape[1]+1))
+            else:
+                raise ValueError("If string, origin should be one of ['center', 'top_left', 'top_right', "
+                                 "'bottom_left', 'bottom_right', 'random']. Got '{}'.".format(origin))
+        elif all(0 <= elem < 1 for elem in origin):
+            region = ((background_shape[0]-image_shape[0]+1),
+                      (background_shape[1]-image_shape[1]+1))
+            origin = np.asarray(origin) * region
+        elif not all(isinstance(elem, int) for elem in origin):
+            raise ValueError('If not a string, origin should be either a sequence of ints or sequence of '
+                             'floats in [0, 1) interval. Got {}'.format(origin))
+
         return np.asarray(origin, dtype=np.int)
 
     def _scale_(self, image, factor, preserve_shape=False, origin='center', resample=0):
@@ -461,19 +492,26 @@ class ImagesBatch(BaseImagesBatch):
             Relevant only if `preserve_shape` is True.
             If `scale` < 1, defines position of the scaled image with respect to the original one's shape.
             If `scale` > 1, defines position of cropping box.
+
+            Can be one of:
+
             - 'center' - place the center of the input image on the center of the background and crop
-                         the input image accordingly.
+              the input image accordingly.
             - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
-                           and crop the input image accordingly.
+              and crop the input image accordingly.
             - 'top_right' - crop an image such that upper-right corners of
-                            an image and the cropping box coincide
+              an image and the cropping box coincide
             - 'bottom_left' - crop an image such that lower-left corners of
-                              an image and the cropping box coincide
+              an image and the cropping box coincide
             - 'bottom_right' - crop an image such that lower-right corners of
-                               an image and the cropping box coincide
+              an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
-                         in the background. Position is sampled uniformly such that there is no need for cropping.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+              in the background. Position is sampled uniformly such that there is no need for cropping.
+            - array_like - sequence of ints or sequence of floats in [0, 1) interval;
+              place the upper-left corner of the input image on the given position in the background.
+              If `origin` is a sequence of floats in [0, 1), it defines a relative position
+              of the origin in a valid region of image.
+
         resample: int
             Parameter passed to PIL.Image.resize. Interpolation order
         src : str
@@ -508,22 +546,9 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         origin : sequence, str
-            Location of the cropping box. Can be one of:
-            - 'center' - place the center of the input image on the center of the background and crop
-                the input image accordingly.
-            - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
-                           and crop the input image accordingly.
-            - 'top_right' - crop an image such that upper-right corners of
-                           an image and the cropping box coincide
-            - 'bottom_left' - crop an image such that lower-left corners of
-                           an image and the cropping box coincide
-            - 'bottom_right' - crop an image such that lower-right corners of
-                           an image and the cropping box coincide
-            - 'random' - place the upper-left corner of the input image on the randomly sampled position
-                         in the background. Position is sampled uniformly such that there is no need for cropping.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.
         shape : sequence
-            - sequence - crop size in the form of (rows, columns)
+            crop size in the form of (rows, columns)
         crop_boundaries : bool
             If `True` then crop is got only from image's area. Shape of the crop might diverge with the passed one
         src : str
@@ -558,21 +583,9 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         background : PIL.Image, np.ndarray of np.uint8
+            Blank background to put image on.
         origin : sequence, str
-            Location of the cropping box. Can be one of:
-            - 'center' - place the center of the input image on the center of the background and crop
-                         the input image accordingly.
-            - 'top_left' - place the upper-left corner of the input image on the upper-left of the background
-                           and crop the input image accordingly.
-            - 'top_right' - crop an image such that upper-right corners of
-                           an image and the cropping box coincide
-            - 'bottom_left' - crop an image such that lower-left corners of
-                           an image and the cropping box coincide
-            - 'bottom_right' - crop an image such that lower-right corners of
-                           an image and the cropping box coincide
-            - 'random' - place the upper-left corner of the input image on the randomly sampled position
-                         in the background. Position is sampled uniformly such that there is no need for cropping.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.
         mask : None, PIL.Image, np.ndarray of np.uint8
             mask passed to PIL.Image.paste
 
@@ -618,7 +631,10 @@ class ImagesBatch(BaseImagesBatch):
                                an image and the cropping box coincide
             - 'random' - place the upper-left corner of the input image on the randomly sampled position
                          in the background. Position is sampled uniformly such that there is no need for cropping.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            - array_like - sequence of ints or sequence of floats in [0, 1) interval;
+                           place the upper-left corner of the input image on the given position in the background.
+                           If `origin` is a sequence of floats in [0, 1), it defines a relative position
+                           of the origin in a valid region of image.
         crop_origin: array-like, {'center', 'top_left', 'random'}
             Position of crop from transformed image.
             Has same values as `input_origin`.
@@ -638,9 +654,9 @@ class ImagesBatch(BaseImagesBatch):
         return self._crop_(transformed_image, origin, original_shape, True)
 
     def _filter_(self, image, mode, *args, **kwargs):
-        """ Filters an image. Calls image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))
+        """ Filters an image. Calls ``image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))``.
 
-        For more details see http://pillow.readthedocs.io/en/stable/reference/ImageFilter.html
+        For more details see `ImageFilter <http://pillow.readthedocs.io/en/stable/reference/ImageFilter.html>_`.
 
         Parameters
         ----------
@@ -656,9 +672,10 @@ class ImagesBatch(BaseImagesBatch):
         return image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))
 
     def _transform_(self, image, *args, **kwargs):
-        """ Calls image.transform(*args, **kwargs)
+        """ Calls ``image.transform(*args, **kwargs)``.
 
-        For more information see http://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.transform
+        For more information see
+        `<http://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.transform>_`.
 
         Parameters
         ----------
@@ -673,9 +690,9 @@ class ImagesBatch(BaseImagesBatch):
         return image.transform(*args, size=size, **kwargs)
 
     def _resize_(self, image, size, *args, **kwargs):
-        """ Calls image.resize(*args, **kwargs)
+        """ Calls ``image.resize(*args, **kwargs)``.
 
-        For more details see https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize
+        For more details see `<https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize>_`.
 
         Parameters
         ----------
@@ -726,9 +743,9 @@ class ImagesBatch(BaseImagesBatch):
         return image
 
     def _pad_(self, image, *args, **kwargs):
-        """ Calls PIL.ImageOps.expand.
+        """ Calls ``PIL.ImageOps.expand``.
 
-        For more details see http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand
+        For more details see `<http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand>`_.
 
         Parameters
         ----------
@@ -977,7 +994,7 @@ class ImagesBatch(BaseImagesBatch):
         return image.astype(dtype)
 
     def _pil_convert_(self, image, mode="L"):
-        """ Convert image. Actually calls image.convert(mode)
+        """ Convert image. Actually calls ``image.convert(mode)``.
 
         Parameters
         ----------
@@ -1018,24 +1035,12 @@ class ImagesBatch(BaseImagesBatch):
         Parameters
         ----------
         origin : sequence, str
-            Location of the cropping box. Can be one of:
-            - 'top_left' - crop an image such that upper-left corners of
-                           an image and the filled box coincide.
-            - 'top_right' - crop an image such that upper-right corners of
-                           an image and the cropping box coincide
-            - 'bottom_left' - crop an image such that lower-left corners of
-                           an image and the cropping box coincide
-            - 'bottom_right' - crop an image such that lower-right corners of
-                           an image and the cropping box coincide
-            - 'center' - crop an image such that centers of
-                         an image and the filled box coincide.
-            - 'random' - place the upper-left corner of the filled box at a random position.
-            - array_like - place the upper-left corner of the input image on the given position in the background.
+            Location of the cropping box. See :meth:`.ImagesBatch._calc_origin` for details.
         shape : sequence, int
             Shape of a filled box. Can be one of:
+                - sequence - crop size in the form of (rows, columns)
+                - int - shape has squared form
 
-            - sequence - crop size in the form of (rows, columns)
-            - int - shape has squared form
         color : sequence, number
             Color of a filled box. Can be one of:
 
@@ -1147,7 +1152,7 @@ class ImagesBatch(BaseImagesBatch):
         return self._add_(image, noise, clip, preserve_type)
 
     def _multiplicative_noise_(self, image, noise, clip=False, preserve_type=False):
-        """ Add multiplicativa noise to an image.
+        """ Add multiplicative noise to an image.
 
         Parameters
         ----------
@@ -1169,13 +1174,10 @@ class ImagesBatch(BaseImagesBatch):
         return self._multiply_(image, noise, clip, preserve_type)
 
     def _elastic_transform_(self, image, alpha, sigma, **kwargs):
-        """Elastic deformation of images as described in [Simard2003]_.
-        [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
-        Convolutional Neural Networks applied to Visual Document Analysis", in
-        Proc. of the International Conference on Document Analysis and
-        Recognition, 2003.
+        """ Deformation of images as described by Simard, Steinkraus and Platt, `Best Practices for Convolutional
+        Neural Networks applied to Visual Document Analysis <http://cognitivemedium.com/assets/rmnist/Simard.pdf>_`.
 
-        Code slightly differs with https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a
+        Code slightly differs from `<https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a>`_.
 
         Parameters
         ----------

@@ -93,7 +93,7 @@ For instance, :class:`~.LinkNet` and :class:`~.GlobalConvolutionNetwork` use :cl
 head
 ----
 It receives body's output and produces a task-specific result, for instance, class logits for classification.
-The default head consists of one :class:`.ConvBlock`. So, by specifying a model's config you can
+The default head consists of one :class:`~.torch.layers.ConvBlock`. So, by specifying a model's config you can
 instantiate models for different tasks.
 
 Classification with 10 classes::
@@ -162,7 +162,7 @@ Initial block specifies which inputs flow into the model to turn into prediction
         'initial_block/inputs': 'images',
     }
 
-As the default initial block contains a :class:`~.ConvBlock`, all its parameters might be also specfied in the config::
+As the default initial block contains a :class:`~.torch.layers.ConvBlock`, all its parameters might be also specfied in the config::
 
     model_config = {
         'initial_block': dict(layout='cnap', filters=64, kernel_size=7, strides=2),
@@ -192,9 +192,9 @@ Body can be specified as `nn.Module` or a dict with parameters for a specific mo
 
 head
 ----
-For many models head is just another :class:`~.ConvBlock`. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.
+For many models head is just another :class:`~.torch.layers.ConvBlock`. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.
 
-Head can be specified as `nn.Module` or a dict with :class:`~.ConvBlock` parameters.
+Head can be specified as `nn.Module` or a dict with :class:`~.torch.layers.ConvBlock` parameters.
 
 
 Loss, learning rate decay, optimizer
@@ -239,7 +239,7 @@ For more detail see :class:`.TorchModel` documentation.
 How to write a custom model
 ===========================
 
-To begin with, take a look at :class:`.ConvBlock` to find out how to write complex networks in just one line of code.
+To begin with, take a look at :class:`~.torch.layers.ConvBlock` to find out how to write complex networks in just one line of code.
 This block is a convenient building block for concise, yet very expressive neural networks.
 
 The simplest case you should avoid
@@ -342,7 +342,7 @@ Things worth mentioning:
 #. Input data and its parameters should be defined in configuration under ``inputs`` key.
    See :meth:`.TorchModel._make_inputs` for details.
 
-#. You might want to use a convenient multidimensional :class:`.ConvBlock`,
+#. You might want to use a convenient multidimensional :class:`~.torch.layers.ConvBlock`,
    as well as other predefined layers from ``batchflow.models.torch.layers``.
    Of course, you can use usual `Torch layers <https://pytorch.org/docs/stable/nn.html>`_.
 

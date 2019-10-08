@@ -124,5 +124,5 @@ def test_apply_transform(src, dst, expectation, func, addendum, batch,):
             func_args = [DATA for src_comp in src]
             if isinstance(addendum, P):
                 addendum.name.random_state.seed(seed=SEED)
-                addendum = addendum.name.get(batch).reshape(-1, 1)
+                addendum = addendum.get(batch, parallel=True).reshape(-1, 1)
             assert np.all(np.equal(result, func(*func_args, addendum=addendum)))

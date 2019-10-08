@@ -34,13 +34,11 @@ class DeepLab(EncoderDecoder):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder'] = dict(base=None, num_stages=None)
+        config['body/encoder'] += dict(base=None, num_stages=None)
 
-        config['body/embedding'] = dict(base=aspp)
+        config['body/embedding'] += dict(base=aspp)
 
-        config['body/decoder/upsample'] = dict(layout='b')
-
-        config['head'] = dict(layout='c', kernel_size=1)
+        config['body/decoder/upsample'] += dict(layout='b')
         return config
 
 
@@ -84,7 +82,7 @@ class DeepLabX(DeepLab):
         config['body/encoder/middle'] = dict(num_stages=None, filters=None, strides=1, combine_op='sum')
         config['body/encoder/exit'] = dict(num_stages=None, filters=None, strides=1,
                                            depth_activation=True, combine_op='softsum')
-        config['body/encoder/downsample'] = dict(layout=None)
+        config['body/encoder/downsample'] += dict(layout=None)
         return config
 
 class DeepLabX8(DeepLabX):
@@ -92,7 +90,7 @@ class DeepLabX8(DeepLabX):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['initial_block'] = dict(layout='cnacna', filters=32, kernel_size=3, strides=1)
+        config['initial_block'] += dict(layout='cnacna', filters=32, kernel_size=3, strides=1)
 
         config['body/encoder/entry/num_stages'] = 4
         config['body/encoder/entry/filters'] = [[64]*3,
@@ -112,7 +110,7 @@ class DeepLabX8(DeepLabX):
 
         config['body/embedding/rates'] = (12, 24, 36)
 
-        config['body/decoder'] = dict(skip=True, num_stages=4, factor=[1, 2, 1, 4])
+        config['body/decoder'] += dict(skip=True, num_stages=4, factor=[1, 2, 1, 4])
         return config
 
 class DeepLabX16(DeepLabX):
@@ -120,7 +118,7 @@ class DeepLabX16(DeepLabX):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['initial_block'] = dict(layout='cnacna', filters=32, kernel_size=3, strides=1)
+        config['initial_block'] += dict(layout='cnacna', filters=32, kernel_size=3, strides=1)
 
         config['body/encoder/entry/num_stages'] = 4
         config['body/encoder/entry/filters'] = [[64]*3,
@@ -140,7 +138,7 @@ class DeepLabX16(DeepLabX):
 
         config['body/embedding/rates'] = (6, 12, 18)
 
-        config['body/decoder'] = dict(skip=True, num_stages=4, factor=[1, 4, 1, 4])
+        config['body/decoder'] += dict(skip=True, num_stages=4, factor=[1, 4, 1, 4])
         return config
 
 
@@ -151,7 +149,7 @@ class DeepLabXS(DeepLabX):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['initial_block'] = dict(layout='cnacna', filters=32, kernel_size=3, strides=1)
+        config['initial_block'] += dict(layout='cnacna', filters=32, kernel_size=3, strides=1)
 
         config['body/encoder/entry/num_stages'] = 4
         config['body/encoder/entry/filters'] = [[6]*3,
@@ -171,7 +169,7 @@ class DeepLabXS(DeepLabX):
 
         config['body/embedding/rates'] = (6, 12, 18)
 
-        config['body/decoder'] = dict(skip=True, num_stages=4, factor=[1, 4, 1, 4])
+        config['body/decoder'] += dict(skip=True, num_stages=4, factor=[1, 4, 1, 4])
         return config
 
 

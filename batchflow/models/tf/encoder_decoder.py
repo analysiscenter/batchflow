@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block
+from .layers import conv_block, combine
 from ..utils import unpack_args
 
 
@@ -24,6 +24,13 @@ class EncoderDecoder(TFModel):
 
             num_stages : int
                 Number of downsampling stages.
+
+            order : str, sequence of str
+                Determines order of applying layers.
+                If str, then each letter stands for operation:
+                'b' for 'block', 'd'/'p' for 'downsampling', 's' for 'skip'.
+                If sequence, than the first letter of each item stands for operation:
+                For example, `'sbd'` allows to use throw skip connection -> block -> downsampling.
 
             downsample : dict, optional
                 Parameters for downsampling (see :func:`~.layers.conv_block`)
@@ -55,8 +62,19 @@ class EncoderDecoder(TFModel):
                 If int, the total upsampling factor for all stages combined.
                 If list, upsampling factors for each stage.
 
-            skip : bool
-                Whether to concatenate upsampled tensor with stored pre-downsample encoding.
+            skip : bool, dict
+                If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by
+                using `combine_op`, that can be specified for each of blocks separately.
+                If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
+                see :class:`~.tf.layers.Combine`.
+
+            order : str, sequence of str
+                Determines order of applying layers.
+                If str, then each letter stands for operation:
+                'b' for 'block', 'u' for 'upsampling', 'c' for 'combine'
+                If sequence, than the first letter of each item stands for operation.
+                For example, `'ucb'` allows to use upsampling-> combine ->block.
+
             upsample : dict
                 Parameters for upsampling (see :func:`~.layers.upsample`).
 
@@ -65,6 +83,9 @@ class EncoderDecoder(TFModel):
 
                 base : callable
                     Tensor processing function. Default is :func:`~.layers.conv_block`.
+                combine_op : str, dict
+                    If str, then operation for combining tensors, see :class:`~.tf.layers.Combine`.
+                    If dict, then parameters for combining tensors, see :class:`~.tf.layers.Combine`.
                 other args : dict
                     Parameters for the base block.
 
@@ -120,18 +141,17 @@ class EncoderDecoder(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
 
-        config['body/encoder'] = dict(base=None, num_stages=None)
+        config['body/encoder'] = dict(base=None, num_stages=None,
+                                      order=['skip', 'block', 'downsampling'])
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
         config['body/encoder/blocks'] = dict(base=cls.block)
 
         config['body/embedding'] = dict(base=cls.block)
 
-        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None)
+        config['body/decoder'] = dict(skip=True, num_stages=None, factor=None,
+                                      order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=cls.block, combine_op='concat')
-
-        config['head/layout'] = None
-
         return config
 
     @classmethod
@@ -144,8 +164,11 @@ class EncoderDecoder(TFModel):
 
         with tf.variable_scope(name):
             # Encoder: transition down
-            encoder_args = {**kwargs, **encoder}
-            encoder_outputs = cls.encoder(inputs, name='encoder', **encoder_args)
+            if encoder is not None:
+                encoder_args = {**kwargs, **encoder}
+                encoder_outputs = cls.encoder(inputs, name='encoder', **encoder_args)
+            else:
+                encoder_outputs = [inputs]
             x = encoder_outputs[-1]
 
             # Bottleneck: working with compressed representation via multiple steps of processing
@@ -155,12 +178,12 @@ class EncoderDecoder(TFModel):
                 for i, embedding in enumerate(embeddings):
                     embedding_args = {**kwargs, **embedding}
                     x = cls.embedding(x, name='embedding-'+str(i), **embedding_args)
-
             encoder_outputs.append(x)
 
             # Decoder: transition up
-            decoder_args = {**kwargs, **decoder}
-            x = cls.decoder(encoder_outputs, name='decoder', **decoder_args)
+            if decoder is not None:
+                decoder_args = {**kwargs, **decoder}
+                x = cls.decoder(encoder_outputs, name='decoder', **decoder_args)
         return x
 
     @classmethod
@@ -209,8 +232,20 @@ class EncoderDecoder(TFModel):
         num_stages : int
             Number of downsampling stages.
 
+        order : str, sequence of str
+            Determines order of applying layers.
+            If str, then each letter stands for operation:
+            'b' for 'block', 'd'/'p' for 'downsampling', 's' for 'skip'.
+            If sequence, than the first letter of each item stands for operation.
+            For example, `'sbd'` allows to use skip connection -> block -> downsampling.
+
         blocks : dict
             Parameters for tensor processing before downsampling.
+
+            base : callable
+                Tensor processing function. Default is :func:`~.layers.conv_block`.
+            other args : dict
+                Parameters for the base block.
 
         downsample : dict
             Parameters for downsampling.
@@ -223,7 +258,8 @@ class EncoderDecoder(TFModel):
         list of tf.Tensors
         """
         base_class = kwargs.pop('base')
-        steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
+        steps, order, downsample, block_args = cls.pop(['num_stages', 'order', 'downsample', 'blocks'], kwargs)
+        order = ''.join([item[0] for item in order])
 
         if base_class is not None:
             encoder_outputs = base_class.make_encoder(inputs, name=name, **kwargs)
@@ -232,19 +268,28 @@ class EncoderDecoder(TFModel):
             base_block = block_args.get('base')
             with tf.variable_scope(name):
                 x = inputs
-                encoder_outputs = [x]
+                encoder_outputs = []
 
                 for i in range(steps):
                     with tf.variable_scope('encoder-'+str(i)):
-                        # Preprocess tensor with given block
-                        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)} # enforce priority of keys
-                        x = base_block(x, name='pre', **args)
+                        # Make all the args
+                        args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
+                        downsample_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
 
-                        # Downsampling
-                        if downsample.get('layout') is not None:
-                            args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
-                            x = conv_block(x, name='downsample-{}'.format(i), **args)
-                        encoder_outputs.append(x)
+                        for letter in order:
+                            if letter == 'b':
+                                x = base_block(x, name='block', **args)
+                            elif letter == 's':
+                                encoder_outputs.append(x)
+                            elif letter in ['d', 'p']:
+                                if downsample.get('layout') is not None:
+                                    x = conv_block(x, name='downsample', **downsample_args)
+                            else:
+                                raise ValueError('Unknown letter in order {}, use one of "b", "d", "p", "s"'
+                                                 .format(letter))
+
+                encoder_outputs.append(x)
+
         return encoder_outputs
 
     @classmethod
@@ -278,8 +323,8 @@ class EncoderDecoder(TFModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
-            Input tensor.
+        inputs : sequence
+            Input tensors.
 
         name : str
             Scope name.
@@ -289,10 +334,19 @@ class EncoderDecoder(TFModel):
 
         factor : int or list of ints
             If int, the total upsampling factor for all stages combined.
-            If list, upsampling factors for each stage.s, then each entry is increase of size on i-th upsampling stage.
+            If list, upsampling factors for each stages, then each entry is increase of size on i-th upsampling stage.
 
-        skip : bool
-            Whether to concatenate upsampled tensor with stored pre-downsample encoding.
+        skip : bool, dict
+            If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by using `combine_op`,
+            that can be specified for each of blocks separately..
+            If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
+            see :class:`~.tf.layers.Combine`.
+
+        order : str, sequence of str
+            Determines order of applying layers.
+            If str, then each letter stands for operation: 'b' for 'block', 'u' for 'upsampling', 'c' for 'combine'.
+            If sequence, than the first letter of each item stands for operation.
+            For example, `'ub'` allows to use upsampling->block.
 
         upsample : dict
             Parameters for upsampling.
@@ -300,8 +354,22 @@ class EncoderDecoder(TFModel):
         blocks : dict
             Parameters for post-processing blocks.
 
+            base : callable
+                Tensor processing function. Default is :func:`~.layers.conv_block`.
+            combine_op : str, dict
+                If str, then operation for combining tensors, see :class:`~.tf.layers.Combine`.
+                If dict, then parameters for combining tensors, see :class:`~.tf.layers.Combine`.
+            other args : dict
+                Parameters for the base block.
+
         kwargs : dict
             Parameters for ``upsample`` method.
+
+        Notes
+        -----
+        Inputs must be a sequence of encodings, where the last item (`inputs[-1]`) and
+        the second last (`inputs[-2]`) have the same spatial shape and thus are not used as skip-connections.
+        `inputs[-3]` has bigger spatial shape and can be used as skip-connection to the first upsampled output.
 
         Returns
         -------
@@ -314,7 +382,8 @@ class EncoderDecoder(TFModel):
         """
         steps = kwargs.pop('num_stages') or len(inputs)-2
         factor = kwargs.pop('factor') or [2]*steps
-        skip, upsample, block_args = cls.pop(['skip', 'upsample', 'blocks'], kwargs)
+        skip, order, upsample, block_args = cls.pop(['skip', 'order', 'upsample', 'blocks'], kwargs)
+        order = ''.join([item[0] for item in order])
         base_block = block_args.get('base')
 
         if isinstance(factor, int):
@@ -331,26 +400,32 @@ class EncoderDecoder(TFModel):
                     # Skip some of the steps
                     if factor[i] == 1:
                         continue
-                    # Upsample by a desired factor
-                    if upsample.get('layout') is not None:
-                        args = {**kwargs, **upsample, **unpack_args(upsample, i, steps)}
-                        x = cls.upsample(x, factor=factor[i], name='upsample-{}'.format(i), **args)
 
-                    # Post-process resulting tensor
-                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}  # enforce priority of subkeys
-                    x = base_block(x, name='post', **args)
+                    # Make all the args
+                    args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
+                    upsample_args = {'factor': factor[i],
+                                     **kwargs, **upsample, **unpack_args(upsample, i, steps)}
 
-                    # Combine it with stored encoding of the ~same shape
-                    if skip and (i < len(inputs)-2):
-                        combine_op = args.get('combine_op')
-                        # inputs[-1] is embedding output and decoder's input, inputs[-2] is last encoder's output,
-                        # they both have same shape, if connection between them is needed,
-                        # it can be incorporated in embedding
-                        # input[-3] is last encoder's input that has normally different shape
-                        # so it might be connected to first decoder's output, that also has modified shape
-                        x = cls.crop(x, inputs[-i-3], data_format=kwargs.get('data_format'))
-                        x = cls.combine([x, inputs[-i-3]], op=combine_op,
-                                        data_format=kwargs.get('data_format'))
+                    combine_op = args.get('combine_op')
+                    combine_args = {'op': combine_op if isinstance(combine_op, str) else '',
+                                    'data_format': args.get('data_format'),
+                                    **(combine_op if isinstance(combine_op, dict) else {}),
+                                    **(skip if isinstance(skip, dict) else {})}
+
+                    for letter in order:
+                        if letter == 'b':
+                            x = base_block(x, name='block', **args)
+                        elif letter in ['u']:
+                            if upsample.get('layout') is not None:
+                                x = cls.upsample(x, name='upsample', **upsample_args)
+                        elif letter == 'c':
+                            # Combine result with the stored encoding of the ~same shape
+                            if (skip or isinstance(skip, dict)) and (i < len(inputs) - 2):
+                                x = cls.crop(x, inputs[-i - 3], data_format=kwargs.get('data_format'))
+                                x = combine([x, inputs[-i - 3]], **combine_args)
+                        else:
+                            raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
+
         return x
 
 
@@ -360,7 +435,7 @@ class AutoEncoder(EncoderDecoder):
     @classmethod
     def default_config(cls):
         config = EncoderDecoder.default_config()
-        config['body/decoder'] = dict(skip=False)
+        config['body/decoder'] += dict(skip=False)
         return config
 
 

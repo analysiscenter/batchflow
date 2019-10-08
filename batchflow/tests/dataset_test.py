@@ -1,7 +1,7 @@
 # pylint: disable=missing-docstring, redefined-outer-name
 
-import pytest
 import numpy as np
+import pytest
 
 from batchflow import Dataset, Batch, ImagesBatch, DatasetIndex, Pipeline
 
@@ -84,3 +84,25 @@ class TestDataset:
         assert len(dataset.train) == 60
         assert len(dataset.test) == 25
         assert len(dataset.validation) == 15
+
+    def _assert_cv_attrs(self, dataset, n_splits):
+        for i in range(n_splits):
+            assert hasattr(dataset, 'cv' + str(i))
+            assert dataset.cv(i) is getattr(dataset, 'cv' + str(i))
+        assert not hasattr(dataset, 'cv' + str(n_splits))
+
+    def test_cv_split(self, dataset):
+        n_splits = 3
+        dataset.cv_split(n_splits=n_splits)
+
+        self._assert_cv_attrs(dataset, n_splits)
+        self._assert_cv_attrs(dataset.train, n_splits)
+        self._assert_cv_attrs(dataset.test, n_splits)
+
+    def test_cv_resplit(self, dataset):
+        dataset.cv_split(n_splits=4)
+        dataset.cv_split(n_splits=3)
+
+        assert not hasattr(dataset, 'cv3')
+        assert not hasattr(dataset.train, 'cv3')
+        assert not hasattr(dataset.test, 'cv3')
