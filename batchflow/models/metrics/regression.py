@@ -74,7 +74,7 @@ class RegressionMetrics(Metrics):
     def __init__(self, targets, predictions, weights=None, multi=False):
         super().__init__()
 
-        # if-else block bellow process the case when the inputs and targets are list
+        # if-else block bellow processes the case when the inputs and targets are list
         # of arrays-like. That's happening when we accumulate targets and predictions in the pipeline
         # via `.update(V('targets', mode='a'), value)`.
         # Since we are not interested in across batch aggregation we only need to concatenate this arrays along 0 axis
@@ -82,7 +82,7 @@ class RegressionMetrics(Metrics):
         # 1. targets is a single batch of multioutput targets and has the following structure [[], [], ..].
         # 2. targets is a list of data come from couple of batches in a single output task
         # and has the same structure [[], [], ..].
-        # In the first case concatenating such arrays do not have any sence. To separate such cases we introduce
+        # In the first case concatenating such arrays does not make any sence. To separate such cases we introduce
         # 'multi' argument.
 
         if np.ndim(targets) == 0 or (np.ndim(targets) == 1 and multi):
