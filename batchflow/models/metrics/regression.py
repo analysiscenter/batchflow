@@ -82,7 +82,7 @@ class RegressionMetrics(Metrics):
         # 1. targets is a single batch of multioutput targets and has the following structure [[], [], ..].
         # 2. targets is a list of data come from couple of batches in a single output task
         # and has the same structure [[], [], ..].
-        # In the first case concatenating such arrays does not make any sence. To separate such cases we introduce
+        # In the first case concatenating such arrays does not make any sense. To separate such cases we introduce
         # 'multi' argument.
 
         if np.ndim(targets) == 0 or (np.ndim(targets) == 1 and multi):
