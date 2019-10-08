@@ -628,7 +628,7 @@ class ImagesBatch(BaseImagesBatch):
         np.ndarray : image after described actions
         """
         transformed_shape = self._get_image_shape(transformed_image)
-        if np.all(np.array(transformed_shape) < np.array(original_shape)):
+        if np.any(np.array(transformed_shape) < np.array(original_shape)):
             n_channels = len(transformed_image.getbands())
             if n_channels == 1:
                 background = np.zeros(original_shape, dtype=np.uint8)
