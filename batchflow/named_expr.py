@@ -195,6 +195,10 @@ class NamedExpression(metaclass=MetaNamedExpression):
             if self.params:
                 batch, pipeline, model = self.params
             return self.name.get(batch=batch, pipeline=pipeline, model=model)
+        elif isinstance(self.name, (list, tuple)):
+            if self.params:
+                batch, pipeline, model = self.params
+            return [item.get(batch=batch, pipeline=pipeline, model=model) for item in self.name]      
         return self.name
 
     def _get_value(self, batch=None, pipeline=None, model=None):
@@ -639,12 +643,7 @@ class P(W):
     def get(self, batch=None, pipeline=None, model=None, parallel=False):   # pylint:disable=arguments-differ
         """ Return a wrapped named expression """
         if parallel:
-            if isinstance(self.name, R):
-                val = np.array([self.name.get(batch=batch, pipeline=pipeline, model=model) for _ in batch])
-            elif isinstance(self.name, NamedExpression):
-                val = self.name.get(batch=batch, pipeline=pipeline, model=model)
-            else:
-                val = self.name
+            val = np.array([eval_expr(self.name, batch=batch, pipeline=pipeline, model=model) for _ in batch])
             if len(val) < len(batch):
                 raise ValueError('%s returns a value (len=%d) which does not fit the batch size (len=%d)'
                                  % (self, len(val), len(batch)))
