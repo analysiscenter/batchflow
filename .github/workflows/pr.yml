@@ -14,6 +14,9 @@ jobs:
     steps:
     - uses: actions/checkout@v1
 
+    - name: Check if the branch is behind the master
+      run: git rev-list --count HEAD..origin/master | grep -w "0"
+
     - name: Generate coverage report
       run: |
         pip3 install pytest-cov
