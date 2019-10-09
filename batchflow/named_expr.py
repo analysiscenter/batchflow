@@ -193,16 +193,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
     def _get_name(self, batch=None, pipeline=None, model=None):
         if self.params:
             batch, pipeline, model = self.params
-        if isinstance(self.name, NamedExpression):
-            return self.name.get(batch=batch, pipeline=pipeline, model=model)
-        elif isinstance(self.name, (list, tuple)):
-            return [eval_expr(item, batch=batch, pipeline=pipeline, model=model) for item in self.name]
-        elif isinstance(self.name, dict):
-            res = dict()
-            for key, value in self.name.items():
-                key = eval_expr(key, batch=batch, pipeline=pipeline, model=model)
-                value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
-        return self.name
+        return eval_expr(self.name, batch=batch, pipeline=pipeline, model=model)
 
     def _get_value(self, batch=None, pipeline=None, model=None):
         if self.name == AN_EXPR:
