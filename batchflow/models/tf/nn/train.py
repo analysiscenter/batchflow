@@ -35,52 +35,43 @@ def cyclic_learning_rate(learning_rate, global_step, max_lr, step_size=10,
 
     Notes
     -----
-    More detailed information about `mode`.
+    More detailed information about `mode`:
 
     If 'tri':
         Default, linearly increasing then linearly decreasing the
         learning rate at each cycle. Learning rate starting
         from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
-        Published in article [1]_.
-        It is computed as:
+        See `Leslie N. Smith, Cyclical Learning Rates for Training Neural Networks
+        <https://arxiv.org/abs/1506.01186>`_ for more information.
 
-        ```python
-        decayed_learning_rate = abs(mod((global_step + step_size / 4) / step_size, 1) - 0.5) *
-                                2 * (max_lr - learning_rate) +
-                                learning_rate
+        It is computed as::
 
-        ```
+            decayed_learning_rate = abs(mod((global_step + step_size / 4) / step_size, 1) - 0.5) *
+                                    2 * (max_lr - learning_rate) +
+                                    learning_rate
+
 
     If 'sin':
         Learning rate changes as a sine wave, starting
         from (max_lr-learning_rate)/2 then decreasing to `learning_rate`.
-        It is computed as:
 
-        ```python
-        decayed_learning_rate = (learning_rate - max_lr) / 2 *
-                                sin(pi * global_step / step_size) +
-                                (max_lr + learning_rate) / 2
+        It is computed as::
 
-        ```
+            decayed_learning_rate = (learning_rate - max_lr) / 2 *
+                                    sin(pi * global_step / step_size) +
+                                    (max_lr + learning_rate) / 2
+
 
     If 'saw':
         Learning rate linearly increasing from `learning_rate` to `max_lr`
         and then sharply drops to `learning_rate` at each cycle.
         Learning rate starting from `learning_rate` then increasing.
-        It is computed as:
 
-        ```python
-        decayed_learning_rate = (max_lr - learning_rate) *
-                                (floor(global_step / step_size) - global_step / step_size) +
-                                learning_rate
+        It is computed as::
 
-        ```
-
-    References
-    ----------
-    .. [1] Leslie N. Smith, "Cyclical Learning Rates
-       for Training Neural Networks", https://arxiv.org/abs/1506.01186
-
+            decayed_learning_rate = (max_lr - learning_rate) *
+                                    (floor(global_step / step_size) - global_step / step_size) +
+                                    learning_rate
     """
     with tf.name_scope(name):
         learning_rate = tf.cast(learning_rate, dtype=tf.float32)

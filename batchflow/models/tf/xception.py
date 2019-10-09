@@ -22,6 +22,7 @@ class Xception(TFModel):
     body : dict
         entry, middle, exit : dict
         Dictionary with parameters for entry encoding: downsampling of the inputs.
+
             num_stages : int
                 Number of `block`'s in the respective flow.
             filters : list of sequences of 3 ints

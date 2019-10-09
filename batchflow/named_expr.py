@@ -650,16 +650,17 @@ class I(NamedExpression):
     Parameters
     ----------
     name : str
-        'current' or its substring - current iteration number, default.
-        'maximum' or its substring - total number of iterations to be performed.
-                                     If total number is not defined, raises an error.
-        'ratio' or its substring - current iteration divided by a total number of iterations.
+        Determines returned value. One of:
+            - 'current' or its substring - current iteration number, default.
+            - 'maximum' or its substring - total number of iterations to be performed.
+              If total number is not defined, raises an error.
+            - 'ratio' or its substring - current iteration divided by a total number of iterations.
 
     Raises
     ------
     ValueError
-        * If `name` is not valid.
-        * If `name` is 'm' or 'r' and total number of iterations is not defined.
+    If `name` is not valid.
+    If `name` is 'm' or 'r' and total number of iterations is not defined.
     Examples
     --------
     ::

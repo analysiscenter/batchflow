@@ -34,19 +34,18 @@ def files_setup(request):
     return path, folder1, folder2
 
 
-@pytest.mark.parametrize('path,expectation', [['', does_not_raise()],
-                                              [[], pytest.raises(ValueError)],
-                                              [['', ''], does_not_raise()]
-                                              ])
+@pytest.mark.parametrize('path, expectation', [['', does_not_raise()],
+                                               [[], pytest.raises(ValueError)],
+                                               [['', ''], does_not_raise()]])
 def test_build_index_empty(path, expectation):
     with expectation:
         findex = FilesIndex(path=path)
         assert len(findex) == 0
         assert isinstance(findex.index, np.ndarray)
 
-@pytest.mark.parametrize('path,error', [(1, TypeError),
-                                        ([2, 3], AttributeError),
-                                        ([None], AttributeError)])
+@pytest.mark.parametrize('path, error', [(1, TypeError),
+                                         ([2, 3], TypeError),
+                                         ([None], TypeError)])
 def test_build_index_non_path(path, error):
     """ `path` should be string or list of strings """
     with pytest.raises(error):

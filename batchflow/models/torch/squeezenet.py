@@ -165,7 +165,7 @@ class FireBlock(nn.Module):
 
     Notes
     -----
-    For other params see :class:`.ConvBlock`.
+    For other params see :class:`~.torch.layers.ConvBlock`.
     """
     def __init__(self, inputs, layout='cna', filters=None, **kwargs):
         super().__init__()
