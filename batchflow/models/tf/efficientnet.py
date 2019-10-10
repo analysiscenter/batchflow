@@ -1,4 +1,4 @@
-""" Base class for scalable models and EfficientNet
+""" EfficientNet family of NNs
 
 Mingxing Tan, Quoc V. Le "`EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks
 <https://arxiv.org/abs/1905.11946>`_"
@@ -13,10 +13,49 @@ class EfficientNetB0(EncoderDecoder):
     """
     EfficientNetB0
 
-    **Configuration**
-        see :class:`ScalableModel`
-        Base block is :meth:`.MobileNet_v2.block`
+    Parameters
+    ----------
+    inputs : dict
+        dict with 'images' and 'labels' (see :meth:`.TFModel._make_inputs`)
 
+    initial_block : dict, optional
+        parameters for the initial block (see :class:`EncoderDecoder`)
+        scalable : bool
+            indicates whether the block can be scaled
+
+    body : dict, optional
+        encoder : dict, optional
+            parameters for model's body (see :class:`EncoderDecoder`)
+
+            num_stages : int, optional
+                Number of blocks
+
+            order : str, sequence of str, optional
+                Determines order of applying layers.
+                Since no skips are used in EfficientNets this should be always `['block']`
+
+            blocks : dict, optional
+                Parameters for pre-processing blocks.
+                if parameter's value is a list, each element correspond to different stage
+
+                base : callable or list of callable
+                    Tensor processing function. Default is :meth:`.MobileNet_v2.block`
+
+                scalable : bool or list of bool
+                    indicates whether the block can be scaled
+
+                other : optional
+                    parameters for :meth:`.MobileNet_v2.block`
+
+    head : dict, optional
+        parameters for head (see :class:`EncoderDecoder`)
+        scalable : bool
+            indicates whether the block can be scaled
+
+    common : dict, optional
+        common parameters
+        width_factor, depth_factor : float, optional
+            scaling factors
     """
 
     resolution = 224  # image resolution used in original paper
@@ -82,12 +121,12 @@ class EfficientNetB0(EncoderDecoder):
     @classmethod
     def round_filters(cls, filters, factor):
         """ Round number of filters based on width multiplier. """
-        return int(filters * factor)
+        return max(1, int(filters * factor))
 
     @classmethod
     def round_repeats(cls, repeats, factor):
         """ Round number of layers based on depth multiplier. """
-        return int(repeats * factor)
+        return max(1, int(repeats * factor))
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
