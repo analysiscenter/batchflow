@@ -294,7 +294,8 @@ class ClassificationMetrics(Metrics):
 
             if multiclass is None:
                 value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-                value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, self.num_classes)
+                classes_calculated = self.num_classes - 1 if self.skip_bg else self.num_classes
+                value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, classes_calculated)
             elif multiclass == 'micro':
                 n = np.sum([l[0] for l in label_value], axis=0)
                 d = np.sum([l[1] for l in label_value], axis=0)

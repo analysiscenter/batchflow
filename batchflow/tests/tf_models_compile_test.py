@@ -1,10 +1,21 @@
 """ Test that all TFmodels can be constructed """
-# pylint: disable=import-error, no-name-in-module
+# pylint: disable=import-error, no-name-in-module, unused-import
 # pylint: disable=redefined-outer-name
 import pytest
 
-from batchflow.models.tf import * #pylint: disable=wildcard-import
-
+from batchflow.models.tf import LinkNet, UNet, VNet, \
+                                FCN8, FCN16, FCN32, \
+                                DenseNetFC56, DenseNetFC67, DenseNetFC103, \
+                                RefineNet, GCN, DeepLabXS, DeepLabX8, DeepLabX16, \
+                                VGG16, VGG19, VGG7, \
+                                ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
+                                ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152, \
+                                Inception_v1, InceptionResNet_v2, Inception_v3, Inception_v4, \
+                                SqueezeNet, MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small, \
+                                DenseNet121, DenseNet169, DenseNet201, DenseNet264, \
+                                ResNetAttention56, ResNetAttention92, \
+                                PyramidNet18, PyramidNet34, PyramidNet50, PyramidNet101, \
+                                XceptionS, Xception41, Xception64
 
 MODELS_SEG = [
     LinkNet,
