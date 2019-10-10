@@ -75,10 +75,11 @@ class RefineNet(TFModel):
         filters = kwargs.pop('filters')
 
         with tf.variable_scope(name):
-            encoder_outputs = cls.encoder(inputs, **encoder, **kwargs)
+            encoder_outputs = cls.encoder(inputs, filters=[64*2**i for i in range(4)],
+                                          **encoder, **kwargs)
 
             x = None
-            for i, tensor in enumerate(encoder_outputs[::-1]):
+            for i, tensor in enumerate(encoder_outputs[1:][::-1]):
                 decoder_inputs = tensor if x is None else (tensor, x)
                 x = cls.decoder_block(decoder_inputs, filters=filters[i], name='decoder-'+str(i), **kwargs)
         return x
@@ -138,7 +139,7 @@ class RefineNet(TFModel):
         upsample_args = {**kwargs, **upsample_args}
 
         with tf.variable_scope(name):
-            #filters = min([cls.num_channels(t, data_format=kwargs['data_format']) for t in inputs])
+            # filters = min([cls.num_channels(t, data_format=kwargs['data_format']) for t in inputs])
             # Residual Conv Unit
             after_rcu = []
             if not isinstance(inputs, (list, tuple)):
@@ -157,7 +158,7 @@ class RefineNet(TFModel):
                     x = conv_block(tensor, layout='ac', filters=filters, kernel_size=3,
                                    name='conv-%d' % i, **kwargs)
                     if i != 0:
-                        x = cls.upsample((x, after_rcu[0]), name='upsample-%d' % i, **upsample_args)
+                        x = cls.upsample(x, name='upsample-%d' % i, **upsample_args)
                     after_mrf += x
             # free memory
             x, after_mrf = after_mrf, None

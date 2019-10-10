@@ -10,28 +10,25 @@ MODELS_SEG = [
     LinkNet,
     UNet,
     VNet,
-    FCN32, FCN16, FCN8,
-    DenseNetFC56, DenseNetFC67, DenseNetFC103,
-    RefineNet, # fails
+    FCN8, FCN16, FCN32,
+    DenseNetFC56, # DenseNetFC67, DenseNetFC103,
+    RefineNet,
     GCN,
-    DeepLabXS, DeepLabX8, DeepLabX16
+    DeepLabXS, DeepLabX8, # DeepLabX16
 ]
 
 MODELS_CLF = [
     VGG16, VGG19, VGG7,
-    ResNet18, ResNet34, ResNet50, ResNet101, ResNet152,
-    ResNeXt18, ResNeXt34,  # ResNeXt50, ResNeXt101, ResNeXt152, # too heavy ?
-    Inception_v1, # Inception_v3, Inception_v4, InceptionResNet_v2,  # heavy fail
+    ResNet18, ResNet34, # ResNet50, ResNet101, ResNet152,
+    ResNeXt18, # ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152,
+    Inception_v1,
+    # InceptionResNet_v2, Inception_v3, Inception_v4, # fail
     SqueezeNet,
     MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small,
-    DenseNet121,  # DenseNet169, DenseNet201, DenseNet264, # too heavy ?
-    ResNetAttention56, ResNetAttention92,
-    PyramidNet18,
-    PyramidNet34,
-    PyramidNet50,
-    PyramidNet101,
-    PyramidNet152,
-    XceptionS, Xception41, Xception64
+    DenseNet121,  # DenseNet169, DenseNet201, DenseNet264,
+    ResNetAttention56, # ResNetAttention92,
+    PyramidNet18, PyramidNet34, PyramidNet50, # PyramidNet101,
+    XceptionS, Xception41, # Xception64
 ]
 
 
