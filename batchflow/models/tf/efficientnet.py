@@ -16,16 +16,16 @@ class EfficientNetB0(EncoderDecoder):
     Parameters
     ----------
     inputs : dict
-        dict with 'images' and 'labels' (see :meth:`.TFModel._make_inputs`)
+        dict with 'images' and 'labels' (see :meth:`~tf.TFModel._make_inputs`)
 
     initial_block : dict, optional
-        parameters for the initial block (see :class:`EncoderDecoder`)
+        parameters for the initial block (see :class:`~tf.EncoderDecoder`)
         scalable : bool
             indicates whether the block can be scaled
 
     body : dict, optional
         encoder : dict, optional
-            parameters for model's body (see :class:`EncoderDecoder`)
+            parameters for model's body (see :class:`~tf.EncoderDecoder`)
 
             num_stages : int, optional
                 Number of blocks
@@ -39,23 +39,23 @@ class EfficientNetB0(EncoderDecoder):
                 if parameter's value is a list, each element correspond to different stage
 
                 base : callable or list of callable
-                    Tensor processing function. Default is :meth:`.MobileNet_v2.block`
+                    Tensor processing function. Default is :meth:`~tf.MobileNet_v2.block`
 
                 scalable : bool or list of bool
                     indicates whether the block can be scaled
 
                 other : optional
-                    parameters for :meth:`.MobileNet_v2.block`
+                    parameters for :meth:`~tf.MobileNet_v2.block`
 
     head : dict, optional
-        parameters for head (see :class:`EncoderDecoder`)
+        parameters for head (see :class:`~tf.EncoderDecoder`)
         scalable : bool
             indicates whether the block can be scaled
 
     common : dict, optional
         common parameters
         width_factor, depth_factor : float, optional
-            scaling factors
+            scaling factors to control network resizing width-wise and depth-wise
     """
 
     resolution = 224  # image resolution used in original paper
@@ -77,8 +77,9 @@ class EfficientNetB0(EncoderDecoder):
                                               expansion_factor=[1, 6, 6, 6, 6, 6, 6],
                                               se_block=dict(ratio=4))
 
-        config['body/encoder/downsample'] = None
+        config['body/encoder/downsample'] = None  # no downsampling
 
+        # disabling decoder completely
         config['body/embedding'] = None
         config['body/decoder'] = None
 
@@ -103,30 +104,19 @@ class EfficientNetB0(EncoderDecoder):
         for path in ('initial_block/', 'body/encoder/blocks/', 'head/'):
             scalable = config.get(path + 'scalable')
             if scalable:
-                for param, factor, fun in [('filters', w_factor, self.round_filters),
-                                           ('repeats', d_factor, self.round_repeats)]:
+                for param, factor in [('filters', w_factor), ('repeats', d_factor)]:
                     if factor != 1:
                         val = config.get(path + param)
                         if val:
                             if isinstance(val, int):
-                                val = fun(val, factor)
+                                val = max(1, int(val * factor))
                             elif isinstance(val, list):
-                                val = [fun(v, factor) for v in val]
+                                val = [max(1, int(v * factor)) for v in val]
                             else:
                                 raise ValueError("{} should be int or list, {} given".format(param, type(val)))
                             config[path + param] = val
 
         return config
-
-    @classmethod
-    def round_filters(cls, filters, factor):
-        """ Round number of filters based on width multiplier. """
-        return max(1, int(filters * factor))
-
-    @classmethod
-    def round_repeats(cls, repeats, factor):
-        """ Round number of layers based on depth multiplier. """
-        return max(1, int(repeats * factor))
 
     @classmethod
     def head(cls, inputs, name='head', **kwargs):
