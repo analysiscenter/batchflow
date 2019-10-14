@@ -303,7 +303,7 @@ class ClassificationMetrics(Metrics):
             value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
         elif multiclass in ['macro', 'mean']:
             value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-            value = np.mean(value, axis=0).reshape(-1, 1)
+            value = self.infmean(value).reshape(-1, 1)
 
         return value
 
