@@ -291,7 +291,7 @@ class ClassificationMetrics(Metrics):
             label = label if label is not None else 1
         labels = label if label is not None else self._all_labels()
         labels = labels if isinstance(labels, (list, tuple)) else [labels]
-        label_value = [(numer(l, multiclass=multiclass), denom(l, multiclass=multiclass)) for l in labels]
+        label_value = [(numer(l), denom(l)) for l in labels]
 
         if multiclass is None:
             value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])).ravel() for l in label_value]
