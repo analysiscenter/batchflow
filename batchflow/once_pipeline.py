@@ -1,9 +1,12 @@
 """ Once pipeline """
-import sys
+import copy as cp
 from functools import partial
+import logging
+
 import numpy as np
 
 from .named_expr import NamedExpression, eval_expr
+from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID, UPDATE_ID
 
 
 class OncePipeline:
@@ -31,52 +34,49 @@ class OncePipeline:
         self._namespaces = state['namespaces']
         self.pipeline = state['pipeline']
 
+    def copy(self):
+        """ Make a shallow copy of the dataset object """
+        return cp.copy(self)
+
     def __add__(self, other):
         if isinstance(other, OncePipeline):
             return self.pipeline + other
         return other + self
 
-    @property
-    def _all_namespaces(self):
-        return [sys.modules["__main__"]] + self._namespaces
-
-    def has_method(self, name):
-        return any(hasattr(namespace, name) for namespace in self._all_namespaces)
-
-    def get_method(self, name):
-        """ Return a method by the name """
-        for namespace in self._all_namespaces:
-            if hasattr(namespace, name):
-                return getattr(namespace, name)
-        return None
-
-    def _add_action(self, name, *args, save_to=None, **kwargs):
-        self._actions.append({'name': name, 'args': args, 'kwargs': kwargs, 'save_to': save_to})
+    def _add_action(self, name, *args, _args=None, save_to=None, **kwargs):
+        action = {'name': name, 'args': args, 'kwargs': kwargs, 'save_to': save_to}
+        if _args:
+            action.update(**_args)
+        self._actions.append(action)
         return self
 
     def __getattr__(self, name):
-        if self.has_method(name):
+        if self.pipeline.is_method_from_ns(name):
             return partial(self._add_action, name)
         raise AttributeError("Unknown name: %s" % name)
 
     def add_namespace(self, *namespaces):
-        self._namespaces.extend(namespaces)
+        self.pipeline.add_namespace(*namespaces)
         return self
 
     def _exec_action(self, action):
         args_value = eval_expr(action['args'], pipeline=self.pipeline)
         kwargs_value = eval_expr(action['kwargs'], pipeline=self.pipeline)
 
-        method = self.get_method(action['name'])
-        if method is None:
-            raise ValueError("Unknown method: %s" % action['name'])
+        if action['name'] in ACTIONS:
+            method = getattr(self, ACTIONS[action['name']])
+            method(action)
+        else:
+            method = self.pipeline.get_method(action['name'])
+            if method is None:
+                raise ValueError("Unknown method: %s" % action['name'])
 
-        res = method(*args_value, **kwargs_value)
+            res = method(*args_value, **kwargs_value)
 
-        if isinstance(action['save_to'], NamedExpression):
-            action['save_to'].set(res, pipeline=self.pipeline)
-        elif isinstance(action['save_to'], np.ndarray):
-            action['save_to'][:] = res
+            if isinstance(action['save_to'], NamedExpression):
+                action['save_to'].set(res, pipeline=self.pipeline)
+            elif isinstance(action['save_to'], np.ndarray):
+                action['save_to'][:] = res
 
     def run(self):
         """ Execute all actions """
@@ -94,8 +94,6 @@ class OncePipeline:
             a name of the variable
         default
             an initial value for the variable set when pipeline is created
-        init_on_each_run
-            an initial value for the variable to set before each run
         lock : bool
             whether to lock a variable before each update (default: True)
 
@@ -107,9 +105,12 @@ class OncePipeline:
         --------
         >>> pp = dataset.p.before
                     .init_variable("iterations", default=0)
-                    .init_variable("accuracy", init_on_each_run=0)
-                    .init_variable("loss_history", init_on_each_run=list)
+                    .init_variable("accuracy")
+                    .init_variable("loss_history", [])
         """
+        if 'init_on_each_run' in kwargs:
+            logging.warning("`init_on_each_run` in `%s` is obsolete. Use `default` instead.", name)
+            default = kwargs.pop('init_on_each_run')
         self.pipeline.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
         return self
 
@@ -146,5 +147,46 @@ class OncePipeline:
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
-        self.pipeline.save_model(name, *args, **kwargs)
-        return self
+        return self._add_action(SAVE_MODEL_ID, *args, _args=dict(model_name=name), **kwargs)
+
+    def _exec_save_model(self, action):
+        self.pipeline._exec_save_model(None, action)        # pylint:disable=protected-access
+
+    def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
+        """ Load a model """
+        if mode == 'static':
+            self.pipeline.models.load_model(mode, model_class, name, *args, **kwargs)
+            return self
+        return self._add_action(LOAD_MODEL_ID, *args,
+                                _args=dict(mode=mode, model_class=model_class, model_name=name),
+                                **kwargs)
+
+    def _exec_load_model(self, action):
+        self.pipeline._exec_load_model(None, action)        # pylint:disable=protected-access
+
+
+    def update(self, expr, value=None):
+        """ Update a value of a given named expression lazily during pipeline execution
+
+        Parameters
+        ----------
+        expr : NamedExpression
+            an expression
+
+        value
+            an updating value, could be a value of any type or a named expression
+
+        Returns
+        -------
+        self - in order to use it in the pipeline chains
+
+        Notes
+        -----
+        This method does not change a value of the variable until the pipeline is run.
+        So it should be used in pipeline definition chains only.
+        ``set_variable`` is imperative and may be used to change variable value within actions.
+        """
+        return self._add_action(UPDATE_ID, _args=dict(expr=expr, value=value))
+
+    def _exec_update(self, action):
+        action['expr'].set(action['value'], pipeline=self.pipeline)

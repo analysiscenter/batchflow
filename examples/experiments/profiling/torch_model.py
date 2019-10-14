@@ -1,23 +1,24 @@
-import sys
-import dill
-import tensorflow as tf
+""" Test torch model """
 
-import matplotlib.pyplot as plt
+import sys
 
 sys.path.append("../../..")
-from batchflow import Pipeline, B, C, V
+from batchflow import B, V
 from batchflow.opensets import MNIST
 from batchflow.models.torch import VGG16
-from batchflow.research import Research, Option
 
-BATCH_SIZE=64
+BATCH_SIZE = 64
 
-model_config={
-    'inputs': dict(images={'shape': (1, 28, 28)},
-                   labels={'classes': 10, 'transform': 'ohe', 'name': 'targets'}),
+model_config = {
+    'inputs/images/shape': (1, 28, 28),
+    'inputs/labels': {
+        'classes': 10,
+        'transform': 'ohe',
+        'name': 'targets'
+    },
     'initial_block/inputs': 'images',
     'body/block/layout': 'cna',
-    'device': 'cuda:2'
+    'device': 'gpu:2'
 }
 
 mnist = MNIST()
@@ -29,20 +30,20 @@ train_ppl = (mnist.train.p
     .to_array(channels='first', dtype='float32')
     .train_model('conv', B('images'), B('labels'),
                  fetches='loss',
-                 save_to=V('loss'), mode='w')
+                 save_to=V('loss', mode='w'))
     .run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True))
 
 
 test_ppl = (mnist.test.p
-    .init_variable('predictions') 
-    .init_variable('metrics', init_on_each_run=None) 
+    .init_variable('predictions')
+    .init_variable('metrics', init_on_each_run=None)
     .import_model('conv', train_ppl)
     .to_array(channels='first', dtype='float32')
-    .predict_model('conv', B('images'), B('labels'),
+    .predict_model('conv', B('images'), targets=B('labels'),
                    fetches='predictions',
                    save_to=V('predictions'))
     .gather_metrics('class', targets=B('labels'), predictions=V('predictions'),
-                    fmt='logits', axis=-1, save_to=V('metrics'), mode='a')
+                    fmt='logits', axis=-1, save_to=V('metrics', mode='a'))
     .run(BATCH_SIZE, shuffle=True, n_epochs=1, lazy=True))
 
 train_ppl.run()

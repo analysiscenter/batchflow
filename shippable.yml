@@ -16,16 +16,15 @@ build:
   ci:
     - pip3 install -U pylint
     - pylint -rn --rcfile pylintrc batchflow
-    - find . -wholename "*.py" | grep "tests" | xargs pylint -rn --rcfile=pylintrc
-    - pytest -m "not slow" -v --junitxml=shippable/testresults/pytests.xml
+    - pytest -m "not slow" --disable-pytest-warnings -v --junitxml=shippable/testresults/pytests.xml
 
 integrations:
   hub:
-    - integrationName: DockerHub analysiscenter.ru
+    - integrationName: Containers
       type: docker
 
   notifications:
-    - integrationName: Slack analysiscenter.ru
+    - integrationName: Notifier
       type: slack
       recipients:
         - "#commits"

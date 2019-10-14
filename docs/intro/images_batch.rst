@@ -48,11 +48,12 @@ ImagesBatch provides typical augmentation actions, for example:
     ..  image:: ../_static/ImagesBatch_examples/posterize.png
 * :meth:`cutout <batchflow.ImagesBatch.cutout>` -- add colored rectangular areas to an image
     ..  image:: ../_static/ImagesBatch_examples/cutout.png
-* :meth:`elastic_transform <batchflow.ImagesBatch.elastic_transform>` -- add colored rectangular areas to an image
+* :meth:`elastic_transform <batchflow.ImagesBatch.elastic_transform>` -- elastic deformation of images
     ..  image:: ../_static/ImagesBatch_examples/elastic.png
 
 
 Perhaps, any function from scipy.ndimage is accesible as sp_<method_name>. Just use it as a usual action (without specifying input parameter). Note that they only works with scipy.ndarray and usually much slower than respective PIL methods.
+
 .. note:: All these methods can be executed for randomly sampled images from a batch. You just need to specify ``p`` parameter when calling an action (probability of applying an action to an image).
 
 .. note:: Use ``R()`` or ``P(R())`` :doc:`named expressions <named_expr>` to sample an argument for actions. In the first case the argument will be sampled for all images in a batch. If ``P(R())`` is passed then the argument will be sampled for each image.
@@ -117,7 +118,7 @@ To dump images, use action :meth:`dump <batchflow.ImagesBatch.dump>`
 `transform_actions` decorator
 -----------------------------
 
-This decorator finds all defined methods whose names starts with user-defined `suffix` and `prefix` and
+This decorator finds all defined methods whose names start with user-defined `suffix` and `prefix` and
 decorates them with ``wrapper`` which is an argument too.
 
 For example, there are two wrapper functions defined in :class:`~batchflow.Batch`:

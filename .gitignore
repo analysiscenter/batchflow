@@ -3,3 +3,8 @@
 .pytest_cache
 .DS_Store
 .vscode
+.idea
+build/
+dist/
+*.egg-info/
+.coverage

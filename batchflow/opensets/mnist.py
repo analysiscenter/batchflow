@@ -42,11 +42,13 @@ class MNIST(ImagesOpenset):
     TEST_IMAGES_URL = "http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz"
     TEST_LABELS_URL = "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz"
     ALL_URLS = [TRAIN_IMAGES_URL, TRAIN_LABELS_URL, TEST_IMAGES_URL, TEST_LABELS_URL]
+    num_classes = 10
 
-    def __init__(self, *args, bar=False, **kwargs):
+    def __init__(self, *args, bar=False, preloaded=None, train_test=True, **kwargs):
         self.bar = tqdm.tqdm(total=8) if bar else None
-        super().__init__(*args, train_test=True, **kwargs)
-        self.split()
+        super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
+        if self.bar:
+            self.bar.close()
 
     @property
     def _get_from_urls(self):

@@ -43,25 +43,29 @@ class ResNet(TFModel):
             number of filters in each group
 
         block : dict
-            bottleneck : bool
-                whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
-            bottleneck_factor : int
-                filter shrinking factor in a bottleneck block (default=4)
-            post_activation : None or bool or str
-                layout to apply after after residual and shortcut summation (default is None)
+            layout : str
+                a sequence of layers in the block
+            filters : int or list/tuple of ints
+                number of output filters
             zero_pad : bool
                 whether to pad a shortcut with zeros when a number of filters increases
                 or apply a 1x1 convolution (default is False)
             width_factor : int
                 widening factor to make WideResNet (default=1)
-            se_block : bool
-                whether to use squeeze-and-excitation blocks (default=False)
-            se_factor : int
-                squeeze-and-excitation channels ratio (default=16)
+            downsample : bool
+                whether to decrease spatial dimensions with strides=2 in the first convolution
             resnext : bool
                 whether to use aggregated ResNeXt block (default=False)
             resnext_factor : int
                 the number of aggregations in ResNeXt block (default=32)
+            bottleneck : bool
+                whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
+            bottleneck_factor : int
+                filter shrinking factor in a bottleneck block (default=4)
+            se_block : dict or None
+                params for squeeze-and-excitation blocks, see :meth:`~TFModel.se_block` (default=None)
+            post_activation : None or bool or str
+                layout to apply after after residual and shortcut summation (default is None)
 
     head : dict
         'Vdf' with dropout_rate=.4
@@ -70,16 +74,16 @@ class ResNet(TFModel):
     def default_config(cls):
         config = TFModel.default_config()
         config['common/conv/use_bias'] = False
-        config['initial_block'] = dict(layout='cnap', filters=64, kernel_size=7, strides=2,
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
 
         config['body/block'] = dict(layout=None, post_activation=None, downsample=False,
                                     bottleneck=False, bottleneck_factor=4,
                                     width_factor=1, zero_pad=False,
                                     resnext=False, resnext_factor=32,
-                                    se_block=False, se_factor=16)
+                                    se_block=None)
 
-        config['head'] = dict(layout='Vdf', dropout_rate=.4)
+        config['head'] += dict(layout='Vdf', dropout_rate=.4)
 
         config['loss'] = 'ce'
 
@@ -197,10 +201,10 @@ class ResNet(TFModel):
             whether to use a simple (`False`) or bottleneck (`True`) block
         bottleneck_factor : int
             the filters nultiplier in the bottleneck block
-        se_block : bool
-            whether to include squeeze and excitation block
-        se_factor : int
-            se block ratio
+        se_block : dict or None
+            params for squeeze-and-excitation blocks, see :meth:`~TFModel.se_block` (default=None)
+        post_activation : str or bool
+            layout to apply after after residual and shortcut summation (default is None)
         name : str
             scope name
         kwargs : dict
@@ -215,7 +219,7 @@ class ResNet(TFModel):
         width_factor = cls.pop('width_factor', kwargs)
         bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
         resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
-        se_block, se_factor = cls.pop(['se_block', 'se_factor'], kwargs)
+        se_block = cls.pop('se_block', kwargs)
         post_activation = cls.pop('post_activation', kwargs)
         if isinstance(post_activation, bool) and post_activation:
             post_activation = 'an'
@@ -234,7 +238,7 @@ class ResNet(TFModel):
             x_channels = cls.num_channels(x, data_format)
 
             if se_block:
-                x = cls.se_block(x, se_factor, **kwargs)
+                x = cls.se_block(x, **{**kwargs, **se_block})
 
             with tf.variable_scope('shortcut'):
                 strides = 2 if downsample else 1
@@ -406,47 +410,6 @@ class ResNet(TFModel):
 
         return x
 
-    @classmethod
-    def make_encoder(cls, inputs, name='encoder', **kwargs):
-        """ Build the body and return encoder tensors
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            input tensor
-        name : str
-            scope name
-        kwargs : dict
-            body params
-
-        Returns
-        -------
-        tf.Tensor
-
-        Raises
-        ------
-        ValueError
-            If `filters` is not specified or number of `num_blocks` not equal to number of `filters` provided.
-        """
-        num_blocks = cls.get('num_blocks', config=cls.fill_params('body', **kwargs))
-
-        if kwargs.get('filters') is None:
-            raise ValueError('Specify number of filters')
-
-        if len(num_blocks) != len(kwargs.get('filters')):
-            msg = '{} encoder requires {} filters instead of {}'
-            raise ValueError(msg.format(cls.__name__, len(num_blocks), len(kwargs.get('filters'))))
-
-        with tf.variable_scope(name):
-            x = cls.body(inputs, name='body', **kwargs)
-
-            scope = tf.get_default_graph().get_name_scope()
-            encoder_tensors = []
-            for i, _ in enumerate(num_blocks):
-                tensor_name = scope + '/body/group-%d'%i + '/output:0'
-                x = tf.get_default_graph().get_tensor_by_name(tensor_name)
-                encoder_tensors.append(x)
-        return encoder_tensors
 
 
 class ResNet18(ResNet):

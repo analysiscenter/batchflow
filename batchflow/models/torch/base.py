@@ -1,4 +1,5 @@
 """ Cotains base class for Torch models """
+import os
 import re
 import threading
 from functools import partial
@@ -31,32 +32,65 @@ LOSSES = {
 
 DECAYS = {
     'exp': torch.optim.lr_scheduler.ExponentialLR,
+    'lambda': torch.optim.lr_scheduler.LambdaLR,
+    'step': torch.optim.lr_scheduler.StepLR,
+    'multistep': torch.optim.lr_scheduler.MultiStepLR,
+    'cos': torch.optim.lr_scheduler.CosineAnnealingLR,
+}
+
+
+DECAYS_DEFAULTS = {
+    torch.optim.lr_scheduler.ExponentialLR : dict(gamma=0.96),
+    torch.optim.lr_scheduler.LambdaLR : dict(lr_lambda=lambda epoch: 0.96**epoch),
+    torch.optim.lr_scheduler.StepLR: dict(step_size=30),
+    torch.optim.lr_scheduler.MultiStepLR: dict(milestones=[30, 80]),
+    torch.optim.lr_scheduler.CosineAnnealingLR: dict(T_max=None)
 }
 
 
 class TorchModel(BaseModel):
-    r""" Base class for torch models
+    r""" Base class for Torch models.
 
-    **Configuration**
-
-    ``build`` and ``load`` are inherited from :class:`.BaseModel`.
-
-    device : str or torch.device
-        if str, a device name (e.g. 'cpu' or 'cuda:0').
-
+    Parameters
+    ----------
     inputs : dict
-        model inputs (see :meth:`~.TorchModel._make_inputs`)
+        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of their initialization.
+        Allows to create placeholders of needed format (shape, dtype, data format) with specified name
+        and apply some typical transformations (like one-hot-encoding), if needed.
 
-    loss - a loss function, might be defined in one of three formats:
-        - name
-        - tuple (name, args)
-        - dict {'name': name, \**args}
+        If value is a string, then it must point to another key from the input-dict, effectively making an alias.
+        By default, ``targets`` is aliased to ``labels`` or ``masks``, if present.
+        If value is a tuple, then it must contain all of the arguments below in the same order. ``None`` is reserved
+        for using default value.
+        If value is a dictionary, then it can omit some of the parameters (default values will be at use).
 
-        where name might be one of:
-            - short name (`'mse'`, `'ce'`, `'l1'`, `'cos'`, `'hinge'`, `'huber'`, `'logloss'`, `'dice'`)
+            dtype : str or torch.dtype
+                Data type. Default is 'float32'.
+
+            shape : int, None, sequence of ints or Nones
+                Tensor shape with channels and without batch size. Default is None.
+
+            classes : int, array-like or None
+                If int, then number of classes.
+                If array-like, then labels of classes (can be strings or anything else).
+                If None, then tensor has no classes. Default is None.
+
+            data_format : {'channels_first', 'channels_last', 'f', 'l'}
+                The ordering of the dimensions in the inputs. Can be shortened to ``df`` for brevity.
+                Default is 'channels_last'.
+
+    loss : str, tuple, dict
+        Loss function, might be defined in multiple formats.
+
+        If str, then short ``name``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
+
+        Name must be one of:
+            - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
+              ``'huber'``, ``'logloss'``, ``'dice'``)
             - a class name from `torch losses <https://pytorch.org/docs/stable/nn.html#loss-functions>`_
-              (e.g. `'PoissonNLL'` or `'TripletMargin'`)
-            - a module class
+              (e.g. ``'PoissonNLL'`` or ``'TripletMargin'``)
             - callable
 
         Examples:
@@ -66,17 +100,41 @@ class TorchModel(BaseModel):
         - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
         - ``{'loss': my_custom_loss_fn}``
 
-    decay - a learning rate decay algorithm might be defined in one of three formats:
-        - name
-        - tuple (name, args)
-        - dict {'name': name, **args}
+    optimizer : str, tuple, dict
+        Optimizer, might be defined in multiple formats.
 
-        where name might be one of:
+        If str, then short ``name``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
 
-        - short name ('exp')
+        Name must be one of:
+            - short name (e.g. ``'Adam'``, ``'Adagrad'``, any optimizer from
+              `torch.optim <https://pytorch.org/docs/stable/optim.html#algorithms>`_)
+            - a class with ``Optimizer`` interface
+            - a callable which takes model parameters and optional args
+
+        Examples:
+
+        - ``{'optimizer': 'Adam'}``
+        - ``{'optimizer': ('SparseAdam', {'lr': 0.01})}``
+        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
+        - ``{'optimizer': {'name': MyCustomOptimizer, momentum=0.95}}``
+
+    decay : str, tuple, dict
+        Learning rate decay algorithm, might be defined in multiple formats.
+        All decays require to have ``n_iters`` as a key in a configuration
+        dictionary that contains the number of iterations in one epoch.
+
+        If str, then short ``name``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
+
+        Name must be one of:
+
+        - short name (``'exp'``, ``'invtime'``, ``'naturalexp'``, ``'const'``, ``'poly'``)
         - a class name from `torch.optim.lr_scheduler
           <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate>`_
-          (e.g. 'LambdaLR')
+          (e.g. ``'LambdaLR'``) except ``'ReduceLROnPlateau'``.
         - a class with ``_LRScheduler`` interface
         - a callable which takes optimizer and optional args
 
@@ -86,30 +144,16 @@ class TorchModel(BaseModel):
         - ``{'decay': ('StepLR', {'steps_size': 10000})}``
         - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5}``
 
-    optimizer - an optimizer might be defined in one of three formats:
-            - name
-            - tuple (name, args)
-            - dict {'name': name, \**args}
+    device : str or torch.device
+        If str, a device name (e.g. 'cpu' or 'gpu:0').
 
-            where name might be one of:
-
-            - short name (e.g. 'Adam', 'Adagrad', any optimizer from
-              `torch.optim <https://pytorch.org/docs/stable/optim.html#algorithms>`_)
-            - a class with ``Optimizer`` interface
-            - a callable which takes model parameters and optional args.
-
-        Examples:
-
-        - ``{'optimizer': 'Adam'}``
-        - ``{'optimizer': ('SparseAdam', {'lr': 0.01})}``
-        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
-        - ``{'optimizer': {'name': MyCustomOptimizer, momentum=0.95}}``
-
-    common : dict
-        default parameters for all blocks (see :class:`.ConvBlock`)
+    microbatch : int
+        Size of chunks to split every batch into. Allows to process given data sequentially, accumulating gradients
+        from microbatches and applying them once in the end. Can be changed later in the `train` method.
+        Batch size must be divisible by microbatch size.
 
     initial_block : dict or nn.Module
-        a user-defined module or parameters for the input block, usually :class:`.ConvBlock` parameters.
+        User-defined module or parameters for the input block, usually :class:`~.torch.layers.ConvBlock` parameters.
 
         The only required parameter here is ``initial_block/inputs`` which should contain a name or
         a list of names from ``inputs`` which tensors will be passed to ``initial_block`` as ``inputs``.
@@ -122,52 +166,63 @@ class TorchModel(BaseModel):
         - ``{'initial_block': MyCustomModule(some_param=1, another_param=2)}``
 
     body : dict or nn.Module
-        a user-defined module or parameters for the base network layers, usually :class:`.ConvBlock` parameters
+        User-defined module or parameters for the base network layers,
+        usually :class:`~.torch.layers.ConvBlock` parameters.
 
     head : dict or nn.Module
-        a user-defined module or parameters for the head layers, usually :class:`.ConvBlock` parameters
+        User-defined module or parameters for the head layers, usually :class:`~.torch.layers.ConvBlock` parameters.
 
     predictions : str or callable
-        an operation applied to the head output to make the predictions tensor which is used in the loss function.
+        An operation applied to the head output to make the predictions tensor which is used in the loss function.
+        See :meth:`.TorchModel.output` for details.
 
     output : dict or list
-        auxiliary operations
+        Auxiliary operations to apply to network predictions. See :meth:`.TorchModel.output` for details.
 
-    For more details about predictions and auxiliary output operations see :meth:`.TorchModel.output`.
+    common : dict
+        Default parameters for all blocks (see :class:`~.torch.layers.ConvBlock`).
 
-    **How to create your own model**
 
-    #. Take a look at :class:`~.ConvBlock` since it is widely used as a building block almost everywhere.
+    **In order to create your own model, it is recommended to:**
 
-    #. Define model defaults (e.g. number of filters, batch normalization options, etc)
-       by overriding :meth:`.TorchModel.default_config`.
-       Or skip it and hard code all the parameters in unpredictable places without the possibility to
-       change them easily through model's config.
+    * Take a look at :class:`.BaseModel`: ``build`` and ``load`` methods inherited from it.
 
-    #. Define build configuration (e.g. number of classes, etc)
-       by overriding :meth:`~.TorchModel.build_config`.
+    * Take a look at :class:`~.torch.layers.ConvBlock` since it is widely used as a building block almost everywhere.
 
-    #. Override :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
-       In many cases defaults and build config are just enough to build a network without additional code writing.
+    * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding
+      :meth:`.TorchModel.default_config`. Those parameters are updated with external configuration dictionary.
 
-    Things worth mentioning:
+    * Define config post-processing by overriding :meth:`~.TorchModel.build_config`.
+      It's main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
 
-    #. Input data and its parameters should be defined in configuration under ``inputs`` key.
-       See :meth:`.TorchModel._make_inputs` for details.
+    * Override :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
+      You can either use usual `Torch layers <https://pytorch.org/docs/stable/nn.html>`_,
+      or predefined layers like :class:`~torch.layers.PyramidPooling`.
+      Conveniently, 'initial_block' is used to make pre-processing (e.g. reshaping or agressive pooling) of inputs,
+      'body' contains the meat of the network flow,
+      and 'head' makes sure that the output is compatible with targets.
 
-    #. You might want to use a convenient multidimensional :class:`.ConvBlock`,
-       as well as other predefined layers from ``dataset.models.torch.layers``.
-       Of course, you can use usual `Torch layers <https://pytorch.org/docs/stable/nn.html>`_.
 
-    #. In many cases there is no need to write a loss function, learning rate decay and optimizer
-       as they might be defined through config.
+    **In order to use existing model, it is recommended to configure:**
 
-    #. For a configured loss to work one of the inputs should have a name ``targets`` and
-       the model output is considered ``predictions``.
-       They will be passed to a loss function.
+    * ``inputs`` key defines input data together with parameters like shape, dtype, number of classes.
+      For a configured loss to work one of the inputs should have a name ``targets`` and
+      the model output is considered ``predictions``. See :meth:`.TorchModel._make_inputs` for details.
+
+    * ``loss``, ``optimizer``, ``decay`` keys
+
+    * ``initial_block`` sub-dictionary must contain ``inputs`` key with names of tensors to use as network inputs.
+
+    * ``initial_block``, ``body``, ``head`` keys are used to define behaviour of respective part of the network.
+      Default behaviour is to support all of the :class:`~.torch.layers.ConvBlock` options.
+      For complex models, take a look at default config of the chosen model to learn
+      which parameters should be configured.
+
     """
     def __init__(self, *args, **kwargs):
         self._train_lock = threading.Lock()
+        self.n_iters = None
+        self.current_iter = 0
         self.device = None
         self.loss_fn = None
         self.lr_decay = None
@@ -176,15 +231,21 @@ class TorchModel(BaseModel):
         self._inputs = dict()
         self.predictions = None
         self.loss = None
+        self.microbatch = None
+        self._full_config = None
 
         super().__init__(*args, **kwargs)
+
+    def reset(self):
+        """ Reset the trained model to allow a new training from scratch """
+        pass
 
     def build(self, *args, **kwargs):
         """ Build the model """
         config = self.build_config()
+        self._full_config = config
 
-        if 'device' in config:
-            self.device = torch.device(config['device'])
+        self.device = self._get_device()
 
         self._build(config)
 
@@ -192,6 +253,8 @@ class TorchModel(BaseModel):
             self._make_loss(config)
         if self.optimizer is None:
             self._make_optimizer(config)
+
+        self.microbatch = config.get('microbatch', None)
 
     def _make_inputs(self, names=None, config=None):
         """ Create model input data from config provided
@@ -274,6 +337,23 @@ class TorchModel(BaseModel):
             elif 'masks' in config:
                 self._inputs['targets'] = self._inputs['masks']
 
+    def _get_device(self):
+        device = self.config.get('device')
+        if isinstance(device, torch.device) or device is None:
+            _device = device
+        elif isinstance(device, str):
+            _device = device.split(':')
+            unit, index = _device if len(_device) > 1 else (device, '0')
+            if unit.lower() == 'gpu':
+                _device = torch.device('cuda', int(index))
+            elif unit.lower() == 'cpu':
+                _device = torch.device('cpu')
+            else:
+                raise ValueError('Unknown device type: ', device)
+        else:
+            raise TypeError('Wrong device type: ', type(device))
+        return _device
+
     def _make_loss(self, config):
         loss, args = unpack_fn_from_config('loss', config)
 
@@ -315,15 +395,27 @@ class TorchModel(BaseModel):
     def _make_decay(self, config):
         decay_name, decay_args = unpack_fn_from_config('decay', config)
 
-        if decay_name is None or callable(decay_name) or isinstance(decay_name, type):
+        if decay_name is None:
+            return decay_name, decay_args
+        if 'n_iters' not in config:
+            raise ValueError('Missing required key ```n_iters``` in the cofiguration dict.')
+        self.n_iters = config.pop('n_iters')
+
+        if callable(decay_name) or isinstance(decay_name, type):
             pass
         elif isinstance(decay_name, str) and hasattr(torch.optim.lr_scheduler, decay_name):
             decay_name = getattr(torch.optim.lr_scheduler, decay_name)
         elif decay_name in DECAYS:
-            decay_name = DECAYS.get(re.sub('[-_ ]', '', decay_name).lower(), None)
+            decay_name = DECAYS.get(decay_name)
         else:
             raise ValueError("Unknown learning rate decay method", decay_name)
 
+        if decay_name in DECAYS_DEFAULTS:
+            decay_dict = DECAYS_DEFAULTS.get(decay_name).copy()
+            if decay_name == DECAYS['cos']:
+                decay_dict.update(T_max=self.n_iters)
+            decay_dict.update(decay_args)
+            decay_args = decay_dict.copy()
         return decay_name, decay_args
 
     def get_tensor_config(self, tensor):
@@ -388,7 +480,7 @@ class TorchModel(BaseModel):
 
     @classmethod
     def default_config(cls):
-        """ Define model defaults
+        """ Define model defaults.
 
         You need to override this method if you expect your model or its blocks to serve as a base for other models
         (e.g. VGG for FCN, ResNet for LinkNet, etc).
@@ -398,7 +490,9 @@ class TorchModel(BaseModel):
 
         These defaults can be changed in :meth:`~.TorchModel.build_config` or when calling :meth:`.Pipeline.init_model`.
 
-        Usually, it looks like::
+        Examples
+        --------
+        .. code-block:: python
 
             @classmethod
             def default_config(cls):
@@ -418,6 +512,7 @@ class TorchModel(BaseModel):
         config['predictions'] = None
         config['output'] = None
         config['optimizer'] = ('Adam', dict())
+        config['microbatch'] = None
 
         return config
 
@@ -431,25 +526,20 @@ class TorchModel(BaseModel):
         return config
 
     def build_config(self, names=None):
-        """ Define a model architecture configuration
+        """ Define model's architecture configuration.
 
-        It takes just 2 steps:
+        * Don't forget to call ``super().build_config(names)`` in the beginning.
 
-        #. Define names for input data and make input tensors by calling ``super().build_config(names)``.
+        * Define parameters for :meth:`.TorchModel.initial_block`, :meth:`.TorchModel.body`, :meth:`.TorchModel.head`,
+          which depend on inputs.
 
-           If the model config does not contain any name from ``names``, :exc:`KeyError` is raised.
+        * Dont forget to return ``config`` at the end.
 
-           See :meth:`._TorchModel.make_inputs` for details.
-
-        #. Define parameters for :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body`,
-           :meth:`~.TorchModel.head` which depend on inputs.
-
-        #. Don't forget to return ``config``.
-
-        Typically it looks like this::
+        Examples
+        --------
+        .. code-block:: python
 
             def build_config(self, names=None):
-                names = names or ['images', 'labels']
                 config = super().build_config(names)
                 config['head/num_classes'] = self.num_classes('targets')
                 return config
@@ -492,11 +582,11 @@ class TorchModel(BaseModel):
 
     @classmethod
     def initial_block(cls, **kwargs):
-        """ Transform inputs with a convolution block
+        """ Transform inputs. Usually used for initial preprocessing, e.g. reshaping, downsampling etc.
 
         Notes
         -----
-        For parameters see :class:`.ConvBlock`.
+        For parameters see :class:`~.torch.layers.ConvBlock`.
 
         Returns
         -------
@@ -509,11 +599,11 @@ class TorchModel(BaseModel):
 
     @classmethod
     def body(cls, **kwargs):
-        """ Base layers which produce a network embedding
+        """ Base layers which produce a network embedding.
 
         Notes
         -----
-        For parameters see :class:`.ConvBlock`.
+        For parameters see :class:`~.torch.layers.ConvBlock`.
 
         Returns
         -------
@@ -526,11 +616,12 @@ class TorchModel(BaseModel):
 
     @classmethod
     def head(cls, **kwargs):
-        """ The last network layers which produce predictions
+        """ The last network layers which produce predictions. Usually used to make network output
+        compatible with the `targets` tensor.
 
         Notes
         -----
-        For parameters see :class:`.ConvBlock`.
+        For parameters see :class:`~.torch.layers.ConvBlock`.
 
         Returns
         -------
@@ -550,21 +641,24 @@ class TorchModel(BaseModel):
             input tensors
 
         predictions : str or callable
-            an operation applied to inputs to get `predictions` tensor which is used in a loss function:
+            Operation to apply to the network output to obtain tensor which is used in loss computation.
 
-            - 'sigmoid' - ``sigmoid(inputs)``
-            - 'proba' - ``softmax(inputs)``
-            - 'labels' - ``argmax(inputs)``
-            - 'softplus' - ``softplus(inputs)``
-            - callable - a user-defined operation
+            If str, then one of predefined operations:
+                - 'sigmoid' - ``sigmoid(inputs)``
+                - 'proba' - ``softmax(inputs)``
+                - 'labels' - ``argmax(inputs)``
+                - 'softplus' - ``softplus(inputs)``
 
-        ops : a sequence of operations or an ordered dict
-            auxiliary operations
+            If callable, then user-defined operation.
 
-            If dict:
+        ops : sequence, dict or OrderedDict
+            Auxiliary operations to apply.
 
-            - key - a prefix for each input
-            - value - a sequence of aux operations
+            If sequence, then operations to apply. Transformed tensors are stored with the same name, as operation
+            If dict, then mapping from prefixes to operations. Transformed tensors are stored with
+            the prefixed name of the operation.
+
+            For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
 
         Raises
         ------
@@ -573,25 +667,22 @@ class TorchModel(BaseModel):
 
         Examples
         --------
-
-        ::
+        .. code-block:: python
 
             config = {
                 'output': ['proba', 'labels']
             }
 
         However, if one of the placeholders also has a name 'labels', then it will be lost as the model
-        will rewrite the name 'labels' with an output.
+        will rewrite the name 'labels' with an output. In this case dict might be more convenient:
 
-        That is where a dict might be convenient::
+        .. code-block:: python
 
             config = {
                 'output': {'predicted': ['proba', 'labels']}
             }
 
         Now the output will be stored under names 'predicted_proba' and 'predicted_labels'.
-
-        For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
         """
         if ops is None:
             ops = []
@@ -635,17 +726,17 @@ class TorchModel(BaseModel):
 
     def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
-        proba = torch.nn.Softplus()(inputs)
+        proba = torch.nn.functional.softplus(inputs)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
-        proba = torch.nn.Sigmoid()(inputs)
+        proba = torch.nn.functional.sigmoid(inputs)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
         axis = self.channels_axis(kwargs.get('data_format'))
-        proba = torch.nn.Softmax(dim=axis)(inputs)
+        proba = torch.nn.functional.softmax(inputs, dim=axis)
         setattr(self, attr_prefix + name, proba)
 
     def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
@@ -679,10 +770,11 @@ class TorchModel(BaseModel):
             inputs = self._fill_value(inputs)
         return inputs
 
-    def _fill_input(self, inputs, targets):
-        inputs = self._fill_param(inputs)
-        targets = self._fill_param(targets)
-        return inputs, targets
+    def _fill_input(self, *args):
+        inputs = []
+        for arg in args:
+            inputs.append(self._fill_param(arg))
+        return tuple(inputs)
 
     def _fill_output(self, fetches):
         _fetches = [fetches] if isinstance(fetches, str) else fetches
@@ -701,50 +793,129 @@ class TorchModel(BaseModel):
 
         return output
 
-    def train(self, inputs, targets, fetches=None, use_lock=False):    # pylint: disable=arguments-differ
+    def train(self, *args, fetches=None, use_lock=False, microbatch=None):    # pylint: disable=arguments-differ
         """ Train the model with the data provided
+
+        Parameters
+        ----------
+        args
+            Arguments to be passed directly into the model.
+
+        fetches : tuple, list
+            Sequence of tensor names to calculate and return.
+
+        use_lock : bool
+            If True, the whole train step is locked, thus allowing for multithreading.
+
+        microbatch : int or None
+            Size of chunks to split every batch into. Allows to process given data sequentially, accumulating gradients
+            from microbatches and applying them once in the end.
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same order.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            model.train(B('images'), B('labels'), fetches='loss')
         """
         if use_lock:
             self._train_lock.acquire()
 
-        inputs, targets = self._fill_input(inputs, targets)
-
+        *inputs, targets = self._fill_input(*args)
         self.model.train()
 
+        if microbatch is not False:
+            if microbatch is True:
+                microbatch = self.microbatch
+            else:
+                microbatch = microbatch or self.microbatch
+        if microbatch:
+            if len(inputs[0]) % microbatch != 0:
+                raise ValueError("Inputs size should be evenly divisible by microbatch size: %d and %d" %
+                                 (len(inputs), microbatch))
+
+            self.optimizer.zero_grad()
+
+            steps = len(inputs[0]) // microbatch
+            predictions = []
+            for i in range(0, len(inputs[0]), microbatch):
+                inputs_ = [data[i: i + microbatch] for data in inputs]
+                targets_ = targets[i: i + microbatch]
+
+                predictions.append(self.model(*inputs_))
+                self.loss = self.loss_fn(predictions[-1], targets_)
+                self.loss.backward()
+
+            self.optimizer.step()
+            self.predictions = torch.cat(predictions)
+            self.loss = self.loss / steps
+        else:
+            self.optimizer.zero_grad()
+            self.predictions = self.model(*inputs)
+            self.loss = self.loss_fn(self.predictions, targets)
+            self.loss.backward()
+            self.optimizer.step()
+
         if self.lr_decay:
-            self.lr_decay()
-        self.optimizer.zero_grad()
-
-        self.predictions = self.model(inputs)
-        self.loss = self.loss_fn(self.predictions, targets)
-
-        self.loss.backward()
-        self.optimizer.step()
+            if self.current_iter == self.n_iters:
+                self.lr_decay.step()
+                self.current_iter = 0
+            self.current_iter += 1
 
         if use_lock:
             self._train_lock.release()
 
-        config = self.build_config()
+        config = self._full_config
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
 
         return output
 
-    def predict(self, inputs, targets=None, fetches=None):    # pylint: disable=arguments-differ
-        """ Get predictions on the data provided
+    def predict(self, *args, targets=None, fetches=None):    # pylint: disable=arguments-differ
+        """ Get predictions on the data provided.
+
+        Parameters
+        ----------
+        args : sequence
+            Arguments to be passed directly into the model.
+
+        targets : ndarray, optional
+            Targets to calculate loss.
+
+        fetches : tuple, list
+            Sequence of tensors to fetch from the model.
+
+        use_lock : bool
+            If True, the whole train step is locked, thus allowing for multithreading.
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same order.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
-        inputs, targets = self._fill_input(inputs, targets)
+        inputs = self._fill_input(*args)
+        if targets is not None:
+            targets = self._fill_input(targets)[0]
+
         self.model.eval()
 
         with torch.no_grad():
-            self.predictions = self.model(inputs)
+            self.predictions = self.model(*inputs)
             if targets is None:
                 self.loss = None
             else:
                 self.loss = self.loss_fn(self.predictions, targets)
 
-        config = self.build_config()
+        config = self._full_config
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
@@ -756,51 +927,62 @@ class TorchModel(BaseModel):
         Parameters
         ----------
         path : str
-            a path to a directory where all model files will be stored
+            Path to a file where the model data will be stored.
 
         Examples
         --------
-        >>> torch_model = ResNet34()
+        .. code-block:: python
+
+            torch_model = ResNet34()
 
         Now save the model
 
-        >>> torch_model.save('/path/to/models/resnet34')
+        .. code-block:: python
 
-        The model will be saved to /path/to/models/resnet34
+            torch_model.save('/path/to/models/resnet34')
+
+        The model will be saved to /path/to/models/resnet34.
         """
         _ = args, kwargs
+        dirname = os.path.dirname(path)
+        if dirname and not os.path.exists(dirname):
+            os.makedirs(dirname)
         torch.save({
             'model_state_dict': self.model,
             'optimizer_state_dict': self.optimizer,
             'loss': self.loss_fn,
-            'config': self.config
+            'config': self.config,
+            'full_config': self._full_config
             }, path)
 
-    def load(self, path, *args, **kwargs):
-        """ Load a torch model from files
+    def load(self, path, *args, eval=False, **kwargs):
+        """ Load a torch model from files.
 
         Parameters
         ----------
         path : str
-            a directory where a model is stored
+            File path where a model is stored.
+
+        eval : bool
+            Whether to switch the model to eval mode.
 
         Examples
         --------
-        >>> resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
+        .. code-block:: python
 
-        >>> torch_model.load(path='/path/to/models/resnet34')
+            resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
 
-        >>> TorchModel(config={'device': 'cuda:2', 'load/path': '/path/to/models/resnet34'})
+            torch_model.load(path='/path/to/models/resnet34')
+
+            TorchModel(config={'device': 'gpu:2', 'load/path': '/path/to/models/resnet34'})
 
         **How to move the model to device**
 
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args, kwargs
-        device = self.config.get('device')
+        device = self._get_device()
         if device:
-            if isinstance(device, str):
-                device = torch.device(device)
             checkpoint = torch.load(path, map_location=device)
         else:
             checkpoint = torch.load(path)
@@ -808,8 +990,12 @@ class TorchModel(BaseModel):
         self.optimizer = checkpoint['optimizer_state_dict']
         self.loss_fn = checkpoint['loss']
         self.config = self.config + checkpoint['config']
+        self._full_config = checkpoint['full_config']
 
         self.device = device
 
         if device:
             self.model.to(device)
+
+        if eval:
+            self.model.eval()

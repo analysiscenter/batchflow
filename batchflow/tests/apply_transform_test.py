@@ -59,8 +59,8 @@ def two2two(arr1, arr2, **kwargs):
 
 
 # Testing all possible combinations of SRC_COMPS and DST_COMPS
-SRC_OPTS = [DATA, 'comp1', ['comp1'], ('comp1'), ('comp1', 'comp2'), ['comp1', 'comp2']]
-DST_OPTS = [DATA, None, 'comp1', ['comp3'], ('comp2'), ('comp2', 'comp3'), ['comp1', 'comp3']]
+SRC_OPTS = [DATA, 'comp1', ['comp1'], ('comp1',), ('comp1', 'comp2'), ['comp1', 'comp2']]
+DST_OPTS = [DATA, None, 'comp1', ['comp3'], ('comp2',), ('comp2', 'comp3'), ['comp1', 'comp3']]
 
 SRC_COMPS, DST_COMPS = list(zip(*list(product(SRC_OPTS, DST_OPTS))))
 
@@ -77,11 +77,14 @@ FUNCTIONS[36] = one2one
 FUNCTIONS[41] = one2one
 
 
+class MyBatch(Batch):
+    pass
+
 @pytest.fixture
 def batch():
     """ Prepare batch and load same DATA to comp1 and comp2 components.
     """
-    dataset = Dataset(range(BATCH_SIZE), Batch)
+    dataset = Dataset(range(BATCH_SIZE), MyBatch)
     batch = (dataset.next_batch(BATCH_SIZE)
              .load(src=DATA, dst='comp1')
              .load(src=DATA, dst='comp2')
@@ -121,5 +124,5 @@ def test_apply_transform(src, dst, expectation, func, addendum, batch,):
             func_args = [DATA for src_comp in src]
             if isinstance(addendum, P):
                 addendum.name.random_state.seed(seed=SEED)
-                addendum = addendum.name.get(batch).reshape(-1, 1)
+                addendum = addendum.get(batch, parallel=True).reshape(-1, 1)
             assert np.all(np.equal(result, func(*func_args, addendum=addendum)))

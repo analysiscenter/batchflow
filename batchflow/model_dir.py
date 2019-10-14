@@ -42,6 +42,11 @@ class ModelDirectory:
         new_md.models = {**self.models}
         return new_md
 
+    def reset(self):
+        """ Reset all models """
+        for model in self.models:
+            model.reset()
+
     def eval_expr(self, expr, batch=None):
         """ Evaluate all named expressions in a given data structure """
         return eval_expr(expr, batch=batch)
@@ -128,8 +133,17 @@ class ModelDirectory:
         else:
             model = pipeline.models.get(source)
             name = name or source
-
         self.add_model(name, model)
+
+    def save_model(self, name, *args, **kwargs):
+        model = self.get_model_by_name(name)
+        model.save(*args, **kwargs)
+
+    def load_model(self, mode, model_class, name=None, *args, build=None, **kwargs):
+        """ Load a model """
+        _ = args
+        config = {'load': kwargs, 'build': build}
+        self.init_model(mode, model_class, name, config=config)
 
     def __add__(self, other):
         if not isinstance(other, ModelDirectory):

@@ -5,3 +5,4 @@ from .resnet import ResNet, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, 
                     ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152
 from .squeezenet import SqueezeNet
 from .unet import UNet
+from .encoder_decoder import EncoderDecoder
