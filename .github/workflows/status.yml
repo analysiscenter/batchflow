@@ -29,7 +29,7 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       uses: pullreminders/slack-action@master
       with:
-        args: '{\"channel\": \"#commits\", \"attachments\": [{\"color\": \"good\", \"text\": \"<${{ github.event.commits[0].url }}|${{ github.repository }}: ${{ github.event.commits[0].message }}> by ${{ github.event.commits[0].author.name }}\"}, {\"color\": \"good\", \"text\": \"<${{ github.event.commits[0].url }}/checks|Workflow ${{ github.workflow }}>: ${{ job.status }}\"}]}'
+        args: '{\"channel\": \"#commits\", \"attachments\": [{\"color\": \"good\", \"text\": \"<${{ github.event.commits[0].url }}|${{ github.repository }}: ${{ github.event.commits[0].message }}> by ${{ github.event.commits[0].author.name }}\n<${{ github.event.commits[0].url }}/checks|Workflow ${{ github.workflow }}>: ${{ job.status }}\"}]}'
 
     - name: Slack notification
       if: failure()
@@ -37,4 +37,4 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       uses: pullreminders/slack-action@master
       with:
-        args: '{\"channel\": \"#commits\", \"attachments\": [{\"color\": \"danger\", \"text\": \"<${{ github.event.commits[0].url }}|${{ github.repository }}: ${{ github.event.commits[0].message }}> by ${{ github.event.commits[0].author.name }}\"}, {\"color\": \"danger\", \"text\": \"<${{ github.event.commits[0].url }}/checks|Workflow ${{ github.workflow }}>: ${{ job.status }}\"}]}'
+        args: '{\"channel\": \"#commits\", \"attachments\": [{\"color\": \"danger\", \"text\": \"<${{ github.event.commits[0].url }}|${{ github.repository }}: ${{ github.event.commits[0].message }}> by ${{ github.event.commits[0].author.name }}\n<${{ github.event.commits[0].url }}/checks|Workflow ${{ github.workflow }}>: ${{ job.status }}\"}]}'
