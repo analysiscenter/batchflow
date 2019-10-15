@@ -339,7 +339,8 @@ class ClassificationMetrics(Metrics):
                               when_zero=(np.inf, 0))
 
     def f1_score(self, *args, **kwargs):
-        return 2 / (1 / self.recall(*args, **kwargs) + 1 / self.precision(*args, **kwargs))
+        pair = self.recall(*args, **kwargs), self.precision(*args, **kwargs)
+        return 2 * (pair[0] * pair[1]) / (pair[0] + pair[1])
 
     def jaccard(self, *args, **kwargs):
         d = self.dice(*args, **kwargs)
