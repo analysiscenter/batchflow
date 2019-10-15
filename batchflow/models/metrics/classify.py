@@ -275,18 +275,18 @@ class ClassificationMetrics(Metrics):
             label = label if label is not None else 1
         labels = label if label is not None else self._all_labels()
         labels = labels if isinstance(labels, (list, tuple)) else [labels]
-        label_value = [(numer(l).astype(float), denom(l).astype(float)) for l in labels]
+        fractions = [(numer(l).astype(float), denom(l).astype(float)) for l in labels]
 
         if multiclass is None:
-            value = [np.divide(l[0], l[1], out=_when_zero(l[0]), where=(l[1] > 0)).ravel() for l in label_value]
+            value = [np.divide(n, d, out=_when_zero(n), where=(d > 0)).ravel() for n, d in fractions]
             classes_calculated = self.num_classes - 1 if self.skip_bg else self.num_classes
             value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, classes_calculated)
         elif multiclass == 'micro':
-            n = np.sum([l[0] for l in label_value], axis=0)
-            d = np.sum([l[1] for l in label_value], axis=0)
-            value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
+            n = np.sum([f[0] for f in fractions], axis=0)
+            d = np.sum([f[1] for f in fractions], axis=0)
+            value = np.divide(n, d, out=_when_zero(n), where=(d > 0)).reshape(-1, 1)
         elif multiclass in ['macro', 'mean']:
-            value = [np.divide(l[0], l[1], out=_when_zero(l[0]), where=(l[1] > 0)) for l in label_value]
+            value = [np.divide(n, d, out=_when_zero(n), where=(d > 0)) for n, d in fractions]
             value = infmean(value, axis=0).reshape(-1, 1)
 
         return value
