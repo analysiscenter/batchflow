@@ -1,6 +1,7 @@
 """ Contains utility function for metrics evaluation """
-import numpy as np
 import warnings
+
+import numpy as np
 
 from numba import njit
 from scipy.ndimage import measurements
