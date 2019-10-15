@@ -1,6 +1,8 @@
 """ Contains utility function for metrics evaluation """
-from numba import njit
 import numpy as np
+import warnings
+
+from numba import njit
 from scipy.ndimage import measurements
 
 
@@ -13,7 +15,8 @@ def binarize(inputs, threshold=.5):
     inputs : np.array
         input mask with probabilities
     threshold : float
-        where probability is above the threshold, the output mask will have 1, otherwise 0.
+        where probability is above the threshold, the output mask will have 1,
+        otherwise 0.
 
     Returns
     -------
@@ -40,3 +43,20 @@ def get_components(inputs, batch=True):
             comps.append(c)
         coords.append(comps)
     return coords if batch else coords[0]
+
+def infmean(arr, axis):
+    """ Compute the arithmetic mean along 0 axis ignoring infs, when there is
+    at least one finite number along averaging axis. Done via np.nanmean()
+    while temporarily replacing np.inf with np.nan.
+    """
+    if isinstance(arr, list):
+        arr = np.array(arr)
+    arr[np.isinf(arr)] = np.nan
+    # Mean of empty slice is expected to be np.nan, so the warning is redundant
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        arr = np.nanmean(arr, axis=axis)
+    if np.isscalar(arr):
+        return np.inf if np.isnan(arr) else arr
+    arr[np.isnan(arr)] = np.inf
+    return arr

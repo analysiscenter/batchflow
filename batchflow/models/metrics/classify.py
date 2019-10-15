@@ -1,10 +1,11 @@
 """ Contains two class classification metrics """
 from copy import copy
+from functools import partial
 
 import numpy as np
 
 from ...decorators import mjit
-from . import Metrics, binarize, sigmoid
+from . import Metrics, binarize, sigmoid, infmean
 
 METRICS_ALIASES = {'sensitivity' : 'true_positive_rate',
                    'recall' : 'true_positive_rate',
@@ -118,9 +119,7 @@ class ClassificationMetrics(Metrics):
         self.skip_bg = skip_bg
         self.num_classes = None if axis is None else predictions.shape[axis]
         self.num_classes = self.num_classes or num_classes or 2
-        self._agg_fn_dict = {
-            'mean': self.infmean,
-        }
+        self._agg_fn_dict = {'mean': partial(infmean, axis=0)}
 
         if fmt in ['proba', 'logits'] and axis is None and self.num_classes > 2:
             raise ValueError('axis cannot be None for multiclass case when fmt is proba or logits')
@@ -158,21 +157,6 @@ class ClassificationMetrics(Metrics):
     @property
     def confusion_matrix(self):
         return self._confusion_matrix.sum(axis=0)
-
-    def infmean(self, arr):
-        """
-        Compute the arithmetic mean along 0 axis ignoring infs,
-        when there is at least one finite number along averaging axis.
-        Done via np.nanmean() while temporarily replacing np.inf with np.nan.
-        """
-        if isinstance(arr, list):
-            arr = np.array(arr)
-        arr[np.isinf(arr)] = np.nan
-        arr = np.nanmean(arr, axis=0)
-        if np.isscalar(arr):
-            return np.inf if np.isnan(arr) else arr
-        arr[np.isnan(arr)] = np.inf
-        return arr
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
@@ -303,7 +287,7 @@ class ClassificationMetrics(Metrics):
             value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
         elif multiclass in ['macro', 'mean']:
             value = [np.divide(l[0], l[1], out=_when_zero(l[0]), where=(l[1] > 0)) for l in label_value]
-            value = self.infmean(value).reshape(-1, 1)
+            value = infmean(value, axis=0).reshape(-1, 1)
 
         return value
 
