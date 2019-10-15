@@ -235,7 +235,7 @@ class PipelineWorker(Worker):
             job.clear_stopped_list() # list with flags for each experiment
             for unit_name, base_unit in job.executable_units.items():
                 exec_actions = job.get_actions(iteration, unit_name) # for each experiment is None if experiment mustn't
-                                                                     # be exuted for that iteration and dict else
+                                                                     # be executed for that iteration and dict else
                 # execute units
                 messages = []
                 exceptions = [None] * len(job.experiments)
@@ -247,14 +247,12 @@ class PipelineWorker(Worker):
                                                 .format(idx_job, os.getpid(), iteration+1, unit_name, i))
                         exceptions = job.parallel_execute_for(iteration, unit_name, exec_actions)
                 elif base_unit.on_root and self._execute_on_root(base_unit, iteration):
-                    try:
+                    if sum([item is not None for item in exec_actions]) > 0:
                         for i, action in enumerate(exec_actions):
                             if action is not None:
                                 messages.append("J {} [{}] I {}: on root '{}' [{}]"
                                                 .format(idx_job, os.getpid(), iteration+1, unit_name, i))
-                        base_unit(iteration, job.experiments, *base_unit.args, **base_unit.kwargs)
-                    except Exception as e: #pylint:disable=broad-except
-                        exceptions = [e] * len(job.experiments)
+                        exceptions = job.call_on_root(iteration, unit_name)
                 else:
                     for i, action in enumerate(exec_actions):
                         if action is not None:

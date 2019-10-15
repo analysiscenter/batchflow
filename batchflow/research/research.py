@@ -20,6 +20,7 @@ from .domain import Domain, Option, ConfigAlias
 from .job import Job
 from .utils import get_metrics
 from .executable import Executable
+from .named_expr import EU
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
@@ -137,7 +138,7 @@ class Research:
         """
         name = pipeline + '_metrics'
         self.add_function(get_metrics, returns, name, execute, dump,
-                          False, logging, pipeline=pipeline,
+                          False, logging, experiment=EU(), pipeline=pipeline,
                           metrics_var=metrics_var, metrics_name=metrics_name)
         return self
 

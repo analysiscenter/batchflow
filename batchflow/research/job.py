@@ -6,6 +6,17 @@ from collections import OrderedDict
 from .named_expr import ResearchNamedExpression
 from .. import inbatch_parallel
 
+def eval_expr(expr, job=None, iteration=None, experiment=None, on_root=False):
+    """ Evaluate a research named expression recursively """
+    if isinstance(expr, ResearchNamedExpression):
+        return expr.get(job, iteration, experiment)
+    elif isinstance(expr, (list, tuple)):
+        return [eval_expr(item, job, iteration, experiment) for item in expr]
+    elif isinstance(expr, dict):
+        return {key: eval_expr(value, job, iteration, experiment) for key, value in expr.items()}
+    return expr
+
+
 class Job:
     """ Contains one job. """
     def __init__(self, executable_units, n_iters, configs, branches, research_path):
@@ -42,15 +53,8 @@ class Job:
                 unit.set_shared_value(last_update_time)
                 unit.reset('iter')
                 if unit.pipeline is not None:
-                    # import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
-                    kwargs_config = {}
-                    for key in unit.kwargs:
-                        if isinstance(key, ResearchNamedExpression):
-                            kwargs_config[key] = unit.kwargs[key].get(self, None, units)
-                        else:
-                            kwargs_config[key] = unit.kwargs[key]
+                    kwargs_config = eval_expr(unit.kwargs, job=self, experiment=units)
                     unit.set_dataset()
-                    print(unit.kwargs, kwargs_config)
                 else:
                     kwargs_config = dict()
                 unit.set_config(config, additional_config,
@@ -112,28 +116,41 @@ class Job:
     def _parallel_run(self, item, execute, iteration, name, batch, actions):
         _ = name, actions
         if execute is not None:
-            item.execute_for(batch, iteration)
+            item.execute_for(batch)
 
     def _parallel_init_run(self, iteration, name, batch, actions):
         _ = iteration, batch
         #to_run = self._experiments_to_run(iteration, name)
         return [[experiment[name], execute] for experiment, execute in zip(self.experiments, actions)]
 
+    @inbatch_parallel(init='_parallel_init_call', post='_parallel_post')
+    def parallel_call(self, experiment, execute, iteration, name, actions):
+        """ Parallel call of the unit 'name' """
+        _ = actions
+        if execute is not None:
+            args = eval_expr(experiment[name].args, job=self, iteration=iteration, experiment=experiment)
+            kwargs = eval_expr(experiment[name].kwargs, job=self, iteration=iteration, experiment=experiment)
+            experiment[name](iteration, *args, **kwargs)
+
+    def _parallel_init_call(self, iteration, name, actions):
+        _ = iteration, name
+        return [[experiment, execute] for experiment, execute in zip(self.experiments, actions)]
+
     def _parallel_post(self, results, *args, **kwargs):
         _ = args, kwargs
         self.last_update_time.value = time.time()
         return results
 
-    @inbatch_parallel(init='_parallel_init_call', post='_parallel_post')
-    def parallel_call(self, item, execute, iteration, name, actions):
-        """ Parallel call of the unit 'name' """
-        _ = actions
-        if execute is not None:
-            item[name](iteration, item, *item[name].args, **item[name].kwargs)
-
-    def _parallel_init_call(self, iteration, name, actions):
-        _ = iteration, name
-        return [[experiment, execute] for experiment, execute in zip(self.experiments, actions)]
+    def call_on_root(self, iteration, unit_name):
+        """ Callable on root """
+        try:
+            unit = self.executable_units[unit_name]
+            args = eval_expr(unit.args, job=self, iteration=iteration, experiment=self.experiments)
+            kwargs = eval_expr(unit.kwargs, job=self, iteration=iteration, experiment=self.experiments)
+            unit(*args, **kwargs)
+            return [None] * len(self.experiments)
+        except Exception as e: #pylint:disable=broad-except
+            return [e] * len(self.experiments)
 
     def put_all_results(self, iteration, name, actions):
         """ Add values of pipeline variables to results """

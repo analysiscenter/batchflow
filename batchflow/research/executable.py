@@ -4,6 +4,7 @@ import os
 import time
 from copy import copy, deepcopy
 import dill
+from . import ResearchNamedExpression
 from .. import Config, Pipeline, V, L
 
 class Executable:
@@ -208,9 +209,8 @@ class Executable:
             raise TypeError("Executable should have root pipeline")
         return batch
 
-    def execute_for(self, batch, iteration):
+    def execute_for(self, batch):
         """ Execute pipeline for batch from root """
-        _ = iteration
         if self.pipeline is not None:
             batch = self.pipeline.execute_for(batch)
         else:
@@ -226,7 +226,7 @@ class Executable:
         self.put_result(iteration)
 
     def _call_function(self, iteration, *args, **kwargs):
-        result = self.function(iteration, *args, **kwargs)
+        result = self.function(*args, **kwargs)
         self.put_result(iteration, result)
         return result
 
