@@ -286,15 +286,15 @@ class ClassificationMetrics(Metrics):
         return self._return(self._confusion_matrix.sum(axis=(1, 2)))
 
     def _calc_agg(self, numer, denom, label=None, multiclass='macro', when_zero=None):
-        _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1])
+        _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1]).astype(float)
         if self.num_classes == 2:
             label = label if label is not None else 1
         labels = label if label is not None else self._all_labels()
         labels = labels if isinstance(labels, (list, tuple)) else [labels]
-        label_value = [(numer(l), denom(l)) for l in labels]
+        label_value = [(numer(l).astype(float), denom(l).astype(float)) for l in labels]
 
         if multiclass is None:
-            value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])).ravel() for l in label_value]
+            value = [np.divide(l[0], l[1], out=_when_zero(l[0]), where=(l[1] > 0)).ravel() for l in label_value]
             classes_calculated = self.num_classes - 1 if self.skip_bg else self.num_classes
             value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, classes_calculated)
         elif multiclass == 'micro':
@@ -302,7 +302,7 @@ class ClassificationMetrics(Metrics):
             d = np.sum([l[1] for l in label_value], axis=0)
             value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
         elif multiclass in ['macro', 'mean']:
-            value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
+            value = [np.divide(l[0], l[1], out=_when_zero(l[0]), where=(l[1] > 0)) for l in label_value]
             value = self.infmean(value).reshape(-1, 1)
 
         return value

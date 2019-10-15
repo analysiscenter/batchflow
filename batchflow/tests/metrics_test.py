@@ -42,7 +42,7 @@ LABELS = np.array([[[0, 1],
 PROBA = np.eye(NUM_CLASSES)[LABELS]
 
 # Logit function gives ±infs on degenerate case of 0s and 1s but it's works fine for sigmoid function.
-LOGITS = np.log(PROBA / (1. - PROBA))
+LOGITS = np.where(PROBA > 0.5, np.inf, -np.inf)
 
 """First param stands for predictions variable, second — for predictions type, third — for axis with class info.
 Transposed predictions correspond to 'channels_first' data format."""
