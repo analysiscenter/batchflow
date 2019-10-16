@@ -137,13 +137,13 @@ class Research:
             include execution information to log file or not
         """
         name = pipeline + '_metrics'
-        self.add_function(get_metrics, returns, name, execute, dump,
-                          False, logging, pipeline=RP(pipeline),
+        self.add_callable(get_metrics, name=name, execute=execute, dump=dump, returns=returns,
+                          on_root=False, logging=logging, pipeline=RP(pipeline),
                           metrics_var=metrics_var, metrics_name=metrics_name)
         return self
 
-    def add_function(self, function, returns=None, name=None, execute=1, dump='last',
-                     on_root=False, logging=False, *args, **kwargs):
+    def add_callable(self, function, *args, returns=None, name=None, execute=1, dump='last',
+                     on_root=False, logging=False, **kwargs):
         """ Add function to research.
 
         Parameters
@@ -200,8 +200,8 @@ class Research:
             raise ValueError("If function on root, then it mustn't have returns")
 
         unit = Executable()
-        unit.add_function(function, name, execute, dump,
-                          returns, on_root, logging, *args, **kwargs)
+        unit.add_callable(function, *args, name=name, execute=execute, dump=dump, returns=returns,
+                          on_root=on_root, logging=logging, **kwargs)
         self.executables[name] = unit
 
         return self
@@ -649,7 +649,7 @@ class Results():
             research = (Research()
             .add_pipeline(train_ppl, variables='loss', name='train')
             .add_pipeline(test_ppl, name='test', execute=100, run=True, import_from='train')
-            .add_function(accuracy, returns='accuracy', name='test_accuracy',
+            .add_callable(accuracy, returns='accuracy', name='test_accuracy',
                       execute=100, pipeline='test')
             .add_domain(domain))
 

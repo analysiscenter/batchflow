@@ -62,8 +62,10 @@ class Executable:
 
         self.last_update_time = None
 
-    def add_function(self, function, name, execute=1, dump='last', returns=None,
-                     on_root=False, logging=False, *args, **kwargs):
+        self._function = None
+
+    def add_callable(self, function, *args, name='callable', execute=1, dump='last', returns=None,
+                     on_root=False, logging=False, **kwargs):
         """ Add function as an Executable Unit. """
         returns = returns or []
 
@@ -72,6 +74,7 @@ class Executable:
 
         self.name = name
         self.function = function
+        self._function = function
         self.execute = execute
         self.dump = dump
         self.variables = returns
@@ -217,30 +220,29 @@ class Executable:
             raise TypeError("Executable should be pipeline, not a function")
         return batch
 
-    def _call_pipeline(self, iteration, *args, **kwargs):
-        _ = args, kwargs
+    def _call_pipeline(self, iteration):
         if self.to_run:
             self.run()
         else:
             self.next_batch()
         self.put_result(iteration)
 
-    def _call_function(self, iteration, *args, **kwargs):
-        result = self.function(*args, **kwargs)
+    def _call_function(self, job, iteration, experiment):
+        function = ResearchNamedExpression.eval_expr(self.function, job, iteration, experiment)
+        if callable(function):
+            args = ResearchNamedExpression.eval_expr(self.args, job, iteration, experiment)
+            kwargs = ResearchNamedExpression.eval_expr(self.kwargs, job, iteration, experiment)
+            result = function(*args, **kwargs)
+        else:
+            result = function
         self.put_result(iteration, result)
         return result
 
-    def __call__(self, iteration, *args, **kwargs):
+    def __call__(self, job, iteration, experiment):
         if self.pipeline is not None:
-            self._call_pipeline(iteration, *args, **kwargs)
+            self._call_pipeline(iteration)
         else:
-            self._call_function(iteration, *args, **kwargs)
-
-    def get_args_kwargs(self, iteration, *args, **kwargs):
-        for i, var in enumerate(args):
-            if isinstance(var, ResearchNamedExpression):
-                var.get(iteration)
-
+            self._call_function(job, iteration, experiment)
 
     def put_result(self, iteration, result=None):
         """ Put result from pipeline to self.result """

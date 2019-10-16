@@ -128,9 +128,7 @@ class Job:
         """ Parallel call of the unit 'name' """
         _ = actions
         if execute is not None:
-            args = ResearchNamedExpression.eval_expr(experiment[name].args, job=self, iteration=iteration, experiment=experiment)
-            kwargs = ResearchNamedExpression.eval_expr(experiment[name].kwargs, job=self, iteration=iteration, experiment=experiment)
-            experiment[name](iteration, *args, **kwargs)
+            experiment[name](job=self, iteration=iteration, experiment=experiment)
 
     def _parallel_init_call(self, iteration, name, actions):
         _ = iteration, name
@@ -145,9 +143,7 @@ class Job:
         """ Callable on root """
         try:
             unit = self.executable_units[unit_name]
-            args = ResearchNamedExpression.eval_expr(unit.args, job=self, iteration=iteration, experiment=self.experiments)
-            kwargs = ResearchNamedExpression.eval_expr(unit.kwargs, job=self, iteration=iteration, experiment=self.experiments)
-            unit(iteration, *args, **kwargs)
+            unit(job=self, iteration=iteration, experiment=self.experiments)
             return [None] * len(self.experiments)
         except Exception as e: #pylint:disable=broad-except
             return [e] * len(self.experiments)
