@@ -75,7 +75,7 @@ class RefineNet(TFModel):
         filters = kwargs.pop('filters')
 
         with tf.variable_scope(name):
-            encoder_outputs = cls.encoder(inputs, filters=[64*2**i for i in range(4)],
+            encoder_outputs = cls.encoder(inputs, filters=filters[::-1],
                                           **encoder, **kwargs)
 
             x = None

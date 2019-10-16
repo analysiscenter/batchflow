@@ -1,4 +1,4 @@
-""" Test that all TFmodels can be constructed """
+""" Test that all TFmodels can be constructed. Some of the bigger models are omitted due to slow initialization. """
 # pylint: disable=import-error, no-name-in-module, unused-import
 # pylint: disable=redefined-outer-name
 import pytest
@@ -17,6 +17,22 @@ from batchflow.models.tf import LinkNet, UNet, VNet, \
                                 PyramidNet18, PyramidNet34, PyramidNet50, PyramidNet101, \
                                 XceptionS, Xception41, Xception64
 
+
+
+MODELS_CLF = [
+    VGG7, VGG16, VGG19,
+    ResNet18, ResNet34, # ResNet50, ResNet101, ResNet152,
+    ResNeXt18, ResNeXt34, # ResNeXt50, ResNeXt101, ResNeXt152,
+    Inception_v1,
+    # InceptionResNet_v2, Inception_v3, Inception_v4, # fail
+    SqueezeNet,
+    MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small,
+    # DenseNet121,  # DenseNet169, DenseNet201, DenseNet264,
+    ResNetAttention56, # ResNetAttention92,
+    PyramidNet18, PyramidNet34, # PyramidNet50, PyramidNet101,
+    XceptionS, Xception41, # Xception64
+]
+
 MODELS_SEG = [
     LinkNet,
     UNet,
@@ -28,19 +44,16 @@ MODELS_SEG = [
     DeepLabXS, DeepLabX8, # DeepLabX16
 ]
 
-MODELS_CLF = [
-    VGG16, VGG19, VGG7,
-    ResNet18, ResNet34, # ResNet50, ResNet101, ResNet152,
-    ResNeXt18, # ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152,
-    Inception_v1,
-    # InceptionResNet_v2, Inception_v3, Inception_v4, # fail
-    SqueezeNet,
-    MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small,
-    DenseNet121,  # DenseNet169, DenseNet201, DenseNet264,
-    ResNetAttention56, # ResNetAttention92,
-    PyramidNet18, PyramidNet34, PyramidNet50, # PyramidNet101,
-    XceptionS, Xception41, # Xception64
-]
+
+
+@pytest.fixture()
+def base_config_clf():
+    """ Fixture to hold default configuration for classification. """
+    config = {'inputs/images/shape': (16, 16, 1),
+              'inputs/labels/classes': 10,
+              'initial_block/inputs': 'images',
+              'loss': 'ce'}
+    return config
 
 
 @pytest.fixture()
@@ -55,14 +68,12 @@ def base_config_segment():
     return config
 
 
-@pytest.fixture()
-def base_config_clf():
-    """ Fixture to hold default configuration for classification. """
-    config = {'inputs/images/shape': (16, 16, 1),
-              'inputs/labels/classes': 10,
-              'initial_block/inputs': 'images',
-              'loss': 'ce'}
-    return config
+
+@pytest.mark.slow
+@pytest.mark.parametrize('model', MODELS_CLF)
+def test_clf(base_config_clf, model):
+    """ Test models for classification """
+    _ = model(base_config_clf)
 
 
 @pytest.mark.slow
@@ -70,10 +81,3 @@ def base_config_clf():
 def test_seg(base_config_segment, model):
     """ Test models for segmentation """
     _ = model(base_config_segment)
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize('model', MODELS_CLF)
-def test_clf(base_config_clf, model):
-    """ Test models for classification """
-    _ = model(base_config_clf)
