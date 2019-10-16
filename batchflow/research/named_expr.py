@@ -67,4 +67,4 @@ class RC(EU):
         if isinstance(res, list):
             return [getattr(item, 'config') for item in res]
         else:
-            return getattr(res, 'config') 
+            return getattr(res, 'config')
