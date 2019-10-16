@@ -1,7 +1,6 @@
 """ Contains utility function for metrics evaluation """
-import warnings
-
 import numpy as np
+import numpy.ma as ma
 
 from numba import njit
 from scipy.ndimage import measurements
@@ -45,19 +44,18 @@ def get_components(inputs, batch=True):
         coords.append(comps)
     return coords if batch else coords[0]
 
+
 def infmean(arr, axis):
-    """ Compute the arithmetic mean along 0 axis ignoring infs, when there is
-    at least one finite number along averaging axis. Done via np.nanmean()
-    while temporarily replacing np.inf with np.nan.
+    """ Compute the arithmetic mean along given axis ignoring infs,
+    when there is at least one finite number along averaging axis.
     """
     if isinstance(arr, list):
         arr = np.array(arr)
-    arr[np.isinf(arr)] = np.nan
-    # Mean of empty slice is expected to be np.nan, so the warning is redundant
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        arr = np.nanmean(arr, axis=axis)
-    if np.isscalar(arr):
-        return np.inf if np.isnan(arr) else arr
-    arr[np.isnan(arr)] = np.inf
-    return arr
+    masked = ma.masked_invalid(arr)
+    masked = masked.mean(axis=axis)
+    if np.isscalar(masked):
+        return masked
+    if isinstance(masked, ma.core.MaskedConstant):
+        return np.inf
+    masked[masked.mask] = np.inf
+    return masked.data
