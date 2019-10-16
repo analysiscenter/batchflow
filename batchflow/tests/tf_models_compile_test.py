@@ -15,7 +15,9 @@ from batchflow.models.tf import LinkNet, UNet, VNet, \
                                 DenseNet121, DenseNet169, DenseNet201, DenseNet264, \
                                 ResNetAttention56, ResNetAttention92, \
                                 PyramidNet18, PyramidNet34, PyramidNet50, PyramidNet101, \
-                                XceptionS, Xception41, Xception64
+                                XceptionS, Xception41, Xception64, \
+                                EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3, \
+                                EfficientNetB4, EfficientNetB5, EfficientNetB6, EfficientNetB7
 
 
 
@@ -27,10 +29,12 @@ MODELS_CLF = [
     # InceptionResNet_v2, Inception_v3, Inception_v4, # fail
     SqueezeNet,
     MobileNet, MobileNet_v2, MobileNet_v3, MobileNet_v3_small,
-    # DenseNet121,  # DenseNet169, DenseNet201, DenseNet264,
+    DenseNet121,  # DenseNet169, DenseNet201, DenseNet264,
     ResNetAttention56, # ResNetAttention92,
     PyramidNet18, PyramidNet34, # PyramidNet50, PyramidNet101,
     XceptionS, Xception41, # Xception64
+    EfficientNetB0, EfficientNetB1, # EfficientNetB2, EfficientNetB3, \
+    # EfficientNetB4, EfficientNetB5, EfficientNetB6, EfficientNetB7
 ]
 
 MODELS_SEG = [
