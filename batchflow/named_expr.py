@@ -10,40 +10,6 @@ class _DummyBatch:
     def __init__(self, pipeline):
         self.pipeline = pipeline
 
-
-def eval_expr(expr, batch=None, pipeline=None, model=None):
-    """ Evaluate a named expression recursively """
-    batch = batch if batch is not None else _DummyBatch(pipeline)
-    pipeline = pipeline if pipeline is not None else batch.pipeline
-    args = dict(batch=batch, pipeline=pipeline, model=model)
-
-    if isinstance(expr, NamedExpression):
-        batch_, pipeline_, model_ = expr.params or (None, None, None)
-        args = {**dict(batch=batch_, pipeline=pipeline_, model=model_),
-                **dict(batch=batch, pipeline=pipeline, model=model)}
-
-        _expr = expr.get(**args)
-        if isinstance(expr, W):
-            expr = _expr
-        elif isinstance(_expr, NamedExpression):
-            expr = eval_expr(_expr, **args)
-        else:
-            expr = _expr
-    elif isinstance(expr, (list, tuple)):
-        _expr = []
-        for val in expr:
-            _expr.append(eval_expr(val, **args))
-        expr = type(expr)(_expr)
-    elif isinstance(expr, dict):
-        _expr = type(expr)()
-        for key, val in expr.items():
-            key = eval_expr(key, **args)
-            val = eval_expr(val, **args)
-            _expr.update({key: val})
-        expr = _expr
-    return expr
-
-
 def swap(op):
     """ Swap args """
     def _op_(a, b):
@@ -138,21 +104,22 @@ class NamedExpression(metaclass=MetaNamedExpression):
         self.b = b
         self.params = None
         self._call = False
+        self.op_class = NamedExpression
 
     def __getattr__(self, name):
-        return NamedExpression(AN_EXPR, op='#attr', a=self, b=name)
+        return self.op_class(AN_EXPR, op='#attr', a=self, b=name)
 
     def __getitem__(self, key):
-        return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
+        return self.op_class(AN_EXPR, op='#slice', a=self, b=key)
 
     def __call__(self, *args, **kwargs):
         if isinstance(self, F):
             self._call = False
-        return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
+        return self.op_class(AN_EXPR, op='#call', a=self, b=(args, kwargs))
 
     def str(self):
         """ Convert a named expression value to a string """
-        return NamedExpression(AN_EXPR, op='#str', a=self)
+        return self.op_class(AN_EXPR, op='#str', a=self)
 
     def format(self, string):
         """ Convert a value to a formatted representation, controlled by format spec.
@@ -199,12 +166,45 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     def _get_value(self, batch=None, pipeline=None, model=None):
         if self.name == AN_EXPR:
-            a = eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
-            b = eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
+            a = self.eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
+            b = self.eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
             if self.op in UNARY_OPS:
                 return OPERATIONS[self.op](a)
             return OPERATIONS[self.op](a, b)
         raise ValueError("Undefined value")
+
+    @classmethod
+    def eval_expr(cls, expr, batch=None, pipeline=None, model=None):
+        """ Evaluate a named expression recursively """
+        batch = batch if batch is not None else _DummyBatch(pipeline)
+        pipeline = pipeline if pipeline is not None else batch.pipeline
+        args = dict(batch=batch, pipeline=pipeline, model=model)
+
+        if isinstance(expr, NamedExpression):
+            batch_, pipeline_, model_ = expr.params or (None, None, None)
+            args = {**dict(batch=batch_, pipeline=pipeline_, model=model_),
+                    **dict(batch=batch, pipeline=pipeline, model=model)}
+
+            _expr = expr.get(**args)
+            if isinstance(expr, W):
+                expr = _expr
+            elif isinstance(_expr, NamedExpression):
+                expr = cls.eval_expr(_expr, **args)
+            else:
+                expr = _expr
+        elif isinstance(expr, (list, tuple)):
+            _expr = []
+            for val in expr:
+                _expr.append(cls.eval_expr(val, **args))
+            expr = type(expr)(_expr)
+        elif isinstance(expr, dict):
+            _expr = type(expr)()
+            for key, val in expr.items():
+                key = cls.eval_expr(key, **args)
+                val = cls.eval_expr(val, **args)
+                _expr.update({key: val})
+            expr = _expr
+        return expr
 
     def set(self, value, batch=None, pipeline=None, model=None, mode=None, eval=True):
         """ Set a value to a named expression
@@ -232,7 +232,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
         mode = mode or self.mode
 
         if eval:
-            value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
+            value = self.eval_expr(value, batch=batch, pipeline=pipeline, model=model)
         if mode in ['a', 'append']:
             self.append(value, batch=batch, pipeline=pipeline, model=model)
         elif mode in ['e', 'extend']:
@@ -246,8 +246,8 @@ class NamedExpression(metaclass=MetaNamedExpression):
         """ Assign a value to a named expression """
         if self.params:
             batch, pipeline, model = self.params
-        a = eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
-        b = eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
+        a = self.eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
+        b = self.eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
 
         if self.op == '#attr':
             setattr(a, b, value)
@@ -555,10 +555,10 @@ class R(NamedExpression):
             name = getattr(self.random_state, name)
         else:
             raise TypeError('Random distribution should be a callable or a numpy distribution')
-        args = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
+        args = self.eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
         if self.size is not None:
             self.kwargs['size'] = self.size
-        kwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
+        kwargs = self.eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
 
         return name(*args, **kwargs)
 

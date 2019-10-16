@@ -6,15 +6,15 @@ from collections import OrderedDict
 from .named_expr import ResearchNamedExpression
 from .. import inbatch_parallel
 
-def eval_expr(expr, job=None, iteration=None, experiment=None, on_root=False):
-    """ Evaluate a research named expression recursively """
-    if isinstance(expr, ResearchNamedExpression):
-        return expr.get(job, iteration, experiment)
-    elif isinstance(expr, (list, tuple)):
-        return [eval_expr(item, job, iteration, experiment) for item in expr]
-    elif isinstance(expr, dict):
-        return {key: eval_expr(value, job, iteration, experiment) for key, value in expr.items()}
-    return expr
+# def eval_expr(expr, job=None, iteration=None, experiment=None, on_root=False):
+#     """ Evaluate a research named expression recursively """
+#     if isinstance(expr, ResearchNamedExpression):
+#         return expr.get(job, iteration, experiment)
+#     elif isinstance(expr, (list, tuple)):
+#         return [eval_expr(item, job, iteration, experiment) for item in expr]
+#     elif isinstance(expr, dict):
+#         return {key: eval_expr(value, job, iteration, experiment) for key, value in expr.items()}
+#     return expr
 
 
 class Job:
@@ -53,7 +53,7 @@ class Job:
                 unit.set_shared_value(last_update_time)
                 unit.reset('iter')
                 if unit.pipeline is not None:
-                    kwargs_config = eval_expr(unit.kwargs, job=self, experiment=units)
+                    kwargs_config = ResearchNamedExpression.eval_expr(unit.kwargs, job=self, experiment=units)
                     unit.set_dataset()
                 else:
                     kwargs_config = dict()
@@ -128,8 +128,8 @@ class Job:
         """ Parallel call of the unit 'name' """
         _ = actions
         if execute is not None:
-            args = eval_expr(experiment[name].args, job=self, iteration=iteration, experiment=experiment)
-            kwargs = eval_expr(experiment[name].kwargs, job=self, iteration=iteration, experiment=experiment)
+            args = ResearchNamedExpression.eval_expr(experiment[name].args, job=self, iteration=iteration, experiment=experiment)
+            kwargs = ResearchNamedExpression.eval_expr(experiment[name].kwargs, job=self, iteration=iteration, experiment=experiment)
             experiment[name](iteration, *args, **kwargs)
 
     def _parallel_init_call(self, iteration, name, actions):
@@ -145,9 +145,9 @@ class Job:
         """ Callable on root """
         try:
             unit = self.executable_units[unit_name]
-            args = eval_expr(unit.args, job=self, iteration=iteration, experiment=self.experiments)
-            kwargs = eval_expr(unit.kwargs, job=self, iteration=iteration, experiment=self.experiments)
-            unit(*args, **kwargs)
+            args = ResearchNamedExpression.eval_expr(unit.args, job=self, iteration=iteration, experiment=self.experiments)
+            kwargs = ResearchNamedExpression.eval_expr(unit.kwargs, job=self, iteration=iteration, experiment=self.experiments)
+            unit(iteration, *args, **kwargs)
             return [None] * len(self.experiments)
         except Exception as e: #pylint:disable=broad-except
             return [e] * len(self.experiments)

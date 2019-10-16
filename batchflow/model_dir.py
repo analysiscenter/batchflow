@@ -2,7 +2,7 @@
 import threading
 
 from .models import BaseModel
-from .named_expr import NamedExpression, eval_expr
+from .named_expr import NamedExpression
 
 
 class NonInitializedModel:
@@ -49,7 +49,7 @@ class ModelDirectory:
 
     def eval_expr(self, expr, batch=None):
         """ Evaluate all named expressions in a given data structure """
-        return eval_expr(expr, batch=batch)
+        return NamedExpression.eval_expr(expr, batch=batch)
 
     def get(self, name):
         """ Retrieve a model from a directory without building it

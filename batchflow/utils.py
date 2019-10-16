@@ -7,7 +7,7 @@ import tqdm
 
 from matplotlib import pyplot as plt
 
-from .named_expr import NamedExpression, eval_expr
+from .named_expr import NamedExpression
 
 
 def partialmethod(func, *frozen_args, **frozen_kwargs):
@@ -139,12 +139,12 @@ def update_bar(bar, bar_desc, **kwargs):
         if current_iter == 0:
             # During the first iteration we can't get items from empty containers (lists, dicts, etc)
             try:
-                desc = eval_expr(bar_desc, **kwargs)
+                desc = NamedExpression.eval_expr(bar_desc, **kwargs)
                 desc = str(desc)
             except LookupError:
                 desc = None
         else:
-            desc = eval_expr(bar_desc, **kwargs)
+            desc = NamedExpression.eval_expr(bar_desc, **kwargs)
             desc = str(desc)
         bar.set_description(desc)
     bar.update(1)
