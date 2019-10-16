@@ -16,46 +16,46 @@ class EfficientNetB0(EncoderDecoder):
     Parameters
     ----------
     inputs : dict
-        dict with 'images' and 'labels' (see :meth:`~tf.TFModel._make_inputs`)
+        Dct with 'images' and 'labels' (see :meth:`~tf.TFModel._make_inputs`)
 
     initial_block : dict, optional
-        parameters for the initial block (see :class:`~tf.EncoderDecoder`)
+        Parameters for the initial block (see :class:`~tf.EncoderDecoder`)
         scalable : bool
-            indicates whether the block can be scaled
+            Indicates whether the block can be scaled
 
     body : dict, optional
         encoder : dict, optional
-            parameters for model's body (see :class:`~tf.EncoderDecoder`)
+            Parameters for model's body (see :class:`~tf.EncoderDecoder`)
 
             num_stages : int, optional
                 Number of blocks
 
             order : str, sequence of str, optional
-                Determines order of applying layers.
+                Determines order of applying layers
                 Since no skips are used in EfficientNets this should be always `['block']`
 
             blocks : dict, optional
                 Parameters for pre-processing blocks.
-                if parameter's value is a list, each element correspond to different stage
+                If parameter's value is a list, each element correspond to different stage
 
                 base : callable or list of callable
                     Tensor processing function. Default is :meth:`~tf.MobileNet_v2.block`
 
                 scalable : bool or list of bool
-                    indicates whether the block can be scaled
+                    Indicates whether the block can be scaled
 
                 other : optional
-                    parameters for :meth:`~tf.MobileNet_v2.block`
+                    Parameters for :meth:`~tf.MobileNet_v2.block`
 
     head : dict, optional
-        parameters for head (see :class:`~tf.EncoderDecoder`)
+        Parameters for head (see :class:`~tf.EncoderDecoder`)
         scalable : bool
-            indicates whether the block can be scaled
+            Indicates whether the block can be scaled
 
     common : dict, optional
-        common parameters
+        Common parameters
         width_factor, depth_factor : float, optional
-            scaling factors to control network resizing width-wise and depth-wise
+            Scaling factors to control network resizing width-wise and depth-wise
     """
 
     resolution = 224  # image resolution used in original paper
