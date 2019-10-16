@@ -49,8 +49,6 @@ def infmean(arr, axis):
     """ Compute the arithmetic mean along given axis ignoring infs,
     when there is at least one finite number along averaging axis.
     """
-    if isinstance(arr, list):
-        arr = np.array(arr)
     masked = ma.masked_invalid(arr)
     masked = masked.mean(axis=axis)
     if np.isscalar(masked):
