@@ -7,6 +7,7 @@ from copy import deepcopy
 import numpy as np
 
 from .. import Config, Sampler, SequenceSampler
+from .named_expr import ResearchNamedExpression
 
 class KV:
     """ Class for value and alias
@@ -162,6 +163,8 @@ class Domain:
 
         self.update_func = None
         self.each = None
+        self.args = None
+        self.kwargs = None
 
         self._iterator = None
 
@@ -307,10 +310,12 @@ class Domain:
         else:
             return None
 
-    def set_update(self, function=None, each=None):
+    def set_update(self, function, each, args, kwargs):
         if function is not None:
-            self.update_domain = function
+            self.update_func = function
         self.each = each
+        self.args = args
+        self.kwargs = kwargs
 
     def __iter__(self):
         if self._iterator is None:
@@ -322,9 +327,12 @@ class Domain:
             self._iterator = self.iterator(self._brute_force, self.n_iters, self.n_reps, self.repeat_each)
         return next(self._iterator)
 
-    def update_domain(self, *args, **kwargs):
-        _ = args, kwargs
-        return None
+    def update_domain(self, path):
+        if self.update_func is None:
+            return None
+        args = ResearchNamedExpression.eval_expr(self.args, path=path)
+        kwargs = ResearchNamedExpression.eval_expr(self.kwargs, path=path)
+        return self.update_func(*args, **kwargs)
 
     def update_config(self, *args, **kwargs):
         _ = args, kwargs

@@ -1,6 +1,6 @@
+from .results import Results
 from .. import NamedExpression
 from ..named_expr import NamedExpression, add_ops, AN_EXPR, UNARY_OPS, OPERATIONS
-import research
 
 class ResearchNamedExpression(NamedExpression):
     param_names = ('job', 'iteration', 'experiment', 'path', 'batch', 'pipeline', 'model')
@@ -13,7 +13,7 @@ class ResearchNamedExpression(NamedExpression):
     def _get_params(cls, job=None, iteration=None, experiment=None, path=None, **kwargs):
         return dict(job=job, iteration=iteration, experiment=experiment, path=path, **kwargs)
 
-class EU(ResearchNamedExpression): # ExecutableUnit
+class ResearchExecutableUnit(ResearchNamedExpression): # ExecutableUnit
     def get(self, **kwargs):
         if isinstance(kwargs['experiment'], (list, tuple)):
             _experiment = kwargs['experiment']
@@ -28,7 +28,7 @@ class EU(ResearchNamedExpression): # ExecutableUnit
         else:
             return kwargs['experiment']
 
-class RP(EU): # ResearchPipeline
+class ResearchPipeline(ResearchExecutableUnit): # ResearchPipeline
     def __init__(self, name=None, root=False):
         super().__init__(name)
         self.root = root
@@ -44,21 +44,11 @@ class RP(EU): # ResearchPipeline
         else:
             return getattr(res, attr)
 
-class RI(ResearchNamedExpression): # research iteration
+class ResearchIteration(ResearchNamedExpression): # research iteration
     def get(self, **kwargs):
         return kwargs['iteration']
 
-class RR(ResearchNamedExpression): # research results
-    def __init__(self, *args, **kwargs):
-        self.args = args
-        self.kwargs = kwargs
-
-    def get(self, **kwargs):
-        if kwargs['path'] is None:
-            path = kwargs['job'].research_path
-        return research.Results(path=path).load(*self.args, **self.kwargs)
-
-class RC(EU):
+class ResearchConfig(ResearchExecutableUnit):
     def get(self, **kwargs):
         if self.name is None:
             raise ValueError('`name` must be defined for RC expressions')
@@ -68,3 +58,29 @@ class RC(EU):
             return [getattr(item, 'config') for item in res]
         else:
             return getattr(res, 'config')
+
+class ResearchResults(ResearchNamedExpression): # research results
+    def __init__(self, name=None, *args, **kwargs):
+        super().__init__(name)
+        self.args = args
+        self.kwargs = kwargs
+
+    def get(self, **kwargs):
+        if kwargs['path'] is None:
+            path = kwargs['job'].research_path
+        else:
+            path = kwargs['path']
+        return research.Results(path=path).load(*self.args, **self.kwargs)
+
+class ResearchResults(ResearchNamedExpression): # research results
+    def __init__(self, name=None, *args, **kwargs):
+        super().__init__(name)
+        self.args = args
+        self.kwargs = kwargs
+
+    def get(self, **kwargs):
+        if kwargs['path'] is None:
+            path = kwargs['job'].research_path
+        else:
+            path = kwargs['path']
+        return Results(path=path).load(*self.args, **self.kwargs)
