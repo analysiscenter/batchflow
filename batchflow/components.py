@@ -1,17 +1,30 @@
 """ Contains classes to handle batch data components """
 import copy as cp
+import numpy as np
 try:
     import pandas as pd
 except ImportError:
     import _fake as pd
 
 
+class _ADict(dict):
+    """ dict that supports advanced indexing """
+    def __getitem__(self, item):
+        if isinstance(item, (list, np.ndarray)):
+            d = dict()
+            for i in item:
+                d[i] = self[i]
+            return d
+        return super().__getitem__(item)
+
+
 class BaseComponents:
     """ Base class for a components storage """
-    def __init__(self, components=None, data=None, indices=None, crop=False, copy=False):
+    def __init__(self, components=None, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
         self.components = components
         self.data = data.data if isinstance(data, BaseComponents) else data
         self.indices = indices
+        self.cast_to_array = cast_to_array
         if crop:
             self.crop(copy=copy)
 
@@ -58,6 +71,16 @@ class BaseComponents:
         else:
             raise NotImplementedError('Item assignment is not implemented.')
 
+    def _get_from(self, data, copy):
+        if isinstance(data, dict):
+            data = _ADict(data)
+        if data is not None and self.indices is not None:
+            data = data[self.indices]
+        if copy:
+            data = cp.deepcopy(data)
+        return data
+
+
 class ComponentsTuple(BaseComponents):
     """ Components storage for tuple-like data """
     def crop(self, copy=False):
@@ -65,10 +88,7 @@ class ComponentsTuple(BaseComponents):
         if self.data is not None and self.indices is not None:
             new_data = []
             for data in self.data:
-                if data is not None and self.indices is not None:
-                    data = data[self.indices]
-                if copy:
-                    data = cp.deepcopy(data)
+                data = self._get_from(data, copy)
                 new_data.append(data)
             self.data = new_data
             self.indices = None
@@ -109,10 +129,7 @@ class ComponentsDict(BaseComponents):
             components = self.components or list(self.data.keys())
             for comp in components:
                 data = self.data.get(comp, None)
-                if data is not None and self.indices is not None:
-                    data = data[self.indices]
-                if copy:
-                    data = cp.deepcopy(data)
+                data = self._get_from(data, copy)
                 new_data[comp] = data
             self.data = new_data
             self.indices = None
@@ -124,6 +141,8 @@ class ComponentsDict(BaseComponents):
         res = self.data[name]
         if res is not None and self.indices is not None:
             res = res[self.indices]
+        if self.cast_to_array and isinstance(res, pd.Series):
+            res = res.values
         return res
 
     def __setattr__(self, name, value):
@@ -140,9 +159,9 @@ class ComponentsDict(BaseComponents):
             super().__setattr__(name, value)
 
 
-def use_source(components, data=None, indices=None, crop=False, copy=False):
+def use_source(components, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
     """ Return data source (and make a crop and a copy if necessary) """
-    _ = components, crop
+    _ = components, crop, cast_to_array
     if indices is not None:
         data = data[indices] if data is not None else None
     if copy and data is not None:
@@ -150,7 +169,7 @@ def use_source(components, data=None, indices=None, crop=False, copy=False):
     return data
 
 
-def create_item_class(components, data=None, indices=None, crop=False, copy=False):
+def create_item_class(components, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
     """ Create components class """
     if data is None and components is not None:
         # default components storage
@@ -163,6 +182,6 @@ def create_item_class(components, data=None, indices=None, crop=False, copy=Fals
         # source is a memory-like object (ndarray, hdf5 storage, etc)
         item_class = use_source
 
-    item = item_class(components, data=data, indices=indices, crop=crop, copy=copy)
+    item = item_class(components, data=data, indices=indices, crop=crop, copy=copy, cast_to_array=cast_to_array)
 
     return item

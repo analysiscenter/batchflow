@@ -42,7 +42,7 @@ class Dataset(Baseset):
     validation : Dataset
         The validation part of this dataset. It appears after splitting
     """
-    def __init__(self, index, batch_class=Batch, preloaded=None, copy=False, *args, **kwargs):
+    def __init__(self, index, batch_class=Batch, *args, preloaded=None, cast_to_array=True, copy=False, **kwargs):
         """ Create Dataset
 
             Parameters
@@ -54,8 +54,11 @@ class Dataset(Baseset):
                 Batch class holds the data and contains processing functions
 
             preloaded : data-type
-                For smaller dataset it might be convenient to preload all data at once
-                As a result, all created batches will contain a portion of some_data.
+                For smaller dataset it might be convenient to preload all data at once.
+                As a result, all created batches will contain a portion of preloaded.
+
+            cast_to_array : bool
+                whether to cast preloaded data to array when creating components data
 
             copy : bool
                 whether to copy data from `preloaded` when creating a batch to alow for in-place transformations
@@ -64,6 +67,7 @@ class Dataset(Baseset):
             raise TypeError("batch_class should be inherited from Batch", batch_class)
 
         super().__init__(index, *args)
+        self.cast_to_array = cast_to_array
         self.batch_class = batch_class
         self.preloaded = preloaded
         self._data_named = None
@@ -91,7 +95,8 @@ class Dataset(Baseset):
         if self.preloaded is None:
             return None
         if self.batch_class.components is not None and self._data_named is None:
-            self._data_named = create_item_class(self.batch_class.components, data=self.preloaded)
+            self._data_named = create_item_class(self.batch_class.components, data=self.preloaded,
+                                                 cast_to_array=self.cast_to_array)
         if self._data_named is not None:
             return self._data_named
         return self.preloaded
