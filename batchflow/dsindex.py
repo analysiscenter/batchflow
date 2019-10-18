@@ -677,6 +677,7 @@ class FilesIndex(DatasetIndex):
             _index = _full_index[:, 0]
             _paths = _full_index[:, 1]
         else:
+            warnings.warn("No items to index in %s" % path)
             _index, _paths = np.empty(0), np.empty(0)
         _paths = dict(zip(_index, _paths))
         return _index, _paths
