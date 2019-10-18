@@ -156,7 +156,7 @@ class TestBatchPreloadedManyComponents:
         assert (batch.images == np.arange(120, 130)).all()
         assert (batch.labels == np.arange(1020, 1030)).all()
         # since nodata1 is a pd.Series of None
-        assert (batch.nodata1.to_numpy() == batch.array_of_nones).all()
+        assert (batch.nodata1 == batch.array_of_nones).all()
         assert batch.nodata2 is None
 
 
