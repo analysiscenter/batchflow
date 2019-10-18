@@ -274,7 +274,8 @@ class EncoderDecoder(TFModel):
                     with tf.variable_scope('encoder-'+str(i)):
                         # Make all the args
                         args = {**kwargs, **block_args, **unpack_args(block_args, i, steps)}
-                        downsample_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
+                        if downsample:
+                            downsample_args = {**kwargs, **downsample, **unpack_args(downsample, i, steps)}
 
                         for letter in order:
                             if letter == 'b':

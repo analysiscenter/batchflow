@@ -59,11 +59,13 @@ class VNet(EncoderDecoder):
         config['initial_block'] += dict(layout='cna Rcna+', kernel_size=5, filters=16)
 
         config['body/encoder/num_stages'] = 4
-        config['body/encoder/downsample'] += dict(layout='cna', kernel_size=2, strides=2)
         config['body/encoder/blocks'] += dict(base=ResNet.block,
                                               layout=['cna'*2] + ['cna'*3] * 3,
                                               filters=[32, 64, 128, 256],
                                               kernel_size=5)
+        config['body/encoder/downsample'] += dict(layout='cna',
+                                                  filters=[32, 64, 128, 256],
+                                                  kernel_size=2, strides=2)
 
         config['body/embedding'] = None
 
