@@ -140,4 +140,4 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
 
     def total_population(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self._return(self._confusion_matrix[:, label - 1].sum(axis=(1, 2)))
+        return self._count(lambda l: self._confusion_matrix[:, l-1].sum(axis=(1, 2)), label)
