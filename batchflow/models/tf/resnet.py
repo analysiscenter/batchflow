@@ -41,6 +41,10 @@ class ResNet(TFModel):
             number of blocks in each group with the same number of filters.
         filters : list of int
             number of filters in each group
+        downsample : list of lists of int
+            indices of blocks in each group that should perform downsampling;
+            by default downsampling is applied at first block of each ResNet group
+            except for the first one.
 
         block : dict
             layout : str
@@ -52,8 +56,6 @@ class ResNet(TFModel):
                 or apply a 1x1 convolution (default is False)
             width_factor : int
                 widening factor to make WideResNet (default=1)
-            downsample : bool
-                whether to decrease spatial dimensions with strides=2 in the first convolution
             resnext : bool
                 whether to use aggregated ResNeXt block (default=False)
             resnext_factor : int
@@ -105,6 +107,10 @@ class ResNet(TFModel):
             filters = config['initial_block/filters']
             config['body/filters'] = (2 ** np.arange(len(num_blocks)) * filters * width).tolist()
 
+        if config.get['body/downsampling'] is None:
+            num_blocks = config['body/num_blocks']
+            config.get['body/downsampling'] = [[]] + [[0]] * (len(num_blocks) - 1)
+
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
         if config.get('head/filters') is None:
@@ -136,7 +142,7 @@ class ResNet(TFModel):
         tf.Tensor
         """
         kwargs = cls.fill_params('body', **kwargs)
-        filters, block_args = cls.pop(['filters', 'block'], kwargs)
+        filters, block_args, downsample = cls.pop(['filters', 'block', 'downsample'], kwargs)
         block_args = {**kwargs, **block_args}
 
         with tf.variable_scope(name):
@@ -144,8 +150,7 @@ class ResNet(TFModel):
             for i, n_blocks in enumerate(kwargs['num_blocks']):
                 with tf.variable_scope('group-%d' % i):
                     for block in range(n_blocks):
-                        downsample = i > 0 and block == 0
-                        block_args['downsample'] = downsample
+                        block_args['downsample'] = block in downsample[i]
                         bfilters = filters[i] if isinstance(filters[i], int) else filters[i][block]
                         x = cls.block(x, filters=bfilters, name='block-%d' % block, **block_args)
                     x = tf.identity(x, name='output')
