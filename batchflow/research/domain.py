@@ -1,6 +1,6 @@
 """ Options and configs. """
 
-from itertools import product, islice
+from itertools import product, islice, repeat
 import collections
 import warnings
 from copy import deepcopy
@@ -50,50 +50,56 @@ class Option:
 
     values : list of KV or lis of obj
     """
-    def __init__(self, parameter, values, shuffle=False):
+    def __init__(self, parameter, values):
         self.parameter = KV(parameter)
-        if isinstance(values, SequenceSampler):
-            self._values = values.array
-            self.values = values
-        elif isinstance(values, Sampler):
-            self._values = None
-            self.values = values
+        if isinstance(values, (list, tuple, np.ndarray)):
+            self.values = [KV(value) for value in values]
         else:
-            self._values = [KV(value) for value in values]
-            self.values = SequenceSampler(self._values, shuffle)
+            self.values = values
 
     def __matmul__(self, other):
-        if self._values is None or other._values is None:
+        if isinstance(self.values, Sampler) or isinstance(other.values, Sampler):
             domain = self * other
-        elif len(self._values) == len(other._values):
+        elif len(self.values) == len(other.values):
             domain = Domain()
-            for item in zip(self._values, other._values):
+            for item in zip(self.values, other.values):
                 domain += Option(self.parameter, [item[0]]) * Option(other.parameter, [item[1]])
         return domain
 
     def __mul__(self, other):
-        return Domain(self) * Domain(other)
+        if isinstance(other, (int, float)):
+            return Domain(self) * other
+        else:
+            return Domain(self) * Domain(other)
+
+    def __rmul__(self, other):
+        return self * other      
 
     def __add__(self, other):
         return Domain(self) + Domain(other)
 
     def __repr__(self):
-        if self._values is None:
+        if isinstance(self.values, Sampler):
             return 'Option({}, {})'.format(self.parameter.alias, self.values)
         else:
-            return 'Option({}, {})'.format(self.parameter.alias, [item.alias for item in self._values])
+            return 'Option({}, {})'.format(self.parameter.alias, [item.alias for item in self.values])
 
-    def sample(self, size, squeeze=True):
-        return [ConfigAlias([[self.parameter, self.values.sample(1, squeeze)]]) for _ in range(size)]
+    def sample(self, size=1):
+        res = [ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]]) for _ in range(size)]
+        if len(res) == 1:
+            res = res[0]
+        return res
+    
+    def items(self):
+        return [ConfigAlias([[self.parameter, value]]) for value in self.values]
 
-    def iterator(self, brute_force=False, n_iters=None, squeeze=True):
-        for value in self.values.iterator(brute_force, n_iters, squeeze):
-            yield ConfigAlias([[self.parameter, value]])
-
-    def gen_configs(self, n_items=1):
-        """ Returns Configs created from the option """
-        domain = Domain(self)
-        return domain.gen_configs(n_items)
+    def iterator(self):
+        if isinstance(self.values, Sampler):
+            while True:
+                yield ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]])
+        else:
+            for value in self.values:
+                yield ConfigAlias([[self.parameter, value]])
 
 
 class ConfigAlias:
@@ -151,30 +157,39 @@ class Domain:
        `domain1 = Option('b': [3, 4])` then `domain1 * domain2` will have both options and generate 4 configs:
        `{a: 1, b: 3}`, `{a: 1, b: 4}`, `{a: 2, b: 3}`, `{a: 2, b: 4}`.
     """
-    def __init__(self, domain=None, **kwargs):
+    def __init__(self, domain=None, weights=None, **kwargs):
         if isinstance(domain, Option):
-            self.domain = [[domain]]
+            self.cubes = [[domain]]
+            self.weights = [np.nan]
         elif isinstance(domain, Domain):
-            self.domain = domain.domain
+            self.cubes = domain.cubes
+            self.weights = domain.weights
         elif isinstance(domain, dict):
-            self.domain = self._dict_to_domain(domain)
+            self.cubes = self._dict_to_domain(domain)
+            self.weights = [np.nan]
+        elif isinstance(domain, list) and all([isinstance(item, list) for item in domain]):
+            self.cubes = domain
+            self.weights = [np.nan] * len(domain)
         else:
-            self.domain = domain
-
-        self.update_func = None
-        self.each = None
-        self.args = None
-        self.kwargs = None
-
-        self._iterator = None
-
-        self._brute_force = False
-        self.n_iters = None
-        self.n_reps = 1
-        self.repeat_each = 100
-
+            raise ValueError('domain can be Option, Domain, dict or nested list but {} were given'.format(type(domain)))
         if len(kwargs) > 0:
-            self.domain.append(self._dict_to_domain(kwargs))
+            self.cubes = self._dict_to_domain(kwargs)
+            self.weights = [np.nan]
+
+        if weights is not None:
+            self.weights = weights
+
+        self.weights = np.array(self.weights)
+        self.update_func = None
+        self.update_each = None
+        self.update_args = None
+        self.update_kwargs = None
+
+        self.iterator = None
+
+        self.brute_force = []
+        for cube in self.cubes:
+            self.brute_force.append(not all([isinstance(option.values, Sampler) for option in cube]))
 
     def _dict_to_domain(self, domain):
         _domain = []
@@ -183,149 +198,140 @@ class Domain:
         return [_domain]
 
     def __mul__(self, other):
-        if self.domain is None:
+        if self.cubes is None:
             result = other
+        elif isinstance(other, (int, float)):
+            result = self
+            weights = self.weights
+            weights[np.isnan(weights)] = 1
+            result.weights = weights * other
         elif isinstance(other, Domain):
-            if other.domain is None:
+            if other.cubes is None:
                 result = self
             else:
-                res = list(product(self.domain, other.domain))
+                res = list(product(self.cubes, other.cubes))
                 res = [item[0] + item[1] for item in res]
-            result = Domain(res)
+                pairs = np.array(list(product(self.weights, other.weights)))
+                weights = np.array([np.nanprod(item) for item in pairs])
+                nan_mask = np.array([np.isnan(item).all() for item in pairs])
+                weights[nan_mask] = np.nan
+            result = Domain(res, weights=weights)
         elif isinstance(other, Option):
             result = self * Domain(other)
         else:
-            raise TypeError('Arguments must be Domains or Options')
+            raise TypeError('Arguments must be numeric, Domains or Options')
         return result
 
+    def __rmul__(self, other):
+        return self * other 
+
     def __add__(self, other):
-        if self.domain is None:
+        if self.cubes is None:
             result = other
         elif isinstance(other, Option):
             result = self + Domain(other)
-        elif other.domain is None:
+        elif other.cubes is None:
             result = self
         elif isinstance(other, Domain):
-            if other.domain is None:
-                result = self
-            else:
-                result = Domain(self.domain + other.domain)
+            result = Domain(self.cubes + other.cubes, weights=np.concatenate((self.weights, other.weights)))
         return result
 
     def __repr__(self):
-        return 'Domain(' + str(self.domain) + ')'
+        return 'Domain(' + str(self.cubes) + ')'
 
     def __getitem__(self, index):
-        return Domain([self.domain[index]])
+        return Domain([self.cubes[index]])
 
     def __eq__(self, other):
-        return self.domain() == other.domain()
+        return self.cubes == other.cubes
 
-    def sample(self, size):
-        cubes = np.random.choice(np.array(self.domain + [None])[:-1], size=size)
-        return [sum([option.sample(1)[0] for option in cube], ConfigAlias()) for cube in cubes]
+    def __next__(self):
+        if self.iterator is None:
+            self.reset_iter()
+        return next(self.iterator)
 
-    def samples_iterator(self, n_iters=None):
-        if n_iters is None:
+    def cube_iterator(self, cube):
+        arrays = [option for option in cube if isinstance(option.values, (list, tuple, np.ndarray))]
+        samplers = [option for option in cube if isinstance(option.values, Sampler)]
+
+        if len(arrays) > 0:
+            for combination in list(product(*[option.items() for option in arrays])):
+                res = []
+                for option in samplers:
+                    res.append(option.sample())
+                res.extend(combination)
+                yield sum(res, ConfigAlias())
+        else:
+            iterators = [option.iterator() for option in cube]
             while True:
-                yield self.sample(1)[0]
-        else:
-            for _ in range(n_iters):
-                yield self.sample(1)[0]
+                try:
+                    yield sum([next(iterator) for iterator in iterators], ConfigAlias())
+                except StopIteration:
+                    break
 
-    def brute_force(self, n_iters=None):
-        iteration = 0
-        while True:
-            for cube in self.domain:
-                _seq_options = [option for option in cube if option._values is not None]
-                _sampler_options = [option for option in cube if option._values is None]
-                for item in product(*[option.iterator(brute_force=True) for option in _seq_options]):
-                    item = sum(item, ConfigAlias())
-                    for _option in _sampler_options:
-                        item += _option.sample(1)[0]
-                    yield item
-                    iteration += 1
-                    if n_iters is not None and iteration == n_iters:
-                        break
-                else:
-                    continue
-                break
-            if n_iters is None or iteration == n_iters:
-                break
+    def _get_sampling_blocks(self):
+        incl = np.cumsum(np.isnan(self.weights))
+        excl = np.concatenate(([0], incl[:-1]))
+        block_indices = incl + excl
+        return [np.where(block_indices == i)[0] for i in set(block_indices)]
 
-    def iterator(self, brute_force=False, n_iters=None, n_reps=1, repeat_each=100):
-        """ Iterator to get all possible values from Sampler.
+    def reset_iter(self, n_iters=None, n_reps=1, repeat_each=100):
+        blocks = self._get_sampling_blocks()
+        size = self._options_size()
+        if n_iters is not None:
+            repeat_each = n_iters
+        elif size is not None:
+            repeat_each = size
+        def _iterator():
+            while True:
+                for block in blocks:
+                    weights = self.weights[block]
+                    weights[np.isnan(weights)] = 1
+                    iterators = [self.cube_iterator(cube) for cube in np.array(self.cubes)[block]]
+                    while len(iterators) > 0:
+                        index = np.random.choice(len(block), p=weights / weights.sum())
+                        try:
+                            yield next(iterators[index])
+                        except StopIteration:
+                            del iterators[index]
+                            weights = np.delete(weights, index)
+                            block = np.delete(block, index)
 
-        Parameters
-        ----------
-        brute_force : bool
-            if True, iterator will return all possible values from sampler, else values will be
-            independently sampled.
-        n_iters : int or None
-
-        n_reps : int
-
-        repeat_each : int
-        """
-        generator = self.brute_force(n_iters) if brute_force else self.samples_iterator(n_iters)
-        if n_reps == 1:
-            yield from generator
-        else:
-            if n_iters is not None or repeat_each is None:
-                results = list(generator)
-                for repetition in range(n_reps):
-                    for res in results:
-                        yield res + ConfigAlias([('repetition', repetition)])
+        def _iterator_with_repetitions():
+            iterator = _iterator()
+            if n_reps == 1:
+                i = 0
+                while n_iters is None or i < n_iters:
+                    yield next(iterator)
+                    i += 1
             else:
-                results = list(islice(generator, repeat_each))
-                while len(results) > 0:
+                i = 0
+                while n_iters is None or i < n_iters:
+                    samples = list(islice(iterator, repeat_each))
                     for repetition in range(n_reps):
-                        for res in results:
-                            yield res + ConfigAlias([('repetition', repetition)])
-                    results = list(islice(generator, repeat_each))
-
-    def set_iterator(self, brute_force=False, n_iters=None, n_reps=1, repeat_each=100):
-        self._iterator = None
-        self._brute_force = brute_force # Do we need it?
+                        for sample in samples:
+                            yield sample + ConfigAlias([('repetition', repetition)])
+                    i += repeat_each
         self.n_iters = n_iters
         self.n_reps = n_reps
-        self.repeat_each = repeat_each
+        self.iterator = _iterator_with_repetitions()
 
-        size = self.size
-        if self._brute_force and self.n_iters is not None and self.n_iters > size:
-            warnings.warn("n_iters is greater then number of elements in Domain: {} > {}".format(self.n_iters, size),
-                          RuntimeWarning)
-
+    def _options_size(self):
+        size = 0
+        for cube in self.cubes:
+            lengthes = [len(option.values) for option in cube if isinstance(option.values, (list, tuple, np.ndarray))]
+            if len(lengthes) == 0:
+                return None
+            else:
+                size += np.product(lengthes)
+        return size
+    
     @property
     def size(self):
         if self.n_iters is not None:
             return self.n_reps * self.n_iters
-        elif self.n_iters is None and self._brute_force:
-            size = 0
-            for cube in self.domain:
-                _seq_options = [option for option in cube if option._values is not None]
-                opt_sizes = [len(list(option.iterator(brute_force=True))) for option in _seq_options]
-                size += np.product(opt_sizes)
-            return size * self.n_reps
         else:
             return None
-
-    def set_update(self, function, each, args, kwargs):
-        if function is not None:
-            self.update_func = function
-        self.each = each
-        self.args = args
-        self.kwargs = kwargs
-
-    def __iter__(self):
-        if self._iterator is None:
-            self._iterator = self.iterator(self._brute_force, self.n_iters, self.n_reps, self.repeat_each)
-        return self._iterator
-
-    def __next__(self):
-        if self._iterator is None:
-            self._iterator = self.iterator(self._brute_force, self.n_iters, self.n_reps, self.repeat_each)
-        return next(self._iterator)
 
     def update_domain(self, path):
         if self.update_func is None:

@@ -123,16 +123,13 @@ class Sampler():
             # redefine sample of self
             self.sample = stacked.sample
 
-    def sample(self, size, squeeze=False):
+    def sample(self, size):
         """ Sampling method of a sampler.
 
         Parameters
         ----------
         size : int
             lentgh of sample to be generated.
-        squeeze : bool
-            remove or not single-dimensional entries from the shape of an array. If the squeezed array
-            will have ndim=0, return constant.
 
         Returns
         -------
@@ -140,48 +137,6 @@ class Sampler():
             Array of size (len, Sampler's dimension).
         """
         raise NotImplementedError('The method should be implemented in child-classes!')
-
-    def brute_force(self, squeeze=False):
-        """ Generator to get all possible values from Sampler.
-
-        Parameters
-        ----------
-        squeeze : bool
-            remove or not single-dimensional entries from the shape of an array. If the squeezed array
-            will have ndim=0, return constant.
-        """
-        raise NotImplementedError('The method should be implemented in child-classes!')
-
-    def iterator(self, brute_force=False, n_iters=None, squeeze=False):
-        """ Iterator to get all possible values from Sampler.
-
-        Parameters
-        ----------
-        brute_force : bool
-            if True, iterator will return all possible values from sampler, else values will be
-            independently sampled.
-        squeeze : bool
-            remove or not single-dimensional entries from the shape of an array. If the squeezed array
-            will have ndim=0, return constant.
-        """
-        if brute_force:
-            generator = self.brute_force(squeeze)
-            if n_iters is None:
-                yield from generator
-            else:
-                for _ in range(n_iters):
-                    try:
-                        yield next(generator)
-                    except StopIteration:
-                        generator = self.brute_force(squeeze)
-                        yield next(generator)
-        else:
-            if n_iters is None:
-                while True:
-                    yield self.sample(1, squeeze)
-            else:
-                for _ in range(n_iters):
-                    yield self.sample(1, squeeze)
 
     def __or__(self, other):
         """ Implementation of '|' operation for two instances of Sampler-class.
@@ -251,14 +206,12 @@ class Sampler():
 
         # when other is a Sampler
         elif isinstance(other, Sampler):
-            def concat_sample(size, squeeze=False):
+            def concat_sample(size):
                 """ Sampling procedure of a product of two samplers.
                 """
-                _left = self.sample(size, squeeze=False)
-                _right = other.sample(size, squeeze=False)
-                samples = np.concatenate([_left, _right], axis=1)
-                samples = _squeeze(samples) if squeeze else samples
-                return samples
+                _left = self.sample(size)
+                _right = other.sample(size)
+                return np.concatenate([_left, _right], axis=1)
 
             result.sample = concat_sample
 
@@ -319,11 +272,11 @@ class Sampler():
         if low is not None:
             low = np.array(low).reshape(1, -1)
 
-        def truncated(size, **kwargs):
+        def truncated(size):
             """ Truncated sampling method.
             """
             if size == 0:
-                return self.sample(size=0, **kwargs)
+                return self.sample(size=0)
 
             # set batch-size
             expectation = size / prob
@@ -336,7 +289,7 @@ class Sampler():
             samples = []
             while cumulated < size:
                 # sample points and compute condition-vector
-                sample = self.sample(size=batch_size, **kwargs)
+                sample = self.sample(size=batch_size)
                 cond = np.ones(shape=batch_size).astype(np.bool)
                 if low is not None:
                     if expr is not None:
@@ -408,9 +361,6 @@ class ConstantSampler(Sampler):
         """
         return np.repeat(self.constant, repeats=size, axis=0)
 
-    def brute_force(self, squeeze=False):
-        yield self.constant
-
 class SequenceSampler(Sampler):
     """ Sampler of a elements of array.
 
@@ -425,28 +375,15 @@ class SequenceSampler(Sampler):
     ----------
     array : np.array
     """
-    def __init__(self, array, shuffle=False, **kwargs):
+    def __init__(self, array, **kwargs):
         self.array = np.array(array)
-        _permutation = lambda x: np.random.choice(x, size=len(x), replace=False) if shuffle else x
-        self.array = _permutation(self.array)
         if self.array.ndim != 1:
             raise ValueError('Array must be 1-dimensional but {}-dimensional were given'.format(self.array.ndim))
         super().__init__(array, **kwargs)
 
-    def sample(self, size, squeeze=False):
+    def sample(self, size):
         sample = np.random.choice(self.array, size=size)
-        sample = _squeeze(sample) if squeeze else sample
         return sample
-
-    def brute_force(self, squeeze=False):
-        iterator = iter(self.array)
-        for value in iterator:
-            if not squeeze:
-                value = value.reshape(-1, 1)
-            yield value
-
-    def __str__(self):
-        return 'SequenceSampler(' + str(self.array) + ')'
 
 class NumpySampler(Sampler):
     """ Sampler based on a distribution from np.random.
@@ -473,10 +410,9 @@ class NumpySampler(Sampler):
         name = _get_method_by_alias(name, 'np')
         self.name = name
         self._params = copy(kwargs)
-        self.seed = seed
         self.state = np.random.RandomState(seed=seed)
 
-    def sample(self, size, squeeze=False):
+    def sample(self, size):
         """ Sampling method of ``NumpySampler``.
 
         Generates random samples from distribution ``self.name``.
@@ -495,11 +431,7 @@ class NumpySampler(Sampler):
         sample = sampler(size=size, **self._params)
         if len(sample.shape) == 1:
             sample = sample.reshape(-1, 1)
-        sample = _squeeze(sample) if squeeze else sample
         return sample
-
-    def __str__(self):
-        return 'NumpySampler({}, seed={}, params={})'.format(self.name, self.seed, self._params)
 
 class ScipySampler(Sampler):
     """ Sampler based on a distribution from `scipy.stats`.
@@ -525,13 +457,10 @@ class ScipySampler(Sampler):
         super().__init__(name, seed, **kwargs)
         name = _get_method_by_alias(name, 'ss')
         self.name = name
-        self.seed = seed
-        self._params = copy(kwargs)
         self.state = np.random.RandomState(seed=seed)
-
         self.distr = getattr(ss, self.name)(**kwargs)
 
-    def sample(self, size, squeeze=False):
+    def sample(self, size):
         """ Sampling method of ``ScipySampler``.
 
         Generates random samples from distribution ``self.name``.
@@ -550,11 +479,7 @@ class ScipySampler(Sampler):
         sample = sampler(size=size, random_state=self.state)
         if len(sample.shape) == 1:
             sample = sample.reshape(-1, 1)
-        sample = _squeeze(sample) if squeeze else sample
         return sample
-
-    def __str__(self):
-        return 'ScipySampler({}, seed={}, params={})'.format(self.name, self.seed, self._params)
 
 class HistoSampler(Sampler):
     """ Sampler based on a histogram, output of `np.histogramdd`.
@@ -674,9 +599,3 @@ def sample_histodd(histo, size, state=None):
     low, high = l_all[bin_nums], h_all[bin_nums]
     sampler = np.random.uniform if state is None else state.uniform
     return sampler(low=low, high=high)
-
-def _squeeze(x):
-    res = np.squeeze(x)
-    if res.ndim == 0:
-        res = np.asscalar(res)
-    return res
