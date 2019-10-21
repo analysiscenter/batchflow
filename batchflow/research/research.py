@@ -245,7 +245,7 @@ class Research:
 
     def load_results(self, *args, **kwargs):
         """ Load results of research as pandas.DataFrame or dict (see Results.load). """
-        return Results(research=self).load(*args, **kwargs)
+        return Results(path=self.name).load(*args, **kwargs)
 
     def run(self, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):

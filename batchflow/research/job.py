@@ -6,17 +6,6 @@ from collections import OrderedDict
 from .named_expr import ResearchNamedExpression
 from .. import inbatch_parallel
 
-# def eval_expr(expr, job=None, iteration=None, experiment=None, on_root=False):
-#     """ Evaluate a research named expression recursively """
-#     if isinstance(expr, ResearchNamedExpression):
-#         return expr.get(job, iteration, experiment)
-#     elif isinstance(expr, (list, tuple)):
-#         return [eval_expr(item, job, iteration, experiment) for item in expr]
-#     elif isinstance(expr, dict):
-#         return {key: eval_expr(value, job, iteration, experiment) for key, value in expr.items()}
-#     return expr
-
-
 class Job:
     """ Contains one job. """
     def __init__(self, executable_units, n_iters, configs, branches, research_path):
