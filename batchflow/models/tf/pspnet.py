@@ -9,13 +9,13 @@ from .layers import pyramid_pooling
 
 class PSPNet(EncoderDecoder):
     """ PSPNet model archtecture.
-    By default, input is compressed with encoder, then processed via Pyramid Pooling layer,
-    and without further upsampling passed as output.
+    By default, input is compressed with encoder, then processed via pyramid pooling layer,
+    and without further upsampling passed as output through 1x1 convolution.
 
     Parameters
     ----------
     inputs : dict
-        Dictionary with 'images' (see :meth:`~.TFModel._make_inputs`)
+        Dictionary (see :meth:`~.TFModel._make_inputs`).
 
     body : dict
         encoder : dict
@@ -61,7 +61,6 @@ class PSPNet34(PSPNet):
                                        downsample=[[], [0], [], []],
                                        filters=[64, 128, 256, 512])
         return config
-
 
 class PSPNet50(PSPNet):
     """
