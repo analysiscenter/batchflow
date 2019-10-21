@@ -4,45 +4,10 @@ from functools import partial
 
 import numpy as np
 
-
 class _DummyBatch:
     """ A fake batch for static models """
     def __init__(self, pipeline):
         self.pipeline = pipeline
-
-
-def eval_expr(expr, batch=None, pipeline=None, model=None):
-    """ Evaluate a named expression recursively """
-    batch = batch if batch is not None else _DummyBatch(pipeline)
-    pipeline = pipeline if pipeline is not None else batch.pipeline
-    args = dict(batch=batch, pipeline=pipeline, model=model)
-
-    if isinstance(expr, NamedExpression):
-        batch_, pipeline_, model_ = expr.params or (None, None, None)
-        args = {**dict(batch=batch_, pipeline=pipeline_, model=model_),
-                **dict(batch=batch, pipeline=pipeline, model=model)}
-
-        _expr = expr.get(**args)
-        if isinstance(expr, W):
-            expr = _expr
-        elif isinstance(_expr, NamedExpression):
-            expr = eval_expr(_expr, **args)
-        else:
-            expr = _expr
-    elif isinstance(expr, (list, tuple)):
-        _expr = []
-        for val in expr:
-            _expr.append(eval_expr(val, **args))
-        expr = type(expr)(_expr)
-    elif isinstance(expr, dict):
-        _expr = type(expr)()
-        for key, val in expr.items():
-            key = eval_expr(key, **args)
-            val = eval_expr(val, **args)
-            _expr.update({key: val})
-        expr = _expr
-    return expr
-
 
 def swap(op):
     """ Swap args """
@@ -129,8 +94,9 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     """
     __slots__ = ('__dict__', )
+    param_names = 'batch', 'pipeline', 'model'
 
-    def __init__(self, name, mode='w', op=None, a=None, b=None):
+    def __init__(self, name, mode='w', op=None, a=None, b=None, op_class=None):
         self.name = name
         self.mode = mode
         self.op = op
@@ -138,21 +104,22 @@ class NamedExpression(metaclass=MetaNamedExpression):
         self.b = b
         self.params = None
         self._call = False
+        self.op_class = op_class or NamedExpression
 
     def __getattr__(self, name):
-        return NamedExpression(AN_EXPR, op='#attr', a=self, b=name)
+        return self.op_class(AN_EXPR, op='#attr', a=self, b=name)
 
     def __getitem__(self, key):
-        return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
+        return self.op_class(AN_EXPR, op='#slice', a=self, b=key)
 
     def __call__(self, *args, **kwargs):
         if isinstance(self, F):
             self._call = False
-        return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
+        return self.op_class(AN_EXPR, op='#call', a=self, b=(args, kwargs))
 
     def str(self):
         """ Convert a named expression value to a string """
-        return NamedExpression(AN_EXPR, op='#str', a=self)
+        return self.op_class(AN_EXPR, op='#str', a=self)
 
     def format(self, string):
         """ Convert a value to a formatted representation, controlled by format spec.
@@ -166,10 +133,24 @@ class NamedExpression(metaclass=MetaNamedExpression):
         """
         return NamedExpression(AN_EXPR, op='#format', a=self, b=string)
 
-    def set_params(self, batch=None, pipeline=None, model=None):
-        self.params = batch, pipeline, model
+    @classmethod
+    def default_kwargs(cls, *args, **kwargs):
+        if len(args) > 0:
+            args = list(args) + [None] * (len(cls.param_names) - len(args))
+            return dict(zip(cls.param_names, args))
+        res = {item: kwargs[item] if item in kwargs else None for item in cls.param_names}
+        res.update(**{item: kwargs[item] for item in kwargs if item not in cls.param_names})
+        return res
 
-    def get(self, batch=None, pipeline=None, model=None):
+    def set_params(self, *args, **kwargs):
+        if len(args) > 0:
+            raise TypeError("set_params don't work woth positional arguments")
+        self.params = self.default_kwargs(**kwargs)
+    
+    def get_params(self, **kwargs):
+        return self.params if self.params else self.default_kwargs(**kwargs)
+
+    def get(self, **kwargs):
         """ Return a value of a named expression
 
         Parameters
@@ -183,30 +164,69 @@ class NamedExpression(metaclass=MetaNamedExpression):
             a model which should be used to calculate a value
             (usually omitted, but might be useful for F- and L-expressions)
         """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch, pipeline, model)
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
         if name == AN_EXPR:
-            return self._get_value(batch, pipeline, model)
+            return self._get_value(**params)
         raise ValueError("Undefined value")
 
-    def _get_name(self, batch=None, pipeline=None, model=None):
+    def _get_name(self, **kwargs):
         if isinstance(self.name, NamedExpression):
-            if self.params:
-                batch, pipeline, model = self.params
-            return self.name.get(batch=batch, pipeline=pipeline, model=model)
+            params = self.get_params(**kwargs)
+            return self.name.get(**params)
         return self.name
 
-    def _get_value(self, batch=None, pipeline=None, model=None):
+    def _get_value(self, **kwargs):
+        kwargs = self.default_kwargs(**kwargs)
         if self.name == AN_EXPR:
-            a = eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
-            b = eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
+            a = self.eval_expr(self.a, **kwargs)
+            b = self.eval_expr(self.b, **kwargs)
             if self.op in UNARY_OPS:
                 return OPERATIONS[self.op](a)
             return OPERATIONS[self.op](a, b)
         raise ValueError("Undefined value")
 
-    def set(self, value, batch=None, pipeline=None, model=None, mode=None, eval=True):
+    @classmethod
+    def _get_params(cls, batch=None, pipeline=None, model=None, **kwargs):
+        batch = batch if batch is not None else _DummyBatch(pipeline)
+        pipeline = pipeline if pipeline is not None else batch.pipeline
+        return dict(batch=batch, pipeline=pipeline, model=model, **kwargs)
+
+    @classmethod
+    def eval_expr(cls, expr, *args, **kwargs):
+        """ Evaluate a named expression recursively """
+        if len(args) > 0 and len(kwargs) > 0:
+            raise TypeError("All `eval_expr` parameters except `expr` must be positional or keywords.")
+        if len(args) > 0:
+            kwargs = cls.default_kwargs(*args)
+        kwargs = cls.default_kwargs(**kwargs)
+        params = cls._get_params(**kwargs)
+        if isinstance(expr, NamedExpression):
+            params_ = expr.params or {item: None for item in cls.param_names}
+            params = {**params_, **params}
+
+            _expr = expr.get(**params)
+            if isinstance(expr, W):
+                expr = _expr
+            elif isinstance(_expr, NamedExpression):
+                expr = cls.eval_expr(_expr, **params)
+            else:
+                expr = _expr
+        elif isinstance(expr, (list, tuple)):
+            _expr = []
+            for val in expr:
+                _expr.append(cls.eval_expr(val, **params))
+            expr = type(expr)(_expr)
+        elif isinstance(expr, dict):
+            _expr = type(expr)()
+            for key, val in expr.items():
+                key = cls.eval_expr(key, **params)
+                val = cls.eval_expr(val, **params)
+                _expr.update({key: val})
+            expr = _expr
+        return expr
+
+    def set(self, value, mode=None, eval=True, **kwargs):
         """ Set a value to a named expression
 
         Parameters
@@ -227,27 +247,25 @@ class NamedExpression(metaclass=MetaNamedExpression):
             (as value might contain other named expressions,
             so it should be processed recursively)
         """
-        if self.params:
-            batch, pipeline, model = self.params
+        params = self.params if self.params else self.default_kwargs(**kwargs)
         mode = mode or self.mode
 
         if eval:
-            value = eval_expr(value, batch=batch, pipeline=pipeline, model=model)
+            value = self.eval_expr(value, **params)
         if mode in ['a', 'append']:
-            self.append(value, batch=batch, pipeline=pipeline, model=model)
+            self.append(value, **params)
         elif mode in ['e', 'extend']:
-            self.extend(value, batch=batch, pipeline=pipeline, model=model)
+            self.extend(value, **params)
         elif mode in ['u', 'update']:
-            self.update(value, batch=batch, pipeline=pipeline, model=model)
+            self.update(value, **params)
         else:
-            self.assign(value, batch=batch, pipeline=pipeline, model=model)
+            self.assign(value, **params)
 
-    def assign(self, value, batch=None, pipeline=None, model=None):
+    def assign(self, value, **kwargs):
         """ Assign a value to a named expression """
-        if self.params:
-            batch, pipeline, model = self.params
-        a = eval_expr(self.a, batch=batch, pipeline=pipeline, model=model)
-        b = eval_expr(self.b, batch=batch, pipeline=pipeline, model=model)
+        params = self.get_params(**kwargs)
+        a = self.eval_expr(self.a, **params)
+        b = self.eval_expr(self.b, **params)
 
         if self.op == '#attr':
             setattr(a, b, value)
@@ -330,22 +348,22 @@ class B(NamedExpression):
         super().__init__(name, mode)
         self.copy = copy
 
-    def get(self, batch=None, pipeline=None, model=None):
+    def get(self, **kwargs):
         """ Return a value of a batch component """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
+        batch = params['batch']
         if isinstance(batch, _DummyBatch):
             raise ValueError("Batch expressions are not allowed in static models: B('%s')" % name)
         if name is None:
             return batch.copy() if self.copy else batch
         return getattr(batch, name)
 
-    def assign(self, value, batch=None, pipeline=None, model=None):
+    def assign(self, value, **kwargs):
         """ Assign a value to a batch component """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
+        params = self.get_params(**kwargs)
+        name = self._get_name(**kwargs)
+        batch = params['batch']
         if name is not None:
             setattr(batch, name, value)
 
@@ -368,12 +386,11 @@ class C(NamedExpression):
     def __init__(self, name=None, mode='w'):
         super().__init__(name, mode)
 
-    def get(self, batch=None, pipeline=None, model=None):
+    def get(self, **kwargs):
         """ Return a value of a pipeline config """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline if batch is not None else pipeline
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
+        pipeline = params['batch'].pipeline if params['batch'] is not None else params['pipeline']
         config = pipeline.config or {}
         if name is None:
             return config
@@ -383,12 +400,11 @@ class C(NamedExpression):
             raise KeyError("Name is not found in the config: %s" % name) from None
         return value
 
-    def assign(self, value, batch=None, pipeline=None, model=None):
+    def assign(self, value, **kwargs):
         """ Assign a value to a pipeline config """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline if batch is not None else pipeline
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
+        pipeline = params['batch'].pipeline if params['batch'] is not None else params['pipeline']
         config = pipeline.config or {}
         config[name] = value
 
@@ -409,17 +425,19 @@ class F(NamedExpression):
     Take into account that the actual calls will look like `current_batch.rotate(angle=30)`,
     `make_data(current_batch)` and `prepare_data(current_batch, 115, item=10)`.
     """
-    def __init__(self, name, mode='w', _pass=True):
-        super().__init__(name, mode)
+    def __init__(self, name, mode='w', _pass=True, op_class=None):
+        super().__init__(name, mode, op_class=op_class)
         self._pass = _pass
         self._call = True
 
-    def get(self, batch=None, pipeline=None, model=None):
+    def get(self, **kwargs):
         """ Return a value from a callable """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
         args = []
+        batch = params['batch']
+        model = params['model']
+        pipeline = params['pipeline']
         if self._pass:
             if isinstance(batch, _DummyBatch) or batch is None:
                 _pipeline = batch.pipeline if batch is not None else pipeline
@@ -439,8 +457,8 @@ class F(NamedExpression):
 
 class L(F):
     """ A function, method or any other callable """
-    def __init__(self, name, mode='w'):
-        super().__init__(name, mode=mode, _pass=False)
+    def __init__(self, name, mode='w', op_class=None):
+        super().__init__(name, mode=mode, _pass=False, op_class=op_class)
 
 
 class V(NamedExpression):
@@ -453,22 +471,20 @@ class V(NamedExpression):
         V('model_name')
         V('loss_history')
     """
-    def get(self, batch=None, pipeline=None, model=None):
+    def get(self, **kwargs):
         """ Return a value of a pipeline variable """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline if batch is not None else pipeline
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
+        pipeline = params['batch'].pipeline if params['batch'] is not None else params['pipeline']
         value = pipeline.get_variable(name)
         return value
 
-    def assign(self, value, batch=None, pipeline=None, model=None):
+    def assign(self, value, **kwargs):
         """ Assign a value to a pipeline variable """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
-        pipeline = batch.pipeline if batch is not None else pipeline
-        pipeline.assign_variable(name, value, batch=batch)
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
+        pipeline = params['batch'].pipeline if params['batch'] is not None else params['pipeline']
+        pipeline.assign_variable(name, value, batch=params['batch'])
 
 
 class D(NamedExpression):
@@ -485,8 +501,11 @@ class D(NamedExpression):
     def __init__(self, name=None, mode='w'):
         super().__init__(name, mode)
 
-    def _get_name_dataset(self, batch=None, pipeline=None, model=None):
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
+    def _get_name_dataset(self, **kwargs):
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
+        pipeline = params['pipeline']
+        batch = params['batch']
         pipeline = pipeline if pipeline is not None else batch.pipeline
         dataset = pipeline.dataset if pipeline is not None else None
         dataset = dataset or batch.dataset
@@ -494,11 +513,10 @@ class D(NamedExpression):
             raise ValueError("Dataset is not set", self)
         return name, dataset
 
-    def get(self, batch=None, pipeline=None, model=None):
+    def get(self, **kwargs):
         """ Return a value of a dataset attribute """
-        if self.params:
-            batch, pipeline, model = self.params
-        name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        params = self.get_params(**kwargs)
+        name, dataset = self._get_name_dataset(**params)
 
         if name is None:
             value = dataset
@@ -508,9 +526,10 @@ class D(NamedExpression):
             raise KeyError("Attribute does not exist in the dataset", name)
         return value
 
-    def assign(self, value, batch=None, pipeline=None, model=None):
+    def assign(self, value, **kwargs):
         """ Assign a value to a dataset attribute """
-        name, dataset = self._get_name_dataset(batch=batch, pipeline=pipeline, model=model)
+        params = self.get_params(**kwargs)
+        name, dataset = self._get_name_dataset(**params)
         if name is None:
             raise ValueError('Assigning a value to D() is not possible.')
         setattr(dataset, name, value)
@@ -544,23 +563,22 @@ class R(NamedExpression):
         self.kwargs = kwargs
         self.size = size
 
-    def get(self, batch=None, pipeline=None, model=None):
+    def get(self, **kwargs):
         """ Return a value of a random variable """
-        if self.params:
-            batch, pipeline, model = self.params
-        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
+        params = self.get_params(**kwargs)
+        name = self._get_name(**params)
         if callable(name):
             pass
         elif isinstance(name, str) and hasattr(self.random_state, name):
             name = getattr(self.random_state, name)
         else:
             raise TypeError('Random distribution should be a callable or a numpy distribution')
-        args = eval_expr(self.args, batch=batch, pipeline=pipeline, model=model)
+        args = self.eval_expr(self.args, **kwargs)
         if self.size is not None:
             self.kwargs['size'] = self.size
-        kwargs = eval_expr(self.kwargs, batch=batch, pipeline=pipeline, model=model)
+        new_kwargs = self.eval_expr(self.kwargs, **kwargs)
 
-        return name(*args, **kwargs)
+        return name(*args, **new_kwargs)
 
     def assign(self, *args, **kwargs):
         """ Assign a value """
@@ -587,9 +605,9 @@ class W(NamedExpression):
         W(B(copy=True))
         W(R('normal', 0, 1, size=B('size')))
     """
-    def get(self, batch=None, pipeline=None, model=None):
+    def get(self, **kwargs):
         """ Return a wrapped named expression """
-        self.name.set_params(batch, pipeline, model)
+        self.name.set_params(**kwargs)
         return self.name
 
     def assign(self, *args, **kwargs):
@@ -635,13 +653,14 @@ class P(W):
     --------
     :func:`~batchflow.inbatch_parallel`
     """
-    def get(self, batch=None, pipeline=None, model=None, parallel=False):   # pylint:disable=arguments-differ
+    def get(self, parallel=False, **kwargs):   # pylint:disable=arguments-differ
         """ Return a wrapped named expression """
         if parallel:
+            batch = kwargs['batch']
             if isinstance(self.name, R):
-                val = np.array([self.name.get(batch=batch, pipeline=pipeline, model=model) for _ in batch])
+                val = np.array([self.name.get(**kwargs) for _ in batch])
             elif isinstance(self.name, NamedExpression):
-                val = self.name.get(batch=batch, pipeline=pipeline, model=model)
+                val = self.name.get(**kwargs)
             else:
                 val = self.name
             if len(val) < len(batch):
@@ -656,17 +675,16 @@ class I(NamedExpression):
     Parameters
     ----------
     name : str
-        Determines returned value. One of:
-            - 'current' or its substring - current iteration number, default.
-            - 'maximum' or its substring - total number of iterations to be performed.
-              If total number is not defined, raises an error.
-            - 'ratio' or its substring - current iteration divided by a total number of iterations.
+        'current' or its substring - current iteration number, default.
+        'maximum' or its substring - total number of iterations to be performed.
+                                     If total number is not defined, raises an error.
+        'ratio' or its substring - current iteration divided by a total number of iterations.
 
     Raises
     ------
     ValueError
-    If `name` is not valid.
-    If `name` is 'm' or 'r' and total number of iterations is not defined.
+        * If `name` is not valid.
+        * If `name` is 'm' or 'r' and total number of iterations is not defined.
     Examples
     --------
     ::
@@ -678,11 +696,11 @@ class I(NamedExpression):
     def __init__(self, name='c'):
         super().__init__(name, mode=None)
 
-    def get(self, batch=None, pipeline=None, model=None):    # pylint:disable=inconsistent-return-statements
+    def get(self, **kwargs):    # pylint:disable=inconsistent-return-statements
         """ Return current or maximum iteration number or their ratio """
-        name = self._get_name(batch, pipeline, model)
+        name = self._get_name(**kwargs)
 
-        pipeline = batch.pipeline if batch is not None else pipeline
+        pipeline = kwargs['batch'].pipeline if kwargs['batch'] is not None else kwargs['pipeline']
         if 'current'.startswith(name):
             return pipeline._iter_params['_n_iters']    # pylint:disable=protected-access
 

@@ -361,6 +361,30 @@ class ConstantSampler(Sampler):
         """
         return np.repeat(self.constant, repeats=size, axis=0)
 
+class SequenceSampler(Sampler):
+    """ Sampler of a elements of array.
+
+    Parameters
+    ----------
+    array : iterable
+        array of elements to sample from.
+    shuffle : bool
+        shuffle or not elements of array. Significant for `iterator`, not `sample`.
+
+    Attributes
+    ----------
+    array : np.array
+    """
+    def __init__(self, array, **kwargs):
+        self.array = np.array(array)
+        if self.array.ndim != 1:
+            raise ValueError('Array must be 1-dimensional but {}-dimensional were given'.format(self.array.ndim))
+        super().__init__(array, **kwargs)
+
+    def sample(self, size):
+        sample = np.random.choice(self.array, size=size)
+        return sample
+
 class NumpySampler(Sampler):
     """ Sampler based on a distribution from np.random.
 

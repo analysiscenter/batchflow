@@ -14,7 +14,7 @@ from .config import Config
 from .batch import Batch
 from .decorators import deprecated
 from .exceptions import SkipBatchException, EmptyBatchSequence
-from .named_expr import NamedExpression, V, eval_expr
+from .named_expr import NamedExpression, V
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
@@ -390,8 +390,10 @@ class Pipeline:
         Parameters
         ----------
         variables : dict or tuple
+            if dict
+                key : str - a variable name,
+                value : dict -  a variable value and init params (see :meth:`.init_variable`)
             if tuple, contains variable names which will have None as default values
-            if dict, then mapping from variable names to values and init params (see :meth:`.init_variable`)
 
         Returns
         -------
@@ -717,7 +719,7 @@ class Pipeline:
         return batch_res
 
     def _eval_expr(self, expr, batch=None, model=None):
-        return eval_expr(expr, batch=batch, pipeline=self, model=model)
+        return NamedExpression.eval_expr(expr, batch=batch, pipeline=self, model=model)
 
     def get_model_by_name(self, name, batch=None):
         """ Retrieve a model by its name """
@@ -1143,20 +1145,20 @@ class Pipeline:
                 self._prefetch_queue.task_done()
                 self._batch_queue.put(None)
                 break
-
-            try:
-                batch = future.result()
-            except SkipBatchException:
-                skip_batch = True
-            except Exception:   # pylint: disable=broad-except
-                exc = future.exception()
-                print("Exception in a thread:", exc)
-                traceback.print_tb(exc.__traceback__)
-            finally:
-                if not skip_batch:
-                    self._batch_queue.put(batch, block=True)
-                    skip_batch = False
-                self._prefetch_queue.task_done()
+            else:
+                try:
+                    batch = future.result()
+                except SkipBatchException:
+                    skip_batch = True
+                except Exception:   # pylint: disable=broad-except
+                    exc = future.exception()
+                    print("Exception in a thread:", exc)
+                    traceback.print_tb(exc.__traceback__)
+                finally:
+                    if not skip_batch:
+                        self._batch_queue.put(batch, block=True)
+                        skip_batch = False
+                    self._prefetch_queue.task_done()
 
     def _clear_queue(self, queue):
         if queue is not None:
@@ -1260,12 +1262,12 @@ class Pipeline:
                     cur_len += len(new_batch)
             if len(batches) == 0:
                 break
-
-            if _action['fn'] is None:
-                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
             else:
-                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'])
-            yield batch
+                if _action['fn'] is None:
+                    batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
+                else:
+                    batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'])
+                yield batch
 
 
     def gen_batch(self, *args, iter_params=None, reset='iter', **kwargs):
