@@ -1,6 +1,6 @@
 """ Run multiple notebooks. """
 # pylint: disable=import-error
-# pylint: disable=wrong-import-position
+# pylint: disable=import-outside-toplevel
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "6"

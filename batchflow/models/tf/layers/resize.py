@@ -1,5 +1,5 @@
 """ Contains upsampling and resize layers """
-# pylint: disable=wrong-import-position
+# pylint: disable=import-outside-toplevel
 import numpy as np
 import tensorflow as tf
 
