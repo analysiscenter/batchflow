@@ -258,12 +258,13 @@ class EncoderDecoder(TFModel):
         list of tf.Tensors
         """
         base_class = kwargs.pop('base')
+        order = cls.pop('order', kwargs)
 
         if base_class is not None:
             encoder_outputs = base_class.make_encoder(inputs, name=name, **kwargs)
 
         else:
-            steps, order, downsample, block_args = cls.pop(['num_stages', 'order', 'downsample', 'blocks'], kwargs)
+            steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
             order = ''.join([item[0] for item in order])
 
             base_block = block_args.get('base')

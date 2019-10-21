@@ -19,7 +19,7 @@ MODELS = [
 
 ENCODERS = [
     {'num_stages': 2},
-    {'base': ResNet, 'num_blocks': [2]*3, 'filters': [13]*3},
+    {'base': ResNet, 'num_blocks': [2]*3, 'filters': [13]*3, 'downsample': [[], [0], [0], [0]]},
     {'base': DenseNet, 'num_layers': [2]*3, 'growth_rate': 13},
     {'num_stages': 2, 'blocks': {'base': ResNet.block, 'filters':[13]*2}},
 ]
