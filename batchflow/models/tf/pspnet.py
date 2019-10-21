@@ -3,7 +3,7 @@ Hengshuang Zhao, Jianping Shi, Xiaojuan Qi, Xiaogang Wang, Jiaya Jia.
 "`Pyramid Scene Parsing Network <https://arxiv.org/abs/1612.01105>`_"
 """
 
-from . import EncoderDecoder, ResNet50
+from . import EncoderDecoder, ResNet18, ResNet34, ResNet50
 from .layers import pyramid_pooling
 
 
@@ -32,8 +32,36 @@ class PSPNet(EncoderDecoder):
         config = super().default_config()
         config['body/embedding'] = dict(base=pyramid_pooling)
         config['body/decoder'] = None
-        config['body/order'] = None
         return config
+
+class PSPNet18(PSPNet):
+    """
+    PSPNet with ResNet18 encoder.
+    """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
+        config['body/encoder'] += dict(base=ResNet18,
+                                       downsample=[[], [0], [], []],
+                                       filters=[64, 128, 256, 512])
+        return config
+
+class PSPNet34(PSPNet):
+    """
+    PSPNet with ResNet34 encoder.
+    """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
+        config['body/encoder'] += dict(base=ResNet34,
+                                       downsample=[[], [0], [], []],
+                                       filters=[64, 128, 256, 512])
+        return config
+
 
 class PSPNet50(PSPNet):
     """
@@ -45,8 +73,6 @@ class PSPNet50(PSPNet):
         config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
                                         pool_size=3, pool_strides=2)
         config['body/encoder'] += dict(base=ResNet50,
-                                       order=None,
                                        downsample=[[], [0], [], []],
-                                       filters=[64, 128, 256, 512],
-                                       bottlenck=True)
+                                       filters=[64, 128, 256, 512])
         return config
