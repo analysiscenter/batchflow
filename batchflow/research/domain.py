@@ -1,23 +1,23 @@
 """ Options and configs. """
 
-from itertools import product, islice, repeat
-import collections
-import warnings
+from itertools import product, islice
+from collections import OrderedDict
 from copy import deepcopy
 import numpy as np
 
-from .. import Config, Sampler, SequenceSampler
+from .. import Config, Sampler
 from .named_expr import ResearchNamedExpression
 
 class KV:
-    """ Class for value and alias
+    """ Class for value and alias. Is used to create short and clear alias for some Python object
+    that can be used as an element of research `Domain`.
 
     Parameters
     ----------
-    value : obj
+    value : hashable
 
-    alias : obj
-        if None alias will be equal to value.
+    alias : object
+        if None alias will be equal to `value`.
     """
     def __init__(self, value, alias=None):
         if isinstance(value, KV):
@@ -46,16 +46,18 @@ class Option:
 
     Parameters
     ----------
-    parameter : KV or obj
+    parameter : KV or object
 
-    values : list of KV or lis of obj
+    values : list, tuple of KV or objects, np.ndarray or Sampler.
     """
     def __init__(self, parameter, values):
         self.parameter = KV(parameter)
         if isinstance(values, (list, tuple, np.ndarray)):
             self.values = [KV(value) for value in values]
-        else:
+        elif isinstance(self, Sampler):
             self.values = values
+        else:
+            raise TypeError('values must be array-like object or Sampler but {} were given'.format(type(values)))
 
     def __matmul__(self, other):
         if isinstance(self.values, Sampler) or isinstance(other.values, Sampler):
@@ -69,31 +71,59 @@ class Option:
     def __mul__(self, other):
         if isinstance(other, (int, float)):
             return Domain(self) * other
-        else:
-            return Domain(self) * Domain(other)
+        return Domain(self) * Domain(other)
 
     def __rmul__(self, other):
-        return self * other      
+        return self * other
 
     def __add__(self, other):
         return Domain(self) + Domain(other)
 
     def __repr__(self):
-        if isinstance(self.values, Sampler):
-            return 'Option({}, {})'.format(self.parameter.alias, self.values)
-        else:
+        if isinstance(self.values, (list, tuple, np.ndarray)):
             return 'Option({}, {})'.format(self.parameter.alias, [item.alias for item in self.values])
+        else:
+            return 'Option({}, {})'.format(self.parameter.alias, self.values)
 
-    def sample(self, size=1):
-        res = [ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]]) for _ in range(size)]
-        if len(res) == 1:
+    def sample(self, size=None):
+        """ Return ConfigAlias objects created on the base of Sampler-option.
+
+        Parameters
+        ----------
+        size : int or None
+            the size of the sample
+
+        Returns
+        -------
+            ConfigAlias if size is None, list of ConfigAlias objects else.
+        """
+
+        if not isinstance(self.values, Sampler):
+            raise TypeError('values must be Sampler but {} was given'.format(type(self.values)))
+        _size = size or 1
+        res = [ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]]) for _ in range(_size)]
+        if size is None:
             res = res[0]
         return res
-    
+
     def items(self):
+        """ Return all possible ConfigAliases which can be created from the option.
+
+        Returns
+        -------
+            list of ConfigAlias objects.
+        """
+        if not isinstance(self.values, (list, tuple, np.ndarray)):
+            raise TypeError('values must be array-like object but {} were given'.format(type(self.values)))
         return [ConfigAlias([[self.parameter, value]]) for value in self.values]
 
     def iterator(self):
+        """ Produce ConfigAlias from the option.
+
+        Returns
+        -------
+            generator.
+        """
         if isinstance(self.values, Sampler):
             while True:
                 yield ConfigAlias([[self.parameter, self.values.sample(1)[0, 0]]])
@@ -103,32 +133,50 @@ class Option:
 
 
 class ConfigAlias:
-    """ Class for config and alias which is represenation of config where all keys and values are str.
+    """ Class for config and alias which is represenation of config where all keys are str.
 
     Parameters
     ----------
     config : list of (key, value)
-        keys and values are KV or objects
+        keys are KV or hashable, value is KV or object.
     """
     def __init__(self, config=None):
         _config = []
         if config is not None:
-            for item in config:
-                key = item[0] if isinstance(item[0], KV) else KV(item[0])
-                value = item[1] if isinstance(item[1], KV) else KV(item[1])
-                _config.append((key, value))
+            for key, value in config:
+                _key = key[0] if isinstance(key[0], KV) else KV(key[0])
+                _value = value[1] if isinstance(value[1], KV) else KV(value[1])
+                _config.append((_key, _value))
         self._config = _config
 
     def alias(self, as_string=False, delim='-'):
-        """ Returns alias. """
+        """ Returns alias.
+
+        Parameters
+        ----------
+        as_string : bool
+            if True, return string representation of ConfigAlias. Different items will be
+            separated by `delim`, key and value for each pair will be separated by '_'.
+        delim : str
+            delimiter for different ConfigAlias items in string representation.
+
+        Returns
+        -------
+            dict or str
+        """
         config_alias = {item[0].alias: item[1].alias for item in self._config}
         if as_string:
-            config_alias = collections.OrderedDict(sorted(config_alias.items()))
+            config_alias = OrderedDict(sorted(config_alias.items()))
             config_alias = delim.join([str(key)+'_'+str(value) for key, value in config_alias.items()])
         return config_alias
 
     def config(self):
-        """ Returns values. """
+        """ Returns values of ConfigAlias.
+
+        Returns
+        -------
+            Config
+        """
         return Config({item[0].value: item[1].value for item in self._config})
 
     def __repr__(self):
