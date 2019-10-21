@@ -33,20 +33,23 @@ class PSPNet(EncoderDecoder):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder'] = dict(base=None, num_stages=None)
         config['body/embedding'] = dict(base=pyramid_pooling)
         config['body/decoder'] = None
+        config['body/order'] = None
         return config
 
 class PSPNet50(PSPNet):
     """
+    PSPNet with ResNet50 encoder.
     """
     @classmethod
     def default_config(cls):
         config = super().default_config()
-
-        config['body/encoder/blocks'] = dict(base=ResNet50,
-                                             downsampling=[[], [0], [], []],
-                                             filters=[64, 128, 256, 512],
-                                             bottlenck=True)
+        config['initial_block'] += dict(layout='cnap', filters=64, kernel_size=7, strides=2,
+                                        pool_size=3, pool_strides=2)
+        config['body/encoder'] += dict(base=ResNet50,
+                                       order=None,
+                                       downsample=[[], [0], [], []],
+                                       filters=[64, 128, 256, 512],
+                                       bottlenck=True)
         return config
