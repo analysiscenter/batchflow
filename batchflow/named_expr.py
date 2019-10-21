@@ -135,6 +135,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     @classmethod
     def default_kwargs(cls, *args, **kwargs):
+        """ Define default kwargs for named expression. """
         if len(args) > 0:
             args = list(args) + [None] * (len(cls.param_names) - len(args))
             return dict(zip(cls.param_names, args))
@@ -143,10 +144,11 @@ class NamedExpression(metaclass=MetaNamedExpression):
         return res
 
     def set_params(self, *args, **kwargs):
+        """ Transform args and kwargs to params. If some parameter is None, default value will be used. """
         if len(args) > 0:
             raise TypeError("set_params don't work woth positional arguments")
         self.params = self.default_kwargs(**kwargs)
-    
+
     def get_params(self, **kwargs):
         return self.params if self.params else self.default_kwargs(**kwargs)
 
