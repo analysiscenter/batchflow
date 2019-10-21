@@ -366,14 +366,14 @@ class TorchModel(BaseModel):
         elif isinstance(loss, type):
             pass
         elif isinstance(loss, nn.Module):
-            pass
+            self.loss_fn = loss
         elif callable(loss):
-            loss = lambda **a: partial(loss, **args)
-            args = {}
+            self.loss_fn = partial(loss, **args)
         else:
             raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
 
-        self.loss_fn = loss if isinstance(loss, nn.Module) else loss(**args)
+        if self.loss_fn is None:
+            self.loss_fn = loss(**args)
 
         if isinstance(self.loss_fn, nn.Module):
             self.loss_fn.to(device=self.device)
