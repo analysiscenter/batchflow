@@ -1,5 +1,12 @@
-""" Tests for regression metrics """
+""" Tests for regression metrics.
+
+Verifies the correctness of evaluated metrics for the cases:
+    - targets and predictions are non border values.
+    - targets and predictions are border values, i.e. zeros, equal values.
+    - targets and predictions are single values.
+"""
 # pylint: disable=import-error, no-name-in-module
+# pylint: disable=missing-docstring
 import pytest
 import numpy as np
 
@@ -25,7 +32,6 @@ PARAMS_DEFINED = [(None, 'mae', [1.5, 0.25]),
 @pytest.mark.parametrize('targets, predictions, weights', [([[1, 1], [2, 2]], [[1, 0], [4, 2]], [1, 3])])
 @pytest.mark.parametrize('output_agg, metric_name, exp_res', PARAMS_DEFINED)
 def test_defined_values(targets, predictions, weights, output_agg, metric_name, exp_res):
-    """ Test that expected values match the real ones for some non border values """
     metrics = RegressionMetrics(targets, predictions, weights=weights, multi=True)
     res = metrics.evaluate(metrics=metric_name, agg=output_agg)
     assert np.allclose(res, exp_res, atol=0.01, rtol=0)
@@ -40,11 +46,6 @@ PARAMS = [('eq', 'mae', 0), ('eq', 'mse', 0), ('eq', 'median_absolute_error', 0)
 @pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('mode, metric_name, exp_res', PARAMS)
 def test_both_zero(multi, mode, metric_name, exp_res):
-    """ Test expected values for the cases:
-        1. both targets and predictions are the same non-zeros
-        2. targets and predictions are both zeros
-        3. targets are zeros and predictions are non-zeros
-    """
     size = (10, 2) if multi else 10
     exp_res = [exp_res, exp_res] if multi else exp_res
 
@@ -74,7 +75,6 @@ PARAMS_SINGLE = [('mae', 1), ('mse', 1), ('median_absolute_error', 1), ('max_err
 @pytest.mark.parametrize('targets, predictions', [([1, 1], [2, 2])])
 @pytest.mark.parametrize('metric_name, exp_res', PARAMS_SINGLE)
 def test_single_value(agg, targets, predictions, metric_name, exp_res):
-    """ Test expected values matches the real ones for the case of single target and single prediction"""
     exp_res = [exp_res, exp_res] if agg is None else exp_res
     metrics = RegressionMetrics(targets, predictions, multi=True)
     res = metrics.evaluate(metrics=metric_name, agg=agg)

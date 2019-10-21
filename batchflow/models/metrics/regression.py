@@ -13,14 +13,14 @@ class RegressionMetrics(Metrics):
     """ Metrics to assess regression models.
 
     Available metrics:
-    - mae
-    - mse
-    - rmse
-    - r2_score
-    - explained_variance_ratio
-    - median absolute error
-    - max error
-    - accuracy
+        - mae
+        - mse
+        - rmse
+        - r2_score
+        - explained_variance_ratio
+        - median absolute error
+        - max error
+        - accuracy
 
     Parameters
     ----------
@@ -41,12 +41,10 @@ class RegressionMetrics(Metrics):
 
     Notes
     -----
-    - Accuracy metric for regression task stands for the ratio of samples for which `abs(targets-predictions) < gap`.
-    Used for validating models in First Break picking task with the default value `gap=3`.
-
     - For all the metrics, except max error, accuracy and median absolute error, you can compute sample-wise weighting.
     For that purpose specify `weight` argument, which must be the same size as inputs.
 
+    
     Multioutput task restricted to the case where each target is 1D array.
     In the multioutput case metrics might be calculated with or without outputs averaging.
 
