@@ -85,8 +85,7 @@ class Combine(Layer):
             if self.op in ['sum', 'add']:
                 return tf.add_n(inputs, name='combine-sum')
             if self.op in ['softsum', 'convsum']:
-                # Can't be imported in the file beginning due to recursive imports
-                from .conv_block import ConvBlock # pylint: disable=import-outside-toplevel
+                from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
                 filters = inputs[0].get_shape().as_list()[axis]
                 args = {'layout': 'c', 'filters': filters, 'kernel_size': 1, **self.kwargs}
                 for i in range(1, len(inputs)):
