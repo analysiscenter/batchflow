@@ -335,9 +335,9 @@ def calculate_accuracy(batch, pipeline, predict_name):
     top3 = np.mean([1 if batch.labels[i] in pred else 0 for i, pred in enumerate(predict_top3)])
     return top1, top3
 
-def plot_images_predictions(images, targets, proba, in_row=5, classes=None, models_names=None, **kwargs):
+def plot_images_predictions(images, targets, proba, ncols=5, classes=None, models_names=None, **kwargs):
     """ Plot images with true label and predicted class proba.
-    Plots predictions of several models in case proba is a list containing each model predictions.
+    Plots predictions of several models in case `proba` is a list containing each model predictions.
 
     Parameters
     ----------
@@ -350,7 +350,7 @@ def plot_images_predictions(images, targets, proba, in_row=5, classes=None, mode
     proba: np.array with the shape (n_images, n_classes) or list of such arrays
         predicted probabilities for each class for each model
 
-    in_row: int
+    ncols: int
         number of images to plot in a row (default 5)
 
     classes: list of strings
@@ -371,8 +371,8 @@ def plot_images_predictions(images, targets, proba, in_row=5, classes=None, mode
     if classes is None:
         classes = [str(i) for i in range(proba[0].shape[1])]
 
-    n_rows = (n_items // in_row) + 1
-    fig, ax = plt.subplots(n_rows, in_row, **kwargs)
+    nrows = (n_items // ncols) + 1
+    fig, ax = plt.subplots(nrows, ncols, **kwargs)
     ax = ax.flatten()
     for i in range(n_items):
         ax[i].imshow(images[i])
@@ -386,5 +386,5 @@ def plot_images_predictions(images, targets, proba, in_row=5, classes=None, mode
         ax[i].title.set_text(title)
         ax[i].grid(b=None)
 
-    for i in range(n_items, n_rows * in_row):
+    for i in range(n_items, n_rows * ncols):
         fig.delaxes(ax[i])

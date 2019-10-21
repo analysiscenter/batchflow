@@ -104,7 +104,7 @@ class SklearnModel(BaseModel):
             Subset of the training data, shape (n_samples, n_features)
 
         predict_proba: bool, default False
-            Whether predictions are probabilities or labels. Not the all estimators support this.
+            Whether predictions are probabilities or labels. Not all estimators support this.
 
         Notes
         -----
