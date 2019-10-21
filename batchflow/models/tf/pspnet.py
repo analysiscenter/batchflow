@@ -7,11 +7,10 @@ from . import EncoderDecoder, ResNet50
 from .layers import pyramid_pooling
 
 
-
 class PSPNet(EncoderDecoder):
     """ PSPNet model archtecture.
     By default, input is compressed with encoder, then processed via Pyramid Pooling layer,
-    and .................................
+    and without further upsampling passed as output.
 
     Parameters
     ----------
@@ -20,15 +19,13 @@ class PSPNet(EncoderDecoder):
 
     body : dict
         encoder : dict
-        Dictionary with parameters for entry encoding: downsampling of the inputs.
+        Dictionary with parameters for entry encoding or dictionary with
+        base model implementing ``make_encoder`` method.
         See :meth:`~.EncoderDecoder.encoder` arguments.
-
-        embedding : dict
-        Same as :meth:`~.EncoderDecoder.embedding`. Default is to use ASPP.
 
         decoder : dict
         Dictionary with parameters for decoding of compressed representation.
-        See :meth:`~.EncoderDecoder.decoder` arguments. Default is to use bilinear upsampling.
+        See :meth:`~.EncoderDecoder.decoder` arguments. Default is None.
     """
     @classmethod
     def default_config(cls):
