@@ -1,7 +1,7 @@
 """ Contains common layers """
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras.layers as K #pylint: disable=import-error
+import tensorflow.keras.layers as K # pylint: disable=import-error
 
 from .layer import Layer, add_as_function
 
@@ -85,7 +85,8 @@ class Combine(Layer):
             if self.op in ['sum', 'add']:
                 return tf.add_n(inputs, name='combine-sum')
             if self.op in ['softsum', 'convsum']:
-                from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+                # Can't be imported in the file beginning due to recursive imports
+                from .conv_block import ConvBlock # pylint: disable=wrong-import-position
                 filters = inputs[0].get_shape().as_list()[axis]
                 args = {'layout': 'c', 'filters': filters, 'kernel_size': 1, **self.kwargs}
                 for i in range(1, len(inputs)):
