@@ -107,9 +107,9 @@ class ResNet(TFModel):
             filters = config['initial_block/filters']
             config['body/filters'] = (2 ** np.arange(len(num_blocks)) * filters * width).tolist()
 
-        if config.get['body/downsampling'] is None:
+        if config.get['body/downsample'] is None:
             num_blocks = config['body/num_blocks']
-            config.get['body/downsampling'] = [[]] + [[0]] * (len(num_blocks) - 1)
+            config.get['body/downsample'] = [[]] + [[0]] * (len(num_blocks) - 1)
 
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
