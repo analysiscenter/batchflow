@@ -5,7 +5,7 @@ import logging
 
 import numpy as np
 
-from .named_expr import NamedExpression
+from .named_expr import NamedExpression, eval_expr
 from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID, UPDATE_ID
 
 
@@ -60,8 +60,8 @@ class OncePipeline:
         return self
 
     def _exec_action(self, action):
-        args_value = NamedExpression.eval_expr(action['args'], pipeline=self.pipeline)
-        kwargs_value = NamedExpression.eval_expr(action['kwargs'], pipeline=self.pipeline)
+        args_value = eval_expr(action['args'], pipeline=self.pipeline)
+        kwargs_value = eval_expr(action['kwargs'], pipeline=self.pipeline)
 
         if action['name'] in ACTIONS:
             method = getattr(self, ACTIONS[action['name']])

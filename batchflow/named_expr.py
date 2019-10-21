@@ -15,6 +15,8 @@ def swap(op):
         return op(b, a)
     return _op_
 
+def eval_expr(expr, *args, **kwargs):
+    return NamedExpression.eval_expr(expr, *args, **kwargs)
 
 AN_EXPR = "#!__op__"
 

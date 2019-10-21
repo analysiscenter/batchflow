@@ -14,7 +14,7 @@ from .config import Config
 from .batch import Batch
 from .decorators import deprecated
 from .exceptions import SkipBatchException, EmptyBatchSequence
-from .named_expr import NamedExpression, V
+from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
@@ -717,7 +717,7 @@ class Pipeline:
         return batch_res
 
     def _eval_expr(self, expr, batch=None, model=None):
-        return NamedExpression.eval_expr(expr, batch=batch, pipeline=self, model=model)
+        return eval_expr(expr, batch=batch, pipeline=self, model=model)
 
     def get_model_by_name(self, name, batch=None):
         """ Retrieve a model by its name """
