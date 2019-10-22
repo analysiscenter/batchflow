@@ -471,6 +471,30 @@ class V(NamedExpression):
         pipeline.assign_variable(name, value, batch=batch)
 
 
+class M(NamedExpression):
+    """ Model name
+
+    Examples
+    --------
+    ::
+
+        M('model_name')
+    """
+    def get(self, batch=None, pipeline=None, model=None):
+        """ Return a model from a pipeline """
+        if self.params:
+            batch, pipeline, model = self.params
+        name = self._get_name(batch=batch, pipeline=pipeline, model=model)
+        pipeline = batch.pipeline if batch is not None else pipeline
+        value = pipeline.get_model_by_name(name)
+        return value
+
+    def assign(self, value, batch=None, pipeline=None, model=None):
+        """ Assign a value to a model """
+        _ = value, batch, pipeline, model
+        raise ValueError('Assigning a value to a model is not possible.')
+
+
 class D(NamedExpression):
     """ Dataset attribute or dataset itself
 
