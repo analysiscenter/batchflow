@@ -5,6 +5,7 @@ import math
 from functools import wraps
 import tqdm
 
+import numpy as np
 from matplotlib import pyplot as plt
 
 from .named_expr import NamedExpression, eval_expr
@@ -148,3 +149,57 @@ def update_bar(bar, bar_desc, **kwargs):
             desc = str(desc)
         bar.set_description(desc)
     bar.update(1)
+
+def plot_images_predictions(images, targets, proba, ncols=5, classes=None, models_names=None, **kwargs):
+    """ Plot images with true label and predicted class proba.
+    Plots predictions of several models in case `proba` is a list containing each model predictions.
+
+    Parameters
+    ----------
+    images : np.array
+        batch of images
+
+    targets : array-like
+        images labels
+
+    proba: np.array with the shape (n_images, n_classes) or list of such arrays
+        predicted probabilities for each class for each model
+
+    ncols: int
+        number of images to plot in a row (default 5)
+
+    classes: list of strings
+        class names
+
+    kwargs : dict
+        additional keyword arguments for plt.subplots().
+    """
+    if not isinstance(proba, list):
+        proba = [proba]
+        if models_names is None:
+            models_names = ['']
+    else:
+        if models_names is None:
+            models_names = ['Model ' + str(i+1) for i in range(len(proba))]
+
+    n_items = len(images)
+    if classes is None:
+        classes = [str(i) for i in range(proba[0].shape[1])]
+
+    nrows = (n_items // ncols) + 1
+    fig, ax = plt.subplots(nrows, ncols, **kwargs)
+    ax = ax.flatten()
+    for i in range(n_items):
+        ax[i].imshow(images[i])
+        true_class_name = classes[targets[i]]
+        title = 'True: {}'.format(true_class_name)
+        for j, model_proba in enumerate(proba):
+            class_pred = np.argmax(model_proba, axis=1)[i]
+            class_proba = model_proba[i][class_pred]
+            pred_class_name = classes[class_pred]
+            title += '\n {0} pred: {1}, p = {2:.2f}'.format(models_names[j], pred_class_name, class_proba)
+        ax[i].title.set_text(title)
+        ax[i].grid(b=None)
+
+    for i in range(n_items, nrows * ncols):
+        fig.delaxes(ax[i])
