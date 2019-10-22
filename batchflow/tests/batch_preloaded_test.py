@@ -10,8 +10,8 @@ DATASET_SIZE = 100
 IMAGE_SHAPE = 10, 10
 
 
-def get_batch(data, pipeline, batch_class=Batch, skip=2):
-    dataset = Dataset(DATASET_SIZE, preloaded=data, batch_class=batch_class)
+def get_batch(data, pipeline, index=DATASET_SIZE, batch_class=Batch, skip=2):
+    dataset = Dataset(index, preloaded=data, batch_class=batch_class)
 
     template_pipeline = (
         Pipeline()
@@ -62,7 +62,7 @@ class TestBatchPreloadedNoComponents:
         comp2 = np.arange(DATASET_SIZE) + 1000
         data = pd.DataFrame({'comp1': comp1, 'comp2': comp2}, index=index)
 
-        batch = get_batch(data, pipeline, skip=2)
+        batch = get_batch(data, pipeline, index=index, skip=2)
 
         assert (batch.data['comp1'] == np.arange(120, 130)).all()
         assert (batch.data['comp2'] == np.arange(1020, 1030)).all()
@@ -78,7 +78,7 @@ class TestBatchPreloadedOneComponent:
         labels = np.arange(DATASET_SIZE)
         data = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
 
-        batch = get_batch(data, pipeline, MyBatch1, skip=2)
+        batch = get_batch(data, pipeline, batch_class=MyBatch1, skip=2)
 
         with pytest.raises(AttributeError) as execinfo:
             _ = batch.images
@@ -89,7 +89,7 @@ class TestBatchPreloadedOneComponent:
         data = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
         data = (data,)
 
-        batch = get_batch(data, pipeline, MyBatch1, skip=2)
+        batch = get_batch(data, pipeline, batch_class=MyBatch1, skip=2)
 
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
 
@@ -98,7 +98,7 @@ class TestBatchPreloadedOneComponent:
         images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
         data = dict(images=images, labels=labels)
 
-        batch = get_batch(data, pipeline, MyBatch1, skip=2)
+        batch = get_batch(data, pipeline, batch_class=MyBatch1, skip=2)
 
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
 
@@ -109,7 +109,7 @@ class TestBatchPreloadedOneComponent:
         data = dict(images=images, labels=labels)
         data = pd.DataFrame(data, index=index)
 
-        batch = get_batch(data, pipeline, MyBatch1, skip=2)
+        batch = get_batch(data, pipeline, index=index, batch_class=MyBatch1, skip=2)
 
         assert (batch.images == np.arange(20, 30)).all()
 
@@ -126,7 +126,7 @@ class TestBatchPreloadedManyComponents:
         # we cannot omit data for nodata1 component, so we pass None
         data = images, None, labels
 
-        batch = get_batch(data, pipeline, MyBatch4, skip=2)
+        batch = get_batch(data, pipeline, batch_class=MyBatch4, skip=2)
 
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
@@ -138,7 +138,7 @@ class TestBatchPreloadedManyComponents:
         images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
         data = dict(images=images, labels=labels)
 
-        batch = get_batch(data, pipeline, MyBatch4, skip=2)
+        batch = get_batch(data, pipeline, batch_class=MyBatch4, skip=2)
 
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(20, 30)).all()
@@ -151,7 +151,7 @@ class TestBatchPreloadedManyComponents:
         comp2 = np.arange(DATASET_SIZE) + 1000
         data = pd.DataFrame({'images': comp1, 'labels': comp2, 'nodata1': None}, index=index)
 
-        batch = get_batch(data, pipeline, MyBatch4, skip=2)
+        batch = get_batch(data, pipeline, index=index, batch_class=MyBatch4, skip=2)
 
         assert (batch.images == np.arange(120, 130)).all()
         assert (batch.labels == np.arange(1020, 1030)).all()
@@ -167,7 +167,7 @@ class TestBatchPreloadedAddComponents:
         data = dict(images=images, labels=labels+1000)
 
         pipeline = Pipeline().add_components('new')
-        batch = get_batch(data, pipeline, MyBatch4, skip=2)
+        batch = get_batch(data, pipeline, batch_class=MyBatch4, skip=2)
 
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(1020, 1030)).all()
@@ -181,7 +181,7 @@ class TestBatchPreloadedAddComponents:
         data = dict(images=images, labels=labels+1000)
 
         pipeline = Pipeline().add_components('new', L(np.arange)(B.size) + B.indices)
-        batch = get_batch(data, pipeline, MyBatch4, skip=2)
+        batch = get_batch(data, pipeline, batch_class=MyBatch4, skip=2)
 
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
         assert (batch.labels == np.arange(1020, 1030)).all()
