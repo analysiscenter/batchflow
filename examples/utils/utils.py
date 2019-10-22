@@ -386,5 +386,5 @@ def plot_images_predictions(images, targets, proba, ncols=5, classes=None, model
         ax[i].title.set_text(title)
         ax[i].grid(b=None)
 
-    for i in range(n_items, n_rows * ncols):
+    for i in range(n_items, nrows * ncols):
         fig.delaxes(ax[i])

@@ -95,7 +95,7 @@ class SklearnModel(BaseModel):
         else:
             self.estimator.fit(X, y, *args, **kwargs)
 
-    def predict(self, X, predict_proba=False, *args, **kwargs):
+    def predict(self, X, proba=False, *args, **kwargs):
         """ Predict with the data provided
 
         Parameters
@@ -103,7 +103,7 @@ class SklearnModel(BaseModel):
         X : array-like
             Subset of the training data, shape (n_samples, n_features)
 
-        predict_proba: bool, default False
+        proba: bool, default False
             Whether predictions are probabilities or labels. Not all estimators support this.
 
         Notes
@@ -115,7 +115,7 @@ class SklearnModel(BaseModel):
         array
             Predicted value per sample, shape (n_samples,)
         """
-        if predict_proba:
+        if proba:
             if hasattr(self.estimator, 'predict_proba'):
                 return self.estimator.predict_proba(X, *args, **kwargs)
             raise NotImplementedError('{} does not support predict_proba '.format(self.estimator))
