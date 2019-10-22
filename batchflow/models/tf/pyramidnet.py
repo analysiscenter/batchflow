@@ -95,6 +95,7 @@ class PyramidNet50(PyramidNet):
     @classmethod
     def default_config(cls):
         config = PyramidNet.default_config()
+        config['body/num_blocks'] = [3, 4, 6, 3]
         config['body/block/bottleneck'] = True
         return config
 

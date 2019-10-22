@@ -365,13 +365,18 @@ class TorchModel(BaseModel):
             loss = getattr(nn, loss + "Loss")
         elif isinstance(loss, type):
             pass
+        elif isinstance(loss, nn.Module):
+            self.loss_fn = loss
         elif callable(loss):
-            loss = lambda **a: partial(loss, **args)
-            args = {}
+            self.loss_fn = partial(loss, **args)
         else:
             raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
 
-        self.loss_fn = loss(**args)
+        if self.loss_fn is None:
+            self.loss_fn = loss(**args)
+
+        if isinstance(self.loss_fn, nn.Module):
+            self.loss_fn.to(device=self.device)
 
     def _make_optimizer(self, config):
         optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
