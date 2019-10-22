@@ -18,7 +18,8 @@ from .named_expr import NamedExpression, V, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
-from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, SegmentationMetricsByInstances
+from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
+                             SegmentationMetricsByInstances, RegressionMetrics)
 from ._const import *       # pylint:disable=wildcard-import
 from .utils import create_bar, update_bar
 
@@ -27,7 +28,8 @@ METRICS = dict(
     classification=ClassificationMetrics,
     segmentation=SegmentationMetricsByPixels,
     mask=SegmentationMetricsByPixels,
-    instance=SegmentationMetricsByInstances
+    instance=SegmentationMetricsByInstances,
+    regression=RegressionMetrics
 )
 
 
