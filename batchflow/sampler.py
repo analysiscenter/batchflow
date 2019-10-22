@@ -11,19 +11,20 @@ SMALL_SHARE = 1e-2
 
 # aliases for Numpy, Scipy-Stats, TensorFlow-samplers
 ALIASES = {
-    'n': {'np': 'normal', 'tf': 'Normal', 'ss': 'norm'},
-    'u': {'np': 'uniform', 'tf': 'Uniform', 'ss': 'uniform'},
+    'n': {'np': 'normal', 'ss': 'norm', 'tf': 'Normal'},
+    'u': {'np': 'uniform', 'ss': 'uniform', 'tf': 'Uniform'},
     'mvn': {'np': 'multivariate_normal', 'ss': 'multivariate_normal'},
-    'f': {'np': 'f', 'ss': 'f'},
-    'p': {'np': 'poisson', 'ss': 'poisson'},
-    'w': {'np': 'weibull'},
     'e': {'np': 'exponential', 'ss': 'expon', 'tf': 'Exponential'},
     'g': {'np': 'gamma', 'ss': 'gamma', 'tf': 'Gamma'},
-    'ln': {'np': 'lognormal', 'ss': 'lognorm'},
-    'mnm': {'np': 'multinomial', 'ss': 'multinomial', 'tf': 'Multinomial'},
-    'b' : {'np': 'binomial', 'ss': 'binom'},
     'be' : {'np': 'beta', 'ss': 'beta', 'tf': 'Beta'},
-    'chi2': {'np': 'chisquare', 'ss': 'chi2'}
+    'mnm': {'np': 'multinomial', 'ss': 'multinomial', 'tf': 'Multinomial'},
+    'f': {'np': 'f', 'ss': 'f'},
+    'p': {'np': 'poisson', 'ss': 'poisson'},
+    'w': {'np': 'weibull', 'ss': 'dweibull'},
+    'ln': {'np': 'lognormal', 'ss': 'lognorm'},
+    'b' : {'np': 'binomial', 'ss': 'binom'},
+    'chi2': {'np': 'chisquare', 'ss': 'chi2'},
+    'c': {'np': 'choice'}
 }
 
 def _get_method_by_alias(alias, module, tf_distributions=None):

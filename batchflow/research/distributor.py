@@ -299,11 +299,11 @@ class Worker:
                                 default_signal.exception = TimeoutError(message)
                                 results.put(default_signal)
                                 break
-                            elif signal is not None and signal.done:
+                            if signal is not None and signal.done:
                                 finished = True
                                 default_signal = signal
                                 break
-                            elif signal is not None:
+                            if signal is not None:
                                 default_signal = signal
                                 results.put(default_signal)
                                 silence = 0

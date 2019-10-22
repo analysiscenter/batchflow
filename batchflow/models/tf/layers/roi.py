@@ -1,31 +1,38 @@
-#pylint:disable=cell-var-from-loop
-
 """ Layers for proposal regions. """
-
 import tensorflow as tf
 
-def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), data_format='channels_last', name='roi-pooling'):
+
+
+class ROI:
     """ ROI pooling layer with resize instead max-pool.
 
     Parameters
     ----------
-        inputs: tf.Tensor
-            input tensor
-        rois: tf.Tuple
-            coordinates of bboxes for each image
-        factor: tuple
-            factor to transform coordinates of bboxes
-        shape: tuple
-            resize to
-        data_format: str, 'channels_last' or 'channels_first'
-        name: str
-            scope name
+    rois: tf.Tuple
+        Coordinates of bboxes for each image.
+    factor: tuple
+        Factor to transform coordinates of bboxes.
+    shape: tuple
+        Resize to
+    data_format: str, 'channels_last' or 'channels_first'.
+    name: str
+        Scope name.
 
-    Return
-    ------
-        tf.Tuple
-            cropped regions
+    Returns
+    -------
+    tf.Tuple
+        cropped regions
     """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return roi_pooling_layer(inputs, *self.args, **self.kwargs)
+
+
+def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), data_format='channels_last', name='roi-pooling'):
+    """ ROI pooling layer with resize instead max-pool. """
+    #pylint:disable=cell-var-from-loop
     with tf.variable_scope(name):
         image_index = tf.constant(0)
         output_tuple = tf.TensorArray(dtype=tf.float32, size=len(rois))
@@ -71,35 +78,45 @@ def roi_pooling_layer(inputs, rois, factor=(1, 1), shape=(7, 7), data_format='ch
         res = _array_to_tuple(output_tuple, len(rois))
     return res
 
-def non_max_suppression(inputs, scores, batch_size, max_output_size,
-                        score_threshold=0.7, iou_threshold=0.7, nonempty=False, name='nms'):
+
+
+class NonMaxSuppression:
     """ Perform NMS on batch of images.
 
     Parameters
     ----------
-        inputs: tf.Tuple
-            each components is a set of bboxes for corresponding image
-        scores: tf.Tuple
-            scores of inputs
-        batch_size:
-            size of batch of inputs
-        max_output_size:
-            maximal size of bboxes per image
-        score_threshold: float
-            bboxes with score less the score_threshold will be dropped
-        iou_threshold: float
-            bboxes with iou which is greater then iou_threshold will be merged
-        nonempty: bool
-            if True at least one bbox per image will be returned
-        name: str
-            scope name
+    inputs: tf.Tuple
+        Each components is a set of bboxes for corresponding image.
+    scores: tf.Tuple
+        Scores of inputs.
+    batch_size:
+        Size of batch of inputs.
+    max_output_size:
+        Maximum size of bboxes per image.
+    score_threshold: float
+        Bboxes with score less the score_threshold will be dropped.
+    iou_threshold: float
+        Bboxes with iou which is greater then iou_threshold will be merged.
+    nonempty: bool
+        If True at least one bbox per image will be returned.
+    name: str
+        Scope name.
 
     Returns
     -------
-        tf.Tuple
-            indices of selected bboxes for each image
+    tf.Tuple
+        indices of selected bboxes for each image
 
     """
+    def __init__(self, *args, **kwargs):
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        return non_max_suppression(inputs, *self.args, **self.kwargs)
+
+def non_max_suppression(inputs, scores, batch_size, max_output_size,
+                        score_threshold=0.7, iou_threshold=0.7, nonempty=False, name='nms'):
+    """ Perform NMS on batch of images. """
     with tf.variable_scope(name):
         ix = tf.constant(0)
         filtered_rois = tf.TensorArray(dtype=tf.int32, size=batch_size, infer_shape=False)

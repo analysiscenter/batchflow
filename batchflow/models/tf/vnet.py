@@ -56,24 +56,26 @@ class VNet(EncoderDecoder):
     def default_config(cls):
         config = super().default_config()
 
-        config['initial_block'] = dict(layout='cna Rcna+', kernel_size=5, filters=16)
+        config['initial_block'] += dict(layout='cna Rcna+', kernel_size=5, filters=16)
 
         config['body/encoder/num_stages'] = 4
-        config['body/encoder/downsample'] = dict(layout='cna', kernel_size=2, strides=2)
-        config['body/encoder/blocks'] = dict(base=ResNet.block,
-                                             layout=['cna'*2] + ['cna'*3] * 3,
-                                             filters=[32, 64, 128, 256],
-                                             kernel_size=5)
+        config['body/encoder/blocks'] += dict(base=ResNet.block,
+                                              layout=['cna'*2] + ['cna'*3] * 3,
+                                              filters=[32, 64, 128, 256],
+                                              kernel_size=5)
+        config['body/encoder/downsample'] += dict(layout='cna',
+                                                  filters=[32, 64, 128, 256],
+                                                  kernel_size=2, strides=2)
 
         config['body/embedding'] = None
 
-        config['body/decoder/upsample'] = dict(layout='tna', kernel_size=2, strides=2)
-        config['body/decoder/blocks'] = dict(base=ResNet.block,
-                                             layout=['cna'*3] * 3 + ['cna'*2],
-                                             filters=[256, 128, 64, 32],
-                                             kernel_size=5)
+        config['body/decoder/upsample'] += dict(layout='tna', kernel_size=2, strides=2)
+        config['body/decoder/blocks'] += dict(base=ResNet.block,
+                                              layout=['cna'*3] * 3 + ['cna'*2],
+                                              filters=[256, 128, 64, 32],
+                                              kernel_size=5)
 
-        config['head'] = dict(layout='Rcna+ cna', kernel_size=5, filters=[48, 32])
+        config['head'] += dict(layout='Rcna+ cna', kernel_size=5, filters=[48, 32])
 
         config['loss'] = 'ce'
         return config

@@ -25,7 +25,7 @@ class Inception_v3(Inception):
     -----
     Since the article misses some important details (e.g. the number of filters in all convolutions),
     this class is based on `Google's implementation
-    <https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py>`_
+    <https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py>`__.
 
     **Configuration**
 
@@ -42,12 +42,12 @@ class Inception_v3(Inception):
             default parameters to build network
         """
         config = Inception.default_config()
-        config['initial_block'] = dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
-                                       kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1],
-                                       pool_size=3, pool_strides=2, padding='valid')
+        config['initial_block'] += dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
+                                        kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1],
+                                        pool_size=3, pool_strides=2, padding='valid')
         config['body']['layout'] = 'bbbrffffmee'
         config['body']['arch'] = _DEFAULT_V3_ARCH
-        config['head'].update(dict(layout='Vdf', dropout_rate=.8))
+        config['head'].update(dict(layout='Vdf', dropout_rate=.2))
         config['loss'] = 'ce'
 
         return config
@@ -79,7 +79,7 @@ class Inception_v3(Inception):
             branch_1_3_3 = conv_block(inputs, layout*3, [filters[0]]+[filters[2]]*2, [1, 3, 3], name='conv_1_3_3',
                                       **kwargs)
 
-            branch_pool = conv_block(inputs, 'p'+layout, filters[3], 1, 'c_pool', **{**kwargs, 'pool_strides': 1})
+            branch_pool = conv_block(inputs, 'p'+layout, filters[3], 1, name='c_pool', **{**kwargs, 'pool_strides': 1})
 
             axis = cls.channels_axis(kwargs['data_format'])
             output = tf.concat([branch_1, branch_1_3, branch_1_3_3, branch_pool], axis=axis, name='output')

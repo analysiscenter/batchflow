@@ -1,0 +1,27 @@
+name: PR
+
+on: pull_request
+
+jobs:
+
+  pr-check:
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: analysiscenter1/ds-py3:cpu
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Check if the branch is behind the master
+      run: git rev-list --count HEAD..origin/master | grep -w "0"
+
+    - name: Generate coverage report
+      run: |
+        pip3 install -U pytest-cov
+        pytest -m "not slow" --cov=./ --cov-report=xml
+    - name: Upload coverage to Codecov
+      run: |
+        pip3 install -U codecov
+        codecov -t ${{ secrets.CODECOV_TOKEN }}

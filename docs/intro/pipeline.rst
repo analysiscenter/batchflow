@@ -637,6 +637,28 @@ batch size differs. To solve this problem, just call `rebatch`::
 Under the hood `rebatch` calls `merge`, so you must ensure that `merge` works properly for your specific data and write your own `merge` if needed.
 
 
+Exceptions
+==========
+
+SkipBatchException
+------------------
+Sometimes you might want to stop processing a batch within a pipeline (e.g. if it does not meet a certain criteria or contains erroneous data, etc).
+Just throw :class:`~batchflow.SkipBatchException` in an action method and the pipeline will skip this batch and switch to a new one.
+
+
+EmptyBatchSequence
+------------------
+When you call several `run` (or `gen_batch`, or `next_batch`) one after another without resetting a batch iterator (see :meth:`~batchflow.Pipeline.reset`),
+you might bump into a situation when the batch iterator is exhausted. Whenever this happens, :class:`~batchflow.EmptyBatchSequence` warning is emitted,
+which can ba caught if needed::
+
+    try:
+        pipeline.run()
+    except EmptyBatchSequence:
+        print("There are no batches left. Call pipeline.reset('iter').")
+
+
+
 Models
 ======
 See :doc:`Working with models <models>`.

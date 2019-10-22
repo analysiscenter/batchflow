@@ -1,8 +1,19 @@
 """ Config class"""
 import numpy as np
 
+
 class Config:
     """ Class for configs that can be represented as nested dicts with easy indexing by slashes """
+
+    class IAddDict(dict):
+        """ dict that supports update via += """
+        def __iadd__(self, other):
+            if isinstance(other, dict):
+                self.update(other)
+            else:
+                raise TypeError("unsupported operand type(s) for +=: 'IAddDict' and '{}'".format(type(other)))
+            return self
+
     def __init__(self, config=None, **kwargs):
         """ Create Config
 
@@ -18,7 +29,7 @@ class Config:
             parameters from kwargs also will be parsed and saved into self.config
         """
         if config is None:
-            self.config = dict()
+            self.config = Config.IAddDict()
         elif isinstance(config, (dict, list)):
             self.config = self.parse(config)
         elif isinstance(config, Config):
@@ -153,7 +164,7 @@ class Config:
 
         for i, p in enumerate(prefix):
             if p not in config:
-                config[p] = dict()
+                config[p] = Config.IAddDict()
             if isinstance(config[p], dict):
                 config = config[p]
             else: # for example, we put value with key 'a/b' into `{a: c}`
@@ -192,7 +203,7 @@ class Config:
                                  ', and therefore must be always the length of 2')
         else:
             raise TypeError('config must be dict, Config or list but {} was given'.format(type(config)))
-        new_config = dict()
+        new_config = Config.IAddDict()
         for key, value in items:
             if isinstance(value, dict):
                 value = self.parse(value)
@@ -218,7 +229,7 @@ class Config:
             config = self.config
         elif isinstance(config, Config):
             config = config.config
-        new_config = dict()
+        new_config = Config.IAddDict()
         for key, value in config.items():
             if isinstance(value, Config):
                 value = value.config
@@ -245,6 +256,7 @@ class Config:
         return value
 
     def __setitem__(self, key, value):
+        self.pop(key, default=None)
         self.put(key, value)
 
     def __delitem__(self, key):

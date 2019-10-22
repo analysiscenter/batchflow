@@ -91,7 +91,7 @@ For instance, :class:`~.tf.LinkNet`, :class:`~.tf.GlobalConvolutionNetwork`, and
 head
 ----
 It receives body's output and produces a task-specific result, for instance, class logits for classification.
-The default head consists of one :func:`.conv_block`. So, by specifying a model's config you can
+The default head consists of one :class:`~.tf.layers.ConvBlock`. So, by specifying a model's config you can
 instantiate models for different tasks.
 
 Classification with 10 classes::
@@ -174,7 +174,7 @@ Initial block specifies which inputs flow into the model to turn into prediction
         'initial_block/inputs': 'images',
     }
 
-As the default initial block contains a :func:`~.tf.layers.conv_block`, all its parameters might be also specfied in the config::
+As the default initial block contains a :class:`~.tf.layers.ConvBlock`, all its parameters might be also specfied in the config::
 
     model_config = {
         'initial_block': dict(layout='cnap', filters=64, kernel_size=7, strides=2),
@@ -214,7 +214,7 @@ Body is usually defined as a dict, but might also take a callable::
 
 head
 ----
-For many models head is just another :func:`~.layers.conv_block`. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.
+For many models head is just another :class:`~.tf.layers.ConvBlock`. So you may configure layout, the number of filters, dense layer units or other parameters. As usual, it is rarely needed for predefined models.
 
 Head can also be defined with a callable.
 
@@ -299,7 +299,7 @@ For more detail see :class:`.TFModel` documentation.
 How to write a custom model
 ===========================
 
-To begin with, take a look at :ref:`conv_block <conv_block>` to find out how to write complex networks in just one line of code.
+To begin with, take a look at :class:`~.tf.layers.ConvBlock` to find out how to write complex networks in just one line of code. Note that there is also :func:`~.tf.layers.conv_block`, that provides functional interface for the class.
 This block is a convenient building block for concise, yet very expressive neural networks.
 
 The simplest case you should avoid
@@ -403,7 +403,7 @@ Things worth mentioning:
 #. Input data and its parameters should be defined in configuration under ``inputs`` key.
    See :meth:`.TFModel._make_inputs` for details.
 
-#. You might want to use a convenient multidimensional :func:`.conv_block` and other predefined :doc:`layers <tf_layers>`.
+#. You might want to use a convenient multidimensional :class:`~.tf.layers.ConvBlock` and other predefined :doc:`layers <tf_layers>`.
    Of course, you can use usual `tensorflow layers <https://www.tensorflow.org/api_docs/python/tf/layers>`_.
 
 #. If you make dropout, batch norm, etc by hand, you might use a predefined ``self.is_training`` tensor.

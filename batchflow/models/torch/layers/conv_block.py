@@ -182,6 +182,7 @@ class ConvBlock(nn.Module):
 
         x = conv_block('cna cna cna', filters=[64, 128, 256], kernel_size=3, activation='selu', batch_norm=False,
                        inputs=previous_layer)
+
     ::
 
         x = conv_block('ca ca ca nd', [32, 32, 64], [5, 3, 3], strides=[1, 1, 2], dropout_rate=.15, inputs=prev_layer)

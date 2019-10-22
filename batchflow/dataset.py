@@ -67,13 +67,21 @@ class Dataset(Baseset):
         self.preloaded = preloaded
         self._attrs = None
         kwargs['_copy'] = kwargs.get('_copy', copy)
+        self.n_splits = None
+        kwargs['n_splits'] = kwargs.get('n_splits', None)
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
         """ Create attributes from kwargs """
-        self._attrs = kwargs
+        self._attrs = list(kwargs.keys())
         for attr, value in kwargs.items():
             setattr(self, attr, value)
+
+    def get_attrs(self):
+        """ Return additional attrs as kwargs """
+        if self._attrs is None:
+            return {}
+        return {attr: getattr(self, attr, None) for attr in self._attrs}
 
     @classmethod
     def from_dataset(cls, dataset, index, batch_class=None, copy=False, **kwargs):
@@ -104,7 +112,7 @@ class Dataset(Baseset):
         if copy:
             index = cp.copy(index)
         bcl = batch_class if batch_class is not None else dataset.batch_class
-        return cls(index, batch_class=bcl, preloaded=dataset.preloaded, **kwargs)
+        return cls(index, batch_class=bcl, preloaded=dataset.preloaded, **{**dataset.get_attrs(), **kwargs})
 
     def __copy__(self):
         return self.from_dataset(self, self.index, copy=True)
@@ -169,13 +177,13 @@ class Dataset(Baseset):
             IndexError
                 When a user wants to create a subset from source dataset it is necessary to be confident
                 that the index of new subset lies in the range of source dataset's index.
-                If the index lies out of the source dataset index's range, the IndexError raises.
+                If the index lies out of the source dataset index's range, the IndexError is raised.
 
         """
         indices = index.indices if isinstance(index, DatasetIndex) else index
         if not np.isin(indices, self.indices).all():
             raise IndexError
-        return type(self).from_dataset(self, self.index.create_subset(index), **self._attrs)
+        return type(self).from_dataset(self, self.index.create_subset(index))
 
     def create_batch(self, index, pos=False, *args, **kwargs):
         """ Create a batch from given indices.
@@ -242,6 +250,12 @@ class Dataset(Baseset):
             raise TypeError("Pipeline is expected, but got %s. Use as dataset >> pipeline" % type(other))
         return other << self
 
+    def cv(self, n):
+        """ Return a dataset which corresponds to n-th CV split """
+        if n > self.n_splits - 1:
+            raise ValueError("The dataset has been split into fewer splits than %d" % n)
+        return  getattr(self, 'cv' + str(n))
+
     def cv_split(self, method='kfold', n_splits=5, shuffle=False):
         """ Create datasets for cross-validation
 
@@ -287,6 +301,17 @@ class Dataset(Baseset):
             print(dataset.test.cv1.indices) # [4, 5, 6]
             print(dataset.test.cv2.indices) # [7, 8, 9]
         """
+        if self.n_splits is not None:
+            for i in range(self.n_splits):
+                cv_attr = 'cv'+str(i)
+                delattr(self, cv_attr)
+                if self.train is not None:
+                    delattr(self.train, cv_attr)
+                if self.test is not None:
+                    delattr(self.test, cv_attr)
+
+        self.n_splits = n_splits
+
         order = self.index.shuffle(shuffle)
 
         if method == 'kfold':
@@ -307,7 +332,6 @@ class Dataset(Baseset):
             cv_dataset.test = self.create_subset(test_indices)
             setattr(self.train, 'cv'+str(i), cv_dataset.train)
             setattr(self.test, 'cv'+str(i), cv_dataset.test)
-
 
     def _split_kfold(self, n_splits, order):
         split_sizes = np.full(n_splits, len(order) // n_splits, dtype=np.int)

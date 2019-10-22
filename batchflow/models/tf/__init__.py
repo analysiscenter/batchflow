@@ -22,5 +22,8 @@ from .gcn import GlobalConvolutionNetwork as GCN
 from .encoder_decoder import EncoderDecoder, AutoEncoder, VariationalAutoEncoder
 from .pyramidnet import PyramidNet, PyramidNet18, PyramidNet34, PyramidNet50, PyramidNet101, PyramidNet152
 from .tf_sampler import TfSampler
-from .xception import Xception, XceptionS
+from .xception import Xception, XceptionS, Xception41, Xception64
 from .deeplab import DeepLab, DeepLabXS, DeepLabX8, DeepLabX16
+from .efficientnet import EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3, \
+    EfficientNetB4, EfficientNetB5, EfficientNetB6, EfficientNetB7
+from .pspnet import PSPNet, PSPNet18, PSPNet34, PSPNet50
