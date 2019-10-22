@@ -160,7 +160,7 @@ class Distributor:
                         if signal.done:
                             finished_jobs += 1
                             finished_iterations[signal.job] = self.n_iters
-                            each = self.jobs_queue.domain.each
+                            each = self.jobs_queue.domain.update_each
                             if isinstance(each, int) and finished_jobs % each == 0:
                                 was_updated = self.jobs_queue.update()
                                 if was_updated:
@@ -174,7 +174,7 @@ class Distributor:
                         else:
                             progress.n += signal.done
                         progress.refresh()
-                    if self.jobs_queue.domain.each == 'last':
+                    if self.jobs_queue.domain.update_each == 'last':
                         was_updated = self.jobs_queue.update()
                         n_updates += 1
                         if not was_updated:

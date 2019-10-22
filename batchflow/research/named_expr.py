@@ -70,17 +70,4 @@ class ResearchResults(ResearchNamedExpression): # research results
             path = kwargs['job'].research_path
         else:
             path = kwargs['path']
-        return research.Results(path=path).load(*self.args, **self.kwargs)
-
-class ResearchResults(ResearchNamedExpression): # research results
-    def __init__(self, name=None, *args, **kwargs):
-        super().__init__(name)
-        self.args = args
-        self.kwargs = kwargs
-
-    def get(self, **kwargs):
-        if kwargs['path'] is None:
-            path = kwargs['job'].research_path
-        else:
-            path = kwargs['path']
         return Results(path=path).load(*self.args, **self.kwargs)

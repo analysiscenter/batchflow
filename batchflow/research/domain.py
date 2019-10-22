@@ -240,7 +240,7 @@ class Domain:
         self.update_args = None
         self.update_kwargs = None
 
-        self.iterator = None
+        self._iterator = None
         self.n_iters = None
         self.n_reps = 1
         self.repeat_each = 100
@@ -250,6 +250,7 @@ class Domain:
             self.brute_force.append(not all([isinstance(option.values, Sampler) for option in cube]))
 
     def update_func(self, *args, **kwargs):
+        """ Function for domain update. If returns None, Domain will not be updated. """
         return None
 
     def _dict_to_domain(self, domain):
@@ -331,17 +332,38 @@ class Domain:
         return self.cubes == other.cubes
 
     def __next__(self):
-        if self.iterator is None:
-            self.reset_iter(self.n_iters, self.n_reps, self.repeat_each)
-        return next(self.iterator)
+        if self._iterator is None:
+            self._reset_iter(self.n_iters, self.n_reps, self.repeat_each)
+        return next(self._iterator)
 
     def set_iter(self, n_iters=None, n_reps=1, repeat_each=100):
+        """ Set parameters for iterator.
+
+        Parameters
+        ----------
+        n_iters : int or None
+            the number of configs that will be generated from domain. If the size
+            of domain is less then `n_iters`, elements will be repeated. If `n_iters`
+            is `None` and there is not a cube that consists only of sampler-options
+            then `n_iters` will be setted to the number of configs that can be produced
+            from that domain. If `n_iters` is None and there is a cube that consists
+            only of sampler-option then domain will produce infinite number of configs.
+        n_reps : int
+            each element will be repeated n_reps times.
+        repeat_each : int
+            if there is not a cube that consists only of sampler-options then
+            elements will be repeated after producing `repeat_each` configs. Else
+            `repeat_each` will be setted to the number of configs that can be produced
+            from domain.
+        """
         size = self._options_size()
         self.n_iters = n_iters or size
         self.n_reps = n_reps
         self.repeat_each = repeat_each
 
-    def reset_iter(self, n_iters=None, n_reps=1, repeat_each=100):
+        self._iterator = None
+
+    def _reset_iter(self, n_iters=None, n_reps=1, repeat_each=100):
         blocks = self._get_sampling_blocks()
         size = self._options_size()
         if n_iters is not None:
@@ -378,33 +400,45 @@ class Domain:
                         for sample in samples:
                             yield sample + ConfigAlias([('repetition', repetition)])
                     i += repeat_each
-        self.iterator = _iterator_with_repetitions()
+        self._iterator = _iterator_with_repetitions()
 
     @property
     def size(self):
+        """ The number of configs that will be produces from domain. """
         if self.n_iters is not None:
             return self.n_reps * self.n_iters
         else:
             return None
 
+    @property
+    def iterator(self):
+        """ Get domain iterator. """
+        if self._iterator is None:
+            self._reset_iter(self.n_iters, self.n_reps, self.repeat_each)
+        return self._iterator
+
     def set_update(self, function, each, args, kwargs):
-        self.args = args
-        self.kwargs = kwargs
-        self.each = each
+        """ Set domain update parameters. """
+        self.update_args = args
+        self.update_kwargs = kwargs
+        self.update_each = each
         self.update_func = self.update_func or function
 
     def update_domain(self, path):
+        """ Update domain by `update_func`. If returns None, domain will not be updated. """
         if self.update_func is None:
             return None
-        args = ResearchNamedExpression.eval_expr(self.args, path=path)
-        kwargs = ResearchNamedExpression.eval_expr(self.kwargs, path=path)
+        args = ResearchNamedExpression.eval_expr(self.update_args, path=path)
+        kwargs = ResearchNamedExpression.eval_expr(self.update_kwargs, path=path)
         return self.update_func(*args, **kwargs)
 
     def update_config(self, *args, **kwargs):
+        """ Compute and update config item. """
         _ = args, kwargs
         return None
 
     def _is_array_option(self):
+        """ Return True if domain consists of only on array-like option. """
         if len(self.cubes) == 1:
             if len(self.cubes[0]) == 1:
                 if isinstance(self.cubes[0][0].values, (list, tuple, np.ndarray)):
@@ -412,6 +446,9 @@ class Domain:
         return False
 
     def _is_scalar_product(self):
+        """ Return True if domain is a result of matmul. It means that each cube has
+        an only one array-like option of length 1.
+        """
         for cube in self.cubes:
             samplers = [option for option in cube if isinstance(option.values, Sampler)]
             if len(samplers) > 0:
@@ -421,6 +458,7 @@ class Domain:
         return True
 
     def _to_scalar_product(self):
+        """ Transform domain to the matmul format (see :meth:`~.Domain._is_scalar_product`)"""
         if self._is_array_option():
             option = self.cubes[0][0]
             cubes = [[Option(option.parameter, [value])] for value in option.values] 
@@ -431,6 +469,9 @@ class Domain:
         raise ValueError("Domain cannot be represented as scalar product.")
 
     def _cube_iterator(self, cube):
+        """ Return iterator from the cube. All array-like options will be transformed
+        to Cartesian product and all sampler-like options will produce independent samples
+        for each condig. """
         arrays = [option for option in cube if isinstance(option.values, (list, tuple, np.ndarray))]
         samplers = [option for option in cube if isinstance(option.values, Sampler)]
 
@@ -450,12 +491,14 @@ class Domain:
                     break
 
     def _get_sampling_blocks(self):
+        """ Return blocks for sampling on the basis of weights. """
         incl = np.cumsum(np.isnan(self.weights))
         excl = np.concatenate(([0], incl[:-1]))
         block_indices = incl + excl
         return [np.where(block_indices == i)[0] for i in set(block_indices)]
 
     def _options_size(self):
+        """ Return the number of configs that will be produced from domain without repetitions. """
         size = 0
         for cube in self.cubes:
             lengthes = [len(option.values) for option in cube if isinstance(option.values, (list, tuple, np.ndarray))]
