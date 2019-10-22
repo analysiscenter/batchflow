@@ -83,13 +83,14 @@ class Research:
             if False then `.next_batch()` will be applied to pipeline, else `.run()` and then `.reset("iter")`.
         logging : bool
             include execution information to log file or not
-        kwargs :
-            parameters in pipeline config that depends on the names of the other pipeline.
+        kwargs : dict
+            parameters that will be added to pipeline config.
+            Can be `:class:~.ResearchPipeline`.
 
             For example,
             if test pipeline imports model from the other pipeline with name `'train'` in Research,
             corresponding parameter in `import_model` must be `C('import_from')` and `add_pipeline`
-            must be called with parameter `import_from='train'`.
+            must be called with parameter `import_from=ResearchPipeline('train')`.
 
 
         **How to define changing parameters**
@@ -150,12 +151,7 @@ class Research:
         Parameters
         ----------
         function : callable
-            callable object with following parameters:
-                experiment : `OrderedDict` of Executable objects
-                    all pipelines and functions that were added to Research
-                iteration : int
-                    iteration when function is called
-                **args, **kwargs
+            callable object with parameters: `*args, **kwargs`
         returns : str, list of str or None
             names for function returns to save into results
             if None, `function` will be executed without any saving results and dumping
@@ -181,8 +177,7 @@ class Research:
         args : list
             args for the function
         kwargs : dict
-            kwargs for the function
-
+            kwargs for the function. Can be :class:`~.ResearchNamedExpression`
 
         **How to use experiment**
 
@@ -214,12 +209,25 @@ class Research:
         Parameters
         ----------
         domain : Domain or Option
-            if dict it should have items parameter_name: list of values.
         """
+        if isinstance(domain, Option):
+            domain = Domain(domain)
         self.domain = domain
         return self
 
     def update_domain(self, function=None, each='last', *args, **kwargs):
+        """ Add domain update functions or update parameters.
+
+        Parameters
+        ----------
+        function : callable or None
+
+        each : int or 'last'
+            when update method will be called. If 'last', domain will be updated
+            when iterator will be finished. If int, domain will be updated with
+            that period.
+        *args, **kwargs : update function parameters
+        """        
         self._update_domain = {
             'function': function,
             'each': each,
@@ -233,8 +241,12 @@ class Research:
 
         Parameters
         ----------
-        domain : dict, Domain or Option
-            if dict it should have items parameter_name: list of values.
+        function : callable
+            function to update config.
+        parameters : list of str or None
+            if None, the whole config will be passed into function.
+        cache : int
+            last `cache` calls of function will be cahced.
         """
         self._update_config = {
             'function': function,
@@ -249,7 +261,6 @@ class Research:
 
     def run(self, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):
-
         """ Run research.
 
         Parameters
@@ -277,17 +288,11 @@ class Research:
             Whether to show a progress bar.
             If callable, it must have the same signature as `tqdm`.
         devices : str, list or None
-            all devices available for the research.
-
-            Must be of length 1 or be divisible
-            by the number of workers.
-
-            If is divisible by the number of workers then
-            `length / n_workers` must be 1 or be divisible by the number of branches. If you want to use different
-            devices in branches, use expression `C('device')`.
+            all devices will be distributed between workwers and branches.
+            If you want to use different devices in branches, use expression `C('device')`.
 
             For example, for :class:`~.TFModel` add `device=C('device')` to model config.
-            if None, default gpu configuration will be used
+            If None, default gpu configuration will be used
         timeout : int
             each job will be killed if it doesn't answer more then that time in minutes
         trials : int
@@ -316,7 +321,7 @@ class Research:
 
         if self.domain is None:
             self.domain = Domain(Option('_dummy', [None]))
-            self.domain.set_iterator(brute_force=True, n_iters=None, n_reps=1)
+            self.domain.set_iter(n_iters=None, n_reps=1)
 
         if self.domain.size is None and (self._update_domain is None or self._update_domain['each'] == 'last'):
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
@@ -342,7 +347,6 @@ class Research:
         self.__dict__.update(d)
 
     def _get_devices(self, devices):
-        # TODO: process `device` to simplify nested list construction
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
         if devices is None:
@@ -425,6 +429,7 @@ class Research:
             return research
 
 class DynamicQueue:
+    """ Queue of tasks that can be changed depending on previous results. """
     def __init__(self, branches, domain, n_iters, executables, research_path, update_config, update_domain):
         self.branches = branches
         self.domain = domain
@@ -474,6 +479,7 @@ class DynamicQueue:
 
     @property
     def total(self):
+        """ Total estimated size of queue. """
         if self._domain_size is not None:
             rolling_mean = pd.Series(self.each_config_produce).rolling(window=10, min_periods=1).mean().round().values[-1]
             num = np.sum(self.each_config_produce)
@@ -483,6 +489,7 @@ class DynamicQueue:
             return None
 
     def update(self):
+        """ Update domain. """
         new_domain = self.domain.update_domain(self.research_path)
         if new_domain is not None:
             self.domain = new_domain
@@ -495,6 +502,7 @@ class DynamicQueue:
             return False
 
     def next_jobs(self, n_tasks=1):
+        """ Get next `n_tasks` elements of queue. """
         configs = []
         for i in range(n_tasks):
             branch_tasks = []
@@ -516,6 +524,7 @@ class DynamicQueue:
         return n_tasks
 
     def stop_workers(self, n_workers):
+        """ Stop all workers. """
         for _ in range(n_workers):
             self.put(None)
 
