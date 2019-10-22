@@ -7,6 +7,7 @@ In all notebooks, it is implied that you are familiar with the bathflow basics.
 
 1. [Microbatching](./01_microbatch.ipynb)
     * What's the point of microbathing?
+    * Example without microbatch.
     * Example with microbatch.
 
 2. [Multi-GPU](./02_device.ipynb)
