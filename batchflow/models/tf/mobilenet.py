@@ -58,30 +58,24 @@ _V3_SMALL_DEFAULT_BODY = [
 
 
 class MobileNet(TFModel):
-    """ MobileNet
+    """ MobileNet.
 
-    **Configuration**
-
-    inputs : dict
-        dict with 'images' and 'labels' (see :meth:`~.TFModel._make_inputs`)
-
-    initial_block : dict
-        parameters for the initial block (default is 'cna', 32, 3, strides=2)
-
+    Parameters
+    ----------
     body : dict
         strides : list of int
-            strides in separable convolutions
+            Strides in separable convolutions.
 
         double_filters : list of bool
-            if True, number of filters in 1x1 covolution will be doubled
+            If True, then number of filters in 1x1 covolution will be doubled.
 
         width_factor : float
-            multiplier for the number of channels (default=1)
+            Multiplier for the number of channels (default=1).
     """
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
-        config['initial_block'] = dict(layout='cna', filters=32, kernel_size=3, strides=2)
+        config['initial_block'] += dict(layout='cna', filters=32, kernel_size=3, strides=2)
         config['body'].update(_V1_DEFAULT_BODY)
         config['head'].update(dict(layout='Vf'))
         config['loss'] = 'ce'
@@ -149,40 +143,39 @@ class MobileNet(TFModel):
 
 
 class MobileNet_v2(TFModel):
-    """ Base class for MobileNets after v2
+    """ Base class for MobileNets after v2.
 
-    **Configuration**
-
-    inputs : dict
-        dict with 'images' and 'labels' (see :meth:`.TFModel._make_inputs`)
-
-    initial_block : dict
-        parameters for the initial block (default is 'cna', 32, 3, strides=2)
-
+    Parameters
+    ----------
     body : dict
-        layout : list of dict each consisting of parameters:
+        layout : list of dict
+            Defines body structure. Each dict must contain following parameters.
+
             repeats : int
-                number of repeats of the block
+                Number of repeats of the block.
             filters : int
-                number of output filters in the block
+                Number of output filters in the block.
             expansion_factor : int
-                multiplier for the number of filters in internal convolutions
+                Multiplier for the number of filters in internal convolutions.
             strides : int
-                stride for 3x3 convolution
+                Stride for 3x3 convolution.
             kernel_size : int
-                kernel size for depthwise convolution
+                Kernel size for depthwise convolution.
             activation : callable, optional
+                Activation function.
             se_block : bool or dict
-                whether to include squeeze and excitation block
-                If dict, it must contain :meth:`~TFModel.se_block` params
+                Whether to include squeeze and excitation block.
+                If dict, then parameters for :meth:`~TFModel.se_block`.
             residual : bool
-                whether to make a residual connection
+                Whether to make a residual connection.
+
         width_factor : float
-            multiplier for the number of channels (default=1)
+            Multiplier for the number of channels (default=1).
 
     head : dict
         se_block : dict, optional
-            None or a dict with :meth:`~TFModel.se_block` params
+            Whether to include squeeze and excitation block.
+            If dict, then parameters for :meth:`~TFModel.se_block`.
     """
     @classmethod
     def default_config(cls):
@@ -310,7 +303,7 @@ class MobileNet_v2(TFModel):
 
 
 class MobileNet_v3(MobileNet_v2):
-    """ MobileNet version 3 large """
+    """ MobileNet version 3 large. """
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()
@@ -324,7 +317,7 @@ class MobileNet_v3(MobileNet_v2):
 
 
 class MobileNet_v3_small(MobileNet_v3):
-    """ MobileNet version 3 small """
+    """ MobileNet version 3 small. """
     @classmethod
     def default_config(cls):
         config = TFModel.default_config()

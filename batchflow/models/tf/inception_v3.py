@@ -25,7 +25,7 @@ class Inception_v3(Inception):
     -----
     Since the article misses some important details (e.g. the number of filters in all convolutions),
     this class is based on `Google's implementation
-    <https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py>`_
+    <https://github.com/tensorflow/models/blob/master/research/slim/nets/inception_v3.py>`__.
 
     **Configuration**
 
@@ -42,9 +42,9 @@ class Inception_v3(Inception):
             default parameters to build network
         """
         config = Inception.default_config()
-        config['initial_block'] = dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
-                                       kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1],
-                                       pool_size=3, pool_strides=2, padding='valid')
+        config['initial_block'] += dict(layout='cna cna cnap cna cnap', filters=[32, 32, 64, 80, 192],
+                                        kernel_size=[3, 3, 3, 1, 3], strides=[2, 1, 1, 1, 1],
+                                        pool_size=3, pool_strides=2, padding='valid')
         config['body']['layout'] = 'bbbrffffmee'
         config['body']['arch'] = _DEFAULT_V3_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.2))

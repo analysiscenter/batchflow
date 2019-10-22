@@ -1,17 +1,24 @@
+"""Test SegmentationMetricsByPixels and SegmentationMetricsByInstances classes.
+Also act as tests for ClassificationMetrics, since it's identical to
+SegmentationMetricsByPixels.
+
+Structurally, file consists of four classes, which respectively check:
+- basic assembly process (shapes compatibility, confusion matrix corectness);
+- evaluated result shape of SegmemtationMetricsByPixels for all metrics;
+- similarly, evaluated result contents;
+- so-called "subsampling" functions of SegmentationMetricsByInstances.
+
+Test data is pre-defined, it's shape and contents were chosen for reasons
+of balance between visual simplicity and test coverage diversity.
 """
-Tests for SegmentationMetricsByPixels class from batchflow.models.metrics.
-Structurally, file consists of two main classes. First one tests metric's output shape, second — its contents.
-Main test functions run for almost all metrics values, declared in metrics_dict (exceptions described below).
-Test data is pre-defined, it's shape and contents were chosen for reasons of balance between visual simplicity
-and test coverage diversity.
-"""
-# pylint: disable=import-error, no-name-in-module
+# pylint: disable=import-error, no-name-in-module, invalid-name, protected-access
 import numpy as np
 import pytest
 
-from batchflow.models.metrics import SegmentationMetricsByPixels
+from batchflow.models.metrics import SegmentationMetricsByPixels, SegmentationMetricsByInstances
 
-# Accuracy is not included because it can't process 'multiclass' parameter and therefore is being tested individually.
+# Accuracy is not included because it can't process 'multiclass' parameter
+# and therefore is being tested individually.
 METRICS_LIST = ['tpr', 'fpr', 'fnr', 'tnr', 'prv', 'ppv', 'fdr', 'for', 'npv', 'plr', 'nlr', 'dor', 'f1s', 'jac']
 
 BATCH_SIZE = 2
@@ -19,24 +26,113 @@ IMAGE_SIZE = 2
 NUM_CLASSES = 3
 
 # Set targets.
-TARGETS = np.array([0, 1, 2, 2, 0, 0, 1, 1]).reshape(BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE)
+TARGETS = np.array([[[0, 1],
+                     [2, 2]],
+
+                    [[0, 0],
+                     [1, 1]]])
 # Set predictions as 'labels'.
-LABELS = np.array([0, 1, 1, 0, 2, 0, 1, 1]).reshape(BATCH_SIZE, IMAGE_SIZE, IMAGE_SIZE)
+LABELS = np.array([[[0, 1],
+                    [1, 0]],
+
+                   [[2, 0],
+                    [1, 1]]])
+
 # Onehots are basically like probas, just with all 0 and a single 1.
 PROBA = np.eye(NUM_CLASSES)[LABELS]
-# Logit function gives ±infs on degenerate case of 0s and 1s, but it's okay for sigmoid function.
-LOGITS = np.log(PROBA / (1. - PROBA))
-# First param stands for predictions variable, second — for predictions type, third — for axis with class info.
-# Transposed predictions correspond to 'channels_first' data format.
+
+# Logit function gives ±infs on degenerate case of 0s and 1s but works fine for sigmoid function.
+LOGITS = np.where(PROBA > 0.5, np.inf, -np.inf)
+
+"""First param stands for predictions variable, second — for predictions type, third — for axis with class info.
+Transposed predictions correspond to 'channels_first' data format."""
 PREDICTIONS = [(LABELS, 'labels', None),
                (PROBA, 'proba', 3),
                (LOGITS, 'logits', 3),
                (np.transpose(PROBA, (3, 0, 1, 2)), 'proba', 0),
                (np.transpose(LOGITS, (3, 0, 1, 2)), 'logits', 0)]
 
+BAD_PREDICTIONS = [(LABELS[0], 'labels', None), # predictions ndim is less then targets' for labels
+                   (PROBA, 'proba', None), # axis is None for multiclass proba
+                   (LOGITS, 'logits', None)] # axis is None for multiclass logits
+
+class TestAssembly:
+    """Check metrics creation process."""
+
+    @pytest.mark.parametrize('SegmentationMetrics', [SegmentationMetricsByPixels, SegmentationMetricsByInstances])
+    @pytest.mark.parametrize('predictions, fmt, axis', BAD_PREDICTIONS)
+    def test_incompatibility_processing(self, SegmentationMetrics, predictions, fmt, axis):
+        """Create metrics class with inconsistent targets and predictions
+        (different ndim, no axis when it's required), expecting ValueError.
+
+        Parameters
+        ----------
+        SegmentationMetrics: SegmentationsMetricsByPixels or
+                             SegmentationsMetricsByInstances
+            Metrics class
+
+        predictions : np.array
+            Variable name containing predictions' array of desired format
+
+        fmt : string
+            Denotes predictions format
+
+        axis : None or int
+            A class axis
+        """
+        with pytest.raises(ValueError):
+            SegmentationMetrics(TARGETS, predictions, fmt, NUM_CLASSES, axis)
+
+    params = [(SegmentationMetricsByPixels, np.array([[[1, 0, 1],
+                                                       [0, 1, 1],
+                                                       [0, 0, 0]],
+
+                                                      [[1, 0, 0],
+                                                       [0, 2, 0],
+                                                       [1, 0, 0]]])),
+
+              (SegmentationMetricsByInstances, np.array([[[[0, 0],
+                                                           [1, 1]],
+
+                                                          [[0, 1],
+                                                           [0, 0]]],
+
+
+                                                         [[[0, 0],
+                                                           [0, 1]],
+
+                                                          [[0, 0],
+                                                           [1, 0]]]]))]
+    @pytest.mark.parametrize('SegmentationMetrics, exp_matrix', params)
+    @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
+    def test_confusion_matrix(self, SegmentationMetrics, exp_matrix, predictions, fmt, axis):
+        """Compare contents of actual confusion matrix with expected ones
+        for metrics class assembled with given params.
+
+        Parameters
+        ----------
+        SegmentationMetrics: SegmentationsMetricsByPixels or
+                             SegmentationsMetricsByInstances
+            Metrics class
+
+        exp_matrix: np.array
+            Expected confusion matrix
+
+        predictions : np.array
+            Variable name containing predictions' array of desired format
+
+        fmt : string
+            Denotes predictions format
+
+        axis : None or int
+            A class axis
+        """
+        metric = SegmentationMetrics(TARGETS, predictions, fmt, NUM_CLASSES, axis)
+        res_matrix = metric._confusion_matrix
+        assert np.array_equal(res_matrix, exp_matrix)
+
 class TestShape:
-    """
-    This class checks the shape of metrics' return value for all combinations of both aggregation types.
+    """Check the shape of evaluated metrics return value for various parameters.
 
     There is a following pattern in both tests:
     0. Each function is preceded by data for it's parametrization.
@@ -47,20 +143,19 @@ class TestShape:
     """
 
     # First param stands for batch aggregation, second — for multiclass one, third represents expected output shape.
-    params = [(None, None, (BATCH_SIZE, NUM_CLASSES)),
+    params = [(None, None, lambda l: (BATCH_SIZE, NUM_CLASSES - l)),
               (None, 'micro', (BATCH_SIZE,)),
               (None, 'macro', (BATCH_SIZE,)),
-              ('mean', None, (NUM_CLASSES,)),
+              ('mean', None, lambda l: (NUM_CLASSES - l,)),
               ('mean', 'micro', None),
               ('mean', 'macro', None)]
-
     @pytest.mark.parametrize('metric_name', METRICS_LIST)
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_shape', params)
-    def test_shape(self, metric_name, predictions, fmt, axis, batch_agg, multi_agg, exp_shape):
-        """
-        Function compares expected return value shape with actual return value shape
-        of metric evaluation with given params for all metrics from METRICS_LIST.
+    @pytest.mark.parametrize('skip_bg', [False, True])
+    def test_shape(self, metric_name, predictions, fmt, axis, batch_agg, multi_agg, exp_shape, skip_bg):
+        """Compare expected return value shape with actual return value shape of
+        metric evaluation with given params for all metrics from METRICS_LIST.
 
         Parameters
         ----------
@@ -81,23 +176,23 @@ class TestShape:
 
         exp_shape : None or tuple
             Expected return value shape
+
+        skip_bg : False or True
+            If background class should be excluded from metrics evaluation
         """
-        metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
+        if callable(exp_shape):
+            exp_shape = exp_shape(skip_bg)
+        metric = SegmentationMetricsByPixels(targets=TARGETS, predictions=predictions, fmt=fmt,
+                                             num_classes=NUM_CLASSES, axis=axis, skip_bg=skip_bg)
         res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
         res_shape = res.shape if isinstance(res, np.ndarray) else None
-
         assert res_shape == exp_shape
 
-    # Individual test params for accuracy — batch-only aggregation param and corresponding expected shapes.
-    params_accuracy = [(None, (BATCH_SIZE,)),
-                       ('mean', None)]
-
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
-    @pytest.mark.parametrize('batch_agg, exp_shape', params_accuracy)
+    @pytest.mark.parametrize('batch_agg, exp_shape', [(None, (BATCH_SIZE,)), ('mean', None)])
     def test_shape_accuracy(self, predictions, fmt, axis, batch_agg, exp_shape):
-        """
-        Function compares expected return value shape with actual return value shape
-        of accuracy metric evaluation with given params.
+        """Compare expected return value shape with actual return value shape of
+        accuracy metric evaluation with given params.
 
         Parameters
         ----------
@@ -119,12 +214,10 @@ class TestShape:
         metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
         res = metric.evaluate(metrics='accuracy', agg=batch_agg)
         res_shape = res.shape if isinstance(res, np.ndarray) else None
-
         assert res_shape == exp_shape
 
 class TestResult:
-    """
-    This class checks the contents of metrics' return value for all combinations of both aggregation types.
+    """Check evaluated metrics return value for various parameters.
 
     There is a following pattern in both tests:
     0. Each function is preceded by data for it's parametrization.
@@ -225,13 +318,11 @@ class TestResult:
                                  'dor' : np.array([0.00]),
                                  'f1s' : np.array([0.70]),
                                  'jac' : np.array([0.54])})]
-
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
     @pytest.mark.parametrize('batch_agg, multi_agg, exp_dict', params)
-    def test_contents(self, predictions, fmt, axis, batch_agg, multi_agg, exp_dict):
-        """
-        Function compares expected return value contents with contents of actual return value
-        of metric evaluation with given params for all metrics from METRICS_DICT.
+    def test_result(self, predictions, fmt, axis, batch_agg, multi_agg, exp_dict):
+        """Compare expected evaluated metrics return value with actual one
+        with given params for all metrics from METRICS_DICT.
 
         Parameters
         ----------
@@ -258,19 +349,13 @@ class TestResult:
         for metric_name, exp in exp_dict.items():
             res = metric.evaluate(metrics=metric_name, agg=batch_agg, multiclass=multi_agg)
             res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
-
             assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format(metric_name)
 
-    # Individual test params for accuracy — batch-only aggregation param and corresponding expected metrics contents.
-    params_accuracy = [(None, np.array([0.50, 0.75])),
-                       ('mean', np.array([0.62]))]
-
     @pytest.mark.parametrize('predictions, fmt, axis', PREDICTIONS)
-    @pytest.mark.parametrize('batch_agg, exp', params_accuracy)
-    def test_contents_accuracy(self, predictions, fmt, axis, batch_agg, exp):
-        """
-        Function compares expected return value contents with contents of actual return value
-        of accuracy metric evaluation with given params.
+    @pytest.mark.parametrize('batch_agg, exp', [(None, np.array([0.50, 0.75])), ('mean', np.array([0.62]))])
+    def test_result_accuracy(self, predictions, fmt, axis, batch_agg, exp):
+        """Compare expected evaluated metrics return value actual one
+        with given params for `accuracy` metrics.
 
         Parameters
         ----------
@@ -287,10 +372,48 @@ class TestResult:
             Cross-batch aggregation type
 
         exp : np.array
-            Expected contents of accuracy evaluation results with given aggregation params
+            Expected `accuracy` evaluation result with given aggregation params
         """
         metric = SegmentationMetricsByPixels(TARGETS, predictions, fmt, NUM_CLASSES, axis)
         res = metric.evaluate(metrics='accuracy', agg=batch_agg)
         res = res.reshape(-1) if isinstance(res, np.ndarray) else [res]
-
         assert np.allclose(res, exp, atol=1e-02, rtol=0), 'failed on metric {}'.format('accuracy')
+
+class TestSubsampling:
+    """Check the correctness of confusion matrix subsampling functions result
+    for SegmentationMetricsByInstances class (e.g. true_positive subsample,
+    total_population subsample). Test functions here act as an equivalent of
+    TestResult functions for SegmentationMetricsByInstances class, since it
+    differs from SegmentationMetricsByPixels in redefined subsampling functions
+    (and confusion matrix assembly process, which is checked in TestAssembly).
+    """
+
+    params = [('true_positive', np.array([[1, 0],
+                                          [1, 0]])),
+              ('condition_positive', np.array([[1, 1],
+                                               [1, 0]])),
+              ('prediction_positive', np.array([[2, 0],
+                                                [1, 1]])),
+              ('total_population', np.array([[2, 1],
+                                             [1, 1]]))]
+    @pytest.mark.parametrize('subsample_name, exp_subsample', params)
+    def test_subsampling(self, subsample_name, exp_subsample):
+        """Compare expected subsample with actual one.
+
+        Parameters
+        ----------
+        subsample_name: string
+            Name of confusion matrix subsample
+
+        exp_subsample: np.array
+            Expected subsample of confusion matrix
+        """
+        metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
+        res_subsample = getattr(metric, subsample_name)()
+        assert np.array_equal(res_subsample, exp_subsample)
+
+    def test_subsampling_true_negative(self):
+        """Check if subsampling true negative raises ValueError."""
+        metric = SegmentationMetricsByInstances(TARGETS, LABELS, 'labels', NUM_CLASSES)
+        with pytest.raises(ValueError):
+            getattr(metric, 'true_negative')()

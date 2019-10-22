@@ -33,8 +33,8 @@ class Inception_v4(Inception):
         """
         config = Inception.default_config()
 
-        config['initial_block'] = dict(layout='cna', filters=[32, 64, 96, 192],
-                                       pool_size=3, pool_strides=2)
+        config['initial_block'] += dict(layout='cna', filters=[32, 64, 96, 192],
+                                        pool_size=3, pool_strides=2)
         config['body']['layout'] = 'AAAArBBBBBBBGCCC'
         config['body']['arch'] = _DEFAULT_V4_ARCH
         config['head'].update(dict(layout='Vdf', dropout_rate=.2))

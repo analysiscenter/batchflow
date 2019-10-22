@@ -41,7 +41,7 @@ class BaseCIFAR(ImagesOpenset):
             return data
 
         def _gather_extracted(all_res):
-            images = np.concatenate([res[b'data'] for res in all_res]).reshape(-1, 3, 32, 32).transpose((0, 2, 3, 1))
+            images = np.concatenate([res[b'data'] for res in all_res]).reshape((-1, 3, 32, 32)).transpose((0, 2, 3, 1))
             images = np.array([PIL.Image.fromarray(image) for image in images], dtype=object)
             labels = np.concatenate([res[self.LABELS_KEY] for res in all_res])
             return images, labels
@@ -60,7 +60,6 @@ class BaseCIFAR(ImagesOpenset):
 
         logger.info("Extracting...")
         with tarfile.open(localname, "r:gz") as archive_file:
-            print(localname)
             files_in_archive = archive_file.getmembers()
 
             data_files = [one_file for one_file in files_in_archive if self.TRAIN_NAME_ID in one_file.name]

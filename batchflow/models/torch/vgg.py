@@ -51,7 +51,7 @@ class VGG(TorchModel):
         config = TorchModel.default_config()
         config['common/conv/bias'] = False
         config['body/block'] = dict(layout='cna', pool_size=2, pool_strides=2)
-        config['head'] = dict(layout='Vdf', dropout_rate=.8, units=2)
+        config['head'] += dict(layout='Vdf', dropout_rate=.8, units=2)
 
         config['loss'] = 'ce'
 

@@ -1,6 +1,8 @@
 """ Contains utility function for metrics evaluation """
-from numba import njit
 import numpy as np
+import numpy.ma as ma
+
+from numba import njit
 from scipy.ndimage import measurements
 
 
@@ -13,7 +15,8 @@ def binarize(inputs, threshold=.5):
     inputs : np.array
         input mask with probabilities
     threshold : float
-        where probability is above the threshold, the output mask will have 1, otherwise 0.
+        where probability is above the threshold, the output mask will have 1,
+        otherwise 0.
 
     Returns
     -------
@@ -40,3 +43,17 @@ def get_components(inputs, batch=True):
             comps.append(c)
         coords.append(comps)
     return coords if batch else coords[0]
+
+
+def infmean(arr, axis):
+    """ Compute the arithmetic mean along given axis ignoring infs,
+    when there is at least one finite number along averaging axis.
+    """
+    masked = ma.masked_invalid(arr)
+    masked = masked.mean(axis=axis)
+    if np.isscalar(masked):
+        return masked
+    if isinstance(masked, ma.core.MaskedConstant):
+        return np.inf
+    masked[masked.mask] = np.inf
+    return masked.data

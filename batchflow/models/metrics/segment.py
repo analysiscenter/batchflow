@@ -98,7 +98,7 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
             class_slice = [slice(None)] * inputs.ndim
             for class_index in range(1, self.num_classes):
                 class_slice[-1] = class_index
-                one_class = get_components(inputs[class_slice], batch=True)
+                one_class = get_components(inputs[tuple(class_slice)], batch=True)
                 instances.append(one_class)
         return instances
 
@@ -140,4 +140,4 @@ class SegmentationMetricsByInstances(ClassificationMetrics):
 
     def total_population(self, label=None, *args, **kwargs):
         _ = args, kwargs
-        return self._return(self._confusion_matrix[:, label - 1].sum(axis=(1, 2)))
+        return self._count(lambda l: self._confusion_matrix[:, l-1].sum(axis=(1, 2)), label)
