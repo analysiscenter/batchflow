@@ -724,6 +724,10 @@ class Pipeline:
         name = self._eval_expr(name, batch=batch)
         return self.models.get_model_by_name(name, batch=batch)
 
+    def m(self, name, batch=None):
+        """ A shorter alias for get_model_by_name() """
+        return self.get_model_by_name(name, batch=batch)
+
     def init_model(self, mode, model_class=None, name=None, config=None):
         """ Initialize a static or dynamic model
 
