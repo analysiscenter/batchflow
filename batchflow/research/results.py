@@ -184,16 +184,17 @@ class Results:
                                 res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
                         res = self._concat(res, self.variables)
                         self._fix_length(res)
+                        repetition = config_alias.pop_config('repetition')
                         if '_dummy' not in alias:
                             if use_alias:
                                 if concat_config:
-                                    res['config'] = alias
+                                    res['config'] = config_alias.alias(as_string=True)
                                 else:
-                                    res.update(alias)
+                                    res.update(config_alias.alias(as_string=False))
                             else:
-                                res.update(config)
-                        if 'repetition' in config:
-                            res.update({'repetition': config['repetition']})
+                                res.update(config_alias.config())
+                        if repetition is not None:
+                            res.update({'repetition': repetition.config()['repetition']})
                         all_results.append(
                             pd.DataFrame({
                                 'name': unit,
