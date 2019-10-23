@@ -634,20 +634,17 @@ class W(NamedExpression):
         W(B(copy=True))
         W(R('normal', 0, 1, size=B('size')))
     """
-    def __init__(self, name=None, mode='w'):
-        if not isinstance(name, NamedExpression):
-            raise ValueError("Named expressions is expected, but given %s" % name)
-        super().__init__(name, mode)
-
     def get(self, **kwargs):
         """ Return a wrapped named expression """
+        if not isinstance(self.name, NamedExpression):
+            raise ValueError("Named expressions is expected, but given %s" % name)
         self.name.set_params(**kwargs)
         return self.name
 
-    def assign(self, *args, **kwargs):
+    def assign(self, value, **kwargs):
         """ Assign a value """
-        _ = args, kwargs
-        raise NotImplementedError("Assigning a value to a wrapper is not supported")
+        _ = kwargs
+        self.name = value
 
 
 class P(W):
@@ -687,9 +684,6 @@ class P(W):
     --------
     :func:`~batchflow.inbatch_parallel`
     """
-    def __init__(self, name=None, mode='w'):
-        NamedExpression.__init__(self, name, mode)
-
     def _get_name(self, **kwargs):
         return self.name
 
@@ -710,3 +704,8 @@ class P(W):
                                  % (self, len(val), len(batch)))
             return val
         return self
+
+    def assign(self, value, **kwargs):
+        """ Assign a value """
+        _ = kwargs
+        self.name = value
