@@ -683,6 +683,9 @@ class P(W):
     --------
     :func:`~batchflow.inbatch_parallel`
     """
+    def _get_name(self, **kwargs):
+        return self.name
+
     def get(self, *args, parallel=False, **kwargs):   # pylint:disable=arguments-differ
         """ Return a wrapped named expression """
         _ = args

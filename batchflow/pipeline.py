@@ -446,6 +446,7 @@ class Pipeline:
 
     def assign_variable(self, name, value, **kwargs):
         """ Assign a value to a variable """
+        _ = kwargs
         if not self.has_variable(name):
             logging.warning("Pipeline variable '%s' has not been initialized", name)
             self.init_variable(name)
