@@ -9,6 +9,7 @@ class _DummyBatch:
     """ A fake batch for static models """
     def __init__(self, pipeline):
         self.pipeline = pipeline
+        self.dataset = pipeline.dataset
 
 
 def eval_expr(expr, **kwargs):
@@ -83,7 +84,7 @@ def add_ops(cls):
     for op in OPERATIONS:
         if op[0] != '#':
             def _oper_(self, other=None, op=op):
-                return cls(AN_EXPR, op=op, a=self, b=other)
+                return AlgebraicNamedExpression(op=op, a=self, b=other)
             setattr(cls, op, _oper_)
     return cls
 
@@ -122,29 +123,26 @@ class NamedExpression(metaclass=MetaNamedExpression):
     """
     __slots__ = ('__dict__', )
 
-    def __init__(self, name, mode='w', op=None, a=None, b=None):
+    def __init__(self, name, mode='w'):
         self.name = name
         self.mode = mode
-        self.op = op
-        self.a = a
-        self.b = b
         self.params = None
         self._call = False
 
     def __getattr__(self, name):
-        return NamedExpression(AN_EXPR, op='#attr', a=self, b=name)
+        return AlgebraicNamedExpression(op='#attr', a=self, b=name)
 
     def __getitem__(self, key):
-        return NamedExpression(AN_EXPR, op='#slice', a=self, b=key)
+        return AlgebraicNamedExpression(op='#slice', a=self, b=key)
 
     def __call__(self, *args, **kwargs):
         if isinstance(self, F):
             self._call = False
-        return NamedExpression(AN_EXPR, op='#call', a=self, b=(args, kwargs))
+        return AlgebraicNamedExpression(op='#call', a=self, b=(args, kwargs))
 
     def str(self):
         """ Convert a named expression value to a string """
-        return NamedExpression(AN_EXPR, op='#str', a=self)
+        return AlgebraicNamedExpression(op='#str', a=self)
 
     def format(self, string):
         """ Convert a value to a formatted representation, controlled by format spec.
@@ -156,7 +154,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
             V('variable').format('Value of the variable is {:7.7}')
         """
-        return NamedExpression(AN_EXPR, op='#format', a=self, b=string)
+        return AlgebraicNamedExpression(op='#format', a=self, b=string)
 
     def get_params(self, **kwargs):
         """ Return parameters needed to evaluate the expression """
@@ -175,16 +173,6 @@ class NamedExpression(metaclass=MetaNamedExpression):
             return self.name.get(**kwargs)
         return self.name
 
-    def _get_value(self, **kwargs):
-        if self.name == AN_EXPR:
-            kwargs = self.get_params(**kwargs)
-            a = eval_expr(self.a, **kwargs)
-            b = eval_expr(self.b, **kwargs)
-            if self.op in UNARY_OPS:
-                return OPERATIONS[self.op](a)
-            return OPERATIONS[self.op](a, b)
-        raise ValueError("Undefined value")
-
     def _get(self, **kwargs):
         kwargs = self.get_params(**kwargs)
         name = self._get_name(**kwargs)
@@ -193,8 +181,6 @@ class NamedExpression(metaclass=MetaNamedExpression):
     def get(self, **kwargs):
         """ Return a value of a named expression """
         name, kwargs = self._get(**kwargs)
-        if name == AN_EXPR:
-            return self._get_value(**kwargs)
         raise ValueError("Undefined value")
 
     def set(self, value, mode=None, eval=True, **kwargs):
@@ -287,6 +273,23 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
     def __getstate__(self):
         return self.__dict__
+
+class AlgebraicNamedExpression(NamedExpression):
+    """ Algebraic expression over named expressions """
+    def __init__(self, op=None, a=None, b=None):
+        super().__init__(AN_EXPR, mode='w')
+        self.op = op
+        self.a = a
+        self.b = b
+
+    def get(self, **kwargs):
+        """ Return a value of an algebraic expression """
+        kwargs = self.get_params(**kwargs)
+        a = eval_expr(self.a, **kwargs)
+        b = eval_expr(self.b, **kwargs)
+        if self.op in UNARY_OPS:
+            return OPERATIONS[self.op](a)
+        return OPERATIONS[self.op](a, b)
 
 
 class B(NamedExpression):
@@ -684,6 +687,9 @@ class P(W):
     --------
     :func:`~batchflow.inbatch_parallel`
     """
+    def __init__(self, name=None, mode='w'):
+        NamedExpression.__init__(self, name, mode)
+
     def _get_name(self, **kwargs):
         return self.name
 
