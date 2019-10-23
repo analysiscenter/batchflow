@@ -161,7 +161,8 @@ class NamedExpression(metaclass=MetaNamedExpression):
     def get_params(self, **kwargs):
         """ Return parameters needed to evaluate the expression """
         if self.params is not None:
-            kwargs = {**self.params, **kwargs}
+            for arg in self.params.keys() | kwargs.keys():
+                kwargs[arg] = kwargs.get(arg) or self.params.get(arg)
         if kwargs.get('batch') is None:
             kwargs['batch'] = _DummyBatch(kwargs.get('pipeline'))
         return kwargs
