@@ -162,7 +162,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
         """ Return parameters needed to evaluate the expression """
         if self.params is not None:
             kwargs = {**self.params, **kwargs}
-        if kwargs.get('batch') is not None:
+        if kwargs.get('batch') is None:
             kwargs['batch'] = _DummyBatch(kwargs.get('pipeline'))
         return kwargs
 
@@ -310,8 +310,7 @@ class B(NamedExpression):
         self.copy = copy
 
     def _get(self, **kwargs):
-        kwargs = self.get_params(**kwargs)
-        name = self._get_name(**kwargs)
+        name, kwargs = super()._get(**kwargs)
         batch = kwargs['batch']
         return name, batch, kwargs
 
@@ -335,8 +334,7 @@ class B(NamedExpression):
 class PipelineNamedExpression(NamedExpression):
     """ Base class for pipeline expressions """
     def _get(self, **kwargs):
-        kwargs = self.get_params(**kwargs)
-        name = self._get_name(**kwargs)
+        name, kwargs = super()._get(**kwargs)
         pipeline = kwargs['batch'].pipeline
         return name, pipeline, kwargs
 
@@ -396,7 +394,7 @@ class V(PipelineNamedExpression):
     def assign(self, value, **kwargs):
         """ Assign a value to a pipeline variable """
         name, pipeline, kwargs = self._get(**kwargs)
-        pipeline.assign_variable(name, value, **kwargs)
+        pipeline.assign_variable(name, value)
 
 
 class M(PipelineNamedExpression):
@@ -472,7 +470,6 @@ class I(PipelineNamedExpression):
         raise NotImplementedError("Assigning a value to an iteration number is not supported")
 
 
-
 class F(NamedExpression):
     """ A function, method or any other callable that takes a batch or a pipeline and possibly other arguments
 
@@ -496,8 +493,7 @@ class F(NamedExpression):
 
     def get(self, **kwargs):
         """ Return a value from a callable """
-        kwargs = self.get_params(**kwargs)
-        name = self._get_name(**kwargs)
+        name, kwargs = self._get(**kwargs)
         batch = kwargs['batch']
         pipeline = batch.pipeline
 
@@ -537,8 +533,7 @@ class D(NamedExpression):
         super().__init__(name, mode)
 
     def _get(self, **kwargs):
-        kwargs = self.get_params(**kwargs)
-        name = self._get_name(**kwargs)
+        name, kwargs = super()._get(**kwargs)
         batch = kwargs['batch']
         dataset = batch.dataset or kwargs['batch'].pipeline.dataset
         if dataset is None:
