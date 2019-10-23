@@ -1,7 +1,7 @@
 """ Contains common layers """
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras.layers as K #pylint: disable=import-error
+import tensorflow.keras.layers as K # pylint: disable=import-error
 
 from .layer import Layer, add_as_function
 

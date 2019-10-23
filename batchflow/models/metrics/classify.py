@@ -1,10 +1,11 @@
 """ Contains two class classification metrics """
 from copy import copy
+from functools import partial
 
 import numpy as np
 
 from ...decorators import mjit
-from . import Metrics, binarize, sigmoid
+from . import Metrics, binarize, sigmoid, infmean
 
 METRICS_ALIASES = {'sensitivity' : 'true_positive_rate',
                    'recall' : 'true_positive_rate',
@@ -118,9 +119,7 @@ class ClassificationMetrics(Metrics):
         self.skip_bg = skip_bg
         self.num_classes = None if axis is None else predictions.shape[axis]
         self.num_classes = self.num_classes or num_classes or 2
-        self._agg_fn_dict = {
-            'mean': self.infmean,
-        }
+        self._agg_fn_dict = {'mean': partial(infmean, axis=0)}
 
         if fmt in ['proba', 'logits'] and axis is None and self.num_classes > 2:
             raise ValueError('axis cannot be None for multiclass case when fmt is proba or logits')
@@ -158,21 +157,6 @@ class ClassificationMetrics(Metrics):
     @property
     def confusion_matrix(self):
         return self._confusion_matrix.sum(axis=0)
-
-    def infmean(self, arr):
-        """
-        Compute the arithmetic mean along 0 axis ignoring infs,
-        when there is at least one finite number along averaging axis.
-        Done via np.nanmean() while temporarily replacing np.inf with np.nan.
-        """
-        if isinstance(arr, list):
-            arr = np.array(arr)
-        arr[np.isinf(arr)] = np.nan
-        arr = np.nanmean(arr, axis=0)
-        if np.isscalar(arr):
-            return np.inf if np.isnan(arr) else arr
-        arr[np.isnan(arr)] = np.inf
-        return arr
 
     def copy(self):
         """ Return a duplicate containing only the confusion matrix """
@@ -286,28 +270,24 @@ class ClassificationMetrics(Metrics):
         return self._return(self._confusion_matrix.sum(axis=(1, 2)))
 
     def _calc_agg(self, numer, denom, label=None, multiclass='macro', when_zero=None):
-        _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1])
-        if self.num_classes > 2:
-            labels = label if label is not None else self._all_labels()
-            labels = labels if isinstance(labels, (list, tuple)) else [labels]
-            label_value = [(numer(l, multiclass=multiclass), denom(l, multiclass=multiclass)) for l in labels]
-
-            if multiclass is None:
-                value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-                classes_calculated = self.num_classes - 1 if self.skip_bg else self.num_classes
-                value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, classes_calculated)
-            elif multiclass == 'micro':
-                n = np.sum([l[0] for l in label_value], axis=0)
-                d = np.sum([l[1] for l in label_value], axis=0)
-                value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
-            elif multiclass in ['macro', 'mean']:
-                value = [np.where(l[1] > 0, l[0] / l[1], _when_zero(l[0])) for l in label_value]
-                value = self.infmean(value).reshape(-1, 1)
-        else:
+        _when_zero = lambda n: np.where(n > 0, when_zero[0], when_zero[1]).astype(float)
+        if self.num_classes == 2:
             label = label if label is not None else 1
-            d = denom(label)
-            n = numer(label)
-            value = np.where(d > 0, n / d, _when_zero(n)).reshape(-1, 1)
+        labels = label if label is not None else self._all_labels()
+        labels = labels if isinstance(labels, (list, tuple)) else [labels]
+        fractions = [(numer(l).astype(float), denom(l).astype(float)) for l in labels]
+
+        if multiclass is None:
+            value = [np.divide(n, d, out=_when_zero(n), where=(d > 0)).ravel() for n, d in fractions]
+            classes_calculated = self.num_classes - 1 if self.skip_bg else self.num_classes
+            value = value[0] if len(value) == 1 else np.array(value).T.reshape(-1, classes_calculated)
+        elif multiclass == 'micro':
+            n = np.sum([f[0] for f in fractions], axis=0)
+            d = np.sum([f[1] for f in fractions], axis=0)
+            value = np.divide(n, d, out=_when_zero(n), where=(d > 0)).reshape(-1, 1)
+        elif multiclass in ['macro', 'mean']:
+            value = [np.divide(n, d, out=_when_zero(n), where=(d > 0)) for n, d in fractions]
+            value = infmean(value, axis=0).reshape(-1, 1)
 
         return value
 
@@ -359,7 +339,8 @@ class ClassificationMetrics(Metrics):
                               when_zero=(np.inf, 0))
 
     def f1_score(self, *args, **kwargs):
-        return 2 / (1 / self.recall(*args, **kwargs) + 1 / self.precision(*args, **kwargs))
+        recall, precision = self.recall(*args, **kwargs), self.precision(*args, **kwargs)
+        return 2 * (recall * precision) / (recall + precision)
 
     def jaccard(self, *args, **kwargs):
         d = self.dice(*args, **kwargs)
