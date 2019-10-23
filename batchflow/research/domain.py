@@ -173,6 +173,22 @@ class ConfigAlias:
         """
         return Config({item[0].value: item[1].value for item in self._config})
 
+    def pop_config(self, key):
+        res = [item for item in self._config if item[0].value == key]
+        self._config = [item for item in self._config if item[0].value != key]
+        if len(res) == 1:
+            return ConfigAlias(res)
+        else:
+            return None
+
+    def pop_alias(self, key):
+        res = [item for item in self._config if item[0].alias == key]
+        self._config = [item for item in self._config if item[0].alias != key]
+        if len(res) == 1:
+            return ConfigAlias(res)
+        else:
+            return None
+    
     def __repr__(self):
         return 'ConfigAlias(' + str(self.alias()) + ')'
 
