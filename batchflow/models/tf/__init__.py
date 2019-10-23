@@ -1,4 +1,20 @@
 """ Contains tensorflow models and functions """
+import sys
+import tensorflow as tf_
+
+class SilentTF:
+    """ Class to supress deprecation warnings. """
+    COMPAT_MODULES = [tf_.compat.v1]
+
+    def __getattr__(self, name):
+        for module in self.COMPAT_MODULES:
+            if name in module.__dict__:
+                return getattr(module, name)
+        return getattr(tf_, name)
+
+sys.modules['tensorflow'] = SilentTF()
+
+
 from .base import TFModel
 from .vgg import VGG, VGG16, VGG19, VGG7
 from .linknet import LinkNet
