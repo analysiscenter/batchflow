@@ -333,6 +333,7 @@ class Domain:
 
     def __next__(self):
         if self._iterator is None:
+            self.set_iter(self.n_iters, self.n_reps, self.repeat_each)
             self._reset_iter(self.n_iters, self.n_reps, self.repeat_each)
         return next(self._iterator)
 
@@ -395,7 +396,7 @@ class Domain:
             else:
                 i = 0
                 while n_iters is None or i < n_iters:
-                    samples = list(islice(iterator, repeat_each))
+                    samples = list(islice(iterator, int(repeat_each)))
                     for repetition in range(n_reps):
                         for sample in samples:
                             yield sample + ConfigAlias([('repetition', repetition)])
@@ -414,6 +415,7 @@ class Domain:
     def iterator(self):
         """ Get domain iterator. """
         if self._iterator is None:
+            self.set_iter(self.n_iters, self.n_reps, self.repeat_each)
             self._reset_iter(self.n_iters, self.n_reps, self.repeat_each)
         return self._iterator
 

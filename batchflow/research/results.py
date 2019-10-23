@@ -74,10 +74,12 @@ class Results:
         for supconfig in self.configs:
             if config is not None:
                 _config = supconfig.config()
+                if all(item in _config.items() for item in config.items()):
+                    result.append(supconfig)
             else:
                 _config = supconfig.alias()
-            if all(item in _config.items() for item in alias.items()):
-                result.append(_config)
+                if all(item in _config.items() for item in alias.items()):
+                    result.append(supconfig)
         self.configs = result
     
     def _get_description(self):
@@ -190,6 +192,8 @@ class Results:
                                     res.update(alias)
                             else:
                                 res.update(config)
+                        if 'repetition' in config:
+                            res.update({'repetition': config['repetition']})
                         all_results.append(
                             pd.DataFrame({
                                 'name': unit,

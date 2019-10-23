@@ -1,7 +1,6 @@
 """ Classes Research and auxiliary classes for multiple experiments. """
 
 import os
-import glob
 from copy import copy
 from collections import OrderedDict
 import itertools
@@ -21,7 +20,7 @@ from .domain import Domain, Option, ConfigAlias
 from .job import Job
 from .utils import get_metrics
 from .executable import Executable
-from .named_expr import ResearchNamedExpression, ResearchPipeline
+from .named_expr import ResearchPipeline
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
@@ -202,7 +201,7 @@ class Research:
 
         return self
 
-    def init_domain(self, domain):
+    def init_domain(self, domain=None, n_configs=None, n_reps=1, repeat_each=100):
         """ Add domain of pipeline parameters. Configs from that domain will be generated
         and then substitute into pipelines.
 
@@ -211,8 +210,15 @@ class Research:
         domain : Domain or Option
         """
         if isinstance(domain, Option):
-            domain = Domain(domain)
-        self.domain = domain
+            self.domain = Domain(domain)
+        elif domain is None:
+            self.domain = Domain(Option('_dummy', [None]))
+        else:
+            self.domain = domain
+        self.n_configs = n_configs
+        self.n_reps = n_reps
+        self.n_configs = n_configs
+        self.repeat_each = repeat_each
         return self
 
     def update_domain(self, function=None, each='last', *args, **kwargs):
@@ -227,7 +233,7 @@ class Research:
             when iterator will be finished. If int, domain will be updated with
             that period.
         *args, **kwargs : update function parameters
-        """        
+        """
         self._update_domain = {
             'function': function,
             'each': each,
@@ -319,9 +325,7 @@ class Research:
         self.name = name or self.name
         self.bar = bar
 
-        if self.domain is None:
-            self.domain = Domain(Option('_dummy', [None]))
-            self.domain.set_iter(n_iters=None, n_reps=1)
+        self.domain.set_iter(n_iters=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
 
         if self.domain.size is None and (self._update_domain is None or self._update_domain['each'] == 'last'):
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
@@ -481,12 +485,13 @@ class DynamicQueue:
     def total(self):
         """ Total estimated size of queue. """
         if self._domain_size is not None:
-            rolling_mean = pd.Series(self.each_config_produce).rolling(window=10, min_periods=1).mean().round().values[-1]
+            rolling_mean = (pd.Series(self.each_config_produce)
+                .rolling(window=10, min_periods=1)
+                .mean().round().values[-1])
             num = np.sum(self.each_config_produce)
             estimated_num = (self._domain_size - len(self.each_config_produce)) * rolling_mean
             return np.ceil((num +  estimated_num) / self.n_branches)
-        else:
-            return None
+        return None
 
     def update(self):
         """ Update domain. """
@@ -498,8 +503,7 @@ class DynamicQueue:
                 self.domain.set_update(**self.update_domain)
             self.generator = self._generate_config(self.domain)
             return True
-        else:
-            return False
+        return False
 
     def next_jobs(self, n_tasks=1):
         """ Get next `n_tasks` elements of queue. """
