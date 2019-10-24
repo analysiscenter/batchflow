@@ -43,8 +43,6 @@ class BaseComponents:
         comps = components
         if isinstance(components, str):
             components = (components, )
-        else:
-            components = components
         components = tuple(components or self.components)
 
         res = [getattr(self, comp) for comp in components]
@@ -63,7 +61,8 @@ class BaseComponents:
         return dict(zip(components, self.as_tuple(components)))
 
     def as_array(self, components=None):
-        comps = self.as_tuple(components)
+        """ Return a component as an array """
+        comps = self.as_list(components)
         return np.stack([comps[i] for i in self._indices])
 
     def __len__(self):
