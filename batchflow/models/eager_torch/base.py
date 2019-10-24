@@ -85,13 +85,13 @@ class EagerTorch:
         if load:
             self.load(**load)
         if build:
-            self.build(*args, **kwargs)
+            self.build()
 
-    def reset(self,):
+    def reset(self):
         pass
 
 
-    def build(self,):
+    def build(self):
         """ Build the model """
         config = self.build_config()
         self.full_config = config
@@ -102,6 +102,7 @@ class EagerTorch:
         if config.get('inputs'):
             print('_BUILD IN BUILD')
             self._build()
+
 
     def _get_device(self):
         device = self.config.get('device')
@@ -296,30 +297,21 @@ class EagerTorch:
         return None
 
 
-    def _fill_value(self, inputs):
-        inputs = torch.from_numpy(inputs)
+    def _fill_value(self, value):
+        value = torch.from_numpy(value)
         if self.device:
-            inputs = inputs.to(self.device)
-        return inputs
+            value = value.to(self.device)
+        return value
 
     def _fill_param(self, inputs):
-        if inputs is None:
-            pass
-        elif isinstance(inputs, (tuple, list)):
-            inputs_list = []
-            for i in inputs:
-                v = self._fill_value(i)
-                inputs_list.append(v)
-            inputs = inputs_list
+        if isinstance(inputs, (tuple, list)):
+            inputs = [self._fill_value(item) for item in inputs]
         else:
             inputs = self._fill_value(inputs)
         return inputs
 
     def _fill_input(self, *args):
-        inputs = []
-        for arg in args:
-            inputs.append(self._fill_param(arg))
-        return tuple(inputs)
+        return tuple([self._fill_param(arg) for arg in args])
 
 
     def _fill_output(self, fetches):
@@ -347,9 +339,9 @@ class EagerTorch:
             print('_BUILD IN TRAIN')
             self._build(inputs)
 
-
         if use_lock:
             self.train_lock.acquire()
+
         self.model.train()
         self.optimizer.zero_grad()
         self.predictions = self.model(*inputs)
@@ -358,7 +350,7 @@ class EagerTorch:
         self.optimizer.step()
 
         if self.lr_decay:
-            if self.current_iter == self.n_iters:
+            if self.current_iter >= self.n_iters:
                 self.lr_decay.step()
                 self.current_iter = 0
             self.current_iter += 1
@@ -416,49 +408,29 @@ class EagerTorch:
 
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
-            self._add_output_identity(inputs, name, attr_prefix, **kwargs)
+            output = inputs
         elif oper == 'softplus':
-            self._add_output_softplus(inputs, name, attr_prefix, **kwargs)
+            output = torch.nn.functional.softplus(inputs)
         elif oper == 'sigmoid':
-            self._add_output_sigmoid(inputs, name, attr_prefix, **kwargs)
+            output = torch.nn.functional.sigmoid(inputs)
         elif oper == 'proba':
-            self._add_output_proba(inputs, name, attr_prefix, **kwargs)
+            axis = self.channels_axis(kwargs.get('data_format'))
+            output = torch.nn.functional.softmax(inputs, dim=axis)
         elif oper == 'labels':
-            self._add_output_labels(inputs, name, attr_prefix, **kwargs)
+            class_axis = self.channels_axis(kwargs.get('data_format'))
+            output = inputs.argmax(dim=class_axis)
         elif callable(oper):
-            self._add_output_callable(inputs, oper, None, attr_prefix, **kwargs)
+            output = oper(inputs)
+            name = name or oper.__name__
 
-    def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
-        _ = kwargs
-        setattr(self, attr_prefix + name, inputs)
-        return inputs
+        setattr(self, attr_prefix + name, output)
 
-    def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
-        _ = kwargs
-        proba = torch.nn.functional.softplus(inputs)
-        setattr(self, attr_prefix + name, proba)
 
-    def _add_output_sigmoid(self, inputs, name, attr_prefix, **kwargs):
-        _ = kwargs
-        proba = torch.nn.functional.sigmoid(inputs)
-        setattr(self, attr_prefix + name, proba)
+    @classmethod
+    def channels_axis(cls, data_format='channels_first'):
+        data_format = data_format if data_format else 'channels_first'
+        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
-    def _add_output_proba(self, inputs, name, attr_prefix, **kwargs):
-        axis = self.channels_axis(kwargs.get('data_format'))
-        proba = torch.nn.functional.softmax(inputs, dim=axis)
-        setattr(self, attr_prefix + name, proba)
-
-    def _add_output_labels(self, inputs, name, attr_prefix, **kwargs):
-        class_axis = self.channels_axis(kwargs.get('data_format'))
-        predicted_classes = inputs.argmax(dim=class_axis)
-        setattr(self, attr_prefix + name, predicted_classes)
-
-    def _add_output_callable(self, inputs, oper, name, attr_prefix, **kwargs):
-        _ = kwargs
-        x = oper(inputs)
-        name = name or oper.__name__
-        setattr(self, attr_prefix + name, x)
-        return x
 
 
     def save(self, path, *args, **kwargs):
