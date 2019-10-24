@@ -637,7 +637,7 @@ class W(NamedExpression):
     def get(self, **kwargs):
         """ Return a wrapped named expression """
         if not isinstance(self.name, NamedExpression):
-            raise ValueError("Named expressions is expected, but given %s" % name)
+            raise ValueError("Named expressions is expected, but given %s" % self.name)
         self.name.set_params(**kwargs)
         return self.name
 
