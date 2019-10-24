@@ -7,16 +7,15 @@ except ImportError:
     import _fake as pd
 
 
-class _ADict(dict):
+class AdvancedDict(dict):
     """ dict that supports advanced indexing """
     def __getitem__(self, item):
         if isinstance(item, (list, np.ndarray)):
-            d = dict()
+            d = type(self)()
             for i in item:
                 d[i] = self[i]
             return d
         return super().__getitem__(item)
-
 
 class BaseComponents:
     """ Base class for a components storage """
@@ -24,6 +23,7 @@ class BaseComponents:
         self.components = components
         self.data = data.data if isinstance(data, BaseComponents) else data
         self.indices = indices
+        self._indices = indices
         self.cast_to_array = cast_to_array
         if crop:
             self.crop(copy=copy)
@@ -40,8 +40,16 @@ class BaseComponents:
 
     def as_list(self, components=None):
         """ Return components data as a tuple """
+        comps = components
+        if isinstance(components, str):
+            components = (components, )
+        else:
+            components = components
         components = tuple(components or self.components)
-        return [getattr(self, comp) for comp in components]
+
+        res = [getattr(self, comp) for comp in components]
+
+        return res[0] if isinstance(comps, str) else res
 
     def as_tuple(self, components=None):
         """ Return components data as a tuple """
@@ -49,8 +57,14 @@ class BaseComponents:
 
     def as_dict(self, components=None):
         """ Return components data as a dict """
+        if isinstance(components, str):
+            components = (components, )
         components = tuple(components or self.components)
         return dict(zip(components, self.as_tuple(components)))
+
+    def as_array(self, components=None):
+        comps = self.as_tuple(components)
+        return np.stack([comps[i] for i in self._indices])
 
     def __len__(self):
         return len(self.data)
@@ -73,7 +87,7 @@ class BaseComponents:
 
     def _get_from(self, data, copy):
         if isinstance(data, dict):
-            data = _ADict(data)
+            data = AdvancedDict(data)
         if data is not None and self.indices is not None:
             data = data[self.indices]
         if copy:
