@@ -102,6 +102,16 @@ class TestBatchPreloadedOneComponent:
 
         assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
 
+    def test_dict_with_index(self, pipeline):
+        index = (np.arange(100)+ 1000).astype('str')
+        labels = np.arange(DATASET_SIZE)
+        images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
+        data = dict(images=dict(zip(index, images)), labels=labels)
+
+        batch = get_batch(data, pipeline, index=index, batch_class=MyBatch1, skip=2)
+
+        assert (batch.data.as_array('images')[:, 0, 0] == np.arange(20, 30)).all()
+
     def test_df(self, pipeline):
         index = (np.arange(100)+ 1000).astype('str')
         labels = np.arange(DATASET_SIZE)
