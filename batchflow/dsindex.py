@@ -52,7 +52,12 @@ class DatasetIndex(Baseset):
         DatasetIndex
             Contains one common index.
         """
-        return DatasetIndex(np.concatenate([i.index for i in index_list]))
+        return type(index_list[0])(np.concatenate([i.index for i in index_list]))
+
+    def __add__(self, other):
+        if not isinstance(other, DatasetIndex):
+            other = DatasetIndex(other)
+        return self.concat(self, other)
 
     @staticmethod
     def build_index(index):
@@ -587,6 +592,30 @@ class FilesIndex(DatasetIndex):
         self.dirs = False
         super().__init__(*args, **kwargs)
 
+    @property
+    def paths(self):
+        return self._paths
+
+    @classmethod
+    def concat(cls, *index_list):
+        """Create index by concatenating other indices.
+
+        Parameters
+        ----------
+        index_list : list
+            Indices to be concatenated. Each item is expected to
+            contain index property with 1-d sequence of indices.
+
+        Returns
+        -------
+        DatasetIndex
+            Contains one common index.
+        """
+        paths = {}
+        for index in index_list:
+            paths.update(index.paths)
+        return type(index_list[0])(index=np.concatenate([i.index for i in index_list]), paths=paths)
+
     def build_index(self, index=None, path=None, *args, **kwargs):
         """ Build index from a path string or an index given. """
         if path is None:
@@ -598,7 +627,7 @@ class FilesIndex(DatasetIndex):
             raise ValueError("Index contains non-unique elements, which leads to path collision")
         return _index
 
-    def build_from_index(self, index, paths, dirs):
+    def build_from_index(self, index, paths, dirs=None):
         """ Build index from another index for indices given. """
         if isinstance(index, DatasetIndex):
             index = index.indices
@@ -620,8 +649,7 @@ class FilesIndex(DatasetIndex):
             paths = path
 
         if len(paths) == 0:
-            raise ValueError("`path` cannot be empty. "
-                             "Got '{}'.".format(path))
+            raise ValueError("`path` cannot be empty. Got '{}'.".format(path))
 
         _all_index = None
         _all_paths = dict()
@@ -652,6 +680,7 @@ class FilesIndex(DatasetIndex):
             _index = _full_index[:, 0]
             _paths = _full_index[:, 1]
         else:
+            warnings.warn("No items to index in %s" % path)
             _index, _paths = np.empty(0), np.empty(0)
         _paths = dict(zip(_index, _paths))
         return _index, _paths

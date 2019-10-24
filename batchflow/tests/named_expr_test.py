@@ -14,7 +14,7 @@ from batchflow import B, C, D, F, L, V, R, P, I, Dataset
     D('size'),
     V('var'),
     R('normal', 0, 1),
-    P('normal', 0, 1),
+    P(R('normal', 0, 1)),
     F(lambda batch: 0),
     L(lambda: 0),
 ])
