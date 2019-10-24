@@ -9,10 +9,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .utils import unpack_fn_from_config
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss
-from .. import Config
+from ..utils import unpack_fn_from_config
+from ... import Config
 
 
 # TODO:
