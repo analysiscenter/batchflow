@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .utils import * # pylint: disable=wildcard-import
+from .utils import unpack_fn_from_config
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss
 from .. import Config
@@ -135,7 +135,7 @@ class EagerTorch:
         config['microbatch'] = None
         return config
 
-    def build_config(self, names=None):
+    def build_config(self):
         config = self.default_config()
         config = config + self.config
 
@@ -153,7 +153,7 @@ class EagerTorch:
 
         blocks = []
         for loc in ['initial_block', 'body', 'head']:
-            inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs)==1 else inputs
+            inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
             block = self._make_block(loc, config, inputs)
             if block is not None:
                 inputs = block(inputs)

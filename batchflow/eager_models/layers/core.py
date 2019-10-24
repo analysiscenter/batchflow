@@ -1,10 +1,6 @@
 """ All the layers. """
 
-import os
-import re
-import threading
 import inspect
-from functools import partial
 
 import numpy as np
 import torch
@@ -22,8 +18,6 @@ def get_shape(inputs, shape=None):
         shape = tuple(inputs.shape)
     elif isinstance(inputs, (torch.Size, tuple, list)):
         shape = tuple(inputs)
-    elif isinstance(inputs, torch.nn.Module):
-        shape = get_output_shape(inputs, shape)
     else:
         raise TypeError('inputs can be array, tensor, tuple/list or layer', type(inputs))
     return shape
@@ -107,7 +101,8 @@ class ConvBlock(nn.Module):
 
         self.layout = layout
         self.filters = filters
-        print(layout)
+
+        print('ConvBlock layout', layout)
         layers = []
         c_counter, f_counter = 0, 0
         for letter in layout:
