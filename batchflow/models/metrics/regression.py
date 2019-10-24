@@ -44,7 +44,6 @@ class RegressionMetrics(Metrics):
     - For all the metrics, except max error, accuracy and median absolute error, you can compute sample-wise weighting.
     For that purpose specify `weight` argument, which must be the same size as inputs.
 
-
     Multioutput task restricted to the case where each target is 1D array.
     In the multioutput case metrics might be calculated with or without outputs averaging.
 
