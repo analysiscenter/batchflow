@@ -2,25 +2,27 @@
 import os
 import re
 import threading
+import inspect
 from functools import partial
 
 import numpy as np
 import torch
 import torch.nn as nn
 
+from .utils import * # pylint: disable=wildcard-import
+from .layers import ConvBlock
+from .losses import CrossEntropyLoss
 from .. import Config
-# from .. import BaseModel
-# from ..utils import unpack_fn_from_config
-# from .layers import ConvBlock
-# from .losses import CrossEntropyLoss
 
 
+# TODO:
+# layers/ConvBlock
+# microbatch (rename/alias to virtual batch?)
+# multi-device
+# async
+# 
 
-class CrossEntropyLoss(nn.CrossEntropyLoss):
-    """ Custom loss which casts target dtype if needed """
-    def forward(self, input, target):
-        target = target.to(dtype=torch.long)
-        return super().forward(input, target)
+
 
 LOSSES = {
     'mse': nn.MSELoss,
@@ -55,143 +57,51 @@ DECAYS_DEFAULTS = {
 }
 
 
-def unpack_args(args, layer_no, layers_max):
-    """ Return layer parameters """
-    new_args = {}
-    for arg in args:
-        if isinstance(args[arg], list) and layers_max > 1:
-            if len(args[arg]) >= layers_max:
-                arg_value = args[arg][layer_no]
-            else:
-                arg_value = args[arg]
-        else:
-            arg_value = args[arg]
-        new_args.update({arg: arg_value})
-    return new_args
-
-
-def unpack_fn_from_config(param, config=None):
-    """ Return params from config """
-    par = config.get(param)
-
-    if par is None:
-        return None, {}
-
-    if isinstance(par, (tuple, list)):
-        if len(par) == 0:
-            par_name = None
-        elif len(par) == 1:
-            par_name, par_args = par[0], {}
-        elif len(par) == 2:
-            par_name, par_args = par
-        else:
-            par_name, par_args = par[0], par[1:]
-    elif isinstance(par, dict):
-        par = par.copy()
-        par_name, par_args = par.pop('name', None), par
-    else:
-        par_name, par_args = par, {}
-
-    return par_name, par_args
-
-
-
-
-def get_shape(inputs, shape=None):
-    """ Return inputs shape """
-    if inputs is None:
-        pass
-    elif isinstance(inputs, np.ndarray):
-        shape = inputs.shape
-    elif isinstance(inputs, torch.Tensor):
-        shape = tuple(inputs.shape)
-    elif isinstance(inputs, (torch.Size, tuple, list)):
-        shape = tuple(inputs)
-    elif isinstance(inputs, torch.nn.Module):
-        shape = get_output_shape(inputs, shape)
-    else:
-        raise TypeError('inputs can be array, tensor, tuple/list or layer', type(inputs))
-    return shape
-
-
-
-class Dense(nn.Module):
-    """ A dense layer """
-    def __init__(self, units=None, out_features=None, bias=True, inputs=None):
-        super().__init__()
-
-        units = units or out_features
-
-        shape = get_shape(inputs)
-        self.linear = nn.Linear(np.prod(shape[1:]), units, bias)
-
-    def forward(self, x):
-        """ Make forward pass """
-        if x.dim() > 2:
-            x = x.view(x.size(0), -1)
-        return self.linear(x)
-
-
-
-class ConvBlock(nn.Module):
-    def __init__(self, inputs, layout='', filters=None):
-        super().__init__()
-        self.layout = layout
-        self.filters = filters
-
-        layers = []
-        for i, letter in enumerate(layout):
-            if letter == 'c':
-                block = nn.Conv2d(inputs.shape[1], filters[i], 3)
-                inputs = block(inputs)
-                layers.append(block)
-
-        # linear = nn.Linear(np.prod(get_shape(inputs)[1:]), 10, True)
-        linear = Dense(units=10, inputs=inputs)
-        layers.append(linear)
-
-        self.block = nn.Sequential(*layers)
-
-
-
-    def forward(self, inputs):
-        return self.block(inputs)
-
-
-
-
 class EagerTorch:
-    """ With eager. """
+    """ Eagerly! """
 
     def __init__(self, config=None, *args, **kwargs):
-
         self.config = Config(config)
-        self._train_lock = threading.Lock()
+        self.full_config = None
+        self.train_lock = threading.Lock()
+
+        self.model = None
+        self.device = None
+        self.microbatch = None
+
         self.n_iters = None
         self.current_iter = 0
-        self.device = None
+
+        self.loss = None
         self.loss_fn = None
         self.lr_decay = None
         self.optimizer = None
-        self.model = None
-        self._inputs = dict()
+
         self.predictions = None
-        self.loss = None
-        self.microbatch = None
-        self._full_config = None
 
 
         load = self.config.get('load')
         build = self.config.get('build', default=load is None)
-        if not isinstance(build, bool) and build in [1, 'first']:
-            self.build(*args, **kwargs)
-            build = False
         if load:
             self.load(**load)
         if build:
             self.build(*args, **kwargs)
 
+    def reset(self,):
+        pass
 
+
+    def build(self,):
+        """ Build the model """
+        config = self.build_config()
+        self.full_config = config
+
+        self.device = self._get_device()
+
+        # If the inputs were set in config with their shapes we can build rightaway
+        if config.get('inputs'):
+            print('_BUILD IN BUILD')
+            self._build()
 
     def _get_device(self):
         device = self.config.get('device')
@@ -211,70 +121,8 @@ class EagerTorch:
         return _device
 
 
-    def reset(self,):
-        pass
-
-    def build(self,):
-        """ Build the model """
-        config = self.build_config()
-        self._full_config = config
-
-        self.device = self._get_device()
-        if config.get('inputs'):
-            print('_BUILD IN BUILD')
-            self._build()
-
-        self.microbatch = config.get('microbatch', None)
-
-
-    def _build(self, inputs=None):
-        inputs = inputs or self._placeholder_data()
-        self.model = ConvBlock(*inputs, 'cc', [16, 35])
-
-        config = self._full_config
-        if self.loss_fn is None:
-            self._make_loss(config)
-        if self.optimizer is None:
-            self._make_optimizer(config)
-
-
-    def _placeholder_data(self):
-        config = self._full_config
-        shape = config['inputs'][config.get('initial_block/inputs')]['shape']
-        shape = (2, *shape)
-
-        data = np.zeros(shape, dtype=np.float32)
-        data = torch.from_numpy(data)
-        if self.device:
-            data = data.to(self.device)
-        return [data]
-
-
     @classmethod
     def default_config(cls):
-        """ Define model defaults.
-
-        You need to override this method if you expect your model or its blocks to serve as a base for other models
-        (e.g. VGG for FCN, ResNet for LinkNet, etc).
-
-        Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
-        specific to the model, but independent of anything else (like image shapes, number of classes, etc).
-
-        These defaults can be changed in :meth:`~.TorchModel.build_config` or when calling :meth:`.Pipeline.init_model`.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            @classmethod
-            def default_config(cls):
-                config = TorchModel.default_config()
-                config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
-                                               pool_size=3, pool_strides=2)
-                config['body/filters'] = 32
-                config['head'] = dict(layout='cnadV', dropout_rate=.2)
-                return config
-        """
         config = Config()
         config['inputs'] = {}
         config['common'] = {}
@@ -285,42 +133,66 @@ class EagerTorch:
         config['output'] = None
         config['optimizer'] = ('Adam', dict())
         config['microbatch'] = None
-
         return config
 
-
-
     def build_config(self, names=None):
-        """ Define model's architecture configuration.
-
-        * Don't forget to call ``super().build_config(names)`` in the beginning.
-
-        * Define parameters for :meth:`.TorchModel.initial_block`, :meth:`.TorchModel.body`, :meth:`.TorchModel.head`,
-          which depend on inputs.
-
-        * Dont forget to return ``config`` at the end.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            def build_config(self, names=None):
-                config = super().build_config(names)
-                config['head/num_classes'] = self.num_classes('targets')
-                return config
-        """
         config = self.default_config()
         config = config + self.config
 
         if config.get('inputs'):
-            # self._make_inputs(names, config)
             inputs = config.get('initial_block/inputs')
             if isinstance(inputs, str):
                 config['common/data_format'] = config['inputs'][inputs].get('data_format')
-
         return config
 
 
+    def _build(self, inputs=None):
+        config = self.full_config
+
+        inputs = inputs or self._placeholder_data()
+
+        blocks = []
+        for loc in ['initial_block', 'body', 'head']:
+            inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs)==1 else inputs
+            block = self._make_block(loc, config, inputs)
+            if block is not None:
+                inputs = block(inputs)
+                blocks.append(block)
+
+        self.model = nn.Sequential(*blocks)
+
+        if self.loss_fn is None:
+            self._make_loss(config)
+        if self.optimizer is None:
+            self._make_optimizer(config)
+
+    def _placeholder_data(self, batch_size=2):
+        config = self.full_config
+
+        input_names = config.pop('initial_block/inputs', default=None) or list(config.get('inputs').keys())
+        input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
+        shapes = [(batch_size, *config['inputs'][name]['shape']) for name in input_names]
+
+        data = [np.zeros(shape, dtype=np.float32) for shape in shapes]
+        data = self._fill_param(data)
+        data = data[0] if len(data) == 1 else data
+        return data
+
+    def _make_block(self, name, config, inputs):
+        config = {**config['common'], **config[name]}
+
+        if 'module' in config:
+            module = config['module']
+            kwargs = config.get('module_kwargs')
+            if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
+                kwargs = {**kwargs, **{'inputs': inputs}}
+            block = module(*config.get('module_args', []), **kwargs)
+
+        elif isinstance(config, dict):
+            block = getattr(self, name)(inputs, **config)
+        else:
+            raise ValueError('Bad')
+        return block
 
 
     def _make_loss(self, config):
@@ -393,6 +265,35 @@ class EagerTorch:
         return decay_name, decay_args
 
 
+    @classmethod
+    def get_defaults(cls, name, kwargs):
+        """ Fill block params from default config and kwargs """
+        config = cls.default_config()
+        _config = config.get(name)
+        kwargs = kwargs or {}
+        config = {**config['common'], **_config, **kwargs}
+        return config
+
+    @classmethod
+    def initial_block(cls, inputs, **kwargs):
+        kwargs = cls.get_defaults('initial_block', kwargs)
+        if kwargs.get('layout'):
+            return ConvBlock(inputs=inputs, **kwargs)
+        return None
+
+    @classmethod
+    def body(cls, inputs, **kwargs):
+        kwargs = cls.get_defaults('body', kwargs)
+        if kwargs.get('layout'):
+            return ConvBlock(inputs=inputs, **kwargs)
+        return None
+
+    @classmethod
+    def head(cls, inputs, **kwargs):
+        kwargs = cls.get_defaults('head', kwargs)
+        if kwargs.get('layout'):
+            return ConvBlock(inputs=inputs, **kwargs)
+        return None
 
 
     def _fill_value(self, inputs):
@@ -404,7 +305,7 @@ class EagerTorch:
     def _fill_param(self, inputs):
         if inputs is None:
             pass
-        elif isinstance(inputs, tuple):
+        elif isinstance(inputs, (tuple, list)):
             inputs_list = []
             for i in inputs:
                 v = self._fill_value(i)
@@ -420,6 +321,7 @@ class EagerTorch:
             inputs.append(self._fill_param(arg))
         return tuple(inputs)
 
+
     def _fill_output(self, fetches):
         _fetches = [fetches] if isinstance(fetches, str) else fetches
 
@@ -434,53 +336,21 @@ class EagerTorch:
                 raise KeyError('Unknown value to fetch', f)
 
         output = output[0] if isinstance(fetches, str) else type(fetches)(output)
-
         return output
 
 
-
-
     def train(self, *args, fetches=None, use_lock=False, microbatch=None):    # pylint: disable=arguments-differ
-        """ Train the model with the data provided
-
-        Parameters
-        ----------
-        args
-            Arguments to be passed directly into the model.
-
-        fetches : tuple, list
-            Sequence of tensor names to calculate and return.
-
-        use_lock : bool
-            If True, the whole train step is locked, thus allowing for multithreading.
-
-        microbatch : int or None
-            Size of chunks to split every batch into. Allows to process given data sequentially, accumulating gradients
-            from microbatches and applying them once in the end.
-
-        Returns
-        -------
-        Calculated values of tensors in `fetches` in the same order.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            model.train(B('images'), B('labels'), fetches='loss')
-        """
-        config = self._full_config
+        config = self.full_config
         *inputs, targets = self._fill_input(*args)
+
         if self.model is None:
             print('_BUILD IN TRAIN')
             self._build(inputs)
 
 
-
-
         if use_lock:
-            self._train_lock.acquire()
+            self.train_lock.acquire()
         self.model.train()
-
         self.optimizer.zero_grad()
         self.predictions = self.model(*inputs)
         self.loss = self.loss_fn(self.predictions, targets)
@@ -494,73 +364,35 @@ class EagerTorch:
             self.current_iter += 1
 
         if use_lock:
-            self._train_lock.release()
+            self.train_lock.release()
 
-        config = self._full_config
+        config = self.full_config
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
-
         return output
 
+    def predict(self, *args, targets=None, fetches=None):    # pylint: disable=arguments-differ
+        inputs = self._fill_input(*args)
+        if targets is not None:
+            targets = self._fill_input(targets)[0]
 
+        self.model.eval()
 
+        with torch.no_grad():
+            self.predictions = self.model(*inputs)
+            if targets is None:
+                self.loss = None
+            else:
+                self.loss = self.loss_fn(self.predictions, targets)
 
-    def predict(self, ):
-        pass
+        config = self.full_config
+        self.output(inputs=self.predictions, predictions=config['predictions'],
+                    ops=config['output'], **config['common'])
+        output = self._fill_output(fetches)
+        return output
 
     def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
-        """ Add output operations to the model, like predicted probabilities or labels, etc.
-
-        Parameters
-        ----------
-        inputs : torch.Tensor or a sequence of torch.Tensors
-            input tensors
-
-        predictions : str or callable
-            Operation to apply to the network output to obtain tensor which is used in loss computation.
-
-            If str, then one of predefined operations:
-                - 'sigmoid' - ``sigmoid(inputs)``
-                - 'proba' - ``softmax(inputs)``
-                - 'labels' - ``argmax(inputs)``
-                - 'softplus' - ``softplus(inputs)``
-
-            If callable, then user-defined operation.
-
-        ops : sequence, dict or OrderedDict
-            Auxiliary operations to apply.
-
-            If sequence, then operations to apply. Transformed tensors are stored with the same name, as operation
-            If dict, then mapping from prefixes to operations. Transformed tensors are stored with
-            the prefixed name of the operation.
-
-            For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
-
-        Raises
-        ------
-        ValueError if the number of inputs does not equal to the number of prefixes
-        TypeError if inputs is not a Tensor or a sequence of Tensors
-
-        Examples
-        --------
-        .. code-block:: python
-
-            config = {
-                'output': ['proba', 'labels']
-            }
-
-        However, if one of the placeholders also has a name 'labels', then it will be lost as the model
-        will rewrite the name 'labels' with an output. In this case dict might be more convenient:
-
-        .. code-block:: python
-
-            config = {
-                'output': {'predicted': ['proba', 'labels']}
-            }
-
-        Now the output will be stored under names 'predicted_proba' and 'predicted_labels'.
-        """
         if ops is None:
             ops = []
         elif not isinstance(ops, (dict, tuple, list)):
@@ -628,28 +460,8 @@ class EagerTorch:
         setattr(self, attr_prefix + name, x)
         return x
 
+
     def save(self, path, *args, **kwargs):
-        """ Save torch model.
-
-        Parameters
-        ----------
-        path : str
-            Path to a file where the model data will be stored.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            torch_model = ResNet34()
-
-        Now save the model
-
-        .. code-block:: python
-
-            torch_model.save('/path/to/models/resnet34')
-
-        The model will be saved to /path/to/models/resnet34.
-        """
         _ = args, kwargs
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
@@ -659,34 +471,10 @@ class EagerTorch:
             'optimizer_state_dict': self.optimizer,
             'loss': self.loss_fn,
             'config': self.config,
-            'full_config': self._full_config
+            'full_config': self.full_config
             }, path)
 
     def load(self, path, *args, eval=False, **kwargs):
-        """ Load a torch model from files.
-
-        Parameters
-        ----------
-        path : str
-            File path where a model is stored.
-
-        eval : bool
-            Whether to switch the model to eval mode.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
-
-            torch_model.load(path='/path/to/models/resnet34')
-
-            TorchModel(config={'device': 'gpu:2', 'load/path': '/path/to/models/resnet34'})
-
-        **How to move the model to device**
-
-        The model will be moved to device specified in the model config by key `device`.
-        """
         _ = args, kwargs
         device = self._get_device()
         if device:
@@ -697,7 +485,7 @@ class EagerTorch:
         self.optimizer = checkpoint['optimizer_state_dict']
         self.loss_fn = checkpoint['loss']
         self.config = self.config + checkpoint['config']
-        self._full_config = checkpoint['full_config']
+        self.full_config = checkpoint['full_config']
 
         self.device = device
 
