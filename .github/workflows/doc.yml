@@ -1,0 +1,34 @@
+name: status
+
+on: [push]
+
+jobs:
+
+  doc:
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: analysiscenter1/ds-py3:cpu
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Update docs
+      run: |
+        export LC_ALL="C"
+        pip3 install psutil
+        pip3 install sphinx
+        git checkout --orphan gh-pages
+        rm -rf *
+        git checkout master batchflow docs
+        cd docs
+        make html
+        cd ..
+        mv docs/_build/html/* .
+        rm -rf docs batchflow
+        touch .nojekyll
+        git add -A .
+        git commit -am "Build docs"
+        git remote add gh_push git@github.com:$REPO_FULL_NAME
+        ssh-agent bash -c 'ssh-add /tmp/ssh/${REPO_NAME}key; git push -f gh_push gh-pages'
