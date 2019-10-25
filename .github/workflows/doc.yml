@@ -17,8 +17,8 @@ jobs:
     - name: Update docs
       run: |
         export LC_ALL="C"
-        sudo -H pip3 install psutil
-        sudo -H pip3 install sphinx
+        pip3 install psutil
+        pip3 install sphinx
         git checkout --orphan gh-pages
         rm -rf *
         git fetch
