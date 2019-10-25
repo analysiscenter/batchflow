@@ -1,4 +1,4 @@
-name: status
+name: docs
 
 on: [push]
 
@@ -17,10 +17,11 @@ jobs:
     - name: Update docs
       run: |
         export LC_ALL="C"
-        pip3 install psutil
-        pip3 install sphinx
+        sudo -H pip3 install psutil
+        sudo -H pip3 install sphinx
         git checkout --orphan gh-pages
         rm -rf *
+        git fetch
         git checkout master batchflow docs
         cd docs
         make html
