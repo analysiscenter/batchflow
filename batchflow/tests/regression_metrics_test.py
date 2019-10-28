@@ -9,6 +9,7 @@ Verifies the correctness of evaluated metrics for the cases:
 # pylint: disable=missing-docstring
 import pytest
 import numpy as np
+np.seterr(divide='ignore', invalid='ignore')
 
 from batchflow.models.metrics import RegressionMetrics
 
