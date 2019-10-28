@@ -26,9 +26,24 @@ For smaller dataset it might be convenient to preload all data at once:
 
 .. code-block:: python
 
-   client_dataset = Dataset(client_index, batch_class=Batch, preloaded=some_data)
+   client_dataset = Dataset(client_index, batch_class=Batch, preloaded=data)
 
-As a result, all created batches will contain a portion of `some_data`.
+As a result, all created batches will contain a portion of `data`.
+For this to work, `preloaded` data container should have a certain structure.
+
+If a batch class does not contain :ref:`components`, `preloaded` should be indexed with the dataset indices,
+i.e. `preloaded[dataset.indices[0]]` returns the first item from the dataset.
+
+So `preloaded` could be a numpy array, pandas dataframe or anything else that supports
+`advanced indexing <https://docs.scipy.org/doc/numpy/reference/arrays.indexing.html#advanced-indexing>`_.
+For convinience, an ordinary `dict` is also allowed (as advanced indexing for dicts is implemented internally).
+
+If a batch class contains :ref:`components`, `preloaded` should be indexed with components names first and then with the dataset indices,
+i.e. `preloaded['images'][0]` returns the first item for the `images` component.
+
+For instance, `pandas.DataFrame` fits the purpose very well. However, other data structures are also allowed.
+As in the previous case, `preloaded[component]` should support advanced indexing (and again `dict` may be used here as well).
+
 
 
 Adding custom data

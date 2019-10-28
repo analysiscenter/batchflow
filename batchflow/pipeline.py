@@ -444,16 +444,13 @@ class Pipeline:
         """
         V(name, mode=mode).set(value, batch=batch, pipeline=self)
 
-    def assign_variable(self, name, value, batch=None):
+    def assign_variable(self, name, value, **kwargs):
         """ Assign a value to a variable """
-        var_name = self._eval_expr(name, batch=batch)
-
-        if not self.has_variable(var_name):
-            logging.warning("Pipeline variable '%s' has not been initialized", var_name)
-            self.init_variable(var_name)
-
-        value = self._eval_expr(value, batch=batch)
-        self.variables.set(var_name, value)
+        _ = kwargs
+        if not self.has_variable(name):
+            logging.warning("Pipeline variable '%s' has not been initialized", name)
+            self.init_variable(name)
+        self.variables.set(name, value)
 
     def delete_variable(self, name):
         """ Delete a variable
@@ -716,13 +713,17 @@ class Pipeline:
         batch_res.pipeline = self
         return batch_res
 
-    def _eval_expr(self, expr, batch=None, model=None):
-        return eval_expr(expr, batch=batch, pipeline=self, model=model)
+    def _eval_expr(self, expr, batch=None):
+        return eval_expr(expr, batch=batch, pipeline=self)
 
     def get_model_by_name(self, name, batch=None):
         """ Retrieve a model by its name """
         name = self._eval_expr(name, batch=batch)
         return self.models.get_model_by_name(name, batch=batch)
+
+    def m(self, name, batch=None):
+        """ A shorter alias for get_model_by_name() """
+        return self.get_model_by_name(name, batch=batch)
 
     def init_model(self, mode, model_class=None, name=None, config=None):
         """ Initialize a static or dynamic model
@@ -897,13 +898,13 @@ class Pipeline:
         if callable(make_data):
             kwargs = make_data(batch=batch, model=model)
         else:
-            kwargs = self._eval_expr(make_data, batch=batch, model=model)
+            kwargs = self._eval_expr(make_data, batch=batch)
         if not isinstance(kwargs, dict):
             raise TypeError("make_data should return a dict with kwargs", make_data)
 
         kwargs = {**action['kwargs'], **kwargs}
 
-        kwargs = self._eval_expr(kwargs, batch=batch, model=model)
+        kwargs = self._eval_expr(kwargs, batch=batch)
 
         return args, kwargs
 
