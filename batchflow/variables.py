@@ -3,7 +3,7 @@ import copy as cp
 import threading
 import logging
 
-from .named_expr import NamedExpression
+from .named_expr import eval_expr
 
 
 class Variable:
@@ -36,7 +36,7 @@ class Variable:
 
     def initialize(self, pipeline=None):
         """ Initialize a variable value """
-        value = NamedExpression.eval_expr(self.default, pipeline=pipeline)
+        value = eval_expr(self.default, pipeline=pipeline)
         self.set(value)
 
     def lock(self):

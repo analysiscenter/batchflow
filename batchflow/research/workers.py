@@ -140,11 +140,11 @@ class Worker:
                                 final_signal.exception = TimeoutError(message)
                                 results.put(copy(final_signal))
                                 break
-                            elif signal is not None and signal.done:
+                            if signal is not None and signal.done:
                                 finished = True
                                 final_signal = signal
                                 break
-                            elif signal is not None:
+                            if signal is not None:
                                 final_signal = signal
                                 results.put(copy(final_signal))
                         if finished:

@@ -76,8 +76,7 @@ class Option:
     def __repr__(self):
         if isinstance(self.values, (list, tuple, np.ndarray)):
             return 'Option({}, {})'.format(self.parameter.alias, [item.alias for item in self.values])
-        else:
-            return 'Option({}, {})'.format(self.parameter.alias, self.values)
+        return 'Option({}, {})'.format(self.parameter.alias, self.values)
 
     def sample(self, size=None):
         """ Return ConfigAlias objects created on the base of Sampler-option.
@@ -184,8 +183,7 @@ class ConfigAlias:
         self._config = [item for item in self._config if item[0].value != key]
         if len(res) == 1:
             return ConfigAlias(res)
-        else:
-            return None
+        return None
 
     def pop_alias(self, key):
         """ Pop item from ConfigAlias by alias value.
@@ -198,8 +196,7 @@ class ConfigAlias:
         self._config = [item for item in self._config if item[0].alias != key]
         if len(res) == 1:
             return ConfigAlias(res)
-        else:
-            return None
+        return None
 
     def __repr__(self):
         return 'ConfigAlias(' + str(self.alias()) + ')'
@@ -316,7 +313,6 @@ class Domain:
         return result
 
     def __matmul__(self, other):
-        weight = np.nan
         if isinstance(other, Option):
             return self @ Domain(other)
 
@@ -420,7 +416,7 @@ class Domain:
             if n_reps == 1:
                 i = 0
                 while n_iters is None or i < n_iters:
-                    yield next(iterator)
+                    yield next(iterator) # pylint: disable=stop-iteration-return
                     i += 1
             else:
                 i = 0
@@ -437,8 +433,7 @@ class Domain:
         """ The number of configs that will be produces from domain. """
         if self.n_iters is not None:
             return self.n_reps * self.n_iters
-        else:
-            return None
+        return None
 
     @property
     def iterator(self):
@@ -453,7 +448,7 @@ class Domain:
         self.update_args = args
         self.update_kwargs = kwargs
         self.update_each = each
-        self.update_func = self.update_func or function
+        self.update_func = self.update_func or function # pylint: disable=method-hidden
 
     def update_domain(self, path):
         """ Update domain by `update_func`. If returns None, domain will not be updated. """
@@ -535,6 +530,5 @@ class Domain:
             lengthes = [len(option.values) for option in cube if isinstance(option.values, (list, tuple, np.ndarray))]
             if len(lengthes) == 0:
                 return None
-            else:
-                size += np.product(lengthes)
+            size += np.product(lengthes)
         return size

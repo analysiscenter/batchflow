@@ -7,7 +7,7 @@ import dill
 from ..named_expr import eval_expr
 from .. import Config, Pipeline, V, L
 
-class Executable:
+class Executable: #pylint: disable=too-many-instance-attributes
     """ Function or pipeline
 
     **Attributes**
@@ -223,7 +223,6 @@ class Executable:
         if self.to_run:
             self.run()
         else:
-            print(self.pipeline.config)
             self.next_batch()
         self.put_result(iteration)
 
@@ -297,6 +296,5 @@ class Executable:
         if self.pipeline is not None:
             self.pipeline += (Pipeline()
                               .init_variable('_time', default=last_update_time)
-                              .print(V('_time'))
                               .update(V('_time').value, L(time.time))
                               )

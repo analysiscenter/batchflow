@@ -26,10 +26,8 @@ class ResearchExecutableUnit(ResearchNamedExpression):
             res = [item[self.name] for item in _experiment]
             if len(_experiment) == 1:
                 return res[0]
-            else:
-                return res
-        else:
-            return experiment
+            return res
+        return experiment
 
 class ResearchPipeline(ResearchExecutableUnit):
     """ NamedExpression for Pipeline in Research """
@@ -45,8 +43,7 @@ class ResearchPipeline(ResearchExecutableUnit):
 
         if isinstance(res, list):
             return [getattr(item, attr) for item in res]
-        else:
-            return getattr(res, attr)
+        return getattr(res, attr)
 
 class ResearchIteration(ResearchNamedExpression):
     """ NamedExpression for iteration of Research """
@@ -66,8 +63,7 @@ class ResearchConfig(ResearchExecutableUnit):
 
         if isinstance(res, list):
             return [getattr(item, 'config') for item in res]
-        else:
-            return getattr(res, 'config')
+        return getattr(res, 'config')
 
 class ResearchResults(ResearchNamedExpression):
     """ NamedExpression for Results of the Research """
