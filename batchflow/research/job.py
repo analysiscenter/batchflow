@@ -3,7 +3,7 @@
 import time
 from collections import OrderedDict
 
-from .named_expr import ResearchNamedExpression
+from ..named_expr import eval_expr
 from .. import inbatch_parallel
 
 class Job:
@@ -42,7 +42,7 @@ class Job:
                 unit.set_shared_value(last_update_time)
                 unit.reset('iter')
                 if unit.pipeline is not None:
-                    kwargs_config = ResearchNamedExpression.eval_expr(unit.kwargs, job=self, experiment=units)
+                    kwargs_config = eval_expr(unit.kwargs, job=self, experiment=units)
                     unit.set_dataset()
                 else:
                     kwargs_config = dict()
@@ -81,7 +81,7 @@ class Job:
             while True:
                 try:
                     batch = unit.next_batch_root()
-                    exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
+                    exceptions = self._parallel_run(name, batch, actions) #pylint:disable=assignment-from-no-return
                 except StopIteration:
                     break
         else:
@@ -90,7 +90,7 @@ class Job:
             except StopIteration as e:
                 exceptions = [e] * len(self.experiments)
             else:
-                exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
+                exceptions = self._parallel_run(name, batch, actions) #pylint:disable=assignment-from-no-return
         self.put_all_results(iteration, name, actions)
         self.last_update_time.value = time.time()
         return exceptions
@@ -102,7 +102,7 @@ class Job:
                 self.exceptions[i] = exception
 
     @inbatch_parallel(init='_parallel_init_run', post='_parallel_post')
-    def _parallel_run(self, item, execute, iteration, name, batch, actions):
+    def _parallel_run(self, item, execute, name, batch, actions):
         _ = name, actions
         if execute is not None:
             item.execute_for(batch)

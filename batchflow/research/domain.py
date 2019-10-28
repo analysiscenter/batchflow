@@ -6,7 +6,7 @@ from copy import copy, deepcopy
 import numpy as np
 
 from .. import Config, Sampler
-from .named_expr import ResearchNamedExpression
+from ..named_expr import eval_expr
 
 class KV:
     """ Class for value and alias. Is used to create short and clear alias for some Python object
@@ -174,6 +174,12 @@ class ConfigAlias:
         return Config({item[0].value: item[1].value for item in self._config})
 
     def pop_config(self, key):
+        """ Pop item from ConfigAlias by config value.
+
+        Returns
+        -------
+            ConfigAlias or None
+        """
         res = [item for item in self._config if item[0].value == key]
         self._config = [item for item in self._config if item[0].value != key]
         if len(res) == 1:
@@ -182,13 +188,19 @@ class ConfigAlias:
             return None
 
     def pop_alias(self, key):
+        """ Pop item from ConfigAlias by alias value.
+
+        Returns
+        -------
+            ConfigAlias or None
+        """
         res = [item for item in self._config if item[0].alias == key]
         self._config = [item for item in self._config if item[0].alias != key]
         if len(res) == 1:
             return ConfigAlias(res)
         else:
             return None
-    
+
     def __repr__(self):
         return 'ConfigAlias(' + str(self.alias()) + ')'
 
@@ -217,8 +229,8 @@ class Domain:
     #. multiplication by `*`: Cartesian multiplications of Options in Domain.
        For example, if `domain1 = Option('a': [1, 2])`, `domain2 = Option('b': [3, 4])` and
        `domain3 = Option('c': bf.Sampler('n'))` then `domain1 * domain2 * domain3` will have
-       all options and generate 4 configs:
-       `{'a': 1, 'b': 3, 'c': xi_1}`, `{'a': 1, 'b': 4, 'c': xi_2}`, `{'a': 2, 'b': 3, 'c': xi_3}`, `{'a': 2, 'b': 4, 'c': xi_4}`
+       all options and generate 4 configs: `{'a': 1, 'b': 3, 'c': xi_1}`, `{'a': 1, 'b': 4, 'c': xi_2}`,
+       `{'a': 2, 'b': 3, 'c': xi_3}`, `{'a': 2, 'b': 4, 'c': xi_4}`
        where xi_i are independent samples from normal distribution.
     #. multiplication by @: element-wise multiplication of array-like Options.
        For example, if `domain1 = Option('a': [1, 2])` and `domain2 = Option('b': [3, 4])` then
@@ -267,6 +279,7 @@ class Domain:
 
     def update_func(self, *args, **kwargs):
         """ Function for domain update. If returns None, Domain will not be updated. """
+        _ = args, kwargs
         return None
 
     def _dict_to_domain(self, domain):
@@ -325,7 +338,7 @@ class Domain:
         raise ValueError("The numbers of domain cubes must conincide.")
 
     def __rmul__(self, other):
-        return self * other 
+        return self * other
 
     def __add__(self, other):
         if self.cubes is None:
@@ -446,8 +459,8 @@ class Domain:
         """ Update domain by `update_func`. If returns None, domain will not be updated. """
         if self.update_func is None:
             return None
-        args = ResearchNamedExpression.eval_expr(self.update_args, path=path)
-        kwargs = ResearchNamedExpression.eval_expr(self.update_kwargs, path=path)
+        args = eval_expr(self.update_args, path=path)
+        kwargs = eval_expr(self.update_kwargs, path=path)
         return self.update_func(*args, **kwargs)
 
     def update_config(self, *args, **kwargs):
@@ -479,7 +492,7 @@ class Domain:
         """ Transform domain to the matmul format (see :meth:`~.Domain._is_scalar_product`)"""
         if self._is_array_option():
             option = self.cubes[0][0]
-            cubes = [[Option(option.parameter, [value])] for value in option.values] 
+            cubes = [[Option(option.parameter, [value])] for value in option.values]
             weights = np.concatenate([[self.weights[0]] * len(cubes)])
             return Domain(cubes, weights)
         if self._is_scalar_product():

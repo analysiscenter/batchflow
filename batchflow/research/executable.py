@@ -4,7 +4,7 @@ import os
 import time
 from copy import copy, deepcopy
 import dill
-from . import ResearchNamedExpression
+from ..named_expr import eval_expr
 from .. import Config, Pipeline, V, L
 
 class Executable:
@@ -173,7 +173,6 @@ class Executable:
 
         self.config = config_from_grid + config_from_func
         self.additional_config = Config(worker_config) + Config(branch_config) + Config(import_config)
-
         if self.pipeline is not None:
             self.pipeline.set_config(self.config.config() + self.additional_config)
 
@@ -224,14 +223,15 @@ class Executable:
         if self.to_run:
             self.run()
         else:
+            print(self.pipeline.config)
             self.next_batch()
         self.put_result(iteration)
 
     def _call_function(self, job, iteration, experiment):
-        function = ResearchNamedExpression.eval_expr(self.function, job, iteration, experiment)
+        function = eval_expr(self.function, job=job, iteration=iteration, experiment=experiment)
         if callable(function):
-            args = ResearchNamedExpression.eval_expr(self.args, job, iteration, experiment)
-            kwargs = ResearchNamedExpression.eval_expr(self.kwargs, job, iteration, experiment)
+            args = eval_expr(self.args, job=job, iteration=iteration, experiment=experiment)
+            kwargs = eval_expr(self.kwargs, job=job, iteration=iteration, experiment=experiment)
             result = function(*args, **kwargs)
         else:
             result = function
@@ -292,9 +292,11 @@ class Executable:
         return (iteration + 1 == n_iters and 'last' in rule) or it_ok or freq_ok
 
     def set_shared_value(self, last_update_time):
+        """ Set last update time """
         self.last_update_time = last_update_time
         if self.pipeline is not None:
             self.pipeline += (Pipeline()
                               .init_variable('_time', default=last_update_time)
+                              .print(V('_time'))
                               .update(V('_time').value, L(time.time))
                               )

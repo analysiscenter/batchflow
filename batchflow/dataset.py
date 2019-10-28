@@ -363,3 +363,11 @@ class Dataset(Baseset):
             splits.append(self.indices[order[start:stop]])
             current = stop
         return splits
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state):
+        for k, v in state.items():
+            # this warrants that all hidden objects are reconstructed upon unpickling
+            setattr(self, k, v)

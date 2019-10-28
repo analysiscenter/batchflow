@@ -60,7 +60,11 @@ class Distributor:
     def log_error(cls, obj, filename):
         """ Write error message into log. """
         logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
-        logging.error(obj, exc_info=True)
+        import traceback
+        ex_traceback = obj.__traceback__
+        tb_lines = ''.join(traceback.format_exception(obj.__class__, obj, ex_traceback))
+        logging.info(tb_lines)
+        # logging.exception(obj, exc_info=True)
 
     def run(self, jobs_queue, dirname, logfile=None, errorfile=None, bar=False, *args, **kwargs):
         """ Run disributor and workers.

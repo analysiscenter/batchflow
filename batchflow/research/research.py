@@ -37,10 +37,14 @@ class Research:
         self.domain = None
         self.n_iters = None
         self.timeout = 5
+        self.n_configs = None
+        self.n_reps = None
+        self.n_configs = None
+        self.repeat_each = None
 
         # update parameters for config. None or dict with keys (function, params, cache)
         self._update_config = None
-        # update parameters for domain. None or dict with keys (funct, each)
+        # update parameters for domain. None or dict with keys (function, each)
         self._update_domain = None
 
     def add_pipeline(self, root, branch=None, dataset=None, variables=None,
@@ -51,13 +55,13 @@ class Research:
         Parameters
         ----------
         root : Pipeline
-            a pipeline to execute when the research is run. It must contain `run` action with `lazy=True`.
-            Only if `branch` is None, `root` may contain parameters that can be defined by domain.
+            a pipeline to execute when the research is run. It must contain `run` action with `lazy=True` or
+            `run_later`. Only if `branch` is None, `root` may contain parameters that can be defined by domain.
         branch : Pipeline or None
             a parallelized pipeline to execute within the research.
             Several copies of branch pipeline will be executed in parallel per each batch
-            received from the root pipeline.
-            May contain parameters that can be defined by domain.
+            received from the root pipeline. May contain parameters that can be defined by domain,
+            all pipelines will have different configs from `Domain`.
         dataset : Dataset or None
             dataset that will be used with pipelines. If None, root or branch must contain dataset.
         variables : str, list of str or None
@@ -107,6 +111,64 @@ class Research:
         self.executables[name] = unit
         return self
 
+    def add_callable(self, function, *args, returns=None, name=None, execute=1, dump='last',
+                     on_root=False, logging=False, **kwargs):
+        """ Add function to research.
+
+        Parameters
+        ----------
+        function : callable
+            callable object with parameters: `*args, **kwargs`
+        returns : str, list of str or None
+            names for function returns to save into results
+            if None, `function` will be executed without any saving results and dumping
+        name : str (default None)
+            function name. If None, a function will have name `func_{index}`
+        execute : int, str or list of int and str
+            If `'last'`, function will be executed just at last iteration (if `iteration + 1 == n_iters`
+            or `StopIteration` was raised)
+
+            If positive int, function will be executed each `step` iterations.
+
+            If str, must be `'#{it}'` or `'last'` where it is int,
+            the function will be executed at this iteration (zero-based)
+
+            If list, must be list of int or str described above
+        dump : int, str or list of int or str
+            iteration when results will be dumped and cleared. Similar to execute.
+        on_root : bool
+            If True, each `ResearchExecutableUnit` in args and kwargs will be evaluated as a list of values for
+            each experiment. If False, will be evaluated as a single value for the current experiment.
+        logging : bool
+            include execution information to log file or not
+        args : list
+            args for the function. Can be :class:`~.ResearchNamedExpression`.
+        kwargs : dict
+            kwargs for the function. Can be :class:`~.ResearchNamedExpression`.
+
+        **How to use experiment**
+
+        Each pipeline and function added to Research is saved as an :class:`~.Executable`.
+
+        Experiment is an `OrderedDict` of all pipelines and functions that were added to Research
+        and are running in current Job. Key is a name of `Executable`, value is `Executable`.
+        """
+
+        name = name or 'func_' + str(len(self.executables) + 1)
+
+        if name in self.executables:
+            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
+
+        if on_root and returns is not None:
+            raise ValueError("If function on root, then it mustn't have returns")
+
+        unit = Executable()
+        unit.add_callable(function, *args, name=name, execute=execute, dump=dump, returns=returns,
+                          on_root=on_root, logging=logging, **kwargs)
+        self.executables[name] = unit
+
+        return self
+
     def get_metrics(self, pipeline, metrics_var, metrics_name,
                     returns=None, execute=1, dump='last', logging=False):
         """ Evaluate metrics.
@@ -141,64 +203,6 @@ class Research:
         self.add_callable(get_metrics, name=name, execute=execute, dump=dump, returns=returns,
                           on_root=False, logging=logging, pipeline=ResearchPipeline(pipeline),
                           metrics_var=metrics_var, metrics_name=metrics_name)
-        return self
-
-    def add_callable(self, function, *args, returns=None, name=None, execute=1, dump='last',
-                     on_root=False, logging=False, **kwargs):
-        """ Add function to research.
-
-        Parameters
-        ----------
-        function : callable
-            callable object with parameters: `*args, **kwargs`
-        returns : str, list of str or None
-            names for function returns to save into results
-            if None, `function` will be executed without any saving results and dumping
-        name : str (default None)
-            function name. If None, a function will have name `func_{index}`
-        execute : int, str or list of int and str
-            If `'last'`, function will be executed just at last iteration (if `iteration + 1 == n_iters`
-            or `StopIteration` was raised)
-
-            If positive int, function will be executed each `step` iterations.
-
-            If str, must be `'#{it}'` or `'last'` where it is int,
-            the function will be executed at this iteration (zero-based)
-
-            If list, must be list of int or str described above
-        dump : int, str or list of int or str
-            iteration when results will be dumped and cleared. Similar to execute
-        on_root : bool
-            if False, function will be called with parameters `(iteration, experiment, *args, **kwargs)`,
-            else with `(iteration, experiments, *args, **kwargs)` where `experiments` is a list of single experiments
-        logging : bool
-            include execution information to log file or not
-        args : list
-            args for the function
-        kwargs : dict
-            kwargs for the function. Can be :class:`~.ResearchNamedExpression`
-
-        **How to use experiment**
-
-        Each pipeline and function added to Research is saved as an :class:`~.Executable`.
-
-        Experiment is an `OrderedDict` of all pipelines and functions that were added to Research
-        and are running in current Job. Key is a name of `Executable`, value is `Executable`.
-        """
-
-        name = name or 'func_' + str(len(self.executables) + 1)
-
-        if name in self.executables:
-            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
-
-        if on_root and returns is not None:
-            raise ValueError("If function on root, then it mustn't have returns")
-
-        unit = Executable()
-        unit.add_callable(function, *args, name=name, execute=execute, dump=dump, returns=returns,
-                          on_root=on_root, logging=logging, **kwargs)
-        self.executables[name] = unit
-
         return self
 
     def init_domain(self, domain=None, n_configs=None, n_reps=1, repeat_each=100):
@@ -262,7 +266,7 @@ class Research:
         return self
 
     def load_results(self, *args, **kwargs):
-        """ Load results of research as pandas.DataFrame or dict (see Results.load). """
+        """ Load results of research as pandas.DataFrame or dict (see :meth:`~.Results.load`). """
         return Results(path=self.name).load(*args, **kwargs)
 
     def run(self, n_iters=None, workers=1, branches=1, name=None,
@@ -272,10 +276,10 @@ class Research:
         Parameters
         ----------
         n_iters: int or None
-            number of iterations for each configurations. If None, wait StopIteration exception for at least
-            one pipeline.
+            number of iterations for each configuration. If None, wait StopIteration exception for at least
+            one executable unit.
         workers : int or list of dicts (Configs)
-            If int - number of workers to run pipelines or workers that will run them, `PipelineWorker` will be used.
+            If int - number of workers to run pipelines or workers that will run them, `worker_class` will be used.
 
             If list of dicts (Configs) - list of additional configs which will be appended to configs from tasks.
 
@@ -299,6 +303,8 @@ class Research:
 
             For example, for :class:`~.TFModel` add `device=C('device')` to model config.
             If None, default gpu configuration will be used
+        worker_class : type
+            worker class. `PipelineWorker` by default.
         timeout : int
             each job will be killed if it doesn't answer more then that time in minutes
         trials : int
@@ -307,6 +313,10 @@ class Research:
         **How does it work**
 
         At each iteration all pipelines and functions will be executed in the order in which were added.
+        If `update_config` callable is defined, each config will be updated by that function and then
+        will be passed into each `ExecutableUnit`.
+        If `update_domain` callable is defined, domain will be updated with the corresponding function
+        accordingly to `each` parameter of `update_domain`.
         """
         if self.loaded:
             print("Starting loaded research. All parameters passed to run except name, bar and devices are ignored.\n",
@@ -353,16 +363,22 @@ class Research:
     def _get_devices(self, devices):
         n_branches = self.branches if isinstance(self.branches, int) else len(self.branches)
         n_workers = self.workers if isinstance(self.workers, int) else len(self.workers)
+        total_n_branches = n_workers * n_branches
         if devices is None:
             devices = [[[None]] * n_branches] * n_workers
         if isinstance(devices, (int, str)):
             devices = [devices]
         if isinstance(devices[0], (int, str)):
-            if n_workers * n_branches % len(devices) == 0:
-                branches_per_device = n_workers * n_branches // len(devices)
+            if total_n_branches > len(devices):
+
+                devices = devices * (total_n_branches // len(devices)) + devices[:total_n_branches % len(devices)]
+            else:
+                devices = devices + devices[:-len(devices) % (total_n_branches)]
+            if total_n_branches % len(devices) == 0:
+                branches_per_device = total_n_branches // len(devices)
                 devices = list(itertools.chain.from_iterable(itertools.repeat(x, branches_per_device) for x in devices))
-            if len(devices) % (n_workers * n_branches) == 0:
-                devices_per_branch = len(devices) // (n_workers * n_branches)
+            if len(devices) % total_n_branches == 0:
+                devices_per_branch = len(devices) // total_n_branches
                 devices = [
                     [
                         [
@@ -371,8 +387,6 @@ class Research:
                         ] for j in range(n_branches)
                     ] for i in range(n_workers)
                 ]
-            else:
-                raise ValueError('n_workers * n_branches must be divisible by n_devices or vice versa')
         if isinstance(devices[0], list):
             def _transform_item(x):
                 if len(x) > 1:
@@ -397,15 +411,17 @@ class Research:
             )
 
     def __save(self):
-        """ Save description of the research to folder name/description. """
+        """ Save description of the research to folder 'name/description'. """
         dirname = os.path.join(self.name, 'description')
         if not os.path.exists(dirname):
             os.makedirs(dirname)
         with open(os.path.join(self.name, 'description', 'research.dill'), 'wb') as file:
-            dill.dump(self, file)
+            dill.dump(self, file) # contains `Research` object
         with open(os.path.join(self.name, 'description', 'research.json'), 'w') as file:
+            # contains `Research` parameters as json
             file.write(json.dumps(self._json(), default=self._set_default_json))
         with open(os.path.join(self.name, 'description', 'alias.json'), 'w') as file:
+            # contains representation of the initial domain
             file.write(json.dumps(str(self.domain), default=self._set_default_json))
 
     def _set_default_json(self, obj):
@@ -426,7 +442,7 @@ class Research:
 
     @classmethod
     def load(cls, name):
-        """ Load description of the research from name/description. """
+        """ Load description of the research from 'name/description'. """
         with open(os.path.join(name, 'description', 'research.dill'), 'rb') as file:
             research = dill.load(file)
             research.loaded = True
@@ -486,8 +502,8 @@ class DynamicQueue:
         """ Total estimated size of queue. """
         if self._domain_size is not None:
             rolling_mean = (pd.Series(self.each_config_produce)
-                .rolling(window=10, min_periods=1)
-                .mean().round().values[-1])
+                            .rolling(window=10, min_periods=1)
+                            .mean().round().values[-1])
             num = np.sum(self.each_config_produce)
             estimated_num = (self._domain_size - len(self.each_config_produce)) * rolling_mean
             return np.ceil((num +  estimated_num) / self.n_branches)

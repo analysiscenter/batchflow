@@ -266,6 +266,7 @@ class PipelineWorker(Worker):
                         message = ("J {} [{}] I {}: '{}' [{}]: exception {}"
                                    .format(idx_job, os.getpid(), iteration+1, unit_name, i, repr(exception)))
                         self.log_info(message, filename=self.logfile)
+                        self.log_error(exception, filename=self.logfile)
                         job.stopped[i] = True
 
                 # dump results

@@ -1,24 +1,27 @@
+""" Contains named expression classes for Research """
+
 from .results import Results
-from .. import NamedExpression
-from ..named_expr import NamedExpression, add_ops, AN_EXPR, UNARY_OPS, OPERATIONS
+from ..named_expr import NamedExpression
 
 class ResearchNamedExpression(NamedExpression):
-    param_names = ('job', 'iteration', 'experiment', 'path', 'batch', 'pipeline', 'model')
+    """ NamedExpression base class for Research objects """
+    def _get(self, **kwargs):
+        name = self._get_name(**kwargs)
+        return name, kwargs
 
-    def __init__(self, name=None, *args, **kwargs):
-        super().__init__(*args, name=name, **kwargs)
-        self.op_class = ResearchNamedExpression
+class ResearchExecutableUnit(ResearchNamedExpression):
+    """ NamedExpression for ExecutableUnit """
+    def _get(self, **kwargs):
+        _, kwargs = super()._get(**kwargs)
+        experiment = kwargs['experiment']
+        return experiment
 
-    @classmethod
-    def _get_params(cls, job=None, iteration=None, experiment=None, path=None, **kwargs):
-        return dict(job=job, iteration=iteration, experiment=experiment, path=path, **kwargs)
-
-class ResearchExecutableUnit(ResearchNamedExpression): # ExecutableUnit
     def get(self, **kwargs):
-        if isinstance(kwargs['experiment'], (list, tuple)):
-            _experiment = kwargs['experiment']
+        experiment = self._get(**kwargs)
+        if isinstance(experiment, (list, tuple)):
+            _experiment = experiment
         else:
-            _experiment = [kwargs['experiment']]
+            _experiment = [experiment]
         if self.name is not None:
             res = [item[self.name] for item in _experiment]
             if len(_experiment) == 1:
@@ -26,9 +29,10 @@ class ResearchExecutableUnit(ResearchNamedExpression): # ExecutableUnit
             else:
                 return res
         else:
-            return kwargs['experiment']
+            return experiment
 
-class ResearchPipeline(ResearchExecutableUnit): # ResearchPipeline
+class ResearchPipeline(ResearchExecutableUnit):
+    """ NamedExpression for Pipeline in Research """
     def __init__(self, name=None, root=False):
         super().__init__(name)
         self.root = root
@@ -44,11 +48,17 @@ class ResearchPipeline(ResearchExecutableUnit): # ResearchPipeline
         else:
             return getattr(res, attr)
 
-class ResearchIteration(ResearchNamedExpression): # research iteration
-    def get(self, **kwargs):
+class ResearchIteration(ResearchNamedExpression):
+    """ NamedExpression for iteration of Research """
+    def _get(self, **kwargs):
+        _, kwargs = super()._get(**kwargs)
         return kwargs['iteration']
 
+    def get(self, iteration):
+        return iteration
+
 class ResearchConfig(ResearchExecutableUnit):
+    """ NamedExpression for Config of the ExecutableUnit """
     def get(self, **kwargs):
         if self.name is None:
             raise ValueError('`name` must be defined for RC expressions')
@@ -59,15 +69,21 @@ class ResearchConfig(ResearchExecutableUnit):
         else:
             return getattr(res, 'config')
 
-class ResearchResults(ResearchNamedExpression): # research results
+class ResearchResults(ResearchNamedExpression):
+    """ NamedExpression for Results of the Research """
     def __init__(self, name=None, *args, **kwargs):
         super().__init__(name)
         self.args = args
         self.kwargs = kwargs
 
-    def get(self, **kwargs):
+    def _get(self, **kwargs):
+        _, kwargs = super()._get(**kwargs)
         if kwargs['path'] is None:
             path = kwargs['job'].research_path
         else:
             path = kwargs['path']
+        return path
+
+    def get(self, **kwargs):
+        path = self._get(**kwargs)
         return Results(path=path).load(*self.args, **self.kwargs)

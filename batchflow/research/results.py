@@ -1,8 +1,10 @@
+""" Research results class """
+
 import os
 from collections import OrderedDict
-import dill
 import glob
 import json
+import dill
 import pandas as pd
 
 class Results:
@@ -81,7 +83,7 @@ class Results:
                 if all(item in _config.items() for item in alias.items()):
                     result.append(supconfig)
         self.configs = result
-    
+
     def _get_description(self):
         with open(os.path.join(self.path, 'description', 'research.json'), 'r') as file:
             return json.load(file)
@@ -158,31 +160,33 @@ class Results:
             names = list(self.description['executables'].keys())
 
         if variables is None:
-            variables = [variable for unit in self.description['executables'].values() for variable in unit['variables']]
+            variables = [variable
+                         for unit in self.description['executables'].values()
+                         for variable in unit['variables']
+                        ]
 
-        self.names = self._get_list(names)
-        self.variables = self._get_list(variables)
-        self.iterations = self._get_list(iterations)
+        names = self._get_list(names)
+        variables = self._get_list(variables)
+        iterations = self._get_list(iterations)
 
         all_results = []
 
         for config_alias in self.configs:
             alias = config_alias.alias(as_string=False)
-            config = config_alias.config()
             alias_str = config_alias.alias(as_string=True)
             path = os.path.join(self.path, 'results', alias_str)
 
-            for unit in self.names:
+            for unit in names:
                 sample_folders = glob.glob(os.path.join(glob.escape(path), '*'))
                 for sample_folder in sample_folders:
                     files = glob.glob(os.path.join(sample_folder, unit + '_[0-9]*'))
-                    files = self._sort_files(files, self.iterations)
+                    files = self._sort_files(files, iterations)
                     if len(files) != 0:
                         res = []
                         for filename, iterations_to_load in files.items():
                             with open(filename, 'rb') as file:
-                                res.append(self._slice_file(dill.load(file), iterations_to_load, self.variables))
-                        res = self._concat(res, self.variables)
+                                res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
+                        res = self._concat(res, variables)
                         self._fix_length(res)
                         repetition = config_alias.pop_config('repetition')
                         if '_dummy' not in alias:
