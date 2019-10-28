@@ -5,6 +5,9 @@ from ..named_expr import NamedExpression
 
 class ResearchNamedExpression(NamedExpression):
     """ NamedExpression base class for Research objects """
+    def __init__(self, name=None):
+        super().__init__(name=name)
+
     def _get(self, **kwargs):
         name = self._get_name(**kwargs)
         return name, kwargs
@@ -64,6 +67,15 @@ class ResearchConfig(ResearchExecutableUnit):
         if isinstance(res, list):
             return [getattr(item, 'config') for item in res]
         return getattr(res, 'config')
+
+class ResearchPath(ResearchNamedExpression):
+    """ NamedExpression for path to the Research """
+    def _get(self, **kwargs):
+        _, kwargs = super()._get(**kwargs)
+        return kwargs['path']
+
+    def get(self, path):
+        return path
 
 class ResearchResults(ResearchNamedExpression):
     """ NamedExpression for Results of the Research """

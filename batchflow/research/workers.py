@@ -8,14 +8,14 @@ import multiprocess as mp
 import psutil
 
 from .distributor import Signal
+from .executable import PipelineStopIteration
 
 class Worker:
     """ Worker that creates subprocess to execute job.
     Worker get queue of jobs, pop one job and execute it in subprocess. That subprocess
     call init, main and post class methods.
     """
-    def __init__(self, devices, worker_name=None, logfile=None, errorfile=None,
-                 worker_config=None, timeout=5, trials=2, *args, **kwargs):
+    def __init__(self, devices, worker_name=None, worker_config=None, timeout=5, trials=2, logger=None):
         """
         Parameters
         ----------
@@ -41,13 +41,10 @@ class Worker:
         else:
             self.worker_name = worker_name
 
-        self.logfile = logfile or 'research.log'
-        self.errorfile = errorfile or 'errors.log'
         self.worker_config = worker_config or dict()
         self.timeout = timeout
         self.trials = trials
-        self.args = args
-        self.kwargs = kwargs
+        self.logger = logger
 
         self.job = None
         self.finished_iterations = None
@@ -58,23 +55,6 @@ class Worker:
         self.device_configs = None
 
         self.last_update_time = None
-
-    def set_args_kwargs(self, args, kwargs):
-        """
-        Parameters
-        ----------
-        args, kwargs
-            will be used in init, post and main
-        """
-        if 'logfile' in kwargs:
-            self.logfile = kwargs['logfile']
-        if 'errorfile' in kwargs:
-            self.errorfile = kwargs['errorfile']
-        self.logfile = self.logfile or 'research.log'
-        self.errorfile = self.errorfile or 'errors.log'
-
-        self.args = args
-        self.kwargs = kwargs
 
     def init(self):
         """ Run before main. """
@@ -100,19 +80,17 @@ class Worker:
             queue for feedback
         """
         _devices = [item['device'] for item in self.devices]
-        self.log_info('Start {} [id:{}] (devices: {})'.format(self.worker_name, os.getpid(), _devices),
-                      filename=self.logfile)
+        self.logger.info('Start {} [id:{}] (devices: {})'.format(self.worker_name, os.getpid(), _devices))
 
         try:
             job = queue.get()
         except Exception as exception: #pylint:disable=broad-except
-            self.log_error(exception, filename=self.errorfile)
+            self.logger.error(exception)
         else:
             while job is not None:
                 try:
                     finished = False
-                    self.log_info(self.worker_name + ' is creating process for Job ' + str(job[0]),
-                                  filename=self.logfile)
+                    self.logger.info(self.worker_name + ' is creating process for Job ' + str(job[0]))
                     for trial in range(self.trials):
                         one_job_queue = mp.JoinableQueue()
                         one_job_queue.put(job)
@@ -136,7 +114,7 @@ class Worker:
                                 p = psutil.Process(pid)
                                 p.terminate()
                                 message = 'Job {} [{}] failed in {}'.format(job[0], pid, self.worker_name)
-                                self.log_info(message, filename=self.logfile)
+                                self.logger.info(message)
                                 final_signal.exception = TimeoutError(message)
                                 results.put(copy(final_signal))
                                 break
@@ -150,7 +128,7 @@ class Worker:
                         if finished:
                             break
                 except Exception as exception: #pylint:disable=broad-except
-                    self.log_error(exception, filename=self.errorfile)
+                    self.logger.error(exception)
                     final_signal.exception = exception
                     results.put(copy(final_signal))
                 if final_signal.done:
@@ -175,33 +153,21 @@ class Worker:
             feedback_queue.put(os.getpid())
             self.job = queue.get()
 
-            self.log_info(
-                'Job {} was started in subprocess [id:{}] by {}'.format(self.job[0], os.getpid(), self.worker_name),
-                filename=self.logfile
+            self.logger.info(
+                'Job {} was started in subprocess [id:{}] by {}'.format(self.job[0], os.getpid(), self.worker_name)
             )
             self.init()
             self.main()
             self.post()
         except Exception as e: #pylint:disable=broad-except
             exception = e
-            self.log_error(exception, filename=self.errorfile)
-        self.log_info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.worker_name),
-                      filename=self.logfile)
+            self.logger.error(exception)
+        self.logger.info('Job {} [{}] was finished by {}'.format(self.job[0], os.getpid(), self.worker_name))
         signal = Signal(worker=self.worker_name, job=self.job[0], iteration=self.finished_iterations,
                         n_iters=self.job[1].n_iters, trial=self.trial, done=True,
                         exception=[exception]*len(self.job[1].experiments))
         self.feedback_queue.put(signal)
         queue.task_done()
-
-    @classmethod
-    def log_info(cls, *args, **kwargs):
-        """ Write message into log """
-        pass #pylint:disable=unnecessary-pass
-
-    @classmethod
-    def log_error(cls, *args, **kwargs):
-        """ Write error message into log """
-        pass #pylint:disable=unnecessary-pass
 
 
 class PipelineWorker(Worker):
@@ -215,7 +181,7 @@ class PipelineWorker(Worker):
 
         job.init(self.worker_config, self.device_configs, self.last_update_time)
         description = job.get_description()
-        self.log_info('Job {} has the following configs:\n{}'.format(i, description), filename=self.logfile)
+        self.logger.info('Job {} has the following configs:\n{}'.format(i, description))
 
     def post(self):
         """ Run after job execution. """
@@ -263,10 +229,15 @@ class PipelineWorker(Worker):
                 # select units that raise exceptions on that iteration
                 for i, exception in enumerate(exceptions):
                     if exception is not None:
-                        message = ("J {} [{}] I {}: '{}' [{}]: exception {}"
-                                   .format(idx_job, os.getpid(), iteration+1, unit_name, i, repr(exception)))
-                        self.log_info(message, filename=self.logfile)
-                        self.log_error(exception, filename=self.logfile)
+                        if not isinstance(exception, PipelineStopIteration):
+                            message = ("J {} [{}] I {}: '{}' [{}]: exception {}"
+                                       .format(idx_job, os.getpid(), iteration+1, unit_name, i, repr(exception)))
+                            self.logger.info(message)
+                            self.logger.error(exception)
+                        else:
+                            message = ("J {} [{}] I {}: '{}' [{}]: Pipeline was stopped by StopIteration"
+                                       .format(idx_job, os.getpid(), iteration+1, unit_name, i))
+                            self.logger.info(message)
                         job.stopped[i] = True
 
                 # dump results
@@ -279,7 +250,7 @@ class PipelineWorker(Worker):
 
                 if base_unit.logging:
                     for message in messages:
-                        self.log_info(message, filename=self.logfile)
+                        self.logger.info(message)
                 job.update_exceptions(exceptions)
                 signal = Signal(worker=self.worker, job=idx_job, iteration=iteration, n_iters=job.n_iters,
                                 trial=self.trial, done=False, exception=job.exceptions, exec_actions=exec_actions,

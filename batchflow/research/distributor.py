@@ -28,7 +28,7 @@ class _DummyBar:
 
 class Distributor:
     """ Distributor of jobs between workers. """
-    def __init__(self, n_iters, workers, devices, worker_class=None, timeout=5, trials=2):
+    def __init__(self, n_iters, workers, devices, worker_class=None, timeout=5, trials=2, logger=None):
         """
         Parameters
         ----------
@@ -42,6 +42,7 @@ class Distributor:
         self.worker_class = worker_class
         self.timeout = timeout
         self.trials = trials
+        self.logger = logger
 
         self.logfile = None
         self.errorfile = None
@@ -50,30 +51,12 @@ class Distributor:
         self.answers = None
         self.jobs_queue = None
 
-    @classmethod
-    def log_info(cls, message, filename):
-        """ Write message into log. """
-        logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
-        logging.info(message)
-
-    @classmethod
-    def log_error(cls, obj, filename):
-        """ Write error message into log. """
-        logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.INFO)
-        import traceback
-        ex_traceback = obj.__traceback__
-        tb_lines = ''.join(traceback.format_exception(obj.__class__, obj, ex_traceback))
-        logging.info(tb_lines)
-        # logging.exception(obj, exc_info=True)
-
-    def run(self, jobs_queue, dirname, logfile=None, errorfile=None, bar=False, *args, **kwargs):
+    def run(self, jobs_queue, bar=False):
         """ Run disributor and workers.
 
         Parameters
         ----------
         jobs_queue : DynamicQueue of tasks
-
-        dirname : str
 
         n_iters : int or None
 
@@ -91,16 +74,7 @@ class Distributor:
         if isinstance(bar, bool):
             bar = tqdm if bar else _DummyBar()
 
-        self.logfile = logfile or 'research.log'
-        self.errorfile = errorfile or 'errors.log'
-
-        self.logfile = os.path.join(dirname, self.logfile)
-        self.errorfile = os.path.join(dirname, self.errorfile)
-
-        kwargs['logfile'] = self.logfile
-        kwargs['errorfile'] = self.errorfile
-
-        self.log_info('Distributor [id:{}] is preparing workers'.format(os.getpid()), filename=self.logfile)
+        self.logger.info('Distributor [id:{}] is preparing workers'.format(os.getpid()))
 
         if isinstance(self.workers, int):
             workers = [self.worker_class(
@@ -108,7 +82,7 @@ class Distributor:
                 worker_name=i,
                 timeout=self.timeout,
                 trials=self.trials,
-                *args, **kwargs
+                logger=self.logger
                 )
                        for i in range(self.workers)]
         else:
@@ -118,28 +92,27 @@ class Distributor:
                     worker_name=i,
                     timeout=self.timeout,
                     trials=self.trials,
-                    worker_config=worker_config,
-                    *args, **kwargs)
+                    logger=self.logger,
+                    worker_config=worker_config
+                    )
                 for i, worker_config in enumerate(self.workers)
             ]
         try:
-            self.log_info('Create queue of jobs', filename=self.logfile)
+            self.logger.info('Create queue of jobs')
             self.results = mp.JoinableQueue()
         except Exception as exception: #pylint:disable=broad-except
-            logging.error(exception, exc_info=True)
+            self.logger.error(exception)
         else:
             if len(workers) > 1:
                 msg = 'Run {} workers'
             else:
                 msg = 'Run {} worker'
-            self.log_info(msg.format(len(workers)), filename=self.logfile)
+            self.logger.info(msg.format(len(workers)))
             for worker in workers:
-                worker.log_info = self.log_info
-                worker.log_error = self.log_error
                 try:
                     mp.Process(target=worker, args=(self.jobs_queue, self.results)).start()
                 except Exception as exception: #pylint:disable=broad-except
-                    logging.error(exception, exc_info=True)
+                    self.logger.error(exception)
             previous_domain_jobs = 0
             n_updates = 0
             finished_iterations = dict()
@@ -188,7 +161,7 @@ class Distributor:
                         self.jobs_queue.join()
                         break
                     previous_domain_jobs += finished_jobs
-        self.log_info('All workers have finished the work', filename=self.logfile)
+        self.logger.info('All workers have finished the work')
         logging.shutdown()
 
 class Signal:

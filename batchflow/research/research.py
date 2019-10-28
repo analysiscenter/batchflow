@@ -18,6 +18,7 @@ from .distributor import Distributor
 from .workers import PipelineWorker
 from .domain import Domain, Option, ConfigAlias
 from .job import Job
+from .logger import BasicLogger
 from .utils import get_metrics
 from .executable import Executable
 from .named_expr import ResearchPipeline
@@ -41,6 +42,7 @@ class Research:
         self.n_reps = None
         self.n_configs = None
         self.repeat_each = None
+        self.logger = BasicLogger()
 
         # update parameters for config. None or dict with keys (function, params, cache)
         self._update_config = None
@@ -265,6 +267,11 @@ class Research:
         }
         return self
 
+    def add_logger(self, logger):
+        """ Add custom Logger into Research """
+        self.logger = logger
+        return self
+
     def load_results(self, *args, **kwargs):
         """ Load results of research as pandas.DataFrame or dict (see :meth:`~.Results.load`). """
         return Results(path=self.name).load(*args, **kwargs)
@@ -349,8 +356,10 @@ class Research:
         jobs_queue = DynamicQueue(self.branches, self.domain, self.n_iters, self.executables,
                                   self.name, self._update_config, self._update_domain)
 
-        distr = Distributor(self.n_iters, self.workers, self.devices, self.worker_class, self.timeout, self.trials)
-        distr.run(jobs_queue, dirname=self.name, bar=self.bar)
+        self.logger.eval_kwargs(path=self.name)
+        distr = Distributor(self.n_iters, self.workers, self.devices, self.worker_class, self.timeout,
+                            self.trials, self.logger)
+        distr.run(jobs_queue, bar=self.bar)
 
         return self
 
@@ -466,6 +475,7 @@ class DynamicQueue:
 
         self.domain = domain
         self.update_domain = update_domain
+
         self._domain_size = self.domain.size
 
         if self.update_domain is not None:

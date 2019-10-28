@@ -274,7 +274,7 @@ class Domain:
         for cube in self.cubes:
             self.brute_force.append(not all([isinstance(option.values, Sampler) for option in cube]))
 
-    def update_func(self, *args, **kwargs):
+    def update_func(self, *args, **kwargs): # pylint: disable=method-hidden
         """ Function for domain update. If returns None, Domain will not be updated. """
         _ = args, kwargs
         return None
@@ -448,7 +448,7 @@ class Domain:
         self.update_args = args
         self.update_kwargs = kwargs
         self.update_each = each
-        self.update_func = self.update_func or function # pylint: disable=method-hidden
+        self.update_func = self.update_func or function
 
     def update_domain(self, path):
         """ Update domain by `update_func`. If returns None, domain will not be updated. """

@@ -7,6 +7,10 @@ import dill
 from ..named_expr import eval_expr
 from .. import Config, Pipeline, V, L
 
+class PipelineStopIteration(StopIteration):
+    """ Special pipeline StopIteration exception """
+    pass
+
 class Executable: #pylint: disable=too-many-instance-attributes
     """ Function or pipeline
 
@@ -183,7 +187,10 @@ class Executable: #pylint: disable=too-many-instance-attributes
     def next_batch(self):
         """ Next batch from pipeline """
         if self.pipeline is not None:
-            batch = self.pipeline.next_batch()
+            try:
+                batch = self.pipeline.next_batch()
+            except StopIteration:
+                raise PipelineStopIteration('{} was stopped'.format(self.name))
         else:
             raise TypeError("Executable should be pipeline, not a function")
         return batch
@@ -206,7 +213,10 @@ class Executable: #pylint: disable=too-many-instance-attributes
     def next_batch_root(self):
         """ Next batch from root pipeline """
         if self.root_pipeline is not None:
-            batch = self.root_pipeline.next_batch()
+            try:
+                batch = self.root_pipeline.next_batch()
+            except StopIteration:
+                raise PipelineStopIteration('{} was stopped'.format(self.name))
         else:
             raise TypeError("Executable should have root pipeline")
         return batch
@@ -292,9 +302,9 @@ class Executable: #pylint: disable=too-many-instance-attributes
 
     def set_shared_value(self, last_update_time):
         """ Set last update time """
-        self.last_update_time = last_update_time
-        if self.pipeline is not None:
-            self.pipeline += (Pipeline()
-                              .init_variable('_time', default=last_update_time)
-                              .update(V('_time').value, L(time.time))
-                              )
+        # self.last_update_time = last_update_time
+        # if self.pipeline is not None:
+        #     self.pipeline += (Pipeline()
+        #                       .init_variable('_time', default=last_update_time)
+        #                       .update(V('_time').value, L(time.time))
+        #                       )
