@@ -107,7 +107,7 @@ class ResNet(TFModel):
 
         if config.get('body/downsample') is None:
             num_blocks = config['body/num_blocks']
-            config.get['body/downsample'] = [[]] + [[0]] * (len(num_blocks) - 1)
+            config['body/downsample'] = [[]] + [[0]] * (len(num_blocks) - 1)
 
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
