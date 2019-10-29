@@ -115,10 +115,12 @@ class Results:
         configs, aliases : dict, Config, Option, Domain or None
             configs to load
         use_alias : bool
-            all elements in the resulting DataFrame will be represented as alias
+            if True, use alias for model name, else use its full name.
+            Defaults to True
         concat_config : bool
-            if True, the resulting DataFrame will have one column with alias, else it will
-            have column for each option in domain
+            if True, concatenate all config options into one string and store
+            it in 'config' column, else use separate column for each option.
+            Defaults to False
         kwargs : dict
             kwargs will be interpreted as config paramter
 
