@@ -123,7 +123,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
     """
     __slots__ = ('__dict__', )
 
-    def __init__(self, name, mode='w'):
+    def __init__(self, name=None, mode='w'):
         self.name = name
         self.mode = mode
         self.params = None
@@ -498,11 +498,12 @@ class F(NamedExpression):
     def get(self, **kwargs):
         """ Return a value from a callable """
         name, kwargs = self._get(**kwargs)
-        batch = kwargs['batch']
-        pipeline = batch.pipeline
 
         args = []
         if self._pass:
+            batch = kwargs['batch']
+            pipeline = batch.pipeline
+
             if isinstance(batch, _DummyBatch):
                 args += [pipeline]
             else:
@@ -644,7 +645,7 @@ class W(NamedExpression):
     def assign(self, value, **kwargs):
         """ Assign a value """
         _ = kwargs
-        self.name = value #pylint: disable=attribute-defined-outside-init
+        self.name = value # pylint: disable=attribute-defined-outside-init
 
 
 class P(W):
@@ -708,4 +709,4 @@ class P(W):
     def assign(self, value, **kwargs):
         """ Assign a value """
         _ = kwargs
-        self.name = value #pylint: disable=attribute-defined-outside-init
+        self.name = value # pylint: disable=attribute-defined-outside-init
