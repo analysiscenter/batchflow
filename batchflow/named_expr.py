@@ -644,7 +644,7 @@ class W(NamedExpression):
     def assign(self, value, **kwargs):
         """ Assign a value """
         _ = kwargs
-        self.name = value
+        self.name = value #pylint: disable=attribute-defined-outside-init
 
 
 class P(W):
@@ -708,4 +708,4 @@ class P(W):
     def assign(self, value, **kwargs):
         """ Assign a value """
         _ = kwargs
-        self.name = value
+        self.name = value #pylint: disable=attribute-defined-outside-init
