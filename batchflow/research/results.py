@@ -115,6 +115,8 @@ class Results:
         configs, aliases : dict, Config, Option, Domain or None
             configs to load
         use_alias : bool
+            all elements in the resulting DataFrame will be represented as alias
+        concat_config : bool
             if True, the resulting DataFrame will have one column with alias, else it will
             have column for each option in domain
         kwargs : dict
@@ -220,8 +222,7 @@ class Results:
                                     res.update(config_alias.alias(as_string=False))
                             else:
                                 res.update(config_alias.config())
-                        if _repetition is not None:
-                            res.update({'repetition': _repetition.config()['repetition']})
+                        res.update({'repetition': _repetition.config()['repetition']})
                         all_results.append(
                             pd.DataFrame({
                                 'name': unit,
