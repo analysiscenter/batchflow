@@ -74,10 +74,10 @@ class Logger:
             item['kwargs'] = eval_expr(item['kwargs'], **kwargs)
 
     def __add___(self, other):
+        # pylint: disable=protected-access
         if isinstance(other, Logger):
             return Logger(self._loggers + other._logers)
-        else:
-            raise TypeError("unsupported operand type(s) for +: '{}' and '{}'".format(type(self), type(other)))
+        raise TypeError("unsupported operand type(s) for +: '{}' and '{}'".format(type(self), type(other)))
 
 class BasicLogger(Logger):
     """ Basic logging class """
