@@ -383,8 +383,7 @@ class TFModel(BaseModel):
                 for device in self.devices:
                     with tf.device(device):
                         with tf.variable_scope(self.device_to_scope[device]):
-                            default_config = self.default_config()
-                            self.full_config = default_config + self.config
+                            self.full_config = self.combine_configs()
                             self._make_inputs(config=self.full_config['inputs'],
                                               data_format=self.full_config.get('common/data_format', 'channels_last'))
                             config = self.build_config()
@@ -1763,6 +1762,10 @@ class TFModel(BaseModel):
         _config = Config(config.get(_name))
         _config = _config + kwargs # Update _config with kwargs (addition order is important)
         config = {**config['common'], **_config}
+        return config
+
+    def combine_configs(self):
+        config = self.default_config() + self.config
         return config
 
     def build_config(self, config=None):
