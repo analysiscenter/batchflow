@@ -416,7 +416,7 @@ class Domain:
             if n_reps == 1:
                 i = 0
                 while n_iters is None or i < n_iters:
-                    yield next(iterator) # pylint: disable=stop-iteration-return
+                    yield next(iterator) + ConfigAlias([('repetition', 0)]) # pylint: disable=stop-iteration-return
                     i += 1
             else:
                 i = 0
