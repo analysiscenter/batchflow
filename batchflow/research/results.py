@@ -75,6 +75,8 @@ class Results:
         result = []
         if repetition is not None:
             repetition = {'repetition': repetition}
+        else:
+            repetition = dict()
 
         if config is None and alias is None:
             config = dict()
