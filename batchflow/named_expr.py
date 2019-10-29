@@ -357,9 +357,6 @@ class C(PipelineNamedExpression):
         C('GPU')
         C()
     """
-    def __init__(self, name=None, mode='w'):
-        super().__init__(name, mode)
-
     def get(self, **kwargs):
         """ Return a value of a pipeline config """
         name, pipeline, _ = self._get(**kwargs)
@@ -534,9 +531,6 @@ class D(NamedExpression):
         D('classes')
         D('organization')
     """
-    def __init__(self, name=None, mode='w'):
-        super().__init__(name, mode)
-
     def _get(self, **kwargs):
         name, kwargs = super()._get(**kwargs)
         batch = kwargs['batch']
