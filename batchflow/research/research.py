@@ -399,9 +399,9 @@ class Research:
         if isinstance(devices[0], list):
             def _transform_item(x):
                 if len(x) > 1:
-                    values = [str(item) for item in x]
+                    values = ['gpu:'+str(item) if isinstance(item, int) else item for item in x]
                 else:
-                    values = str(x[0])
+                    values = 'gpu:'+str(x[0]) if isinstance(x[0], int) else x[0]
                 return dict(device=values) if x is not None else dict()
 
             devices = [[_transform_item(branch_config) for branch_config in worker_config] for worker_config in devices]
