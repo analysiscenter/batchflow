@@ -6,12 +6,12 @@ from .. import ImagesBatch
 
 class Openset(Dataset):
     """ The base class for open datasets """
-    def __init__(self, index=None, batch_class=None, train_test=False, path=None, preloaded=None):
+    def __init__(self, index=None, batch_class=None, train_test=False, path=None, preloaded=None, **kwargs):
         self.train_test = train_test
         self._train_index, self._test_index = None, None
         if preloaded is None:
             preloaded = self.download(path=path)
-        super().__init__(index, batch_class, preloaded=preloaded)
+        super().__init__(index, batch_class, preloaded=preloaded, **kwargs)
         if train_test:
             self.split()
 
