@@ -68,18 +68,26 @@ class Results:
             if len(value) < max_len:
                 value.extend([pd.np.nan] * (max_len - len(value)))
 
-    def _filter_configs(self, config=None, alias=None):
+    def _filter_configs(self, config=None, alias=None, repetition=None):
         result = None
-        if config is None and alias is None:
-            raise ValueError('At least one of parameters config and alias must be not None')
+        if config is None and alias is None and repetition is None:
+            raise ValueError('At least one of parameters config, alias and repetition must be not None')
         result = []
+        if repetition is not None:
+            repetition = {'repetition': repetition}
+
+        if config is None and alias is None:
+            config = dict()
+
         for supconfig in self.configs:
             if config is not None:
+                config.update(repetition)
                 _config = supconfig.config()
                 if all(item in _config.items() for item in config.items()):
                     result.append(supconfig)
             else:
                 _config = supconfig.alias()
+                alias.update(repetition)
                 if all(item in _config.items() for item in alias.items()):
                     result.append(supconfig)
         self.configs = result
@@ -88,8 +96,8 @@ class Results:
         with open(os.path.join(self.path, 'description', 'research.json'), 'r') as file:
             return json.load(file)
 
-    def load(self, names=None, variables=None, iterations=None,
-             configs=None, aliases=None, use_alias=True, concat_config=False):
+    def load(self, names=None, variables=None, iterations=None, repetition=None,
+             configs=None, aliases=None, use_alias=True, concat_config=False, **kwargs):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -100,11 +108,15 @@ class Results:
             names of variables to load
         iterations : int, list or None
             iterations to load
+        repetition : int
+            index of repetition to load
         configs, aliases : dict, Config, Option, Domain or None
             configs to load
         use_alias : bool
             if True, the resulting DataFrame will have one column with alias, else it will
             have column for each option in domain
+        kwargs : dict
+            kwargs will be interpreted as config paramter
 
         Returns
         -------
@@ -151,10 +163,19 @@ class Results:
         for filename in glob.glob(os.path.join(self.path, 'configs', '*')):
             with open(filename, 'rb') as f:
                 self.configs.append(dill.load(f))
+
+        if len(kwargs) > 0:
+            if configs is None:
+                configs = kwargs
+            else:
+                configs.update(kwargs)
+
         if configs is not None:
-            self._filter_configs(config=configs)
+            self._filter_configs(config=configs, repetition=repetition)
         elif aliases is not None:
-            self._filter_configs(alias=aliases)
+            self._filter_configs(alias=aliases, repetition=repetition)
+        elif repetition is not None:
+            self._filter_configs(repetition=repetition)
 
         if names is None:
             names = list(self.description['executables'].keys())
@@ -188,7 +209,7 @@ class Results:
                                 res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
                         res = self._concat(res, variables)
                         self._fix_length(res)
-                        repetition = config_alias.pop_config('repetition')
+                        _repetition = config_alias.pop_config('repetition')
                         if '_dummy' not in alias:
                             if use_alias:
                                 if concat_config:
@@ -197,8 +218,8 @@ class Results:
                                     res.update(config_alias.alias(as_string=False))
                             else:
                                 res.update(config_alias.config())
-                        if repetition is not None:
-                            res.update({'repetition': repetition.config()['repetition']})
+                        if _repetition is not None:
+                            res.update({'repetition': _repetition.config()['repetition']})
                         all_results.append(
                             pd.DataFrame({
                                 'name': unit,
