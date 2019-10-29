@@ -302,9 +302,9 @@ class Executable: #pylint: disable=too-many-instance-attributes
 
     def set_shared_value(self, last_update_time):
         """ Set last update time """
-        # self.last_update_time = last_update_time
-        # if self.pipeline is not None:
-        #     self.pipeline += (Pipeline()
-        #                       .init_variable('_time', default=last_update_time)
-        #                       .update(V('_time').value, L(time.time))
-        #                       )
+        self.last_update_time = last_update_time
+        if self.pipeline is not None:
+            self.pipeline += (Pipeline()
+                              .init_variable('_time', default=last_update_time)
+                              .update(V('_time').value, L(time.time))
+                              )
