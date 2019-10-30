@@ -17,6 +17,12 @@ class AdvancedDict(dict):
             return d
         return super().__getitem__(item)
 
+    def as_array(self, indices=None):
+        """ Return data as an array """
+        if indices is None:
+            indices = self.keys()
+        return np.stack([self[i] for i in indices])
+
 class BaseComponents:
     """ Base class for a components storage """
     def __init__(self, components=None, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
@@ -63,7 +69,7 @@ class BaseComponents:
     def as_array(self, components=None):
         """ Return a component as an array """
         comps = self.as_list(components)
-        return np.stack([comps[i] for i in self._indices])
+        return comps.as_array(self._indices)
 
     def __len__(self):
         return len(self.data)
@@ -84,13 +90,17 @@ class BaseComponents:
         else:
             raise NotImplementedError('Item assignment is not implemented.')
 
-    def _get_from(self, data, copy):
+    def _get_from(self, data, copy=False, cast=False):
         if isinstance(data, dict):
             data = AdvancedDict(data)
-        if data is not None and self.indices is not None:
-            data = data[self.indices]
-        if copy:
-            data = cp.deepcopy(data)
+        data = get_from_source(data=data, indices=self.indices, copy=copy)
+
+        if cast and self.cast_to_array:
+            if isinstance(data, pd.Series):
+                data = data.values
+            elif isinstance(data, AdvancedDict):
+                data = data.as_array(self._indices)
+
         return data
 
 
@@ -111,10 +121,8 @@ class ComponentsTuple(BaseComponents):
             raise AttributeError("%s does not have an attribute '%s'" % (type(self), name))
 
         ix = self.components.index(name)
-        res = self.data[ix] if ix < len(self.data) else None
-        if res is not None and self.indices is not None:
-            res = res[self.indices]
-        return res
+        data = self.data[ix] if ix < len(self.data) else None
+        return self._get_from(data=data, cast=True)
 
     def __setattr__(self, name, value):
         if name in ('components', 'data'):
@@ -150,13 +158,7 @@ class ComponentsDict(BaseComponents):
     def __getattr__(self, name):
         if self.components is not None and name not in self.components:
             raise AttributeError("%s does not have an attribute '%s'" % (type(self), name))
-
-        res = self.data[name]
-        if res is not None and self.indices is not None:
-            res = res[self.indices]
-        if self.cast_to_array and isinstance(res, pd.Series):
-            res = res.values
-        return res
+        return self._get_from(data=self.data[name], cast=True)
 
     def __setattr__(self, name, value):
         if name in ('components', 'data'):
@@ -172,7 +174,7 @@ class ComponentsDict(BaseComponents):
             super().__setattr__(name, value)
 
 
-def use_source(components, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
+def get_from_source(components=None, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
     """ Return data source (and make a crop and a copy if necessary) """
     _ = components, crop, cast_to_array
     if indices is not None:
@@ -193,7 +195,7 @@ def create_item_class(components, data=None, indices=None, crop=False, copy=Fals
         item_class = ComponentsTuple
     else:
         # source is a memory-like object (ndarray, hdf5 storage, etc)
-        item_class = use_source
+        item_class = get_from_source
 
     item = item_class(components, data=data, indices=indices, crop=crop, copy=copy, cast_to_array=cast_to_array)
 
