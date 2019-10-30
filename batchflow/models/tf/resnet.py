@@ -214,8 +214,8 @@ class ResNet(TFModel):
         kwargs = cls.fill_params('body/block', **kwargs)
         layout, filters, downsample, zero_pad = cls.pop(['layout', 'filters', 'downsample', 'zero_pad'], kwargs)
         width_factor = cls.pop('width_factor', kwargs)
-        bottleneck = cls.pop(['bottleneck'], kwargs)
-        resnext = cls.pop(['resnext'], kwargs)
+        bottleneck = cls.pop('bottleneck', kwargs)
+        resnext = cls.pop('resnext', kwargs)
         se_block = cls.pop('se_block', kwargs)
         post_activation = cls.pop('post_activation', kwargs)
         if isinstance(post_activation, bool) and post_activation:
