@@ -90,7 +90,7 @@ class BaseComponents:
         else:
             raise NotImplementedError('Item assignment is not implemented.')
 
-    def _get_from(self, data, copy, cast=False):
+    def _get_from(self, data, copy=False, cast=False):
         if isinstance(data, dict):
             data = AdvancedDict(data)
         data = get_from_source(data=data, indices=self.indices, copy=copy)
