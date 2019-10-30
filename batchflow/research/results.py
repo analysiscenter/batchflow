@@ -201,6 +201,7 @@ class Results:
         for config_alias in self.configs:
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
+            _repetition = config_alias.pop_config('repetition')
             path = os.path.join(self.path, 'results', alias_str)
 
             for unit in names:
@@ -215,7 +216,6 @@ class Results:
                                 res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
                         res = self._concat(res, variables)
                         self._fix_length(res)
-                        _repetition = config_alias.pop_config('repetition')
                         if '_dummy' not in alias:
                             if use_alias:
                                 if concat_config:
