@@ -1,10 +1,10 @@
 """ All the layers. """
-
 import inspect
 
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 
@@ -33,6 +33,47 @@ def get_num_dims(inputs):
     return max(1, dim - 2)
 
 
+def get_padding(kernel_size=None, width=None, dilation=1, stride=1):
+    kernel_size = dilation * (kernel_size - 1) + 1
+    if stride >= width:
+        p = max(0, kernel_size - width)
+    else:
+        if width % stride == 0:
+            p = kernel_size - stride
+        else:
+            p = kernel_size - width % stride
+    p = (p // 2, p - p // 2)
+    return p
+
+def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
+    _ = kwargs
+    print(kernel_size)
+    dims = get_num_dims(inputs)
+    shape = get_shape(inputs)
+
+    if isinstance(padding, str):
+        if padding == 'valid':
+            padding = 0
+        elif padding == 'same':
+            if transposed:
+                padding = 0
+            else:
+                if isinstance(kernel_size, int):
+                    kernel_size = (kernel_size,) * dims
+                if isinstance(dilation, int):
+                    dilation = (dilation,) * dims
+                if isinstance(stride, int):
+                    stride = (stride,) * dims
+                padding = tuple(get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
+        else:
+            raise ValueError("padding can be 'same' or 'valid'")
+    elif isinstance(padding, int):
+        pass
+    elif isinstance(padding, tuple):
+        pass
+    else:
+        raise ValueError("padding can be 'same' or 'valid' or int or tuple of int")
+    return padding
 
 class Identity(nn.Module):
     """ Module which just returns its inputs
@@ -71,9 +112,8 @@ class Dense(nn.Module):
 
 
 
-
 class Activation(nn.Module):
-    self.ACTIVATIONS = {f.lower(): f for f in dir(nn)}
+    ACTIVATIONS = {f.lower(): f for f in dir(nn)}
 
     def __init__(self, activation, *args, **kwargs):
         super().__init__()
@@ -120,7 +160,7 @@ class BaseConv(nn.Module):
     LAYERS = {}
     TRANSPOSED = False
 
-   def __init__(self, filters, kernel_size, stride=1, strides=None, padding='same',
+    def __init__(self, filters, kernel_size, stride=1, strides=None, padding='same',
                 dilation=1, dilation_rate=None, groups=1, bias=True, inputs=None):
         super().__init__()
 
@@ -135,7 +175,7 @@ class BaseConv(nn.Module):
         }
 
 
-        padding = self.calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
+        padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
         if isinstance(padding, tuple) and isinstance(padding[0], tuple):
             args['padding'] = 0
             self.padding = sum(padding, ())
@@ -150,73 +190,30 @@ class BaseConv(nn.Module):
             x = F.pad(x, self.padding[::-1])
         return self.layer(x)
 
-    def get_padding(self, kernel_size=None, width=None, dilation=1, stride=1):
-        kernel_size = dilation * (kernel_size - 1) + 1
-        if stride >= width:
-            p = max(0, kernel_size - width)
-        else:
-            if width % stride == 0:
-                p = kernel_size - stride
-            else:
-                p = kernel_size - width % stride
-        p = (p // 2, p - p // 2)
-        return p
-
-    def calc_padding(self, inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
-        _ = kwargs
-
-        dims = get_num_dims(inputs)
-        shape = get_shape(inputs)
-
-        if isinstance(padding, str):
-            if padding == 'valid':
-                padding = 0
-            elif padding == 'same':
-                if transposed:
-                    padding = 0
-                else:
-                    if isinstance(kernel_size, int):
-                        kernel_size = (kernel_size,) * dims
-                    if isinstance(dilation, int):
-                        dilation = (dilation,) * dims
-                    if isinstance(stride, int):
-                        stride = (stride,) * dims
-                    padding = tuple(get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
-            else:
-                raise ValueError("padding can be 'same' or 'valid'")
-        elif isinstance(padding, int):
-            pass
-        elif isinstance(padding, tuple):
-            pass
-        else:
-            raise ValueError("padding can be 'same' or 'valid' or int or tuple of int")
-
-        return padding
-
 
 class Conv(BaseConv):
     """ Multi-dimensional convolutional layer """
-    self.LAYERS = {
+    LAYERS = {
         1: nn.Conv1d,
         2: nn.Conv2d,
         3: nn.Conv3d,
     }
-    self.TRANSPOSED = False
+    TRANSPOSED = False
 
 
 class ConvTranspose(BaseConv):
     """ Multi-dimensional transposed convolutional layer """
-    self.LAYERS = {
+    LAYERS = {
         1: nn.ConvTranspose1d,
         2: nn.ConvTranspose2d,
         3: nn.ConvTranspose3d,
     }
-    self.TRANSPOSED = True
+    TRANSPOSED = True
 
 
 
 class BaseDepthwiseConv(nn.Module):
-    self.LAYER = None
+    LAYER = None
 
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
                  dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None):
@@ -232,16 +229,16 @@ class BaseDepthwiseConv(nn.Module):
 
 
 class DepthwiseConv(BaseDepthwiseConv):
-    self.LAYER = Conv
+    LAYER = Conv
 
 
 class DepthwiseConvTranspose(BaseDepthwiseConv):
-    self.LAYER = ConvTranspose
+    LAYER = ConvTranspose
 
 
 
 class BaseSeparableConv(nn.Module):
-    self.LAYER = None
+    LAYER = None
 
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
                  dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None):
@@ -258,11 +255,11 @@ class BaseSeparableConv(nn.Module):
 
 
 class SeparableConv(BaseSeparableConv):
-    self.LAYER = DepthwiseConv
+    LAYER = DepthwiseConv
 
 
 class SeparableConvTranspose(BaseSeparableConv):
-    self.LAYER = DepthwiseConvTranspose
+    LAYER = DepthwiseConvTranspose
 
 
 
@@ -276,7 +273,7 @@ BATCH_NORM = {
 
 class BatchNorm(nn.Module):
     """ Multi-dimensional batch normalization layer """
-    self.LAYERS = {
+    LAYERS = {
         1: nn.BatchNorm1d,
         2: nn.BatchNorm2d,
         3: nn.BatchNorm3d,
@@ -294,7 +291,7 @@ class BatchNorm(nn.Module):
 
 class Dropout(nn.Module):
     """ Multi-dimensional dropout layer """
-    self.LAYERS = {
+    LAYERS = {
         1: nn.Dropout,
         2: nn.Dropout2d,
         3: nn.Dropout3d,
@@ -311,24 +308,32 @@ class Dropout(nn.Module):
 
 class BasePool(nn.Module):
     """ A universal pooling layer """
-    self.LAYER = None
-    self.LAYERS = {}
+    LAYER = None
+    LAYERS = {}
 
-    def __init__(self, inputs=None, padding='same', _fn=None, **kwargs):
+    def __init__(self, inputs=None, pool_size=2, pool_strides=2, padding='same', **kwargs):
         super().__init__()
+        self.padding = None
 
         if self.LAYER is not None:
             self.layer = self.LAYER(inputs=inputs, padding=padding, **kwargs)
         else:
             if padding is not None:
-                padding = BaseConv.calc_padding(inputs, padding=padding, **kwargs)
+                args = {
+                    'kernel_size': pool_size,
+                    'strides': pool_strides,
+                }
 
+                padding = calc_padding(inputs=inputs, padding=padding, **{**kwargs, **args})
+
+                print('P', padding)
                 if isinstance(padding, tuple) and isinstance(padding[0], tuple):
                     self.padding = sum(padding, ())
                 else:
                     kwargs['padding'] = padding
 
-            self.layer = self.LAYERS[get_num_dims(inputs)](**kwargs)
+            print('WTF', self.LAYERS, get_num_dims(inputs))
+            self.layer = self.LAYERS[get_num_dims(inputs)](kernel_size=pool_size, **kwargs)
 
     def forward(self, x):
         if self.padding:
@@ -338,7 +343,7 @@ class BasePool(nn.Module):
 
 class MaxPool(BasePool):
     """ Multi-dimensional max pooling layer """
-    self.LAYERS = {
+    LAYERS = {
         1: nn.MaxPool1d,
         2: nn.MaxPool2d,
         3: nn.MaxPool3d,
@@ -347,7 +352,7 @@ class MaxPool(BasePool):
 
 class AvgPool(BasePool):
     """ Multi-dimensional average pooling layer """
-    self.LAYERS = {
+    LAYERS = {
         1: nn.AvgPool1d,
         2: nn.AvgPool2d,
         3: nn.AvgPool3d,
@@ -367,7 +372,7 @@ class Pool(BasePool):
 
 class AdaptiveMaxPool(BasePool):
     """ Multi-dimensional adaptive max pooling layer """
-    self.LAYERS = {
+    LAYERS = {
         1: nn.AdaptiveMaxPool1d,
         2: nn.AdaptiveMaxPool2d,
         3: nn.AdaptiveMaxPool3d,
@@ -380,7 +385,7 @@ class AdaptiveMaxPool(BasePool):
 
 class AdaptiveAvgPool(BasePool):
     """ Multi-dimensional adaptive average pooling layer """
-    self.LAYERS = {
+    LAYERS = {
         1: nn.AdaptiveAvgPool1d,
         2: nn.AdaptiveAvgPool2d,
         3: nn.AdaptiveAvgPool3d,
@@ -391,7 +396,7 @@ class AdaptiveAvgPool(BasePool):
 
 
 
-class AdaptivePool(_Pool):
+class AdaptivePool(BasePool):
     """ Multi-dimensional adaptive pooling layer """
     def __init__(self, op='max', inputs=None, **kwargs):
         if op == 'max':
@@ -427,12 +432,13 @@ class Interpolate(nn.Module):
 
     All the parameters should the specified as keyword arguments (i.e. with names and values).
     """
-    self.MODES = {
+    MODES = {
         'n': 'nearest',
         'l': 'linear',
         'b': 'bilinear',
         't': 'trilinear',
     }
+
     def __init__(self, *args, inputs=None, **kwargs):
         super().__init__()
         _ = args
@@ -458,30 +464,30 @@ class SubPixelConv(PixelShuffle):
 
 
 
-class ConvBlock(nn.Module):
-    def __init__(self, inputs, layout='', filters=None, units=None, **kwargs):
-        super().__init__()
+# class ConvBlock(nn.Module):
+#     def __init__(self, inputs, layout='', filters=None, units=None, **kwargs):
+#         super().__init__()
 
-        self.layout = layout
-        self.filters = filters
+#         self.layout = layout
+#         self.filters = filters
 
-        print('ConvBlock layout', layout)
-        layers = []
-        c_counter, f_counter = 0, 0
-        for letter in layout:
-            if letter == 'c':
-                block = Conv(filters=filters[c_counter], inputs=inputs)
-                c_counter += 1
-            elif letter == 'f':
-                block = Dense(units=units[f_counter], inputs=inputs)
-                f_counter += 1
-            elif letter == 'a':
-                block = Activation('relu')
+#         print('ConvBlock layout', layout)
+#         layers = []
+#         c_counter, f_counter = 0, 0
+#         for letter in layout:
+#             if letter == 'c':
+#                 block = Conv(filters=filters[c_counter], inputs=inputs)
+#                 c_counter += 1
+#             elif letter == 'f':
+#                 block = Dense(units=units[f_counter], inputs=inputs)
+#                 f_counter += 1
+#             elif letter == 'a':
+#                 block = Activation('relu')
 
-            inputs = block(inputs)
-            layers.append(block)
+#             inputs = block(inputs)
+#             layers.append(block)
 
-        self.block = nn.Sequential(*layers)
+#         self.block = nn.Sequential(*layers)
 
-    def forward(self, inputs):
-        return self.block(inputs)
+#     def forward(self, inputs):
+#         return self.block(inputs)

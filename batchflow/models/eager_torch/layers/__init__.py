@@ -1,2 +1,5 @@
 """ PyTorch custom layers. """
-from .core import * # pylint: disable=wildcard-import
+# pylint: disable=wildcard-import
+from .core import *
+from .conv import *
+from .conv_block import *
