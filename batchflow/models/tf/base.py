@@ -1671,7 +1671,7 @@ class TFModel(BaseModel):
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         device = self._get_current_device()
         if oper is None:
-            self._add_output_identity(inputs, '', attr_prefix[:-1], device, **kwargs)
+            self._add_output_identity(inputs, name, attr_prefix[:-1], device, **kwargs)
         elif oper == 'softplus':
             self._add_output_softplus(inputs, name, attr_prefix, device, **kwargs)
         elif oper == 'sigmoid':
@@ -1686,7 +1686,7 @@ class TFModel(BaseModel):
     def _add_output_identity(self, inputs, name, attr_prefix, device, **kwargs):
         _ = kwargs
         x = tf.identity(inputs, name=name)
-        self.store_to_attr(attr_prefix + name, x, device)
+        self.store_to_attr(attr_prefix + (name or ''), x, device)
         return x
 
     def _add_output_softplus(self, inputs, name, attr_prefix, device, **kwargs):
