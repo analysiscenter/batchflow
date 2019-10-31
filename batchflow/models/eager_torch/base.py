@@ -3,6 +3,7 @@ import os
 import re
 import threading
 import inspect
+from collections import OrderedDict
 from functools import partial
 
 import numpy as np
@@ -127,6 +128,7 @@ class EagerTorch:
         config = Config()
         config['inputs'] = {}
         config['common'] = {}
+        config['order'] = ['initial_block', 'body', 'head']
         config['initial_block'] = {}
         config['body'] = {}
         config['head'] = {}
@@ -149,18 +151,28 @@ class EagerTorch:
 
     def _build(self, inputs=None):
         config = self.full_config
+        order = config.get('order')
 
         inputs = inputs or self._placeholder_data()
 
         blocks = []
-        for loc in ['initial_block', 'body', 'head']:
+        for item in order:
+            if isinstance(item, str):
+                block_name = config_name = method = item
+            elif isinstance(item, tuple):
+                if len(item) == 2:
+                    block_name, method = config_name, _ = item
+                elif len(item) == 3:
+                    block_name, config_name, method = item
+
+
             inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
-            block = self._make_block(loc, config, inputs)
+            block = self._make_block(config_name, method, config, inputs)
             if block is not None:
                 inputs = block(inputs)
-                blocks.append(block)
+                blocks.append((block_name, block))
 
-        self.model = nn.Sequential(*blocks)
+        self.model = nn.Sequential(OrderedDict(blocks))
 
         if self.loss_fn is None:
             self._make_loss(config)
@@ -179,7 +191,7 @@ class EagerTorch:
         data = data[0] if len(data) == 1 else data
         return data
 
-    def _make_block(self, name, config, inputs):
+    def _make_block(self, name, method, config, inputs):
         config = {**config['common'], **config[name]}
 
         if 'module' in config:
@@ -190,7 +202,8 @@ class EagerTorch:
             block = module(*config.get('module_args', []), **kwargs)
 
         elif isinstance(config, dict):
-            block = getattr(self, name)(inputs, **config)
+            method = getattr(self, method) if isinstance(method, str) else method
+            block = method(inputs, **config)
         else:
             raise ValueError('Bad')
         return block
