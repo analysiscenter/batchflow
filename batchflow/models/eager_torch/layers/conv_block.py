@@ -7,7 +7,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .core import *
+from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout, Interpolate, SubPixelConv
+from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
+                  SeparableConv, SeparableConvTranspose
+from .pooling import Pool, GlobalPool
+from ..utils import get_shape
 from ...utils import unpack_args
 
 
