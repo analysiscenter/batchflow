@@ -47,7 +47,7 @@ def get_padding(kernel_size=None, width=None, dilation=1, stride=1):
 
 def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
     _ = kwargs
-    print(kernel_size)
+
     dims = get_num_dims(inputs)
     shape = get_shape(inputs)
 
@@ -244,7 +244,7 @@ class BaseSeparableConv(nn.Module):
                  dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None):
         super().__init__()
 
-        self.layer = nn.Sequenital(
+        self.layer = nn.Sequential(
             self.LAYER(filters, kernel_size, stride, strides, padding,
                        dilation, dilation_rate, bias, depth_multiplier, inputs),
             Conv(filters, kernel_size=1, strides=1, padding=padding, dilation_rate=1, bias=bias, inputs=inputs)
@@ -297,12 +297,19 @@ class Dropout(nn.Module):
         3: nn.Dropout3d,
     }
 
-    def __init__(self, inputs=None, **kwargs):
+    def __init__(self, inputs=None, dropout_rate=0.0, **kwargs):
         super().__init__()
-        self.layer = self.LAYERS[get_num_dims(inputs)](**kwargs)
+        self.layer = self.LAYERS[get_num_dims(inputs)](p=dropout_rate, **kwargs)
 
     def forward(self, x):
         return self.layer(x)
+
+class AlphaDropout(Dropout):
+    LAYERS = {
+        1: nn.AlphaDropout,
+        2: nn.AlphaDropout,
+        3: nn.AlphaDropout,
+    }
 
 
 
@@ -325,15 +332,15 @@ class BasePool(nn.Module):
                 }
 
                 padding = calc_padding(inputs=inputs, padding=padding, **{**kwargs, **args})
-
-                print('P', padding)
                 if isinstance(padding, tuple) and isinstance(padding[0], tuple):
                     self.padding = sum(padding, ())
                 else:
                     kwargs['padding'] = padding
 
-            print('WTF', self.LAYERS, get_num_dims(inputs))
-            self.layer = self.LAYERS[get_num_dims(inputs)](kernel_size=pool_size, **kwargs)
+            layer = self.LAYERS[get_num_dims(inputs)]
+            if 'Adaptive' not in layer.__name__:
+                kwargs['kernel_size'] = pool_size
+            self.layer = layer(**kwargs)
 
     def forward(self, x):
         if self.padding:
@@ -379,6 +386,7 @@ class AdaptiveMaxPool(BasePool):
     }
 
     def __init__(self, inputs=None, output_size=None, **kwargs):
+        kwargs.pop('padding')
         super().__init__(inputs=inputs, output_size=output_size, padding=None, **kwargs)
 
 
@@ -439,16 +447,16 @@ class Interpolate(nn.Module):
         't': 'trilinear',
     }
 
-    def __init__(self, *args, inputs=None, **kwargs):
+    def __init__(self, inputs=None, size=None, scale_factor=None, **kwargs):
         super().__init__()
-        _ = args
+        self.size, self.scale_factor = size, scale_factor
 
         if kwargs.get('mode') in self.MODES:
             kwargs['mode'] = self.MODES[mode]
         self.kwargs = kwargs
 
     def forward(self, x):
-        return F.interpolate(x, **self.kwargs)
+        return F.interpolate(x, size=self.size, scale_factor=self.scale_factor, **self.kwargs)
 
 
 
@@ -461,33 +469,3 @@ class PixelShuffle(nn.PixelShuffle):
 class SubPixelConv(PixelShuffle):
     """ An alias for PixelShuffle """
     pass
-
-
-
-# class ConvBlock(nn.Module):
-#     def __init__(self, inputs, layout='', filters=None, units=None, **kwargs):
-#         super().__init__()
-
-#         self.layout = layout
-#         self.filters = filters
-
-#         print('ConvBlock layout', layout)
-#         layers = []
-#         c_counter, f_counter = 0, 0
-#         for letter in layout:
-#             if letter == 'c':
-#                 block = Conv(filters=filters[c_counter], inputs=inputs)
-#                 c_counter += 1
-#             elif letter == 'f':
-#                 block = Dense(units=units[f_counter], inputs=inputs)
-#                 f_counter += 1
-#             elif letter == 'a':
-#                 block = Activation('relu')
-
-#             inputs = block(inputs)
-#             layers.append(block)
-
-#         self.block = nn.Sequential(*layers)
-
-#     def forward(self, inputs):
-#         return self.block(inputs)

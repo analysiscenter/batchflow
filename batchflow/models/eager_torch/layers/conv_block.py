@@ -1,6 +1,7 @@
 """ Convenient combining block """
 import logging
 import inspect
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -192,9 +193,9 @@ class ConvBlock(nn.Module):
         'global_pooling': GlobalPool,
         'batch_norm': BatchNorm,
         'dropout': Dropout,
-        'alpha_dropout': nn.AlphaDropout,
+        'alpha_dropout': AlphaDropout,
         'dropblock': None, # TODO
-        'mip': None, # TODO
+        'mip': None, # TODO?
         'residual_bilinear_additive': None, # TODO
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
@@ -351,14 +352,17 @@ class ConvBlock(nn.Module):
             if not skip_layer:
                 args = {**args, **layer_args}
                 args = unpack_args(args, *layout_dict[letter_group])
-
-                print('\n\nLAYER CLASS IS {}'.format(layer_class))
-                print('ARGS ARE {}'.format(args.keys()))
                 layer = layer_class(**args)
-                self.inputs = layer(self.inputs)
-                layers.append(layer)
 
-        return nn.Sequential(*layers)
+                shape_before = get_shape(self.inputs)
+                self.inputs = layer(self.inputs)
+                shape_after = get_shape(self.inputs)
+
+                shape_before = (None, *shape_before[1:])
+                shape_after = (None, *shape_after[1:])
+                layers.append(('Layer {}: {} -> {}'.format(i, shape_before, shape_after),layer))
+
+        return nn.Sequential(OrderedDict(layers))
 
 
 def update_layers(letter, func, name=None):
