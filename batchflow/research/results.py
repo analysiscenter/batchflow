@@ -115,10 +115,12 @@ class Results:
         configs, aliases : dict, Config, Option, Domain or None
             configs to load
         use_alias : bool
-            all elements in the resulting DataFrame will be represented as alias
+            if True, use alias for model name, else use its full name.
+            Defaults to True
         concat_config : bool
-            if True, the resulting DataFrame will have one column with alias, else it will
-            have column for each option in domain
+            if True, concatenate all config options into one string and store
+            it in 'config' column, else use separate column for each option.
+            Defaults to False
         kwargs : dict
             kwargs will be interpreted as config paramter
 
@@ -199,6 +201,7 @@ class Results:
         for config_alias in self.configs:
             alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
+            _repetition = config_alias.pop_config('repetition')
             path = os.path.join(self.path, 'results', alias_str)
 
             for unit in names:
@@ -213,7 +216,6 @@ class Results:
                                 res.append(self._slice_file(dill.load(file), iterations_to_load, variables))
                         res = self._concat(res, variables)
                         self._fix_length(res)
-                        _repetition = config_alias.pop_config('repetition')
                         if '_dummy' not in alias:
                             if use_alias:
                                 if concat_config:
