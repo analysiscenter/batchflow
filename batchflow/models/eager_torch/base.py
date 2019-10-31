@@ -1,4 +1,4 @@
-""""""
+""" Eager version of TorchModel. """
 import os
 import re
 import threading
@@ -17,11 +17,10 @@ from ... import Config
 
 
 # TODO:
-# layers/ConvBlock
+# layers/ConvBlock ✓
 # microbatch (rename/alias to virtual batch?)
 # multi-device
 # async
-# 
 
 
 
@@ -61,7 +60,7 @@ DECAYS_DEFAULTS = {
 class EagerTorch:
     """ Eagerly! """
 
-    def __init__(self, config=None, *args, **kwargs):
+    def __init__(self, config=None):
         self.config = Config(config)
         self.full_config = None
         self.train_lock = threading.Lock()
@@ -125,6 +124,7 @@ class EagerTorch:
 
     @classmethod
     def default_config(cls):
+        """ Truly amazing docstring. """
         config = Config()
         config['inputs'] = {}
         config['common'] = {}
@@ -139,6 +139,7 @@ class EagerTorch:
         return config
 
     def build_config(self):
+        """ Truly amazing docstring. """
         config = self.default_config()
         config = config + self.config
 
@@ -164,7 +165,10 @@ class EagerTorch:
                     block_name, method = config_name, _ = item
                 elif len(item) == 3:
                     block_name, config_name, method = item
-
+            elif isinstance(item, dict):
+                block_name = item['block_name']
+                config_name = item.get('config_name', block_name)
+                method = item.get('method', config_name)
 
             inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
             block = self._make_block(config_name, method, config, inputs)
@@ -290,6 +294,7 @@ class EagerTorch:
 
     @classmethod
     def initial_block(cls, inputs, **kwargs):
+        """ Truly amazing docstring. """
         kwargs = cls.get_defaults('initial_block', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -297,6 +302,7 @@ class EagerTorch:
 
     @classmethod
     def body(cls, inputs, **kwargs):
+        """ Truly amazing docstring. """
         kwargs = cls.get_defaults('body', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -304,6 +310,7 @@ class EagerTorch:
 
     @classmethod
     def head(cls, inputs, **kwargs):
+        """ Truly amazing docstring. """
         kwargs = cls.get_defaults('head', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -345,6 +352,9 @@ class EagerTorch:
 
 
     def train(self, *args, fetches=None, use_lock=False, microbatch=None):    # pylint: disable=arguments-differ
+        """ Truly amazing docstring. """
+        _ = microbatch
+
         config = self.full_config
         *inputs, targets = self._fill_input(*args)
 
@@ -378,6 +388,7 @@ class EagerTorch:
         return output
 
     def predict(self, *args, targets=None, fetches=None):    # pylint: disable=arguments-differ
+        """ Truly amazing docstring. """
         inputs = self._fill_input(*args)
         if targets is not None:
             targets = self._fill_input(targets)[0]
@@ -398,6 +409,7 @@ class EagerTorch:
         return output
 
     def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
+        """ Truly amazing docstring. """
         if ops is None:
             ops = []
         elif not isinstance(ops, (dict, tuple, list)):
@@ -441,12 +453,14 @@ class EagerTorch:
 
     @classmethod
     def channels_axis(cls, data_format='channels_first'):
+        """ Get channel axis. """
         data_format = data_format if data_format else 'channels_first'
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
 
 
     def save(self, path, *args, **kwargs):
+        """ Truly amazing docstring. """
         _ = args, kwargs
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
@@ -460,6 +474,7 @@ class EagerTorch:
             }, path)
 
     def load(self, path, *args, eval=False, **kwargs):
+        """ Truly amazing docstring. """
         _ = args, kwargs
         device = self._get_device()
         if device:

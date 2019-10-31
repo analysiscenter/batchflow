@@ -196,7 +196,7 @@ class ConvBlock(nn.Module):
         'alpha_dropout': AlphaDropout,
         'dropblock': None, # TODO
         'mip': None, # TODO?
-        'residual_bilinear_additive': None, # TODO
+        'residual_bilinear_additive': Interpolate, # TODO
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
         'subpixel_conv': SubPixelConv,
@@ -253,7 +253,7 @@ class ConvBlock(nn.Module):
                  activation='relu',
                  pool_size=2, pool_strides=2,
                  dropout_rate=0.,
-                 padding='same', data_format='channels_last', name=None,
+                 padding='same', data_format='channels_first', name=None,
                  **kwargs):
         super().__init__()
 
@@ -267,19 +267,45 @@ class ConvBlock(nn.Module):
         self.padding, self.data_format = padding, data_format
         self.kwargs = kwargs
 
-        self.layer = self.parse_params(inputs)
-
+        block_modules, skip_modules, combine_modules = self.parse_params(self.inputs)
+        self.block_modules = block_modules
+        self.skip_modules = skip_modules if skip_modules else None
+        self.combine_modules = combine_modules if combine_modules else None
 
     def forward(self, x):
-        return self.layer(x)
+        b_counter, s_counter, c_counter = 0, 0, 0
+        residuals = []
 
+        for letter in self.module_layout:
+            if letter == '_':
+                x = self.block_modules[b_counter](x)
+                b_counter += 1
+            elif letter in ['R', 'A']:
+                residuals += [self.skip_modules[s_counter](x)]
+                s_counter += 1
+            elif letter in ['+', '*', '.']:
+                x = self.combine_modules[c_counter]([x, residuals[-1]])
+                residuals = residuals[:-1]
+                c_counter += 1
+        return x
+
+
+    def fill_layer_params(self, layer_class):
+        layer_params = inspect.getfullargspec(layer_class.__init__)[0]
+        layer_params.remove('self')
+
+        args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
+                for param in layer_params
+                if (hasattr(self, param) or (param in self.kwargs))}
+        return args
 
     def parse_params(self, inputs=None):
         layout = self.layout or ''
         layout = layout.replace(' ', '')
         if len(layout) == 0:
             logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
-            return inputs
+            return nn.Sequential([])
+        self.module_layout = ''
 
 
         layout_dict = {}
@@ -288,8 +314,9 @@ class ConvBlock(nn.Module):
             letter_counts = layout_dict.setdefault(letter_group, [-1, 0])
             letter_counts[1] += 1
 
-        layers = []
-        residuals = []
+        modules, skip_modules, combine_modules = nn.ModuleList(), nn.ModuleList(), nn.ModuleList()
+        layers, residuals = [], []
+
         for i, letter in enumerate(layout):
             # Arguments for layer creating; arguments for layer call
             args = {}
@@ -299,70 +326,84 @@ class ConvBlock(nn.Module):
             layer_class = self.LAYERS_CLASSES[layer_name]
             layout_dict[letter_group][0] += 1
 
-            # if letter == 'a':
-            #     args = dict(activation=self.activation)
-            #     activation_fn = unpack_args(args, *layout_dict[letter_group])['activation']
-            #     if activation_fn is not None:
-            #         tensor = activation_fn(tensor)
-            # elif letter == 'R':
-            #     residuals += [tensor]
-            # elif letter == 'A':
-            #     args = dict(factor=self.kwargs.get('factor'), data_format=self.data_format)
-            #     args = unpack_args(args, *layout_dict[letter_group])
-            #     t = self.LAYERS_CLASSES['resize_bilinear_additive'](**args, name='rba-%d' % i)(tensor)
-            #     residuals += [t]
-            # elif letter == '+':
-            #     tensor = tensor + residuals[-1]
-            #     residuals = residuals[:-1]
-            # elif letter == '*':
-            #     tensor = tensor * residuals[-1]
-            #     residuals = residuals[:-1]
-            # elif letter == '.':
-            #     axis = -1 if self.data_format == 'channels_last' else 1
-            #     tensor = tf.concat([tensor, residuals[-1]], axis=axis, name='concat-%d' % i)
-            #     residuals = residuals[:-1]
-            layer_args = self.kwargs.get(layer_name, {})
-            skip_layer = layer_args is False \
-                         or isinstance(layer_args, dict) and layer_args.get('disable', False)
+            if letter in ['R', 'A', '+', '*', '.']:
+                if len(layers) >= 1:
+                    self.module_layout += '_'
+                    modules.append(nn.Sequential(OrderedDict(layers)))
+                    layers = []
+                self.module_layout += letter
 
-            # Create params for the layer call
-            if skip_layer:
-                pass
-            elif letter in self.DEFAULT_LETTERS:
-                layer_params = inspect.getfullargspec(layer_class.__init__)[0]
-                layer_params.remove('self')
+                if letter == 'R':
+                    residuals += [self.inputs]
 
-                args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
-                        for param in layer_params
-                        if (hasattr(self, param) or (param in self.kwargs))}
+                    layer_desc = 'Layer {}, letter "{}"'.format(i, letter)
+                    layer = nn.Sequential(OrderedDict([(layer_desc, nn.Sequential())]))
+                    skip_modules.append(layer)
+                elif letter == 'A':
+                    args = self.fill_layer_params(layer_class)
+                    args['mode'] = args.get('mode', 'b')
+                    layer = layer_class(**args)
+                    skip = layer(self.inputs)
+                    residuals += [skip]
+
+                    layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter, get_shape(self.inputs), get_shape(skip))
+                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
+                    skip_modules.append(layer)
+                elif letter in ['+', '*', '.']:
+                    layer = Combine(op=letter)
+                    shape_before = get_shape(self.inputs)
+                    self.inputs = layer([self.inputs, residuals[-1]])
+                    shape_after = get_shape(self.inputs)
+                    residuals = residuals[:-1]
+
+                    shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
+                    layer_desc = 'Layer {}: {} -> {}'.format(i, shape_before, shape_after)
+                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
+                    combine_modules.append(layer)
             else:
-                if letter not in self.LETTERS_LAYERS.keys():
-                    raise ValueError('Unknown letter symbol - %s' % letter)
+                layer_args = self.kwargs.get(layer_name, {})
+                skip_layer = layer_args is False \
+                             or isinstance(layer_args, dict) and layer_args.get('disable', False)
 
-            # Additional params for some layers
-            if letter_group.lower() == 'p':
-                # Choosing pooling operation
-                pool_op = 'mean' if letter.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
-                args['op'] = pool_op
-            elif letter_group == 'b':
-                # Additional layouts for all the upsampling layers
-                if self.kwargs.get('upsampling_layout'):
-                    args['layout'] = self.kwargs.get('upsampling_layout')
+                # Create params for the layer call
+                if skip_layer:
+                    pass
+                elif letter in self.DEFAULT_LETTERS:
+                    args = self.fill_layer_params(layer_class)
+                else:
+                    if letter not in self.LETTERS_LAYERS.keys():
+                        raise ValueError('Unknown letter symbol - %s' % letter)
 
-            if not skip_layer:
-                args = {**args, **layer_args}
-                args = unpack_args(args, *layout_dict[letter_group])
-                layer = layer_class(**args)
+                # Additional params for some layers
+                if letter_group.lower() == 'p':
+                    # Choosing pooling operation
+                    pool_op = 'mean' if letter.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
+                    args['op'] = pool_op
 
-                shape_before = get_shape(self.inputs)
-                self.inputs = layer(self.inputs)
-                shape_after = get_shape(self.inputs)
+                elif letter_group == 'b':
+                    # Additional layouts for all the upsampling layers
+                    args['mode'] = args.get('mode', letter.lower())
+                    if self.kwargs.get('upsampling_layout'):
+                        args['layout'] = self.kwargs.get('upsampling_layout')
 
-                shape_before = (None, *shape_before[1:])
-                shape_after = (None, *shape_after[1:])
-                layers.append(('Layer {}: {} -> {}'.format(i, shape_before, shape_after),layer))
+                if not skip_layer:
+                    args = {**args, **layer_args}
+                    args = unpack_args(args, *layout_dict[letter_group])
+                    layer = layer_class(**args)
 
-        return nn.Sequential(OrderedDict(layers))
+                    shape_before = get_shape(self.inputs)
+                    self.inputs = layer(self.inputs)
+                    shape_after = get_shape(self.inputs)
+
+                    shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
+                    layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter, shape_before, shape_after)
+                    layers.append((layer_desc, layer))
+
+        if len(layers) > 0:
+            self.module_layout += '_'
+            modules.append(nn.Sequential(OrderedDict(layers)))
+
+        return modules, skip_modules, combine_modules
 
 
 def update_layers(letter, func, name=None):
@@ -444,3 +485,50 @@ class Upsample(nn.Module):
 
     def forward(self, x):
         return self.layer(x)
+
+
+
+class Combine(nn.Module):
+    """ Combine list of tensor into one.
+
+    Parameters
+    ----------
+    inputs : sequence of torch.Tensors
+        Tensors to combine.
+
+    op : str {'concat', 'sum', 'conv'}
+        If 'concat', inputs are concated along channels axis.
+        If 'sum', inputs are summed.
+        If 'softsum', every tensor is passed through 1x1 convolution in order to have
+        the same number of channels as the first tensor, and then summed.
+    """
+    def __init__(self, inputs=None, op='concat'):
+        super().__init__()
+
+        self.op = op
+
+        if op == ['softsum', '&']:
+            args = dict(layout='c', filters=get_shape(inputs[0])[1],
+                        kernel_size=1)
+            conv = [ConvBlock(get_shape(tensor), **args) for tensor in inputs]
+            self.conv = nn.ModuleList(conv)
+
+
+    def forward(self, inputs):
+        if self.op in ['concat', '.']:
+            return torch.cat(inputs, dim=1)
+        if self.op in ['sum', '+']:
+            return torch.stack(inputs, dim=0).sum(dim=0)
+        if self.op in ['multi', '*']:
+            result = 1
+            for item in inputs:
+                result *= item
+            return result
+        if self.op in ['softsum', '&']:
+            inputs = [conv(tensor)
+                      for conv, tensor in zip(self.conv, inputs)]
+            return torch.stack(inputs, dim=0).sum(dim=0)
+        raise ValueError('Combine `op` must be one of `concat`, `sum`, `softsum`, got {}.'.format(self.op))
+
+    def extra_repr(self):
+        return 'op=' + self.op

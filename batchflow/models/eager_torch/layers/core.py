@@ -447,16 +447,26 @@ class Interpolate(nn.Module):
         't': 'trilinear',
     }
 
-    def __init__(self, inputs=None, size=None, scale_factor=None, **kwargs):
+    def __init__(self, inputs=None, mode='b', size=None, scale_factor=None, **kwargs):
         super().__init__()
         self.size, self.scale_factor = size, scale_factor
 
-        if kwargs.get('mode') in self.MODES:
-            kwargs['mode'] = self.MODES[mode]
+        if mode in self.MODES:
+            mode = self.MODES[mode]
+        self.mode = mode
         self.kwargs = kwargs
 
     def forward(self, x):
-        return F.interpolate(x, size=self.size, scale_factor=self.scale_factor, **self.kwargs)
+        return F.interpolate(x, mode=self.mode, size=self.size, scale_factor=self.scale_factor,
+                             align_corners=True, **self.kwargs)
+
+    def extra_repr(self):
+        if self.scale_factor is not None:
+            info = 'scale_factor=' + str(self.scale_factor)
+        else:
+            info = 'size=' + str(self.size)
+        info += ', mode=' + self.mode
+        return info
 
 
 
