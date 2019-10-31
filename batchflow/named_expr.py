@@ -535,7 +535,7 @@ class D(NamedExpression):
     def _get(self, **kwargs):
         name, kwargs = super()._get(**kwargs)
         batch = kwargs['batch']
-        dataset = batch._dataset or kwargs['batch'].pipeline._dataset
+        dataset = batch._dataset or kwargs['batch'].pipeline._dataset # pylint:disable=protected-access
         if dataset is None:
             raise ValueError("Dataset is not set", self)
         return name, dataset, kwargs
