@@ -73,10 +73,10 @@ class Logger:
         for item in self._loggers:
             item['kwargs'] = eval_expr(item['kwargs'], **kwargs)
 
-    def __add___(self, other):
+    def __add__(self, other):
         # pylint: disable=protected-access
         if isinstance(other, Logger):
-            return Logger(self._loggers + other._logers)
+            return Logger(self._loggers + other._loggers)
         raise TypeError("unsupported operand type(s) for +: '{}' and '{}'".format(type(self), type(other)))
 
 class BasicLogger(Logger):
@@ -89,7 +89,7 @@ class PrintLogger(Logger):
     """ Logging by print """
     def __init__(self):
         super().__init__()
-        self._loggers = [{'info': print, 'error': print}]
+        self._loggers = [{'info': print, 'error': print, 'kwargs': dict()}]
 
 class TelegramLogger(Logger):
     """ Telegram Logger """

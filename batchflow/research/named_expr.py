@@ -54,7 +54,8 @@ class ResearchIteration(ResearchNamedExpression):
         _, kwargs = super()._get(**kwargs)
         return kwargs['iteration']
 
-    def get(self, iteration):
+    def get(self, **kwargs):
+        iteration = self._get(**kwargs)
         return iteration
 
 class ResearchConfig(ResearchExecutableUnit):
@@ -74,7 +75,8 @@ class ResearchPath(ResearchNamedExpression):
         _, kwargs = super()._get(**kwargs)
         return kwargs['path']
 
-    def get(self, path):
+    def get(self, **kwargs):
+        path = self._get(**kwargs)
         return path
 
 class ResearchResults(ResearchNamedExpression):
