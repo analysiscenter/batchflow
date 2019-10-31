@@ -496,12 +496,6 @@ class Pipeline:
         """ Delete all variables """
         self.variables = VariableDirectory()
 
-    def update_dataset(self, name):
-        return self._add_action(UPDATE_DATASET_ID, _args=dict(var_name=name))
-
-    def _exec_update_dataset(self, batch, action):
-        self.set_variable(action['var_name'], action['value'], action['mode'], batch=batch)
-
     def update(self, expr, value=None):
         """ Update a value of a given named expression lazily during pipeline execution
 
