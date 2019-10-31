@@ -14,7 +14,7 @@ from .config import Config
 from .batch import Batch
 from .decorators import deprecated
 from .exceptions import SkipBatchException, EmptyBatchSequence
-from .named_expr import NamedExpression, V, eval_expr
+from .named_expr import NamedExpression, V, D, eval_expr
 from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
@@ -65,7 +65,7 @@ class Pipeline:
             self._namespaces = []
         else:
             self.dataset = pipeline.dataset
-            self._dataset = None
+            self._dataset = pipeline._dataset
             config = config or {}
             _config = pipeline.config or {}
             self.config = {**config, **_config}
@@ -312,8 +312,24 @@ class Pipeline:
 
         It is always run as the first action in the pipeline chain despite it's actual location.
         """
+        self._dataset = self.dataset
         self.dataset = dataset
         return self
+
+    def cv_fold(self, fold, part=None):
+        """ Set dataset fold as dataset
+
+        Parameters
+        ----------
+        fold : int
+            partition index
+        part : str or None
+            'train' or 'test', part of the cv partition
+        """
+        dataset = D().cv(fold)
+        if part is not None:
+            dataset = getattr(dataset, part)
+        return self.set_dataset(dataset)
 
     def has_variable(self, name):
         """ Check if a variable exists
@@ -479,6 +495,12 @@ class Pipeline:
     def delete_all_variables(self):
         """ Delete all variables """
         self.variables = VariableDirectory()
+
+    def update_dataset(self, name):
+        return self._add_action(UPDATE_DATASET_ID, _args=dict(var_name=name))
+
+    def _exec_update_dataset(self, batch, action):
+        self.set_variable(action['var_name'], action['value'], action['mode'], batch=batch)
 
     def update(self, expr, value=None):
         """ Update a value of a given named expression lazily during pipeline execution

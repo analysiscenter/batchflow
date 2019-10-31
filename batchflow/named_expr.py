@@ -10,6 +10,7 @@ class _DummyBatch:
     def __init__(self, pipeline):
         self.pipeline = pipeline
         self.dataset = pipeline.dataset
+        self._dataset = pipeline._dataset
 
 
 def eval_expr(expr, **kwargs):
@@ -534,7 +535,7 @@ class D(NamedExpression):
     def _get(self, **kwargs):
         name, kwargs = super()._get(**kwargs)
         batch = kwargs['batch']
-        dataset = batch.dataset or kwargs['batch'].pipeline.dataset
+        dataset = batch._dataset or kwargs['batch'].pipeline._dataset
         if dataset is None:
             raise ValueError("Dataset is not set", self)
         return name, dataset, kwargs
