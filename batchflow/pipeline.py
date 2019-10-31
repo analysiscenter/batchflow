@@ -53,8 +53,9 @@ class Pipeline:
         # pylint: disable=protected-access
 
         if pipeline is None:
-            self.dataset = dataset
-            self._dataset = None
+            self.dataset = dataset # dataset that can be updated by set_dataset
+            self.initial_dataset = dataset # initial dataset. Will not be changes
+            self._dataset = None # evaluated value of dataset
             self.config = config or {}
             self._actions = actions or []
             self._lazy_run = None
@@ -65,6 +66,7 @@ class Pipeline:
             self._namespaces = []
         else:
             self.dataset = pipeline.dataset
+            self.initial_dataset = pipeline.initial_dataset
             self._dataset = pipeline._dataset
             config = config or {}
             _config = pipeline.config or {}
@@ -312,7 +314,6 @@ class Pipeline:
 
         It is always run as the first action in the pipeline chain despite it's actual location.
         """
-        self._dataset = self.dataset
         self.dataset = dataset
         return self
 
@@ -1360,6 +1361,7 @@ class Pipeline:
                 raise RuntimeError("gen_batch without arguments requires a lazy run at the end of the pipeline")
             args, kwargs = self._lazy_run
 
+        self._dataset = self.initial_dataset
         self._dataset = self._eval_expr(self.dataset)
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
