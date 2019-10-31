@@ -1,5 +1,4 @@
 """ Resizing Torch layers. """
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -26,7 +25,7 @@ class Interpolate(nn.Module):
         't': 'trilinear',
     }
 
-    def __init__(self, inputs=None, mode='b', size=None, scale_factor=None, **kwargs):
+    def __init__(self, mode='b', size=None, scale_factor=None, **kwargs):
         super().__init__()
         self.size, self.scale_factor = size, scale_factor
 
@@ -50,7 +49,7 @@ class Interpolate(nn.Module):
 
 class PixelShuffle(nn.PixelShuffle):
     """ Resize input tensor with depth to space operation """
-    def __init__(self, upscale_factor=None, inputs=None):
+    def __init__(self, upscale_factor=None):
         super().__init__(upscale_factor)
 
 
@@ -70,7 +69,7 @@ class Crop(nn.Module):
     resize_to
         Tensor or shape to resize input tensor to.
     """
-    def __init__(self, inputs, resize_to):
+    def __init__(self, resize_to):
         super().__init__()
 
         self.resize_to = resize_to

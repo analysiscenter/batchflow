@@ -1,12 +1,9 @@
 """ Pooling layers. """
-import inspect
-
-import numpy as np
-import torch
+#pylint: disable=not-callable, invalid-name
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_shape, get_num_channels, get_num_dims, calc_padding
+from ..utils import get_shape, get_num_dims, calc_padding
 
 
 

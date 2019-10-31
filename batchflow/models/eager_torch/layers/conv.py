@@ -1,12 +1,9 @@
 """ Convolutional layers. """
-import inspect
-
-import numpy as np
-import torch
+#pylint: disable=not-callable
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_shape, get_num_channels, get_num_dims, calc_padding
+from ..utils import get_num_channels, get_num_dims, calc_padding
 
 
 class BaseConv(nn.Module):
@@ -14,7 +11,7 @@ class BaseConv(nn.Module):
     TRANSPOSED = False
 
     def __init__(self, filters, kernel_size, stride=1, strides=None, padding='same',
-                dilation=1, dilation_rate=None, groups=1, bias=True, inputs=None):
+                 dilation=1, dilation_rate=None, groups=1, bias=True, inputs=None):
         super().__init__()
 
         args = {
@@ -22,8 +19,8 @@ class BaseConv(nn.Module):
             'out_channels': filters,
             'groups': groups,
             'kernel_size': kernel_size,
-            'dilation': dilation or dilation_rate,
-            'stride': stride or strides,
+            'dilation': dilation_rate or dilation,
+            'stride': strides or stride,
             'bias': bias,
         }
 
@@ -68,14 +65,21 @@ class ConvTranspose(BaseConv):
 class BaseDepthwiseConv(nn.Module):
     LAYER = None
 
-    def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
+    def __init__(self, kernel_size, stride=None, strides=None, padding='same',
                  dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None):
         super().__init__()
 
-        in_channels = get_num_channels(inputs)
-        out_channels = in_channels * depth_multiplier
-        self.layer = self.LAYER(out_channels, kernel_size, strides=strides, padding=padding,
-                                dilation_rate=dilation_rate, groups=in_channels, bias=bias, inputs=inputs)
+        args = {
+            'filters': get_num_channels(inputs) * depth_multiplier,
+            'kernel_size': kernel_size,
+            'groups': get_num_channels(inputs),
+            'strides': stride or strides,
+            'padding': padding,
+            'dilation_rate': dilation or dilation_rate,
+            'bias': bias,
+        }
+
+        self.layer = self.LAYER(inputs=inputs, **args)
 
     def forward(self, x):
         return self.layer(x)

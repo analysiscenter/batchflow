@@ -3,7 +3,6 @@ import logging
 import inspect
 from collections import OrderedDict
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -258,7 +257,7 @@ class ConvBlock(nn.Module):
                  activation='relu',
                  pool_size=2, pool_strides=2,
                  dropout_rate=0.,
-                 padding='same', data_format='channels_first', name=None,
+                 padding='same', data_format='channels_first',
                  **kwargs):
         super().__init__()
 
@@ -272,7 +271,7 @@ class ConvBlock(nn.Module):
         self.padding, self.data_format = padding, data_format
         self.kwargs = kwargs
 
-        block_modules, skip_modules, combine_modules = self.parse_params(self.inputs)
+        block_modules, skip_modules, combine_modules = self.parse_params()
         self.block_modules = block_modules
         self.skip_modules = skip_modules if skip_modules else None
         self.combine_modules = combine_modules if combine_modules else None
@@ -296,6 +295,7 @@ class ConvBlock(nn.Module):
 
 
     def fill_layer_params(self, layer_class):
+        """ Inspect which parameters should be passed to the layer and get them from instance. """
         layer_params = inspect.getfullargspec(layer_class.__init__)[0]
         layer_params.remove('self')
 
@@ -304,7 +304,8 @@ class ConvBlock(nn.Module):
                 if (hasattr(self, param) or (param in self.kwargs))}
         return args
 
-    def parse_params(self, inputs=None):
+    def parse_params(self):
+        """ Create necessary Modules from instance parameters. """
         layout = self.layout or ''
         layout = layout.replace(' ', '')
         if len(layout) == 0:
@@ -323,6 +324,7 @@ class ConvBlock(nn.Module):
         layers, residuals = [], []
 
         for i, letter in enumerate(layout):
+            print('ASD', letter, get_shape(self.inputs))
             # Arguments for layer creating; arguments for layer call
             args = {}
 
@@ -351,7 +353,9 @@ class ConvBlock(nn.Module):
                     skip = layer(self.inputs)
                     residuals += [skip]
 
-                    layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter, get_shape(self.inputs), get_shape(skip))
+                    layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter,
+                                                                          get_shape(self.inputs),
+                                                                          get_shape(skip))
                     layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
                     skip_modules.append(layer)
                 elif letter in ['+', '*', '.']:

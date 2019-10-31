@@ -2,11 +2,9 @@
 import inspect
 
 import numpy as np
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from ..utils import get_shape, get_num_channels, get_num_dims, calc_padding
+from ..utils import get_shape, get_num_channels, get_num_dims
 
 
 
@@ -48,6 +46,23 @@ class Dense(nn.Module):
 
 
 class Activation(nn.Module):
+    """ Proxy activation module.
+
+    Parameters
+    ----------
+    activation : str, nn.Module, callable or None
+        If None, then identity function `f(x) = x`.
+        If str, then name from `torch.nn`
+        Also can be an instance of activation module (e.g. `torch.nn.ReLU()` or `torch.nn.ELU(alpha=2.0)`),
+        or a class of activation module (e.g. `torch.nn.ReLU` or `torch.nn.ELU`),
+        or a callable (e.g. `F.relu` or your custom function).
+
+    args
+        Positional arguments passed to either class initializer or callable.
+
+    kwargs
+        Additional named arguments passed to either class initializer or callable.
+    """
     ACTIVATIONS = {f.lower(): f for f in dir(nn)}
 
     def __init__(self, activation, *args, **kwargs):
