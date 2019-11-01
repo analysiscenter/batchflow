@@ -507,20 +507,21 @@ class EagerTorch:
         with torch.no_grad():
             self.predictions = self.model(*inputs)
 
-            for mode in train_mode:
-                if mode in train_steps.keys():
-                    train_fetches = [(mode, train_steps[mode])]
-                else:
-                    train_fetches = [(name, train_step) for name, train_step in train_steps.items()
-                                     if re.search(mode, name) is not None]
+            if targets:
+                for mode in train_mode:
+                    if mode in train_steps.keys():
+                        train_fetches = [(mode, train_steps[mode])]
+                    else:
+                        train_fetches = [(name, train_step) for name, train_step in train_steps.items()
+                                         if re.search(mode, name) is not None]
 
-                mode_loss = 0
-                for name, step in train_fetches:
-                    loss_fn = step['loss']
-                    loss = sum([loss(self.predictions, targets) for loss in loss_fn]) / len(loss_fn)
-                    setattr(self, 'loss' + name, loss)
-                    mode_loss += loss
-                setattr(self, 'loss' + mode, mode_loss)
+                    mode_loss = 0
+                    for name, step in train_fetches:
+                        loss_fn = step['loss']
+                        loss = sum([loss(self.predictions, targets) for loss in loss_fn]) / len(loss_fn)
+                        setattr(self, 'loss' + name, loss)
+                        mode_loss += loss
+                    setattr(self, 'loss' + mode, mode_loss)
 
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
