@@ -77,6 +77,13 @@ N_SPLITS = [2, 3, 6, 5]
                          list(zip(SIZE, N_SPLITS))
 )
 def test_d(size, n_splits):
+    """Test checks for behaviour of D expression in `set_dataset` action.
+
+    size
+        size of the dataset.
+    n_splits
+        the number if cv folds.
+    """
     ds = Dataset(size)
     ds.cv_split(n_splits=n_splits)
 
