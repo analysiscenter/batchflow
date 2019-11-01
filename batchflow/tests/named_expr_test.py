@@ -84,10 +84,10 @@ def test_d(size, n_splits):
     n_splits
         the number if cv folds.
     """
-    ds = Dataset(size)
-    ds.cv_split(n_splits=n_splits)
+    dataset = Dataset(size)
+    dataset.cv_split(n_splits=n_splits)
 
-    pipeline = (ds.pipeline()
+    pipeline = (dataset.pipeline()
         .set_dataset(D().cv(C('fold')).train)
         .init_variable('indices', default=[])
         .update(V('indices', mode='a'), B('indices')[0])
