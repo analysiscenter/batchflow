@@ -12,7 +12,6 @@ import torch.nn as nn
 
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss
-from ..utils import unpack_fn_from_config
 from ... import Config
 
 
@@ -22,7 +21,35 @@ from ... import Config
 # multi-device
 # async
 
+def unpack_fn_from_config(param, config=None):
+    """ Return params from config """
+    value = config.get(param)
 
+    if value is None:
+        return None, {}
+
+    value = value if isinstance(value, list) else [value]
+    res = []
+
+    for item in value:
+        if isinstance(item, tuple):
+            if len(item) == 0:
+                name, args = None, None
+            elif len(item) == 1:
+                name, args = item[0], {}
+            elif len(item) == 2:
+                name, args = item
+            else:
+                name, args = item[0], item[1:]
+        elif isinstance(item, dict):
+            item = item.copy()
+            name, args = item.pop('name', None), item
+        else:
+            name, args = item, {}
+        res.append((name, args))
+
+    res = res[0] if len(res) == 1 else res
+    return res
 
 LOSSES = {
     'mse': nn.MSELoss,
@@ -213,74 +240,111 @@ class EagerTorch:
         return block
 
 
-    def _make_loss(self, config):
-        loss, args = unpack_fn_from_config('loss', config)
+    def _make_train_steps(self, config):
+        # Wrap parameters from config root as `train_steps`
+        if 'train_steps' not in config:
+            config['train_steps'] = {'': {key: config.get(key) for key in
+                                          ('loss', 'optimizer', 'decay', 'n_iters')}}
 
-        if isinstance(loss, str):
-            loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
-        elif isinstance(loss, str) and hasattr(nn, loss):
-            loss = getattr(nn, loss)
-        elif isinstance(loss, str) and hasattr(nn, loss + "Loss"):
-            loss = getattr(nn, loss + "Loss")
-        elif isinstance(loss, type):
-            pass
-        elif isinstance(loss, nn.Module):
-            self.loss_fn = loss
-        elif callable(loss):
-            self.loss_fn = partial(loss, **args)
-        else:
-            raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
+        # First pass through the config: pass values from higher level, create (and store) all of the optimizers
+        optimizers = {}
+        for key, subconfig in config['train_steps'].items():
+            subconfig.update({key: subconfig.get(key) or config.get(key)
+                              for key in ('loss', 'optimizer', 'decay', 'n_iters')})
+            if subconfig.get('optimizer') is not None:
+                if optimizers.get(key) is None:
+                    optimizers[key] = self._make_optimizer(subconfig)
 
-        if self.loss_fn is None:
-            self.loss_fn = loss(**args)
+        # Second pass through the config: create loss, get scope variables, minimize via chosen optimizer
+        train_steps = {}
+        for key, subconfig in config['train_steps'].items():
+            loss = self._make_loss(subconfig)
+            optimizer, decay = optimizers.get(subconfig.get('use')) or optimizers.get(key)
+            step = {
+                'loss': loss,
+                'optimizer': optimizer,
+                'decay': decay,
+                'n_iters': subconfig.get('n_iters'),
+            }
+            train_steps.update({key: step})
 
-        if isinstance(self.loss_fn, nn.Module):
-            self.loss_fn.to(device=self.device)
+        return train_steps
+
+    def _make_loss(self, config, device=None):
+        device = device or self.device
+        res = unpack_fn_from_config('loss', config)
+        res = res if isinstance(res, list) else [res]
+
+        losses = []
+        for loss, args in res:
+            loss_fn = None
+            if isinstance(loss, str):
+                if hasattr(nn, loss):
+                    loss = getattr(nn, loss)
+                elif hasattr(nn, loss + "Loss"):
+                    loss = getattr(nn, loss + "Loss")
+                else:
+                    loss = LOSSES.get(re.sub('[-_ ]', '', loss).lower(), None)
+            elif isinstance(loss, type):
+                pass
+            elif isinstance(loss, nn.Module):
+                loss_fn = loss
+            elif callable(loss):
+                loss_fn = partial(loss, **args)
+            else:
+                raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
+
+            loss_fn = loss_fn or loss(*args)
+            if isinstance(loss_fn, nn.Module):
+                loss_fn.to(device=device)
+            losses.append(loss_fn)
+        return losses
 
     def _make_optimizer(self, config):
-        optimizer_name, optimizer_args = unpack_fn_from_config('optimizer', config)
+        optimizer, optimizer_args = unpack_fn_from_config('optimizer', config)
 
-        if optimizer_name is None or callable(optimizer_name) or isinstance(optimizer_name, type):
+        if optimizer is None or callable(optimizer) or isinstance(optimizer, type):
             pass
-        elif isinstance(optimizer_name, str) and hasattr(torch.optim, optimizer_name):
-            optimizer_name = getattr(torch.optim, optimizer_name)
+        elif isinstance(optimizer, str) and hasattr(torch.optim, optimizer):
+            optimizer = getattr(torch.optim, optimizer)
         else:
-            raise ValueError("Unknown optimizer", optimizer_name)
+            raise ValueError("Unknown optimizer", optimizer)
 
-        if optimizer_name:
-            self.optimizer = optimizer_name(self.model.parameters(), **optimizer_args)
+        if optimizer:
+            optimizer = optimizer(self.model.parameters(), **optimizer_args)
         else:
-            raise ValueError("Optimizer is not defined", optimizer_name)
+            raise ValueError("Optimizer is not defined", optimizer)
 
-        decay_name, decay_args = self._make_decay(config)
-        if decay_name is not None:
-            self.lr_decay = decay_name(self.optimizer, **decay_args)
+        decay, decay_args = self._make_decay(config)
+        if decay is not None:
+            decay = decay(optimizer, **decay_args)
+        return optimizer, decay
 
     def _make_decay(self, config):
-        decay_name, decay_args = unpack_fn_from_config('decay', config)
+        decay, decay_args = unpack_fn_from_config('decay', config)
+        n_iters = config.get('n_iters')
 
-        if decay_name is None:
-            return decay_name, decay_args
+        if decay is None:
+            return decay, decay_args
         if 'n_iters' not in config:
             raise ValueError('Missing required key ```n_iters``` in the cofiguration dict.')
-        self.n_iters = config.pop('n_iters')
 
-        if callable(decay_name) or isinstance(decay_name, type):
+        if callable(decay) or isinstance(decay, type):
             pass
-        elif isinstance(decay_name, str) and hasattr(torch.optim.lr_scheduler, decay_name):
-            decay_name = getattr(torch.optim.lr_scheduler, decay_name)
-        elif decay_name in DECAYS:
-            decay_name = DECAYS.get(decay_name)
+        elif isinstance(decay, str) and hasattr(torch.optim.lr_scheduler, decay):
+            decay = getattr(torch.optim.lr_scheduler, decay)
+        elif decay in DECAYS:
+            decay = DECAYS.get(decay)
         else:
-            raise ValueError("Unknown learning rate decay method", decay_name)
+            raise ValueError("Unknown learning rate decay method", decay)
 
-        if decay_name in DECAYS_DEFAULTS:
-            decay_dict = DECAYS_DEFAULTS.get(decay_name).copy()
-            if decay_name == DECAYS['cos']:
-                decay_dict.update(T_max=self.n_iters)
+        if decay in DECAYS_DEFAULTS:
+            decay_dict = DECAYS_DEFAULTS.get(decay).copy()
+            if decay == DECAYS['cos']:
+                decay_dict.update(T_max=n_iters)
             decay_dict.update(decay_args)
             decay_args = decay_dict.copy()
-        return decay_name, decay_args
+        return decay, decay_args
 
 
     @classmethod
@@ -333,7 +397,6 @@ class EagerTorch:
     def _fill_input(self, *args):
         return tuple([self._fill_param(arg) for arg in args])
 
-
     def _fill_output(self, fetches):
         _fetches = [fetches] if isinstance(fetches, str) else fetches
 
@@ -351,37 +414,59 @@ class EagerTorch:
         return output
 
 
-    def train(self, *args, fetches=None, use_lock=False, microbatch=None):    # pylint: disable=arguments-differ
+    def train(self, *args, fetches=None, use_lock=False, train_mode='', individual_backwards=True, microbatch=None):    # pylint: disable=arguments-differ
         """ Truly amazing docstring. """
         _ = microbatch
 
         config = self.full_config
+
         *inputs, targets = self._fill_input(*args)
 
         if self.model is None:
             print('_BUILD IN TRAIN')
             self._build(inputs)
 
+        train_steps = self.train_steps
+        if not isinstance(train_mode, (tuple, list)):
+            train_mode = [train_mode]
+
         if use_lock:
             self.train_lock.acquire()
-
         self.model.train()
-        self.optimizer.zero_grad()
-        self.predictions = self.model(*inputs)
-        self.loss = self.loss_fn(self.predictions, targets)
-        self.loss.backward()
-        self.optimizer.step()
 
-        if self.lr_decay:
-            if self.current_iter >= self.n_iters:
-                self.lr_decay.step()
-                self.current_iter = 0
-            self.current_iter += 1
+        if not individual_backwards:
+            self.predictions = self.model(*inputs)
+
+        for mode in train_mode:
+            if mode in train_steps.keys():
+                train_fetches = [(mode, train_steps[mode])]
+            else:
+                train_fetches = [(name, train_step) for name, train_step in train_steps.items()
+                                 if re.search(mode, name) is not None]
+
+            mode_loss = 0
+            for name, step in train_fetches:
+                loss_fn, optimizer, decay = step['loss'], step['optimizer'], step['decay']
+                optimizer.zero_grad()
+                if individual_backwards:
+                    self.predictions = self.model(*inputs)
+                loss = sum([loss(self.predictions, targets) for loss in loss_fn]) / len(loss_fn)
+                setattr(self, 'loss' + name, loss)
+                loss.backward()
+                optimizer.step()
+
+                if decay:
+                    if step.get('current_iter', 0) >= step['n_iters']:
+                        decay.step()
+                        step['current_iter'] = 0
+                    step['current_iter'] = step.get('current_iter', 0) + 1
+
+                mode_loss += loss
+            setattr(self, 'loss' + mode, mode_loss)
 
         if use_lock:
             self.train_lock.release()
 
-        config = self.full_config
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
