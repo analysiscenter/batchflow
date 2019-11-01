@@ -54,6 +54,7 @@ class Pipeline:
 
         if pipeline is None:
             self.dataset = dataset
+            self._dataset = None
             self.evaluated_dataset = None
             self.config = config or {}
             self._actions = actions or []
@@ -65,6 +66,7 @@ class Pipeline:
             self._namespaces = []
         else:
             self.dataset = pipeline.dataset
+            self._dataset = pipeline._dataset
             self.evaluated_dataset = pipeline.evaluated_dataset
             config = config or {}
             _config = pipeline.config or {}
@@ -312,7 +314,7 @@ class Pipeline:
 
         It is always run as the first action in the pipeline chain despite it's actual location.
         """
-        self.evaluated_dataset = dataset
+        self._dataset = dataset
         return self
 
     def cv_fold(self, fold, part=None):
@@ -1359,9 +1361,8 @@ class Pipeline:
                 raise RuntimeError("gen_batch without arguments requires a lazy run at the end of the pipeline")
             args, kwargs = self._lazy_run
 
-        dataset = self.evaluated_dataset or self.dataset
         self.evaluated_dataset = None
-        self.evaluated_dataset = self._eval_expr(dataset)
+        self.evaluated_dataset = self._eval_expr(self._dataset or self.dataset)
         args_value = self._eval_expr(args)
         kwargs_value = self._eval_expr(kwargs)
         self.reset(reset)
