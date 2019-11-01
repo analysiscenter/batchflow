@@ -328,6 +328,7 @@ class Dataset(Baseset):
             print(dataset.test.cv1.indices) # [4, 5, 6]
             print(dataset.test.cv2.indices) # [7, 8, 9]
         """
+        import pdb; pdb.set_trace()
         if self.n_splits is not None:
             for i in range(self.n_splits):
                 cv_attr = 'cv'+str(i)
