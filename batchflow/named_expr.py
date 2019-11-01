@@ -534,7 +534,7 @@ class D(NamedExpression):
     def _get(self, **kwargs):
         name, kwargs = super()._get(**kwargs)
         batch = kwargs['batch']
-        dataset = batch.dataset or kwargs['batch'].pipeline.evaluated_dataset or kwargs['batch'].pipeline.dataset
+        dataset = batch.dataset or kwargs['batch'].pipeline.dataset
         if dataset is None:
             raise ValueError("Dataset is not set", self)
         return name, dataset, kwargs

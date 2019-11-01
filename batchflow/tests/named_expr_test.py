@@ -5,7 +5,7 @@ from contextlib import ExitStack as does_not_raise
 import pytest
 
 sys.path.append('..')
-from batchflow import B, C, D, F, L, V, R, P, I, Dataset
+from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline
 
 
 @pytest.mark.parametrize('named_expr', [
@@ -87,11 +87,10 @@ def test_d(size, n_splits):
     dataset = Dataset(size)
     dataset.cv_split(n_splits=n_splits)
 
-    pipeline = (dataset.pipeline()
-        .set_dataset(D().cv(C('fold')).train)
+    pipeline = (Pipeline()
         .init_variable('indices', default=[])
         .update(V('indices', mode='a'), B('indices')[0])
-    )
+    ) << dataset.CV(C('fold')).train
 
     result = list(range(size))
 

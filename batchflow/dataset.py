@@ -5,6 +5,7 @@ import numpy as np
 from .base import Baseset
 from .batch import Batch
 from .dsindex import DatasetIndex
+from .named_expr import L
 from .pipeline import Pipeline
 from .components import create_item_class
 
@@ -75,6 +76,8 @@ class Dataset(Baseset):
         kwargs['_copy'] = kwargs.get('_copy', copy)
         self.n_splits = None
         kwargs['n_splits'] = kwargs.get('n_splits', None)
+        if kwargs['n_splits'] is not None:
+            self.cv_split(n_splits=kwargs['n_splits'])
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
@@ -275,6 +278,10 @@ class Dataset(Baseset):
         if n > self.n_splits - 1:
             raise ValueError("The dataset has been split into fewer splits than %d" % n)
         return  getattr(self, 'cv' + str(n))
+
+    def CV(self, expr):
+        """ Return a dataset which corresponds to the fold defined as NamedExpression """
+        return  L(self.cv)(expr)
 
     def cv_split(self, method='kfold', n_splits=5, shuffle=False):
         """ Create datasets for cross-validation
