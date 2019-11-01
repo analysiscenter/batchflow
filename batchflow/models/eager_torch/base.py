@@ -17,8 +17,9 @@ from ... import Config
 
 # TODO:
 # layers/ConvBlock ✓
+# train_steps ✓
 # microbatch (rename/alias to virtual batch?)
-# multi-device
+# multi-device ✓
 # async
 
 def unpack_fn_from_config(param, config=None):
@@ -94,6 +95,7 @@ class EagerTorch:
 
         self.model = None
         self.device = None
+        self.devices = []
         self.microbatch = None
 
         self.n_iters = None
@@ -120,34 +122,15 @@ class EagerTorch:
 
     def build(self):
         """ Build the model """
-        config = self.build_config()
-        self.full_config = config
+        self.full_config = self.combine_configs()
+        self.build_config()
 
-        self.device = self._get_device()
+        self._get_devices()
 
-        # If the inputs were set in config with their shapes we can build rightaway
-        if config.get('inputs'):
+        # If the inputs were set in config with their shapes we can build right away
+        if self.full_config.get('inputs'):
             print('_BUILD IN BUILD')
             self._build()
-
-
-    def _get_device(self):
-        device = self.config.get('device')
-        if isinstance(device, torch.device) or device is None:
-            _device = device
-        elif isinstance(device, str):
-            _device = device.split(':')
-            unit, index = _device if len(_device) > 1 else (device, '0')
-            if unit.lower() == 'gpu':
-                _device = torch.device('cuda', int(index))
-            elif unit.lower() == 'cpu':
-                _device = torch.device('cpu')
-            else:
-                raise ValueError('Unknown device type: ', device)
-        else:
-            raise TypeError('Wrong device type: ', type(device))
-        return _device
-
 
     @classmethod
     def default_config(cls):
@@ -165,16 +148,48 @@ class EagerTorch:
         config['microbatch'] = None
         return config
 
+    def combine_configs(self):
+        config = self.default_config() + self.config
+        return config
+
     def build_config(self):
         """ Truly amazing docstring. """
-        config = self.default_config()
-        config = config + self.config
+        config = self.full_config
 
         if config.get('inputs'):
             inputs = config.get('initial_block/inputs')
             if isinstance(inputs, str):
                 config['common/data_format'] = config['inputs'][inputs].get('data_format')
-        return config
+
+    def _get_devices(self):
+        devices = self.full_config.get('device')
+        if devices is None:
+            if torch.cuda.is_available():
+                self.device = torch.device('cuda:0')
+            else:
+                self.device = torch.device('cpu')
+        else:
+            devices = self.full_config.get('device')
+            devices = devices if isinstance(devices, list) else [devices]
+            available_devices = ['cuda:{}'.format(i) for i in range(torch.cuda.device_count())] + ['cpu']
+
+            for dev in devices:
+                if isinstance(dev, torch.device):
+                    self.devices.append(dev)
+                elif isinstance(dev, str):
+                    dev_ = dev.lower()
+                    dev_ = dev.replace('gpu', 'cuda')
+
+                    devices = [torch.device(device) for device in available_devices
+                               if re.search(dev_, device.lower()) is not None]
+                    self.devices.extend(devices)
+                else:
+                    raise TypeError('Wrong device type: {}'.format(type(dev)))
+            self.devices = [device for i, device in enumerate(self.devices)
+                            if device not in self.devices[:i]]
+            self.device = self.devices[0]
+
+        torch.backends.cudnn.benchmark = self.full_config.get('benchmark', 'cuda' in self.device.type)
 
 
     def _build(self, inputs=None):
@@ -204,18 +219,28 @@ class EagerTorch:
                 blocks.append((block_name, block))
 
         self.model = nn.Sequential(OrderedDict(blocks))
+        if len(self.devices) > 1:
+            self.model = nn.DataParallel(self.model, self.devices)
+        else:
+            self.model.to(self.device)
 
-        if self.loss_fn is None:
-            self._make_loss(config)
-        if self.optimizer is None:
-            self._make_optimizer(config)
+        self.train_steps = self._make_train_steps(config)
 
-    def _placeholder_data(self, batch_size=2):
+    def _placeholder_data(self):
         config = self.full_config
+        batch_size = config.get('placeholder_batch_size', 2)
 
-        input_names = config.pop('initial_block/inputs', default=None) or list(config.get('inputs').keys())
+        input_names = config.pop('initial_block/inputs', default=None)
         input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
-        shapes = [(batch_size, *config['inputs'][name]['shape']) for name in input_names]
+        shapes = []
+        for name in input_names:
+            cfg = config['inputs'][name]
+            if 'shape' in cfg:
+                shapes.append((batch_size, *cfg['shape']))
+            elif 'classes' in cfg:
+                shapes.append((batch_size, *cfg['classes']))
+            else:
+                raise ValueError('Input {} must contain `shape` configuration'.format(name))
 
         data = [np.zeros(shape, dtype=np.float32) for shape in shapes]
         data = self._fill_param(data)
@@ -382,6 +407,9 @@ class EagerTorch:
 
 
     def _fill_value(self, value):
+        if value.dtype not in [np.float32, 'float32']:
+            value = value.astype(np.float32)
+
         value = torch.from_numpy(value)
         if self.device:
             value = value.to(self.device)
@@ -541,7 +569,6 @@ class EagerTorch:
         """ Get channel axis. """
         data_format = data_format if data_format else 'channels_first'
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
-
 
 
     def save(self, path, *args, **kwargs):
