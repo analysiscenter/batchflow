@@ -35,6 +35,7 @@ def check_batch_lengths(batch_lengths, batch_size):
 def test_rebatch(batch_size, rebatch_size):
     """ checks that rebatch produces batches of expected lengths (and doesn't crash)"""
     data = np.vstack([np.array([i, i]) for i in range(DATASET_SIZE)])
+    data = (data,)
     dataset = Dataset(index=DATASET_SIZE,
                       batch_class=MyBatch,
                       preloaded=data)
@@ -61,6 +62,7 @@ def test_rebatch(batch_size, rebatch_size):
 def test_merge(merge_factor):
     """ merge `merge_factor` instances of a batch and check result's shape"""
     data = np.vstack([np.array([i, i]) for i in range(DATASET_SIZE)])
+    data = (data,)
     b = MyBatch(index=range(DATASET_SIZE), preloaded=data)
     merged, rest = MyBatch.merge([b] * merge_factor)
 

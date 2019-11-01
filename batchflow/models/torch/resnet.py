@@ -45,10 +45,6 @@ class ResNet(TorchModel):
             number of filters in each group
 
         block : dict
-            bottleneck : bool
-                whether to use bottleneck blocks (1x1,3x3,1x1) or simple (3x3,3x3)
-            bottleneck_factor : int
-                filter shrinking factor in a bottleneck block (default=4)
             post_activation : None or bool or str
                 layout to apply after after residual and shortcut summation (default is None)
             zero_pad : bool
@@ -56,10 +52,15 @@ class ResNet(TorchModel):
                 or apply a 1x1 convolution (default is False)
             width_factor : int
                 widening factor to make WideResNet (default=1)
-            resnext : bool
-                whether to use aggregated ResNeXt block (default=False)
-            resnext_factor : int
-                the number of aggregations in ResNeXt block (default=32)
+            resnext : int or None
+                if None - do not use ResNeXt block
+                if int - number of aggregations in ResNeXt block
+                default is None
+            bottleneck : int or None
+                if None - use simple (3x3,3x3) block
+                if int - filter shrinking factor in a bottleneck block (1x1,3x3,1x1)
+                default is None
+
 
     head : dict
         'Vdf' with dropout_rate=.4
@@ -72,9 +73,8 @@ class ResNet(TorchModel):
                                         pool_size=3, pool_strides=2)
 
         config['body/block'] = dict(layout=None, post_activation=None, downsample=False,
-                                    bottleneck=False, bottleneck_factor=4,
-                                    width_factor=1, zero_pad=False,
-                                    resnext=False, resnext_factor=32)
+                                    bottleneck=None, width_factor=1, zero_pad=False,
+                                    resnext=False)
 
         config['head'] += dict(layout='Vdf', dropout_rate=.4)
 
@@ -98,6 +98,10 @@ class ResNet(TorchModel):
             filters = config['initial_block/filters']
             config['body/filters'] = (2 ** np.arange(len(num_blocks)) * filters * width).tolist()
 
+        if config.get('body/downsample') is None:
+            num_blocks = config['body/num_blocks']
+            config['body/downsample'] = [[]] + [[0]] * (len(num_blocks) - 1)
+
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
         if config.get('head/filters') is None:
@@ -115,25 +119,20 @@ class ResNet(TorchModel):
             number of filters in each block group
         num_blocks : list of int
             number of blocks in each group
-        bottleneck : bool
-            whether to use a simple or bottleneck block
-        bottleneck_factor : int
-            filter number multiplier for a bottleneck block
 
         Returns
         -------
         nn.Module
         """
         kwargs = cls.get_defaults('body', kwargs)
-        filters, block_args = cls.pop(['filters', 'block'], kwargs)
+        filters, block_args, downsample = cls.pop(['filters', 'block', 'downsample'], kwargs)
         block_args = {**kwargs, **block_args}
 
         x = inputs
         all_blocks = []
         for i, n_blocks in enumerate(kwargs['num_blocks']):
             for block in range(n_blocks):
-                downsample = i > 0 and block == 0
-                block_args['downsample'] = downsample
+                block_args['downsample'] = block in downsample[i]
                 bfilters = filters[i] if isinstance(filters[i], int) else filters[i][block]
                 x = cls.block(x, filters=bfilters, **block_args)
                 all_blocks.append(x)
@@ -178,14 +177,12 @@ class ResNet(TorchModel):
             a factor to increase number of filters to build a wide network
         downsample : bool
             whether to decrease spatial dimensions with strides=2 in the first convolution
-        resnext : bool
-            whether to use an aggregated ResNeXt block
-        resnext_factor : int
-            cardinality for ResNeXt block
-        bottleneck : bool
-            whether to use a simple (`False`) or bottleneck (`True`) block
-        bottleneck_factor : int
-            the filters nultiplier in the bottleneck block
+        resnext : int or None
+            if None - do not use ResNeXt block
+            if int - number of aggregations in ResNeXt block
+        bottleneck : int or None
+            if None - use simple (3x3,3x3) block
+            if int - filter shrinking factor in a bottleneck block (1x1,3x3,1x1)
         kwargs : dict
             ConvBlock parameters for all sub blocks
 
@@ -196,18 +193,18 @@ class ResNet(TorchModel):
         kwargs = cls.get_defaults('body/block', kwargs)
         layout, filters, downsample, zero_pad = cls.pop(['layout', 'filters', 'downsample', 'zero_pad'], kwargs)
         width_factor = cls.pop('width_factor', kwargs)
-        bottleneck, bottleneck_factor = cls.pop(['bottleneck', 'bottleneck_factor'], kwargs)
-        resnext, resnext_factor = cls.pop(['resnext', 'resnext_factor'], kwargs)
+        bottleneck = cls.pop('bottleneck', kwargs)
+        resnext = cls.pop('resnext', kwargs)
         post_activation = cls.pop('post_activation', kwargs)
         if isinstance(post_activation, bool) and post_activation:
             post_activation = 'an'
 
         filters = filters * width_factor
         if resnext:
-            x = cls.next_conv_block(inputs, layout, filters, bottleneck, resnext_factor,
-                                    downsample=downsample, bottleneck_factor=bottleneck_factor, **kwargs)
+            x = cls.next_conv_block(inputs, layout, filters, bottleneck,
+                                    downsample=downsample, **kwargs)
         else:
-            x = cls.conv_block(inputs, layout, filters, bottleneck, bottleneck_factor,
+            x = cls.conv_block(inputs, layout, filters, bottleneck,
                                downsample=downsample, **kwargs)
 
         inputs_channels = get_num_channels(inputs)
@@ -239,7 +236,7 @@ class ResNet(TorchModel):
         return x
 
     @classmethod
-    def conv_block(cls, inputs, layout, filters, bottleneck, bottleneck_factor=None, **kwargs):
+    def conv_block(cls, inputs, layout, filters, bottleneck=None, **kwargs):
         """ ResNet convolution block
 
         Parameters
@@ -252,10 +249,9 @@ class ResNet(TorchModel):
             number of output filters
         downsample : bool
             whether to decrease spatial dimensions with strides=2
-        bottleneck : bool
-            whether to use a simple or a bottleneck block
-        bottleneck_factor : int
-            filter count scaling factor
+        bottleneck : int or None
+            if None - use simple (3x3,3x3) block
+            if int - filter shrinking factor in a bottleneck block (1x1,3x3,1x1)
         kwargs : dict
             conv_block parameters
 
@@ -266,7 +262,7 @@ class ResNet(TorchModel):
         if layout is None:
             layout = cls.default_layout(bottleneck=bottleneck, filters=filters, **kwargs)
         if bottleneck:
-            x = cls.bottleneck_block(inputs, layout, filters, bottleneck_factor=bottleneck_factor, **kwargs)
+            x = cls.bottleneck_block(inputs, layout, filters, bottleneck=bottleneck, **kwargs)
         else:
             x = cls.simple_block(inputs, layout, filters, **kwargs)
         return x
@@ -299,7 +295,7 @@ class ResNet(TorchModel):
         return ConvBlock(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
 
     @classmethod
-    def bottleneck_block(cls, inputs, layout=None, filters=None, kernel_size=None, bottleneck_factor=4,
+    def bottleneck_block(cls, inputs, layout=None, filters=None, kernel_size=None, bottleneck=None,
                          downsample=False, **kwargs):
         """ A stack of 1x1, 3x3, 1x1 convolutions
 
@@ -314,8 +310,8 @@ class ResNet(TorchModel):
             if list, number of filters in each layer
         kernel_size : int or tuple
             convolution kernel size
-        bottleneck_factor : int
-            scale factor for the number of filters in the last convolution
+        bottleneck : int
+            filter number multiplier for a bottleneck block
             (if filters is int, otherwise is not used)
         downsample : bool
             whether to decrease spatial dimensions with strides=2
@@ -333,12 +329,12 @@ class ResNet(TorchModel):
         else:
             strides = kwargs.pop('strides')
         if isinstance(filters, int):
-            filters = [filters, filters, filters * bottleneck_factor]
+            filters = [filters, filters, filters * bottleneck]
         x = ConvBlock(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
         return x
 
     @classmethod
-    def next_conv_block(cls, inputs, layout, filters, bottleneck, resnext_factor, **kwargs):
+    def next_conv_block(cls, inputs, layout, filters, bottleneck, resnext, **kwargs):
         """ ResNeXt convolution block
 
         Parameters
@@ -347,10 +343,11 @@ class ResNet(TorchModel):
             input tensor
         filters : int
             number of output filters
-        bottleneck : bool
-            whether to use a simple or a bottleneck block
-        resnext_factor : int
-            cardinality for ResNeXt model
+        bottleneck : int or None
+            if None - use simple (3x3,3x3) block
+            if int - filter shrinking factor in a bottleneck block (1x1,3x3,1x1)
+        resnext : int
+            number of aggregations in ResNeXt block
         kwargs : dict
             `ConvBlock` parameters
 
@@ -359,11 +356,11 @@ class ResNet(TorchModel):
         nn.Module
         """
         if bottleneck:
-            filters = filters * kwargs['bottleneck_factor']
+            filters = filters * bottleneck
             filters = [filters // 2, filters // 2, filters]
-            kwargs['groups'] = [1, resnext_factor, 1]
+            kwargs['groups'] = [1, resnext, 1]
         else:
-            filters = [resnext_factor * 4, filters]
+            filters = [resnext * 4, filters]
         x = cls.conv_block(inputs, layout, filters=filters, bottleneck=bottleneck, **kwargs)
         return x
 
@@ -403,7 +400,7 @@ class ResNet18(ResNet):
     def default_config(cls):
         config = ResNet.default_config()
         config['body/num_blocks'] = [2, 2, 2, 2]
-        config['body/block/bottleneck'] = False
+        config['body/block/bottleneck'] = None
         return config
 
 
@@ -413,7 +410,7 @@ class ResNet34(ResNet):
     def default_config(cls):
         config = ResNet.default_config()
         config['body/num_blocks'] = [3, 4, 6, 3]
-        config['body/block/bottleneck'] = False
+        config['body/block/bottleneck'] = None
         return config
 
 
@@ -422,7 +419,7 @@ class ResNet50(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet34.default_config()
-        config['body/block/bottleneck'] = True
+        config['body/block/bottleneck'] = 4
         return config
 
 
@@ -432,7 +429,7 @@ class ResNet101(ResNet):
     def default_config(cls):
         config = ResNet.default_config()
         config['body/num_blocks'] = [3, 4, 23, 3]
-        config['body/block/bottleneck'] = True
+        config['body/block/bottleneck'] = 4
         return config
 
 
@@ -442,7 +439,7 @@ class ResNet152(ResNet):
     def default_config(cls):
         config = ResNet.default_config()
         config['body/num_blocks'] = [3, 8, 36, 3]
-        config['body/block/bottleneck'] = True
+        config['body/block/bottleneck'] = 4
         return config
 
 class ResNeXt18(ResNet):
@@ -450,7 +447,7 @@ class ResNeXt18(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet18.default_config()
-        config['body/block/resnext'] = True
+        config['body/block/resnext'] = 32
         return config
 
 
@@ -459,7 +456,7 @@ class ResNeXt34(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet34.default_config()
-        config['body/block/resnext'] = True
+        config['body/block/resnext'] = 32
         return config
 
 
@@ -468,7 +465,7 @@ class ResNeXt50(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet50.default_config()
-        config['body/block/resnext'] = True
+        config['body/block/resnext'] = 32
         return config
 
 
@@ -477,7 +474,7 @@ class ResNeXt101(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet101.default_config()
-        config['body/block/resnext'] = True
+        config['body/block/resnext'] = 32
         return config
 
 
@@ -486,5 +483,5 @@ class ResNeXt152(ResNet):
     @classmethod
     def default_config(cls):
         config = ResNet152.default_config()
-        config['body/block/resnext'] = True
+        config['body/block/resnext'] = 32
         return config

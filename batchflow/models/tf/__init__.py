@@ -1,4 +1,26 @@
 """ Contains tensorflow models and functions """
+import sys
+import tensorflow as tf_
+
+class SilentTF:
+    """ Class to supress deprecation warnings. """
+    def __init__(self):
+        modules = []
+        if hasattr(tf_.compat, 'v1'):
+            modules.append(tf_.compat.v1)
+
+        self.modules = modules
+
+
+    def __getattr__(self, name):
+        for module in self.modules:
+            if name in module.__dict__:
+                return getattr(module, name)
+        return getattr(tf_, name)
+
+sys.modules['tensorflow'] = SilentTF()
+
+
 from .base import TFModel
 from .vgg import VGG, VGG16, VGG19, VGG7
 from .linknet import LinkNet
@@ -26,3 +48,4 @@ from .xception import Xception, XceptionS, Xception41, Xception64
 from .deeplab import DeepLab, DeepLabXS, DeepLabX8, DeepLabX16
 from .efficientnet import EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3, \
     EfficientNetB4, EfficientNetB5, EfficientNetB6, EfficientNetB7
+from .pspnet import PSPNet, PSPNet18, PSPNet34, PSPNet50

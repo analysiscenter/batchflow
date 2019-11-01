@@ -17,7 +17,8 @@ from batchflow.models.tf import LinkNet, UNet, VNet, \
                                 PyramidNet18, PyramidNet34, PyramidNet50, PyramidNet101, \
                                 XceptionS, Xception41, Xception64, \
                                 EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3, \
-                                EfficientNetB4, EfficientNetB5, EfficientNetB6, EfficientNetB7
+                                EfficientNetB4, EfficientNetB5, EfficientNetB6, EfficientNetB7, \
+                                PSPNet18, PSPNet34, PSPNet50
 
 
 
@@ -45,7 +46,8 @@ MODELS_SEG = [
     DenseNetFC56, # DenseNetFC67, DenseNetFC103,
     RefineNet,
     GCN,
-    DeepLabXS, DeepLabX8, # DeepLabX16
+    DeepLabXS, DeepLabX8, # DeepLabX16,
+    PSPNet18, # PSPNet34, PSPNet50
 ]
 
 
