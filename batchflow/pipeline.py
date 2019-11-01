@@ -49,8 +49,9 @@ def hashable(x):
 
 class Pipeline:
     """ Pipeline """
+    # pylint: disable=too-many-instance-attributes
     def __init__(self, dataset=None, config=None, pipeline=None, actions=None, proba=None, repeat=None):
-        # pylint: disable=protected-access, too-many-instance-attributes
+        # pylint: disable=protected-access
 
         if pipeline is None:
             self.dataset = dataset
