@@ -60,6 +60,9 @@ class Dataset(Baseset):
 
             copy : bool
                 whether to copy data from `preloaded` when creating a batch to alow for in-place transformations
+
+            **kwargs : dict
+                additional dataset attributes or `cv_split` parameters
         """
         if batch_class is not Batch and not issubclass(batch_class, Batch):
             raise TypeError("batch_class should be inherited from Batch", batch_class)
@@ -72,8 +75,11 @@ class Dataset(Baseset):
         self._attrs = None
         kwargs['_copy'] = kwargs.get('_copy', copy)
         self.n_splits = None
-        if kwargs.get('n_splits') is not None:
-            self.cv_split(**kwargs)
+
+        cv_kwargs = {item: kwargs.pop(item) for item in ['method', 'n_splits', 'shuffle'] if item in kwargs}
+        if cv_kwargs.get('n_splits') is not None:
+            self.cv_split(**cv_kwargs)
+
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
@@ -279,7 +285,7 @@ class Dataset(Baseset):
         """ Return a dataset which corresponds to the fold defined as NamedExpression """
         return  L(self.cv)(expr)
 
-    def cv_split(self, method='kfold', n_splits=5, shuffle=False, **kwargs):
+    def cv_split(self, method='kfold', n_splits=5, shuffle=False):
         """ Create datasets for cross-validation
 
         Datasets are available as `cv0`, `cv1` and so on. And they are already split into train and test parts.
@@ -324,7 +330,6 @@ class Dataset(Baseset):
             print(dataset.test.cv1.indices) # [4, 5, 6]
             print(dataset.test.cv2.indices) # [7, 8, 9]
         """
-        _ = kwargs
         if self.n_splits is not None:
             for i in range(self.n_splits):
                 cv_attr = 'cv'+str(i)
