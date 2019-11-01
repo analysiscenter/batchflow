@@ -10,7 +10,7 @@ from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import Interpolate, SubPixelConv
+from .resize import Interpolate, SubPixelConv, Crop
 from ..utils import get_shape
 from ...utils import unpack_args
 
@@ -288,7 +288,7 @@ class ConvBlock(nn.Module):
                 residuals += [self.skip_modules[s_counter](x)]
                 s_counter += 1
             elif letter in ['+', '*', '.']:
-                x = self.combine_modules[c_counter]([x, residuals[-1]])
+                x = self.combine_modules[c_counter]([residuals[-1], x])
                 residuals = residuals[:-1]
                 c_counter += 1
         return x
@@ -324,7 +324,6 @@ class ConvBlock(nn.Module):
         layers, residuals = [], []
 
         for i, letter in enumerate(layout):
-            print('ASD', letter, get_shape(self.inputs))
             # Arguments for layer creating; arguments for layer call
             args = {}
 
@@ -361,7 +360,7 @@ class ConvBlock(nn.Module):
                 elif letter in ['+', '*', '.']:
                     layer = Combine(op=letter)
                     shape_before = get_shape(self.inputs)
-                    self.inputs = layer([self.inputs, residuals[-1]])
+                    self.inputs = layer([residuals[-1], self.inputs])
                     shape_after = get_shape(self.inputs)
                     residuals = residuals[:-1]
 
@@ -525,10 +524,13 @@ class Combine(nn.Module):
 
     def forward(self, inputs):
         if self.op in ['concat', '.']:
+            inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
             return torch.cat(inputs, dim=1)
         if self.op in ['sum', '+']:
+            inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
             return torch.stack(inputs, dim=0).sum(dim=0)
         if self.op in ['multi', '*']:
+            inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
             result = 1
             for item in inputs:
                 result *= item

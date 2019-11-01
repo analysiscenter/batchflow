@@ -7,6 +7,7 @@ from ..utils import get_num_channels, get_num_dims, calc_padding
 
 
 class BaseConv(nn.Module):
+    """ An universal module for plain and transposed convolutions. """
     LAYERS = {}
     TRANSPOSED = False
 
@@ -23,7 +24,6 @@ class BaseConv(nn.Module):
             'stride': strides or stride,
             'bias': bias,
         }
-
 
         padding = calc_padding(inputs, padding=padding, transposed=self.TRANSPOSED, **args)
         if isinstance(padding, tuple) and isinstance(padding[0], tuple):
@@ -42,7 +42,7 @@ class BaseConv(nn.Module):
 
 
 class Conv(BaseConv):
-    """ Multi-dimensional convolutional layer """
+    """ Multi-dimensional convolutional layer. """
     LAYERS = {
         1: nn.Conv1d,
         2: nn.Conv2d,
@@ -52,7 +52,7 @@ class Conv(BaseConv):
 
 
 class ConvTranspose(BaseConv):
-    """ Multi-dimensional transposed convolutional layer """
+    """ Multi-dimensional transposed convolutional layer. """
     LAYERS = {
         1: nn.ConvTranspose1d,
         2: nn.ConvTranspose2d,
@@ -63,6 +63,7 @@ class ConvTranspose(BaseConv):
 
 
 class BaseDepthwiseConv(nn.Module):
+    """ An universal module for plain and transposed depthwise convolutions. """
     LAYER = None
 
     def __init__(self, kernel_size, stride=None, strides=None, padding='same',
@@ -86,15 +87,18 @@ class BaseDepthwiseConv(nn.Module):
 
 
 class DepthwiseConv(BaseDepthwiseConv):
+    """ Multi-dimensional depthwise convolutional layer. """
     LAYER = Conv
 
 
 class DepthwiseConvTranspose(BaseDepthwiseConv):
+    """ Multi-dimensional transposed depthwise convolutional layer. """
     LAYER = ConvTranspose
 
 
 
 class BaseSeparableConv(nn.Module):
+    """ An universal module for plain and transposed separable convolutions. """
     LAYER = None
 
     def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
@@ -112,8 +116,10 @@ class BaseSeparableConv(nn.Module):
 
 
 class SeparableConv(BaseSeparableConv):
+    """ Multi-dimensional separable convolutional layer. """
     LAYER = DepthwiseConv
 
 
 class SeparableConvTranspose(BaseSeparableConv):
+    """ Multi-dimensional separable depthwise convolutional layer. """
     LAYER = DepthwiseConvTranspose
