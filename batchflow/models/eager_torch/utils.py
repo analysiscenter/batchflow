@@ -1,10 +1,6 @@
 """ Utility functions. """
-import inspect
-
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 
 
@@ -33,19 +29,8 @@ def get_num_dims(inputs):
     return max(1, dim - 2)
 
 
-def get_padding(kernel_size=None, width=None, dilation=1, stride=1):
-    kernel_size = dilation * (kernel_size - 1) + 1
-    if stride >= width:
-        p = max(0, kernel_size - width)
-    else:
-        if width % stride == 0:
-            p = kernel_size - stride
-        else:
-            p = kernel_size - width % stride
-    p = (p // 2, p - p // 2)
-    return p
-
 def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
+    """ Get padding values for various convolutions. """
     _ = kwargs
 
     dims = get_num_dims(inputs)
@@ -64,7 +49,7 @@ def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fal
                     dilation = (dilation,) * dims
                 if isinstance(stride, int):
                     stride = (stride,) * dims
-                padding = tuple(get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
+                padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
         else:
             raise ValueError("padding can be 'same' or 'valid'")
     elif isinstance(padding, int):
@@ -75,3 +60,14 @@ def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fal
         raise ValueError("padding can be 'same' or 'valid' or int or tuple of int")
     return padding
 
+def _get_padding(kernel_size=None, width=None, dilation=1, stride=1):
+    kernel_size = dilation * (kernel_size - 1) + 1
+    if stride >= width:
+        p = max(0, kernel_size - width)
+    else:
+        if width % stride == 0:
+            p = kernel_size - stride
+        else:
+            p = kernel_size - width % stride
+    p = (p // 2, p - p // 2)
+    return p

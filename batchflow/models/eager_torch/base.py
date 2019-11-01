@@ -94,20 +94,12 @@ class EagerTorch:
         self.train_lock = threading.Lock()
 
         self.model = None
+        self.train_steps = None
         self.device = None
         self.devices = []
         self.microbatch = None
 
-        self.n_iters = None
-        self.current_iter = 0
-
-        self.loss = None
-        self.loss_fn = None
-        self.lr_decay = None
-        self.optimizer = None
-
         self.predictions = None
-
 
         load = self.config.get('load')
         build = self.config.get('build', default=load is None)
@@ -455,8 +447,7 @@ class EagerTorch:
             self._build(inputs)
 
         train_steps = self.train_steps
-        if not isinstance(train_mode, (tuple, list)):
-            train_mode = [train_mode]
+        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
         if use_lock:
             self.train_lock.acquire()
@@ -500,8 +491,13 @@ class EagerTorch:
         output = self._fill_output(fetches)
         return output
 
-    def predict(self, *args, targets=None, fetches=None):    # pylint: disable=arguments-differ
+    def predict(self, *args, targets=None, train_mode='', fetches=None):    # pylint: disable=arguments-differ
         """ Truly amazing docstring. """
+        config = self.full_config
+        train_steps = self.train_steps
+        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
+
+
         inputs = self._fill_input(*args)
         if targets is not None:
             targets = self._fill_input(targets)[0]
@@ -510,12 +506,22 @@ class EagerTorch:
 
         with torch.no_grad():
             self.predictions = self.model(*inputs)
-            if targets is None:
-                self.loss = None
-            else:
-                self.loss = self.loss_fn(self.predictions, targets)
 
-        config = self.full_config
+            for mode in train_mode:
+                if mode in train_steps.keys():
+                    train_fetches = [(mode, train_steps[mode])]
+                else:
+                    train_fetches = [(name, train_step) for name, train_step in train_steps.items()
+                                     if re.search(mode, name) is not None]
+
+                mode_loss = 0
+                for name, step in train_fetches:
+                    loss_fn = step['loss']
+                    loss = sum([loss(self.predictions, targets) for loss in loss_fn]) / len(loss_fn)
+                    setattr(self, 'loss' + name, loss)
+                    mode_loss += loss
+                setattr(self, 'loss' + mode, mode_loss)
+
         self.output(inputs=self.predictions, predictions=config['predictions'],
                     ops=config['output'], **config['common'])
         output = self._fill_output(fetches)
