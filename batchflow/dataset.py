@@ -5,6 +5,7 @@ import numpy as np
 from .base import Baseset
 from .batch import Batch
 from .dsindex import DatasetIndex
+from .named_expr import L
 from .pipeline import Pipeline
 from .components import create_item_class
 
@@ -23,9 +24,6 @@ class Dataset(Baseset):
 
     indices : class:`numpy.ndarray`
         an array with the indices
-
-    is_split: bool
-        True if dataset has been split into train / test / validation subsets
 
     p : Pipeline
         Actions which will be applied to this dataset
@@ -62,6 +60,9 @@ class Dataset(Baseset):
 
             copy : bool
                 whether to copy data from `preloaded` when creating a batch to alow for in-place transformations
+
+            **kwargs : dict
+                additional dataset attributes or `cv_split` parameters
         """
         if batch_class is not Batch and not issubclass(batch_class, Batch):
             raise TypeError("batch_class should be inherited from Batch", batch_class)
@@ -74,7 +75,11 @@ class Dataset(Baseset):
         self._attrs = None
         kwargs['_copy'] = kwargs.get('_copy', copy)
         self.n_splits = None
-        kwargs['n_splits'] = kwargs.get('n_splits', None)
+
+        cv_kwargs = {item: kwargs.pop(item) for item in ['method', 'n_splits', 'shuffle'] if item in kwargs}
+        if cv_kwargs.get('n_splits') is not None:
+            self.cv_split(**cv_kwargs)
+
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
@@ -276,6 +281,10 @@ class Dataset(Baseset):
             raise ValueError("The dataset has been split into fewer splits than %d" % n)
         return  getattr(self, 'cv' + str(n))
 
+    def CV(self, expr):
+        """ Return a dataset which corresponds to the fold defined as NamedExpression """
+        return  L(self.cv)(expr)
+
     def cv_split(self, method='kfold', n_splits=5, shuffle=False):
         """ Create datasets for cross-validation
 
@@ -341,6 +350,10 @@ class Dataset(Baseset):
 
         self.train = self.copy()
         self.test = self.copy()
+
+        self.train.n_splits = self.n_splits
+        self.test.n_splits = self.n_splits
+
         for i in range(n_splits):
             test_indices = splits[i]
             train_splits = list(set(range(n_splits)) - {i})
