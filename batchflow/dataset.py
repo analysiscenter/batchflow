@@ -25,9 +25,6 @@ class Dataset(Baseset):
     indices : class:`numpy.ndarray`
         an array with the indices
 
-    is_split: bool
-        True if dataset has been split into train / test / validation subsets
-
     p : Pipeline
         Actions which will be applied to this dataset
 
@@ -75,9 +72,8 @@ class Dataset(Baseset):
         self._attrs = None
         kwargs['_copy'] = kwargs.get('_copy', copy)
         self.n_splits = None
-        kwargs['n_splits'] = kwargs.get('n_splits', None)
-        if kwargs['n_splits'] is not None:
-            self.cv_split(n_splits=kwargs['n_splits'])
+        if kwargs.get('n_splits') is not None:
+            self.cv_split(**kwargs)
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
@@ -283,7 +279,7 @@ class Dataset(Baseset):
         """ Return a dataset which corresponds to the fold defined as NamedExpression """
         return  L(self.cv)(expr)
 
-    def cv_split(self, method='kfold', n_splits=5, shuffle=False):
+    def cv_split(self, method='kfold', n_splits=5, shuffle=False, **kwargs):
         """ Create datasets for cross-validation
 
         Datasets are available as `cv0`, `cv1` and so on. And they are already split into train and test parts.
@@ -328,7 +324,7 @@ class Dataset(Baseset):
             print(dataset.test.cv1.indices) # [4, 5, 6]
             print(dataset.test.cv2.indices) # [7, 8, 9]
         """
-        import pdb; pdb.set_trace()
+        _ = kwargs
         if self.n_splits is not None:
             for i in range(self.n_splits):
                 cv_attr = 'cv'+str(i)
@@ -349,6 +345,10 @@ class Dataset(Baseset):
 
         self.train = self.copy()
         self.test = self.copy()
+
+        self.train.n_splits = self.n_splits
+        self.test.n_splits = self.n_splits
+
         for i in range(n_splits):
             test_indices = splits[i]
             train_splits = list(set(range(n_splits)) - {i})
