@@ -110,7 +110,7 @@ class TestBatchPreloadedOneComponent:
 
         batch = get_batch(data, pipeline, index=index, batch_class=MyBatch1, skip=2)
 
-        assert (batch.data.as_array('images')[:, 0, 0] == np.arange(20, 30)).all()
+        assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
 
     def test_df(self, pipeline):
         index = (np.arange(100)+ 1000).astype('str')

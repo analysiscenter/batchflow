@@ -726,7 +726,7 @@ class TorchModel(BaseModel):
 
     def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
-        setattr(self, attr_prefix + name, inputs)
+        setattr(self, attr_prefix + (name or ''), inputs)
         return inputs
 
     def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):
