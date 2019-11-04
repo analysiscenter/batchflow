@@ -378,7 +378,9 @@ class Research:
             devices = [devices]
         if isinstance(devices[0], (int, str)):
             if total_n_branches > len(devices):
-                _devices = list(itertools.chain.from_iterable(zip(*itertools.repeat(devices, total_n_branches // len(devices)))))
+                _devices = list(itertools.chain.from_iterable(
+                    zip(*itertools.repeat(devices, total_n_branches // len(devices)))
+                ))
                 devices = _devices + devices[:total_n_branches % len(devices)]
             else:
                 devices = devices + devices[:-len(devices) % (total_n_branches)]
