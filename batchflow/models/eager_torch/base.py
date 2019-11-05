@@ -437,51 +437,86 @@ class EagerTorch:
         return output
 
 
-    def train(self, *args, fetches=None, use_lock=False, train_mode='', individual_backwards=True, sync_every=True):
+    def train(self, *args, fetches=None, use_lock=False, train_mode='',
+              sum_grads=True, step_on_each=True, microbatch=False):
         """ Truly amazing docstring. """
         # pylint: disable=arguments-differ
         config = self.full_config
-
         *inputs, targets = self._fill_input(*args)
+
+        if step_on_each is True:
+            step_on_each = config.get('step_on_each', 1)
+        elif step_on_each is False or step_on_each is None:
+            step_on_each = 1
+
+        if microbatch is True:
+            microbatch = config.get('microbatch', len(targets))
+
+        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
+
+        steps = len(targets) // microbatch if microbatch else 1 # microbatch acts as size
+        splitted_inputs = [np.array_split(item, steps) for item in inputs] if microbatch else [inputs]
+        splitted_targets = np.array_split(targets, steps) if microbatch else [targets]
+
+        if use_lock:
+            self.train_lock.acquire()
+
+        outputs = []
+        for i in range(steps):
+            _inputs = [item[i] for item in splitted_inputs]
+            _targets = splitted_targets[i]
+
+            output = self._train(*_inputs, _targets, fetches=fetches, train_mode=train_mode,
+                                 sum_grads=sum_grads, step_on_each=step_on_each*steps)
+
+            outputs.append(output)
+
+        if use_lock:
+            self.train_lock.release()
+
+        outputs = [outputs] if isinstance(fetches, str) else outputs
+        output = []
+        for i in range(len(outputs)):
+            lst = [item[i] for item in outputs]
+            output.append(np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst))
+        output = output[0] if isinstance(fetches, str) else output
+        return output
+
+    def _train(self, *args, fetches=None, train_mode='', sum_grads=True, step_on_each=True):
+        *inputs, targets = args
 
         if self.model is None:
             print('_BUILD IN TRAIN')
             self._build(inputs)
-
-        if sync_every is True:
-            sync_every = config.get('sync_every', 1)
-        elif sync_every is False or sync_every is None:
-            sync_every = 1
-
-        train_steps = self.train_steps
-        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
-
-        if use_lock:
-            self.train_lock.acquire()
         self.model.train()
+
         output_container = {}
 
-        if not individual_backwards:
+        if not sum_grads:
             predictions = self.model(*inputs)
 
         for mode in train_mode:
-            if mode in train_steps.keys():
-                train_fetches = [(mode, train_steps[mode])]
+            if mode in self.train_steps.keys():
+                train_fetches = [(mode, self.train_steps[mode])]
             else:
-                train_fetches = [(name, train_step) for name, train_step in train_steps.items()
+                train_fetches = [(name, train_step) for name, train_step in self.train_steps.items()
                                  if re.search(mode, name) is not None]
 
             mode_loss = 0
             for name, step in train_fetches:
                 loss_fn, optimizer, decay = step['loss'], step['optimizer'], step['decay']
 
-                if individual_backwards:
+                if 'initialized' not in step:
+                    optimizer.zero_grad()
+                    step['initialized'] = True
+
+                if sum_grads:
                     predictions = self.model(*inputs)
-                loss = sum([loss(predictions, targets) for loss in loss_fn]) / len(loss_fn)
+                loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
                 mode_loss += loss
                 loss.backward()
 
-                if self.sync_counter >= sync_every:
+                if self.sync_counter >= step_on_each:
                     self.sync_counter = 1
                     optimizer.step()
                     optimizer.zero_grad()
@@ -494,13 +529,11 @@ class EagerTorch:
                         step['current_iter'] = 0
                     step['current_iter'] = step.get('current_iter', 0) + 1
 
-                output_container['loss' + '_'*int(len(name)>0) + name] = loss
-            output_container['loss' + '_'*int(len(mode)>0) + mode] = mode_loss
-
-        if use_lock:
-            self.train_lock.release()
-
+                output_container['loss' + '_'*int(len(name) > 0) + name] = loss
+            output_container['loss' + '_'*int(len(mode) > 0) + mode] = mode_loss
         output_container['predictions'] = predictions
+
+        config = self.full_config
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
                                          ops=config['output'], **config['common'])
         output_container = {**output_container, **additional_outputs}
@@ -509,8 +542,6 @@ class EagerTorch:
 
     def predict(self, *args, targets=None, train_mode='', fetches=None):    # pylint: disable=arguments-differ
         """ Truly amazing docstring. """
-        config = self.full_config
-        train_steps = self.train_steps
         train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
 
@@ -526,10 +557,10 @@ class EagerTorch:
 
             if targets is not None:
                 for mode in train_mode:
-                    if mode in train_steps.keys():
-                        train_fetches = [(mode, train_steps[mode])]
+                    if mode in self.train_steps.keys():
+                        train_fetches = [(mode, self.train_steps[mode])]
                     else:
-                        train_fetches = [(name, train_step) for name, train_step in train_steps.items()
+                        train_fetches = [(name, train_step) for name, train_step in self.train_steps.items()
                                          if re.search(mode, name) is not None]
 
                     mode_loss = 0
@@ -537,10 +568,11 @@ class EagerTorch:
                         loss_fn = step['loss']
                         loss = sum([loss(predictions, targets) for loss in loss_fn]) / len(loss_fn)
                         mode_loss += loss
-                        output_container['loss' + '_'*int(len(name)>0) + name] = loss
-                    output_container['loss' + '_'*int(len(mode)>0) + mode] = mode_loss
+                        output_container['loss' + '_'*int(len(name) > 0) + name] = loss
+                    output_container['loss' + '_'*int(len(mode) > 0) + mode] = mode_loss
+            output_container['predictions'] = predictions
 
-        output_container['predictions'] = predictions
+        config = self.full_config
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
                                          ops=config['output'], **config['common'])
         output_container = {**output_container, **additional_outputs}
