@@ -85,7 +85,7 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
     n_h, n_v = n_vars, n_configs
 
     if n_vars == 1:
-        if layout == 'force_flat':
+        if layout == 'flat':
             n_h, n_v = n_configs, 1
         if layout == 'square':
             n_h = int(np.sqrt(n_configs))
