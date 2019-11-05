@@ -288,8 +288,7 @@ class ConvBlock(nn.Module):
                 residuals += [self.skip_modules[s_counter](x)]
                 s_counter += 1
             elif letter in ['+', '*', '.']:
-                x = self.combine_modules[c_counter]([residuals[-1], x])
-                residuals = residuals[:-1]
+                x = self.combine_modules[c_counter]([residuals.pop(), x])
                 c_counter += 1
         return x
 
@@ -305,7 +304,7 @@ class ConvBlock(nn.Module):
         return args
 
     def parse_params(self):
-        """ Create necessary Modules from instance parameters. """
+        """ Create necessary ModuleLists from instance parameters. """
         layout = self.layout or ''
         layout = layout.replace(' ', '')
         if len(layout) == 0:
@@ -340,7 +339,7 @@ class ConvBlock(nn.Module):
                 self.module_layout += letter
 
                 if letter == 'R':
-                    residuals += [self.inputs]
+                    residuals.append(self.inputs)
 
                     layer_desc = 'Layer {}, letter "{}"'.format(i, letter)
                     layer = nn.Sequential(OrderedDict([(layer_desc, nn.Sequential().to(self.device))]))
@@ -350,7 +349,7 @@ class ConvBlock(nn.Module):
                     args['mode'] = args.get('mode', 'b')
                     layer = layer_class(**args).to(self.device)
                     skip = layer(self.inputs)
-                    residuals += [skip]
+                    residuals.append(skip)
 
                     layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter,
                                                                           get_shape(self.inputs),
@@ -360,9 +359,8 @@ class ConvBlock(nn.Module):
                 elif letter in ['+', '*', '.']:
                     layer = Combine(op=letter).to(self.device)
                     shape_before = get_shape(self.inputs)
-                    self.inputs = layer([residuals[-1], self.inputs])
+                    self.inputs = layer([residuals.pop(), self.inputs])
                     shape_after = get_shape(self.inputs)
-                    residuals = residuals[:-1]
 
                     shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
                     layer_desc = 'Layer {}: {} -> {}'.format(i, shape_before, shape_after)
@@ -378,9 +376,8 @@ class ConvBlock(nn.Module):
                     pass
                 elif letter in self.DEFAULT_LETTERS:
                     args = self.fill_layer_params(layer_class)
-                else:
-                    if letter not in self.LETTERS_LAYERS.keys():
-                        raise ValueError('Unknown letter symbol - %s' % letter)
+                elif letter not in self.LETTERS_LAYERS.keys():
+                    raise ValueError('Unknown letter symbol - %s' % letter)
 
                 # Additional params for some layers
                 if letter_group.lower() == 'p':
@@ -539,7 +536,8 @@ class Combine(nn.Module):
             inputs = [conv(tensor)
                       for conv, tensor in zip(self.conv, inputs)]
             return torch.stack(inputs, dim=0).sum(dim=0)
-        raise ValueError('Combine `op` must be one of `concat`, `sum`, `softsum`, got {}.'.format(self.op))
+        raise ValueError('Combine `op` must be one of `concat`, `sum`, ' \
+                         '`softsum`, or `multi`,  got {}.'.format(self.op))
 
     def extra_repr(self):
         return 'op=' + self.op

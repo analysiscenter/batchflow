@@ -106,12 +106,6 @@ class Activation(nn.Module):
 
 
 
-BATCH_NORM = {
-    1: nn.BatchNorm1d,
-    2: nn.BatchNorm2d,
-    3: nn.BatchNorm3d,
-}
-
 class BatchNorm(nn.Module):
     """ Multi-dimensional batch normalization layer """
     LAYERS = {
