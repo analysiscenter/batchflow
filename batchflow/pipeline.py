@@ -179,7 +179,7 @@ class Pipeline:
 
     def __lshift__(self, other):
         new_p = self.from_pipeline(self)
-        if isinstance(other, Baseset):
+        if isinstance(other, (Baseset, NamedExpression)):
             new_p.dataset = other
             return new_p
         if isinstance(other, (Config, dict)):
@@ -312,6 +312,8 @@ class Pipeline:
 
         It is always run as the first action in the pipeline chain despite it's actual location.
         """
+        if self.dataset is not None:
+            logging.warning("Initial dataset will be changed.")
         self.dataset = dataset
         return self
 
