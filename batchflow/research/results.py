@@ -99,7 +99,7 @@ class Results:
             return json.load(file)
 
     def load(self, names=None, variables=None, iterations=None, repetition=None,
-             configs=None, aliases=None, use_alias=True, concat_config=False, **kwargs):
+             configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
         """ Load results as pandas.DataFrame.
 
         Parameters
@@ -121,6 +121,9 @@ class Results:
             if True, concatenate all config options into one string and store
             it in 'config' column, else use separate column for each option.
             Defaults to False
+        drop_columns : bool
+            used only if `concat_config=True`. Drop or not columns with options and
+            leave only concatenated config.
         kwargs : dict
             kwargs will be interpreted as config paramter
 
@@ -220,7 +223,7 @@ class Results:
                             if use_alias:
                                 if concat_config:
                                     res['config'] = config_alias.alias(as_string=True)
-                                else:
+                                if not drop_columns:
                                     res.update(config_alias.alias(as_string=False))
                             else:
                                 res.update(config_alias.config())
