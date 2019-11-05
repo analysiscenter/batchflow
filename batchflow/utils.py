@@ -70,8 +70,8 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
     figsize : tuple or None
         figsize to pass to matplotlib. If None (default value) figsize is set to (x, y),
         where x = (5 * number of variables), y = (5 * number of configs in `results`)
-    layout: 'force_flat', 'square' or None
-        plot arranging strategy when only one variable is needed (default: None, plots are arranged horysontally)
+    layout: 'flat', 'square' or None
+        plot arranging strategy when only one variable is needed (default: None, plots are arranged vertically)
     """
     if isinstance(variables, dict):
         variables = variables.items()
