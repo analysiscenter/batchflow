@@ -22,6 +22,8 @@ from ... import Config
 # multi-device ✓
 # async
 
+
+
 def unpack_fn_from_config(param, config=None):
     """ Return params from config """
     value = config.get(param)
@@ -97,9 +99,10 @@ class EagerTorch:
         self.train_steps = None
         self.device = None
         self.devices = []
+
+        self.sync_counter = 0
         self.microbatch = None
 
-        self.predictions = None
 
         load = self.config.get('load')
         build = self.config.get('build', default=load is None)
@@ -417,13 +420,13 @@ class EagerTorch:
     def _fill_input(self, *args):
         return tuple([self._fill_param(arg) for arg in args])
 
-    def _fill_output(self, fetches):
+    def _fill_output(self, fetches, outputs):
         _fetches = [fetches] if isinstance(fetches, str) else fetches
 
         output = []
         for f in _fetches:
-            if hasattr(self, f):
-                v = getattr(self, f)
+            if f in outputs:
+                v = outputs[f]
                 if isinstance(v, (torch.Tensor, torch.autograd.Variable)):
                     v = v.detach().cpu().numpy()
                 output.append(v)
@@ -434,10 +437,9 @@ class EagerTorch:
         return output
 
 
-    def train(self, *args, fetches=None, use_lock=False, train_mode='', individual_backwards=True, microbatch=None):    # pylint: disable=arguments-differ
+    def train(self, *args, fetches=None, use_lock=False, train_mode='', individual_backwards=True, sync_every=True):
         """ Truly amazing docstring. """
-        _ = microbatch
-
+        # pylint: disable=arguments-differ
         config = self.full_config
 
         *inputs, targets = self._fill_input(*args)
@@ -446,15 +448,21 @@ class EagerTorch:
             print('_BUILD IN TRAIN')
             self._build(inputs)
 
+        if sync_every is True:
+            sync_every = config.get('sync_every', 1)
+        elif sync_every is False or sync_every is None:
+            sync_every = 1
+
         train_steps = self.train_steps
         train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
         if use_lock:
             self.train_lock.acquire()
         self.model.train()
+        output_container = {}
 
         if not individual_backwards:
-            self.predictions = self.model(*inputs)
+            predictions = self.model(*inputs)
 
         for mode in train_mode:
             if mode in train_steps.keys():
@@ -466,13 +474,19 @@ class EagerTorch:
             mode_loss = 0
             for name, step in train_fetches:
                 loss_fn, optimizer, decay = step['loss'], step['optimizer'], step['decay']
-                optimizer.zero_grad()
+
                 if individual_backwards:
-                    self.predictions = self.model(*inputs)
-                loss = sum([loss(self.predictions, targets) for loss in loss_fn]) / len(loss_fn)
-                setattr(self, 'loss' + name, loss)
+                    predictions = self.model(*inputs)
+                loss = sum([loss(predictions, targets) for loss in loss_fn]) / len(loss_fn)
+                mode_loss += loss
                 loss.backward()
-                optimizer.step()
+
+                if self.sync_counter >= sync_every:
+                    self.sync_counter = 1
+                    optimizer.step()
+                    optimizer.zero_grad()
+                else:
+                    self.sync_counter += 1
 
                 if decay:
                     if step.get('current_iter', 0) >= step['n_iters']:
@@ -480,15 +494,17 @@ class EagerTorch:
                         step['current_iter'] = 0
                     step['current_iter'] = step.get('current_iter', 0) + 1
 
-                mode_loss += loss
-            setattr(self, 'loss' + mode, mode_loss)
+                output_container['loss' + '_'*int(len(name)>0) + name] = loss
+            output_container['loss' + '_'*int(len(mode)>0) + mode] = mode_loss
 
         if use_lock:
             self.train_lock.release()
 
-        self.output(inputs=self.predictions, predictions=config['predictions'],
-                    ops=config['output'], **config['common'])
-        output = self._fill_output(fetches)
+        output_container['predictions'] = predictions
+        additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
+                                         ops=config['output'], **config['common'])
+        output_container = {**output_container, **additional_outputs}
+        output = self._fill_output(fetches, output_container)
         return output
 
     def predict(self, *args, targets=None, train_mode='', fetches=None):    # pylint: disable=arguments-differ
@@ -503,11 +519,12 @@ class EagerTorch:
             targets = self._fill_input(targets)[0]
 
         self.model.eval()
+        output_container = {}
 
         with torch.no_grad():
-            self.predictions = self.model(*inputs)
+            predictions = self.model(*inputs)
 
-            if targets:
+            if targets is not None:
                 for mode in train_mode:
                     if mode in train_steps.keys():
                         train_fetches = [(mode, train_steps[mode])]
@@ -518,14 +535,16 @@ class EagerTorch:
                     mode_loss = 0
                     for name, step in train_fetches:
                         loss_fn = step['loss']
-                        loss = sum([loss(self.predictions, targets) for loss in loss_fn]) / len(loss_fn)
-                        setattr(self, 'loss' + name, loss)
+                        loss = sum([loss(predictions, targets) for loss in loss_fn]) / len(loss_fn)
                         mode_loss += loss
-                    setattr(self, 'loss' + mode, mode_loss)
+                        output_container['loss' + '_'*int(len(name)>0) + name] = loss
+                    output_container['loss' + '_'*int(len(mode)>0) + mode] = mode_loss
 
-        self.output(inputs=self.predictions, predictions=config['predictions'],
-                    ops=config['output'], **config['common'])
-        output = self._fill_output(fetches)
+        output_container['predictions'] = predictions
+        additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
+                                         ops=config['output'], **config['common'])
+        output_container = {**output_container, **additional_outputs}
+        output = self._fill_output(fetches, output_container)
         return output
 
     def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
@@ -540,6 +559,7 @@ class EagerTorch:
         if not isinstance(inputs, (tuple, list)):
             inputs = [inputs]
 
+        outputs = {}
         for i, tensor in enumerate(inputs):
             if not isinstance(tensor, torch.Tensor):
                 raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
@@ -549,7 +569,10 @@ class EagerTorch:
 
             self._add_output_op(tensor, predictions, 'predictions', '', **kwargs)
             for oper in ops[prefix]:
-                self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
+                name, output = self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
+                outputs[name] = output
+        return outputs
+
 
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
@@ -567,8 +590,8 @@ class EagerTorch:
         elif callable(oper):
             output = oper(inputs)
             name = name or oper.__name__
-
-        setattr(self, attr_prefix + name, output)
+        return attr_prefix + name, output
+        # setattr(self, attr_prefix + name, output)
 
 
     @classmethod
