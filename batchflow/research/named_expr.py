@@ -5,9 +5,6 @@ from ..named_expr import NamedExpression
 
 class ResearchNamedExpression(NamedExpression):
     """ NamedExpression base class for Research objects """
-    def __init__(self, name=None):
-        super().__init__(name=name)
-
     def _get(self, **kwargs):
         name = self._get_name(**kwargs)
         return name, kwargs
@@ -60,9 +57,10 @@ class ResearchIteration(ResearchNamedExpression):
 
 class ResearchConfig(ResearchExecutableUnit):
     """ NamedExpression for Config of the ExecutableUnit """
+    def __init__(self, name):
+        super().__init__(name=name)
+
     def get(self, **kwargs):
-        if self.name is None:
-            raise ValueError('`name` must be defined for RC expressions')
         res = super().get(**kwargs)
 
         if isinstance(res, list):
