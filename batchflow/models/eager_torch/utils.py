@@ -46,7 +46,7 @@ def get_shape(inputs, shape=None):
     elif isinstance(inputs, (torch.Size, tuple, list)):
         shape = tuple(inputs)
     else:
-        raise TypeError('inputs can be array, tensor, tuple/list or layer', type(inputs))
+        raise TypeError('inputs can be array, tensor, or sequence', type(inputs))
     return shape
 
 def get_num_channels(inputs, axis=1):

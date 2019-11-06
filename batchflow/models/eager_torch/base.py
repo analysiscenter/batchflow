@@ -52,11 +52,218 @@ DECAYS_DEFAULTS = {
 
 
 class EagerTorch:
-    """ Eagerly! """
+    r""" Base class for eager Torch models.
 
+    Parameters
+    ----------
+    inputs : dict, optional
+        Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of their initialization.
+        Allows to create placeholders of needed shape and data format and initialize model before
+        first pass of actual batch data (thus explicitly imposing shapes).
+
+        Value must be a dictionary with parameters. If some parameters are omitted, then defaults will be at use.
+
+            dtype : str or torch.dtype
+                Data type. Default is 'float32'.
+
+            shape : int, None, sequence of ints or Nones
+                Tensor shape with channels and without batch size. Default is None.
+
+            classes : int, array-like or None
+                If int, then number of classes.
+                If None, then tensor has no classes. Default is None.
+
+    placeholder_batch_size : int
+        If `inputs` is specified with all the required shapes, than it serves as size of batch dimension during
+        placeholder (usually np.ndarrays with zeros) creation.
+
+    loss : str, tuple, dict, list
+        Loss function, might be defined in multiple formats.
+
+        If str, then short ``name``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
+        If list, then sequence of losses in previous formats.
+
+        Name must be one of:
+            - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
+              ``'huber'``, ``'logloss'``, ``'dice'``)
+            - a class name from `torch losses <https://pytorch.org/docs/stable/nn.html#loss-functions>`_
+              (e.g. ``'PoissonNLL'`` or ``'TripletMargin'``)
+            - callable
+
+        Examples:
+
+        - ``{'loss': 'mse'}``
+        - ``{'loss': ('KLDiv', {'reduction': 'none'})``
+        - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
+        - ``{'loss': my_custom_loss_fn}``
+        - ``{'loss': ['dice', 'bce']}``
+
+    optimizer : str, tuple, dict
+        Optimizer, might be defined in multiple formats.
+
+        If str, then short ``name``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
+
+        Name must be one of:
+            - short name (e.g. ``'Adam'``, ``'Adagrad'``, any optimizer from
+              `torch.optim <https://pytorch.org/docs/stable/optim.html#algorithms>`_)
+            - a class with ``Optimizer`` interface
+            - a callable which takes model parameters and optional args
+
+        Examples:
+
+        - ``{'optimizer': 'Adam'}``
+        - ``{'optimizer': ('SparseAdam', {'lr': 0.01})}``
+        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
+        - ``{'optimizer': {'name': MyCustomOptimizer, momentum=0.95}}``
+
+    decay : str, tuple, dict
+        Learning rate decay algorithm, might be defined in multiple formats.
+        All decays require to have ``n_iters`` as a key in a configuration
+        dictionary that contains the number of iterations in one epoch.
+
+        If str, then short ``name``.
+        If tuple, then ``(name, *args)``.
+        If dict, then ``{'name': name, **kwargs}``.
+
+        Name must be one of:
+
+        - short name (``'exp'``, ``'invtime'``, ``'naturalexp'``, ``'const'``, ``'poly'``)
+        - a class name from `torch.optim.lr_scheduler
+          <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate>`_
+          (e.g. ``'LambdaLR'``) except ``'ReduceLROnPlateau'``.
+        - a class with ``_LRScheduler`` interface
+        - a callable which takes optimizer and optional args
+
+        Examples:
+
+        - ``{'decay': 'exp'}``
+        - ``{'decay': ('StepLR', {'steps_size': 10000})}``
+        - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5}``
+
+    n_iters : int
+        Frequency of making step of learning rate decay.
+
+    train_steps : dict
+        Configuration of different training procedures.
+        Must be a mapping from string names to dictionary with train parameters like
+        loss, optimizer, decay, n_iters. Those keys support syntax defined above.
+
+        If any of loss, optimizer, decay, n_iters is defined directly in config, it serves as the default
+        value for every train step.
+
+        Optimizer and decay, created at one train step, can be re-used in another. To do so, one can
+        pass 'use' key with value corresponding to the name of train step from which you want to borrow optimizer.
+        Note that in this case you are still free to change loss-function or scope.
+
+        In order to use particular train step during train, one must pass `train_mode` argument to
+        :meth:`.EagerTorch.train` method.
+
+        Examples:
+
+        Create multiple training procedures:
+            - one to optimize weights to minimize cross-entropy with Adam
+            - one to optimize weights to minimize Dice-coefficient loss with RMSProp
+            - one to optimize weights to minimize cross-entropy loss with re-used optimizer from previous
+
+        .. code-block:: python
+
+            {'train_steps': {'adam_ce': {'loss': 'ce', 'optimizer': 'Adam'},
+                             'rmsprop_dice': {'loss': 'dice', 'optimizer': 'RMSProp'}},
+                             'rmsprop_ce': {'loss': 'ce', 'use': 'rmsprop_dice'}}
+
+    device : str, torch.device or sequence
+        If str, a device name (e.g. 'cpu' or 'gpu:0'). Regular expressions are also allowed (e.g. 'gpu:*').
+        If torch.device, then device to be used.
+        If sequence, then each entry must be in one of previous formats, and batch data is paralleled across them.
+        Default behaviour is to use one (and only one) device of the best available type (priority to GPU over CPU).
+
+    benchmark : bool
+        Whether to optimize network's forward pass after the first batch. Can speed up training if shapes of inputs
+        are constant.
+
+    sync_frequency : int
+        How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
+
+    microbatch : int
+        Also known as virtual batch. Size of chunks to split every batch into.
+        Allows to process given data sequentially, accumulating gradients from microbatches and applying them
+        once in the end. Can be changed later in the `train` method. Batch size must be divisible by microbatch size.
+        Default is not to use microbatching.
+
+    initial_block : dict
+        User-defined module or parameters for the input block, usually
+        :class:`~.eager_torch.layers.ConvBlock` parameters.
+
+        If ``initial_block/inputs`` is specified with a name or list of names,
+        then it should contain names from ``inputs`` with info about shapes of tensors to be passed to `initial_block`.
+
+        Examples:
+
+        - ``{'initial_block/inputs': 'images'}``
+        - ``{'initial_block': dict(inputs='features')}``
+        - ``{'initial_block': dict(inputs='images', layout='nac nac', filters=64, kernel_size=[7, 3], strides=[1, 2])}``
+        - ``{'initial_block': MyCustomModule(some_param=1, another_param=2)}``
+
+    body : dict or nn.Module
+        User-defined module or parameters for the base network layers,
+        usually :class:`~.eager_torch.layers.ConvBlock` parameters.
+
+    head : dict or nn.Module
+        User-defined module or parameters for the head layers,
+        usually :class:`~.eager_torch.layers.ConvBlock` parameters.
+
+    predictions : str or callable
+        An operation applied to the head output to make the predictions tensor which is used in the loss function.
+        See :meth:`.EagerTorch.output` for details.
+
+    output : dict or list
+        Auxiliary operations to apply to network predictions. See :meth:`.EagerTorch.output` for details.
+
+    common : dict
+        Default parameters for all blocks (see :class:`~.eager_torch.layers.ConvBlock`).
+
+
+    **In order to create your own model, it is recommended to:**
+
+    * Take a look at :class:`.BaseModel`: ``build`` and ``load`` methods inherited from it.
+
+    * Take a look at :class:`~.eager_torch.layers.ConvBlock` since it is widely used as a building
+      block almost everywhere.
+
+    * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding
+      :meth:`.EagerTorch.default_config`. Those parameters are then updated with external configuration dictionary.
+
+    * Define config post-processing by overriding :meth:`~.EagerTorch.build_config`.
+      It's main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
+
+    * Override :meth:`~.EagerTorch.initial_block`, :meth:`~.EagerTorch.body` and :meth:`~.EagerTorch.head`, if needed.
+      You can either use usual `Torch layers <https://pytorch.org/docs/stable/nn.html>`_,
+      or predefined layers like :class:`~eager_torch.layers.PyramidPooling`.
+      Conveniently, 'initial_block' is used to make pre-processing (e.g. reshaping or agressive pooling) of inputs,
+      'body' contains the meat of the network flow, and 'head' makes sure that the output is compatible with targets.
+
+
+    **In order to use existing model, it is recommended to configure:**
+
+    * ``inputs`` key defines input data together with parameters like shape, number of classes, data format.
+
+    * ``loss``, ``optimizer``, ``decay`` keys
+
+    * ``initial_block`` sub-dictionary with ``inputs`` key with names of tensors to use as network inputs.
+
+    * ``initial_block``, ``body``, ``head`` keys are used to define behaviour of respective part of the network.
+      Default behaviour is to support all of the :class:`~.eager_torch.layers.ConvBlock` options.
+      For complex models, take a look at default config of the chosen model to learn
+      which parameters should be configured.
+    """
     def __init__(self, config=None):
-        self.config = Config(config)
         self.full_config = None
+        self.config = Config(config)
+        self.input_shapes = None
         self.train_lock = threading.Lock()
 
         self.model = None
@@ -141,17 +348,49 @@ class EagerTorch:
         return config
 
     def combine_configs(self):
+        """ Combine default configuration and the external one. """
         config = self.default_config() + self.config
         return config
 
     def build_config(self):
-        """ Truly amazing docstring. """
+        """ Define model's architecture configuration.
+
+        * Don't forget to call ``super().build_config(names)`` in the beginning.
+
+        * Define parameters for :meth:`.EagerTorch.initial_block`, :meth:`.EagerTorch.body`, :meth:`.EagerTorch.head`,
+          which depend on inputs.
+
+        * Dont forget to return ``config`` at the end.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            def build_config(self, names=None):
+                config = super().build_config(names)
+                config['head/filters'] = self.num_classes('targets')
+                return config
+        """
         config = self.full_config
 
         if config.get('inputs'):
+            inputs_config = config['inputs']
+
+            # Add default aliases
+            if 'targets' not in inputs_config:
+                if 'labels' in inputs_config:
+                    inputs_config['targets'] = inputs_config['labels']
+                elif 'masks' in inputs_config:
+                    inputs_config['targets'] = inputs_config['masks']
+
+            # Fetch default data format for all the parts of the network
             inputs = config.get('initial_block/inputs')
             if isinstance(inputs, str):
-                config['common/data_format'] = config['inputs'][inputs].get('data_format')
+                data_format = inputs_config[inputs].get('data_format')
+            elif isinstance(inputs, (tuple, list)):
+                data_format = inputs_config[inputs[0]].get('data_format')
+            config['common/data_format'] = config.get('common/data_format') or data_format or 'channels_first'
+        return config
 
     def _get_devices(self):
         devices = self.full_config.get('device')
@@ -378,7 +617,16 @@ class EagerTorch:
 
     @classmethod
     def initial_block(cls, inputs, **kwargs):
-        """ Truly amazing docstring. """
+        """ Transform inputs. Usually used for initial preprocessing, e.g. reshaping, downsampling etc.
+
+        Notes
+        -----
+        For parameters see :class:`~.torch.layers.ConvBlock`.
+
+        Returns
+        -------
+        torch.nn.Module or None
+        """
         kwargs = cls.get_defaults('initial_block', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -386,7 +634,16 @@ class EagerTorch:
 
     @classmethod
     def body(cls, inputs, **kwargs):
-        """ Truly amazing docstring. """
+        """ Base layers which produce a network embedding.
+
+        Notes
+        -----
+        For parameters see :class:`~.torch.layers.ConvBlock`.
+
+        Returns
+        -------
+        torch.nn.Module or None
+        """
         kwargs = cls.get_defaults('body', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -394,7 +651,17 @@ class EagerTorch:
 
     @classmethod
     def head(cls, inputs, **kwargs):
-        """ Truly amazing docstring. """
+        """ The last network layers which produce predictions. Usually used to make network output
+        compatible with the `targets` tensor.
+
+        Notes
+        -----
+        For parameters see :class:`~.torch.layers.ConvBlock`.
+
+        Returns
+        -------
+        torch.nn.Module or None
+        """
         kwargs = cls.get_defaults('head', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -438,16 +705,51 @@ class EagerTorch:
 
 
     def train(self, *args, fetches=None, use_lock=False, train_mode='',
-              sum_grads=True, step_on_each=True, microbatch=False):
-        """ Truly amazing docstring. """
-        # pylint: disable=arguments-differ
+              accumulate_grads=True, sync_frequency=True, microbatch=False):
+        """ Train the model with the data provided
+
+        Parameters
+        ----------
+        args
+            Arguments to be passed directly into the model.
+        fetches : tuple, list
+            Sequence of tensor names to calculate and return.
+        use_lock : bool
+            If True, the whole train step is locked, thus allowing for multithreading.
+        train_mode : str or sequence of str
+            Name(s) of train step(s) to optimize. Regular expressions are allowed.
+            If multiple train steps are selected (either via passing a sequence or by using regular expression),
+            then all of them are optimized sequentially.
+        accumulate_grads : bool
+            If True, then gradients from different train modes are accumulated and applied once at the end.
+            If False, then gradients are applied for each of the train modes separately.
+        sync_frequency : int, bool or None
+            If int, then how often to apply accumulated gradients to the weights.
+            If True, then value from config is used (default value is to apply gradients after each batch of data).
+            If False or None, then gradients are applied after each batch of data.
+        microbatch : int, bool or None
+            If int, then size of chunks to split every batch into. Allows to process given data sequentially,
+            accumulating gradients from microbatches and applying them once in the end.
+            If True, then value from config is used (default value is not to use microbatching).
+            If False or None, then microbatching is not used.
+
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same order.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            model.train(B('images'), B('labels'), fetches='loss')
+        """
         config = self.full_config
         *inputs, targets = self._fill_input(*args)
 
-        if step_on_each is True:
-            step_on_each = config.get('step_on_each', 1)
-        elif step_on_each is False or step_on_each is None:
-            step_on_each = 1
+        if sync_frequency is True:
+            sync_frequency = config['sync_frequency']
+        elif sync_frequency is False or sync_frequency is None:
+            sync_frequency = 1
 
         if microbatch is True:
             microbatch = config.get('microbatch', len(targets))
@@ -472,7 +774,7 @@ class EagerTorch:
             _targets = splitted_targets[i]
 
             output = self._train(*_inputs, _targets, fetches=fetches, train_mode=train_mode,
-                                 sum_grads=sum_grads, step_on_each=step_on_each*steps)
+                                 accumulate_grads=accumulate_grads, sync_frequency=sync_frequency*steps)
 
             outputs.append(output)
 
@@ -487,12 +789,12 @@ class EagerTorch:
         output = output[0] if isinstance(fetches, str) else output
         return output
 
-    def _train(self, *args, fetches=None, train_mode='', sum_grads=True, step_on_each=True):
+    def _train(self, *args, fetches=None, train_mode='', accumulate_grads=True, sync_frequency=True):
         *inputs, targets = args
 
         output_container = {}
 
-        if not sum_grads:
+        if not accumulate_grads:
             predictions = self.model(*inputs)
 
         for mode in train_mode:
@@ -510,13 +812,13 @@ class EagerTorch:
                     optimizer.zero_grad()
                     step['initialized'] = True
 
-                if sum_grads:
+                if accumulate_grads:
                     predictions = self.model(*inputs)
                 loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
                 mode_loss += loss
                 loss.backward()
 
-                if self.sync_counter >= step_on_each:
+                if self.sync_counter >= sync_frequency:
                     self.sync_counter = 1
                     optimizer.step()
                     optimizer.zero_grad()
@@ -592,7 +894,57 @@ class EagerTorch:
         return output
 
     def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
-        """ Truly amazing docstring. """
+        """ Add output operations to the model, like predicted probabilities or labels, etc.
+
+        Parameters
+        ----------
+        inputs : torch.Tensor or a sequence of torch.Tensors
+            Input tensors.
+
+        predictions : str or callable
+            Operation to apply to the network output to obtain tensor which is used in loss computation.
+
+            If str, then one of predefined operations:
+                - 'sigmoid' - ``sigmoid(inputs)``
+                - 'proba' - ``softmax(inputs)``
+                - 'labels' - ``argmax(inputs)``
+                - 'softplus' - ``softplus(inputs)``
+
+            If callable, then user-defined operation.
+
+        ops : sequence, dict or OrderedDict
+            Auxiliary operations to apply.
+
+            If sequence, then operations to apply. Transformed tensors are stored with the same name, as operation
+            If dict, then mapping from prefixes to operations. Transformed tensors are stored with
+            the prefixed name of the operation.
+
+            For multi-output models ensure that an ordered dict is used (e.g. :class:`~collections.OrderedDict`).
+
+        Raises
+        ------
+        ValueError if the number of inputs does not equal to the number of prefixes
+        TypeError if inputs is not a Tensor or a sequence of Tensors
+
+        Examples
+        --------
+        .. code-block:: python
+
+            config = {
+                'output': ['proba', 'labels']
+            }
+
+        However, if one of the placeholders also has a name 'labels', then it will be lost as the model
+        will rewrite the name 'labels' with an output. In this case dict might be more convenient:
+
+        .. code-block:: python
+
+            config = {
+                'output': {'predicted': ['proba', 'labels']}
+            }
+
+        Now the output will be stored under names 'predicted_proba' and 'predicted_labels'.
+        """
         if ops is None:
             ops = []
         elif not isinstance(ops, (dict, tuple, list)):
@@ -691,7 +1043,30 @@ class EagerTorch:
             }, path)
 
     def load(self, path, *args, eval=False, **kwargs):
-        """ Truly amazing docstring. """
+        """ Load a torch model from files.
+
+        Parameters
+        ----------
+        path : str
+            File path where a model is stored.
+
+        eval : bool
+            Whether to switch the model to eval mode.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            resnet = ResNet34(load=dict(path='/path/to/models/resnet34'))
+
+            torch_model.load(path='/path/to/models/resnet34')
+
+            TorchModel(config={'device': 'gpu:2', 'load/path': '/path/to/models/resnet34'})
+
+        **How to move the model to device**
+
+        The model will be moved to device specified in the model config by key `device`.
+        """
         _ = args, kwargs
         device = self._get_device()
         if device:
