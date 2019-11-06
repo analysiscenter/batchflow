@@ -1686,7 +1686,7 @@ class TFModel(BaseModel):
     def _add_output_identity(self, inputs, name, attr_prefix, device, **kwargs):
         _ = kwargs
         x = tf.identity(inputs, name=name)
-        self.store_to_attr(attr_prefix + name, x, device)
+        self.store_to_attr(attr_prefix + (name or ''), x, device)
         return x
 
     def _add_output_softplus(self, inputs, name, attr_prefix, device, **kwargs):
