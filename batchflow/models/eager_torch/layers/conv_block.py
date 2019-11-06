@@ -42,8 +42,6 @@ class ConvBlock(nn.Module):
         - V - global average pooling
         - d - dropout
         - D - alpha dropout
-        - O - dropblock
-        - m - maximum intensity projection (:class:`~.layers.Mip`)
         - b - upsample with bilinear resize
         - B - upsample with bilinear additive resize
         - N - upsample with nearest neighbors resize
@@ -175,8 +173,8 @@ class ConvBlock(nn.Module):
         'n': 'batch_norm',
         'd': 'dropout',
         'D': 'alpha_dropout',
-        'O': 'dropblock',
-        'm': 'mip',
+        # 'O': 'dropblock',
+        # 'm': 'mip',
         'A': 'residual_bilinear_additive',
         'b': 'resize_bilinear',
         'N': 'resize_nn',
@@ -199,8 +197,8 @@ class ConvBlock(nn.Module):
         'batch_norm': BatchNorm,
         'dropout': Dropout,
         'alpha_dropout': AlphaDropout,
-        'dropblock': None, # TODO
-        'mip': None, # TODO?
+        # 'dropblock': None, # TODO
+        # 'mip': None, # TODO?
         'residual_bilinear_additive': Interpolate,
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
@@ -218,7 +216,7 @@ class ConvBlock(nn.Module):
         'v': 'p',
         'V': 'P',
         'D': 'd',
-        'O': 'd',
+        # 'O': 'd',
         'n': 'd',
         'A': 'b',
         'B': 'b',
@@ -358,7 +356,6 @@ class ConvBlock(nn.Module):
                 if letter_group.lower() == 'p':
                     args['op'] = letter
                 elif letter_group == 'b':
-                    # Additional layouts for all the upsampling layers
                     args['mode'] = args.get('mode', letter.lower())
                     if self.kwargs.get('upsampling_layout'):
                         args['layout'] = self.kwargs.get('upsampling_layout')

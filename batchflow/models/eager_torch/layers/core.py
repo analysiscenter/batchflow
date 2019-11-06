@@ -9,7 +9,7 @@ from ..utils import get_shape, get_num_channels, get_num_dims
 
 
 class Identity(nn.Module):
-    """ Module which just returns its inputs
+    """ Module which just returns its inputs.
 
     Notes
     -----
@@ -22,14 +22,14 @@ class Identity(nn.Module):
 
 
 class Flatten(nn.Module):
-    """ A module which reshapes inputs into 2-dimension (batch_items, features) """
+    """ A module which reshapes inputs into 2-dimension (batch_items, features). """
     def forward(self, x):
         return x.view(x.size(0), -1)
 
 
 
 class Dense(nn.Module):
-    """ A dense layer """
+    """ Dense layer. """
     def __init__(self, units=None, out_features=None, bias=True, inputs=None):
         super().__init__()
 
@@ -38,9 +38,8 @@ class Dense(nn.Module):
         self.linear = nn.Linear(in_units, units, bias)
 
     def forward(self, x):
-        """ Make forward pass """
         if x.dim() > 2:
-            x = x.view(x.size(0), -1)
+            x = Flatten()(x)
         return self.linear(x)
 
 
@@ -56,10 +55,8 @@ class Activation(nn.Module):
         Also can be an instance of activation module (e.g. `torch.nn.ReLU()` or `torch.nn.ELU(alpha=2.0)`),
         or a class of activation module (e.g. `torch.nn.ReLU` or `torch.nn.ELU`),
         or a callable (e.g. `F.relu` or your custom function).
-
     args
         Positional arguments passed to either class initializer or callable.
-
     kwargs
         Additional named arguments passed to either class initializer or callable.
     """
@@ -99,7 +96,6 @@ class Activation(nn.Module):
             raise ValueError("Activation can be str, nn.Module or a callable, but given", activation)
 
     def forward(self, x):
-        """ Make forward pass """
         if self.activation:
             return self.activation(x, *self.args, **self.kwargs)
         return x
@@ -125,7 +121,7 @@ class BatchNorm(nn.Module):
 
 
 class Dropout(nn.Module):
-    """ Multi-dimensional dropout layer """
+    """ Multi-dimensional dropout layer. """
     LAYERS = {
         1: nn.Dropout,
         2: nn.Dropout2d,
@@ -140,6 +136,7 @@ class Dropout(nn.Module):
         return self.layer(x)
 
 class AlphaDropout(Dropout):
+    """ Multi-dimensional alpha-dropout layer. """
     LAYERS = {
         1: nn.AlphaDropout,
         2: nn.AlphaDropout,

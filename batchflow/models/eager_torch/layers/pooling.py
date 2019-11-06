@@ -8,7 +8,7 @@ from ..utils import get_shape, get_num_dims, calc_padding
 
 
 class BasePool(nn.Module):
-    """ A universal pooling layer """
+    """ A universal pooling layer. """
     LAYER = None
     LAYERS = {}
 
@@ -43,7 +43,7 @@ class BasePool(nn.Module):
 
 
 class MaxPool(BasePool):
-    """ Multi-dimensional max pooling layer """
+    """ Multi-dimensional max pooling layer. """
     LAYERS = {
         1: nn.MaxPool1d,
         2: nn.MaxPool2d,
@@ -52,7 +52,7 @@ class MaxPool(BasePool):
 
 
 class AvgPool(BasePool):
-    """ Multi-dimensional average pooling layer """
+    """ Multi-dimensional average pooling layer. """
     LAYERS = {
         1: nn.AvgPool1d,
         2: nn.AvgPool2d,
@@ -61,7 +61,7 @@ class AvgPool(BasePool):
 
 
 class Pool(BasePool):
-    """ Multi-dimensional pooling layer """
+    """ Multi-dimensional pooling layer. """
     def __init__(self, inputs=None, op='max', **kwargs):
         if op in ['max', 'p', 'P']:
             self.LAYER = MaxPool
@@ -72,7 +72,7 @@ class Pool(BasePool):
 
 
 class AdaptiveMaxPool(BasePool):
-    """ Multi-dimensional adaptive max pooling layer """
+    """ Multi-dimensional adaptive max pooling layer. """
     LAYERS = {
         1: nn.AdaptiveMaxPool1d,
         2: nn.AdaptiveMaxPool2d,
@@ -85,7 +85,7 @@ class AdaptiveMaxPool(BasePool):
 
 
 class AdaptiveAvgPool(BasePool):
-    """ Multi-dimensional adaptive average pooling layer """
+    """ Multi-dimensional adaptive average pooling layer. """
     LAYERS = {
         1: nn.AdaptiveAvgPool1d,
         2: nn.AdaptiveAvgPool2d,
@@ -97,7 +97,7 @@ class AdaptiveAvgPool(BasePool):
 
 
 class AdaptivePool(BasePool):
-    """ Multi-dimensional adaptive pooling layer """
+    """ Multi-dimensional adaptive pooling layer. """
     def __init__(self, op='max', inputs=None, **kwargs):
         if op in ['max', 'p', 'P']:
             self.LAYER = AdaptiveMaxPool
@@ -108,7 +108,7 @@ class AdaptivePool(BasePool):
 
 
 class GlobalPool(nn.Module):
-    """ Multi-dimensional global pooling layer """
+    """ Multi-dimensional global pooling layer. """
     def __init__(self, inputs=None, op='max', **kwargs):
         super().__init__()
         shape = get_shape(inputs)
@@ -120,10 +120,12 @@ class GlobalPool(nn.Module):
         return x.view(x.size(0), -1)
 
 class GlobalMaxPool(GlobalPool):
+    """ Multi-dimensional global max pooling layer. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__(inputs=inputs, op='max', **kwargs)
 
 
 class GlobalAvgPool(GlobalPool):
+    """ Multi-dimensional global avg pooling layer. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__(inputs=inputs, op='avg', **kwargs)

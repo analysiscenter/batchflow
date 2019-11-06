@@ -8,7 +8,7 @@ from ..utils import get_shape
 
 
 class Interpolate(nn.Module):
-    """ Upsample inputs with a given factor
+    """ Upsample inputs with a given factor.
 
     Notes
     -----
@@ -48,13 +48,13 @@ class Interpolate(nn.Module):
 
 
 class PixelShuffle(nn.PixelShuffle):
-    """ Resize input tensor with depth to space operation """
+    """ Resize input tensor with depth to space operation. """
     def __init__(self, upscale_factor=None):
         super().__init__(upscale_factor)
 
 
 class SubPixelConv(PixelShuffle):
-    """ An alias for PixelShuffle """
+    """ An alias for PixelShuffle. """
     pass
 
 
@@ -66,7 +66,7 @@ class Crop(nn.Module):
     ----------
     inputs
         Input tensor.
-    resize_to
+    resize_to : tuple or torch.Tensor
         Tensor or shape to resize input tensor to.
     """
     def __init__(self, resize_to):
