@@ -233,7 +233,10 @@ class Domain:
        For example, if `domain1 = Option('a': [1, 2])` and `domain2 = Option('b': [3, 4])` then
        `domain1 @ domain2` will have two configs:
        `{'a': 1, `b`: 3}`, `{'a': 2, `b`: 4}`.
-    #. multiplication with weights: TODO
+    #. multiplication with weights: can be used to sample configs from sum of Options
+        For example, `0.3 * Option('p1', ['v1', 'v2']) + 0.2 * Option('p2', ['v3', 'v4'])
+        + Option('p3', ['v5', 'v6'])+ 0.5 * op3` will return `{'p1': 'v1'}, {'p1': 'v2'},
+        {'p2': 'v3'}, {'p2': 'v4'}, {'p3': 'v5'}, {'p3': 'v6'}` (depends from seed).
     """
     def __init__(self, domain=None, weights=None, **kwargs):
         if isinstance(domain, Option):
