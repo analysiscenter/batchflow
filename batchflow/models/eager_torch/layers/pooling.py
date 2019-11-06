@@ -63,9 +63,9 @@ class AvgPool(BasePool):
 class Pool(BasePool):
     """ Multi-dimensional pooling layer """
     def __init__(self, inputs=None, op='max', **kwargs):
-        if op == 'max':
+        if op in ['max', 'p', 'P']:
             self.LAYER = MaxPool
-        elif op in ['avg', 'mean']:
+        elif op in ['avg', 'mean', 'v', 'V']:
             self.LAYER = AvgPool
         super().__init__(inputs=inputs, **kwargs)
 
@@ -84,7 +84,6 @@ class AdaptiveMaxPool(BasePool):
         super().__init__(inputs=inputs, output_size=output_size, padding=None, **kwargs)
 
 
-
 class AdaptiveAvgPool(BasePool):
     """ Multi-dimensional adaptive average pooling layer """
     LAYERS = {
@@ -97,15 +96,15 @@ class AdaptiveAvgPool(BasePool):
         super().__init__(inputs=inputs, output_size=output_size, padding=None, **kwargs)
 
 
-
 class AdaptivePool(BasePool):
     """ Multi-dimensional adaptive pooling layer """
     def __init__(self, op='max', inputs=None, **kwargs):
-        if op == 'max':
+        if op in ['max', 'p', 'P']:
             self.LAYER = AdaptiveMaxPool
-        elif op in ['avg', 'mean']:
+        elif op in ['avg', 'mean', 'v', 'V']:
             self.LAYER = AdaptiveAvgPool
         super().__init__(inputs=inputs, padding=None, **kwargs)
+
 
 
 class GlobalPool(nn.Module):
@@ -119,3 +118,12 @@ class GlobalPool(nn.Module):
     def forward(self, x):
         x = self.pool(x)
         return x.view(x.size(0), -1)
+
+class GlobalMaxPool(GlobalPool):
+    def __init__(self, inputs=None, **kwargs):
+        super().__init__(inputs=inputs, op='max', **kwargs)
+
+
+class GlobalAvgPool(GlobalPool):
+    def __init__(self, inputs=None, **kwargs):
+        super().__init__(inputs=inputs, op='avg', **kwargs)

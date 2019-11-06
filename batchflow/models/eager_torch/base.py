@@ -10,49 +10,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from .utils import unpack_fn_from_config
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss
 from ... import Config
 
 
-# TODO:
-# layers/ConvBlock ✓
-# train_steps ✓
-# microbatch (rename/alias to virtual batch?)
-# multi-device ✓
-# async
-
-
-
-def unpack_fn_from_config(param, config=None):
-    """ Return params from config """
-    value = config.get(param)
-
-    if value is None:
-        return None, {}
-
-    value = value if isinstance(value, list) else [value]
-    res = []
-
-    for item in value:
-        if isinstance(item, tuple):
-            if len(item) == 0:
-                name, args = None, None
-            elif len(item) == 1:
-                name, args = item[0], {}
-            elif len(item) == 2:
-                name, args = item
-            else:
-                name, args = item[0], item[1:]
-        elif isinstance(item, dict):
-            item = item.copy()
-            name, args = item.pop('name', None), item
-        else:
-            name, args = item, {}
-        res.append((name, args))
-
-    res = res[0] if len(res) == 1 else res
-    return res
 
 LOSSES = {
     'mse': nn.MSELoss,
@@ -87,6 +50,7 @@ DECAYS_DEFAULTS = {
 }
 
 
+
 class EagerTorch:
     """ Eagerly! """
 
@@ -96,13 +60,12 @@ class EagerTorch:
         self.train_lock = threading.Lock()
 
         self.model = None
-        self.train_steps = None
         self.device = None
         self.devices = []
+        self.train_steps = None
 
         self.sync_counter = 0
         self.microbatch = None
-
 
         load = self.config.get('load')
         build = self.config.get('build', default=load is None)
@@ -132,15 +95,26 @@ class EagerTorch:
         """ Truly amazing docstring. """
         config = Config()
         config['inputs'] = {}
-        config['common'] = {}
+        config['placeholder_batch_size'] = 2
+
+        config['device'] = None
+        config['benchmark'] = True
+        config['microbatch'] = None
+        config['step_on_each'] = 1
+
+        config['train_steps'] = None
+        config['loss'] = None
+        config['optimizer'] = ('Adam', dict())
+        config['decay'] = None
+
         config['order'] = ['initial_block', 'body', 'head']
         config['initial_block'] = {}
         config['body'] = {}
         config['head'] = {}
+        config['common'] = {}
+
         config['predictions'] = None
         config['output'] = None
-        config['optimizer'] = ('Adam', dict())
-        config['microbatch'] = None
         return config
 
     def combine_configs(self):
@@ -256,13 +230,13 @@ class EagerTorch:
             method = getattr(self, method) if isinstance(method, str) else method
             block = method(inputs, **config)
         else:
-            raise ValueError('Bad')
+            raise ValueError('{} must be configured either as nn.Module or dictionary, got {}'.format(name, config))
         return block
 
 
     def _make_train_steps(self, config):
         # Wrap parameters from config root as `train_steps`
-        if 'train_steps' not in config:
+        if config.get('train_steps') is None:
             config['train_steps'] = {'': {key: config.get(key) for key in
                                           ('loss', 'optimizer', 'decay', 'n_iters')}}
 
@@ -458,6 +432,11 @@ class EagerTorch:
         splitted_inputs = [np.array_split(item, steps) for item in inputs] if microbatch else [inputs]
         splitted_targets = np.array_split(targets, steps) if microbatch else [targets]
 
+        if self.model is None:
+            print('_BUILD IN TRAIN')
+            self._build(splitted_inputs[0])
+        self.model.train()
+
         if use_lock:
             self.train_lock.acquire()
 
@@ -484,11 +463,6 @@ class EagerTorch:
 
     def _train(self, *args, fetches=None, train_mode='', sum_grads=True, step_on_each=True):
         *inputs, targets = args
-
-        if self.model is None:
-            print('_BUILD IN TRAIN')
-            self._build(inputs)
-        self.model.train()
 
         output_container = {}
 
@@ -542,17 +516,15 @@ class EagerTorch:
 
     def predict(self, *args, targets=None, train_mode='', fetches=None):    # pylint: disable=arguments-differ
         """ Truly amazing docstring. """
-        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
-
-
         inputs = self._fill_input(*args)
         if targets is not None:
             targets = self._fill_input(targets)[0]
 
         self.model.eval()
-        output_container = {}
+        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
         with torch.no_grad():
+            output_container = {}
             predictions = self.model(*inputs)
 
             if targets is not None:
@@ -623,7 +595,6 @@ class EagerTorch:
             output = oper(inputs)
             name = name or oper.__name__
         return attr_prefix + name, output
-        # setattr(self, attr_prefix + name, output)
 
 
     @classmethod

@@ -50,9 +50,10 @@ class ConvBlock(nn.Module):
         - X - upsample with subpixel convolution (:class:`~.layers.SubpixelConv`)
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
+        - `.` - end residual connection with concatenation
         - `+` - end residual connection with summation
         - `*` - end residual connection with multiplication
-        - `.` - end residual connection with concatenation
+        - `&` - end residual connection with softsum
 
         Default is ''.
 
@@ -182,7 +183,7 @@ class ConvBlock(nn.Module):
         'X': 'subpixel_conv'
     }
 
-    LAYERS_CLASSES = {
+    LAYERS_MODULES = {
         'activation': Activation,
         'residual_start': None,
         'residual_end': None,
@@ -200,7 +201,7 @@ class ConvBlock(nn.Module):
         'alpha_dropout': AlphaDropout,
         'dropblock': None, # TODO
         'mip': None, # TODO?
-        'residual_bilinear_additive': Interpolate, # TODO
+        'residual_bilinear_additive': Interpolate,
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
         'subpixel_conv': SubPixelConv,
@@ -224,32 +225,6 @@ class ConvBlock(nn.Module):
         'N': 'b',
         'X': 'b',
         })
-
-
-    def add_letter(self, letter, cls, name=None):
-        """ Add custom letter to layout parsing procedure.
-
-        Parameters
-        ----------
-        letter : str
-            Letter to add.
-        cls : class
-            Tensor-processing layer. Must have layer-like signature (both init and call overloaded).
-        name : str
-            Name of parameter dictionary. Defaults to `letter`.
-
-        Examples
-        --------
-        Add custom `Q` letter::
-
-            block = ConvBlock('cnap Q', filters=32, custom_params={'key': 'value'})
-            block.add_letter('Q', my_layer_class, 'custom_params')
-            x = block(x)
-        """
-        name = name or letter
-        self.LETTERS_LAYERS.update({letter: name})
-        self.LAYERS_CLASSES.update({name: cls})
-        self.LETTERS_GROUPS.update({letter: letter})
 
 
     def __init__(self, inputs=None, layout='',
@@ -328,10 +303,10 @@ class ConvBlock(nn.Module):
 
             letter_group = self.LETTERS_GROUPS[letter]
             layer_name = self.LETTERS_LAYERS[letter]
-            layer_class = self.LAYERS_CLASSES[layer_name]
+            layer_class = self.LAYERS_MODULES[layer_name]
             layout_dict[letter_group][0] += 1
 
-            if letter in ['R', 'A', '+', '*', '.']:
+            if letter in ['R', 'A', '+', '*', '.', '&']:
                 if len(layers) >= 1:
                     self.module_layout += '_'
                     modules.append(nn.Sequential(OrderedDict(layers)).to(self.device))
@@ -356,7 +331,7 @@ class ConvBlock(nn.Module):
                                                                           get_shape(skip))
                     layer = nn.Sequential(OrderedDict([(layer_desc, layer)])).to(self.device)
                     skip_modules.append(layer)
-                elif letter in ['+', '*', '.']:
+                elif letter in ['+', '*', '.', '&']:
                     layer = Combine(op=letter).to(self.device)
                     shape_before = get_shape(self.inputs)
                     self.inputs = layer([residuals.pop(), self.inputs])
@@ -381,10 +356,7 @@ class ConvBlock(nn.Module):
 
                 # Additional params for some layers
                 if letter_group.lower() == 'p':
-                    # Choosing pooling operation
-                    pool_op = 'mean' if letter.lower() == 'v' else self.kwargs.pop('pool_op', 'max')
-                    args['op'] = pool_op
-
+                    args['op'] = letter
                 elif letter_group == 'b':
                     # Additional layouts for all the upsampling layers
                     args['mode'] = args.get('mode', letter.lower())
@@ -411,15 +383,15 @@ class ConvBlock(nn.Module):
         return modules, skip_modules, combine_modules
 
 
-def update_layers(letter, func, name=None):
+def update_layers(letter, module, name=None):
     """ Add custom letter to layout parsing procedure.
 
     Parameters
     ----------
     letter : str
         Letter to add.
-    func : class
-        Tensor-processing layer. Must have layer-like signature (both init and call overloaded).
+    module : :class:`torch.nn.Module`
+        Tensor-processing layer. Must have layer-like signature (both init and forward methods overloaded).
     name : str
         Name of parameter dictionary. Defaults to `letter`.
 
@@ -427,28 +399,30 @@ def update_layers(letter, func, name=None):
     --------
     Add custom `Q` letter::
 
-        block = ConvBlock('cnap Q', filters=32, custom_params={'key': 'value'})
-        block.add_letter('Q', my_func, 'custom_params')
+        block.add_letter('Q', my_module, 'custom_module_params')
+        block = ConvBlock('cnap Q', filters=32, custom_module_params={'key': 'value'})
         x = block(x)
     """
     name = name or letter
     ConvBlock.LETTERS_LAYERS.update({letter: name})
-    ConvBlock.LAYERS_CLASSES.update({name: func})
+    ConvBlock.LAYERS_MODULES.update({name: module})
     ConvBlock.LETTERS_GROUPS.update({letter: letter})
 
 
 
 class Upsample(nn.Module):
-    """ Upsample inputs with a given factor
+    """ Upsample inputs with a given factor.
 
     Parameters
     ----------
+    inputs
+        Input tensor.
     factor : int
-        an upsamping scale
+        Upsamping scale.
     shape : tuple of int
-        a shape to upsample to (used by bilinear and NN resize)
+        Shape to upsample to (used by bilinear and NN resize).
     layout : str
-        resizing technique, a sequence of:
+        Resizing technique, a sequence of:
 
         - b - bilinear resize
         - N - nearest neighbor resize
@@ -458,8 +432,6 @@ class Upsample(nn.Module):
 
         all other :class:`~.torch.ConvBlock` layers are also allowed.
 
-    inputs
-        an input tensor
 
     Examples
     --------
@@ -501,18 +473,25 @@ class Combine(nn.Module):
     inputs : sequence of torch.Tensors
         Tensors to combine.
 
-    op : str {'concat', 'sum', 'conv'}
-        If 'concat', inputs are concated along channels axis.
-        If 'sum', inputs are summed.
-        If 'softsum', every tensor is passed through 1x1 convolution in order to have
+    op : str
+        If 'concat', 'cat', '.', then inputs are concated along channels axis.
+        If 'sum', '+', then inputs are summed.
+        If 'multi', '*', then inputs are multiplied.
+        If 'softsum', '&', then every tensor is passed through 1x1 convolution in order to have
         the same number of channels as the first tensor, and then summed.
     """
+    CONCAT_OPS = ['concat', 'cat', '.']
+    SUM_OPS = ['sum', '+']
+    MULTI_OPS = ['multi', '*']
+    SOFTSUM_OPS = ['softsum', '&']
+    ALL_OPS = CONCAT_OPS + SUM_OPS + MULTI_OPS + SOFTSUM_OPS
+
     def __init__(self, inputs=None, op='concat'):
         super().__init__()
 
         self.op = op
 
-        if op == ['softsum', '&']:
+        if op == self.SOFTSUM_OPS:
             args = dict(layout='c', filters=get_shape(inputs[0])[1],
                         kernel_size=1)
             conv = [ConvBlock(get_shape(tensor), **args) for tensor in inputs]
@@ -520,24 +499,23 @@ class Combine(nn.Module):
 
 
     def forward(self, inputs):
-        if self.op in ['concat', '.']:
+        if self.op in self.CONCAT_OPS:
             inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
             return torch.cat(inputs, dim=1)
-        if self.op in ['sum', '+']:
+        if self.op in self.SUM_OPS:
             inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
             return torch.stack(inputs, dim=0).sum(dim=0)
-        if self.op in ['multi', '*']:
+        if self.op in self.MULTI_OPS:
             inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
             result = 1
             for item in inputs:
                 result *= item
             return result
-        if self.op in ['softsum', '&']:
+        if self.op in self.SOFTSUM_OPS:
             inputs = [conv(tensor)
                       for conv, tensor in zip(self.conv, inputs)]
             return torch.stack(inputs, dim=0).sum(dim=0)
-        raise ValueError('Combine `op` must be one of `concat`, `sum`, ' \
-                         '`softsum`, or `multi`,  got {}.'.format(self.op))
+        raise ValueError('Combine operation must be in {}, instead got {}.'.format(self.ALL_OPS, self.op))
 
     def extra_repr(self):
         return 'op=' + self.op

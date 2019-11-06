@@ -4,6 +4,37 @@ import torch
 
 
 
+def unpack_fn_from_config(param, config=None):
+    """ Return params from config """
+    value = config.get(param)
+
+    if value is None:
+        return None, {}
+
+    value = value if isinstance(value, list) else [value]
+    res = []
+
+    for item in value:
+        if isinstance(item, tuple):
+            if len(item) == 0:
+                name, args = None, None
+            elif len(item) == 1:
+                name, args = item[0], {}
+            elif len(item) == 2:
+                name, args = item
+            else:
+                name, args = item[0], item[1:]
+        elif isinstance(item, dict):
+            item = item.copy()
+            name, args = item.pop('name', None), item
+        else:
+            name, args = item, {}
+        res.append((name, args))
+
+    res = res[0] if len(res) == 1 else res
+    return res
+
+
 def get_shape(inputs, shape=None):
     """ Return inputs shape """
     if inputs is None:
