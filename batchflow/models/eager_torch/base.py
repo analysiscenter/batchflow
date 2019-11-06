@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .utils import unpack_fn_from_config
+from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss
 from ... import Config
@@ -84,15 +84,38 @@ class EagerTorch:
         self.build_config()
 
         self._get_devices()
+        self._get_placeholder_shapes()
 
         # If the inputs were set in config with their shapes we can build right away
-        if self.full_config.get('inputs'):
+        if self.input_shapes:
             print('_BUILD IN BUILD')
             self._build()
 
     @classmethod
     def default_config(cls):
-        """ Truly amazing docstring. """
+        """ Define model defaults.
+
+        You need to override this method if you expect your model or its blocks to serve as a base for other models
+        (e.g. VGG for FCN, ResNet for LinkNet, etc).
+
+        Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
+        specific to the model, but independent of anything else (like image shapes, number of classes, etc).
+
+        These defaults can be changed in :meth:`~.EagerTorch.build_config` or when calling :meth:`.Pipeline.init_model`.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            @classmethod
+            def default_config(cls):
+                config = EagerTorch.default_config()
+                config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
+                                               pool_size=3, pool_strides=2)
+                config['body/filters'] = 32
+                config['head'] = dict(layout='cnadV', dropout_rate=.2)
+                return config
+        """
         config = Config()
         config['inputs'] = {}
         config['placeholder_batch_size'] = 2
@@ -100,7 +123,7 @@ class EagerTorch:
         config['device'] = None
         config['benchmark'] = True
         config['microbatch'] = None
-        config['step_on_each'] = 1
+        config['sync_frequency'] = 1
 
         config['train_steps'] = None
         config['loss'] = None
@@ -195,23 +218,26 @@ class EagerTorch:
 
         self.train_steps = self._make_train_steps(config)
 
-    def _placeholder_data(self):
+    def _get_placeholder_shapes(self):
         config = self.full_config
         batch_size = config.get('placeholder_batch_size', 2)
 
         input_names = config.pop('initial_block/inputs', default=None)
-        input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
-        shapes = []
-        for name in input_names:
-            cfg = config['inputs'][name]
-            if 'shape' in cfg:
-                shapes.append((batch_size, *cfg['shape']))
-            elif 'classes' in cfg:
-                shapes.append((batch_size, *cfg['classes']))
-            else:
-                raise ValueError('Input {} must contain `shape` configuration'.format(name))
+        if input_names is not None:
+            input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
+            shapes = []
+            for name in input_names:
+                cfg = config['inputs'][name]
+                if 'shape' in cfg:
+                    shapes.append((batch_size, *cfg['shape']))
+                elif 'classes' in cfg:
+                    shapes.append((batch_size, cfg['classes']))
+                else:
+                    raise ValueError('Input {} must contain `shape` configuration'.format(name))
+            self.input_shapes = shapes
 
-        data = [np.zeros(shape, dtype=np.float32) for shape in shapes]
+    def _placeholder_data(self):
+        data = [np.zeros(shape, dtype=np.float32) for shape in self.input_shapes]
         data = self._fill_param(data)
         data = data[0] if len(data) == 1 else data
         return data
@@ -514,34 +540,48 @@ class EagerTorch:
         output = self._fill_output(fetches, output_container)
         return output
 
-    def predict(self, *args, targets=None, train_mode='', fetches=None):    # pylint: disable=arguments-differ
-        """ Truly amazing docstring. """
+    def predict(self, *args, targets=None, train_mode='', fetches=None):
+        """ Get predictions on the data provided.
+
+        Parameters
+        ----------
+        args : sequence
+            Arguments to be passed directly into the model.
+        targets : ndarray, optional
+            Targets to calculate loss.
+        fetches : tuple, list
+            Sequence of tensors to fetch from the model.
+        train_mode : str
+            Exact name of train step to use to calculate loss.
+        Returns
+        -------
+        Calculated values of tensors in `fetches` in the same order.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            model.predict(B('images'), targets=B('labels'), fetches='loss')
+        """
         inputs = self._fill_input(*args)
         if targets is not None:
             targets = self._fill_input(targets)[0]
 
         self.model.eval()
-        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
         with torch.no_grad():
             output_container = {}
             predictions = self.model(*inputs)
 
             if targets is not None:
-                for mode in train_mode:
-                    if mode in self.train_steps.keys():
-                        train_fetches = [(mode, self.train_steps[mode])]
-                    else:
-                        train_fetches = [(name, train_step) for name, train_step in self.train_steps.items()
-                                         if re.search(mode, name) is not None]
+                if train_mode in self.train_steps.keys():
+                    step = self.train_steps[train_mode]
+                else:
+                    raise ValueError('`train_mode` must reference exact `train_step`.')
 
-                    mode_loss = 0
-                    for name, step in train_fetches:
-                        loss_fn = step['loss']
-                        loss = sum([loss(predictions, targets) for loss in loss_fn]) / len(loss_fn)
-                        mode_loss += loss
-                        output_container['loss' + '_'*int(len(name) > 0) + name] = loss
-                    output_container['loss' + '_'*int(len(mode) > 0) + mode] = mode_loss
+                loss_fn = step['loss']
+                loss = sum([loss(predictions, targets) for loss in loss_fn]) / len(loss_fn)
+                output_container['loss' + '_'*int(len(train_mode) > 0) + train_mode] = loss
             output_container['predictions'] = predictions
 
         config = self.full_config
@@ -603,9 +643,41 @@ class EagerTorch:
         data_format = data_format if data_format else 'channels_first'
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
 
+    def num_classes(self, tensor, data_format='channels_first'):
+        """ Get number of channels. """
+        if isinstance(tensor, str) and self.config.get('inputs') is not None:
+            inputs_config = self.config['inputs']
+            if inputs_config.get(tensor) is not None:
+                tensor_config = inputs_config[tensor]
+                if tensor_config.get('shape') is not None:
+                    shape = tensor_config['shape']
+        else:
+            shape = get_shape(tensor)
+        return shape[self.channels_axis(data_format)]
+
 
     def save(self, path, *args, **kwargs):
-        """ Truly amazing docstring. """
+        """ Save torch model.
+
+        Parameters
+        ----------
+        path : str
+            Path to a file where the model data will be stored.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            torch_model = ResNet34()
+
+        Now save the model
+
+        .. code-block:: python
+
+            torch_model.save('/path/to/models/resnet34')
+
+        The model will be saved to /path/to/models/resnet34.
+        """
         _ = args, kwargs
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
