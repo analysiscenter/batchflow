@@ -202,7 +202,6 @@ class Results:
         all_results = []
 
         for config_alias in self.configs:
-            alias = config_alias.alias(as_string=False)
             alias_str = config_alias.alias(as_string=True)
             _repetition = config_alias.pop_config('repetition')
             _update = config_alias.pop_config('update')
