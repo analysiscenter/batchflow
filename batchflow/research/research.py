@@ -48,6 +48,7 @@ class Research:
         self._update_config = None
         # update parameters for domain. None or dict with keys (function, each)
         self._update_domain = None
+        self.n_updates = 0
 
     def add_pipeline(self, root, branch=None, dataset=None, variables=None,
                      name=None, execute=1, dump='last', run=False, logging=False, **kwargs):
@@ -345,6 +346,8 @@ class Research:
         self.name = name or self.name
         self.bar = bar
 
+        if self.domain is None:
+            self.init_domain()
         self.domain = self.domain * Option('update', [0])
         self.domain.set_iter(n_iters=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
 
