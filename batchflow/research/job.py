@@ -2,6 +2,7 @@
 
 import time
 from collections import OrderedDict
+import random
 
 from ..named_expr import eval_expr
 from .. import inbatch_parallel
@@ -22,6 +23,7 @@ class Job:
         self.branches = branches
         self.research_path = research_path
         self.worker_config = {}
+        self.ids = [str(random.getrandbits(32)) for _ in self.configs]
 
         self.exceptions = []
         self.stopped = []

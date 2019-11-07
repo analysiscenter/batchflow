@@ -266,13 +266,13 @@ class Executable: #pylint: disable=too-many-instance-attributes
                     self.result[variable].append(value)
             self.result['iteration'].append(iteration)
 
-    def dump_result(self, iteration, filename):
+    def dump_result(self, task_id, iteration, filename):
         """ Dump pipeline results """
         if len(self.variables) > 0:
-            n_samples = len(os.listdir(self.path))
-            os.makedirs(os.path.join(self.path, str(n_samples)))
-            self.result['sample_index'] = [n_samples] * len(self.result['iteration'])
-            path = os.path.join(self.path, str(n_samples), filename + '_' + str(iteration))
+            if not os.path.exists(os.path.join(self.path, task_id)):
+                os.makedirs(os.path.join(self.path, task_id))
+            self.result['sample_index'] = [task_id] * len(self.result['iteration'])
+            path = os.path.join(self.path, task_id, filename + '_' + str(iteration))
             with open(path, 'wb') as file:
                 dill.dump(self.result, file)
         self._clear_result()

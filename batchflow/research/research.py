@@ -227,7 +227,7 @@ class Research:
         self.repeat_each = repeat_each
         return self
 
-    def update_domain(self, function=None, each='last', *args, **kwargs):
+    def update_domain(self, function=None, each='last', n_updates=1, **kwargs):
         """ Add domain update functions or update parameters.
 
         Parameters
@@ -238,14 +238,17 @@ class Research:
             when update method will be called. If 'last', domain will be updated
             when iterator will be finished. If int, domain will be updated with
             that period.
-        *args, **kwargs : update function parameters
+        n_updates : int
+            the total number of updates.
+        *args, **kwargs :
+            update function parameters.
         """
         self._update_domain = {
             'function': function,
             'each': each,
-            'args': args,
             'kwargs': kwargs
         }
+        self.n_updates = n_updates
         return self
 
     def update_config(self, function, parameters=None, cache=0):
@@ -342,6 +345,7 @@ class Research:
         self.name = name or self.name
         self.bar = bar
 
+        self.domain = self.domain * Option('update', [0])
         self.domain.set_iter(n_iters=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
 
         if self.domain.size is None and (self._update_domain is None or self._update_domain['each'] == 'last'):
@@ -354,7 +358,7 @@ class Research:
         self.__save()
 
         jobs_queue = DynamicQueue(self.branches, self.domain, self.n_iters, self.executables,
-                                  self.name, self._update_config, self._update_domain)
+                                  self.name, self._update_config, self._update_domain, self.n_updates)
         self.logger.eval_kwargs(path=self.name)
         distr = Distributor(self.n_iters, self.workers, self.devices, self.worker_class, self.timeout,
                             self.trials, self.logger)
@@ -460,7 +464,7 @@ class Research:
 
 class DynamicQueue:
     """ Queue of tasks that can be changed depending on previous results. """
-    def __init__(self, branches, domain, n_iters, executables, research_path, update_config, update_domain):
+    def __init__(self, branches, domain, n_iters, executables, research_path, update_config, update_domain, n_updates):
         self.branches = branches
         self.domain = domain
         self.n_iters = n_iters
@@ -476,9 +480,10 @@ class DynamicQueue:
 
         self.domain = domain
         self.update_domain = update_domain
+        self.n_updates = n_updates
+        self.update_idx = 0
 
         self._domain_size = self.domain.size
-
         if self.update_domain is not None:
             self.domain.set_update(**self.update_domain)
 
@@ -522,14 +527,16 @@ class DynamicQueue:
 
     def update(self):
         """ Update domain. """
-        new_domain = self.domain.update_domain(self.research_path)
-        if new_domain is not None:
-            self.domain = new_domain
-            self._domain_size = self.domain.size
-            if self.update_domain is not None:
-                self.domain.set_update(**self.update_domain)
-            self.generator = self._generate_config(self.domain)
-            return True
+        if self.n_updates is None or self.update_idx < self.n_updates:
+            new_domain = self.domain.update_domain(self.research_path)
+            self.update_idx += 1
+            if new_domain is not None:
+                self.domain = new_domain * Option('update', [self.update_idx])
+                self._domain_size = self.domain.size
+                if self.update_domain is not None:
+                    self.domain.set_update(**self.update_domain)
+                self.generator = self._generate_config(self.domain)
+                return True
         return False
 
     def next_jobs(self, n_tasks=1):

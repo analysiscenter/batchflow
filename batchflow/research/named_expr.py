@@ -79,7 +79,7 @@ class ResearchPath(ResearchNamedExpression):
 
 class ResearchResults(ResearchNamedExpression):
     """ NamedExpression for Results of the Research """
-    def __init__(self, name=None, *args, **kwargs):
+    def __init__(self, *args, name=None, **kwargs):
         super().__init__(name)
         self.args = args
         self.kwargs = kwargs

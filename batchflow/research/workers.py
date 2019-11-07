@@ -246,7 +246,7 @@ class PipelineWorker(Worker):
                     if dump_actions[i] is not None:
                         messages.append("J {} [{}] I {}: dump '{}' [{}]"
                                         .format(idx_job, os.getpid(), iteration+1, unit_name, i))
-                        experiment[unit_name].dump_result(iteration+1, unit_name)
+                        experiment[unit_name].dump_result(job.ids[i], iteration+1, unit_name)
 
                 if base_unit.logging:
                     for message in messages:

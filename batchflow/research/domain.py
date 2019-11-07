@@ -234,9 +234,10 @@ class Domain:
        `domain1 @ domain2` will have two configs:
        `{'a': 1, `b`: 3}`, `{'a': 2, `b`: 4}`.
     #. multiplication with weights: can be used to sample configs from sum of Options
-        For example, `0.3 * Option('p1', ['v1', 'v2']) + 0.2 * Option('p2', ['v3', 'v4'])
-        + Option('p3', ['v5', 'v6'])+ 0.5 * op3` will return `{'p1': 'v1'}, {'p1': 'v2'},
-        {'p2': 'v3'}, {'p2': 'v4'}, {'p3': 'v5'}, {'p3': 'v6'}` (depends from seed).
+        For example, `0.3 * Option('p1', NS('n', loc=-10)) + 0.2 * Option('p2',  NS('u'))
+        + 0.5 * Option('p3',  NS('n', loc=10))` will return `{'p1': '-10.3059'}, {'p3': '8.9959'},
+        {'p3': '9.1302'}, {'p3': '10.2611'}, {'p1': '-7.9388'}, {'p2': '0.5455'}, {'p1': '-9.2497'},
+        {'p3': '9.9769'}, {'p2': '0.3510'}, {'p3': '8.8519'}` (depends on seed).
     """
     def __init__(self, domain=None, weights=None, **kwargs):
         if isinstance(domain, Option):
@@ -265,8 +266,9 @@ class Domain:
 
         self.weights = np.array(self.weights)
         self.update_each = None
-        self.update_args = None
         self.update_kwargs = None
+        self.n_updates = 1
+        self.update_idx = 0
 
         self._iterator = None
         self.n_iters = None
@@ -446,20 +448,17 @@ class Domain:
             self._reset_iter(self.n_iters, self.n_reps, self.repeat_each)
         return self._iterator
 
-    def set_update(self, function, each, args, kwargs):
+    def set_update(self, function, each, kwargs):
         """ Set domain update parameters. """
-        self.update_args = args
         self.update_kwargs = kwargs
         self.update_each = each
-        self.update_func = self.update_func or function
+        if function is not None:
+            self.update_func = function
 
     def update_domain(self, path):
         """ Update domain by `update_func`. If returns None, domain will not be updated. """
-        if self.update_func is None:
-            return None
-        args = eval_expr(self.update_args, path=path)
         kwargs = eval_expr(self.update_kwargs, path=path)
-        return self.update_func(*args, **kwargs)
+        return self.update_func(**kwargs)
 
     def update_config(self, *args, **kwargs):
         """ Compute and update config item. """
