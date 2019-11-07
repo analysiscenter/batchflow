@@ -84,7 +84,7 @@ class MyBatch(Batch):
 def batch():
     """ Prepare batch and load same DATA to comp1 and comp2 components.
     """
-    dataset = Dataset(range(BATCH_SIZE), MyBatch)
+    dataset = Dataset(BATCH_SIZE, MyBatch)
     batch = (dataset.next_batch(BATCH_SIZE)
              .load(src=DATA, dst='comp1')
              .load(src=DATA, dst='comp2')
@@ -124,5 +124,5 @@ def test_apply_transform(src, dst, expectation, func, addendum, batch,):
             func_args = [DATA for src_comp in src]
             if isinstance(addendum, P):
                 addendum.name.random_state.seed(seed=SEED)
-                addendum = addendum.get(batch, parallel=True).reshape(-1, 1)
+                addendum = addendum.get(batch=batch, parallel=True).reshape(-1, 1)
             assert np.all(np.equal(result, func(*func_args, addendum=addendum)))

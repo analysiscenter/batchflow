@@ -5,7 +5,9 @@ import numpy as np
 from .base import Baseset
 from .batch import Batch
 from .dsindex import DatasetIndex
+from .named_expr import L
 from .pipeline import Pipeline
+from .components import create_item_class
 
 
 class Dataset(Baseset):
@@ -23,9 +25,6 @@ class Dataset(Baseset):
     indices : class:`numpy.ndarray`
         an array with the indices
 
-    is_split: bool
-        True if dataset has been split into train / test / validation subsets
-
     p : Pipeline
         Actions which will be applied to this dataset
 
@@ -41,7 +40,7 @@ class Dataset(Baseset):
     validation : Dataset
         The validation part of this dataset. It appears after splitting
     """
-    def __init__(self, index, batch_class=Batch, preloaded=None, copy=False, *args, **kwargs):
+    def __init__(self, index, batch_class=Batch, *args, preloaded=None, cast_to_array=True, copy=False, **kwargs):
         """ Create Dataset
 
             Parameters
@@ -53,22 +52,34 @@ class Dataset(Baseset):
                 Batch class holds the data and contains processing functions
 
             preloaded : data-type
-                For smaller dataset it might be convenient to preload all data at once
-                As a result, all created batches will contain a portion of some_data.
+                For smaller dataset it might be convenient to preload all data at once.
+                As a result, all created batches will contain a portion of preloaded.
+
+            cast_to_array : bool
+                whether to cast preloaded data to array when creating components data
 
             copy : bool
                 whether to copy data from `preloaded` when creating a batch to alow for in-place transformations
+
+            **kwargs : dict
+                additional dataset attributes or `cv_split` parameters
         """
         if batch_class is not Batch and not issubclass(batch_class, Batch):
             raise TypeError("batch_class should be inherited from Batch", batch_class)
 
         super().__init__(index, *args)
+        self.cast_to_array = cast_to_array
         self.batch_class = batch_class
         self.preloaded = preloaded
+        self._data_named = None
         self._attrs = None
         kwargs['_copy'] = kwargs.get('_copy', copy)
         self.n_splits = None
-        kwargs['n_splits'] = kwargs.get('n_splits', None)
+
+        cv_kwargs = {item: kwargs.pop(item) for item in ['method', 'n_splits', 'shuffle'] if item in kwargs}
+        if cv_kwargs.get('n_splits') is not None:
+            self.cv_split(**cv_kwargs)
+
         self.create_attrs(**kwargs)
 
     def create_attrs(self, **kwargs):
@@ -82,6 +93,25 @@ class Dataset(Baseset):
         if self._attrs is None:
             return {}
         return {attr: getattr(self, attr, None) for attr in self._attrs}
+
+    @property
+    def data(self):
+        """ Return preloaded data """
+        if self.preloaded is None:
+            return None
+        if self.batch_class.components is not None and self._data_named is None:
+            self._data_named = create_item_class(self.batch_class.components, data=self.preloaded,
+                                                 cast_to_array=self.cast_to_array)
+        if self._data_named is not None:
+            return self._data_named
+        return self.preloaded
+
+    def __getattr__(self, name):
+        if name[:2] == 'cv' and name[2:].isdigit():
+            raise AttributeError("To access cross-validation call cv_split() first.")
+        if self.batch_class.components is not None and name in self.batch_class.components:
+            return getattr(self.data, name)
+        raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
     @classmethod
     def from_dataset(cls, dataset, index, batch_class=None, copy=False, **kwargs):
@@ -120,11 +150,6 @@ class Dataset(Baseset):
     def copy(self):
         """ Make a shallow copy of the dataset object """
         return cp.copy(self)
-
-    def __getattr__(self, name):
-        if name[:2] == 'cv' and name[2:].isdigit():
-            raise AttributeError("To access cross-validation call cv_split() first.")
-        raise AttributeError()
 
     @staticmethod
     def build_index(index, *args, **kwargs):
@@ -208,7 +233,7 @@ class Dataset(Baseset):
         """
         if not isinstance(index, DatasetIndex):
             index = self.index.create_batch(index, pos, *args, **kwargs)
-        return self.batch_class(index, dataset=self, preloaded=self.preloaded, copy=self._copy, **kwargs)
+        return self.batch_class(index, dataset=self, preloaded=self.data, copy=self._copy, **kwargs)
 
     def pipeline(self, config=None):
         """ Start a new data processing workflow
@@ -255,6 +280,10 @@ class Dataset(Baseset):
         if n > self.n_splits - 1:
             raise ValueError("The dataset has been split into fewer splits than %d" % n)
         return  getattr(self, 'cv' + str(n))
+
+    def CV(self, expr):
+        """ Return a dataset which corresponds to the fold defined as NamedExpression """
+        return  L(self.cv)(expr)
 
     def cv_split(self, method='kfold', n_splits=5, shuffle=False):
         """ Create datasets for cross-validation
@@ -321,6 +350,10 @@ class Dataset(Baseset):
 
         self.train = self.copy()
         self.test = self.copy()
+
+        self.train.n_splits = self.n_splits
+        self.test.n_splits = self.n_splits
+
         for i in range(n_splits):
             test_indices = splits[i]
             train_splits = list(set(range(n_splits)) - {i})
