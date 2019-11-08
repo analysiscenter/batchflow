@@ -31,7 +31,6 @@ LOSSES = {
     'logloss': CrossEntropyLoss,
 }
 
-
 DECAYS = {
     'exp': torch.optim.lr_scheduler.ExponentialLR,
     'lambda': torch.optim.lr_scheduler.LambdaLR,
@@ -39,7 +38,6 @@ DECAYS = {
     'multistep': torch.optim.lr_scheduler.MultiStepLR,
     'cos': torch.optim.lr_scheduler.CosineAnnealingLR,
 }
-
 
 DECAYS_DEFAULTS = {
     torch.optim.lr_scheduler.ExponentialLR : dict(gamma=0.96),
@@ -392,6 +390,7 @@ class EagerTorch:
             config['common/data_format'] = config.get('common/data_format') or data_format or 'channels_first'
         return config
 
+
     def _get_devices(self):
         devices = self.full_config.get('device')
         if devices is None:
@@ -421,6 +420,24 @@ class EagerTorch:
             self.device = self.devices[0]
 
         torch.backends.cudnn.benchmark = self.full_config.get('benchmark', 'cuda' in self.device.type)
+
+    def _get_placeholder_shapes(self):
+        config = self.full_config
+        batch_size = config.get('placeholder_batch_size', 2)
+
+        input_names = config.pop('initial_block/inputs', default=None)
+        if input_names is not None:
+            input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
+            shapes = []
+            for name in input_names:
+                cfg = config['inputs'][name]
+                if 'shape' in cfg:
+                    shapes.append((batch_size, *cfg['shape']))
+                elif 'classes' in cfg:
+                    shapes.append((batch_size, cfg['classes']))
+                else:
+                    raise ValueError('Input {} must contain `shape` configuration'.format(name))
+            self.input_shapes = shapes
 
 
     def _build(self, inputs=None):
@@ -452,28 +469,8 @@ class EagerTorch:
         self.model = nn.Sequential(OrderedDict(blocks))
         if len(self.devices) > 1:
             self.model = nn.DataParallel(self.model, self.devices)
-        else:
-            self.model.to(self.device)
 
         self.train_steps = self._make_train_steps(config)
-
-    def _get_placeholder_shapes(self):
-        config = self.full_config
-        batch_size = config.get('placeholder_batch_size', 2)
-
-        input_names = config.pop('initial_block/inputs', default=None)
-        if input_names is not None:
-            input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
-            shapes = []
-            for name in input_names:
-                cfg = config['inputs'][name]
-                if 'shape' in cfg:
-                    shapes.append((batch_size, *cfg['shape']))
-                elif 'classes' in cfg:
-                    shapes.append((batch_size, cfg['classes']))
-                else:
-                    raise ValueError('Input {} must contain `shape` configuration'.format(name))
-            self.input_shapes = shapes
 
     def _placeholder_data(self):
         data = [np.zeros(shape, dtype=np.float32) for shape in self.input_shapes]
@@ -842,6 +839,7 @@ class EagerTorch:
         output = self._fill_output(fetches, output_container)
         return output
 
+
     def predict(self, *args, targets=None, train_mode='', fetches=None):
         """ Get predictions on the data provided.
 
@@ -892,6 +890,7 @@ class EagerTorch:
         output_container = {**output_container, **additional_outputs}
         output = self._fill_output(fetches, output_container)
         return output
+
 
     def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
         """ Add output operations to the model, like predicted probabilities or labels, etc.
@@ -968,7 +967,6 @@ class EagerTorch:
                 name, output = self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
                 outputs[name] = output
         return outputs
-
 
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:

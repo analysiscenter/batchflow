@@ -234,7 +234,6 @@ class ConvBlock(nn.Module):
                  **kwargs):
         super().__init__()
 
-        self.inputs, self.device = inputs, inputs.device
         self.layout = layout
         self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
         self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
@@ -244,7 +243,7 @@ class ConvBlock(nn.Module):
         self.padding, self.data_format = padding, data_format
         self.kwargs = kwargs
 
-        block_modules, skip_modules, combine_modules = self.parse_params()
+        block_modules, skip_modules, combine_modules = self.parse_params(inputs)
         self.block_modules = block_modules
         self.skip_modules = skip_modules if skip_modules else None
         self.combine_modules = combine_modules if combine_modules else None
@@ -266,7 +265,7 @@ class ConvBlock(nn.Module):
         return x
 
 
-    def fill_layer_params(self, layer_class):
+    def fill_layer_params(self, layer_class, inputs):
         """ Inspect which parameters should be passed to the layer and get them from instance. """
         layer_params = inspect.getfullargspec(layer_class.__init__)[0]
         layer_params.remove('self')
@@ -274,9 +273,11 @@ class ConvBlock(nn.Module):
         args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
                 for param in layer_params
                 if (hasattr(self, param) or (param in self.kwargs))}
+        if 'inputs' in layer_params:
+            args['inputs'] = inputs
         return args
 
-    def parse_params(self):
+    def parse_params(self, inputs):
         """ Create necessary ModuleLists from instance parameters. """
         layout = self.layout or ''
         layout = layout.replace(' ', '')
@@ -284,6 +285,8 @@ class ConvBlock(nn.Module):
             logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
             return nn.Sequential([])
         self.module_layout = ''
+
+        device = inputs.device
 
 
         layout_dict = {}
@@ -307,37 +310,37 @@ class ConvBlock(nn.Module):
             if letter in ['R', 'A', '+', '*', '.', '&']:
                 if len(layers) >= 1:
                     self.module_layout += '_'
-                    modules.append(nn.Sequential(OrderedDict(layers)).to(self.device))
+                    modules.append(nn.Sequential(OrderedDict(layers)))
                     layers = []
                 self.module_layout += letter
 
                 if letter == 'R':
-                    residuals.append(self.inputs)
+                    residuals.append(inputs)
 
                     layer_desc = 'Layer {}, letter "{}"'.format(i, letter)
-                    layer = nn.Sequential(OrderedDict([(layer_desc, nn.Sequential().to(self.device))]))
+                    layer = nn.Sequential(OrderedDict([(layer_desc, nn.Sequential().to(device))]))
                     skip_modules.append(layer)
                 elif letter == 'A':
-                    args = self.fill_layer_params(layer_class)
+                    args = self.fill_layer_params(layer_class, inputs)
                     args['mode'] = args.get('mode', 'b')
                     layer = layer_class(**args).to(self.device)
-                    skip = layer(self.inputs)
+                    skip = layer(inputs)
                     residuals.append(skip)
 
                     layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter,
                                                                           get_shape(self.inputs),
                                                                           get_shape(skip))
-                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)])).to(self.device)
+                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
                     skip_modules.append(layer)
                 elif letter in ['+', '*', '.', '&']:
-                    layer = Combine(op=letter).to(self.device)
-                    shape_before = get_shape(self.inputs)
-                    self.inputs = layer([residuals.pop(), self.inputs])
-                    shape_after = get_shape(self.inputs)
+                    layer = Combine(op=letter).to(device)
+                    shape_before = get_shape(inputs)
+                    inputs = layer([residuals.pop(), inputs])
+                    shape_after = get_shape(inputs)
 
                     shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
                     layer_desc = 'Layer {}: {} -> {}'.format(i, shape_before, shape_after)
-                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)])).to(self.device)
+                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
                     combine_modules.append(layer)
             else:
                 layer_args = self.kwargs.get(layer_name, {})
@@ -348,7 +351,7 @@ class ConvBlock(nn.Module):
                 if skip_layer:
                     pass
                 elif letter in self.DEFAULT_LETTERS:
-                    args = self.fill_layer_params(layer_class)
+                    args = self.fill_layer_params(layer_class, inputs)
                 elif letter not in self.LETTERS_LAYERS.keys():
                     raise ValueError('Unknown letter symbol - %s' % letter)
 
@@ -363,11 +366,11 @@ class ConvBlock(nn.Module):
                 if not skip_layer:
                     args = {**args, **layer_args}
                     args = unpack_args(args, *layout_dict[letter_group])
-                    layer = layer_class(**args).to(self.device)
+                    layer = layer_class(**args).to(device)
 
-                    shape_before = get_shape(self.inputs)
-                    self.inputs = layer(self.inputs)
-                    shape_after = get_shape(self.inputs)
+                    shape_before = get_shape(inputs)
+                    inputs = layer(inputs)
+                    shape_after = get_shape(inputs)
 
                     shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
                     layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter, shape_before, shape_after)
@@ -375,7 +378,7 @@ class ConvBlock(nn.Module):
 
         if len(layers) > 0:
             self.module_layout += '_'
-            modules.append(nn.Sequential(OrderedDict(layers)).to(self.device))
+            modules.append(nn.Sequential(OrderedDict(layers)))
 
         return modules, skip_modules, combine_modules
 
