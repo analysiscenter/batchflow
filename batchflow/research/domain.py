@@ -235,9 +235,9 @@ class Domain:
        `{'a': 1, `b`: 3}`, `{'a': 2, `b`: 4}`.
     #. multiplication with weights: can be used to sample configs from sum of Options
         For example, `0.3 * Option('p1', NS('n', loc=-10)) + 0.2 * Option('p2',  NS('u'))
-        + 0.5 * Option('p3',  NS('n', loc=10))` will return `{'p1': '-10.3059'}, {'p3': '8.9959'},
-        {'p3': '9.1302'}, {'p3': '10.2611'}, {'p1': '-7.9388'}, {'p2': '0.5455'}, {'p1': '-9.2497'},
-        {'p3': '9.9769'}, {'p2': '0.3510'}, {'p3': '8.8519'}` (depends on seed).
+        + 0.5 * Option('p3',  NS('n', loc=10))` will return `{'p1': -10.3059}, {'p3': 8.9959},
+        {'p3': 9.1302}, {'p3': 10.2611}, {'p1': -7.9388}, {'p2': 0.5455}, {'p1': -9.2497},
+        {'p3': 9.9769}, {'p2': 0.3510}, {'p3': 8.8519}` (depends on seed).
     """
     def __init__(self, domain=None, weights=None, **kwargs):
         if isinstance(domain, Option):
