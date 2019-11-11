@@ -18,8 +18,27 @@ import torch
 from torch.optim import Optimizer
 
 class RAdam(Optimizer):
-    """
-    Implements RAdam algorithms
+    """ Implements RAdam algorithm.
+
+    Parameters
+    ----------
+    params : iterable
+        iterable of parameters to optimize or dicts defining parameter groups
+    lr : float, optional
+        learning rate
+        (default: 1e-3)
+    betas : Tuple[float, float], optional
+        coefficients used for computing running averages of gradient and its square
+        (default: (0.9, 0.999))
+    eps : float, optional
+        term added to the denominator to improve numerical stability
+        (default: 1e-8)
+    weight_decay : float, optional
+        weight decay (L2 penalty)
+        (default: 0)
+    degenerated_to_sgd : bool, optional
+        defines whether to use SGD in first steps or just update parameters
+        (default: True)
     """
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, degenerated_to_sgd=True):
@@ -41,16 +60,13 @@ class RAdam(Optimizer):
                         buffer=[[None, None, None] for _ in range(10)])
         super(RAdam, self).__init__(params, defaults)
 
-    def __setstate__(self, state):
-        # pylint: disable=useless-super-delegation
-        super(RAdam, self).__setstate__(state)
-
     def step(self, closure=None):
         """Performs a single optimization step.
 
-        Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
+        Parameters
+        ----------
+        closure : callable, optional
+            A closure that reevaluates the model and returns the loss.
         """
         loss = None
         if closure is not None:
