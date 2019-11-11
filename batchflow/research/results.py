@@ -200,7 +200,6 @@ class Results:
         iterations = self._get_list(iterations)
 
         all_results = []
-
         for config_alias in self.configs:
             alias_str = config_alias.alias(as_string=True)
             _repetition = config_alias.pop_config('repetition')

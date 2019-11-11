@@ -238,6 +238,7 @@ class Domain:
         + 0.5 * Option('p3',  NS('n', loc=10))` will return `{'p1': -10.3059}, {'p3': 8.9959},
         {'p3': 9.1302}, {'p3': 10.2611}, {'p1': -7.9388}, {'p2': 0.5455}, {'p1': -9.2497},
         {'p3': 9.9769}, {'p2': 0.3510}, {'p3': 8.8519}` (depends on seed).
+        See more in tutorials (`<../../examples/tutorials/research/04_advance_usage_of_domain.ipynb>_`).
     """
     def __init__(self, domain=None, weights=None, **kwargs):
         if isinstance(domain, Option):
@@ -366,6 +367,9 @@ class Domain:
             self.set_iter(self.n_iters, self.n_reps, self.repeat_each)
             self._reset_iter(self.n_iters, self.n_reps, self.repeat_each)
         return next(self._iterator)
+
+    def reset_iter(self):
+        self._iterator = None
 
     def set_iter(self, n_iters=None, n_reps=1, repeat_each=100):
         """ Set parameters for iterator.

@@ -348,17 +348,19 @@ class Research:
 
         if self.domain is None:
             self.init_domain()
+
+        self.domain.reset_iter()
+        self._folder_exists(self.name)
+        self.__save()
+
         self.domain = self.domain * Option('update', [0])
         self.domain.set_iter(n_iters=self.n_configs, n_reps=self.n_reps, repeat_each=self.repeat_each)
 
         if self.domain.size is None and (self._update_domain is None or self._update_domain['each'] == 'last'):
             warnings.warn("Research will be infinite because has infinite domain and hasn't domain updating",
                           stacklevel=2)
-        self._folder_exists(self.name)
 
         print("Research {} is starting...".format(self.name))
-
-        self.__save()
 
         jobs_queue = DynamicQueue(self.branches, self.domain, self.n_iters, self.executables,
                                   self.name, self._update_config, self._update_domain, self.n_updates)
