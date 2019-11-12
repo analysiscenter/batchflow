@@ -19,7 +19,7 @@ from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import ClassificationMetrics, SegmentationMetricsByPixels, \
-     SegmentationMetricsByInstances, RegressionMetrics 
+     SegmentationMetricsByInstances, RegressionMetrics
 from ._const import ACTIONS, JOIN_ID, MERGE_ID, REBATCH_ID, PIPELINE_ID, TRAIN_MODEL_ID, PREDICT_MODEL_ID, CALL_ID, \
      SAVE_MODEL_ID, LOAD_MODEL_ID, GATHER_METRICS_ID, UPDATE_VARIABLE_ID, UPDATE_ID, PRINT_ID, CALL_FROM_NS_ID
 from .utils import create_bar, update_bar
