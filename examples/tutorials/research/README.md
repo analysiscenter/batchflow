@@ -25,5 +25,8 @@
 1. [Plotting Research results](./03_plotting_research_results.ipynb)
 
 1. [Advanced usage of Domain](./04_advance_usage_of_domain.ipynb)
+    * Operations with Domains and Options
+    * Samplers in Domain
+    * Domains with weights
 
 1. [Domain update](./05_update_domain_in_research.ipynb)
