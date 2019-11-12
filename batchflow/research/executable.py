@@ -11,7 +11,7 @@ class PipelineStopIteration(StopIteration):
     """ Special pipeline StopIteration exception """
     pass
 
-class Executable: #pylint: disable=too-many-instance-attributes
+class Executable:
     """ Function or pipeline
 
     **Attributes**

@@ -58,15 +58,12 @@ class Worker:
 
     def init(self):
         """ Run before main. """
-        pass #pylint:disable=unnecessary-pass
 
     def post(self):
         """ Run after main. """
-        pass #pylint:disable=unnecessary-pass
 
     def main(self):
         """ Main part of the worker. """
-        pass #pylint:disable=unnecessary-pass
 
 
     def __call__(self, queue, results):

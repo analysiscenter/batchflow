@@ -83,7 +83,7 @@ class Job:
             while True:
                 try:
                     batch = unit.next_batch_root()
-                    exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
+                    exceptions = self._parallel_run(iteration, name, batch, actions)
                 except StopIteration:
                     break
         else:
@@ -92,7 +92,7 @@ class Job:
             except StopIteration as e:
                 exceptions = [e] * len(self.experiments)
             else:
-                exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
+                exceptions = self._parallel_run(iteration, name, batch, actions)
         self.put_all_results(iteration, name, actions)
         self.last_update_time.value = time.time()
         return exceptions
@@ -108,6 +108,7 @@ class Job:
         _ = name, actions, iteration
         if execute is not None:
             item.execute_for(batch)
+        return None
 
     def _parallel_init_run(self, iteration, name, batch, actions):
         _ = iteration, batch
