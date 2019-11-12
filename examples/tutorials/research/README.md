@@ -5,21 +5,25 @@
             * running several repetitions of an experiment
             * viewing research results
             * saving and loading research
-    * Runnung experiments with different parameters aka grid
+    * Runnung experiments with different parameters aka domain
         * 1 pipeline with variable parameters
-            * creating and viewing grids
+            * creating and viewing domains
             * viewing filtered research results
     * More complex execution strategies
-        * 2 pipelines, train & test + function + grid
+        * 2 pipelines, train & test + function + domain
             * adding test pipeline
             * defining pipeline execution frequency
             * adding functions
 
 1. [Advanced topics](./02_advanced_usage_of_research.ipynb)
     * Reducing extra dataset loads
-        * 1 pipeline with root and branch + grid
+        * 1 pipeline with root and branch + domain
     * Performance
         * execution tasks managing
     * Cross-validation
 
 1. [Plotting Research results](./03_plotting_research_results.ipynb)
+
+1. [Advanced usage of Domain](./04_advance_usage_of_domain.ipynb)
+
+1. [Domain update](./05_update_domain_in_research.ipynb)
