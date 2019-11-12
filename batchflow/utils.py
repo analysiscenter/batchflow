@@ -100,11 +100,17 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
         for y, (source, val) in enumerate(variables):
             ax = axs[n_vars * x + y]
 
-            (df[df['name'] == source]
-             .pivot(index='iteration', columns='repetition', values=val)
-             .rename(columns=lambda s: 'rep ' + str(s))
-             .plot(ax=ax, **kwargs))
-            ax.set_title(config + '\n' + source + ' ' + val)
+            cols = ['repetition', 'cv_split'] if 'cv_split' in df.columns else 'repetition'
+
+            res = (df[df['name'] == source]
+                   .pivot_table(index='iteration', columns=cols, values=val)
+                   .rename(columns=lambda s: 'rep ' + str(s), level=0))
+
+            if 'cv_split' in df.columns:
+                res = res.rename(columns=lambda s: 'split ' + str(s), level=1)
+
+            res.plot(ax=ax, **kwargs)
+            ax.set_title(config + ' ' + source)
             ax.set_xlabel('Iteration')
             ax.set_ylabel(val.replace('_', ' ').capitalize())
             ax.grid(True)
