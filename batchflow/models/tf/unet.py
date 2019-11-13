@@ -1,9 +1,11 @@
 """  Ronneberger O. et al "`U-Net: Convolutional Networks for Biomedical Image Segmentation
 <https://arxiv.org/abs/1505.04597>`_"
 """
+import tensorflow as tf
 
 from .encoder_decoder import EncoderDecoder
-
+from .layers import conv_block, combine
+from ..utils import unpack_args
 
 class UNet(EncoderDecoder):
     """ UNet-like model
@@ -87,3 +89,15 @@ class UNet(EncoderDecoder):
             config['body/decoder/upsample/filters'] = config.get('body/decoder/blocks/filters')
 
         return config
+
+class UNetPP(UNet):
+    @classmethod
+    def decoder(cls, inputs, name='decoder', **kwargs):
+        for i in range(1, len(inputs)-3):
+            _inputs = inputs[:i+1] + [inputs[i]] * 2
+            outputs = super().decoder(_inputs, name=name, return_all=True, **{**kwargs, 'num_stages': i+1})
+            outputs[-1] = outputs[-1]
+            for j, x in enumerate(inputs[:i]):
+                x = tf.concat([x, outputs[::-1][j]], name='dense-concat-'+str(i), axis=-1)
+                inputs[j] = tf.concat([conv_block(x, layout='cna', filters=3), inputs[j]], axis=-1)
+        return super().decoder(inputs, name=name, return_all=False, **{**kwargs, 'num_stages': len(inputs)-2})
