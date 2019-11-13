@@ -10,6 +10,7 @@ from batchflow import B, C, D, F, L, V, R, P, I, Dataset, Pipeline
 
 @pytest.mark.parametrize('named_expr', [
     C('option'),
+    C('not defined', default=10),
     B('size'),
     D('size'),
     V('var'),
