@@ -4,7 +4,7 @@ extension-pkg-whitelist=numpy
 
 [DESIGN]
 max-line-length=120
-max-attributes=20
+max-attributes=50
 max-locals=20
 max-args=20
 max-module-lines=1500
