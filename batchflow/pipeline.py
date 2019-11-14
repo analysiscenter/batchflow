@@ -100,7 +100,7 @@ class Pipeline:
         self._iter_params = None
         self._not_init_vars = True
         self._debug = None
-        self._debug_info = None
+        self.debug_info = None
         self._debug_info_lock = threading.Lock()
 
     def __enter__(self):
@@ -712,12 +712,12 @@ class Pipeline:
             if self._debug:
                 exec_time = time.time() - start_time
                 debug_info = self._create_debug_info(batch, action, start_time=start_time, time=exec_time)
-                if self._debug_info is None:
+                if self.debug_info is None:
                     with self._debug_info_lock:
-                        self._debug_info = pd.DataFrame(debug_info, index=[0])
+                        self.debug_info = pd.DataFrame(debug_info, index=[0])
                 else:
                     with self._debug_info_lock:
-                        self._debug_info = self._debug_info.append(debug_info, ignore_index=True, sort=False)
+                        self.debug_info = self.debug_info.append(debug_info, ignore_index=True, sort=False)
 
         return batch
 
