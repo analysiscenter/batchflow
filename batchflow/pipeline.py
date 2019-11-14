@@ -1,13 +1,16 @@
 """ Contains pipeline class """
 import sys
+import time
 from functools import partial
 import traceback
+import threading
 import concurrent.futures as cf
 import asyncio
 import logging
 import warnings
 import queue as q
 import numpy as np
+import pandas as pd
 
 from .base import Baseset
 from .config import Config
@@ -54,7 +57,6 @@ class Pipeline:
 
         if pipeline is None:
             self.dataset = dataset
-            self._dataset = None
             self.config = config or {}
             self._actions = actions or []
             self._lazy_run = None
@@ -65,7 +67,6 @@ class Pipeline:
             self._namespaces = []
         else:
             self.dataset = pipeline.dataset
-            self._dataset = None
             config = config or {}
             _config = pipeline.config or {}
             self.config = {**config, **_config}
@@ -86,6 +87,7 @@ class Pipeline:
             self.after = pipeline.after.copy()
             self.after.pipeline = self
 
+        self._dataset = None
         self.config = Config(self.config)
         self._stop_flag = False
         self._executor = None
@@ -97,6 +99,9 @@ class Pipeline:
         self._rest_batch = None
         self._iter_params = None
         self._not_init_vars = True
+        self._debug = None
+        self._debug_info = None
+        self._debug_info_lock = threading.Lock()
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -193,6 +198,14 @@ class Pipeline:
         if hasattr(namespace, name) and callable(getattr(namespace, name)):
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
+
+    def get_action_name(self, action):
+        """ Return a pretty action name """
+        if action['name'] == '#_from_ns':
+            return action['method'].__name__
+        if action['name'].startswith('#_'):
+            return action['name'][2:]
+        return action['name']
 
     def add_namespace(self, *namespaces):
         self._namespaces.extend(namespaces)
@@ -645,15 +658,23 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._actions)  # pylint: disable=protected-access
         return batch
 
+    def _create_debug_info(self, batch, action, **kwargs):
+        name = self.get_action_name(action)
+        return dict(batch=id(batch), action=name, **kwargs)
+
     def _exec_all_actions(self, batch, actions=None):
         join_batches = None
         actions = actions or self._actions
+
         for action in actions:
             _action = action.copy()
             if 'args' in action:
                 _action['args'] = self._eval_expr(action['args'], batch=batch)
             if 'kwargs' in action:
                 _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
+
+            if self._debug:
+                start_time = time.time()
 
             if _action.get('#dont_run', False):
                 pass
@@ -687,6 +708,16 @@ class Pipeline:
                     join_batches = None
 
                 batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
+
+            if self._debug:
+                exec_time = time.time() - start_time
+                debug_info = self._create_debug_info(batch, action, start_time=start_time, time=exec_time)
+                if self._debug_info is None:
+                    with self._debug_info_lock:
+                        self._debug_info = pd.DataFrame(debug_info, index=[0])
+                else:
+                    with self._debug_info_lock:
+                        self._debug_info = self._debug_info.append(debug_info, ignore_index=True, sort=False)
 
         return batch
 
@@ -1273,7 +1304,7 @@ class Pipeline:
             yield batch
 
 
-    def gen_batch(self, *args, iter_params=None, reset='iter', **kwargs):
+    def gen_batch(self, *args, iter_params=None, reset='iter', debug=False, **kwargs):
         """ Generate batches
 
         Parameters
@@ -1351,6 +1382,7 @@ class Pipeline:
         kwargs_value = self._eval_expr(kwargs)
         self.reset(reset)
         self._iter_params = iter_params or self._iter_params or Baseset.get_default_iter_params()
+        self._debug = debug
 
         return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
 
