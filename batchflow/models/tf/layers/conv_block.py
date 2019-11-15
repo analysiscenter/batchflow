@@ -328,16 +328,16 @@ class ConvBlock:
                 residuals = residuals[:-1]
             else:
                 layer_args = self.kwargs.get(layer_name, {})
-                skip_layer = layer_args is False \
-                             or isinstance(layer_args, dict) and layer_args.get('disable', False)
+                skip_layer = layer_args is False or \
+                             isinstance(layer_args, dict) and layer_args.get('disable', False)
 
                 # Create params for the layer call
                 if skip_layer:
                     pass
                 elif letter in self.DEFAULT_LETTERS:
-                    args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
+                    args = {param: getattr(self, param, self.kwargs.get(param, None))
                             for param in layer_class.params
-                            if (hasattr(self, param) or (param in self.kwargs))}
+                            if (hasattr(self, param) or param in self.kwargs)}
                 else:
                     if letter not in self.LETTERS_LAYERS.keys():
                         raise ValueError('Unknown letter symbol - %s' % letter)
