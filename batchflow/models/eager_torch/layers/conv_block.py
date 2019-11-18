@@ -3,14 +3,13 @@ import logging
 import inspect
 from collections import OrderedDict
 
-import torch
 import torch.nn as nn
 
 from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import Interpolate, SubPixelConv, Crop
+from .resize import Interpolate, SubPixelConv, SqueezeBlock, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
 
@@ -85,8 +84,6 @@ class ConvBlock(nn.Module):
         Upsampling factor
     upsampling_layout : str
         Layout for upsampling layers
-    is_training : bool or tf.Tensor
-        Default is True.
     reuse : bool
         Whether to user layer variables if exist
 
@@ -127,11 +124,11 @@ class ConvBlock(nn.Module):
     --------
     A simple block: 3x3 conv, batch norm, relu, 2x2 max-pooling with stride 2::
 
-        x = ConvBlock('cnap', filters=32, kernel_size=3)(x)
+        x = ConvBlock(layout='cnap', filters=32, kernel_size=3)
 
     A canonical bottleneck block (1x1, 3x3, 1x1 conv with relu in-between)::
 
-        x = ConvBlock('nac nac nac', [64, 64, 256], [1, 3, 1])(x)
+        x = ConvBlock(layout='nac nac nac', filters=[64, 64, 256], kernel_size=[1, 3, 1])
 
     A complex Nd block:
 
@@ -146,11 +143,16 @@ class ConvBlock(nn.Module):
 
     ::
 
-        x = ConvBlock('ca ca ca nd', [32, 32, 64], [5, 3, 3], strides=[1, 1, 2], dropout_rate=.15)(x)
+        x = ConvBlock(layout='ca ca ca nd', filters=[32, 32, 64], kernel_size=[5, 3, 3],
+                      strides=[1, 1, 2], dropout_rate=.15)(x)
 
     A residual block::
 
-        x = ConvBlock('R nac nac +', [16, 16, 64], [1, 3, 1])(x)
+        x = ConvBlock(layout='R nac nac +', filters=[16, 16, 64], kernel_size=[1, 3, 1])
+
+    Squeeze and excitation block::
+
+        x = ConvBlock(layout='S cna *', filters=64)
 
     """
     LETTERS_LAYERS = {
@@ -159,6 +161,7 @@ class ConvBlock(nn.Module):
         '+': 'residual_end',
         '.': 'residual_end',
         '*': 'residual_end',
+        '&': 'residual_end',
         'f': 'dense',
         'c': 'conv',
         't': 'transposed_conv',
@@ -176,6 +179,7 @@ class ConvBlock(nn.Module):
         # 'O': 'dropblock',
         # 'm': 'mip',
         'A': 'residual_bilinear_additive',
+        'S': 'residual_se',
         'b': 'resize_bilinear',
         'N': 'resize_nn',
         'X': 'subpixel_conv'
@@ -183,8 +187,8 @@ class ConvBlock(nn.Module):
 
     LAYERS_MODULES = {
         'activation': Activation,
-        'residual_start': None,
-        'residual_end': None,
+        'residual_start': nn.Identity,
+        'residual_end': Combine,
         'dense': Dense,
         'conv': Conv,
         'transposed_conv': ConvTranspose,
@@ -200,6 +204,7 @@ class ConvBlock(nn.Module):
         # 'dropblock': None, # TODO
         # 'mip': None, # TODO?
         'residual_bilinear_additive': Interpolate,
+        'residual_se': SqueezeBlock,
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
         'subpixel_conv': SubPixelConv,
@@ -225,6 +230,9 @@ class ConvBlock(nn.Module):
         })
 
 
+    SKIP_LETTERS = ['R', 'A', 'S']
+    COMBINE_LETTERS = ['+', '*', '.', '&']
+
     def __init__(self, inputs=None, layout='',
                  filters=0, kernel_size=3, strides=1, dilation_rate=1, depth_multiplier=1,
                  activation='relu',
@@ -234,7 +242,6 @@ class ConvBlock(nn.Module):
                  **kwargs):
         super().__init__()
 
-        self.inputs, self.device = inputs, inputs.device
         self.layout = layout
         self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
         self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
@@ -244,7 +251,7 @@ class ConvBlock(nn.Module):
         self.padding, self.data_format = padding, data_format
         self.kwargs = kwargs
 
-        block_modules, skip_modules, combine_modules = self.parse_params()
+        block_modules, skip_modules, combine_modules = self.parse_params(inputs)
         self.block_modules = block_modules
         self.skip_modules = skip_modules if skip_modules else None
         self.combine_modules = combine_modules if combine_modules else None
@@ -257,16 +264,16 @@ class ConvBlock(nn.Module):
             if letter == '_':
                 x = self.block_modules[b_counter](x)
                 b_counter += 1
-            elif letter in ['R', 'A']:
+            elif letter in self.SKIP_LETTERS:
                 residuals += [self.skip_modules[s_counter](x)]
                 s_counter += 1
-            elif letter in ['+', '*', '.']:
+            elif letter in self.COMBINE_LETTERS:
                 x = self.combine_modules[c_counter]([residuals.pop(), x])
                 c_counter += 1
         return x
 
 
-    def fill_layer_params(self, layer_class):
+    def fill_layer_params(self, layer_class, inputs):
         """ Inspect which parameters should be passed to the layer and get them from instance. """
         layer_params = inspect.getfullargspec(layer_class.__init__)[0]
         layer_params.remove('self')
@@ -274,9 +281,11 @@ class ConvBlock(nn.Module):
         args = {param: getattr(self, param) if hasattr(self, param) else self.kwargs.get(param, None)
                 for param in layer_params
                 if (hasattr(self, param) or (param in self.kwargs))}
+        if 'inputs' in layer_params:
+            args['inputs'] = inputs
         return args
 
-    def parse_params(self):
+    def parse_params(self, inputs):
         """ Create necessary ModuleLists from instance parameters. """
         layout = self.layout or ''
         layout = layout.replace(' ', '')
@@ -284,6 +293,8 @@ class ConvBlock(nn.Module):
             logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
             return nn.Sequential([])
         self.module_layout = ''
+
+        device = inputs.device
 
 
         layout_dict = {}
@@ -304,40 +315,36 @@ class ConvBlock(nn.Module):
             layer_class = self.LAYERS_MODULES[layer_name]
             layout_dict[letter_group][0] += 1
 
-            if letter in ['R', 'A', '+', '*', '.', '&']:
+            if letter in self.SKIP_LETTERS + self.COMBINE_LETTERS:
                 if len(layers) >= 1:
                     self.module_layout += '_'
-                    modules.append(nn.Sequential(OrderedDict(layers)).to(self.device))
+                    modules.append(nn.Sequential(OrderedDict(layers)))
                     layers = []
                 self.module_layout += letter
 
-                if letter == 'R':
-                    residuals.append(self.inputs)
-
-                    layer_desc = 'Layer {}, letter "{}"'.format(i, letter)
-                    layer = nn.Sequential(OrderedDict([(layer_desc, nn.Sequential().to(self.device))]))
-                    skip_modules.append(layer)
-                elif letter == 'A':
-                    args = self.fill_layer_params(layer_class)
-                    args['mode'] = args.get('mode', 'b')
-                    layer = layer_class(**args).to(self.device)
-                    skip = layer(self.inputs)
+                if letter in self.SKIP_LETTERS:
+                    args = self.fill_layer_params(layer_class, inputs)
+                    layer = layer_class(**args).to(device)
+                    skip = layer(inputs)
                     residuals.append(skip)
 
-                    layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter,
-                                                                          get_shape(self.inputs),
-                                                                          get_shape(skip))
-                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)])).to(self.device)
+                    layer_desc = 'Layer {}, skip-letter "{}"; {} -> {}'.format(i, letter,
+                                                                               get_shape(inputs),
+                                                                               get_shape(skip))
+                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
                     skip_modules.append(layer)
-                elif letter in ['+', '*', '.', '&']:
-                    layer = Combine(op=letter).to(self.device)
-                    shape_before = get_shape(self.inputs)
-                    self.inputs = layer([residuals.pop(), self.inputs])
-                    shape_after = get_shape(self.inputs)
+
+                elif letter in self.COMBINE_LETTERS:
+                    args = self.fill_layer_params(layer_class, inputs)
+                    args['inputs'] = [residuals.pop(), inputs]
+                    layer = layer_class(op=letter, **args).to(device)
+                    shape_before = get_shape(inputs)
+                    inputs = layer(args['inputs'])
+                    shape_after = get_shape(inputs)
 
                     shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
-                    layer_desc = 'Layer {}: {} -> {}'.format(i, shape_before, shape_after)
-                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)])).to(self.device)
+                    layer_desc = 'Layer {}: combine; {} -> {}'.format(i, shape_before, shape_after)
+                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
                     combine_modules.append(layer)
             else:
                 layer_args = self.kwargs.get(layer_name, {})
@@ -348,7 +355,7 @@ class ConvBlock(nn.Module):
                 if skip_layer:
                     pass
                 elif letter in self.DEFAULT_LETTERS:
-                    args = self.fill_layer_params(layer_class)
+                    args = self.fill_layer_params(layer_class, inputs)
                 elif letter not in self.LETTERS_LAYERS.keys():
                     raise ValueError('Unknown letter symbol - %s' % letter)
 
@@ -357,17 +364,15 @@ class ConvBlock(nn.Module):
                     args['op'] = letter
                 elif letter_group == 'b':
                     args['mode'] = args.get('mode', letter.lower())
-                    if self.kwargs.get('upsampling_layout'):
-                        args['layout'] = self.kwargs.get('upsampling_layout')
 
                 if not skip_layer:
                     args = {**args, **layer_args}
                     args = unpack_args(args, *layout_dict[letter_group])
-                    layer = layer_class(**args).to(self.device)
+                    layer = layer_class(**args).to(device)
 
-                    shape_before = get_shape(self.inputs)
-                    self.inputs = layer(self.inputs)
-                    shape_after = get_shape(self.inputs)
+                    shape_before = get_shape(inputs)
+                    inputs = layer(inputs)
+                    shape_after = get_shape(inputs)
 
                     shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
                     layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter, shape_before, shape_after)
@@ -375,7 +380,7 @@ class ConvBlock(nn.Module):
 
         if len(layers) > 0:
             self.module_layout += '_'
-            modules.append(nn.Sequential(OrderedDict(layers)).to(self.device))
+            modules.append(nn.Sequential(OrderedDict(layers)))
 
         return modules, skip_modules, combine_modules
 
@@ -404,115 +409,3 @@ def update_layers(letter, module, name=None):
     ConvBlock.LETTERS_LAYERS.update({letter: name})
     ConvBlock.LAYERS_MODULES.update({name: module})
     ConvBlock.LETTERS_GROUPS.update({letter: letter})
-
-
-
-class Upsample(nn.Module):
-    """ Upsample inputs with a given factor.
-
-    Parameters
-    ----------
-    inputs
-        Input tensor.
-    factor : int
-        Upsamping scale.
-    shape : tuple of int
-        Shape to upsample to (used by bilinear and NN resize).
-    layout : str
-        Resizing technique, a sequence of:
-
-        - b - bilinear resize
-        - N - nearest neighbor resize
-        - t - transposed convolution
-        - T - separable transposed convolution
-        - X - subpixel convolution
-
-        all other :class:`~.torch.ConvBlock` layers are also allowed.
-
-
-    Examples
-    --------
-    A simple bilinear upsampling::
-
-        x = Upsample(layout='b', shape=(256, 256), inputs=inputs)
-
-    Upsampling with non-linear normalized transposed convolution::
-
-        x = Upsample(layout='nat', factor=2, kernel_size=3, inputs=inputs)
-
-    Subpixel convolution::
-
-        x = Upsample(layout='X', factor=2, inputs=inputs)
-    """
-    def __init__(self, factor=2, shape=None, layout='b', *args, inputs=None, **kwargs):
-        super().__init__()
-
-        _ = args
-
-        if 't' in layout or 'T' in layout:
-            if 'kernel_size' not in kwargs:
-                kwargs['kernel_size'] = factor
-            if 'strides' not in kwargs:
-                kwargs['strides'] = factor
-
-        self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
-
-    def forward(self, x):
-        return self.layer(x)
-
-
-
-class Combine(nn.Module):
-    """ Combine list of tensor into one.
-
-    Parameters
-    ----------
-    inputs : sequence of torch.Tensors
-        Tensors to combine.
-
-    op : str
-        If 'concat', 'cat', '.', then inputs are concated along channels axis.
-        If 'sum', '+', then inputs are summed.
-        If 'multi', '*', then inputs are multiplied.
-        If 'softsum', '&', then every tensor is passed through 1x1 convolution in order to have
-        the same number of channels as the first tensor, and then summed.
-    """
-    CONCAT_OPS = ['concat', 'cat', '.']
-    SUM_OPS = ['sum', '+']
-    MULTI_OPS = ['multi', '*']
-    SOFTSUM_OPS = ['softsum', '&']
-    ALL_OPS = CONCAT_OPS + SUM_OPS + MULTI_OPS + SOFTSUM_OPS
-
-    def __init__(self, inputs=None, op='concat'):
-        super().__init__()
-
-        self.op = op
-
-        if op == self.SOFTSUM_OPS:
-            args = dict(layout='c', filters=get_shape(inputs[0])[1],
-                        kernel_size=1)
-            conv = [ConvBlock(get_shape(tensor), **args) for tensor in inputs]
-            self.conv = nn.ModuleList(conv)
-
-
-    def forward(self, inputs):
-        if self.op in self.CONCAT_OPS:
-            inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
-            return torch.cat(inputs, dim=1)
-        if self.op in self.SUM_OPS:
-            inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
-            return torch.stack(inputs, dim=0).sum(dim=0)
-        if self.op in self.MULTI_OPS:
-            inputs = [Crop(inputs[0])(item, inputs[0]) for item in inputs]
-            result = 1
-            for item in inputs:
-                result *= item
-            return result
-        if self.op in self.SOFTSUM_OPS:
-            inputs = [conv(tensor)
-                      for conv, tensor in zip(self.conv, inputs)]
-            return torch.stack(inputs, dim=0).sum(dim=0)
-        raise ValueError('Combine operation must be in {}, instead got {}.'.format(self.ALL_OPS, self.op))
-
-    def extra_repr(self):
-        return 'op=' + self.op
