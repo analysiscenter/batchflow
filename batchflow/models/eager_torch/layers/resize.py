@@ -180,7 +180,7 @@ class Upsample(nn.Module):
 
 
 
-class SqueezeBlock(nn.Module):
+class SEBlock(nn.Module):
     """ Squeeze and excitation block.
 
     Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"

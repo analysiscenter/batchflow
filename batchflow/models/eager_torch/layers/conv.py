@@ -15,8 +15,7 @@ class BaseConv(nn.Module):
                  dilation=1, dilation_rate=None, groups=1, bias=True, inputs=None):
         super().__init__()
 
-        if filters == 'same':
-            filters = get_num_channels(inputs)
+        filters = get_num_channels(inputs) if filters == 'same' else filters
 
         args = {
             'in_channels': get_num_channels(inputs),

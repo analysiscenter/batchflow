@@ -9,7 +9,7 @@ from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, SideBlock, SqueezeBlock, Combine
+from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, SideBlock, SEBlock, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
 
@@ -26,6 +26,9 @@ class ConvBlock(nn.Module):
     layout : str
         A sequence of letters, each letter meaning individual operation:
 
+        - `>` - add new axis to tensor
+        - `<` - remove trailing axis from tensor
+        - r - reshape tensor to desired shape
         - c - convolution
         - t - transposed convolution
         - C - separable convolution
@@ -42,11 +45,12 @@ class ConvBlock(nn.Module):
         - d - dropout
         - D - alpha dropout
         - b - upsample with bilinear resize
-        - B - upsample with bilinear additive resize
         - N - upsample with nearest neighbors resize
         - X - upsample with subpixel convolution (:class:`~.layers.SubpixelConv`)
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
+        - S - start residual connection with squeeze and excitation
+        - B - start residual connection with auxilliary :class:`~.layers.ConvBlock`
         - `.` - end residual connection with concatenation
         - `+` - end residual connection with summation
         - `*` - end residual connection with multiplication
@@ -54,14 +58,16 @@ class ConvBlock(nn.Module):
 
         Default is ''.
 
-    filters : int
-        Number of filters in the output tensor.
+    filters : int or str
+        If str, then 'same' stands for making convolution channel-preserving operation.
+        If int, then number of filters in the output tensor.
     kernel_size : int
         Kernel size.
     name : str
         Name of the layer that will be used as a scope.
-    units : int
-        Number of units in the dense layer.
+    units : int or str
+        If str, then 'same' stands for applying dense while preserving number of units.
+        If int, then number of units in the dense layer.
     strides : int
         Default is 1.
     padding : str
@@ -84,33 +90,30 @@ class ConvBlock(nn.Module):
         Upsampling factor
     upsampling_layout : str
         Layout for upsampling layers
-    reuse : bool
-        Whether to user layer variables if exist
 
-    dense : dict
-        Parameters for dense layers, like initializers, regularalizers, etc.
-    conv : dict
-        Parameters for convolution layers, like initializers, regularalizers, etc.
-    transposed_conv : dict
-        Parameters for transposed conv layers, like initializers, regularalizers, etc.
-    batch_norm : dict or None
-        Parameters for batch normalization layers, like momentum, intiializers, etc
-        If None or inculdes parameters 'off' or 'disable' set to True or 1,
-        the layer will be excluded whatsoever.
-    pooling : dict
-        Parameters for pooling layers, like initializers, regularalizers, etc.
-    dropout : dict or None
-        Parameters for dropout layers, like noise_shape, etc
-        If None or inculdes parameters 'off' or 'disable' set to True or 1,
-        the layer will be excluded whatsoever.
-    dropblock : dict or None
-        Parameters for dropblock layers, like dropout_rate, block_size, etc.
-    subpixel_conv : dict or None
-        Parameters for subpixel convolution like layout, activation, etc.
-    resize_bilinear : dict or None
-        Parameters for bilinear resize.
-    resize_bilinear_additive : dict or None
-        Parameters for bilinear additive resize like layout, activation, etc.
+    other named arguments : None, bool, dict or sequence
+        If None, then no common parameters are passed to all the layers of a given type.
+        If False, then all the layers of a given type are disabled.
+        If dict, then contains common parameters for all the layers of a given type. If 'disable' is present in
+        this dictionary and evaluates to True, then all the layers of a given type are disabled.
+        If sequence, then each element must be a dict with parameters that are passed to corresponding layers
+        of a given type.
+
+
+        Name of the argument must be one of:
+
+        - dense - parameters like initializers, regularalizers, etc.
+        - conv - parameters like initializers, regularalizers, etc.
+        - transposed_conv - parameters like initializers, regularalizers, etc.
+        - batch_norm - parameters like initializers, momentum, etc.
+        - pooling - parameters like initializers, regularalizers, etc.
+        - dropout - parameters like noise_shape, dropout_rate, etc.
+        - subpixel_conv - parameters for :class:`~.layers.SubPixelConv`.
+        - resize_bilinear - parameters for parameters for :class:`~.layers.Interpolate`.
+        - residual_bilinear_additive - parameters for parameters for :class:`~.layers.Interpolate`.
+        - residual_se - parameters for parameters for :class:`~.layers.SEBlock`.
+        - side_branch - parameters for parameters for :class:`~.layers.ConvBlock`.
+
 
     Notes
     -----
@@ -144,11 +147,11 @@ class ConvBlock(nn.Module):
     ::
 
         x = ConvBlock(layout='ca ca ca nd', filters=[32, 32, 64], kernel_size=[5, 3, 3],
-                      strides=[1, 1, 2], dropout_rate=.15)(x)
+                      strides=[1, 1, 2], dropout_rate=.15)
 
     A residual block::
 
-        x = ConvBlock(layout='R nac nac +', filters=[16, 16, 64], kernel_size=[1, 3, 1])
+        x = ConvBlock(layout='R nac +', filters='same')
 
     Squeeze and excitation block::
 
@@ -158,6 +161,9 @@ class ConvBlock(nn.Module):
     LETTERS_LAYERS = {
         'a': 'activation',
         'R': 'residual_start',
+        'A': 'residual_bilinear_additive',
+        'B': 'side_branch', # formally, it is residual too
+        'S': 'residual_se',
         '+': 'residual_end',
         '.': 'residual_end',
         '*': 'residual_end',
@@ -181,9 +187,6 @@ class ConvBlock(nn.Module):
         'D': 'alpha_dropout',
         # 'O': 'dropblock',
         # 'm': 'mip',
-        'A': 'residual_bilinear_additive',
-        'B': 'side_branch', # formally, it is residual too
-        'S': 'residual_se',
         'b': 'resize_bilinear',
         'N': 'resize_nn',
         'X': 'subpixel_conv'
@@ -192,6 +195,8 @@ class ConvBlock(nn.Module):
     LAYERS_MODULES = {
         'activation': Activation,
         'residual_start': nn.Identity,
+        'side_branch': SideBlock,
+        'residual_se': SEBlock,
         'residual_end': Combine,
         'increase_dim': IncreaseDim,
         'reduce_dim': ReduceDim,
@@ -211,8 +216,6 @@ class ConvBlock(nn.Module):
         # 'dropblock': None, # TODO
         # 'mip': None, # TODO?
         'residual_bilinear_additive': Interpolate,
-        'side_branch': SideBlock,
-        'residual_se': SqueezeBlock,
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
         'subpixel_conv': SubPixelConv,

@@ -35,6 +35,8 @@ class Dense(nn.Module):
 
         in_units = np.prod(get_shape(inputs)[1:])
         units = units or out_features
+        units = in_units if units == 'same' else units
+
         self.linear = nn.Linear(in_units, units, bias)
 
     def forward(self, x):
