@@ -7,6 +7,41 @@ from ..utils import get_shape
 
 
 
+class IncreaseDim(nn.Module):
+    """ Increase dimensionality of passed tensor by one. """
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        dim = len(get_shape(x)) - 2 + self.dim
+        ones = [1] * dim
+        return x.view(x.size(0), -1, *ones)
+
+
+class ReduceDim(nn.Module):
+    """ Reduce dimensionality of passed tensor by one. """
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        dim = max(len(get_shape(x)) - 2 - self.dim, 0)
+        ones = [1] * dim
+        return x.view(x.size(0), -1, *ones)
+
+
+class Reshape(nn.Module):
+    """ Enforce desired shape of tensor. """
+    def __init__(self, shape=None, reshape_to=None):
+        super().__init__()
+        self.shape = shape or reshape_to
+
+    def forward(self, x):
+        return x.view(x.size(0), *self.shape)
+
+
+
 class Interpolate(nn.Module):
     """ Upsample inputs with a given factor.
 
@@ -135,10 +170,8 @@ class Upsample(nn.Module):
         super().__init__()
 
         if 't' in upsampling_layout or 'T' in upsampling_layout:
-            if 'kernel_size' not in kwargs:
-                kwargs['kernel_size'] = factor
-            if 'strides' not in kwargs:
-                kwargs['strides'] = factor
+            kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
+            kwargs['strides'] = kwargs.get('strides') or factor
 
         self.layer = ConvBlock(inputs=inputs, layout=upsampling_layout, factor=factor, shape=shape, **kwargs)
 
@@ -176,6 +209,18 @@ class SqueezeBlock(nn.Module):
     def forward(self, x):
         x = self.layer(x)
         return x.view(x.size(0), -1, 1, 1)
+
+
+
+class SideBlock(nn.Module):
+    """ Add side branch to a :class:`~.layers.ConvBlock`. """
+    def __init__(self, inputs=None, **kwargs):
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        super().__init__()
+        self.layer = ConvBlock(inputs=inputs, **kwargs)
+
+    def forward(self, x):
+        return self.layer(x)
 
 
 
@@ -223,7 +268,7 @@ class Combine(nn.Module):
             shape = get_shape(item)
             dim = len(shape) - 2
             spatial_shape = shape[dim:]
-            if spatial_shape_ != tuple([1]*dim) and spatial_shape != spatial_shape_:
+            if dim > 0 and spatial_shape_ != tuple([1]*dim) and spatial_shape != spatial_shape_:
                 item = Crop(inputs[0])(item, inputs[0])
             resized.append(item)
         return resized

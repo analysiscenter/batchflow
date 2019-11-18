@@ -9,7 +9,7 @@ from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import Interpolate, SubPixelConv, SqueezeBlock, Combine
+from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, SideBlock, SqueezeBlock, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
 
@@ -162,6 +162,9 @@ class ConvBlock(nn.Module):
         '.': 'residual_end',
         '*': 'residual_end',
         '&': 'residual_end',
+        '>': 'increase_dim',
+        '<': 'reduce_dim',
+        'r': 'reshape',
         'f': 'dense',
         'c': 'conv',
         't': 'transposed_conv',
@@ -179,6 +182,7 @@ class ConvBlock(nn.Module):
         # 'O': 'dropblock',
         # 'm': 'mip',
         'A': 'residual_bilinear_additive',
+        'B': 'side_branch', # formally, it is residual too
         'S': 'residual_se',
         'b': 'resize_bilinear',
         'N': 'resize_nn',
@@ -189,6 +193,9 @@ class ConvBlock(nn.Module):
         'activation': Activation,
         'residual_start': nn.Identity,
         'residual_end': Combine,
+        'increase_dim': IncreaseDim,
+        'reduce_dim': ReduceDim,
+        'reshape': Reshape,
         'dense': Dense,
         'conv': Conv,
         'transposed_conv': ConvTranspose,
@@ -204,6 +211,7 @@ class ConvBlock(nn.Module):
         # 'dropblock': None, # TODO
         # 'mip': None, # TODO?
         'residual_bilinear_additive': Interpolate,
+        'side_branch': SideBlock,
         'residual_se': SqueezeBlock,
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
@@ -224,13 +232,12 @@ class ConvBlock(nn.Module):
         # 'O': 'd',
         'n': 'd',
         'A': 'b',
-        'B': 'b',
         'N': 'b',
         'X': 'b',
         })
 
 
-    SKIP_LETTERS = ['R', 'A', 'S']
+    SKIP_LETTERS = ['R', 'A', 'B', 'S']
     COMBINE_LETTERS = ['+', '*', '.', '&']
 
     def __init__(self, inputs=None, layout='',
@@ -273,7 +280,7 @@ class ConvBlock(nn.Module):
         return x
 
 
-    def fill_layer_params(self, layer_class, inputs):
+    def fill_layer_params(self, layer_name, layer_class, inputs, counters):
         """ Inspect which parameters should be passed to the layer and get them from instance. """
         layer_params = inspect.getfullargspec(layer_class.__init__)[0]
         layer_params.remove('self')
@@ -283,19 +290,23 @@ class ConvBlock(nn.Module):
                 if (hasattr(self, param) or (param in self.kwargs))}
         if 'inputs' in layer_params:
             args['inputs'] = inputs
+
+        layer_args = unpack_args(self.kwargs, *counters)
+        layer_args = layer_args.get(layer_name, {})
+        args = {**args, **layer_args}
+        args = unpack_args(args, *counters)
         return args
 
     def parse_params(self, inputs):
         """ Create necessary ModuleLists from instance parameters. """
+        self.module_layout = ''
+        device = inputs.device
+
         layout = self.layout or ''
         layout = layout.replace(' ', '')
         if len(layout) == 0:
             logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
-            return nn.Sequential([])
-        self.module_layout = ''
-
-        device = inputs.device
-
+            return nn.ModuleList(), nn.ModuleList(), nn.ModuleList()
 
         layout_dict = {}
         for letter in layout:
@@ -307,9 +318,6 @@ class ConvBlock(nn.Module):
         layers, residuals = [], []
 
         for i, letter in enumerate(layout):
-            # Arguments for layer creating; arguments for layer call
-            args = {}
-
             letter_group = self.LETTERS_GROUPS[letter]
             layer_name = self.LETTERS_LAYERS[letter]
             layer_class = self.LAYERS_MODULES[layer_name]
@@ -323,7 +331,8 @@ class ConvBlock(nn.Module):
                 self.module_layout += letter
 
                 if letter in self.SKIP_LETTERS:
-                    args = self.fill_layer_params(layer_class, inputs)
+                    args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
+
                     layer = layer_class(**args).to(device)
                     skip = layer(inputs)
                     residuals.append(skip)
@@ -335,7 +344,7 @@ class ConvBlock(nn.Module):
                     skip_modules.append(layer)
 
                 elif letter in self.COMBINE_LETTERS:
-                    args = self.fill_layer_params(layer_class, inputs)
+                    args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
                     args['inputs'] = [residuals.pop(), inputs]
                     layer = layer_class(op=letter, **args).to(device)
                     shape_before = get_shape(inputs)
@@ -355,7 +364,7 @@ class ConvBlock(nn.Module):
                 if skip_layer:
                     pass
                 elif letter in self.DEFAULT_LETTERS:
-                    args = self.fill_layer_params(layer_class, inputs)
+                    args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
                 elif letter not in self.LETTERS_LAYERS.keys():
                     raise ValueError('Unknown letter symbol - %s' % letter)
 
@@ -366,8 +375,6 @@ class ConvBlock(nn.Module):
                     args['mode'] = args.get('mode', letter.lower())
 
                 if not skip_layer:
-                    args = {**args, **layer_args}
-                    args = unpack_args(args, *layout_dict[letter_group])
                     layer = layer_class(**args).to(device)
 
                     shape_before = get_shape(inputs)

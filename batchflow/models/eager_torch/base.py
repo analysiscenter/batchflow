@@ -666,6 +666,7 @@ class EagerTorch:
 
 
     def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
+        """ Show information about model configuration, used devices, train steps, architecture and more. """
         if config:
             print('### Config:')
             pprint(self.full_config.config)
@@ -697,7 +698,9 @@ class EagerTorch:
 
     @property
     def info(self):
+        """ Show information about model configuration, used devices, train steps and more. """
         self.information()
+        return self._info
 
 
     def _fill_value(self, value):
