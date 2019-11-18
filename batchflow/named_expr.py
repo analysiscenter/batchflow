@@ -353,10 +353,15 @@ class C(PipelineNamedExpression):
     --------
     ::
 
-        C('model_class')
+        C('model_class', default=ResNet)
         C('GPU')
         C()
     """
+    def __init__(self, name=None, mode='w', **kwargs):
+        super().__init__(name, mode)
+        self._has_default = 'default' in kwargs
+        self.default = kwargs.get('default')
+
     def get(self, **kwargs):
         """ Return a value of a pipeline config """
         name, pipeline, _ = self._get(**kwargs)
@@ -365,7 +370,10 @@ class C(PipelineNamedExpression):
         if name is None:
             return config
         try:
-            value = config[name]
+            if self._has_default:
+                value = config.get(name, default=self.default)
+            else:
+                value = config[name]
         except KeyError:
             raise KeyError("Name is not found in the config: %s" % name) from None
         return value

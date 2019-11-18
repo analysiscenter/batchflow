@@ -31,6 +31,7 @@ setup(
     platforms='any',
     install_requires=[
         'numpy>=1.10',
+        'pandas>=0.24',
         'dill>=0.2.7',
         'tqdm>=4.19.7',
         'scipy>=0.19.1',

@@ -1,12 +1,15 @@
 """ Classes Job and Experiment. """
 
+import time
 from collections import OrderedDict
+import random
 
+from ..named_expr import eval_expr
 from .. import inbatch_parallel
 
 class Job:
     """ Contains one job. """
-    def __init__(self, executable_units, n_iters, repetition, configs, folds, branches, name):
+    def __init__(self, executable_units, n_iters, configs, branches, research_path):
         """
         Parameters
         ----------
@@ -17,20 +20,20 @@ class Job:
         self.executable_units = executable_units
         self.n_iters = n_iters
         self.configs = configs
-        self.repetition = repetition
-        self.folds = folds
         self.branches = branches
-        self.name = name
+        self.research_path = research_path
         self.worker_config = {}
+        self.ids = [str(random.getrandbits(32)) for _ in self.configs]
 
         self.exceptions = []
         self.stopped = []
+        self.last_update_time = None
 
-    def init(self, worker_config, gpu_configs):
+    def init(self, worker_config, device_configs, last_update_time):
         """ Create experiments. """
         self.worker_config = worker_config
-
-        for index, config in enumerate(self.configs):
+        self.last_update_time = last_update_time
+        for index, (config, additional_config) in enumerate(self.configs):
             if isinstance(self.branches, list):
                 branch_config = self.branches[index]
             else:
@@ -38,34 +41,36 @@ class Job:
             units = OrderedDict()
             for name, unit in self.executable_units.items():
                 unit = unit.get_copy()
+                unit.set_shared_value(last_update_time)
                 unit.reset('iter')
-                unit.cv_split = self.folds[index]
                 if unit.pipeline is not None:
-                    import_config = {key: units[value].pipeline for key, value in unit.kwargs.items()}
+                    kwargs_config = eval_expr(unit.kwargs, job=self, experiment=units)
                     unit.set_dataset()
                 else:
-                    import_config = dict()
-                unit.set_config(config, {**branch_config, **gpu_configs[index]}, worker_config, import_config)
-                unit.repetition = self.repetition[index]
+                    kwargs_config = dict()
+                unit.set_config(config, additional_config,
+                                {**branch_config, **device_configs[index]}, worker_config, kwargs_config)
+                unit.dump_config(self.research_path)
                 unit.index = index
-                unit.create_folder(self.name)
+                unit.create_folder(self.research_path)
                 units[name] = unit
+
 
             self.experiments.append(units)
             self.exceptions.append(None)
-        self.clear_stopped()
+        self.clear_stopped_list()
 
-    def clear_stopped(self):
+    def clear_stopped_list(self):
         """ Clear list of stopped experiments for the current iteration """
         self.stopped = [False for _ in range(len(self.experiments))]
 
     def get_description(self):
         """ Get description of job. """
         if isinstance(self.branches, list):
-            description = '\n'.join([str({**config.alias(), **_config, **self.worker_config})
+            description = '\n'.join([str({**config[0].alias(), **_config, **self.worker_config})
                                      for config, _config in zip(self.configs, self.branches)])
         else:
-            description = '\n'.join([str({**config.alias(), **self.worker_config})
+            description = '\n'.join([str({**config[0].alias(), **self.worker_config})
                                      for config in self.configs])
         return description
 
@@ -78,7 +83,7 @@ class Job:
             while True:
                 try:
                     batch = unit.next_batch_root()
-                    exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
+                    exceptions = self._parallel_run(iteration, name, batch, actions)
                 except StopIteration:
                     break
         else:
@@ -87,8 +92,9 @@ class Job:
             except StopIteration as e:
                 exceptions = [e] * len(self.experiments)
             else:
-                exceptions = self._parallel_run(iteration, name, batch, actions) #pylint:disable=assignment-from-no-return
+                exceptions = self._parallel_run(iteration, name, batch, actions)
         self.put_all_results(iteration, name, actions)
+        self.last_update_time.value = time.time()
         return exceptions
 
     def update_exceptions(self, exceptions):
@@ -99,29 +105,40 @@ class Job:
 
     @inbatch_parallel(init='_parallel_init_run', post='_parallel_post')
     def _parallel_run(self, item, execute, iteration, name, batch, actions):
-        _ = name, actions
+        _ = name, actions, iteration
         if execute is not None:
-            item.execute_for(batch, iteration)
+            item.execute_for(batch)
+        return None
 
     def _parallel_init_run(self, iteration, name, batch, actions):
         _ = iteration, batch
         #to_run = self._experiments_to_run(iteration, name)
         return [[experiment[name], execute] for experiment, execute in zip(self.experiments, actions)]
 
-    def _parallel_post(self, results, *args, **kwargs):
-        _ = args, kwargs
-        return results
-
     @inbatch_parallel(init='_parallel_init_call', post='_parallel_post')
-    def parallel_call(self, item, execute, iteration, name, actions):
+    def parallel_call(self, experiment, execute, iteration, name, actions):
         """ Parallel call of the unit 'name' """
         _ = actions
         if execute is not None:
-            item[name](iteration, item, *item[name].args, **item[name].kwargs)
+            experiment[name](job=self, iteration=iteration, experiment=experiment)
 
     def _parallel_init_call(self, iteration, name, actions):
         _ = iteration, name
         return [[experiment, execute] for experiment, execute in zip(self.experiments, actions)]
+
+    def _parallel_post(self, results, *args, **kwargs):
+        _ = args, kwargs
+        self.last_update_time.value = time.time()
+        return results
+
+    def call_on_root(self, iteration, unit_name):
+        """ Callable on root """
+        try:
+            unit = self.executable_units[unit_name]
+            unit(job=self, iteration=iteration, experiment=self.experiments)
+            return [None] * len(self.experiments)
+        except Exception as e: #pylint:disable=broad-except
+            return [e] * len(self.experiments)
 
     def put_all_results(self, iteration, name, actions):
         """ Add values of pipeline variables to results """
