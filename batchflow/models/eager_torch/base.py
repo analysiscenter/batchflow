@@ -5,6 +5,7 @@ import threading
 import inspect
 from collections import OrderedDict
 from functools import partial
+from pprint import pprint
 
 import numpy as np
 import torch
@@ -293,7 +294,6 @@ class EagerTorch:
 
         # If the inputs were set in config with their shapes we can build right away
         if self.input_shapes:
-            print('_BUILD IN BUILD')
             self._build()
 
     @classmethod
@@ -665,6 +665,41 @@ class EagerTorch:
         return None
 
 
+    def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
+        if config:
+            print('### Config:')
+            pprint(self.full_config.config)
+
+        if devices:
+            print('\n### Devices:')
+            print('Leading device is {}'.format(self.device, ))
+            if self.devices:
+                _ = [print('Device {} is {}'.format(i, d)) for i, d in enumerate(self.devices)]
+
+        if train_steps:
+            print('\n### Train steps:')
+            pprint(self.train_steps)
+
+        if model:
+            print('\n### Model:')
+            print(self.model)
+
+        if misc:
+            print('\n### Additional info:')
+            if self.input_shapes:
+                _ = [print('Input {} has shape {}'.format(i, s)) for i, s in enumerate(self.input_shapes)]
+
+            iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
+            print('Total number of training iterations: {}'.format(sum(list(iters.values()))))
+            if len(iters) > 1:
+                print('Number of training iterations for individual train steps:')
+                pprint(iters)
+
+    @property
+    def info(self):
+        self.information()
+
+
     def _fill_value(self, value):
         if value.dtype not in [np.float32, 'float32']:
             value = value.astype(np.float32)
@@ -758,8 +793,13 @@ class EagerTorch:
         splitted_targets = np.array_split(targets, steps) if microbatch else [targets]
 
         if self.model is None:
-            print('_BUILD IN TRAIN')
             self._build(splitted_inputs[0])
+
+            if isinstance(splitted_inputs[0], (list, tuple)):
+                self.input_shapes = [get_shape(item) for item in splitted_inputs[0]]
+            else:
+                self.input_shapes = get_shape(splitted_inputs[0])
+
         self.model.train()
 
         if use_lock:
@@ -814,6 +854,7 @@ class EagerTorch:
                 loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
                 mode_loss += loss
                 loss.backward()
+                step['iter'] = step.get('iter', 0) + 1
 
                 if self.sync_counter >= sync_frequency:
                     self.sync_counter = 1
