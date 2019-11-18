@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 import torch.nn as nn
 
-from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
+from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout, Identity
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
@@ -187,7 +187,7 @@ class ConvBlock(nn.Module):
 
     LAYERS_MODULES = {
         'activation': Activation,
-        'residual_start': nn.Identity,
+        'residual_start': Identity,
         'residual_end': Combine,
         'dense': Dense,
         'conv': Conv,
