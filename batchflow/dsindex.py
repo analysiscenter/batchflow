@@ -588,7 +588,8 @@ class FilesIndex(DatasetIndex):
         super().__init__(*args, **kwargs)
 
     def build_index(self, index=None, path=None, *args, **kwargs):
-        """ Build index from a path string or an index given. """
+        """Create indices from a path/glob or a sequence of paths/globs or `index`.
+        """
         if path is None:
             _index = self.build_from_index(index, *args, **kwargs)
         else:
@@ -599,7 +600,7 @@ class FilesIndex(DatasetIndex):
         return _index
 
     def build_from_index(self, index, paths, dirs):
-        """ Build index from another index for indices given.
+        """Create indices from given `index` and index the `paths`.
 
         Parameters
         ----------
@@ -617,22 +618,22 @@ class FilesIndex(DatasetIndex):
         -------
         numpy.array
             Created indecies.
-
         """
         if isinstance(index, DatasetIndex):
             index = index.indices
         else:
             index = DatasetIndex(index).indices
 
-        if isinstance(paths, dict):
+        if isinstance(paths, dict): # TODO: Behavior to do subsets?
             self._paths = dict((file, paths[file]) for file in index)
         else:
             self._paths = dict((file, paths[pos]) for pos, file in enumerate(index))
         self.dirs = dirs
+
         return index
 
     def build_from_path(self, path, dirs=False, no_ext=False, sort=False):
-        """ Create indices from a path/glob or a sequence of paths/globs.
+        """Create indices from a path/glob or a sequence of paths/globs.
 
         Parameters
         ----------
@@ -656,7 +657,6 @@ class FilesIndex(DatasetIndex):
         -------
         numpy.array
             Created indecies.
-
         """
         if isinstance(path, str):
             paths = [path]
@@ -685,7 +685,24 @@ class FilesIndex(DatasetIndex):
         return _all_index
 
     def build_from_one_path(self, path, dirs=False, no_ext=False):
-        """ Build index from a path/glob. """
+        """Create index and their full paths from a path/glob.
+
+        Parameters
+        ----------
+        path : str
+            Parameter `path` contains a glob/path.
+        dirs : bool
+            If True, this means that `path` is directory.
+            Defaults to False.
+        no_ext : bool
+            If True, delete extension in index when index creating from full path name.
+            Defaults to False.
+
+        Returns
+        -------
+        tuple of numpy.array
+            Indexes and their full paths created from `path`.
+        """
         check_fn = os.path.isdir if dirs else os.path.isfile
         pathlist = glob.iglob(path, recursive=True)
         _full_index = np.asarray([self.build_key(fname, no_ext) for fname in pathlist if check_fn(fname)])
