@@ -1,6 +1,16 @@
 name: docs
 
-on: [push]
+on:
+  pull_request:
+    types: [closed]
+    branches:
+    - master
+    paths:
+    - 'docs/**'
+
+  push:
+    paths:
+    - 'docs/**'
 
 jobs:
 
@@ -13,23 +23,30 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+      with:
+          fetch-depth: 1
 
-    - name: Update docs
+    - name: Build docs
       run: |
         export LC_ALL="C"
-        pip3 install psutil
         pip3 install sphinx
+        pip3 install sphinx-rtd-theme
         git checkout --orphan gh-pages
         rm -rf *
         git fetch
-        git checkout master batchflow docs
+        git checkout origin/master -- batchflow docs
         cd docs
         make html
-        cd ..
+
+    - name: Push docs
+      if: github.event_name == 'pull_request'
+      run: |
         mv docs/_build/html/* .
         rm -rf docs batchflow
         touch .nojekyll
+        git config user.email rhudor@gmail.com
+        git config user.name "Roman Kh"
         git add -A .
         git commit -am "Build docs"
-        git remote add gh_push git@github.com:$REPO_FULL_NAME
-        ssh-agent bash -c 'ssh-add /tmp/ssh/${REPO_NAME}key; git push -f gh_push gh-pages'
+        git remote add gh_pages https://${{ secrets.GITHUB_PUSH}}@github.com/${{ github.repository }}
+        git push gh_pages

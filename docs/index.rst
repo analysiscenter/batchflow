@@ -3,7 +3,7 @@ Welcome to BatchFlow documentation!
 ===================================
 `BatchFlow` helps you conveniently work with random or sequential batches of your data
 and define data processing and machine learning workflows even for datasets that do not fit into memory.
-
+  
 Main features:
 
 * flexible batch generaton
