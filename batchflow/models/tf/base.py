@@ -1726,7 +1726,7 @@ class TFModel(BaseModel):
         if len(predictions) > 1:
             x = tf.stack(predictions, name=name)
         else:
-            x = tf.identity(predictions, name=name)
+            x = tf.identity(predictions[0], name=name)
         self.store_to_attr(attr_prefix + name + attr_postfix, x, device)
 
     @classmethod
