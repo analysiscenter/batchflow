@@ -150,19 +150,21 @@ def update_bar(bar, bar_desc, **kwargs):
         bar.set_description(desc)
     bar.update(1)
 
-def plot_images_predictions(images, targets, proba, ncols=5, classes=None, models_names=None, **kwargs):
-    """ Plot images with true label and predicted class proba.
-    Plots predictions of several models in case `proba` is a list containing each model predictions.
+def plot_images_predictions(images, labels=None, proba=None, ncols=5, classes=None, models_names='', **kwargs):
+    """ Plot images and optionally true labels as well as predicted class proba.
+        - In case labels and proba are not passed, just shows images.
+        - In case labels are passed and proba is not, shows images with labels.
+        - Otherwise shows everything.
 
     Parameters
     ----------
     images : np.array
         batch of images
 
-    targets : array-like
+    labels : array-like, optional
         images labels
 
-    proba: np.array with the shape (n_images, n_classes) or list of such arrays
+    proba: np.array with the shape (n_images, n_classes) or list of such arrays, optional
         predicted probabilities for each class for each model
 
     ncols: int
@@ -174,6 +176,8 @@ def plot_images_predictions(images, targets, proba, ncols=5, classes=None, model
     kwargs : dict
         additional keyword arguments for plt.subplots().
     """
+    if isinstance(models_names, str):
+        models_names = (models_names, )
     if not isinstance(proba, list):
         proba = [proba]
         if models_names is None:
@@ -182,23 +186,28 @@ def plot_images_predictions(images, targets, proba, ncols=5, classes=None, model
         if models_names is None:
             models_names = ['Model ' + str(i+1) for i in range(len(proba))]
 
-    n_items = len(images)
-    if classes is None:
+    # if the classes names are not specified they can be implicitely infered from the `proba` shape,
+    if classes is None and proba[0] is not None:
         classes = [str(i) for i in range(proba[0].shape[1])]
+    elif classes is None and proba[0] is None:
+        raise ValueError('Specify classes')
 
+    n_items = len(images)
     nrows = (n_items // ncols) + 1
     fig, ax = plt.subplots(nrows, ncols, **kwargs)
     ax = ax.flatten()
     for i in range(n_items):
         ax[i].imshow(images[i])
-        true_class_name = classes[targets[i]]
-        title = 'True: {}'.format(true_class_name)
-        for j, model_proba in enumerate(proba):
-            class_pred = np.argmax(model_proba, axis=1)[i]
-            class_proba = model_proba[i][class_pred]
-            pred_class_name = classes[class_pred]
-            title += '\n {0} pred: {1}, p = {2:.2f}'.format(models_names[j], pred_class_name, class_proba)
-        ax[i].title.set_text(title)
+        if labels is not None: # plot images with labels
+            true_class_name = classes[labels[i]]
+            title = 'True: {}'.format(true_class_name)
+            if proba[0] is not None: # plot images with labels and predictions
+                for j, model_proba in enumerate(proba): # the case of preidctions of several models
+                    class_pred = np.argmax(model_proba, axis=1)[i]
+                    class_proba = model_proba[i][class_pred]
+                    pred_class_name = classes[class_pred]
+                    title += '\n {0} pred: {1}, p = {2:.2f}'.format(models_names[j], pred_class_name, class_proba)
+            ax[i].title.set_text(title)
         ax[i].grid(b=None)
 
     for i in range(n_items, nrows * ncols):
