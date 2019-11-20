@@ -108,3 +108,50 @@ class ResNet(EagerTorch):
                 block_list.append(layer)
                 x = layer(x)
         return nn.Sequential(*block_list)
+
+class ResNet18(ResNet):
+    """ The original ResNet-18 architecture """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['body/num_blocks'] = [2, 2, 2, 2]
+        return config
+
+
+class ResNet34(ResNet):
+    """ The original ResNet-34 architecture """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['body/num_blocks'] = [3, 4, 6, 3]
+        return config
+
+
+class ResNet50(ResNet):
+    """ The original ResNet-50 architecture """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['body/num_blocks'] = [3, 4, 6, 3]
+        config['body/block/bottleneck'] = True
+        return config
+
+
+class ResNet101(ResNet):
+    """ The original ResNet-101 architecture """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['body/num_blocks'] = [3, 4, 23, 3]
+        config['body/block/bottleneck'] = True
+        return config
+
+
+class ResNet152(ResNet):
+    """ The original ResNet-152 architecture """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['body/num_blocks'] = [3, 8, 36, 3]
+        config['body/block/bottleneck'] = True
+        return config
