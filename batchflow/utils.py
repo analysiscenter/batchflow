@@ -170,13 +170,14 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
         predicted probabilities for each class for each model
 
     ncols: int
-        number of images to plot in a row (default 5)
+        number of images to plot in a row
 
-    classes: list of strings, optional
-        class names
+    classes: list of strings
+        class names. In case not specified the list [`1`, `2`, .., `proba.shape[1]`] would be assigned.
 
-    models_names: string or list of strings, optional
-        models names.
+    models_names: string or list of strings
+        models names. In case not specified and the single model predictions provided will not display any name.
+        Otherwise the list [`Model 1`, `Model 2`, ..] is being assigned.
 
     kwargs : dict
         additional keyword arguments for plt.subplots().
@@ -192,10 +193,13 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
             models_names = ['Model ' + str(i+1) for i in range(len(proba))]
 
     # if the classes names are not specified they can be implicitely infered from the `proba` shape,
-    if classes is None and proba[0] is not None:
-        classes = [str(i) for i in range(proba[0].shape[1])]
-    elif classes is None and proba[0] is None:
-        raise ValueError('Specify classes')
+    if classes is None:
+        if proba[0] is not None:
+            classes = [str(i) for i in range(proba[0].shape[1])]
+        elif labels is None:
+            pass
+        elif proba[0] is None:
+            raise ValueError('Specify classes')
 
     n_items = len(images)
     nrows = (n_items // ncols) + 1
@@ -205,7 +209,7 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
         ax[i].imshow(images[i])
         if labels is not None: # plot images with labels
             true_class_name = classes[labels[i]]
-            title = 'True: {}'.format(true_class_name)
+            title = 'Label: {}'.format(true_class_name)
             if proba[0] is not None: # plot images with labels and predictions
                 for j, model_proba in enumerate(proba): # the case of preidctions of several models
                     class_pred = np.argmax(model_proba, axis=1)[i]

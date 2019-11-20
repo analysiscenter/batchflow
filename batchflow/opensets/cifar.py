@@ -95,7 +95,7 @@ class CIFAR10(BaseCIFAR):
     TRAIN_NAME_ID = "data_batch"
     TEST_NAME_ID = "test_batch"
     num_classes = 10
-    name_classes = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', ]
+    classes = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
 
 class CIFAR100(BaseCIFAR):
@@ -117,7 +117,7 @@ class CIFAR100(BaseCIFAR):
     TRAIN_NAME_ID = "train"
     TEST_NAME_ID = "test"
     num_classes = 100
-    name_classes = ['apple', 'aquarium_fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle', 'bicycle', 'bottle',
+    classes = ['apple', 'aquarium_fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle', 'bicycle', 'bottle',
                     'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel', 'can', 'castle', 'caterpillar', 'cattle',
                     'chair', 'chimpanzee', 'clock', 'cloud', 'cockroach', 'couch', 'crab', 'crocodile', 'cup',
                     'dinosaur', 'dolphin', 'elephant', 'flatfish', 'forest', 'fox', 'girl', 'hamster', 'house',
