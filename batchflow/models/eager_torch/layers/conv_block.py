@@ -59,17 +59,19 @@ class ConvBlock(nn.Module):
         Default is ''.
 
     filters : int or str
-        If str, then 'same' stands for making convolution channel-preserving operation.
+        If str, then number of filters is calculated by its evaluation. `S` and `same` stand for the
+        number of filters in the previous tensor.
         If int, then number of filters in the output tensor.
     kernel_size : int
-        Kernel size.
+        Convolution kernel size.
     name : str
         Name of the layer that will be used as a scope.
     units : int or str
-        If str, then 'same' stands for applying dense while preserving number of units.
+        If str, then number of units is calculated by its evaluation. `S` and `same` stand for the
+        number of units in the previous tensor.
         If int, then number of units in the dense layer.
     strides : int
-        Default is 1.
+        Convolution stride.
     padding : str
         Padding mode, can be 'same' or 'valid'. Default - 'same'.
     data_format : str

@@ -15,7 +15,9 @@ class BaseConv(nn.Module):
                  dilation=1, dilation_rate=None, groups=1, bias=True, inputs=None):
         super().__init__()
 
-        filters = get_num_channels(inputs) if filters == 'same' else filters
+        same = get_num_channels(inputs)
+        if isinstance(filters, str):
+            filters = eval(filters, None, {key: in_units for key in ['S', 'same']})
 
         args = {
             'in_channels': get_num_channels(inputs),
