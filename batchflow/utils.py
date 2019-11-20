@@ -150,11 +150,13 @@ def update_bar(bar, bar_desc, **kwargs):
         bar.set_description(desc)
     bar.update(1)
 
-def plot_images_predictions(images, labels=None, proba=None, ncols=5, classes=None, models_names='', **kwargs):
+def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, **kwargs):
     """ Plot images and optionally true labels as well as predicted class proba.
         - In case labels and proba are not passed, just shows images.
         - In case labels are passed and proba is not, shows images with labels.
         - Otherwise shows everything.
+    In case the predictions of several models provided, i.e proba is an iterable containing np.arrays,
+    shows predictions for every model.
 
     Parameters
     ----------
@@ -170,16 +172,19 @@ def plot_images_predictions(images, labels=None, proba=None, ncols=5, classes=No
     ncols: int
         number of images to plot in a row (default 5)
 
-    classes: list of strings
+    classes: list of strings, optional
         class names
+
+    models_names: string or list of strings, optional
+        models names.
 
     kwargs : dict
         additional keyword arguments for plt.subplots().
     """
     if isinstance(models_names, str):
         models_names = (models_names, )
-    if not isinstance(proba, list):
-        proba = [proba]
+    if not isinstance(proba, (list, tuple)):
+        proba = (proba, )
         if models_names is None:
             models_names = ['']
     else:
