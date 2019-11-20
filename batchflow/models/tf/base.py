@@ -1648,73 +1648,86 @@ class TFModel(BaseModel):
 
         if not isinstance(inputs, (tuple, list)):
             inputs = [inputs]
-
         for i, tensor in enumerate(inputs):
             if not isinstance(tensor, tf.Tensor):
                 raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
 
-            prefix = [*ops.keys()][i]
-            if prefix:
-                ctx = tf.variable_scope(prefix)
-                ctx.__enter__()
-            else:
-                ctx = None
-            attr_prefix = prefix + '_' if prefix else ''
+            self._add_output_op(tensor, predictions, 'predictions', '', '_' + str(i), **kwargs)
 
-            self._add_output_op(tensor, predictions, 'predictions', '', **kwargs)
-            for oper in ops[prefix]:
-                self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
+            for prefix in ops.keys():
+                if prefix:
+                    ctx = tf.variable_scope(prefix)
+                    ctx.__enter__()
+                else:
+                    ctx = None
+                attr_prefix = prefix + '_' if prefix else ''
+                attr_postfix = '_' + str(i) if len(inputs) > 1 else ''
 
-            if ctx:
-                ctx.__exit__(None, None, None)
+                for oper in ops[prefix]:
+                    self._add_output_op(tensor, oper, oper, attr_prefix, attr_postfix, **kwargs)
 
-    def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
+                if ctx:
+                    ctx.__exit__(None, None, None) 
+
+        _predictions = [self.get_from_attr('predictions_' + str(i)) for i in range(len(inputs))]
+        self._add_predictions(_predictions, 'predictions', '', '', **kwargs)
+
+    def _add_output_op(self, inputs, oper, name, attr_prefix, attr_postfix, **kwargs):
         device = self._get_current_device()
         if oper is None:
-            self._add_output_identity(inputs, name, attr_prefix[:-1], device, **kwargs)
+            self._add_output_identity(inputs, name, attr_prefix[:-1], attr_postfix, device, **kwargs)
         elif oper == 'softplus':
-            self._add_output_softplus(inputs, name, attr_prefix, device, **kwargs)
+            self._add_output_softplus(inputs, name, attr_prefix, attr_postfix, device, **kwargs)
         elif oper == 'sigmoid':
-            self._add_output_sigmoid(inputs, name, attr_prefix, device, **kwargs)
+            self._add_output_sigmoid(inputs, name, attr_prefix, attr_postfix, device, **kwargs)
         elif oper == 'proba':
-            self._add_output_proba(inputs, name, attr_prefix, device, **kwargs)
+            self._add_output_proba(inputs, name, attr_prefix, attr_postfix, device, **kwargs)
         elif oper == 'labels':
-            self._add_output_labels(inputs, name, attr_prefix, device, **kwargs)
+            self._add_output_labels(inputs, name, attr_prefix, attr_postfix, device, **kwargs)
         elif callable(oper):
-            self._add_output_callable(inputs, oper, None, attr_prefix, device, **kwargs)
+            self._add_output_callable(inputs, oper, None, attr_prefix, attr_postfix, device, **kwargs)
 
-    def _add_output_identity(self, inputs, name, attr_prefix, device, **kwargs):
+    def _add_output_identity(self, inputs, name, attr_prefix, attr_postfix, device, **kwargs):
         _ = kwargs
         x = tf.identity(inputs, name=name)
-        self.store_to_attr(attr_prefix + (name or ''), x, device)
+        self.store_to_attr(attr_prefix + (name or '') + attr_postfix, x, device)
         return x
 
-    def _add_output_softplus(self, inputs, name, attr_prefix, device, **kwargs):
+    def _add_output_softplus(self, inputs, name, attr_prefix, attr_postfix, device, **kwargs):
         _ = kwargs
         proba = tf.nn.softplus(inputs, name=name)
-        self.store_to_attr(attr_prefix + name, proba, device)
+        self.store_to_attr(attr_prefix + name + attr_postfix, proba, device)
 
-    def _add_output_sigmoid(self, inputs, name, attr_prefix, device, **kwargs):
+    def _add_output_sigmoid(self, inputs, name, attr_prefix, attr_postfix, device, **kwargs):
         _ = kwargs
         proba = tf.sigmoid(inputs, name=name)
-        self.store_to_attr(attr_prefix + name, proba, device)
+        self.store_to_attr(attr_prefix + name + attr_postfix, proba, device)
 
-    def _add_output_proba(self, inputs, name, attr_prefix, device, **kwargs):
+    def _add_output_proba(self, inputs, name, attr_prefix, attr_postfix, device, **kwargs):
         axis = self.channels_axis(kwargs['data_format'])
         proba = tf.nn.softmax(inputs, name=name, axis=axis)
-        self.store_to_attr(attr_prefix + name, proba, device)
+        self.store_to_attr(attr_prefix + name + attr_postfix, proba, device)
 
-    def _add_output_labels(self, inputs, name, attr_prefix, device, **kwargs):
+    def _add_output_labels(self, inputs, name, attr_prefix, attr_postfix, device, **kwargs):
         class_axis = self.channels_axis(kwargs.get('data_format'))
         predicted_classes = tf.argmax(inputs, axis=class_axis, name=name)
-        self.store_to_attr(attr_prefix + name, predicted_classes, device)
+        self.store_to_attr(attr_prefix + name + attr_postfix, predicted_classes, device)
 
-    def _add_output_callable(self, inputs, oper, name, attr_prefix, device, **kwargs):
+    def _add_output_callable(self, inputs, oper, name, attr_prefix, attr_postfix, device, **kwargs):
         _ = kwargs
         x = oper(inputs)
         name = name or oper.__name__
-        self.store_to_attr(attr_prefix + name, x, device)
+        self.store_to_attr(attr_prefix + name + attr_postfix, x, device)
         return x
+
+    def _add_predictions(self, predictions, name, attr_prefix, attr_postfix, **kwargs):
+        _ = kwargs
+        device = self._get_current_device()
+        if len(predictions) > 1:
+            x = tf.stack(predictions, name=name)
+        else:
+            x = tf.identity(predictions, name=name)
+        self.store_to_attr(attr_prefix + name + attr_postfix, x, device)
 
     @classmethod
     def default_config(cls):

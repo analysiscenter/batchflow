@@ -5,6 +5,8 @@ Ronneberger O. et al "`U-Net: Convolutional Networks for Biomedical Image Segmen
 Zhou Z. et al "UNet++: A Nested U-Net Architecture for Medical Image Segmentation
 <https://arxiv.org/abs/1807.10165>`_"
 """
+import tensorflow as tf
+
 from .encoder_decoder import EncoderDecoder
 from .layers import conv_block, combine
 from ..utils import unpack_args
@@ -167,6 +169,10 @@ class UNetPP(UNet):
         if config.get('body/decoder/dense/combine_op') is None:
             config['body/decoder/dense/combine_op'] = 'concat'
 
+        # for i in range(num_stages-1):
+        #     if config.get('head_'+str(i)) is None:
+        #         config['head_'+str(i)] = config['head']
+
         return config
 
     @classmethod
@@ -179,6 +185,8 @@ class UNetPP(UNet):
         combine_args = {'op': combine_op if isinstance(combine_op, str) else '',
                         'data_format': kwargs.get('data_format'),
                         **(combine_op if isinstance(combine_op, dict) else {})}
+
+        semantic_outputs = []
 
         for i in range(1, num_stages):
             _inputs = inputs[:i] + [inputs[i]] * 2
@@ -197,10 +205,35 @@ class UNetPP(UNet):
                 dense_args = {**unpack_args(kwargs['dense'], j, num_stages), **kwargs}
                 x = conv_block(x, name='x-{}-{}'.format(j, i), **dense_args)
 
+                if j == 0:
+                    semantic_outputs.append(x)
+
                 inputs[j] = combine([x, inputs[j]], name='concat-{}-{}'.format(j, i-j), **combine_args)
 
         kwargs['upsample']['filters'] = decoder_filters
         kwargs['blocks']['filters'] = decoder_filters
-        print(inputs)
-        return super().decoder(inputs, name=name, filters=decoder_filters,
-                               return_all=False, **{**kwargs, 'num_stages': num_stages})
+
+        x = super().decoder(inputs, name=name, filters=decoder_filters,
+                            return_all=False, **{**kwargs, 'num_stages': num_stages})
+
+        semantic_outputs.append(x)
+
+        return semantic_outputs
+
+    @classmethod
+    def head(cls, inputs, targets, name='head', **kwargs):
+        res = []
+        for i, x in enumerate(inputs):
+            res.append(super().head(x, targets, name=name+'-'+str(i), **kwargs))
+        return res
+
+    # def _build(self, config=None):
+    #     import pdb; pdb.set_trace()
+    #     config = config or self.full_config
+    #     inputs = config.pop('initial_block/inputs')
+    #     x = self._add_block('initial_block', config, inputs=inputs)
+    #     body_outputs = self._add_block('body', config, inputs=x)
+    #     for i, x in enumerate(body_outputs[:-1]):
+    #         output = self._add_block('head', config, inputs=x)
+    #         self.output(output, predictions=config['predictions'], ops=config['output'], prefix=str(i)+'_', **config['common'])
+    #     self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])
