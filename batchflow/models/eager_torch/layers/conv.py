@@ -17,7 +17,7 @@ class BaseConv(nn.Module):
         super().__init__()
 
         if isinstance(filters, str):
-            filters = eval(filters, None, {key: get_num_channels(inputs) for key in ['S', 'same']})
+            filters = eval(filters, {}, {key: get_num_channels(inputs) for key in ['S', 'same']})
 
         args = {
             'in_channels': get_num_channels(inputs),

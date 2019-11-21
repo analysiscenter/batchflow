@@ -6,4 +6,4 @@ from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, Se
 from .pooling import MaxPool, AvgPool, Pool, AdaptiveMaxPool, AdaptiveAvgPool, AdaptivePool, \
 					 GlobalPool, GlobalMaxPool, GlobalAvgPool
 from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, PixelShuffle, SubPixelConv, \
-					SideBlock, Upsample, Combine, SEBlock
+					SideBlock, Upsample, Combine, SEBlock, Crop

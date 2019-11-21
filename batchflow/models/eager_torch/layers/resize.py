@@ -110,12 +110,12 @@ class Crop(nn.Module):
         self.resize_to = resize_to
 
 
-    def forward(self, inputs, resize_to):
+    def forward(self, inputs):
         i_shape = get_shape(inputs)
-        r_shape = get_shape(resize_to)
+        r_shape = get_shape(self.resize_to)
         if (i_shape[2] > r_shape[2]) or (i_shape[3] > r_shape[3]):
             # Decrease input tensor's shape by slicing desired shape out of it
-            shape = [slice(None, c) for c in resize_to.size()[2:]]
+            shape = [slice(None, c) for c in r_shape[2:]]
             shape = tuple([slice(None, None), slice(None, None)] + shape)
             output = inputs[shape]
         elif (i_shape[2] < r_shape[2]) or (i_shape[3] < r_shape[3]):
@@ -165,15 +165,16 @@ class Upsample(nn.Module):
 
         x = Upsample(layout='X', factor=2, inputs=inputs)
     """
-    def __init__(self, factor=2, shape=None, upsampling_layout='b', inputs=None, **kwargs):
+    def __init__(self, factor=2, shape=None, layout='b', inputs=None, **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
 
-        if 't' in upsampling_layout or 'T' in upsampling_layout:
+        if 't' in layout or 'T' in layout:
             kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
             kwargs['strides'] = kwargs.get('strides') or factor
+            kwargs['filters'] = kwargs.get('filters') or 'same'
 
-        self.layer = ConvBlock(inputs=inputs, layout=upsampling_layout, factor=factor, shape=shape, **kwargs)
+        self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
 
     def forward(self, x):
         return self.layer(x)
@@ -269,7 +270,7 @@ class Combine(nn.Module):
             dim = len(shape) - 2
             spatial_shape = shape[dim:]
             if dim > 0 and spatial_shape_ != tuple([1]*dim) and spatial_shape != spatial_shape_:
-                item = Crop(inputs[0])(item, inputs[0])
+                item = Crop(inputs[0])(item)
             resized.append(item)
         return resized
 

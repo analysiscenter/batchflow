@@ -262,9 +262,11 @@ class EagerTorch:
     def __init__(self, config=None):
         self.full_config = None
         self.config = Config(config)
-        self.input_shapes = None
         self.train_lock = threading.Lock()
 
+        self.input_shapes = None
+        self.target_shape = None
+        self.classes = None
         self.model = None
         self.device = None
         self.devices = []
@@ -287,12 +289,12 @@ class EagerTorch:
     def build(self):
         """ Build the model """
         self.full_config = self.combine_configs()
-        self.build_config()
+        self.full_config = self.build_config()
 
         self._get_devices()
         self._get_placeholder_shapes()
 
-        # If the inputs were set in config with their shapes we can build right away
+        # If the inputs are set in config with their shapes we can build right away
         if self.input_shapes:
             self._build()
 
@@ -387,7 +389,12 @@ class EagerTorch:
                 data_format = inputs_config[inputs].get('data_format')
             elif isinstance(inputs, (tuple, list)):
                 data_format = inputs_config[inputs[0]].get('data_format')
-            config['common/data_format'] = config.get('common/data_format') or data_format or 'channels_first'
+            else:
+                data_format = 'channels_first'
+            config['common/data_format'] = config.get('common/data_format') or data_format
+
+        config['head/target_shape'] = self.target_shape
+        config['head/classes'] = self.classes
         return config
 
 
@@ -439,6 +446,8 @@ class EagerTorch:
                     raise ValueError('Input {} must contain `shape` configuration'.format(name))
             self.input_shapes = shapes
 
+        self.classes = config.get('inputs/targets/classes')
+
 
     def _build(self, inputs=None):
         config = self.full_config
@@ -469,6 +478,8 @@ class EagerTorch:
         self.model = nn.Sequential(OrderedDict(blocks))
         if len(self.devices) > 1:
             self.model = nn.DataParallel(self.model, self.devices)
+        else:
+            self.model.to(self.device)
 
         self.train_steps = self._make_train_steps(config)
 
@@ -647,7 +658,7 @@ class EagerTorch:
         return None
 
     @classmethod
-    def head(cls, inputs, **kwargs):
+    def head(cls, inputs, target_shape, classes, **kwargs):
         """ The last network layers which produce predictions. Usually used to make network output
         compatible with the `targets` tensor.
 
@@ -659,6 +670,7 @@ class EagerTorch:
         -------
         torch.nn.Module or None
         """
+        _ = target_shape, classes
         kwargs = cls.get_defaults('head', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(inputs=inputs, **kwargs)
@@ -796,12 +808,17 @@ class EagerTorch:
         splitted_targets = np.array_split(targets, steps) if microbatch else [targets]
 
         if self.model is None:
-            self._build(splitted_inputs[0])
-
             if isinstance(splitted_inputs[0], (list, tuple)):
                 self.input_shapes = [get_shape(item) for item in splitted_inputs[0]]
             else:
                 self.input_shapes = get_shape(splitted_inputs[0])
+
+            self.target_shape = get_shape(splitted_targets[0])
+            if self.classes is None and len(self.target_shape) > 1:
+                self.classes = self.target_shape[1]
+
+            self.build_config()
+            self._build(splitted_inputs[0])
 
         self.model.train()
 
