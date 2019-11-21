@@ -5,7 +5,6 @@ Ronneberger O. et al "`U-Net: Convolutional Networks for Biomedical Image Segmen
 Zhou Z. et al "UNet++: A Nested U-Net Architecture for Medical Image Segmentation
 <https://arxiv.org/abs/1807.10165>`_"
 """
-import tensorflow as tf
 
 from .encoder_decoder import EncoderDecoder
 from .layers import conv_block, combine
@@ -226,14 +225,3 @@ class UNetPP(UNet):
         for i, x in enumerate(inputs):
             res.append(super().head(x, targets, name=name+'-'+str(i), **kwargs))
         return res
-
-    # def _build(self, config=None):
-    #     import pdb; pdb.set_trace()
-    #     config = config or self.full_config
-    #     inputs = config.pop('initial_block/inputs')
-    #     x = self._add_block('initial_block', config, inputs=inputs)
-    #     body_outputs = self._add_block('body', config, inputs=x)
-    #     for i, x in enumerate(body_outputs[:-1]):
-    #         output = self._add_block('head', config, inputs=x)
-    #         self.output(output, predictions=config['predictions'], ops=config['output'], prefix=str(i)+'_', **config['common'])
-    #     self.output(output, predictions=config['predictions'], ops=config['output'], **config['common'])

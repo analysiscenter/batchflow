@@ -1587,7 +1587,7 @@ class TFModel(BaseModel):
             return conv_block(inputs, name=name, **kwargs)
         return inputs
 
-    def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
+    def output(self, inputs, predictions=None, ops=None, **kwargs):
         """ Add output operations to the model graph, like predicted probabilities or labels, etc.
 
         Parameters
@@ -1667,7 +1667,7 @@ class TFModel(BaseModel):
                     self._add_output_op(tensor, oper, oper, attr_prefix, attr_postfix, **kwargs)
 
                 if ctx:
-                    ctx.__exit__(None, None, None) 
+                    ctx.__exit__(None, None, None)
 
         _predictions = [self.get_from_attr('predictions_' + str(i)) for i in range(len(inputs))]
         self._add_predictions(_predictions, 'predictions', '', '', **kwargs)
