@@ -129,14 +129,17 @@ C - config option
 =================
 ::
 
-    config = dict(model=ResNet18, model_config=model_config)
+    config = dict(model=ResNet34, model_config=model_config)
 
     train_pipeline = dataset.train.pipeline(config)
         ...
-        .init_model('dynamic', C.model, 'my_model', C.model_config)
+        .init_model('dynamic', C('model', default=ResNet18), 'my_model', C.model_config)
         ...
 
 At each iteration ``C('model')`` will be replaced with the current value of ``pipeline.config['model']``.
+
+If there is no ``model`` key in the pipeline config, a default value will be used.
+If default is not set, ``KeyError`` is raised.
 
 This is an example of a model independent pipeline which allows to change models, for instance,
 to assess performance of various models.
