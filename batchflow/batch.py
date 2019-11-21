@@ -901,11 +901,11 @@ class Batch:
         return self
 
     def _load_from_source(self, dst, src):
-        """ Load data from a memroy object (tuple, ndarray, pd.DataFrame, etc) """
+        """ Load data from a memory object (tuple, ndarray, pd.DataFrame, etc) """
         if dst is None:
-            self._data = create_item_class(self.components, data=src, indices=self.indices, crop=True)
+            self._data = create_item_class(self.components, data=src, indices=self.indices, crop=True, copy=self._copy)
         else:
-            source = create_item_class(dst, data=src, indices=self.indices, crop=True)
+            source = create_item_class(dst, data=src, indices=self.indices, crop=True, copy=self._copy)
             for comp in dst:
                 setattr(self, comp, getattr(source, comp))
 

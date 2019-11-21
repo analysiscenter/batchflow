@@ -177,10 +177,13 @@ class ComponentsDict(BaseComponents):
 def get_from_source(components=None, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
     """ Return data source (and make a crop and a copy if necessary) """
     _ = components, crop, cast_to_array
+
     if indices is not None:
         data = data[indices] if data is not None else None
+
     if copy and data is not None:
         data = cp.deepcopy(data)
+
     return data
 
 
