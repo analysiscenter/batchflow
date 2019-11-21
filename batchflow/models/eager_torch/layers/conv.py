@@ -13,11 +13,11 @@ class BaseConv(nn.Module):
 
     def __init__(self, filters, kernel_size, stride=1, strides=None, padding='same',
                  dilation=1, dilation_rate=None, groups=1, bias=True, inputs=None):
+        #pylint: disable=eval-used
         super().__init__()
 
-        same = get_num_channels(inputs)
         if isinstance(filters, str):
-            filters = eval(filters, None, {key: in_units for key in ['S', 'same']})
+            filters = eval(filters, None, {key: get_num_channels(inputs) for key in ['S', 'same']})
 
         args = {
             'in_channels': get_num_channels(inputs),

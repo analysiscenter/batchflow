@@ -31,6 +31,7 @@ class Flatten(nn.Module):
 class Dense(nn.Module):
     """ Dense layer. """
     def __init__(self, units=None, out_features=None, bias=True, inputs=None):
+        #pylint: disable=eval-used
         super().__init__()
 
         in_units = np.prod(get_shape(inputs)[1:])
