@@ -36,6 +36,9 @@ class UNet(EncoderDecoder):
                     provided that `decoder/skip` is `True`. Specify `filters=None` explicitly
                     if you want to use custom `num_steps` and infer `filters`
 
+            n_outputs : int or list of ints
+                the number of supervision outputs from the model or the list of indices of outputs.
+
         decoder : dict
             num_stages : int
                 number of upsampling blocks. Defaults to the number of downsamplings.
@@ -63,14 +66,7 @@ class UNet(EncoderDecoder):
     def default_config(cls):
         config = super().default_config()
 
-        config['body/encoder/num_stages'] = 4
-        config['body/encoder/order'] = ['block', 'skip', 'downsampling']
-        config['body/encoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[64, 128, 256, 512])
-        config['body/embedding'] += dict(layout='cna cna', kernel_size=3)
-        config['body/decoder/order'] = ['upsampling', 'combine', 'block']
-        config['body/decoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[512, 256, 128, 64])
-
-        config['loss'] = 'ce'
+        config['body/n_outputs'] = 1
         return config
 
     def build_config(self, names=None):
@@ -148,6 +144,11 @@ class UNetPP(UNet):
 
     for more parameters see (see :class:`~.EncoderDecoder`)
     """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        return config
+
     def build_config(self, names=None):
         config = super().build_config(names)
 
@@ -168,10 +169,6 @@ class UNetPP(UNet):
         if config.get('body/decoder/dense/combine_op') is None:
             config['body/decoder/dense/combine_op'] = 'concat'
 
-        # for i in range(num_stages-1):
-        #     if config.get('head_'+str(i)) is None:
-        #         config['head_'+str(i)] = config['head']
-
         return config
 
     @classmethod
@@ -186,6 +183,9 @@ class UNetPP(UNet):
                         **(combine_op if isinstance(combine_op, dict) else {})}
 
         semantic_outputs = []
+        n_outputs = kwargs['n_outputs']
+        if isinstance(n_outputs, int):
+            n_outputs = list(range(-n_outputs, 0))
 
         for i in range(1, num_stages):
             _inputs = inputs[:i] + [inputs[i]] * 2
@@ -217,7 +217,7 @@ class UNetPP(UNet):
 
         semantic_outputs.append(x)
 
-        return semantic_outputs
+        return [semantic_outputs[i] for i in n_outputs]
 
     @classmethod
     def head(cls, inputs, targets, name='head', **kwargs):
