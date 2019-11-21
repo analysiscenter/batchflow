@@ -2,6 +2,7 @@
 import inspect
 
 import numpy as np
+import torch
 import torch.nn as nn
 
 from ..utils import get_shape, get_num_channels, get_num_dims
@@ -125,19 +126,61 @@ class BatchNorm(nn.Module):
 
 
 class Dropout(nn.Module):
-    """ Multi-dimensional dropout layer. """
+    """ Multi-dimensional dropout layer.
+
+    Parameters
+    ----------
+    dropout_rate : float
+        The fraction of the input units to drop.
+
+    multisample: bool, number, sequence
+        If evaluates to True, then either multiple dropout applied to the whole batch and then averaged, or
+        batch is split into multiple parts, each passed through dropout and then concatenated back.
+
+        If True, then two different dropouts are applied to whole batch.
+        If integer, then that number of different dropouts are applied to whole batch.
+        If float, then batch is split into parts of `multisample` and `1 - multisample` sizes.
+        If sequence of ints, then batch is split into parts of given sizes. Must sum up to the batch size.
+        If sequence of floats, then each float means proportion of sizes in batch and must sum up to 1.
+    """
     LAYERS = {
         1: nn.Dropout,
         2: nn.Dropout2d,
         3: nn.Dropout3d,
     }
 
-    def __init__(self, inputs=None, dropout_rate=0.0, **kwargs):
+    def __init__(self, inputs=None, dropout_rate=0.0, multisample=False):
         super().__init__()
-        self.layer = self.LAYERS[get_num_dims(inputs)](p=dropout_rate, **kwargs)
+        self.multisample = multisample
+        self.layer = self.LAYERS[get_num_dims(inputs)](p=dropout_rate)
 
     def forward(self, x):
-        return self.layer(x)
+        if self.multisample is not False:
+            if self.multisample is True:
+                self.multisample = 2
+            elif isinstance(self.multisample, float):
+                self.multisample = [self.multisample, 1 - self.multisample]
+
+            if isinstance(self.multisample, int): # dropout to the whole batch, then average
+                dropped = [self.layer(x) for _ in range(self.multisample)]
+                output = torch.mean(torch.stack(dropped), dim=0)
+            else: # split batch into separate-dropout branches
+                if isinstance(self.multisample, (tuple, list)):
+                    if all([isinstance(item, int) for item in self.multisample]):
+                        sizes = self.multisample
+                    elif all([isinstance(item, float) for item in self.multisample]):
+                        batch_size = x.shape[0]
+                        sizes = [round(batch_size*item) for item in self.multisample[:-1]]
+                        residual = batch_size - sum(sizes)
+                        sizes += [residual]
+
+                splitted = torch.split(x, sizes)
+                dropped = [self.layer(branch) for branch in splitted]
+                output = torch.cat(dropped, axis=0)
+        else:
+            output = self.layer(x)
+        return output
+
 
 class AlphaDropout(Dropout):
     """ Multi-dimensional alpha-dropout layer. """
