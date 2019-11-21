@@ -123,7 +123,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
     """
     __slots__ = ('__dict__', )
 
-    def __init__(self, name, mode='w'):
+    def __init__(self, name=None, mode='w'):
         self.name = name
         self.mode = mode
         self.params = None
@@ -353,12 +353,14 @@ class C(PipelineNamedExpression):
     --------
     ::
 
-        C('model_class')
+        C('model_class', default=ResNet)
         C('GPU')
         C()
     """
-    def __init__(self, name=None, mode='w'):
+    def __init__(self, name=None, mode='w', **kwargs):
         super().__init__(name, mode)
+        self._has_default = 'default' in kwargs
+        self.default = kwargs.get('default')
 
     def get(self, **kwargs):
         """ Return a value of a pipeline config """
@@ -368,7 +370,10 @@ class C(PipelineNamedExpression):
         if name is None:
             return config
         try:
-            value = config[name]
+            if self._has_default:
+                value = config.get(name, default=self.default)
+            else:
+                value = config[name]
         except KeyError:
             raise KeyError("Name is not found in the config: %s" % name) from None
         return value
@@ -498,11 +503,12 @@ class F(NamedExpression):
     def get(self, **kwargs):
         """ Return a value from a callable """
         name, kwargs = self._get(**kwargs)
-        batch = kwargs['batch']
-        pipeline = batch.pipeline
 
         args = []
         if self._pass:
+            batch = kwargs['batch']
+            pipeline = batch.pipeline
+
             if isinstance(batch, _DummyBatch):
                 args += [pipeline]
             else:
@@ -533,9 +539,6 @@ class D(NamedExpression):
         D('classes')
         D('organization')
     """
-    def __init__(self, name=None, mode='w'):
-        super().__init__(name, mode)
-
     def _get(self, **kwargs):
         name, kwargs = super()._get(**kwargs)
         batch = kwargs['batch']
@@ -644,7 +647,7 @@ class W(NamedExpression):
     def assign(self, value, **kwargs):
         """ Assign a value """
         _ = kwargs
-        self.name = value
+        self.name = value # pylint: disable=attribute-defined-outside-init
 
 
 class P(W):
@@ -708,4 +711,4 @@ class P(W):
     def assign(self, value, **kwargs):
         """ Assign a value """
         _ = kwargs
-        self.name = value
+        self.name = value # pylint: disable=attribute-defined-outside-init
