@@ -129,7 +129,7 @@ class Dropout(nn.Module):
     dropout_rate : float
         The fraction of the input units to drop.
 
-    multisample: bool, number, sequence, tf.Tensor
+    multisample: bool, number, sequence
         If evaluates to True, then either multiple dropout applied to the whole batch and then averaged, or
         batch is split into multiple parts, each passed through dropout and then concatenated back.
 
