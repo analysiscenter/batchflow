@@ -1,5 +1,4 @@
 """ Encoder, decoder, encoder-decoder architectures. """
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -11,10 +10,13 @@ from ..utils import unpack_args
 
 
 class DefaultBlock(nn.Module):
+    """ Default block for processing tensors in encoder and decoder.
+    Makes 3x3 convolutions followed by batch-norm and activation. Does not change tensor shape.
+    """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
         layout = kwargs.pop('layout', 'cna')
-        filters = kwargs.pop('filters', 'same*2')
+        filters = kwargs.pop('filters', 'same')
         self.layer = ConvBlock(inputs=inputs, layout=layout, filters=filters, **kwargs)
 
     def forward(self, x):
@@ -23,16 +25,17 @@ class DefaultBlock(nn.Module):
 
 
 class EncoderModule(nn.Module):
+    """ Encoder: create compressed representation of an input by redycing its spatially. """
     def __init__(self, inputs=None, return_all=True, **kwargs):
         super().__init__()
         self.return_all = return_all
-        self.make_modules(inputs, **kwargs)
+        self._make_modules(inputs, **kwargs)
 
     def forward(self, x):
         b_counter, d_counter = 0, 0
         outputs = []
 
-        for i in range(self.num_stages):
+        for _ in range(self.num_stages):
             for letter in self.encoder_layout:
                 if letter in ['b']:
                     x = self.encoder_b[b_counter](x)
@@ -49,7 +52,7 @@ class EncoderModule(nn.Module):
         return outputs[-1]
 
 
-    def make_modules(self, inputs, **kwargs):
+    def _make_modules(self, inputs, **kwargs):
         num_stages = kwargs.pop('num_stages')
         encoder_layout = ''.join([item[0] for item in kwargs.pop('order')])
         self.num_stages, self.encoder_layout = num_stages, encoder_layout
@@ -62,7 +65,8 @@ class EncoderModule(nn.Module):
         for i in range(num_stages):
             for letter in encoder_layout:
                 if letter in ['b']:
-                    args = {**kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
+                    args = {'filters': 'same * 2',
+                            **kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
                     base_block = args.get('base')
 
                     layer = base_block(inputs=inputs, **args)
@@ -82,6 +86,7 @@ class EncoderModule(nn.Module):
 
 
 class EmbeddingModule(nn.Module):
+    """ Embedding: thorough processing of an input tensor. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
         base_block = kwargs.get('base')
@@ -100,16 +105,15 @@ class EmbeddingModule(nn.Module):
 
 
 class DecoderModule(nn.Module):
+    """ Decoder: increasing spatial dimensionality. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
-        self.make_modules(inputs, **kwargs)
-
+        self._make_modules(inputs, **kwargs)
 
     def forward(self, x):
+        b_counter, u_counter, c_counter = 0, 0, 0
         inputs = x if isinstance(x, list) else [x]
         x = inputs[-1]
-
-        b_counter, u_counter, c_counter = 0, 0, 0
 
         for i in range(self.num_stages):
             for letter in self.decoder_layout:
@@ -126,7 +130,7 @@ class DecoderModule(nn.Module):
         return x
 
 
-    def make_modules(self, inputs, **kwargs):
+    def _make_modules(self, inputs, **kwargs):
         inputs = inputs if isinstance(inputs, list) else [inputs]
         x = inputs[-1]
 
@@ -180,6 +184,35 @@ class DecoderModule(nn.Module):
 
 
 class Encoder(EagerTorch):
+    """ Encoder architecture. Allows to combine blocks from different models,
+    e.g. ResNet and DenseNet, in order to create new ones with just a few lines of code.
+    Indended to be used for classification tasks.
+
+    Parameters
+    ----------
+    body : dict
+        encoder : dict, optional
+            num_stages : int
+                Number of downsampling stages.
+
+            order : str, sequence of str
+                Determines order of applying layers.
+                If str, then each letter stands for operation:
+                'b' for 'block', 'd'/'p' for 'downsampling', 's' for 'skip'.
+                If sequence, than the first letter of each item stands for operation:
+                For example, `'sbd'` allows to use throw skip connection -> block -> downsampling.
+
+            downsample : dict, optional
+                Parameters for downsampling (see :class:`~.layers.ConvBlock`)
+
+            blocks : dict, optional
+                Parameters for pre-processing blocks.
+
+                base : callable
+                    Tensor processing function. Default is :class:`~.layers.ConvBlock`.
+                other args : dict
+                    Parameters for the base block.
+    """
     @classmethod
     def default_config(cls):
         config = super().default_config()
@@ -200,6 +233,50 @@ class Encoder(EagerTorch):
 
 
 class Decoder(EagerTorch):
+    """ Decoder architecture. Allows to combine blocks from different models,
+    e.g. ResNet and DenseNet, in order to create new ones with just a few lines of code.
+    Intended to be used for increasing spatial dimensionality of inputs.
+
+    Parameters
+    ----------
+    body : dict
+        decoder : dict, optional
+            num_stages : int
+                Number of upsampling blocks.
+
+            factor : int or list of int
+                If int, the total upsampling factor for all stages combined.
+                If list, upsampling factors for each stage.
+
+            skip : bool, dict
+                If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by
+                using `combine` parameters that can be specified for each of blocks separately.
+
+            order : str, sequence of str
+                Determines order of applying layers.
+                If str, then each letter stands for operation:
+                'b' for 'block', 'u' for 'upsampling', 'c' for 'combine'
+                If sequence, than the first letter of each item stands for operation.
+                For example, `'ucb'` allows to use upsampling -> combine -> block.
+
+            upsample : dict
+                Parameters for upsampling (see :class:`~.layers.Upsample`).
+
+            blocks : dict
+                Parameters for post-processing blocks:
+
+                base : callable
+                    Tensor processing function. Default is :class:`~.layers.ConvBlock`.
+                other args : dict
+                    Parameters for the base block.
+
+            combine : dict
+                If dict, then parameters for combining tensors, see :class:`~.layers.Combine`.
+
+    head : dict, optional
+        Parameters for the head layers, usually :class:`~.layers.ConvBlock` parameters. Note that an extra 1x1
+        convolution may be applied in order to make predictions compatible with the shape of the targets.
+    """
     @classmethod
     def default_config(cls):
         config = super().default_config()
@@ -240,6 +317,118 @@ class Decoder(EagerTorch):
 
 
 class EncoderDecoder(Decoder):
+    """ Encoder-decoder architecture. Allows to combine blocks from different models,
+    e.g. ResNet and DenseNet, in order to create new ones with just a few lines of code.
+    Intended to be used for segmentation tasks.
+
+    Parameters
+    ----------
+    body : dict
+        encoder : dict, optional
+            num_stages : int
+                Number of downsampling stages.
+
+            order : str, sequence of str
+                Determines order of applying layers.
+                If str, then each letter stands for operation:
+                'b' for 'block', 'd'/'p' for 'downsampling', 's' for 'skip'.
+                If sequence, than the first letter of each item stands for operation:
+                For example, `'sbd'` allows to use throw skip connection -> block -> downsampling.
+
+            downsample : dict, optional
+                Parameters for downsampling (see :class:`~.layers.ConvBlock`)
+
+            blocks : dict, optional
+                Parameters for pre-processing blocks.
+
+                base : callable
+                    Tensor processing function. Default is :class:`~.layers.ConvBlock`.
+                other args : dict
+                    Parameters for the base block.
+
+        embedding : dict or None, optional
+            If None no embedding block is created.
+            If dict, then parameters for tensor processing function.
+
+            base : callable
+                Tensor processing function. Default is :class:`~.layers.ConvBlock`.
+            other args
+                Parameters for the base block.
+
+        decoder : dict, optional
+            num_stages : int
+                Number of upsampling blocks.
+
+            factor : int or list of int
+                If int, the total upsampling factor for all stages combined.
+                If list, upsampling factors for each stage.
+
+            skip : bool, dict
+                If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by
+                using `combine` parameters that can be specified for each of blocks separately.
+
+            order : str, sequence of str
+                Determines order of applying layers.
+                If str, then each letter stands for operation:
+                'b' for 'block', 'u' for 'upsampling', 'c' for 'combine'
+                If sequence, than the first letter of each item stands for operation.
+                For example, `'ucb'` allows to use upsampling -> combine -> block.
+
+            upsample : dict
+                Parameters for upsampling (see :class:`~.layers.Upsample`).
+
+            blocks : dict
+                Parameters for post-processing blocks:
+
+                base : callable
+                    Tensor processing function. Default is :class:`~.layers.ConvBlock`.
+                other args : dict
+                    Parameters for the base block.
+
+            combine : dict
+                If dict, then parameters for combining tensors, see :class:`~.layers.Combine`.
+
+    head : dict, optional
+        Parameters for the head layers, usually :class:`~.layers.ConvBlock` parameters. Note that an extra 1x1
+        convolution may be applied in order to make predictions compatible with the shape of the targets.
+
+    Examples
+    --------
+    Use ResNet as an encoder with desired number of blocks and filters in them (total downsampling factor is 4),
+    create an embedding that contains 256 channels, then upsample it to get 8 times the size of initial image.
+
+    >>> config = {
+            'inputs': dict(images={'shape': B('image_shape')},
+                           masks={'name': 'targets', 'shape': B('mask_shape')}),
+            'initial_block/inputs': 'images',
+            'body/encoder': {'base': ResNet,
+                             'num_blocks': [2, 3, 4]
+                             'filters': [16, 32, 128]},
+            'body/embedding': {'layout': 'cna', 'filters': 256},
+            'body/decoder': {'num_stages': 5, 'factor': 32},
+        }
+
+    Preprocess input image with 7x7 convolutions, downsample it 5 times with DenseNet blocks in between,
+    use MobileNet block in the bottom, then restore original image size with subpixel convolutions and
+    ResNeXt blocks in between:
+
+    >>> config = {
+            'inputs': dict(images={'shape': B('image_shape')},
+                           masks={'name': 'targets', 'shape': B('mask_shape')}),
+            'initial_block': {'inputs': 'images',
+                              'layout': 'cna', 'filters': 4, 'kernel_size': 7},
+            'body/encoder': {'num_stages': 5,
+                             'blocks': {'base': DenseNet.block,
+                                        'num_layers': [2, 2, 3, 4, 5],
+                                        'growth_rate': 6, 'skip': True}},
+            'body/embedding': {'base': MobileNet.block,
+                               'width_factor': 2},
+            'body/decoder': {'upsample': {'layout': 'X'},
+                             'blocks': {'base': ResNet.block,
+                                        'filters': [256, 128, 64, 32, 16],
+                                        'resnext': True}},
+        }
+    """
     @classmethod
     def default_config(cls):
         config = super().default_config()
@@ -266,16 +455,34 @@ class EncoderDecoder(Decoder):
         embedding = kwargs.pop('embedding')
         decoder = kwargs.pop('decoder')
 
-        encoder = EncoderModule(inputs=inputs, **{**kwargs, **encoder})
+        layers = []
+        encoder = cls.encoder(inputs=inputs, **{**kwargs, **encoder})
         encoder_outputs = encoder(inputs)
+        layers.append(encoder)
 
-        embedding = EmbeddingModule(inputs=encoder_outputs, **{**kwargs, **embedding})
+        if embedding is not None:
+            embedding = cls.embedding(inputs=encoder_outputs, **{**kwargs, **embedding})
+        else:
+            embedding = nn.Identity()
         encoder_outputs = embedding(encoder_outputs)
+        layers.append(embedding)
 
-        decoder = DecoderModule(inputs=encoder_outputs, **{**kwargs, **decoder})
+        decoder = cls.decoder(inputs=encoder_outputs, **{**kwargs, **decoder})
+        layers.append(decoder)
 
-        return nn.Sequential(encoder, embedding, decoder)
+        return nn.Sequential(*layers)
 
+    @classmethod
+    def encoder(cls, inputs, **kwargs):
+        return EncoderModule(inputs=inputs, **kwargs)
+
+    @classmethod
+    def embedding(cls, inputs, **kwargs):
+        return EmbeddingModule(inputs=inputs, **kwargs)
+
+    @classmethod
+    def decoder(cls, inputs, **kwargs):
+        return DecoderModule(inputs=inputs, **kwargs)
 
 
 class AutoEncoder(EncoderDecoder):
@@ -289,6 +496,7 @@ class AutoEncoder(EncoderDecoder):
 
 
 class VariationalBlock(nn.Module):
+    """ Reparametrization trick block. """
     def __init__(self, inputs=None, base_mu=None, base_std=None, **kwargs):
         super().__init__()
         self.mean = base_mu(inputs=inputs, **kwargs)
