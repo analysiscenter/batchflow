@@ -4,6 +4,8 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-0.4-orange.svg)](https://pytorch.org)
 [![codecov](https://codecov.io/gh/analysiscenter/batchflow/branch/master/graph/badge.svg)](https://codecov.io/gh/analysiscenter/batchflow)
 [![PyPI](https://badge.fury.io/py/batchflow.svg)](https://badge.fury.io/py/batchflow)
+[![Status](https://github.com/analysiscenter/batchflow/workflows/status/badge.svg)](https://github.com/analysiscenter/batchflow/actions?query=workflow%3Astatus)
+
 
 # BatchFlow
 
