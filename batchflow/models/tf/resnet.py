@@ -105,9 +105,9 @@ class ResNet(TFModel):
             filters = config['initial_block/filters']
             config['body/filters'] = (2 ** np.arange(len(num_blocks)) * filters * width).tolist()
 
-        if config.get['body/downsample'] is None:
+        if config.get('body/downsample') is None:
             num_blocks = config['body/num_blocks']
-            config.get['body/downsample'] = [[]] + [[0]] * (len(num_blocks) - 1)
+            config['body/downsample'] = [[]] + [[0]] * (len(num_blocks) - 1)
 
         if config.get('head/units') is None:
             config['head/units'] = self.num_classes('targets')
@@ -214,8 +214,8 @@ class ResNet(TFModel):
         kwargs = cls.fill_params('body/block', **kwargs)
         layout, filters, downsample, zero_pad = cls.pop(['layout', 'filters', 'downsample', 'zero_pad'], kwargs)
         width_factor = cls.pop('width_factor', kwargs)
-        bottleneck = cls.pop(['bottleneck'], kwargs)
-        resnext = cls.pop(['resnext'], kwargs)
+        bottleneck = cls.pop('bottleneck', kwargs)
+        resnext = cls.pop('resnext', kwargs)
         se_block = cls.pop('se_block', kwargs)
         post_activation = cls.pop('post_activation', kwargs)
         if isinstance(post_activation, bool) and post_activation:

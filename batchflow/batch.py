@@ -1,10 +1,9 @@
 """ Contains basic Batch classes """
-
+# pylint: disable=ungrouped-imports
 import os
 import traceback
 import threading
 import warnings
-from copy import deepcopy
 
 import dill
 try:
@@ -15,7 +14,7 @@ import numpy as np
 try:
     import pandas as pd
 except ImportError:
-    pass
+    import _fake as pd
 try:
     import feather
 except ImportError:
@@ -23,16 +22,15 @@ except ImportError:
 try:
     import dask.dataframe as dd
 except ImportError:
-    pass
+    import _fake as dd
 
 from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, any_action_failed
-from .components import MetaComponentsTuple
+from .components import create_item_class, BaseComponents
 
 
 class Batch:
     """ The core Batch class """
-    _item_class = None
     components = None
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
@@ -40,12 +38,12 @@ class Batch:
         if  self.components is not None and not isinstance(self.components, tuple):
             raise TypeError("components should be a tuple of strings with components names")
         self.index = index
-        self._data_named = None
-        self._data = None
         self._preloaded_lock = threading.Lock()
         self._preloaded = preloaded
         self._copy = copy
         self._local = None
+        self._data_named = None
+        self._data = None
         self._dataset = dataset
         self._pipeline = pipeline
         self._attrs = None
@@ -62,6 +60,22 @@ class Batch:
         if self._attrs is None:
             return {}
         return {attr: getattr(self, attr, None) for attr in self._attrs}
+
+    @property
+    def data(self):
+        """: tuple or named components - batch data """
+        if self._data is None and self._preloaded is not None:
+            # load data the first time it's requested
+            with self._preloaded_lock:
+                if self._data is None and self._preloaded is not None:
+                    self.load(src=self._preloaded)
+        res = self._data if self.components is None else self._data_named
+        return res
+
+    @data.setter
+    def data_setter(self, value):
+        """: tuple or named components - batch data """
+        self._data = value
 
     @property
     def dataset(self):
@@ -124,7 +138,6 @@ class Batch:
         """ Create batch from another batch """
         return cls(batch.index, dataset=batch.dataset, pipeline=batch.pipeline, preloaded=batch.data,
                    **batch.get_attrs())
-
 
     @classmethod
     def merge(cls, batches, batch_size=None):
@@ -248,30 +261,6 @@ class Batch:
         """: int - number of items in the batch """
         return len(self)
 
-    @property
-    def data(self):
-        """: tuple or named components - batch data """
-        if self._data is None and self._preloaded is not None:
-            # load data the first time it's requested
-            with self._preloaded_lock:
-                if self._data is None and self._preloaded is not None:
-                    self.load(src=self._preloaded)
-        res = self._data if self.components is None else self._data_named
-        return res
-
-    def make_item_class(self, local=False):
-        """ Create a class to handle data components """
-        # pylint: disable=protected-access
-        if self.components is None:
-            type(self)._item_class = None
-        elif type(self)._item_class is None or not local:
-            comp_class = MetaComponentsTuple(type(self).__name__ + 'Components', components=self.components)
-            type(self)._item_class = comp_class
-        elif local:
-            comp_class = MetaComponentsTuple(type(self).__name__ + 'Components' + str(id(self)),
-                                             components=self.components)
-            self._item_class = comp_class
-
     @action
     def add_components(self, components, init=None):
         """ Add new components
@@ -298,27 +287,19 @@ class Batch:
             else:
                 init = tuple(init)
 
-        if any(hasattr(self, c) for c in components):
-            raise ValueError("An attribute with the same name exists")
+        for comp, value in zip(components, init):
+            if hasattr(self, comp):
+                raise ValueError("An attribute '%s' already exists" % comp)
+            if self.components is not None and comp in self.components:
+                raise ValueError("A components '%s' already exists" % comp)
 
-        # preload data if needed
-        data = self.data
-        data = self._data
-        if self.components is None:
-            self.components = tuple()
-            if data is not None:
-                warnings.warn("All batch data is erased")
-            data = tuple()
-            self.components = components
-        else:
-            exists_component = set(components) & set(self.components)
-            if exists_component:
-                raise ValueError("Component(s) with name(s) '{}' already exists".format("', '".join(exists_component)))
-            self.components = self.components + components
-
-        self.make_item_class(local=True)
-        if data is not None:
-            self._data = data + init
+            if self.components is None:
+                self.components = tuple([comp])
+                if self._data is not None:
+                    warnings.warn("All batch data is erased")
+            else:
+                self.components = self.components + tuple([comp])
+            setattr(self, comp, value)
 
         return self
 
@@ -332,17 +313,19 @@ class Batch:
         if self.components is not None:
             if name == "_data":
                 super().__setattr__(name, value)
-                if self._item_class is None:
-                    self.make_item_class()
-                if isinstance(value, self._item_class):
-                    self._data_named = value
-                else:
-                    self._data_named = self._item_class(data=self._data)   # pylint: disable=not-callable
+                if self._data is not None:
+                    if isinstance(self._data, BaseComponents):
+                        self._data_named = self._data
+                    else:
+                        self._data_named = create_item_class(self.components, self._data)
                 return
             if name in self.components:    # pylint: disable=unsupported-membership-test
-                if self._data_named is None:
-                    _ = self.data
+                # preload data if needed
+                _ = self.data
+                if self._data_named is None or self._data_named.components != self.components:
+                    self._data_named = create_item_class(self.components, self._data)
                 setattr(self._data_named, name, value)
+                # update _data with with new component values
                 super().__setattr__('_data', self._data_named.data)
                 return
         super().__setattr__(name, value)
@@ -350,9 +333,14 @@ class Batch:
     def __getstate__(self):
         state = self.__dict__.copy()
         state.pop('_data_named')
+        state['_local'] = state['_local'] is not None
+        state['_preloaded_lock'] = True
         return state
 
     def __setstate__(self, state):
+        state['_preloaded_lock'] = threading.Lock() if state['_preloaded_lock'] else None
+        state['_local'] = threading.Lock() if state['_local'] else None
+
         for k, v in state.items():
             # this warrants that all hidden objects are reconstructed upon unpickling
             setattr(self, k, v)
@@ -416,65 +404,11 @@ class Batch:
         Whilst, `get_pos(data, 'source', index)` should return `data.image_no[index]`.
         """
         _ = component
-        if data is None:
+        if data is None: # or data is self._data:
             pos = self.index.get_pos(index)
         else:
             pos = index
         return pos
-
-    def put_into_data(self, data, dst=None):
-        """ Load data into :attr:`_data` property """
-        _src = self.get_items(self.indices, data)
-        if self._copy and data is self._preloaded:
-            res = deepcopy(res)
-
-        types = tuple, dict, pd.DataFrame
-        if isinstance(self._item_class, type):
-            types = types + (self._item_class,)
-
-        if self.components is None:
-            self._data = _src
-        else:
-            if not isinstance(_src, types):
-                _src = (_src,)
-            if dst is None:
-                components = self.components
-            elif isinstance(dst, str):
-                components = [dst]
-            else:
-                components = dst
-
-            for i, comp in enumerate(components):
-                if isinstance(_src, (dict, pd.DataFrame)):
-                    comp_src = _src[comp]
-                else:
-                    comp_src = _src[i] if i < len(_src) else None
-                setattr(self, comp, comp_src)
-
-    def get_items(self, index, data=None, components=None):
-        """ Return one or several data items from a data source """
-        if data is None:
-            _data = self.data
-        else:
-            _data = data
-        components = components or self.components
-
-        if self._item_class is not None and isinstance(_data, self._item_class):
-            pos = [self.get_pos(None, comp, index) for comp in components]   # pylint: disable=not-an-iterable
-            res = self._item_class(data=_data, pos=pos)    # pylint: disable=not-callable
-        elif isinstance(_data, tuple):
-            comps = components or range(len(_data))
-            res = tuple(data_item[self.get_pos(data, comp, index)] if data_item is not None else None
-                        for comp, data_item in zip(comps, _data))
-        elif isinstance(_data, (dict, pd.DataFrame)):
-            components = components or _data.keys()
-            check = lambda comp: comp in _data and _data[comp] is not None
-            data_comps = (_data[comp][self.get_pos(data, comp, index)] if check(comp) else None for comp in components)
-            res = dict(zip(components, data_comps))
-        else:
-            pos = self.get_pos(data, None, index)
-            res = _data[pos]
-        return res
 
     def get(self, item=None, component=None):
         """ Return an item from the batch or the component """
@@ -491,7 +425,8 @@ class Batch:
         return res
 
     def __getitem__(self, item):
-        return self.get_items(item)
+        # pylint: disable=not-callable
+        return create_item_class(self.components, data=self._data, indices=item, crop=False)
 
     def __iter__(self):
         for item in self.indices:
@@ -965,6 +900,15 @@ class Batch:
 
         return self
 
+    def _load_from_source(self, dst, src):
+        """ Load data from a memroy object (tuple, ndarray, pd.DataFrame, etc) """
+        if dst is None:
+            self._data = create_item_class(self.components, data=src, indices=self.indices, crop=True)
+        else:
+            source = create_item_class(dst, data=src, indices=self.indices, crop=True)
+            for comp in dst:
+                setattr(self, comp, getattr(source, comp))
+
     @action
     def load(self, *args, src=None, fmt=None, dst=None, **kwargs):
         """ Load data from another array or a file.
@@ -982,14 +926,22 @@ class Batch:
 
         **kwargs :
             other parameters to pass to format-specific loaders
+
+        Notes
+        -----
+        Loading creates new components if necessary.
         """
         _ = args
-        components = [dst] if isinstance(dst, str) else dst
+        if  isinstance(dst, str):
+            components = (dst,)
+            src = (src,)
+        else:
+            components = dst
         if components is not None:
             self.add_components(np.setdiff1d(components, self.components).tolist())
 
         if fmt is None:
-            self.put_into_data(src, components)
+            self._load_from_source(src=src, dst=components)
         elif fmt == 'blosc':
             self._load_blosc(src=src, dst=components, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:

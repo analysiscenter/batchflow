@@ -54,7 +54,7 @@ def _copy1_dict(data):
     return dict((key, copy.copy(item)) for key, item in data.items())
 
 
-def plot_results_by_config(results, variables, figsize=None, force_flat=True):
+def plot_results_by_config(results, variables, figsize=None, layout=None, **kwargs):
     """
     Given results from Research.run() draws plots of specified variables for all configs
 
@@ -70,8 +70,8 @@ def plot_results_by_config(results, variables, figsize=None, force_flat=True):
     figsize : tuple or None
         figsize to pass to matplotlib. If None (default value) figsize is set to (x, y),
         where x = (5 * number of variables), y = (5 * number of configs in `results`)
-    force_flat: bool
-        whether to arrange plots horizontally if only one variable is needed (default: True)
+    layout: 'flat', 'square' or None
+        plot arranging strategy when only one variable is needed (default: None, plots are arranged vertically)
     """
     if isinstance(variables, dict):
         variables = variables.items()
@@ -82,28 +82,35 @@ def plot_results_by_config(results, variables, figsize=None, force_flat=True):
     n_configs = len(gbc)
     n_vars = len(variables)
 
-    n_h, n_v = (n_configs, 1) if n_vars == 1 and force_flat else (n_vars, n_configs)
+    n_h, n_v = n_vars, n_configs
+
+    if n_vars == 1:
+        if layout == 'flat':
+            n_h, n_v = n_configs, 1
+        if layout == 'square':
+            n_h = int(np.sqrt(n_configs))
+            n_v = np.ceil(n_configs / n_h).astype(int)
 
     if figsize is None:
         figsize = (n_h * 5, n_v * 5)
 
     _, axs = plt.subplots(n_v, n_h, figsize=figsize)
+    axs = axs.flatten() if isinstance(axs, np.ndarray) else (axs,)
     for x, (config, df) in enumerate(gbc):
         for y, (source, val) in enumerate(variables):
-            if n_configs == 1 and n_vars == 1:
-                ax = axs
-            elif n_configs == 1:
-                ax = axs[y]
-            elif n_vars == 1:
-                ax = axs[x]
-            else:
-                ax = axs[x, y]
+            ax = axs[n_vars * x + y]
 
-            (df[df['name'] == source]
-             .pivot(index='iteration', columns='repetition', values=val)
-             .rename(columns=lambda s: 'rep ' + str(s))
-             .plot(ax=ax))
-            ax.set_title(config)
+            cols = ['repetition', 'cv_split'] if 'cv_split' in df.columns else 'repetition'
+
+            res = (df[df['name'] == source]
+                   .pivot_table(index='iteration', columns=cols, values=val)
+                   .rename(columns=lambda s: 'rep ' + str(s), level=0))
+
+            if 'cv_split' in df.columns:
+                res = res.rename(columns=lambda s: 'split ' + str(s), level=1)
+
+            res.plot(ax=ax, **kwargs)
+            ax.set_title(config + ' ' + source)
             ax.set_xlabel('Iteration')
             ax.set_ylabel(val.replace('_', ' ').capitalize())
             ax.grid(True)

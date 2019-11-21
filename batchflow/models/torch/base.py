@@ -713,7 +713,7 @@ class TorchModel(BaseModel):
 
     def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
         if oper is None:
-            self._add_output_identity(inputs, name, attr_prefix, **kwargs)
+            self._add_output_identity(inputs, name, attr_prefix[:-1], **kwargs)
         elif oper == 'softplus':
             self._add_output_softplus(inputs, name, attr_prefix, **kwargs)
         elif oper == 'sigmoid':
@@ -727,7 +727,7 @@ class TorchModel(BaseModel):
 
     def _add_output_identity(self, inputs, name, attr_prefix, **kwargs):
         _ = kwargs
-        setattr(self, attr_prefix + name, inputs)
+        setattr(self, attr_prefix + (name or ''), inputs)
         return inputs
 
     def _add_output_softplus(self, inputs, name, attr_prefix, **kwargs):

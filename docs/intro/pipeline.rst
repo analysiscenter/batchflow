@@ -664,6 +664,18 @@ Models
 See :doc:`Working with models <models>`.
 
 
+Debugging
+=========
+To debug a pipeline you might pass `debug` parameter when executing the pipeline, e.g.::
+
+    pipeline.run(batch_size=100, debug=True)
+
+Execution parameters are gathered into `pipeline.debug_info` data frame, which contains
+batch id, action name, start time and execution time.
+
+This might help you to analyze pipeline exection, find bottlenecks and so on.
+
+
 API
 ===
 See :doc:`pipelines API <../api/batchflow.pipeline>`.
