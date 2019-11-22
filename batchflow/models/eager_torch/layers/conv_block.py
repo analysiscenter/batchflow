@@ -3,6 +3,8 @@ import logging
 import inspect
 from collections import OrderedDict
 
+import numpy as np
+import torch
 import torch.nn as nn
 
 from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
@@ -263,10 +265,8 @@ class ConvBlock(nn.Module):
         self.padding, self.data_format = padding, data_format
         self.kwargs = kwargs
 
-        block_modules, skip_modules, combine_modules = self.parse_params(inputs)
-        self.block_modules = block_modules
-        self.skip_modules = skip_modules if skip_modules else None
-        self.combine_modules = combine_modules if combine_modules else None
+        self._make_modules(inputs)
+
 
     def forward(self, x):
         b_counter, s_counter, c_counter = 0, 0, 0
@@ -302,16 +302,15 @@ class ConvBlock(nn.Module):
         args = unpack_args(args, *counters)
         return args
 
-    def parse_params(self, inputs):
+    def _make_modules(self, inputs):
         """ Create necessary ModuleLists from instance parameters. """
-        self.module_layout = ''
+        module_layout = ''
         device = inputs.device
 
         layout = self.layout or ''
         layout = layout.replace(' ', '')
         if len(layout) == 0:
             logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
-            return nn.ModuleList(), nn.ModuleList(), nn.ModuleList()
 
         layout_dict = {}
         for letter in layout:
@@ -319,7 +318,7 @@ class ConvBlock(nn.Module):
             letter_counts = layout_dict.setdefault(letter_group, [-1, 0])
             letter_counts[1] += 1
 
-        modules, skip_modules, combine_modules = nn.ModuleList(), nn.ModuleList(), nn.ModuleList()
+        block_modules, skip_modules, combine_modules = nn.ModuleList(), nn.ModuleList(), nn.ModuleList()
         layers, residuals = [], []
 
         for i, letter in enumerate(layout):
@@ -330,10 +329,10 @@ class ConvBlock(nn.Module):
 
             if letter in self.SKIP_LETTERS + self.COMBINE_LETTERS:
                 if len(layers) >= 1:
-                    self.module_layout += '_'
-                    modules.append(nn.Sequential(OrderedDict(layers)))
+                    module_layout += '_'
+                    block_modules.append(nn.Sequential(OrderedDict(layers)))
                     layers = []
-                self.module_layout += letter
+                module_layout += letter
 
                 if letter in self.SKIP_LETTERS:
                     args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
@@ -391,10 +390,13 @@ class ConvBlock(nn.Module):
                     layers.append((layer_desc, layer))
 
         if len(layers) > 0:
-            self.module_layout += '_'
-            modules.append(nn.Sequential(OrderedDict(layers)))
+            module_layout += '_'
+            block_modules.append(nn.Sequential(OrderedDict(layers)))
 
-        return modules, skip_modules, combine_modules
+        self.module_layout = module_layout
+        self.block_modules = block_modules if block_modules else None
+        self.skip_modules = skip_modules if skip_modules else None
+        self.combine_modules = combine_modules if combine_modules else None
 
 
 def update_layers(letter, module, name=None):
@@ -421,3 +423,116 @@ def update_layers(letter, module, name=None):
     ConvBlock.LETTERS_LAYERS.update({letter: name})
     ConvBlock.LAYERS_MODULES.update({name: module})
     ConvBlock.LETTERS_GROUPS.update({letter: letter})
+
+
+
+class ConvGroup(nn.Module):
+    """ Convenient wrapper for chaining/splitting multiple base blocks. """
+    def __init__(self, *args, inputs=None, base_block=ConvBlock, n_repeats=1, n_branches=1, combine='+', **kwargs):
+        super().__init__()
+        self.input_shape, self.device = get_shape(inputs), inputs.device
+        self.n_repeats, self.n_branches = n_repeats, n_branches
+        self.base_block, self.combine = base_block, combine
+        self.args, self.kwargs = args, kwargs
+
+        self._make_modules(inputs)
+
+    def forward(self, x):
+        for r in range(self.n_repeats):
+            branch_outputs = [layer(x) for layer in self.group_modules[r]]
+            x = self.combine_modules[r](branch_outputs) if self.n_branches > 1 else branch_outputs[0]
+        return x
+
+
+    def _make_modules(self, inputs):
+        modules, combine_modules = nn.ModuleList(), nn.ModuleList()
+        for _ in range(self.n_repeats):
+
+            branch_layers, branch_outputs = nn.ModuleList(), []
+            for _ in range(self.n_branches):
+                layer = self._make_layer(*self.args, inputs=inputs, base_block=self.base_block, **self.kwargs)
+                branch_layers.append(layer)
+                branch_outputs.append(layer(inputs))
+            modules.append(branch_layers)
+
+            if self.n_branches > 1:
+                combine_layer = Combine(inputs=branch_outputs, op=self.combine)
+                inputs = combine_layer(branch_outputs)
+                combine_modules.append(combine_layer)
+
+        self.group_modules = modules
+        self.combine_modules = combine_modules if combine_modules else None
+
+    def _make_layer(self, *args, inputs=None, base_block=ConvBlock, **kwargs):
+        # each element in `args` is a dict; make a sequential out of them
+        if args:
+            layers = []
+            for item in args:
+                if isinstance(item, dict):
+                    block = item.pop('base_block', None) or base_block
+                    block_args = {'inputs': inputs, **kwargs, **item}
+                    layer = block(**block_args)
+                    inputs = layer(inputs)
+                    layers.append(layer)
+                elif isinstance(item, nn.Module):
+                    inputs = item(inputs)
+                    layers.append(item)
+                else:
+                    raise ValueError('Positional arguments of ConvGroup must be either dicts or nn.Modules, \
+                                      got instead {}'.format(type(item)))
+            return nn.Sequential(*layers)
+        # one block only
+        return base_block(inputs=inputs, **kwargs)
+
+    def _make_inputs(self):
+        inputs = np.zeros(self.input_shape, dtype=np.float32)
+        inputs = torch.from_numpy(inputs).to(self.device)
+        return inputs
+
+
+    def __mul__(self, other):
+        inputs = self._make_inputs()
+
+        layers = []
+        for _ in range(other):
+            layer = ConvGroup(*self.args, inputs=inputs, base_block=self.base_block,
+                              n_repeats=self.n_repeats, n_branches=self.n_branches, combine=self.combine,
+                              **self.kwargs)
+            inputs = layer(inputs)
+            layers.append(layer)
+        return nn.Sequential(*layers)
+
+
+    def __mod__(self, other):
+        inputs = self._make_inputs()
+        return Splitted(*self.args, inputs=inputs, base_block=self.base_block,
+                        n_repeats=self.n_repeats, n_branches=self.n_branches, combine=self.combine,
+                        other=other, **self.kwargs)
+
+
+class Splitted(nn.Module):
+    """ Allows for more layer of splitting. """
+    def __init__(self, *args, inputs=None, base_block=ConvBlock, n_repeats=1, n_branches=1, combine='+',
+                 other=1, **kwargs):
+        super().__init__()
+
+        branch_layers, branch_outputs = nn.ModuleList(), []
+        for _ in range(other):
+            layer = ConvGroup(*args, inputs=inputs, base_block=base_block,
+                              n_repeats=n_repeats, n_branches=n_branches,
+                              combine=combine, **kwargs)
+            branch_layers.append(layer)
+            branch_outputs.append(layer(inputs))
+        self.branch_layers = branch_layers
+
+        if other > 1:
+            self.combine_layer = Combine(inputs=branch_outputs, op=combine)
+        else:
+            self.combine_layer = None
+
+    def forward(self, x):
+        branch_outputs = [layer(x) for layer in self.branch_layers]
+        x = self.combine_layer(branch_outputs) if self.combine_layer is not None else branch_outputs[0]
+        return x
+
+ConvBlock = ConvGroup

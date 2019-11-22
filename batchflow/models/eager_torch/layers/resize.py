@@ -240,26 +240,57 @@ class Combine(nn.Module):
         If 'softsum', '&', then every tensor is passed through 1x1 convolution in order to have
         the same number of channels as the first tensor, and then summed.
     """
-    CONCAT_OPS = ['concat', 'cat', '.']
-    SUM_OPS = ['sum', '+']
-    MULTI_OPS = ['multi', '*']
-    SOFTSUM_OPS = ['softsum', '&']
-    ALL_OPS = CONCAT_OPS + SUM_OPS + MULTI_OPS + SOFTSUM_OPS
+    @staticmethod
+    def concat(inputs):
+        return torch.cat(inputs, dim=1)
+
+    @staticmethod
+    def sum(inputs):
+        return torch.stack(inputs, dim=0).sum(dim=0)
+
+    @staticmethod
+    def mul(inputs):
+        """ Multiplication. """
+        result = 1
+        for item in inputs:
+            result = result * item
+        return result
+
+    @staticmethod
+    def mean(inputs):
+        return torch.mean(inputs)
+
+    @staticmethod
+    def softsum(self, inputs):
+        """ Softsum. """
+        inputs = [conv(tensor) for conv, tensor in zip(self.conv, inputs)]
+        return torch.stack(inputs, dim=0).sum(dim=0)
+
+    OPS = {
+        concat.__func__: ['concat', 'cat', '.'],
+        sum.__func__: ['sum', 'plus', '+'],
+        mul.__func__: ['multi', 'mul', '*'],
+        mean.__func__: ['average', 'avg', 'mean'],
+        softsum.__func__: ['softsum', '&'],
+    }
+
+    OPS = {alias: method for method, aliases in OPS.items() for alias in aliases}
+    ALL_OPS = list(OPS.keys())
 
     def __init__(self, inputs=None, op='concat'):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
 
         self.op = op
-
-        if op in self.SOFTSUM_OPS:
+        if op in self.OPS and self.OPS[op].__name__ == 'softsum':
             args = dict(layout='c', filters=get_shape(inputs[0])[1],
                         kernel_size=1)
             conv = [ConvBlock(inputs=tensor, **args) for tensor in inputs]
             self.conv = nn.ModuleList(conv)
+            self.op = lambda inputs: self.OPS[op](self, inputs)
 
 
-    def resize(self, inputs):
+    def spatial_resize(self, inputs):
         """ Force the same shapes of the inputs, if needed. """
         shape_ = get_shape(inputs[0])
         spatial_shape_ = shape_[len(shape_)-2:]
@@ -276,22 +307,15 @@ class Combine(nn.Module):
 
 
     def forward(self, inputs):
-        if self.op in self.CONCAT_OPS:
-            inputs = self.resize(inputs)
-            return torch.cat(inputs, dim=1)
-        if self.op in self.SUM_OPS:
-            inputs = self.resize(inputs)
-            return torch.stack(inputs, dim=0).sum(dim=0)
-        if self.op in self.MULTI_OPS:
-            inputs = self.resize(inputs)
-            result = 1
-            for item in inputs:
-                result = result*item
-            return result
-        if self.op in self.SOFTSUM_OPS:
-            inputs = [conv(tensor) for conv, tensor in zip(self.conv, inputs)]
-            return torch.stack(inputs, dim=0).sum(dim=0)
-        raise ValueError('Combine operation must be in {}, instead got {}.'.format(self.ALL_OPS, self.op))
+        inputs = self.spatial_resize(inputs)
+        if callable(self.op):
+            return self.op(inputs)
+        if self.op in self.OPS:
+            return self.OPS[self.op](inputs)
+        raise ValueError('Combine operation must be a callable or \
+                          one from {}, instead got {}.'.format(self.ALL_OPS, self.op))
 
     def extra_repr(self):
-        return 'op=' + self.op
+        if isinstance(self.op, str):
+            return 'op=' + self.op
+        return 'op=' + 'callable ' + self.op.__name__
