@@ -179,6 +179,8 @@ def get_from_source(components=None, data=None, indices=None, crop=False, copy=F
     _ = components, crop, cast_to_array
 
     if indices is not None:
+        if isinstance(data, pd.DataFrame):
+            data = data.ix
         data = data[indices] if data is not None else None
 
     if copy and data is not None:
