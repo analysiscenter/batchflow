@@ -426,6 +426,8 @@ class Batch:
 
     def __getitem__(self, item):
         # pylint: disable=not-callable
+        if not isinstance(self._data, BaseComponents):
+            item = self.get_pos(None, None, item)
         return create_item_class(self.components, data=self._data, indices=item, crop=False)
 
     def __iter__(self):
