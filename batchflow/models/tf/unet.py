@@ -6,6 +6,8 @@ Zhou Z. et al "UNet++: A Nested U-Net Architecture for Medical Image Segmentatio
 <https://arxiv.org/abs/1807.10165>`_"
 """
 
+import tensorflow as tf
+
 from .encoder_decoder import EncoderDecoder
 from .layers import conv_block, combine
 from ..utils import unpack_args
@@ -66,7 +68,14 @@ class UNet(EncoderDecoder):
     def default_config(cls):
         config = super().default_config()
 
-        config['body/n_outputs'] = 1
+        config['body/encoder/num_stages'] = 4
+        config['body/encoder/order'] = ['block', 'skip', 'downsampling']
+        config['body/encoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[64, 128, 256, 512])
+        config['body/embedding'] += dict(layout='cna cna', kernel_size=3, filters=1024)
+        config['body/decoder/order'] = ['upsampling', 'combine', 'block']
+        config['body/decoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[512, 256, 128, 64])
+
+        config['loss'] = 'ce'
         return config
 
     def build_config(self, names=None):
@@ -147,6 +156,8 @@ class UNetPP(UNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
+
+        config['body/n_outputs'] = 1
         return config
 
     def build_config(self, names=None):
@@ -163,11 +174,14 @@ class UNetPP(UNet):
         if config.get('body/decoder/dense/layout') is None:
             config['body/decoder/dense/layout'] = 'cna'
 
-        if config.get('body/decoder/dense/kernel') is None:
-            config['body/decoder/dense/kernel'] = 3
+        if config.get('body/decoder/dense/kernel_size') is None:
+            config['body/decoder/dense/kernel_size'] = 3
 
         if config.get('body/decoder/dense/combine_op') is None:
             config['body/decoder/dense/combine_op'] = 'concat'
+
+        config['body/decoder/inner_decoder'] = config['body/decoder']
+        config['body/decoder/inner_decoder/upsample'] = config['body/decoder/dense/upsample']
 
         return config
 
@@ -187,33 +201,30 @@ class UNetPP(UNet):
         if isinstance(n_outputs, int):
             n_outputs = list(range(-n_outputs, 0))
 
-        for i in range(1, num_stages):
-            _inputs = inputs[:i] + [inputs[i]] * 2
+        _kwargs = {**kwargs, **kwargs['inner_decoder']}
+        with tf.variable_scope(name):
+            for i in range(1, num_stages):
+                _inputs = inputs[:i] + [inputs[i]] * 2
 
-            _kwargs = kwargs
-            _kwargs['upsample'] = _kwargs['dense']['upsample']
-            _kwargs['upsample']['filters'] = decoder_filters[-i:]
-            _kwargs['blocks']['filters'] = decoder_filters[-i:]
+                _kwargs['upsample']['filters'] = decoder_filters[-i:]
+                _kwargs['blocks']['filters'] = decoder_filters[-i:]
 
-            outputs = super().decoder(_inputs, name=name,
-                                      return_all=True, **{**_kwargs, 'num_stages': i})
+                outputs = super().decoder(_inputs, name='inner_decoder_'+str(i-1),
+                                          return_all=True, **{**_kwargs, 'num_stages': i})
 
-            for j, x in enumerate(inputs[:i]):
-                x = combine([x, outputs[::-1][j]], **combine_args)
+                for j, x in enumerate(inputs[:i]):
+                    x = combine([x, outputs[-j-1]], **combine_args)
 
-                dense_args = {**unpack_args(kwargs['dense'], j, num_stages), **kwargs}
-                x = conv_block(x, name='x-{}-{}'.format(j, i), **dense_args)
+                    dense_args = {**unpack_args(_kwargs['dense'], j, num_stages), **_kwargs}
+                    x = conv_block(x, name='x-{}-{}'.format(j, i), **dense_args)
 
-                if j == 0:
-                    semantic_outputs.append(x)
+                    if j == 0:
+                        semantic_outputs.append(x)
 
-                inputs[j] = combine([x, inputs[j]], name='concat-{}-{}'.format(j, i-j), **combine_args)
+                    inputs[j] = combine([x, inputs[j]], name='concat-{}-{}'.format(j, i-j), **combine_args)
 
-        kwargs['upsample']['filters'] = decoder_filters
-        kwargs['blocks']['filters'] = decoder_filters
-
-        x = super().decoder(inputs, name=name, filters=decoder_filters,
-                            return_all=False, **{**kwargs, 'num_stages': num_stages})
+            x = super().decoder(inputs, name='main_decoder', filters=decoder_filters,
+                                return_all=False, **{**kwargs, 'num_stages': num_stages})
 
         semantic_outputs.append(x)
 
@@ -221,6 +232,21 @@ class UNetPP(UNet):
 
     @classmethod
     def head(cls, inputs, targets, name='head', **kwargs):
+        """ The last network layers which produce predictions. Process all output from body.
+
+        Parameters
+        ----------
+        inputs : list of tf.Tensors
+            Input tensors.
+        targets : tf.Tensor
+
+        name : str
+            Scope name.
+
+        Returns
+        -------
+        list of tf.Tensors
+        """
         res = []
         for i, x in enumerate(inputs):
             res.append(super().head(x, targets, name=name+'-'+str(i), **kwargs))
