@@ -233,10 +233,12 @@ class Combine(nn.Module):
     inputs : sequence of torch.Tensors
         Tensors to combine.
 
-    op : str
+    op : str or callable
+        If callable, then operation to be applied to the list of inputs.
         If 'concat', 'cat', '.', then inputs are concated along channels axis.
         If 'sum', '+', then inputs are summed.
-        If 'multi', '*', then inputs are multiplied.
+        If 'mul', '*', then inputs are multiplied.
+        If 'avg', then inputs are averaged.
         If 'softsum', '&', then every tensor is passed through 1x1 convolution in order to have
         the same number of channels as the first tensor, and then summed.
     """
@@ -263,6 +265,7 @@ class Combine(nn.Module):
     @staticmethod
     def softsum(self, inputs):
         """ Softsum. """
+        #pylint: disable=bad-staticmethod-argument
         inputs = [conv(tensor) for conv, tensor in zip(self.conv, inputs)]
         return torch.stack(inputs, dim=0).sum(dim=0)
 
@@ -307,9 +310,9 @@ class Combine(nn.Module):
 
 
     def forward(self, inputs):
-        inputs = self.spatial_resize(inputs)
         if callable(self.op):
             return self.op(inputs)
+        inputs = self.spatial_resize(inputs)
         if self.op in self.OPS:
             return self.OPS[self.op](inputs)
         raise ValueError('Combine operation must be a callable or \

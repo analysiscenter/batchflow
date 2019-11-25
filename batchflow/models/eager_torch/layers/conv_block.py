@@ -427,9 +427,49 @@ def update_layers(letter, module, name=None):
 
 
 class ConvGroup(nn.Module):
-    """ Convenient wrapper for chaining/splitting multiple base blocks. """
+    """ Convenient wrapper for chaining/splitting multiple base blocks.
+
+    Parameters
+    ----------
+    args : sequence
+        Layers to be chained.
+        If element of a sequence is a module, then it is used as is.
+        If element of a sequence is a dictionary, then it is used as arguments of a layer creation.
+        Function that is used as layer is either `base_block` or `base`/`base_block` keys inside the dictionary.
+
+    base, base_block : nn.Module
+        Tensor processing function.
+
+    n_repeats : int
+        Number of times to repeat the whole block.
+
+    n_branches : int
+        Number of times to apply the whole block to the inputs; later, this branches are combined into one output.
+
+    combine : str or callable
+        Way of combining separate branches. See :class:`~.layers.Combine` for details.
+
+    kwargs : dict
+        Default arguments for layers creation in case of dicts present in `args`.
+
+    Examples
+    --------
+    Simple encoder that reduces spatial dimensions by 32 times and increases number
+    of features to maintain the same tensor size::
+
+    layer = ConvGroup({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
+
+    Make multiple (3) branches of previous encoder, then combine them into one::
+
+    splitted = layer % 3
+
+    Repeat the whole construction two times::
+
+    repeated = splitted * 2
+    """
     def __init__(self, *args, inputs=None, base_block=ConvBlock, n_repeats=1, n_branches=1, combine='+', **kwargs):
         super().__init__()
+        base_block = kwargs.pop('base', None) or base_block
         self.input_shape, self.device = get_shape(inputs), inputs.device
         self.n_repeats, self.n_branches = n_repeats, n_branches
         self.base_block, self.combine = base_block, combine
@@ -464,12 +504,12 @@ class ConvGroup(nn.Module):
         self.combine_modules = combine_modules if combine_modules else None
 
     def _make_layer(self, *args, inputs=None, base_block=ConvBlock, **kwargs):
-        # each element in `args` is a dict; make a sequential out of them
+        # each element in `args` is a dict or module: make a sequential out of them
         if args:
             layers = []
             for item in args:
                 if isinstance(item, dict):
-                    block = item.pop('base_block', None) or base_block
+                    block = item.pop('base_block', None) or item.pop('base', None) or base_block
                     block_args = {'inputs': inputs, **kwargs, **item}
                     layer = block(**block_args)
                     inputs = layer(inputs)
@@ -510,8 +550,9 @@ class ConvGroup(nn.Module):
                         other=other, **self.kwargs)
 
 
+
 class Splitted(nn.Module):
-    """ Allows for more layer of splitting. """
+    """ Allows for more levels of splitting. """
     def __init__(self, *args, inputs=None, base_block=ConvBlock, n_repeats=1, n_branches=1, combine='+',
                  other=1, **kwargs):
         super().__init__()

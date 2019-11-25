@@ -9,19 +9,6 @@ from ..utils import get_shape, get_num_channels, get_num_dims
 
 
 
-class Identity(nn.Module):
-    """ Module which just returns its inputs.
-
-    Notes
-    -----
-    It slows training and inference so you should have a very good reason to use it.
-    For instance, this could be a good option to replace some other module when debugging.
-    """
-    def forward(self, x):
-        return x
-
-
-
 class Flatten(nn.Module):
     """ A module which reshapes inputs into 2-dimension (batch_items, features). """
     def forward(self, x):
@@ -151,16 +138,14 @@ class Dropout(nn.Module):
 
     def __init__(self, inputs=None, dropout_rate=0.0, multisample=False):
         super().__init__()
+        multisample = 2 if multisample is True else multisample
+        multisample = [multisample, 1 - multisample] if isinstance(multisample, float) else multisample
         self.multisample = multisample
+
         self.layer = self.LAYERS[get_num_dims(inputs)](p=dropout_rate)
 
     def forward(self, x):
         if self.multisample is not False:
-            if self.multisample is True:
-                self.multisample = 2
-            elif isinstance(self.multisample, float):
-                self.multisample = [self.multisample, 1 - self.multisample]
-
             if isinstance(self.multisample, int): # dropout to the whole batch, then average
                 dropped = [self.layer(x) for _ in range(self.multisample)]
                 output = torch.mean(torch.stack(dropped), dim=0)

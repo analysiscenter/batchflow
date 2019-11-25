@@ -11,7 +11,7 @@ from ..utils import unpack_args
 
 class DefaultBlock(nn.Module):
     """ Default block for processing tensors in encoder and decoder.
-    Makes 3x3 convolutions followed by batch-norm and activation. Does not change tensor shape.
+    Makes 3x3 convolution followed by batch-norm and activation. Does not change tensor shape.
     """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
@@ -25,7 +25,7 @@ class DefaultBlock(nn.Module):
 
 
 class EncoderModule(nn.Module):
-    """ Encoder: create compressed representation of an input by redycing its spatially. """
+    """ Encoder: create compressed representation of an input by reducing its spatial dimensions. """
     def __init__(self, inputs=None, return_all=True, **kwargs):
         super().__init__()
         self.return_all = return_all
@@ -67,9 +67,8 @@ class EncoderModule(nn.Module):
                 if letter in ['b']:
                     args = {'filters': 'same * 2',
                             **kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
-                    base_block = args.get('base')
 
-                    layer = base_block(inputs=inputs, **args)
+                    layer = ConvBlock(inputs=inputs, **args)
                     inputs = layer(inputs)
                     self.encoder_b.append(layer)
                 elif letter in ['d', 'p']:
@@ -92,7 +91,7 @@ class EmbeddingModule(nn.Module):
         base_block = kwargs.get('base')
         if base_block is not None:
             inputs = inputs[-1] if isinstance(inputs, list) else inputs
-            self.embedding = base_block(inputs=inputs, **kwargs)
+            self.embedding = ConvBlock(inputs=inputs, **kwargs)
         else:
             self.embedding = nn.Identity()
 
@@ -159,9 +158,8 @@ class DecoderModule(nn.Module):
                 if letter in ['b']:
                     args = {'filters': 'same // 2',
                             **kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
-                    base_block = args.get('base')
 
-                    layer = base_block(inputs=x, **args)
+                    layer = ConvBlock(inputs=x, **args)
                     x = layer(x)
                     self.decoder_b.append(layer)
                 elif letter in ['u']:
