@@ -260,7 +260,7 @@ class EagerTorch:
       which parameters should be configured.
     """
     def __init__(self, config=None):
-        self.full_config = None
+        self.full_config = Config(config)
         self.config = Config(config)
         self.train_lock = threading.Lock()
 
@@ -274,6 +274,10 @@ class EagerTorch:
 
         self.sync_counter = 0
         self.microbatch = None
+
+        self.iter_info = {}
+        self.preserve = ['full_config', 'input_shapes', 'target_shape', 'classes',
+                         'model', 'device', 'devices', 'train_steps', 'sync_counter', 'microbatch']
 
         load = self.config.get('load')
         build = self.config.get('build', default=load is None)
@@ -334,7 +338,7 @@ class EagerTorch:
 
         config['train_steps'] = None
         config['loss'] = None
-        config['optimizer'] = ('Adam', dict())
+        config['optimizer'] = 'Adam'
         config['decay'] = None
 
         config['order'] = ['initial_block', 'body', 'head']
@@ -1093,13 +1097,7 @@ class EagerTorch:
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
-        torch.save({
-            'model_state_dict': self.model,
-            'optimizer_state_dict': self.optimizer,
-            'loss': self.loss_fn,
-            'config': self.config,
-            'full_config': self.full_config
-            }, path)
+        torch.save({item: getattr(self, item) for item in self.preserve}, path)
 
     def load(self, path, *args, eval=False, **kwargs):
         """ Load a torch model from files.
@@ -1127,21 +1125,18 @@ class EagerTorch:
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args, kwargs
-        device = self._get_device()
-        if device:
-            checkpoint = torch.load(path, map_location=device)
+        self._get_devices()
+
+        if self.device:
+            checkpoint = torch.load(path, map_location=self.device)
         else:
             checkpoint = torch.load(path)
-        self.model = checkpoint['model_state_dict']
-        self.optimizer = checkpoint['optimizer_state_dict']
-        self.loss_fn = checkpoint['loss']
-        self.config = self.config + checkpoint['config']
-        self.full_config = checkpoint['full_config']
 
-        self.device = device
+        for item in self.preserve:
+            setattr(self, item, checkpoint.get(item))
 
-        if device:
-            self.model.to(device)
+        if self.device:
+            self.model.to(self.device)
 
         if eval:
             self.model.eval()
