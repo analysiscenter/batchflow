@@ -22,7 +22,7 @@ class BasePool(nn.Module):
             if padding is not None:
                 args = {
                     'kernel_size': pool_size,
-                    'strides': pool_strides,
+                    'stride': pool_strides,
                 }
 
                 padding = calc_padding(inputs=inputs, padding=padding, **{**kwargs, **args})
