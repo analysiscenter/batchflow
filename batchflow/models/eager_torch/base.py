@@ -10,6 +10,7 @@ from pprint import pprint
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
@@ -712,11 +713,39 @@ class EagerTorch:
                 print('Number of training iterations for individual train steps:')
                 pprint(iters)
 
+            print('Last iteration parameters:')
+            pprint(self.iter_info)
+
     @property
     def info(self):
         """ Show information about model configuration, used devices, train steps and more. """
         self.information()
-        return self._info
+
+
+    def save_graph(self, log_dir=None, **kwargs):
+        """ Save model graph for later visualization via tensorboard.
+
+        Parameters
+        ----------
+        logdir : str
+            Save directory location. Default is runs/CURRENT_DATETIME_HOSTNAME, which changes after each run.
+            Use hierarchical folder structure to compare between runs easily,
+            e.g. ‘runs/exp1’, ‘runs/exp2’, etc. for each new experiment to compare across them from within tensorboard.
+
+        Examples
+        --------
+        To easily check model graph inside Jupyter Notebook, run::
+
+        model.save_graph()
+        %load_ext tensorboard
+        %tensorboard --logdir runs/
+
+        Or, using command line::
+        tensorboard --logdir=runs
+        """
+        writer = SummaryWriter(log_dir=log_dir, **kwargs)
+        writer.add_graph(self.model, self._placeholder_data())
+        writer.close()
 
 
     def _fill_value(self, value):
@@ -848,6 +877,11 @@ class EagerTorch:
             lst = [item[i] for item in outputs]
             output.append(np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst))
         output = output[0] if isinstance(fetches, str) else output
+
+        self.iter_info.update({'microbatch': microbatch,
+                               'steps': steps,
+                               'train_mode': train_mode,
+                               })
         return output
 
     def _train(self, *args, fetches=None, train_mode='', accumulate_grads=True, sync_frequency=True):
