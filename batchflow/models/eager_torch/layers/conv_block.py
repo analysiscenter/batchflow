@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 
-class ConvBlock(nn.Module):
+class BaseConvBlock(nn.Module):
     """ Complex multi-dimensional block to apply sequence of different operations.
 
     Parameters
@@ -52,7 +52,7 @@ class ConvBlock(nn.Module):
         - R - start residual connection
         - A - start residual connection with bilinear additive upsampling
         - S - start residual connection with squeeze and excitation
-        - B - start residual connection with auxilliary :class:`~.layers.ConvBlock`
+        - B - start residual connection with auxilliary :class:`~.layers.BaseConvBlock`
         - `.` - end residual connection with concatenation
         - `+` - end residual connection with summation
         - `*` - end residual connection with multiplication
@@ -77,7 +77,7 @@ class ConvBlock(nn.Module):
     padding : str
         Padding mode, can be 'same' or 'valid'. Default - 'same'.
     data_format : str
-        'channels_last' or 'channels_first'. Default - 'channels_last'.
+        'channels_last' or 'channels_first'. Default - 'channels_first'.
     dilation_rate: int
         Default is 1.
     activation : callable
@@ -116,7 +116,7 @@ class ConvBlock(nn.Module):
         - resize_bilinear - parameters for parameters for :class:`~.layers.Interpolate`.
         - residual_bilinear_additive - parameters for parameters for :class:`~.layers.Interpolate`.
         - residual_se - parameters for parameters for :class:`~.layers.SEBlock`.
-        - side_branch - parameters for parameters for :class:`~.layers.ConvBlock`.
+        - side_branch - parameters for parameters for :class:`~.layers.BaseConvBlock`.
 
 
     Notes
@@ -131,11 +131,11 @@ class ConvBlock(nn.Module):
     --------
     A simple block: 3x3 conv, batch norm, relu, 2x2 max-pooling with stride 2::
 
-        x = ConvBlock(layout='cnap', filters=32, kernel_size=3)
+        x = BaseConvBlock(layout='cnap', filters=32, kernel_size=3)
 
     A canonical bottleneck block (1x1, 3x3, 1x1 conv with relu in-between)::
 
-        x = ConvBlock(layout='nac nac nac', filters=[64, 64, 256], kernel_size=[1, 3, 1])
+        x = BaseConvBlock(layout='nac nac nac', filters=[64, 64, 256], kernel_size=[1, 3, 1])
 
     A complex Nd block:
 
@@ -150,16 +150,16 @@ class ConvBlock(nn.Module):
 
     ::
 
-        x = ConvBlock(layout='ca ca ca nd', filters=[32, 32, 64], kernel_size=[5, 3, 3],
+        x = BaseConvBlock(layout='ca ca ca nd', filters=[32, 32, 64], kernel_size=[5, 3, 3],
                       strides=[1, 1, 2], dropout_rate=.15)
 
     A residual block::
 
-        x = ConvBlock(layout='R nac +', filters='same')
+        x = BaseConvBlock(layout='R nac +', filters='same')
 
     Squeeze and excitation block::
 
-        x = ConvBlock(layout='S cna *', filters=64)
+        x = BaseConvBlock(layout='S cna *', filters=64)
 
     """
     LETTERS_LAYERS = {
@@ -310,7 +310,7 @@ class ConvBlock(nn.Module):
         layout = self.layout or ''
         layout = layout.replace(' ', '')
         if len(layout) == 0:
-            logger.warning('ConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
+            logger.warning('BaseConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
 
         layout_dict = {}
         for letter in layout:
@@ -416,17 +416,17 @@ def update_layers(letter, module, name=None):
     Add custom `Q` letter::
 
         block.add_letter('Q', my_module, 'custom_module_params')
-        block = ConvBlock('cnap Q', filters=32, custom_module_params={'key': 'value'})
+        block = BaseConvBlock('cnap Q', filters=32, custom_module_params={'key': 'value'})
         x = block(x)
     """
     name = name or letter
-    ConvBlock.LETTERS_LAYERS.update({letter: name})
-    ConvBlock.LAYERS_MODULES.update({name: module})
-    ConvBlock.LETTERS_GROUPS.update({letter: letter})
+    BaseConvBlock.LETTERS_LAYERS.update({letter: name})
+    BaseConvBlock.LAYERS_MODULES.update({name: module})
+    BaseConvBlock.LETTERS_GROUPS.update({letter: letter})
 
 
 
-class ConvGroup(nn.Module):
+class ConvBlock(nn.Module):
     """ Convenient wrapper for chaining/splitting multiple base blocks.
 
     Parameters
@@ -457,7 +457,7 @@ class ConvGroup(nn.Module):
     Simple encoder that reduces spatial dimensions by 32 times and increases number
     of features to maintain the same tensor size::
 
-    layer = ConvGroup({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
+    layer = ConvBlock({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
 
     Make multiple (3) branches of previous encoder, then combine them into one::
 
@@ -467,7 +467,7 @@ class ConvGroup(nn.Module):
 
     repeated = splitted * 2
     """
-    def __init__(self, *args, inputs=None, base_block=ConvBlock, n_repeats=1, n_branches=1, combine='+', **kwargs):
+    def __init__(self, *args, inputs=None, base_block=BaseConvBlock, n_repeats=1, n_branches=1, combine='+', **kwargs):
         super().__init__()
         base_block = kwargs.pop('base', None) or base_block
         self.input_shape, self.device = get_shape(inputs), inputs.device
@@ -503,7 +503,7 @@ class ConvGroup(nn.Module):
         self.group_modules = modules
         self.combine_modules = combine_modules if combine_modules else None
 
-    def _make_layer(self, *args, inputs=None, base_block=ConvBlock, **kwargs):
+    def _make_layer(self, *args, inputs=None, base_block=BaseConvBlock, **kwargs):
         # each element in `args` is a dict or module: make a sequential out of them
         if args:
             layers = []
@@ -518,7 +518,7 @@ class ConvGroup(nn.Module):
                     inputs = item(inputs)
                     layers.append(item)
                 else:
-                    raise ValueError('Positional arguments of ConvGroup must be either dicts or nn.Modules, \
+                    raise ValueError('Positional arguments of ConvBlock must be either dicts or nn.Modules, \
                                       got instead {}'.format(type(item)))
             return nn.Sequential(*layers)
         # one block only
@@ -535,7 +535,7 @@ class ConvGroup(nn.Module):
 
         layers = []
         for _ in range(other):
-            layer = ConvGroup(*self.args, inputs=inputs, base_block=self.base_block,
+            layer = ConvBlock(*self.args, inputs=inputs, base_block=self.base_block,
                               n_repeats=self.n_repeats, n_branches=self.n_branches, combine=self.combine,
                               **self.kwargs)
             inputs = layer(inputs)
@@ -553,13 +553,13 @@ class ConvGroup(nn.Module):
 
 class Splitted(nn.Module):
     """ Allows for more levels of splitting. """
-    def __init__(self, *args, inputs=None, base_block=ConvBlock, n_repeats=1, n_branches=1, combine='+',
+    def __init__(self, *args, inputs=None, base_block=BaseConvBlock, n_repeats=1, n_branches=1, combine='+',
                  other=1, **kwargs):
         super().__init__()
 
         branch_layers, branch_outputs = nn.ModuleList(), []
         for _ in range(other):
-            layer = ConvGroup(*args, inputs=inputs, base_block=base_block,
+            layer = ConvBlock(*args, inputs=inputs, base_block=base_block,
                               n_repeats=n_repeats, n_branches=n_branches,
                               combine=combine, **kwargs)
             branch_layers.append(layer)
@@ -575,5 +575,3 @@ class Splitted(nn.Module):
         branch_outputs = [layer(x) for layer in self.branch_layers]
         x = self.combine_layer(branch_outputs) if self.combine_layer is not None else branch_outputs[0]
         return x
-
-ConvBlock = ConvGroup

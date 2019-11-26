@@ -104,7 +104,7 @@ class EmbeddingModule(nn.Module):
 
 
 class DecoderModule(nn.Module):
-    """ Decoder: increasing spatial dimensionality. """
+    """ Decoder: increasing spatial dimensions. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
         self._make_modules(inputs, **kwargs)
@@ -184,7 +184,7 @@ class DecoderModule(nn.Module):
 class Encoder(EagerTorch):
     """ Encoder architecture. Allows to combine blocks from different models,
     e.g. ResNet and DenseNet, in order to create new ones with just a few lines of code.
-    Indended to be used for classification tasks.
+    Intended to be used for classification tasks.
 
     Parameters
     ----------
@@ -226,7 +226,6 @@ class Encoder(EagerTorch):
         kwargs = cls.get_defaults('body', kwargs)
         encoder = kwargs.pop('encoder')
         return EncoderModule(inputs=inputs, return_all=False, **{**kwargs, **encoder})
-
 
 
 
@@ -481,6 +480,7 @@ class EncoderDecoder(Decoder):
     @classmethod
     def decoder(cls, inputs, **kwargs):
         return DecoderModule(inputs=inputs, **kwargs)
+
 
 
 class AutoEncoder(EncoderDecoder):

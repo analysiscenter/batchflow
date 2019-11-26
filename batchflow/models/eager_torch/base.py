@@ -499,10 +499,13 @@ class EagerTorch:
 
         if 'module' in config:
             module = config['module']
-            kwargs = config.get('module_kwargs')
-            if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
-                kwargs = {**kwargs, **{'inputs': inputs}}
-            block = module(*config.get('module_args', []), **kwargs)
+            if isinstance(module, nn.Module):
+                block = module
+            else:
+                kwargs = config.get('module_kwargs', {})
+                if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
+                    kwargs = {'inputs': inputs, **kwargs}
+                block = module(*config.get('module_args', []), **kwargs)
 
         elif isinstance(config, dict):
             method = getattr(self, method) if isinstance(method, str) else method
@@ -785,7 +788,7 @@ class EagerTorch:
 
 
     def train(self, *args, fetches=None, use_lock=False, train_mode='',
-              accumulate_grads=True, sync_frequency=True, microbatch=False):
+              accumulate_grads=True, sync_frequency=True, microbatch=None):
         """ Train the model with the data provided
 
         Parameters
@@ -831,14 +834,18 @@ class EagerTorch:
         elif sync_frequency is False or sync_frequency is None:
             sync_frequency = 1
 
-        if microbatch is True:
-            microbatch = config.get('microbatch', len(targets))
-
+        if microbatch is not False:
+            if microbatch is True:
+                microbatch = config.get('microbatch', len(targets))
+            else:
+                microbatch = microbatch or config.get('microbatch', len(targets))
         train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
         steps = len(targets) // microbatch if microbatch else 1 # microbatch acts as size
-        splitted_inputs = [np.array_split(item, steps) for item in inputs] if microbatch else [inputs]
-        splitted_targets = np.array_split(targets, steps) if microbatch else [targets]
+        splitted_inputs = [[item[i:i + microbatch] for i in range(0, len(item), microbatch)]
+                           for item in inputs] if microbatch else [inputs]
+        splitted_targets = [targets[i:i + microbatch]
+                            for i in range(0, len(targets), microbatch)] if microbatch else [targets]
 
         if self.model is None:
             if isinstance(splitted_inputs[0], (list, tuple)):
