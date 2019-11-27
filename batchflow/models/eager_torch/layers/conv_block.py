@@ -14,6 +14,7 @@ from .pooling import Pool, GlobalPool
 from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, SideBlock, SEBlock, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
+from .... import Config
 
 
 logger = logging.getLogger(__name__)
@@ -512,7 +513,8 @@ class ConvBlock(nn.Module):
             for item in args:
                 if isinstance(item, dict):
                     block = item.pop('base_block', None) or item.pop('base', None) or base_block
-                    block_args = {'inputs': inputs, **kwargs, **item}
+                    args_merger = dict(Config(kwargs) + Config(item))
+                    block_args = {'inputs': inputs, **args_merger}
                     layer = block(**block_args)
                     inputs = layer(inputs)
                     layers.append(layer)
