@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout, Identity
+from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
