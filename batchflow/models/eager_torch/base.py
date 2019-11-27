@@ -265,6 +265,7 @@ class EagerTorch:
         self.config = Config(config)
         self.train_lock = threading.Lock()
 
+        self.input_names = None
         self.input_shapes = None
         self.target_shape = None
         self.classes = None
@@ -278,7 +279,8 @@ class EagerTorch:
 
         self.iter_info = {}
         self.preserve = ['full_config', 'input_shapes', 'target_shape', 'classes',
-                         'model', 'device', 'devices', 'train_steps', 'sync_counter', 'microbatch']
+                         'model', 'device', 'devices',
+                         'train_steps', 'sync_counter', 'microbatch']
 
         load = self.config.get('load')
         build = self.config.get('build', default=load is None)
@@ -391,9 +393,9 @@ class EagerTorch:
             # Fetch default data format for all the parts of the network
             inputs = config.get('initial_block/inputs')
             if isinstance(inputs, str):
-                data_format = inputs_config[inputs].get('data_format')
+                data_format = inputs_config.get(inputs, {}).get('data_format')
             elif isinstance(inputs, (tuple, list)):
-                data_format = inputs_config[inputs[0]].get('data_format')
+                data_format = inputs_config.get(inputs[0], {}).get('data_format')
             else:
                 data_format = 'channels_first'
             config['common/data_format'] = config.get('common/data_format') or data_format
@@ -442,14 +444,17 @@ class EagerTorch:
             input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
             shapes = []
             for name in input_names:
-                cfg = config['inputs'][name]
+                cfg = config['inputs'].get(name, {})
                 if 'shape' in cfg:
                     shapes.append((batch_size, *cfg['shape']))
                 elif 'classes' in cfg:
                     shapes.append((batch_size, cfg['classes']))
                 else:
-                    raise ValueError('Input {} must contain `shape` configuration'.format(name))
-            self.input_shapes = shapes
+                    shapes.append(None)
+
+            if None not in shapes:
+                self.input_shapes = shapes
+            self.input_names = input_names
 
         self.classes = config.get('inputs/targets/classes')
 
@@ -509,7 +514,7 @@ class EagerTorch:
 
         elif isinstance(config, dict):
             method = getattr(self, method) if isinstance(method, str) else method
-            block = method(inputs, **config)
+            block = method(inputs=inputs, **config)
         else:
             raise ValueError('{} must be configured either as nn.Module or dictionary, got {}'.format(name, config))
         return block
@@ -767,7 +772,15 @@ class EagerTorch:
             inputs = self._fill_value(inputs)
         return inputs
 
-    def _fill_input(self, *args):
+    def _fill_input(self, *args, **kwargs):
+        if args and kwargs:
+            raise ValueError('Use either positional or keyword arguments in `train` call.')
+        if kwargs:
+            for name in ['labels', 'masks', 'targets']:
+                if name in kwargs:
+                    targets = kwargs.pop(name)
+            args = [kwargs.get(name) for name in (self.input_names or list(kwargs.keys()))]
+            args.append(targets)
         return tuple([self._fill_param(arg) for arg in args])
 
     def _fill_output(self, fetches, outputs):
@@ -787,8 +800,8 @@ class EagerTorch:
         return output
 
 
-    def train(self, *args, fetches=None, use_lock=False, train_mode='',
-              accumulate_grads=True, sync_frequency=True, microbatch=None):
+    def train(self, *args, feed_dict=None, fetches=None, use_lock=False, train_mode='',
+              accumulate_grads=True, sync_frequency=True, microbatch=None, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -827,7 +840,7 @@ class EagerTorch:
             model.train(B('images'), B('labels'), fetches='loss')
         """
         config = self.full_config
-        *inputs, targets = self._fill_input(*args)
+        *inputs, targets = self._fill_input(*args, **{**(feed_dict or {}), **kwargs})
 
         if sync_frequency is True:
             sync_frequency = config['sync_frequency']
@@ -867,7 +880,7 @@ class EagerTorch:
 
         outputs = []
         for i in range(steps):
-            _inputs = [item[i] for item in splitted_inputs]
+            _inputs = splitted_inputs[i]
             _targets = splitted_targets[i]
 
             output = self._train(*_inputs, _targets, fetches=fetches, train_mode=train_mode,
@@ -893,11 +906,12 @@ class EagerTorch:
 
     def _train(self, *args, fetches=None, train_mode='', accumulate_grads=True, sync_frequency=True):
         *inputs, targets = args
+        inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
 
         output_container = {}
 
         if not accumulate_grads:
-            predictions = self.model(*inputs)
+            predictions = self.model(inputs)
 
         for mode in train_mode:
             if mode in self.train_steps.keys():
@@ -915,7 +929,7 @@ class EagerTorch:
                     step['initialized'] = True
 
                 if accumulate_grads:
-                    predictions = self.model(*inputs)
+                    predictions = self.model(inputs)
                 loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
                 mode_loss += loss
                 loss.backward()
@@ -946,7 +960,7 @@ class EagerTorch:
         return output
 
 
-    def predict(self, *args, targets=None, train_mode='', fetches=None):
+    def predict(self, *args, targets=None, feed_dict=None, train_mode='', fetches=None, **kwargs):
         """ Get predictions on the data provided.
 
         Parameters
@@ -969,15 +983,21 @@ class EagerTorch:
 
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
-        inputs = self._fill_input(*args)
-        if targets is not None:
-            targets = self._fill_input(targets)[0]
+        feed_dict = {**(feed_dict or {}), **kwargs}
+        if feed_dict:
+            feed_dict = {'targets': targets, **feed_dict}
+            *inputs, targets = self._fill_input(*args, **feed_dict)
+        else:
+            inputs = self._fill_input(*args)
+            if targets is not None:
+                targets = self._fill_input(targets)[0]
+        inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
 
         self.model.eval()
 
         with torch.no_grad():
             output_container = {}
-            predictions = self.model(*inputs)
+            predictions = self.model(inputs)
 
             if targets is not None:
                 if train_mode in self.train_steps.keys():
