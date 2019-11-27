@@ -46,6 +46,10 @@ def swap(op):
 
 AN_EXPR = "#!__op__"
 
+TRIPLE_OPS = {
+    '#slice': lambda a, b, c: slice(a, b, c)
+}
+
 BINARY_OPS = {
     '__add__': operator.add, '__radd__': swap(operator.add),
     '__sub__': operator.sub, '__rsub__': swap(operator.sub),
@@ -59,7 +63,7 @@ BINARY_OPS = {
     '__and__': operator.and_, '__or__': operator.or_, '__xor__': operator.xor,
     '__lt__': operator.lt, '__le__': operator.le, '__gt__': operator.gt, '__ge__': operator.ge,
     '__eq__': operator.eq, '__ne__': operator.ne,
-    '#slice': lambda a, b: a[b], '#format': lambda a, b: b.format(a),
+    '#item': lambda a, b: a[b], '#format': lambda a, b: b.format(a),
     '#attr': lambda a, b: getattr(a, b), '#call': lambda a, b: a(*b[0], **b[1]),
 }
 
@@ -69,7 +73,7 @@ UNARY_OPS = {
 }
 
 
-OPERATIONS = {**BINARY_OPS, **UNARY_OPS}
+OPERATIONS = {**TRIPLE_OPS, **BINARY_OPS, **UNARY_OPS}
 
 
 def add_ops(cls):
@@ -133,7 +137,9 @@ class NamedExpression(metaclass=MetaNamedExpression):
         return AlgebraicNamedExpression(op='#attr', a=self, b=name)
 
     def __getitem__(self, key):
-        return AlgebraicNamedExpression(op='#slice', a=self, b=key)
+        if isinstance(key, slice):
+            key = AlgebraicNamedExpression(op='#slice', a=key.start, b=key.stop, c=key.step)
+        return AlgebraicNamedExpression(op='#item', a=self, b=key)
 
     def __call__(self, *args, **kwargs):
         if isinstance(self, F):
@@ -276,21 +282,25 @@ class NamedExpression(metaclass=MetaNamedExpression):
 
 class AlgebraicNamedExpression(NamedExpression):
     """ Algebraic expression over named expressions """
-    def __init__(self, op=None, a=None, b=None):
+    def __init__(self, op=None, a=None, b=None, c=None):
         super().__init__(AN_EXPR, mode='w')
         self.op = op
         self.a = a
         self.b = b
+        self.c = c
 
     def get(self, **kwargs):
         """ Return a value of an algebraic expression """
         kwargs = self.get_params(**kwargs)
         a = eval_expr(self.a, **kwargs)
         b = eval_expr(self.b, **kwargs)
+        c = eval_expr(self.c, **kwargs)
         if self.op in UNARY_OPS:
             return OPERATIONS[self.op](a)
-        return OPERATIONS[self.op](a, b)
-
+        elif self.op in BINARY_OPS:
+            return OPERATIONS[self.op](a, b)
+        else:
+            return OPERATIONS[self.op](a, b, c)
 
 class B(NamedExpression):
     """ Batch component or attribute name
