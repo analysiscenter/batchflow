@@ -9,21 +9,6 @@ from ..utils import unpack_args
 
 
 
-class DefaultBlock(nn.Module):
-    """ Default block for processing tensors in encoder and decoder.
-    Makes 3x3 convolution followed by batch-norm and activation. Does not change tensor shape.
-    """
-    def __init__(self, inputs=None, **kwargs):
-        super().__init__()
-        layout = kwargs.pop('layout', 'cna')
-        filters = kwargs.pop('filters', 'same')
-        self.layer = ConvBlock(inputs=inputs, layout=layout, filters=filters, **kwargs)
-
-    def forward(self, x):
-        return self.layer(x)
-
-
-
 class EncoderModule(nn.Module):
     """ Encoder: create compressed representation of an input by reducing its spatial dimensions. """
     def __init__(self, inputs=None, return_all=True, **kwargs):
@@ -65,7 +50,7 @@ class EncoderModule(nn.Module):
         for i in range(num_stages):
             for letter in encoder_layout:
                 if letter in ['b']:
-                    args = {'filters': 'same * 2',
+                    args = {'layout': 'cna', 'filters': 'same * 2',
                             **kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=inputs, **args)
@@ -88,9 +73,10 @@ class EmbeddingModule(nn.Module):
     """ Embedding: thorough processing of an input tensor. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
-        base_block = kwargs.get('base')
+        base_block = kwargs.get('base') or kwargs.get('base_block')
         if base_block is not None:
             inputs = inputs[-1] if isinstance(inputs, list) else inputs
+            kwargs = {'layout': 'cna', 'filters': 'same', **kwargs}
             self.embedding = ConvBlock(inputs=inputs, **kwargs)
         else:
             self.embedding = nn.Identity()
@@ -156,7 +142,7 @@ class DecoderModule(nn.Module):
         for i in range(num_stages):
             for letter in decoder_layout:
                 if letter in ['b']:
-                    args = {'filters': 'same // 2',
+                    args = {'layout': 'cna', 'filters': 'same // 2',
                             **kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=x, **args)
@@ -218,7 +204,7 @@ class Encoder(EagerTorch):
         config['body/encoder'] = dict(num_stages=None,
                                       order=['skip', 'block', 'downsampling'])
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
-        config['body/encoder/blocks'] = dict(base=DefaultBlock)
+        config['body/encoder/blocks'] = dict(base=None)
         return config
 
     @classmethod
@@ -281,7 +267,7 @@ class Decoder(EagerTorch):
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None,
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=DefaultBlock)
+        config['body/decoder/blocks'] = dict(base=None)
         config['body/decoder/combine'] = dict(op='concat')
         return config
 
@@ -433,14 +419,14 @@ class EncoderDecoder(Decoder):
         config['body/encoder'] = dict(num_stages=None,
                                       order=['skip', 'block', 'downsampling'])
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
-        config['body/encoder/blocks'] = dict(base=DefaultBlock)
+        config['body/encoder/blocks'] = dict(base=None)
 
-        config['body/embedding'] = dict(base=DefaultBlock)
+        config['body/embedding'] = dict(base=None)
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None,
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=DefaultBlock)
+        config['body/decoder/blocks'] = dict(base=None)
         config['body/decoder/combine'] = dict(op='concat')
         return config
 
@@ -518,5 +504,5 @@ class VariationalAutoEncoder(AutoEncoder):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/embedding'] += dict(base=VariationalBlock, base_mu=DefaultBlock, base_std=DefaultBlock)
+        config['body/embedding'] += dict(base=VariationalBlock, base_mu=None, base_std=None)
         return config
