@@ -25,6 +25,8 @@ class BaseConvBlock(nn.Module):
 
     Parameters
     ----------
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
     layout : str
         A sequence of letters, each letter meaning individual operation:
 

@@ -60,9 +60,9 @@ class Interpolate(nn.Module):
         't': 'trilinear',
     }
 
-    def __init__(self, mode='b', size=None, scale_factor=None, **kwargs):
+    def __init__(self, mode='b', size=None, shape=None, scale_factor=None, **kwargs):
         super().__init__()
-        self.size, self.scale_factor = size, scale_factor
+        self.size, self.scale_factor = size or shape, scale_factor
 
         if mode in self.MODES:
             mode = self.MODES[mode]
