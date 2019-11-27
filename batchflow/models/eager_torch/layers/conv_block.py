@@ -513,8 +513,7 @@ class ConvBlock(nn.Module):
             for item in args:
                 if isinstance(item, dict):
                     block = item.pop('base_block', None) or item.pop('base', None) or base_block
-                    args_merger = dict(Config(kwargs) + Config(item))
-                    block_args = {'inputs': inputs, **args_merger}
+                    block_args = {'inputs': inputs, **dict(Config(kwargs) + Config(item))}
                     layer = block(**block_args)
                     inputs = layer(inputs)
                     layers.append(layer)
