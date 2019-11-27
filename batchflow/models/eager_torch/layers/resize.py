@@ -7,6 +7,41 @@ from ..utils import get_shape
 
 
 
+class IncreaseDim(nn.Module):
+    """ Increase dimensionality of passed tensor by one. """
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        dim = len(get_shape(x)) - 2 + self.dim
+        ones = [1] * dim
+        return x.view(x.size(0), -1, *ones)
+
+
+class ReduceDim(nn.Module):
+    """ Reduce dimensionality of passed tensor by one. """
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        dim = max(len(get_shape(x)) - 2 - self.dim, 0)
+        ones = [1] * dim
+        return x.view(x.size(0), -1, *ones)
+
+
+class Reshape(nn.Module):
+    """ Enforce desired shape of tensor. """
+    def __init__(self, shape=None, reshape_to=None):
+        super().__init__()
+        self.shape = shape or reshape_to
+
+    def forward(self, x):
+        return x.view(x.size(0), *self.shape)
+
+
+
 class Interpolate(nn.Module):
     """ Upsample inputs with a given factor.
 
@@ -75,12 +110,12 @@ class Crop(nn.Module):
         self.resize_to = resize_to
 
 
-    def forward(self, inputs, resize_to):
+    def forward(self, inputs):
         i_shape = get_shape(inputs)
-        r_shape = get_shape(resize_to)
+        r_shape = get_shape(self.resize_to)
         if (i_shape[2] > r_shape[2]) or (i_shape[3] > r_shape[3]):
             # Decrease input tensor's shape by slicing desired shape out of it
-            shape = [slice(None, c) for c in resize_to.size()[2:]]
+            shape = [slice(None, c) for c in r_shape[2:]]
             shape = tuple([slice(None, None), slice(None, None)] + shape)
             output = inputs[shape]
         elif (i_shape[2] < r_shape[2]) or (i_shape[3] < r_shape[3]):
@@ -130,24 +165,23 @@ class Upsample(nn.Module):
 
         x = Upsample(layout='X', factor=2, inputs=inputs)
     """
-    def __init__(self, factor=2, shape=None, upsampling_layout='b', inputs=None, **kwargs):
+    def __init__(self, factor=2, shape=None, layout='b', inputs=None, **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
 
-        if 't' in upsampling_layout or 'T' in upsampling_layout:
-            if 'kernel_size' not in kwargs:
-                kwargs['kernel_size'] = factor
-            if 'strides' not in kwargs:
-                kwargs['strides'] = factor
+        if 't' in layout or 'T' in layout:
+            kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
+            kwargs['strides'] = kwargs.get('strides') or factor
+            kwargs['filters'] = kwargs.get('filters') or 'same'
 
-        self.layer = ConvBlock(inputs=inputs, layout=upsampling_layout, factor=factor, shape=shape, **kwargs)
+        self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
 
     def forward(self, x):
         return self.layer(x)
 
 
 
-class SqueezeBlock(nn.Module):
+class SEBlock(nn.Module):
     """ Squeeze and excitation block.
 
     Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
@@ -179,6 +213,18 @@ class SqueezeBlock(nn.Module):
 
 
 
+class SideBlock(nn.Module):
+    """ Add side branch to a :class:`~.layers.ConvBlock`. """
+    def __init__(self, inputs=None, **kwargs):
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        super().__init__()
+        self.layer = ConvBlock(inputs=inputs, **kwargs)
+
+    def forward(self, x):
+        return self.layer(x)
+
+
+
 class Combine(nn.Module):
     """ Combine list of tensor into one.
 
@@ -187,33 +233,67 @@ class Combine(nn.Module):
     inputs : sequence of torch.Tensors
         Tensors to combine.
 
-    op : str
+    op : str or callable
+        If callable, then operation to be applied to the list of inputs.
         If 'concat', 'cat', '.', then inputs are concated along channels axis.
         If 'sum', '+', then inputs are summed.
-        If 'multi', '*', then inputs are multiplied.
+        If 'mul', '*', then inputs are multiplied.
+        If 'avg', then inputs are averaged.
         If 'softsum', '&', then every tensor is passed through 1x1 convolution in order to have
         the same number of channels as the first tensor, and then summed.
     """
-    CONCAT_OPS = ['concat', 'cat', '.']
-    SUM_OPS = ['sum', '+']
-    MULTI_OPS = ['multi', '*']
-    SOFTSUM_OPS = ['softsum', '&']
-    ALL_OPS = CONCAT_OPS + SUM_OPS + MULTI_OPS + SOFTSUM_OPS
+    @staticmethod
+    def concat(inputs):
+        return torch.cat(inputs, dim=1)
+
+    @staticmethod
+    def sum(inputs):
+        return torch.stack(inputs, dim=0).sum(dim=0)
+
+    @staticmethod
+    def mul(inputs):
+        """ Multiplication. """
+        result = 1
+        for item in inputs:
+            result = result * item
+        return result
+
+    @staticmethod
+    def mean(inputs):
+        return torch.mean(inputs)
+
+    @staticmethod
+    def softsum(self, inputs):
+        """ Softsum. """
+        #pylint: disable=bad-staticmethod-argument
+        inputs = [conv(tensor) for conv, tensor in zip(self.conv, inputs)]
+        return torch.stack(inputs, dim=0).sum(dim=0)
+
+    OPS = {
+        concat.__func__: ['concat', 'cat', '.'],
+        sum.__func__: ['sum', 'plus', '+'],
+        mul.__func__: ['multi', 'mul', '*'],
+        mean.__func__: ['average', 'avg', 'mean'],
+        softsum.__func__: ['softsum', '&'],
+    }
+
+    OPS = {alias: method for method, aliases in OPS.items() for alias in aliases}
+    ALL_OPS = list(OPS.keys())
 
     def __init__(self, inputs=None, op='concat'):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
 
         self.op = op
-
-        if op in self.SOFTSUM_OPS:
+        if op in self.OPS and self.OPS[op].__name__ == 'softsum':
             args = dict(layout='c', filters=get_shape(inputs[0])[1],
                         kernel_size=1)
             conv = [ConvBlock(inputs=tensor, **args) for tensor in inputs]
             self.conv = nn.ModuleList(conv)
+            self.op = lambda inputs: self.OPS[op](self, inputs)
 
 
-    def resize(self, inputs):
+    def spatial_resize(self, inputs):
         """ Force the same shapes of the inputs, if needed. """
         shape_ = get_shape(inputs[0])
         spatial_shape_ = shape_[len(shape_)-2:]
@@ -223,29 +303,22 @@ class Combine(nn.Module):
             shape = get_shape(item)
             dim = len(shape) - 2
             spatial_shape = shape[dim:]
-            if spatial_shape_ != tuple([1]*dim) and spatial_shape != spatial_shape_:
-                item = Crop(inputs[0])(item, inputs[0])
+            if dim > 0 and spatial_shape_ != tuple([1]*dim) and spatial_shape != spatial_shape_:
+                item = Crop(inputs[0])(item)
             resized.append(item)
         return resized
 
 
     def forward(self, inputs):
-        if self.op in self.CONCAT_OPS:
-            inputs = self.resize(inputs)
-            return torch.cat(inputs, dim=1)
-        if self.op in self.SUM_OPS:
-            inputs = self.resize(inputs)
-            return torch.stack(inputs, dim=0).sum(dim=0)
-        if self.op in self.MULTI_OPS:
-            inputs = self.resize(inputs)
-            result = 1
-            for item in inputs:
-                result = result*item
-            return result
-        if self.op in self.SOFTSUM_OPS:
-            inputs = [conv(tensor) for conv, tensor in zip(self.conv, inputs)]
-            return torch.stack(inputs, dim=0).sum(dim=0)
-        raise ValueError('Combine operation must be in {}, instead got {}.'.format(self.ALL_OPS, self.op))
+        if callable(self.op):
+            return self.op(inputs)
+        inputs = self.spatial_resize(inputs)
+        if self.op in self.OPS:
+            return self.OPS[self.op](inputs)
+        raise ValueError('Combine operation must be a callable or \
+                          one from {}, instead got {}.'.format(self.ALL_OPS, self.op))
 
     def extra_repr(self):
-        return 'op=' + self.op
+        if isinstance(self.op, str):
+            return 'op=' + self.op
+        return 'op=' + 'callable ' + self.op.__name__

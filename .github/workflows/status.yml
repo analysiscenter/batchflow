@@ -1,6 +1,11 @@
 name: status
 
-on: [push]
+on:
+  push:
+    branches:
+    - !gh-pages
+    paths-ignore:
+    - 'docs/**'
 
 jobs:
 
@@ -13,6 +18,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+      with:
+          fetch-depth: 1
 
     - name: Update pylint
       run: pip3 install -U pylint

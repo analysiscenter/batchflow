@@ -5,10 +5,12 @@ import threading
 import inspect
 from collections import OrderedDict
 from functools import partial
+from pprint import pprint
 
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
@@ -259,11 +261,13 @@ class EagerTorch:
       which parameters should be configured.
     """
     def __init__(self, config=None):
-        self.full_config = None
+        self.full_config = Config(config)
         self.config = Config(config)
-        self.input_shapes = None
         self.train_lock = threading.Lock()
 
+        self.input_shapes = None
+        self.target_shape = None
+        self.classes = None
         self.model = None
         self.device = None
         self.devices = []
@@ -271,6 +275,10 @@ class EagerTorch:
 
         self.sync_counter = 0
         self.microbatch = None
+
+        self.iter_info = {}
+        self.preserve = ['full_config', 'input_shapes', 'target_shape', 'classes',
+                         'model', 'device', 'devices', 'train_steps', 'sync_counter', 'microbatch']
 
         load = self.config.get('load')
         build = self.config.get('build', default=load is None)
@@ -286,14 +294,13 @@ class EagerTorch:
     def build(self):
         """ Build the model """
         self.full_config = self.combine_configs()
-        self.build_config()
+        self.full_config = self.build_config()
 
         self._get_devices()
         self._get_placeholder_shapes()
 
-        # If the inputs were set in config with their shapes we can build right away
+        # If the inputs are set in config with their shapes we can build right away
         if self.input_shapes:
-            print('_BUILD IN BUILD')
             self._build()
 
     @classmethod
@@ -332,7 +339,7 @@ class EagerTorch:
 
         config['train_steps'] = None
         config['loss'] = None
-        config['optimizer'] = ('Adam', dict())
+        config['optimizer'] = 'Adam'
         config['decay'] = None
 
         config['order'] = ['initial_block', 'body', 'head']
@@ -387,7 +394,12 @@ class EagerTorch:
                 data_format = inputs_config[inputs].get('data_format')
             elif isinstance(inputs, (tuple, list)):
                 data_format = inputs_config[inputs[0]].get('data_format')
-            config['common/data_format'] = config.get('common/data_format') or data_format or 'channels_first'
+            else:
+                data_format = 'channels_first'
+            config['common/data_format'] = config.get('common/data_format') or data_format
+
+        config['head/target_shape'] = self.target_shape
+        config['head/classes'] = self.classes
         return config
 
 
@@ -439,6 +451,8 @@ class EagerTorch:
                     raise ValueError('Input {} must contain `shape` configuration'.format(name))
             self.input_shapes = shapes
 
+        self.classes = config.get('inputs/targets/classes')
+
 
     def _build(self, inputs=None):
         config = self.full_config
@@ -469,6 +483,8 @@ class EagerTorch:
         self.model = nn.Sequential(OrderedDict(blocks))
         if len(self.devices) > 1:
             self.model = nn.DataParallel(self.model, self.devices)
+        else:
+            self.model.to(self.device)
 
         self.train_steps = self._make_train_steps(config)
 
@@ -483,10 +499,13 @@ class EagerTorch:
 
         if 'module' in config:
             module = config['module']
-            kwargs = config.get('module_kwargs')
-            if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
-                kwargs = {**kwargs, **{'inputs': inputs}}
-            block = module(*config.get('module_args', []), **kwargs)
+            if isinstance(module, nn.Module):
+                block = module
+            else:
+                kwargs = config.get('module_kwargs', {})
+                if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
+                    kwargs = {'inputs': inputs, **kwargs}
+                block = module(*config.get('module_args', []), **kwargs)
 
         elif isinstance(config, dict):
             method = getattr(self, method) if isinstance(method, str) else method
@@ -647,7 +666,7 @@ class EagerTorch:
         return None
 
     @classmethod
-    def head(cls, inputs, **kwargs):
+    def head(cls, inputs, target_shape, classes, **kwargs):
         """ The last network layers which produce predictions. Usually used to make network output
         compatible with the `targets` tensor.
 
@@ -659,10 +678,77 @@ class EagerTorch:
         -------
         torch.nn.Module or None
         """
+        _ = target_shape, classes
         kwargs = cls.get_defaults('head', kwargs)
         if kwargs.get('layout'):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
+
+
+    def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
+        """ Show information about model configuration, used devices, train steps, architecture and more. """
+        if config:
+            print('### Config:')
+            pprint(self.full_config.config)
+
+        if devices:
+            print('\n### Devices:')
+            print('Leading device is {}'.format(self.device, ))
+            if self.devices:
+                _ = [print('Device {} is {}'.format(i, d)) for i, d in enumerate(self.devices)]
+
+        if train_steps:
+            print('\n### Train steps:')
+            pprint(self.train_steps)
+
+        if model:
+            print('\n### Model:')
+            print(self.model)
+
+        if misc:
+            print('\n### Additional info:')
+            if self.input_shapes:
+                _ = [print('Input {} has shape {}'.format(i, s)) for i, s in enumerate(self.input_shapes)]
+
+            iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
+            print('Total number of training iterations: {}'.format(sum(list(iters.values()))))
+            if len(iters) > 1:
+                print('Number of training iterations for individual train steps:')
+                pprint(iters)
+
+            print('Last iteration parameters:')
+            pprint(self.iter_info)
+
+    @property
+    def info(self):
+        """ Show information about model configuration, used devices, train steps and more. """
+        self.information()
+
+
+    def save_graph(self, log_dir=None, **kwargs):
+        """ Save model graph for later visualization via tensorboard.
+
+        Parameters
+        ----------
+        logdir : str
+            Save directory location. Default is runs/CURRENT_DATETIME_HOSTNAME, which changes after each run.
+            Use hierarchical folder structure to compare between runs easily,
+            e.g. ‘runs/exp1’, ‘runs/exp2’, etc. for each new experiment to compare across them from within tensorboard.
+
+        Examples
+        --------
+        To easily check model graph inside Jupyter Notebook, run::
+
+        model.save_graph()
+        %load_ext tensorboard
+        %tensorboard --logdir runs/
+
+        Or, using command line::
+        tensorboard --logdir=runs
+        """
+        writer = SummaryWriter(log_dir=log_dir, **kwargs)
+        writer.add_graph(self.model, self._placeholder_data())
+        writer.close()
 
 
     def _fill_value(self, value):
@@ -702,7 +788,7 @@ class EagerTorch:
 
 
     def train(self, *args, fetches=None, use_lock=False, train_mode='',
-              accumulate_grads=True, sync_frequency=True, microbatch=False):
+              accumulate_grads=True, sync_frequency=True, microbatch=None):
         """ Train the model with the data provided
 
         Parameters
@@ -748,18 +834,32 @@ class EagerTorch:
         elif sync_frequency is False or sync_frequency is None:
             sync_frequency = 1
 
-        if microbatch is True:
-            microbatch = config.get('microbatch', len(targets))
-
+        if microbatch is not False:
+            if microbatch is True:
+                microbatch = config.get('microbatch', len(targets))
+            else:
+                microbatch = microbatch or config.get('microbatch', len(targets))
         train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
         steps = len(targets) // microbatch if microbatch else 1 # microbatch acts as size
-        splitted_inputs = [np.array_split(item, steps) for item in inputs] if microbatch else [inputs]
-        splitted_targets = np.array_split(targets, steps) if microbatch else [targets]
+        splitted_inputs = [[item[i:i + microbatch] for i in range(0, len(item), microbatch)]
+                           for item in inputs] if microbatch else [inputs]
+        splitted_targets = [targets[i:i + microbatch]
+                            for i in range(0, len(targets), microbatch)] if microbatch else [targets]
 
         if self.model is None:
-            print('_BUILD IN TRAIN')
+            if isinstance(splitted_inputs[0], (list, tuple)):
+                self.input_shapes = [get_shape(item) for item in splitted_inputs[0]]
+            else:
+                self.input_shapes = get_shape(splitted_inputs[0])
+
+            self.target_shape = get_shape(splitted_targets[0])
+            if self.classes is None and len(self.target_shape) > 1:
+                self.classes = self.target_shape[1]
+
+            self.build_config()
             self._build(splitted_inputs[0])
+
         self.model.train()
 
         if use_lock:
@@ -784,6 +884,11 @@ class EagerTorch:
             lst = [item[i] for item in outputs]
             output.append(np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst))
         output = output[0] if isinstance(fetches, str) else output
+
+        self.iter_info.update({'microbatch': microbatch,
+                               'steps': steps,
+                               'train_mode': train_mode,
+                               })
         return output
 
     def _train(self, *args, fetches=None, train_mode='', accumulate_grads=True, sync_frequency=True):
@@ -814,6 +919,7 @@ class EagerTorch:
                 loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
                 mode_loss += loss
                 loss.backward()
+                step['iter'] = step.get('iter', 0) + 1
 
                 if self.sync_counter >= sync_frequency:
                     self.sync_counter = 1
@@ -1032,13 +1138,7 @@ class EagerTorch:
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
-        torch.save({
-            'model_state_dict': self.model,
-            'optimizer_state_dict': self.optimizer,
-            'loss': self.loss_fn,
-            'config': self.config,
-            'full_config': self.full_config
-            }, path)
+        torch.save({item: getattr(self, item) for item in self.preserve}, path)
 
     def load(self, path, *args, eval=False, **kwargs):
         """ Load a torch model from files.
@@ -1066,21 +1166,18 @@ class EagerTorch:
         The model will be moved to device specified in the model config by key `device`.
         """
         _ = args, kwargs
-        device = self._get_device()
-        if device:
-            checkpoint = torch.load(path, map_location=device)
+        self._get_devices()
+
+        if self.device:
+            checkpoint = torch.load(path, map_location=self.device)
         else:
             checkpoint = torch.load(path)
-        self.model = checkpoint['model_state_dict']
-        self.optimizer = checkpoint['optimizer_state_dict']
-        self.loss_fn = checkpoint['loss']
-        self.config = self.config + checkpoint['config']
-        self.full_config = checkpoint['full_config']
 
-        self.device = device
+        for item in self.preserve:
+            setattr(self, item, checkpoint.get(item))
 
-        if device:
-            self.model.to(device)
+        if self.device:
+            self.model.to(self.device)
 
         if eval:
             self.model.eval()
