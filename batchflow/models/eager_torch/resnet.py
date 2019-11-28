@@ -34,7 +34,7 @@ class ResBlock(nn.Module):
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         groups = [groups] * num_convs
         strides_d = list(strides)
-        side_branch_stride_d = int(np.prod(np.array(strides)))
+        side_branch_stride = side_branch_stride_d = np.prod(strides)
 
         if downsample:
             downsample = 2 if downsample is True else downsample
@@ -53,7 +53,8 @@ class ResBlock(nn.Module):
         layer_params = [{'strides': strides_d, 'side_branch/strides': side_branch_stride_d}] + [{}]*(n_reps-1)
         self.block = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
                                kernel_size=kernel_size, strides=strides, groups=groups,
-                               side_branch={'layout': 'c', 'filters': filters[-1], 'strides': 1}, **kwargs)
+                               side_branch={'layout': 'c', 'filters': filters[-1], 'strides': side_branch_stride},
+                               **kwargs)
 
 
     def forward(self, x):
@@ -78,7 +79,7 @@ class ResNet(Encoder):
         config['body/encoder/num_stages'] = 4
         config['body/encoder/order'] = ['block']
         config['body/encoder/blocks'] += dict(base=ResBlock, layout='cnacna',
-                                              filters=None,
+                                              filters=[64, 128, 256, 512],
                                               n_reps=[1, 1, 1, 1],
                                               downsample=[False, True, True, True],
                                               bottleneck=False)
@@ -91,12 +92,6 @@ class ResNet(Encoder):
 
     def build_config(self):
         config = super().build_config()
-
-        if config.get('body/filters') is None:
-            num_blocks = config['body/encoder/blocks/n_reps']
-            filters = config['initial_block/filters']
-            config['body/encoder/blocks/filters'] = [filters * 2**i for i, _ in enumerate(num_blocks)]
-
 
         if config.get('head/units') is None:
             config['head/units'] = self.classes
@@ -124,31 +119,29 @@ class ResNet34(ResNet):
         return config
 
 
-class ResNet50(ResNet):
+class ResNet50(ResNet34):
     """ The original ResNet-50 architecture."""
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/num_blocks'] = [3, 4, 6, 3]
+        config['body/encoder/blocks/layout'] = 'cna'
         config['body/block/bottleneck'] = True
         return config
 
 
-class ResNet101(ResNet):
+class ResNet101(ResNet50):
     """ The original ResNet-101 architecture."""
     @classmethod
     def default_config(cls):
         config = super().default_config()
         config['body/num_blocks'] = [3, 4, 23, 3]
-        config['body/block/bottleneck'] = True
         return config
 
 
-class ResNet152(ResNet):
+class ResNet152(ResNet50):
     """ The original ResNet-152 architecture."""
     @classmethod
     def default_config(cls):
         config = super().default_config()
         config['body/num_blocks'] = [3, 8, 36, 3]
-        config['body/block/bottleneck'] = True
         return config
