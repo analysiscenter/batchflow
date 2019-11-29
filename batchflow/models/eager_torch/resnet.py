@@ -25,7 +25,46 @@ from .utils import get_num_channels
 CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T']
 
 class ResBlock(nn.Module):
-    """ ResNet Module.  """
+    """ ResNet Module. 
+
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
+    layout : str
+        A sequence of letters, each letter meaning individual operation.
+        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
+        Default is 'cnacna'.
+    filters : int, str, list of int, list of str
+        If str, then number of filters is calculated by its evaluation. `S` and `same` stand for the
+        number of filters in the previous tensor. Note the `eval` usage under the hood.
+        If int, then number of filters in the output tensor. Default 'same'.
+    kernel_size : int, list of int
+        Convolution kernel size. Default is 3.
+    strides : int, list of int
+        Convolution stride. Default is 1.
+    downsample : int, bool
+        If int, in first repetition of block downsampling with a factor `downsample`.
+        If True, in first repetition of block downsampling with a factor 2.
+        If False, without downsampling. Default is False.
+    bottleneck : bool, int, list of bool, list of int
+        If True, then construct a canonical bottleneck block from the given layout.
+        If False, then bottleneck is not used. Default is False.
+    se : bool, list of bool
+        If True, then construct a SE-ResNet block from the given layout.
+        If False, then squeeze and excitation is not used. Default is False.
+    groups : int
+        Use `groups` convolution side by side, each  seeing 1 / `groups` the input channels, 
+        and producing 1 / `groups` the output channels, and both subsequently concatenated.
+        Number of `inputs` channels must be divisible by `groups`. Default is 1.
+    op : {'+', '.', '&', '*'}
+        Operation for combination shortcut and residual.
+        See more :class:`~.layers.Combine` documentation. Default is '+'.
+    n_reps : int, list of int
+        Number of times to repeat the whole block. Default is 1.
+    kwargs : 
+        Other named arguments for the :class:`~.layers.ConvBlock`
+    """
     def __init__(self, inputs=None, layout='cnacna', filters='same', kernel_size=3, strides=1,
                  downsample=False, bottleneck=False, se=False, groups=1, op='+', n_reps=1, **kwargs):
         #pylint: disable=eval-used
