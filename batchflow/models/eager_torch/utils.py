@@ -78,7 +78,7 @@ def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fal
                     kernel_size = (kernel_size,) * dims
                 if isinstance(dilation, int):
                     dilation = (dilation,) * dims
-                if isinstance(stride, int):
+                if isinstance(stride, (int, np.int64)):
                     stride = (stride,) * dims
                 padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
         else:
