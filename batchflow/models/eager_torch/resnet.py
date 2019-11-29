@@ -70,7 +70,59 @@ class ResNet(Encoder):
 
     Parameters
     ----------
+    initial_block : dict, optional
+            base : callable
+                Tensor processing function. Default is :class:`~.layers.ConvBlock`.
+            other args
+                Parameters for the base block.
 
+    body : dict, optional
+        encoder : dict, optional
+            num_stages : int
+                Number of different layers. Default is 4.
+
+            order : str, sequence of str
+                Determines order of applying layers.
+                See more in :class:`~.encoder_decoder.Encoder` documentation.
+                In default ResNet, only 'block' is needed.
+
+            blocks : dict, optional
+                Parameters for pre-processing blocks. Each of the parameters can be represented
+                either by a single value or by a list with `num_stages` length.
+                If it is a `list`, then the i-th block is formed using the i-th value of the `list`.
+                If this is a single value, then all the blocks is formed using it.
+
+                base : callable, list of callable
+                    Tensor processing function. Default is :class:`ResBlock`.
+                layout : str, list of str
+                    A sequence of letters, each letter meaning individual operation.
+                    See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
+                filters : int, str, list of int, list of str
+                    If str, then number of filters is calculated by its evaluation. `S` and `same` stand for the
+                    number of filters in the previous tensor. Note the `eval` usage under the hood.
+                    If int, then number of filters in the block.
+                n_reps : int, list of int
+                    Number of times to repeat the whole block.
+                downsample : bool, int, list of bool, list of int
+                    If int, in first repetition of block downsampling with a factor `downsample`.
+                    If True, in first repetition of block downsampling with a factor 2.
+                    If False, without downsampling.
+                bottleneck : bool, int, list of bool, list of int
+                    If True, then construct a canonical bottleneck block from the given layout.
+                    If False, then bottleneck is not used.
+                other args : dict
+                    Parameters for the base block.
+    head : dict, optional
+        base : callable
+            Tensor processing function. Default is :class:`~.layers.ConvBlock`.
+        other args
+            Parameters for the base block.
+
+    Notes
+    -----
+    This class is intended to define custom ResNets.
+    For more convenience use predefined :class:`ResNet18`, :class:`ResNet34`,
+    and others described down below.
 
     """
     @classmethod
