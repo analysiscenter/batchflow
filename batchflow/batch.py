@@ -425,10 +425,9 @@ class Batch:
         return res
 
     def __getitem__(self, item):
-        # pylint: disable=not-callable
         if not isinstance(self._data, BaseComponents):
             item = self.get_pos(None, None, item)
-        return create_item_class(self.components, data=self._data, indices=item, crop=False)
+        return create_item_class(self.components, source=self.data, indices=item, crop=False)
 
     def __iter__(self):
         for item in self.indices:
@@ -905,9 +904,10 @@ class Batch:
     def _load_from_source(self, dst, src):
         """ Load data from a memory object (tuple, ndarray, pd.DataFrame, etc) """
         if dst is None:
-            self._data = create_item_class(self.components, data=src, indices=self.indices, crop=True, copy=self._copy)
+            self._data = create_item_class(self.components, source=src, indices=self.indices,
+                                           crop=True, copy=self._copy)
         else:
-            source = create_item_class(dst, data=src, indices=self.indices, crop=True, copy=self._copy)
+            source = create_item_class(dst, source=src, indices=self.indices, crop=True, copy=self._copy)
             for comp in dst:
                 setattr(self, comp, getattr(source, comp))
 

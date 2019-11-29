@@ -100,7 +100,7 @@ class Dataset(Baseset):
         if self.preloaded is None:
             return None
         if self.batch_class.components is not None and self._data_named is None:
-            self._data_named = create_item_class(self.batch_class.components, data=self.preloaded,
+            self._data_named = create_item_class(self.batch_class.components, source=self.preloaded,
                                                  cast_to_array=self.cast_to_array)
         if self._data_named is not None:
             return self._data_named
