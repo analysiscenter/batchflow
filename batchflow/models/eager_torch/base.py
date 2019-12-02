@@ -56,12 +56,16 @@ class EagerTorch:
 
     Parameters
     ----------
+    config : dict, :class:`~Config`
+        Configuration of model creation. Below are the valid keys.
+
     inputs : dict, optional
         Mapping from placeholder names (e.g. ``images``, ``labels``, ``masks``) to arguments of their initialization.
         Allows to create placeholders of needed shape and data format and initialize model before
         first pass of actual batch data (thus explicitly imposing shapes).
 
         Value must be a dictionary with parameters. If some parameters are omitted, then defaults will be at use.
+        Valid keys are:
 
             dtype : str or torch.dtype
                 Data type. Default is 'float32'.
@@ -74,8 +78,8 @@ class EagerTorch:
                 If None, then tensor has no classes. Default is None.
 
     placeholder_batch_size : int
-        If `inputs` is specified with all the required shapes, than it serves as size of batch dimension during
-        placeholder (usually np.ndarrays with zeros) creation.
+        If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
+        placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
 
     loss : str, tuple, dict, list
         Loss function, might be defined in multiple formats.
@@ -188,11 +192,11 @@ class EagerTorch:
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
 
-    microbatch : int
-        Also known as virtual batch. Size of chunks to split every batch into.
+    microbatch : int or None
+        Also known as virtual batch. If int, then size of chunks to split every batch into.
         Allows to process given data sequentially, accumulating gradients from microbatches and applying them
         once in the end. Can be changed later in the `train` method. Batch size must be divisible by microbatch size.
-        Default is not to use microbatching.
+        If None, then feature is not used. Default is not to use microbatching.
 
     initial_block : dict
         User-defined module or parameters for the input block, usually
@@ -229,8 +233,6 @@ class EagerTorch:
 
     **In order to create your own model, it is recommended to:**
 
-    * Take a look at :class:`.BaseModel`: ``build`` and ``load`` methods inherited from it.
-
     * Take a look at :class:`~.eager_torch.layers.ConvBlock` since it is widely used as a building
       block almost everywhere.
 
@@ -238,7 +240,7 @@ class EagerTorch:
       :meth:`.EagerTorch.default_config`. Those parameters are then updated with external configuration dictionary.
 
     * Define config post-processing by overriding :meth:`~.EagerTorch.build_config`.
-      It's main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
+      Its main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
 
     * Override :meth:`~.EagerTorch.initial_block`, :meth:`~.EagerTorch.body` and :meth:`~.EagerTorch.head`, if needed.
       You can either use usual `Torch layers <https://pytorch.org/docs/stable/nn.html>`_,
@@ -247,11 +249,12 @@ class EagerTorch:
       'body' contains the meat of the network flow, and 'head' makes sure that the output is compatible with targets.
 
 
-    **In order to use existing model, it is recommended to configure:**
+    **In order to use existing model, it is recommended to:**
 
-    * ``inputs`` key defines input data together with parameters like shape, number of classes, data format.
+    * If ``inputs`` key defines shapes for all tensors in ``initial_block/inputs``, then model is created off of
+      placeholders (tensors with all zeros); otherwise, the first batch data is used to create model.
 
-    * ``loss``, ``optimizer``, ``decay`` keys
+    * ``loss``, ``optimizer``, ``decay`` keys.
 
     * ``initial_block`` sub-dictionary with ``inputs`` key with names of tensors to use as network inputs.
 
@@ -290,11 +293,13 @@ class EagerTorch:
             self.build()
 
     def reset(self):
-        pass
+        """ Allows to recreate model from scratch. """
+        self.model = None
+        self.iter_info = {}
 
 
     def build(self):
-        """ Build the model """
+        """ Build the model. """
         self.full_config = self.combine_configs()
         self.full_config = self.build_config()
 
@@ -437,10 +442,10 @@ class EagerTorch:
 
     def _get_placeholder_shapes(self):
         config = self.full_config
-        batch_size = config.get('placeholder_batch_size', 2)
 
         input_names = config.pop('initial_block/inputs', default=None)
         if input_names is not None:
+            batch_size = config.get('placeholder_batch_size', 2)
             input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
             shapes = []
             for name in input_names:
@@ -583,7 +588,7 @@ class EagerTorch:
     def _make_optimizer(self, config):
         optimizer, optimizer_args = unpack_fn_from_config('optimizer', config)
 
-        if optimizer is None or callable(optimizer) or isinstance(optimizer, type):
+        if callable(optimizer) or isinstance(optimizer, type):
             pass
         elif isinstance(optimizer, str) and hasattr(torch.optim, optimizer):
             optimizer = getattr(torch.optim, optimizer)
@@ -607,7 +612,7 @@ class EagerTorch:
         if decay is None:
             return decay, decay_args
         if 'n_iters' not in config:
-            raise ValueError('Missing required key ```n_iters``` in the cofiguration dict.')
+            raise ValueError("Missing required key ``'n_iters'`` in the cofiguration dict.")
 
         if callable(decay) or isinstance(decay, type):
             pass
@@ -736,7 +741,7 @@ class EagerTorch:
         Parameters
         ----------
         logdir : str
-            Save directory location. Default is runs/CURRENT_DATETIME_HOSTNAME, which changes after each run.
+            Save directory location. Default is `runs/CURRENT_DATETIME_HOSTNAME`, which changes after each run.
             Use hierarchical folder structure to compare between runs easily,
             e.g. ‘runs/exp1’, ‘runs/exp2’, etc. for each new experiment to compare across them from within tensorboard.
 
@@ -775,10 +780,12 @@ class EagerTorch:
     def _fill_input(self, *args, **kwargs):
         if args and kwargs:
             raise ValueError('Use either positional or keyword arguments in `train` call.')
+
         if kwargs:
             for name in ['labels', 'masks', 'targets']:
                 if name in kwargs:
                     targets = kwargs.pop(name)
+
             args = [kwargs.get(name) for name in (self.input_names or list(kwargs.keys()))]
             args.append(targets)
         return tuple([self._fill_param(arg) for arg in args])
@@ -808,6 +815,9 @@ class EagerTorch:
         ----------
         args
             Arguments to be passed directly into the model.
+        feed_dict : dict
+            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
+            with keys being names and values being actual data.
         fetches : tuple, list
             Sequence of tensor names to calculate and return.
         use_lock : bool
@@ -828,6 +838,8 @@ class EagerTorch:
             accumulating gradients from microbatches and applying them once in the end.
             If True, then value from config is used (default value is not to use microbatching).
             If False or None, then microbatching is not used.
+        kwargs : dict
+            Additional named arguments directly passed to `feed_dict`.
 
         Returns
         -------
@@ -846,19 +858,23 @@ class EagerTorch:
             sync_frequency = config['sync_frequency']
         elif sync_frequency is False or sync_frequency is None:
             sync_frequency = 1
+        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
         if microbatch is not False:
             if microbatch is True:
                 microbatch = config.get('microbatch', len(targets))
             else:
                 microbatch = microbatch or config.get('microbatch', len(targets))
-        train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
-        steps = len(targets) // microbatch if microbatch else 1 # microbatch acts as size
-        splitted_inputs = [[item[i:i + microbatch] for i in range(0, len(item), microbatch)]
-                           for item in inputs] if microbatch else [inputs]
-        splitted_targets = [targets[i:i + microbatch]
-                            for i in range(0, len(targets), microbatch)] if microbatch else [targets]
+        if microbatch:
+            steps = len(targets) // microbatch
+            splitted_inputs = [[item[i:i + microbatch] for i in range(0, len(item), microbatch)] for item in inputs]
+            splitted_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
+        else:
+            steps = 1
+            splitted_inputs = [inputs]
+            splitted_targets = [targets]
+
 
         if self.model is None:
             if isinstance(splitted_inputs[0], (list, tuple)):
@@ -967,12 +983,18 @@ class EagerTorch:
         ----------
         args : sequence
             Arguments to be passed directly into the model.
+        feed_dict : dict
+            If ``initial_block/inputs`` are set, then this argument allows to pass data inside,
+            with keys being names and values being actual data.
         targets : ndarray, optional
             Targets to calculate loss.
         fetches : tuple, list
             Sequence of tensors to fetch from the model.
         train_mode : str
             Exact name of train step to use to calculate loss.
+        kwargs : dict
+            Additional named arguments directly passed to `feed_dict`.
+
         Returns
         -------
         Calculated values of tensors in `fetches` in the same order.
