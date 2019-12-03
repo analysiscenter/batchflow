@@ -142,8 +142,8 @@ class ResNet(Encoder):
                     A sequence of letters, each letter meaning individual operation.
                     See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
                 filters : int, str, list of int, list of str
-                    If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
-                    number of filters in the previous tensor. Note the `eval` usage under the hood.
+                    If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'``
+                    stand for the number of filters in the previous tensor. Note the `eval` usage under the hood.
                     If `int`, then number of filters in the block.
                 n_reps : int, list of int
                     Number of times to repeat the whole block.
