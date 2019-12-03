@@ -3,7 +3,7 @@
 """
 
 from .encoder_decoder import EncoderDecoder
-
+from .resnet import ResBlock
 
 class UNet(EncoderDecoder):
     """ UNet-like model.
@@ -85,4 +85,13 @@ class UNet(EncoderDecoder):
         if config.get('body/decoder/upsample/filters') is None:
             config['body/decoder/upsample/filters'] = config.get('body/decoder/blocks/filters')
 
+        return config
+
+class ResUNet(UNet):
+    """ UNet with residual blocks. """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['body/encoder/blocks'] += dict(base=ResBlock, layout='cna', n_reps=2)
+        config['body/decoder/blocks'] += dict(base=ResBlock, layout='cna', n_reps=2)
         return config
