@@ -488,11 +488,8 @@ class EagerTorch:
         for item in order:
             if isinstance(item, str):
                 block_name = config_name = method = item
-            elif isinstance(item, tuple):
-                if len(item) == 2:
-                    block_name, method = config_name, _ = item
-                elif len(item) == 3:
-                    block_name, config_name, method = item
+            elif isinstance(item, tuple) and len(item) == 3:
+                block_name, config_name, method = item
             elif isinstance(item, dict):
                 block_name = item['block_name']
                 config_name = item.get('config_name', block_name)
@@ -515,7 +512,6 @@ class EagerTorch:
     def _placeholder_data(self):
         data = [np.zeros(shape, dtype=np.float32) for shape in self.input_shapes]
         data = self._fill_param(data)
-        data = data[0] if len(data) == 1 else data
         return data
 
     def _make_block(self, name, method, config, inputs):
@@ -712,26 +708,27 @@ class EagerTorch:
 
     def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
         """ Show information about model configuration, used devices, train steps, architecture and more. """
+        template = '\n##### {}:'
         if config:
-            print('### Config:')
+            print(template.format('Config'))
             pprint(self.full_config.config)
 
         if devices:
-            print('\n### Devices:')
+            print(template.format('Devices'))
             print('Leading device is {}'.format(self.device, ))
             if self.devices:
                 _ = [print('Device {} is {}'.format(i, d)) for i, d in enumerate(self.devices)]
 
         if train_steps:
-            print('\n### Train steps:')
+            print(template.format('Train steps'))
             pprint(self.train_steps)
 
         if model:
-            print('\n### Model:')
+            print(template.format('Model'))
             print(self.model)
 
         if misc:
-            print('\n### Additional info:')
+            print(template.format('Additional info'))
             if self.input_shapes:
                 _ = [print('Input {} has shape {}'.format(i, s)) for i, s in enumerate(self.input_shapes)]
 
@@ -741,7 +738,7 @@ class EagerTorch:
                 print('Number of training iterations for individual train steps:')
                 pprint(iters)
 
-            print('Last iteration parameters:')
+            print(template.format('Last iteration params'))
             pprint(self.iter_info)
 
     @property
