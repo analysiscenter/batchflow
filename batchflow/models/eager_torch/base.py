@@ -192,11 +192,21 @@ class EagerTorch:
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
 
-    microbatch : int or None
+    microbatch : int, bool or None
         Also known as virtual batch. If int, then size of chunks to split every batch into.
         Allows to process given data sequentially, accumulating gradients from microbatches and applying them
         once in the end. Can be changed later in the `train` method. Batch size must be divisible by microbatch size.
-        If None, then feature is not used. Default is not to use microbatching.
+        If False or None, then feature is not used. Default is not to use microbatching.
+
+    order : sequence
+        Defines sequence of network blocks in the architecture. Default is initial_block -> body -> head.
+        Each element of the sequence must be either a string, a tuple or a dict.
+        If string, then it is used as name of method to use, as config key to use, as name in model repr.
+        For example, ``'initial_block'`` stands for using ``self.initial_block`` with config[`initial_block`]
+        as parameters, and model representation would show this part of network as `initial_block`.
+        If tuple, then it must have three elements: (block_name, config_name, method).
+        If dict, then it must contain three keys: `block_name`, `config_name`, `method`.
+        In cases of tuple and dict, `method` can also be callable.
 
     initial_block : dict
         User-defined module or parameters for the input block, usually
@@ -407,6 +417,11 @@ class EagerTorch:
 
         config['head/target_shape'] = self.target_shape
         config['head/classes'] = self.classes
+
+        if config.get('head/units') is None:
+            config['head/units'] = self.classes
+        if config.get('head/filters') is None:
+            config['head/filters'] = self.classes
         return config
 
 
@@ -418,7 +433,6 @@ class EagerTorch:
             else:
                 self.device = torch.device('cpu')
         else:
-            devices = self.full_config.get('device')
             devices = devices if isinstance(devices, list) else [devices]
             available_devices = ['cuda:{}'.format(i) for i in range(torch.cuda.device_count())] + ['cpu']
 
@@ -507,19 +521,21 @@ class EagerTorch:
     def _make_block(self, name, method, config, inputs):
         config = {**config['common'], **config[name]}
 
-        if 'module' in config:
-            module = config['module']
-            if isinstance(module, nn.Module):
-                block = module
-            else:
-                kwargs = config.get('module_kwargs', {})
-                if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
-                    kwargs = {'inputs': inputs, **kwargs}
-                block = module(*config.get('module_args', []), **kwargs)
-
+        if isinstance(config, nn.Module):
+            block = config
         elif isinstance(config, dict):
-            method = getattr(self, method) if isinstance(method, str) else method
-            block = method(inputs=inputs, **config)
+            if 'module' in config:
+                module = config['module']
+                if isinstance(module, nn.Module):
+                    block = module
+                else:
+                    kwargs = config.get('module_kwargs', {})
+                    if 'inputs' in inspect.getfullargspec(module.__init__)[0]:
+                        kwargs = {'inputs': inputs, **kwargs}
+                    block = module(*config.get('module_args', []), **kwargs)
+            else:
+                method = getattr(self, method) if isinstance(method, str) else method
+                block = method(inputs=inputs, **config)
         else:
             raise ValueError('{} must be configured either as nn.Module or dictionary, got {}'.format(name, config))
         return block
@@ -555,8 +571,7 @@ class EagerTorch:
 
         return train_steps
 
-    def _make_loss(self, config, device=None):
-        device = device or self.device
+    def _make_loss(self, config):
         res = unpack_fn_from_config('loss', config)
         res = res if isinstance(res, list) else [res]
 
@@ -581,7 +596,7 @@ class EagerTorch:
 
             loss_fn = loss_fn or loss(*args)
             if isinstance(loss_fn, nn.Module):
-                loss_fn.to(device=device)
+                loss_fn.to(device=self.device)
             losses.append(loss_fn)
         return losses
 
@@ -836,8 +851,8 @@ class EagerTorch:
         microbatch : int, bool or None
             If int, then size of chunks to split every batch into. Allows to process given data sequentially,
             accumulating gradients from microbatches and applying them once in the end.
-            If True, then value from config is used (default value is not to use microbatching).
-            If False or None, then microbatching is not used.
+            If True or None, then value from config is used (default value is not to use microbatching).
+            If False, then microbatching is not used.
         kwargs : dict
             Additional named arguments directly passed to `feed_dict`.
 

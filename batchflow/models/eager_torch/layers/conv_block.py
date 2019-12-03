@@ -502,6 +502,8 @@ class ConvBlock(nn.Module):
                 combine_layer = Combine(inputs=branch_outputs, op=self.combine)
                 inputs = combine_layer(branch_outputs)
                 combine_modules.append(combine_layer)
+            else:
+                inputs = branch_outputs[0]
 
         self.group_modules = modules
         self.combine_modules = combine_modules if combine_modules else None

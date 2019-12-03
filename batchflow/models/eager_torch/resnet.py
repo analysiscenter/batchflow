@@ -14,6 +14,7 @@ Xie S. et al. "`Aggregated Residual Transformations for Deep Neural Networks
 Jie Hu. et al. "`Squeeze-and-Excitation Networks
 <https://arxiv.org/abs/1709.01507`_"
 """
+#pylint: disable=too-many-ancestors
 import numpy as np
 import torch.nn as nn
 
@@ -25,7 +26,8 @@ from .utils import get_num_channels
 CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T']
 
 class ResBlock(nn.Module):
-    """ ResNet Module. 
+    """ ResNet Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
+    configurable residual layer, potentially including downsampling, bottleneck, squeeze-and-excitation and groups.
 
     Parameters
     ----------
@@ -33,12 +35,11 @@ class ResBlock(nn.Module):
         Example of input tensor to this layer.
     layout : str
         A sequence of letters, each letter meaning individual operation.
-        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
-        Default is 'cnacna'.
+        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation. Default is 'cna cna'.
     filters : int, str, list of int, list of str
         If str, then number of filters is calculated by its evaluation. `S` and `same` stand for the
         number of filters in the previous tensor. Note the `eval` usage under the hood.
-        If int, then number of filters in the output tensor. Default 'same'.
+        If int, then number of filters in the output tensor. Default value is 'same'.
     kernel_size : int, list of int
         Convolution kernel size. Default is 3.
     strides : int, list of int
@@ -47,22 +48,22 @@ class ResBlock(nn.Module):
         If int, in first repetition of block downsampling with a factor `downsample`.
         If True, in first repetition of block downsampling with a factor 2.
         If False, without downsampling. Default is False.
-    bottleneck : bool, int, list of bool, list of int
+    bottleneck : bool, int
         If True, then construct a canonical bottleneck block from the given layout.
         If False, then bottleneck is not used. Default is False.
-    se : bool, list of bool
+    se : bool
         If True, then construct a SE-ResNet block from the given layout.
         If False, then squeeze and excitation is not used. Default is False.
     groups : int
-        Use `groups` convolution side by side, each  seeing 1 / `groups` the input channels, 
+        Use `groups` convolution side by side, each  seeing 1 / `groups` the input channels,
         and producing 1 / `groups` the output channels, and both subsequently concatenated.
         Number of `inputs` channels must be divisible by `groups`. Default is 1.
-    op : {'+', '.', '&', '*'}
+    op : str or callable
         Operation for combination shortcut and residual.
         See more :class:`~.layers.Combine` documentation. Default is '+'.
-    n_reps : int, list of int
+    n_reps : int
         Number of times to repeat the whole block. Default is 1.
-    kwargs : 
+    kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
     def __init__(self, inputs=None, layout='cnacna', filters='same', kernel_size=3, strides=1,
@@ -72,10 +73,10 @@ class ResBlock(nn.Module):
 
         num_convs = sum([letter in CONV_LETTERS for letter in layout])
 
-        if isinstance(filters, str):
-            filters = eval(filters, {}, {key: get_num_channels(inputs) for key in ['S', 'same']})
+        vars = {key: get_num_channels(inputs) for key in ['S', 'same']}
+        filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
+        filters = [eval(str(item), {}, vars) for item in filters]
 
-        filters = [filters] * num_convs if isinstance(filters, int) else filters
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides
         strides_d = list(strides)
@@ -88,13 +89,13 @@ class ResBlock(nn.Module):
             strides_d[0] *= downsample
             side_branch_stride_d *= downsample
         if bottleneck:
+            bottleneck = 4 if bottleneck is True else bottleneck
             layout = 'cna' + layout + 'cna'
             kernel_size = [1] + kernel_size + [1]
             strides = [1] + strides + [1]
             strides_d = [1] + strides_d + [1]
             groups = [1] + groups + [1]
-            bottleneck = 4 if bottleneck is True else bottleneck
-            filters = [filters[0]] + filters + [filters[0] * bottleneck]
+            filters = [filters[0] // bottleneck] + filters + [filters[0]]
         if se:
             layout += 'S*'
         layout = 'B' + layout + op
@@ -114,12 +115,6 @@ class ResNet(Encoder):
 
     Parameters
     ----------
-    initial_block : dict, optional
-        base : callable
-            Tensor processing function. Default is :class:`~.layers.ConvBlock`.
-        other args : dict
-            Parameters for the base block.
-
     body : dict, optional
         encoder : dict, optional
             num_stages : int
@@ -159,18 +154,11 @@ class ResNet(Encoder):
                     If False, then squeeze and excitation is not used.
                 other args : dict
                     Parameters for the base block.
-    head : dict, optional
-        base : callable
-            Tensor processing function. Default is :class:`~.layers.ConvBlock`.
-        other args : dict
-            Parameters for the base block.
 
     Notes
     -----
     This class is intended to define custom ResNets.
-    For more convenience use predefined :class:`ResNet18`, :class:`ResNet34`,
-    and others described down below.
-
+    For more convenience use predefined :class:`ResNet18`, :class:`ResNet34` and others described down below.
     """
     @classmethod
     def default_config(cls):
@@ -191,17 +179,8 @@ class ResNet(Encoder):
         config['head'] += dict(layout='Vdf', dropout_rate=.4)
 
         config['loss'] = 'ce'
-
         return config
 
-    def build_config(self):
-        config = super().build_config()
-
-        if config.get('head/units') is None:
-            config['head/units'] = self.classes
-        if config.get('head/filters') is None:
-            config['head/filters'] = self.classes
-        return config
 
 
 class ResNet18(ResNet):
@@ -212,7 +191,6 @@ class ResNet18(ResNet):
         config['body/encoder/blocks/n_reps'] = [2, 2, 2, 2]
         return config
 
-
 class ResNet34(ResNet):
     """ The original ResNet-34 architecture. """
     @classmethod
@@ -220,7 +198,6 @@ class ResNet34(ResNet):
         config = super().default_config()
         config['body/encoder/blocks/n_reps'] = [3, 4, 6, 3]
         return config
-
 
 class ResNet50(ResNet34):
     """ The original ResNet-50 architecture. """
@@ -231,7 +208,6 @@ class ResNet50(ResNet34):
         config['body/encoder/blocks/bottleneck'] = True
         return config
 
-
 class ResNet101(ResNet50):
     """ The original ResNet-101 architecture. """
     @classmethod
@@ -239,7 +215,6 @@ class ResNet101(ResNet50):
         config = super().default_config()
         config['body/encoder/blocks/n_reps'] = [3, 4, 23, 3]
         return config
-
 
 class ResNet152(ResNet50):
     """ The original ResNet-152 architecture. """
@@ -249,6 +224,8 @@ class ResNet152(ResNet50):
         config['body/encoder/blocks/n_reps'] = [3, 8, 36, 3]
         return config
 
+
+
 class ResNeXt18(ResNet18):
     """ The ResNeXt-18 architecture. """
     @classmethod
@@ -256,7 +233,6 @@ class ResNeXt18(ResNet18):
         config = super().default_config()
         config['body/encoder/blocks/groups'] = 32
         return config
-
 
 class ResNeXt34(ResNet34):
     """ The ResNeXt-34 architecture. """
@@ -266,7 +242,6 @@ class ResNeXt34(ResNet34):
         config['body/encoder/blocks/groups'] = 32
         return config
 
-
 class ResNeXt50(ResNet50):
     """ The ResNeXt-50 architecture. """
     @classmethod
@@ -274,7 +249,6 @@ class ResNeXt50(ResNet50):
         config = super().default_config()
         config['body/encoder/blocks/groups'] = 32
         return config
-
 
 class ResNeXt101(ResNet101):
     """ The ResNeXt-101 architecture. """
@@ -284,7 +258,6 @@ class ResNeXt101(ResNet101):
         config['body/encoder/blocks/groups'] = 32
         return config
 
-
 class ResNeXt152(ResNet152):
     """ The ResNeXt-152 architecture. """
     @classmethod
@@ -292,6 +265,8 @@ class ResNeXt152(ResNet152):
         config = super().default_config()
         config['body/encoder/blocks/groups'] = 32
         return config
+
+
 
 class SEResNet18(ResNet18):
     """ The original SE-ResNet-18 architecture. """
@@ -302,7 +277,6 @@ class SEResNet18(ResNet18):
         config['body/encoder/blocks/ratio'] = 16
         return config
 
-
 class SEResNet34(ResNet34):
     """ The original SE-ResNet-34 architecture. """
     @classmethod
@@ -311,7 +285,6 @@ class SEResNet34(ResNet34):
         config['body/encoder/blocks/se'] = True
         config['body/encoder/blocks/ratio'] = 16
         return config
-
 
 class SEResNet50(ResNet50):
     """ The original SE-ResNet-50 architecture. """
@@ -322,7 +295,6 @@ class SEResNet50(ResNet50):
         config['body/encoder/blocks/ratio'] = 16
         return config
 
-
 class SEResNet101(ResNet101):
     """ The original SE-ResNet-101 architecture. """
     @classmethod
@@ -331,7 +303,6 @@ class SEResNet101(ResNet101):
         config['body/encoder/blocks/se'] = True
         config['body/encoder/blocks/ratio'] = 16
         return config
-
 
 class SEResNet152(ResNet152):
     """ The original SE-ResNet-152 architecture. """
@@ -343,46 +314,48 @@ class SEResNet152(ResNet152):
         return config
 
 
+
 class SEResNeXt18(ResNeXt18):
     """ The SE-ResNeXt-18 architecture. """
     @classmethod
     def default_config(cls):
+        config = super().default_config()
         config['body/encoder/blocks/se'] = True
         config['body/encoder/blocks/ratio'] = 16
         return config
-
 
 class SEResNeXt34(ResNeXt34):
     """ The SE-ResNeXt-34 architecture. """
     @classmethod
     def default_config(cls):
+        config = super().default_config()
         config['body/encoder/blocks/se'] = True
         config['body/encoder/blocks/ratio'] = 16
         return config
-
 
 class SEResNeXt50(ResNeXt50):
     """ The SE-ResNeXt-50 architecture. """
     @classmethod
     def default_config(cls):
+        config = super().default_config()
         config['body/encoder/blocks/se'] = True
         config['body/encoder/blocks/ratio'] = 16
         return config
-
 
 class SEResNeXt101(ResNeXt101):
     """ The SE-ResNeXt-101 architecture. """
     @classmethod
     def default_config(cls):
+        config = super().default_config()
         config['body/encoder/blocks/se'] = True
         config['body/encoder/blocks/ratio'] = 16
         return config
-
 
 class SEResNeXt152(ResNeXt152):
     """ The SE-ResNeXt-152 architecture. """
     @classmethod
     def default_config(cls):
+        config = super().default_config()
         config['body/encoder/blocks/se'] = True
         config['body/encoder/blocks/ratio'] = 16
         return config
