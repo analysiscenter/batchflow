@@ -111,17 +111,20 @@ class Crop(nn.Module):
 
 
     def forward(self, inputs):
+        import numpy as np
         i_shape = get_shape(inputs)
         r_shape = get_shape(self.resize_to)
-        if (i_shape[2] > r_shape[2]) or (i_shape[3] > r_shape[3]):
+        if (np.array(i_shape[2:]) > np.array(r_shape[2:])).any():
             # Decrease input tensor's shape by slicing desired shape out of it
             shape = [slice(None, c) for c in r_shape[2:]]
             shape = tuple([slice(None, None), slice(None, None)] + shape)
             output = inputs[shape]
-        elif (i_shape[2] < r_shape[2]) or (i_shape[3] < r_shape[3]):
+        elif (np.array(i_shape[2:]) < np.array(r_shape[2:])).any():
             # Increase input tensor's shape by zero padding
             output = torch.zeros(*i_shape[:2], *r_shape[2:])
-            output[:, :, :i_shape[2], :i_shape[3]] = inputs
+            shape = [slice(None, c) for c in i_shape[2:]]
+            shape = tuple([slice(None, None), slice(None, None)] + shape)
+            output[shape] = inputs
         else:
             output = inputs
         return output
@@ -209,7 +212,9 @@ class SEBlock(nn.Module):
 
     def forward(self, x):
         x = self.layer(x)
-        return x.view(x.size(0), -1, 1, 1)
+        ndims = get_num_dims(x)
+        shape = [x.size(0), -1] + [1] * (ndims)
+        return x.view(shape)
 
 
 
@@ -296,13 +301,13 @@ class Combine(nn.Module):
     def spatial_resize(self, inputs):
         """ Force the same shapes of the inputs, if needed. """
         shape_ = get_shape(inputs[0])
-        spatial_shape_ = shape_[len(shape_)-2:]
+        spatial_shape_ = shape_[-(len(shape_)-2):]
 
         resized = []
         for item in inputs:
             shape = get_shape(item)
             dim = len(shape) - 2
-            spatial_shape = shape[dim:]
+            spatial_shape = shape[-dim:]
             if dim > 0 and spatial_shape_ != tuple([1]*dim) and spatial_shape != spatial_shape_:
                 item = Crop(inputs[0])(item)
             resized.append(item)
