@@ -111,22 +111,28 @@ class Crop(nn.Module):
 
 
     def forward(self, inputs):
-        import numpy as np
         i_shape = get_shape(inputs)
         r_shape = get_shape(self.resize_to)
-        if (np.array(i_shape[2:]) > np.array(r_shape[2:])).any():
-            # Decrease input tensor's shape by slicing desired shape out of it
-            shape = [slice(None, c) for c in r_shape[2:]]
-            shape = tuple([slice(None, None), slice(None, None)] + shape)
-            output = inputs[shape]
-        elif (np.array(i_shape[2:]) < np.array(r_shape[2:])).any():
-            # Increase input tensor's shape by zero padding
-            output = torch.zeros(*i_shape[:2], *r_shape[2:])
-            shape = [slice(None, c) for c in i_shape[2:]]
-            shape = tuple([slice(None, None), slice(None, None)] + shape)
-            output[shape] = inputs
-        else:
-            output = inputs
+        output = inputs
+        for j, (isx, rsx) in enumerate(zip(i_shape[2:], r_shape[2:])):       
+            if isx > rsx:
+                # Decrease input tensor's shape by slicing desired shape out of it
+                shape = [slice(None, None)] * len(i_shape)
+                shape[j + 2] = slice(None, rsx)
+                output = output[shape]
+            elif isx < rsx:
+                # Increase input tensor's shape by zero padding
+                zeros_shape = list(i_shape)
+                zeros_shape[j + 2] = rsx 
+                zeros = torch.zeros(zeros_shape)
+
+                shape = [slice(None, None)] * len(i_shape)
+                shape[j + 2] = slice(None, isx)
+                zeros[shape] = output
+                output = zeros
+            else:
+                pass
+            i_shape = get_shape(output)
         return output
 
 
