@@ -15,7 +15,7 @@ def unpack_fn_from_config(param, config=None):
     res = []
 
     for item in value:
-        if isinstance(item, tuple):
+        if isinstance(item, (tuple, list)):
             if len(item) == 0:
                 name, args = None, None
             elif len(item) == 1:
@@ -82,6 +82,7 @@ def safe_eval(expression, value, names=None):
     Increase number of filters of tensor by the factor of two::
     new_filters = safe_eval('same * 2', old_filters)
     """
+    #pylint: disable=eval-used
     names = names or ['S', 'same']
     return eval(expression, {}, {name: value for name in names})
 
@@ -109,20 +110,20 @@ def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fal
                 result = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
         else:
             raise ValueError("padding can be 'same' or 'valid'")
-    elif isinstance(padding, int) or isinstance(padding, tuple):
+    elif isinstance(padding, (int, tuple)):
         result = padding
     else:
         raise ValueError("padding can be 'same' or 'valid' or int or tuple of int")
     return result
 
-def _get_padding(kernel_size=None, width=None, dilation=1, stride=1):
+def _get_padding(kernel_size=None, input_shape=None, dilation=1, stride=1):
     kernel_size = dilation * (kernel_size - 1) + 1
-    if stride >= width:
-        padding = max(0, kernel_size - width)
+    if stride >= input_shape:
+        padding = max(0, kernel_size - input_shape)
     else:
-        if width % stride == 0:
+        if input_shape % stride == 0:
             padding = kernel_size - stride
         else:
-            padding = kernel_size - width % stride
+            padding = kernel_size - input_shape % stride
     padding = (padding // 2, padding - padding // 2)
     return padding

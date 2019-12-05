@@ -312,10 +312,9 @@ class EagerTorch:
     def build(self):
         """ Build the model. """
         self.full_config = self.combine_configs()
-        self.full_config = self.build_config()
-
         self._get_devices()
         self._get_placeholder_shapes()
+        self.full_config = self.build_config()
 
         # If the inputs are set in config with their shapes we can build right away
         if self.input_shapes:
@@ -462,13 +461,12 @@ class EagerTorch:
         if input_names is not None:
             batch_size = config.get('placeholder_batch_size', 2)
             input_names = input_names if isinstance(input_names, (tuple, list)) else [input_names]
+
             shapes = []
             for name in input_names:
                 cfg = config['inputs'].get(name, {})
                 if 'shape' in cfg:
                     shapes.append((batch_size, *cfg['shape']))
-                elif 'classes' in cfg:
-                    shapes.append((batch_size, cfg['classes']))
                 else:
                     shapes.append(None)
 
@@ -476,7 +474,17 @@ class EagerTorch:
                 self.input_shapes = shapes
             self.input_names = input_names
 
-        self.classes = config.get('inputs/targets/classes')
+        if config.get('inputs'):
+            classes, shapes = [], []
+            for name, cfg in config['inputs'].items():
+                if 'classes' in cfg:
+                    classes.append(cfg['classes'])
+                    if 'shape' in cfg:
+                        shapes.append(cfg['shape'])
+            if len(classes) == 1:
+                self.classes = classes[0]
+                if shapes:
+                    self.target_shape = shapes[0]
 
 
     def _build(self, inputs=None):

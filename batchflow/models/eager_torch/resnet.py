@@ -68,7 +68,6 @@ class ResBlock(nn.Module):
     """
     def __init__(self, inputs=None, layout='cnacna', filters='same', kernel_size=3, strides=1,
                  downsample=False, bottleneck=False, se=False, groups=1, op='+', n_reps=1, **kwargs):
-        #pylint: disable=eval-used
         super().__init__()
 
         num_convs = sum([letter in CONV_LETTERS for letter in layout])
@@ -94,7 +93,7 @@ class ResBlock(nn.Module):
             strides = [1] + strides + [1]
             strides_d = [1] + strides_d + [1]
             groups = [1] + groups + [1]
-            filters = [filters[0] // bottleneck] + filters + [filters[0]]
+            filters = [filters[0]] + filters + [filters[0] * bottleneck]
         if se:
             layout += 'S*'
         layout = 'B' + layout + op

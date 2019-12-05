@@ -13,7 +13,6 @@ class BaseConv(nn.Module):
 
     def __init__(self, filters, kernel_size=3, strides=1, padding='same',
                  dilation_rate=1, groups=1, bias=True, inputs=None):
-        #pylint: disable=eval-used
         super().__init__()
 
         if isinstance(filters, str):
