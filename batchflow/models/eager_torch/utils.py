@@ -69,10 +69,10 @@ def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fal
 
     if isinstance(padding, str):
         if padding == 'valid':
-            padding = 0
+            result = 0
         elif padding == 'same':
             if transposed:
-                padding = 0
+                result = 0
             else:
                 if isinstance(kernel_size, int):
                     kernel_size = (kernel_size,) * dims
@@ -80,25 +80,23 @@ def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fal
                     dilation = (dilation,) * dims
                 if isinstance(stride, (int, np.int64)):
                     stride = (stride,) * dims
-                padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
+                result = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
         else:
             raise ValueError("padding can be 'same' or 'valid'")
-    elif isinstance(padding, int):
-        pass
-    elif isinstance(padding, tuple):
-        pass
+    elif isinstance(padding, int) or isinstance(padding, tuple):
+        result = padding
     else:
         raise ValueError("padding can be 'same' or 'valid' or int or tuple of int")
-    return padding
+    return result
 
 def _get_padding(kernel_size=None, width=None, dilation=1, stride=1):
     kernel_size = dilation * (kernel_size - 1) + 1
     if stride >= width:
-        p = max(0, kernel_size - width)
+        padding = max(0, kernel_size - width)
     else:
         if width % stride == 0:
-            p = kernel_size - stride
+            padding = kernel_size - stride
         else:
-            p = kernel_size - width % stride
-    p = (p // 2, p - p // 2)
-    return p
+            padding = kernel_size - width % stride
+    padding = (padding // 2, padding - padding // 2)
+    return padding

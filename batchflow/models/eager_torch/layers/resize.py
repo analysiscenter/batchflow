@@ -33,12 +33,12 @@ class ReduceDim(nn.Module):
 
 class Reshape(nn.Module):
     """ Enforce desired shape of tensor. """
-    def __init__(self, shape=None, reshape_to=None):
+    def __init__(self, reshape_to=None):
         super().__init__()
-        self.shape = shape or reshape_to
+        self.reshape_to = reshape_to
 
     def forward(self, x):
-        return x.view(x.size(0), *self.shape)
+        return x.view(x.size(0), *self.reshape_to)
 
 
 
@@ -60,9 +60,9 @@ class Interpolate(nn.Module):
         't': 'trilinear',
     }
 
-    def __init__(self, mode='b', size=None, shape=None, scale_factor=None, **kwargs):
+    def __init__(self, mode='b', shape=None, scale_factor=None, **kwargs):
         super().__init__()
-        self.size, self.scale_factor = size or shape, scale_factor
+        self.shape, self.scale_factor = shape, scale_factor
 
         if mode in self.MODES:
             mode = self.MODES[mode]
@@ -70,14 +70,14 @@ class Interpolate(nn.Module):
         self.kwargs = kwargs
 
     def forward(self, x):
-        return F.interpolate(x, mode=self.mode, size=self.size, scale_factor=self.scale_factor,
+        return F.interpolate(x, mode=self.mode, size=self.shape, scale_factor=self.scale_factor,
                              align_corners=True, **self.kwargs)
 
     def extra_repr(self):
         if self.scale_factor is not None:
             info = 'scale_factor=' + str(self.scale_factor)
         else:
-            info = 'size=' + str(self.size)
+            info = 'size=' + str(self.shape)
         info += ', mode=' + self.mode
         return info
 
@@ -219,7 +219,11 @@ class SideBlock(nn.Module):
     def __init__(self, inputs=None, **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
-        self.layer = ConvBlock(inputs=inputs, **kwargs)
+
+        if kwargs.get('layout'):
+            self.layer = ConvBlock(inputs=inputs, **kwargs)
+        else:
+            self.layer = nn.Identity()
 
     def forward(self, x):
         return self.layer(x)
@@ -264,35 +268,54 @@ class Combine(nn.Module):
         return torch.mean(inputs)
 
     @staticmethod
-    def softsum(self, inputs):
+    def softsum(inputs, **kwargs):
         """ Softsum. """
-        #pylint: disable=bad-staticmethod-argument
-        inputs = [conv(tensor) for conv, tensor in zip(self.conv, inputs)]
-        return torch.stack(inputs, dim=0).sum(dim=0)
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+
+        args = {'layout': 'c', 'filters': get_shape(inputs[0])[1], 'kernel_size': 1,
+                **kwargs}
+        conv = [ConvBlock(inputs=tensor, **args) for tensor in inputs]
+        conv = nn.ModuleList(conv)
+        inputs = [conv(tensor) for conv, tensor in zip(conv, inputs)]
+        return Combine.sum(inputs)
 
     OPS = {
-        concat.__func__: ['concat', 'cat', '.'],
-        sum.__func__: ['sum', 'plus', '+'],
-        mul.__func__: ['multi', 'mul', '*'],
-        mean.__func__: ['average', 'avg', 'mean'],
-        softsum.__func__: ['softsum', '&'],
+        concat: ['concat', 'cat', '.'],
+        sum: ['sum', 'plus', '+'],
+        mul: ['multi', 'mul', '*'],
+        mean: ['average', 'avg', 'mean'],
+        softsum: ['softsum', '&'],
     }
 
-    OPS = {alias: method for method, aliases in OPS.items() for alias in aliases}
-    ALL_OPS = list(OPS.keys())
+    OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
-    def __init__(self, inputs=None, op='concat', force_resize=True):
-        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+    def __init__(self, inputs=None, op='concat', force_resize=True, **kwargs):
         super().__init__()
 
         self.force_resize = force_resize
-        self.op = op
-        if op in self.OPS and self.OPS[op].__name__ == 'softsum':
-            args = dict(layout='c', filters=get_shape(inputs[0])[1],
-                        kernel_size=1)
-            conv = [ConvBlock(inputs=tensor, **args) for tensor in inputs]
-            self.conv = nn.ModuleList(conv)
-            self.op = lambda inputs: self.OPS[op](self, inputs)
+        self.name = op
+
+        if op in self.OPS:
+            op = self.OPS[op]
+            if op.__name__ == 'softsum':
+                self.op = lambda inputs: op(inputs, **kwargs)
+            else:
+                self.op = op
+        elif callable(op):
+            self.op = op
+        else:
+            raise ValueError('Combine operation must be a callable or \
+                              one from {}, instead got {}.'.format(list(self.OPS.keys()), op))
+
+    def forward(self, inputs):
+        if self.force_resize:
+            inputs = self.spatial_resize(inputs)
+        return self.op(inputs)
+
+    def extra_repr(self):
+        if isinstance(self.name, str):
+            return 'op=' + self.name
+        return 'op=' + 'callable ' + self.name.__name__
 
 
     def spatial_resize(self, inputs):
@@ -310,19 +333,3 @@ class Combine(nn.Module):
                 item = Crop(inputs[0])(item)
             resized.append(item)
         return resized
-
-
-    def forward(self, inputs):
-        if self.force_resize:
-            inputs = self.spatial_resize(inputs)
-        if callable(self.op):
-            return self.op(inputs)
-        if self.op in self.OPS:
-            return self.OPS[self.op](inputs)
-        raise ValueError('Combine operation must be a callable or \
-                          one from {}, instead got {}.'.format(self.ALL_OPS, self.op))
-
-    def extra_repr(self):
-        if isinstance(self.op, str):
-            return 'op=' + self.op
-        return 'op=' + 'callable ' + self.op.__name__
