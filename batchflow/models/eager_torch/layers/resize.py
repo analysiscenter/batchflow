@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_shape
+from ..utils import get_shape, get_num_dims
 
 
 
@@ -14,7 +14,7 @@ class IncreaseDim(nn.Module):
         self.dim = dim
 
     def forward(self, x):
-        dim = len(get_shape(x)) - 2 + self.dim
+        dim = get_num_dims(x) + self.dim
         ones = [1] * dim
         return x.view(x.size(0), -1, *ones)
 
@@ -26,7 +26,7 @@ class ReduceDim(nn.Module):
         self.dim = dim
 
     def forward(self, x):
-        dim = max(len(get_shape(x)) - 2 - self.dim, 0)
+        dim = max(get_num_dims(x) - self.dim, 0)
         ones = [1] * dim
         return x.view(x.size(0), -1, *ones)
 
@@ -208,8 +208,9 @@ class SEBlock(nn.Module):
 
 
     def forward(self, x):
+        ones = [1] * get_num_dims(x)
         x = self.layer(x)
-        return x.view(x.size(0), -1, 1, 1)
+        return x.view(x.size(0), -1, *ones)
 
 
 
@@ -280,10 +281,11 @@ class Combine(nn.Module):
     OPS = {alias: method for method, aliases in OPS.items() for alias in aliases}
     ALL_OPS = list(OPS.keys())
 
-    def __init__(self, inputs=None, op='concat'):
+    def __init__(self, inputs=None, op='concat', force_resize=True):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
 
+        self.force_resize = force_resize
         self.op = op
         if op in self.OPS and self.OPS[op].__name__ == 'softsum':
             args = dict(layout='c', filters=get_shape(inputs[0])[1],
@@ -296,13 +298,14 @@ class Combine(nn.Module):
     def spatial_resize(self, inputs):
         """ Force the same shapes of the inputs, if needed. """
         shape_ = get_shape(inputs[0])
-        spatial_shape_ = shape_[len(shape_)-2:]
+        dim_ = get_num_dims(inputs[0])
+        spatial_shape_ = shape_[-dim_:]
 
         resized = []
         for item in inputs:
             shape = get_shape(item)
-            dim = len(shape) - 2
-            spatial_shape = shape[dim:]
+            dim = get_num_dims(item)
+            spatial_shape = shape[-dim:]
             if dim > 0 and spatial_shape_ != tuple([1]*dim) and spatial_shape != spatial_shape_:
                 item = Crop(inputs[0])(item)
             resized.append(item)
@@ -310,9 +313,10 @@ class Combine(nn.Module):
 
 
     def forward(self, inputs):
+        if self.force_resize:
+            inputs = self.spatial_resize(inputs)
         if callable(self.op):
             return self.op(inputs)
-        inputs = self.spatial_resize(inputs)
         if self.op in self.OPS:
             return self.OPS[self.op](inputs)
         raise ValueError('Combine operation must be a callable or \
