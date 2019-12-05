@@ -3,7 +3,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_num_channels, get_num_dims, calc_padding
+from ..utils import get_num_channels, get_num_dims, safe_eval, calc_padding
 
 
 class BaseConv(nn.Module):
@@ -17,7 +17,7 @@ class BaseConv(nn.Module):
         super().__init__()
 
         if isinstance(filters, str):
-            filters = eval(filters, {}, {key: get_num_channels(inputs) for key in ['S', 'same']})
+            filters = safe_eval(filters, get_num_channels(inputs))
 
         args = {
             'in_channels': get_num_channels(inputs),

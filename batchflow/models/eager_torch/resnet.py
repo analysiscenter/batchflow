@@ -20,7 +20,7 @@ import torch.nn as nn
 
 from .layers import ConvBlock
 from .encoder_decoder import Encoder
-from .utils import get_num_channels
+from .utils import get_num_channels, safe_eval
 
 
 CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T']
@@ -73,9 +73,8 @@ class ResBlock(nn.Module):
 
         num_convs = sum([letter in CONV_LETTERS for letter in layout])
 
-        vars = {key: get_num_channels(inputs) for key in ['S', 'same']}
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
-        filters = [eval(str(item), {}, vars) for item in filters]
+        filters = [safe_eval(str(item), get_num_channels(inputs)) for item in filters]
 
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides

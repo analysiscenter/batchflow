@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ..utils import get_shape, get_num_channels, get_num_dims
+from ..utils import get_shape, get_num_channels, get_num_dims, safe_eval
 
 
 
@@ -25,7 +25,7 @@ class Dense(nn.Module):
         in_units = np.prod(get_shape(inputs)[1:])
         units = units
         if isinstance(units, str):
-            units = eval(units, {}, {key: in_units for key in ['S', 'same']})
+            units = safe_eval(units, in_units)
 
         self.linear = nn.Linear(in_units, units, bias)
 
@@ -52,33 +52,28 @@ class Activation(nn.Module):
     kwargs
         Additional named arguments passed to either class initializer or callable.
     """
-    ACTIVATIONS = {f.lower(): f for f in dir(nn)}
+    FUNCTIONS = {f.lower(): f for f in dir(nn)}
 
     def __init__(self, activation, *args, **kwargs):
         super().__init__()
+        self.args, self.kwargs = tuple(), {}
 
-        if 'inplace' not in kwargs:
-            kwargs['inplace'] = True
-
-        self.args = tuple()
-        self.kwargs = {}
+        if isinstance(activation, str):
+            name = activation.lower()
+            if name in self.FUNCTIONS:
+                activation = getattr(nn, self.FUNCTIONS[activation])
+            else:
+                raise ValueError('Unknown activation', activation)
 
         if activation is None:
             self.activation = None
-        if isinstance(activation, str):
-            a = activation.lower()
-            if a in self.ACTIVATIONS:
-                _activation = getattr(nn, self.ACTIVATIONS[a])
-                # check does activation has `in_place` parameter
-                has_inplace = 'inplace' in inspect.getfullargspec(_activation).args
-                if not has_inplace:
-                    kwargs.pop('inplace', None)
-                self.activation = _activation(*args, **kwargs)
-            else:
-                raise ValueError('Unknown activation', activation)
         elif isinstance(activation, nn.Module):
             self.activation = activation
         elif issubclass(activation, nn.Module):
+            # check if activation has `in_place` parameter
+            has_inplace = 'inplace' in inspect.getfullargspec(activation).args
+            if has_inplace:
+                kwargs['inplace'] = True
             self.activation = activation(*args, **kwargs)
         elif callable(activation):
             self.activation = activation

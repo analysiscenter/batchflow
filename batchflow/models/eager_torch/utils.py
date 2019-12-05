@@ -60,6 +60,32 @@ def get_num_dims(inputs):
     return max(1, dim - 2)
 
 
+def safe_eval(expression, value, names=None):
+    """ Safely evaluates expression given value and names.
+    Supposed to be used to parse string parameters and allow dependencies between parameters (e.g. number of channels)
+    in subsequent layers.
+
+    Parameters
+    ----------
+    expression : str
+        Valid Python expression. Each element of the `names` will be swapped with `value`.
+    value : object
+        Value to use instead of elements of `names`.
+    names : sequence of str
+        Names inside `expression` to be interpreted as `value`. Default names are `same`, `S`.
+
+    Examples
+    --------
+    Add 5 to the value::
+    safe_eval('same + 5', 10)
+
+    Increase number of filters of tensor by the factor of two::
+    new_filters = safe_eval('same * 2', old_filters)
+    """
+    names = names or ['S', 'same']
+    return eval(expression, {}, {name: value for name in names})
+
+
 def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
     """ Get padding values for various convolutions. """
     _ = kwargs

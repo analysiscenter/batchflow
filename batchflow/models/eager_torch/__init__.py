@@ -6,4 +6,4 @@ from .resnet import ResBlock, ResNet, ResNet18, ResNet34, ResNet50, ResNet101, R
                     SEResNet18, SEResNet34, SEResNet50, SEResNet101, SEResNet152, \
                     SEResNeXt18, SEResNeXt34, SEResNeXt50, SEResNeXt101, SEResNeXt152
 from .unet import UNet, ResUNet
-from .utils import get_shape, get_num_channels, get_num_dims, calc_padding, unpack_fn_from_config
+from .utils import get_shape, get_num_channels, get_num_dims, calc_padding, unpack_fn_from_config, safe_eval
