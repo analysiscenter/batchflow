@@ -196,6 +196,7 @@ class EagerTorch:
         Also known as virtual batch. If int, then size of chunks to split every batch into.
         Allows to process given data sequentially, accumulating gradients from microbatches and applying them
         once in the end. Can be changed later in the `train` method. Batch size must be divisible by microbatch size.
+        If True, then every batch is split into individual items (same as microbatch equals 1).
         If False or None, then feature is not used. Default is not to use microbatching.
 
     order : sequence
@@ -731,6 +732,8 @@ class EagerTorch:
             print(template.format('Additional info'))
             if self.input_shapes:
                 _ = [print('Input {} has shape {}'.format(i, s)) for i, s in enumerate(self.input_shapes)]
+            if self.target_shape:
+                print('Target has shape {}'.format(self.target_shape))
 
             iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
             print('Total number of training iterations: {}'.format(sum(list(iters.values()))))
@@ -820,7 +823,7 @@ class EagerTorch:
 
 
     def train(self, *args, feed_dict=None, fetches=None, use_lock=False, train_mode='',
-              accumulate_grads=True, sync_frequency=True, microbatch=None, **kwargs):
+              accumulate_grads=True, sync_frequency=True, microbatch=True, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -848,8 +851,8 @@ class EagerTorch:
         microbatch : int, bool or None
             If int, then size of chunks to split every batch into. Allows to process given data sequentially,
             accumulating gradients from microbatches and applying them once in the end.
-            If True or None, then value from config is used (default value is not to use microbatching).
-            If False, then microbatching is not used.
+            If True, then value from config is used (default value is not to use microbatching).
+            If False or None, then microbatching is not used.
         kwargs : dict
             Additional named arguments directly passed to `feed_dict`.
 
@@ -872,15 +875,16 @@ class EagerTorch:
             sync_frequency = 1
         train_mode = train_mode if isinstance(train_mode, (tuple, list)) else [train_mode]
 
-        if microbatch is not False:
+        if microbatch:
             if microbatch is True:
-                microbatch = config.get('microbatch', len(targets))
+                microbatch = config.get('microbatch')
             else:
-                microbatch = microbatch or config.get('microbatch', len(targets))
+                microbatch = microbatch or config.get('microbatch')
 
         if microbatch:
+            microbatch = 1 if microbatch is True else microbatch
             steps = len(targets) // microbatch
-            splitted_inputs = [[item[i:i + microbatch] for i in range(0, len(item), microbatch)] for item in inputs]
+            splitted_inputs = [[item[i:i + microbatch] for item in inputs] for i in range(0, len(targets), microbatch)]
             splitted_targets = [targets[i:i + microbatch] for i in range(0, len(targets), microbatch)]
         else:
             steps = 1

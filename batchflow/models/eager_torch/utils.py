@@ -60,6 +60,32 @@ def get_num_dims(inputs):
     return max(1, dim - 2)
 
 
+def safe_eval(expression, value, names=None):
+    """ Safely evaluates expression given value and names.
+    Supposed to be used to parse string parameters and allow dependencies between parameters (e.g. number of channels)
+    in subsequent layers.
+
+    Parameters
+    ----------
+    expression : str
+        Valid Python expression. Each element of the `names` will be swapped with `value`.
+    value : object
+        Value to use instead of elements of `names`.
+    names : sequence of str
+        Names inside `expression` to be interpreted as `value`. Default names are `same`, `S`.
+
+    Examples
+    --------
+    Add 5 to the value::
+    safe_eval('same + 5', 10)
+
+    Increase number of filters of tensor by the factor of two::
+    new_filters = safe_eval('same * 2', old_filters)
+    """
+    names = names or ['S', 'same']
+    return eval(expression, {}, {name: value for name in names})
+
+
 def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=False, stride=1, **kwargs):
     """ Get padding values for various convolutions. """
     _ = kwargs
@@ -69,10 +95,10 @@ def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fal
 
     if isinstance(padding, str):
         if padding == 'valid':
-            padding = 0
+            result = 0
         elif padding == 'same':
             if transposed:
-                padding = 0
+                result = 0
             else:
                 if isinstance(kernel_size, int):
                     kernel_size = (kernel_size,) * dims
@@ -80,25 +106,23 @@ def calc_padding(inputs, padding=0, kernel_size=None, dilation=1, transposed=Fal
                     dilation = (dilation,) * dims
                 if isinstance(stride, (int, np.int64)):
                     stride = (stride,) * dims
-                padding = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
+                result = tuple(_get_padding(kernel_size[i], shape[i+2], dilation[i], stride[i]) for i in range(dims))
         else:
             raise ValueError("padding can be 'same' or 'valid'")
-    elif isinstance(padding, int):
-        pass
-    elif isinstance(padding, tuple):
-        pass
+    elif isinstance(padding, int) or isinstance(padding, tuple):
+        result = padding
     else:
         raise ValueError("padding can be 'same' or 'valid' or int or tuple of int")
-    return padding
+    return result
 
 def _get_padding(kernel_size=None, width=None, dilation=1, stride=1):
     kernel_size = dilation * (kernel_size - 1) + 1
     if stride >= width:
-        p = max(0, kernel_size - width)
+        padding = max(0, kernel_size - width)
     else:
         if width % stride == 0:
-            p = kernel_size - stride
+            padding = kernel_size - stride
         else:
-            p = kernel_size - width % stride
-    p = (p // 2, p - p // 2)
-    return p
+            padding = kernel_size - width % stride
+    padding = (padding // 2, padding - padding // 2)
+    return padding

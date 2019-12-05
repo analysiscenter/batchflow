@@ -3,7 +3,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_num_channels, get_num_dims, calc_padding
+from ..utils import get_num_channels, get_num_dims, safe_eval, calc_padding
 
 
 class BaseConv(nn.Module):
@@ -11,21 +11,21 @@ class BaseConv(nn.Module):
     LAYERS = {}
     TRANSPOSED = False
 
-    def __init__(self, filters, kernel_size, stride=1, strides=None, padding='same',
-                 dilation=1, dilation_rate=None, groups=1, bias=True, inputs=None):
+    def __init__(self, filters, kernel_size=3, strides=1, padding='same',
+                 dilation_rate=1, groups=1, bias=True, inputs=None):
         #pylint: disable=eval-used
         super().__init__()
 
         if isinstance(filters, str):
-            filters = eval(filters, {}, {key: get_num_channels(inputs) for key in ['S', 'same']})
+            filters = safe_eval(filters, get_num_channels(inputs))
 
         args = {
             'in_channels': get_num_channels(inputs),
             'out_channels': filters,
             'groups': groups,
             'kernel_size': kernel_size,
-            'dilation': dilation_rate or dilation,
-            'stride': strides or stride,
+            'dilation': dilation_rate,
+            'stride': strides,
             'bias': bias,
         }
 
@@ -70,17 +70,17 @@ class BaseDepthwiseConv(nn.Module):
     """ An universal module for plain and transposed depthwise convolutions. """
     LAYER = None
 
-    def __init__(self, kernel_size, stride=None, strides=None, padding='same',
-                 dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None):
+    def __init__(self, kernel_size=3, strides=1, padding='same',
+                 dilation_rate=1, bias=True, depth_multiplier=1, inputs=None):
         super().__init__()
 
         args = {
             'filters': get_num_channels(inputs) * depth_multiplier,
             'kernel_size': kernel_size,
             'groups': get_num_channels(inputs),
-            'strides': stride or strides,
+            'strides': strides,
             'padding': padding,
-            'dilation_rate': dilation or dilation_rate,
+            'dilation_rate': dilation_rate,
             'bias': bias,
         }
 
@@ -105,13 +105,12 @@ class BaseSeparableConv(nn.Module):
     """ An universal module for plain and transposed separable convolutions. """
     LAYER = None
 
-    def __init__(self, filters, kernel_size, stride=None, strides=None, padding='same',
-                 dilation=None, dilation_rate=None, bias=True, depth_multiplier=1, inputs=None):
+    def __init__(self, filters, kernel_size=3, strides=1, padding='same',
+                 dilation_rate=1, bias=True, depth_multiplier=1, inputs=None):
         super().__init__()
 
         self.layer = nn.Sequential(
-            self.LAYER(filters, kernel_size, stride, strides, padding,
-                       dilation, dilation_rate, bias, depth_multiplier, inputs),
+            self.LAYER(kernel_size, strides, padding, dilation_rate, bias, depth_multiplier, inputs),
             Conv(filters, kernel_size=1, strides=1, padding=padding, dilation_rate=1, bias=bias, inputs=inputs)
             )
 
