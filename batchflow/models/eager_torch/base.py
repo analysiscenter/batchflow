@@ -524,11 +524,10 @@ class EagerTorch:
         return data
 
     def _make_block(self, name, method, config, inputs):
-        config = {**config['common'], **config[name]}
-
-        if isinstance(config, nn.Module):
-            block = config
-        elif isinstance(config, dict):
+        if isinstance(config[name], nn.Module):
+            block = config[name]
+        elif isinstance(config[name], dict):
+            config = {**config['common'], **config[name]}
             if 'module' in config:
                 module = config['module']
                 if isinstance(module, nn.Module):
@@ -907,8 +906,9 @@ class EagerTorch:
                 self.input_shapes = get_shape(splitted_inputs[0])
 
             self.target_shape = get_shape(splitted_targets[0])
-            if self.classes is None and len(self.target_shape) > 1:
-                self.classes = self.target_shape[1]
+            if self.classes is None:
+                if len(self.target_shape) > 1: # segmentation
+                    self.classes = self.target_shape[1]
 
             self.build_config()
             self._build(splitted_inputs[0])

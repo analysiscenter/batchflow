@@ -40,6 +40,7 @@ class ResBlock(nn.Module):
         If str, then number of filters is calculated by its evaluation. `S` and `same` stand for the
         number of filters in the previous tensor. Note the `eval` usage under the hood.
         If int, then number of filters in the output tensor. Default value is 'same'.
+        Lists are used for layouts that require multiple values, and elements are interpreted as described above.
     kernel_size : int, list of int
         Convolution kernel size. Default is 3.
     strides : int, list of int
@@ -70,7 +71,7 @@ class ResBlock(nn.Module):
                  downsample=False, bottleneck=False, se=False, groups=1, op='+', n_reps=1, **kwargs):
         super().__init__()
 
-        num_convs = sum([letter in CONV_LETTERS for letter in layout])
+        num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
         filters = [safe_eval(str(item), get_num_channels(inputs)) for item in filters]

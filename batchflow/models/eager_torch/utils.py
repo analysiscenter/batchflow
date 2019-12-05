@@ -35,10 +35,10 @@ def unpack_fn_from_config(param, config=None):
     return res
 
 
-def get_shape(inputs, shape=None):
+def get_shape(inputs, default_shape=None):
     """ Return inputs shape """
     if inputs is None:
-        pass
+        shape = default_shape
     elif isinstance(inputs, np.ndarray):
         shape = inputs.shape
     elif isinstance(inputs, torch.Tensor):

@@ -93,8 +93,6 @@ class BaseConvBlock(nn.Module):
         Pooling operation ('max', 'mean', 'frac')
     dropout_rate : float
         Default is 0.
-    factor : int or tuple of int
-        Upsampling factor
     upsampling_layout : str
         Layout for upsampling layers
 
@@ -397,9 +395,9 @@ class BaseConvBlock(nn.Module):
             block_modules.append(nn.Sequential(OrderedDict(layers)))
 
         self.module_layout = module_layout
-        self.block_modules = block_modules if block_modules else None
-        self.skip_modules = skip_modules if skip_modules else None
-        self.combine_modules = combine_modules if combine_modules else None
+        self.block_modules = block_modules or None
+        self.skip_modules = skip_modules or None
+        self.combine_modules = combine_modules or None
 
 
 def update_layers(letter, module, name=None):
