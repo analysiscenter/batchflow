@@ -10,7 +10,15 @@ from .utils import get_num_channels, safe_eval
 
 
 class VGGBlock(nn.Module):
+    """ Convenient VGG block.
 
+    Parameters
+    ----------
+    depth3 : int
+        Number of 3x3 convolutions.
+    depth1 : int
+        Number of 1x1 convolutions.
+    """
     def __init__(self, inputs=None, layout='cna', filters=None, depth3=1, depth1=0, **kwargs):
         super().__init__()
 
@@ -19,7 +27,7 @@ class VGGBlock(nn.Module):
 
         layout = layout * (depth3 + depth1)
         kernels = [3]*depth3 + [1]*depth1
-        self.layer = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=kernels)
+        self.layer = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=kernels, **kwargs)
 
     def forward(self, x):
         return self.layer(x)

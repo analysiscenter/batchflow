@@ -10,7 +10,6 @@ from pprint import pprint
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
 
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
@@ -778,6 +777,8 @@ class EagerTorch:
         Or, using command line::
         tensorboard --logdir=runs
         """
+        # Import here to avoid unnecessary tensorflow imports inside tensorboard
+        from torch.utils.tensorboard import SummaryWriter
         writer = SummaryWriter(log_dir=log_dir, **kwargs)
         writer.add_graph(self.model, self._placeholder_data())
         writer.close()

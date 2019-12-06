@@ -60,7 +60,7 @@ class Activation(nn.Module):
         if isinstance(activation, str):
             name = activation.lower()
             if name in self.FUNCTIONS:
-                activation = getattr(nn, self.FUNCTIONS[activation])
+                activation = getattr(nn, self.FUNCTIONS[name])
             else:
                 raise ValueError('Unknown activation', activation)
 
