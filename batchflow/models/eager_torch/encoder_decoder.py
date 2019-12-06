@@ -5,6 +5,7 @@ import torch.nn as nn
 from .base import EagerTorch
 from .utils import get_shape
 from .layers import ConvBlock, Upsample, Combine, Crop
+from .blocks import DefaultBlock
 from ..utils import unpack_args
 
 
@@ -50,8 +51,7 @@ class EncoderModule(nn.Module):
         for i in range(num_stages):
             for letter in encoder_layout:
                 if letter in ['b']:
-                    args = {'layout': 'cna', 'filters': 'same * 2',
-                            **kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
+                    args = {**kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=inputs, **args)
                     inputs = layer(inputs)
@@ -200,7 +200,7 @@ class Encoder(EagerTorch):
         config['body/encoder'] = dict(num_stages=None,
                                       order=['skip', 'block', 'downsampling'])
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
-        config['body/encoder/blocks'] = dict(base=None)
+        config['body/encoder/blocks'] = dict(base=DefaultBlock)
         return config
 
     @classmethod
@@ -416,7 +416,7 @@ class EncoderDecoder(Decoder):
         config['body/encoder'] = dict(num_stages=None,
                                       order=['skip', 'block', 'downsampling'])
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
-        config['body/encoder/blocks'] = dict(base=None)
+        config['body/encoder/blocks'] = dict(base=DefaultBlock)
 
         config['body/embedding'] = dict(base=None)
 
