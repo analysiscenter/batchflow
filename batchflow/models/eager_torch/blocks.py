@@ -88,28 +88,33 @@ class ResBlock(nn.Module):
 
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides
-        strides_d = list(strides)
         groups = [groups] * num_convs
         side_branch_stride = np.prod(strides)
-        side_branch_stride_d = int(side_branch_stride)
+
+        # Used in the first repetition of the block.
+        # Different from strides and side_branch_stride in other blocks if `downsample` is not ``False``.
+        strides_downsample = list(strides)
+        side_branch_stride_downsample = int(side_branch_stride)
 
         if downsample:
             downsample = 2 if downsample is True else downsample
-            strides_d[0] *= downsample
-            side_branch_stride_d *= downsample
+            strides_downsample[0] *= downsample
+            side_branch_stride_downsample *= downsample
         if bottleneck:
             bottleneck = 4 if bottleneck is True else bottleneck
             layout = 'cna' + layout + 'cna'
             kernel_size = [1] + kernel_size + [1]
             strides = [1] + strides + [1]
-            strides_d = [1] + strides_d + [1]
+            strides_downsample = [1] + strides_downsample + [1]
             groups = [1] + groups + [1]
             filters = [filters[0]] + filters + [filters[0] * bottleneck]
         if se:
             layout += 'S*'
         layout = 'B' + layout
 
-        layer_params = [{'strides': strides_d, 'side_branch/strides': side_branch_stride_d}] + [{}]*(n_reps-1)
+        layer_params = [{'strides': strides_downsample, 'side_branch/strides': side_branch_stride_downsample}]
+        layer_params += [{}]*(n_reps-1)
+
         self.block = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
                                kernel_size=kernel_size, strides=strides, groups=groups,
                                side_branch={'layout': 'c', 'filters': filters[-1], 'strides': side_branch_stride},
