@@ -1,6 +1,9 @@
 name: PR
 
-on: pull_request
+on:
+  pull_request:
+    branches:
+    - master
 
 jobs:
 

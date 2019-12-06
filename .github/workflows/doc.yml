@@ -1,0 +1,52 @@
+name: docs
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+    - master
+    paths:
+    - 'docs/**'
+
+  push:
+    paths:
+    - 'docs/**'
+
+jobs:
+
+  doc:
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: analysiscenter1/ds-py3:cpu
+
+    steps:
+    - uses: actions/checkout@v1
+      with:
+          fetch-depth: 1
+
+    - name: Build docs
+      run: |
+        export LC_ALL="C"
+        pip3 install sphinx
+        pip3 install sphinx-rtd-theme
+        git checkout --orphan gh-pages
+        rm -rf *
+        git fetch
+        git checkout origin/master -- batchflow docs
+        cd docs
+        make html
+
+    - name: Push docs
+      if: github.event_name == 'pull_request'
+      run: |
+        mv docs/_build/html/* .
+        rm -rf docs batchflow
+        touch .nojekyll
+        git config user.email rhudor@gmail.com
+        git config user.name "Roman Kh"
+        git add -A .
+        git commit -am "Build docs"
+        git remote add gh_pages https://${{ secrets.GITHUB_PUSH}}@github.com/${{ github.repository }}
+        git push gh_pages

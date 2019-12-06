@@ -333,9 +333,14 @@ class Batch:
     def __getstate__(self):
         state = self.__dict__.copy()
         state.pop('_data_named')
+        state['_local'] = state['_local'] is not None
+        state['_preloaded_lock'] = True
         return state
 
     def __setstate__(self, state):
+        state['_preloaded_lock'] = threading.Lock() if state['_preloaded_lock'] else None
+        state['_local'] = threading.Lock() if state['_local'] else None
+
         for k, v in state.items():
             # this warrants that all hidden objects are reconstructed upon unpickling
             setattr(self, k, v)
