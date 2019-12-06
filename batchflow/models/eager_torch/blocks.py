@@ -7,6 +7,27 @@ from .utils import get_num_channels, safe_eval
 
 CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T']
 
+class DefaultBlock(nn.Module):
+    " Default block for another blocks."
+
+    LAYOUT = 'cna'
+    FILTERS = 'same'
+
+    def __init__(self, **kwargs):
+        super().__init__()
+        attrs = [attr.lower() for attr in vars(self.__class__).keys()
+                 if not attr.startswith('__') and attr != 'forward']
+
+        for attr in attrs:
+            if kwargs.setdefault(attr, None) is None:
+                kwargs[attr] = getattr(self, attr.upper())
+
+        self.block = ConvBlock(**kwargs)
+
+    def forward(self, x):
+        return self.block(x)
+
+
 class DenseBlock(nn.Module):
     """ DenseBlock module. """
     def __init__(self, inputs=None, layout='nacd', filters=None, kernel_size=3, strides=1, dropout_rate=0.2,
@@ -35,6 +56,7 @@ class DenseBlock(nn.Module):
     def forward(self, x):
         output = self.block(x)
         return output if self.skip else output[:, self.input_num_channels:]
+
 
 class ResBlock(nn.Module):
     """ ResNet Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
