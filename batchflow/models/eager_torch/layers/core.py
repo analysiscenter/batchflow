@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ..utils import get_shape, get_num_channels, get_num_dims
+from ..utils import get_shape, get_num_channels, get_num_dims, safe_eval
 
 
 
@@ -18,14 +18,13 @@ class Flatten(nn.Module):
 
 class Dense(nn.Module):
     """ Dense layer. """
-    def __init__(self, units=None, out_features=None, bias=True, inputs=None):
-        #pylint: disable=eval-used
+    def __init__(self, units=None, bias=True, inputs=None):
         super().__init__()
 
         in_units = np.prod(get_shape(inputs)[1:])
-        units = units or out_features
+        units = units
         if isinstance(units, str):
-            units = eval(units, {}, {key: in_units for key in ['S', 'same']})
+            units = safe_eval(units, in_units)
 
         self.linear = nn.Linear(in_units, units, bias)
 
@@ -52,33 +51,28 @@ class Activation(nn.Module):
     kwargs
         Additional named arguments passed to either class initializer or callable.
     """
-    ACTIVATIONS = {f.lower(): f for f in dir(nn)}
+    FUNCTIONS = {f.lower(): f for f in dir(nn)}
 
     def __init__(self, activation, *args, **kwargs):
         super().__init__()
+        self.args, self.kwargs = tuple(), {}
 
-        if 'inplace' not in kwargs:
-            kwargs['inplace'] = True
-
-        self.args = tuple()
-        self.kwargs = {}
+        if isinstance(activation, str):
+            name = activation.lower()
+            if name in self.FUNCTIONS:
+                activation = getattr(nn, self.FUNCTIONS[activation])
+            else:
+                raise ValueError('Unknown activation', activation)
 
         if activation is None:
             self.activation = None
-        if isinstance(activation, str):
-            a = activation.lower()
-            if a in self.ACTIVATIONS:
-                _activation = getattr(nn, self.ACTIVATIONS[a])
-                # check does activation has `in_place` parameter
-                has_inplace = 'inplace' in inspect.getfullargspec(_activation).args
-                if not has_inplace:
-                    kwargs.pop('inplace', None)
-                self.activation = _activation(*args, **kwargs)
-            else:
-                raise ValueError('Unknown activation', activation)
         elif isinstance(activation, nn.Module):
             self.activation = activation
         elif issubclass(activation, nn.Module):
+            # check if activation has `in_place` parameter
+            has_inplace = 'inplace' in inspect.getfullargspec(activation).args
+            if has_inplace:
+                kwargs['inplace'] = True
             self.activation = activation(*args, **kwargs)
         elif callable(activation):
             self.activation = activation
@@ -149,19 +143,27 @@ class Dropout(nn.Module):
             if isinstance(self.multisample, int): # dropout to the whole batch, then average
                 dropped = [self.layer(x) for _ in range(self.multisample)]
                 output = torch.mean(torch.stack(dropped), dim=0)
-            else: # split batch into separate-dropout branches
-                if isinstance(self.multisample, (tuple, list)):
-                    if all([isinstance(item, int) for item in self.multisample]):
-                        sizes = self.multisample
-                    elif all([isinstance(item, float) for item in self.multisample]):
-                        batch_size = x.shape[0]
-                        sizes = [round(batch_size*item) for item in self.multisample[:-1]]
-                        residual = batch_size - sum(sizes)
-                        sizes += [residual]
+            elif isinstance(self.multisample, (tuple, list)): # split batch into separate-dropout branches
+                if all(isinstance(item, int) for item in self.multisample):
+                    sizes = self.multisample
+                elif all(isinstance(item, float) for item in self.multisample):
+                    if sum(self.multisample) != 1.:
+                        raise ValueError('Sequence of floats must sum up to one for multisample dropout,\
+                                          got instead {}'.format(self.multisample))
+
+                    batch_size = x.shape[0]
+                    sizes = [round(batch_size*item) for item in self.multisample[:-1]]
+                    residual = batch_size - sum(sizes)
+                    sizes += [residual]
+                else:
+                    raise ValueError('Elements of multisample must be either all ints or floats,\
+                                      got instead {}'.format(self.multisample))
 
                 splitted = torch.split(x, sizes)
                 dropped = [self.layer(branch) for branch in splitted]
                 output = torch.cat(dropped, axis=0)
+            else:
+                raise ValueError('Unknown type of multisample: {}'.format(self.multisample))
         else:
             output = self.layer(x)
         return output

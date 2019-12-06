@@ -73,13 +73,9 @@ class EmbeddingModule(nn.Module):
     """ Embedding: thorough processing of an input tensor. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
-        base_block = kwargs.get('base') or kwargs.get('base_block')
-        if base_block is not None:
-            inputs = inputs[-1] if isinstance(inputs, list) else inputs
-            kwargs = {'layout': 'cna', 'filters': 'same', **kwargs}
-            self.embedding = ConvBlock(inputs=inputs, **kwargs)
-        else:
-            self.embedding = nn.Identity()
+        inputs = inputs[-1] if isinstance(inputs, list) else inputs
+        kwargs = {'layout': 'cna', 'filters': 'same', **kwargs}
+        self.embedding = ConvBlock(inputs=inputs, **kwargs)
 
     def forward(self, x):
         inputs = x if isinstance(x, list) else [x]
@@ -287,14 +283,15 @@ class Decoder(EagerTorch):
             inputs = layer(inputs)
             layers.append(layer)
 
-        if get_shape(inputs) != target_shape:
-            layer = Crop(resize_to=target_shape)
-            inputs = layer(inputs)
-            layers.append(layer)
-
-            if get_shape(inputs)[1] != classes:
-                layer = ConvBlock(inputs=inputs, layout='c', filters=classes, kernel_size=1)
+        if target_shape:
+            if get_shape(inputs) != target_shape:
+                layer = Crop(resize_to=target_shape)
+                inputs = layer(inputs)
                 layers.append(layer)
+
+                if get_shape(inputs)[1] != classes:
+                    layer = ConvBlock(inputs=inputs, layout='c', filters=classes, kernel_size=1)
+                    layers.append(layer)
         return nn.Sequential(*layers)
 
 
