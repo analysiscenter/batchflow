@@ -1,7 +1,8 @@
 """ Simonyan K., Zisserman A. "`Very Deep Convolutional Networks for Large-Scale Image Recognition
 <https://arxiv.org/abs/1409.1556>`_"
 """
-from . import Encoder, VGGBlock
+from .encoder_decoder import Encoder
+from .blocks import VGGBlock
 
 
 

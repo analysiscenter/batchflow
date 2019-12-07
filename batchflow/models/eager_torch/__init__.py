@@ -1,6 +1,7 @@
 """ Eagerly! """
 from .base import EagerTorch
 from .encoder_decoder import Encoder, Decoder, EncoderDecoder, AutoEncoder, VariationalAutoEncoder
+from .vgg import VGG, VGG7, VGG16, VGG19
 from .resnet import ResNet, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
                     ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152, \
                     SEResNet18, SEResNet34, SEResNet50, SEResNet101, SEResNet152, \

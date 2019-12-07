@@ -3,7 +3,7 @@
 # pylint: disable=redefined-outer-name
 import pytest
 
-
+from batchflow.models.eager_torch import VGG7, VGG16, VGG19
 from batchflow.models.eager_torch import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
                                          ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152, \
                                          SEResNet18, SEResNet34, SEResNet50, SEResNet101, SEResNet152, \
@@ -17,6 +17,7 @@ MODELS_SEG = [
 ]
 
 MODELS_CLF = [
+    VGG7, VGG16, VGG19,
     ResNet18, ResNet34, ResNet50, ResNet101, ResNet152,
     ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152,
     SEResNet18, SEResNet34, SEResNet50, SEResNet101, SEResNet152,
