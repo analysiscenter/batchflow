@@ -74,7 +74,6 @@ class EmbeddingModule(nn.Module):
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
         inputs = inputs[-1] if isinstance(inputs, list) else inputs
-        kwargs = {'layout': 'cna', 'filters': 'same', **kwargs}
         self.embedding = ConvBlock(inputs=inputs, **kwargs)
 
     def forward(self, x):
@@ -138,8 +137,7 @@ class DecoderModule(nn.Module):
         for i in range(num_stages):
             for letter in decoder_layout:
                 if letter in ['b']:
-                    args = {'layout': 'cna', 'filters': 'same // 2',
-                            **kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
+                    args = {**kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=x, **args)
                     x = layer(x)
@@ -263,7 +261,7 @@ class Decoder(EagerTorch):
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None,
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=None)
+        config['body/decoder/blocks'] = dict(base=DefaultBlock)
         config['body/decoder/combine'] = dict(op='concat')
         return config
 
@@ -418,12 +416,12 @@ class EncoderDecoder(Decoder):
         config['body/encoder/downsample'] = dict(layout='p', pool_size=2, pool_strides=2)
         config['body/encoder/blocks'] = dict(base=DefaultBlock)
 
-        config['body/embedding'] = dict(base=None)
+        config['body/embedding'] = dict(base=DefaultBlock)
 
         config['body/decoder'] = dict(skip=True, num_stages=None, factor=None,
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
-        config['body/decoder/blocks'] = dict(base=None)
+        config['body/decoder/blocks'] = dict(base=DefaultBlock)
         config['body/decoder/combine'] = dict(op='concat')
         return config
 
@@ -501,5 +499,6 @@ class VariationalAutoEncoder(AutoEncoder):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/embedding'] += dict(base=VariationalBlock, base_mu=None, base_std=None)
+        config['body/embedding'] += dict(base=VariationalBlock,
+                                         base_mu=DefaultBlock, base_std=DefaultBlock)
         return config

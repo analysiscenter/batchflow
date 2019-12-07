@@ -1,9 +1,10 @@
 """  Ronneberger O. et al "`U-Net: Convolutional Networks for Biomedical Image Segmentation
 <https://arxiv.org/abs/1505.04597>`_"
 """
-
 from .encoder_decoder import EncoderDecoder
-from .resnet import ResBlock
+from .blocks import ResBlock
+
+
 
 class UNet(EncoderDecoder):
     """ UNet-like model.

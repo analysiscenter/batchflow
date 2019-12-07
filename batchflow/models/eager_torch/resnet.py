@@ -15,8 +15,10 @@ Jie Hu. et al. "`Squeeze-and-Excitation Networks
 <https://arxiv.org/abs/1709.01507`_"
 """
 #pylint: disable=too-many-ancestors
-from .blocks import ResBlock
 from .encoder_decoder import Encoder
+from .blocks import ResBlock
+
+
 
 class ResNet(Encoder):
     """ Base ResNet model.

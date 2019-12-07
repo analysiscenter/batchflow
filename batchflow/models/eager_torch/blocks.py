@@ -5,22 +5,24 @@ import torch.nn as nn
 from .layers import ConvBlock
 from .utils import get_num_channels, safe_eval
 
+
+
 CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T']
 
-class DefaultBlock(nn.Module):
-    " Default block for another blocks."
 
+
+class DefaultBlock(nn.Module):
+    """ Block with default parameters.
+    Allows creation of modules with predefined arguments for :class:`~.ConvBlock`.
+    """
     LAYOUT = 'cna'
     FILTERS = 'same'
 
     def __init__(self, **kwargs):
         super().__init__()
-        attrs = [attr.lower() for attr in vars(self.__class__).keys()
-                 if not attr.startswith('__') and attr != 'forward']
-
-        for attr in attrs:
-            if kwargs.setdefault(attr, None) is None:
-                kwargs[attr] = getattr(self, attr.upper())
+        attrs = {name.lower(): value for name, value in vars(self.__class__).items()
+                 if name != 'forward' and '__' not in name}
+        kwargs = {**attrs, **kwargs}
 
         self.block = ConvBlock(**kwargs)
 
@@ -28,34 +30,42 @@ class DefaultBlock(nn.Module):
         return self.block(x)
 
 
-class DenseBlock(nn.Module):
-    """ DenseBlock module. """
-    def __init__(self, inputs=None, layout='nacd', filters=None, kernel_size=3, strides=1, dropout_rate=0.2,
-                 num_layers=4, growth_rate=12, skip=True, bottleneck=False, **kwargs):
+
+class XceptionBlock(DefaultBlock):
+    """ Xception building block.
+    François Chollet. "`Xception: Deep Learning with Depthwise Separable Convolutions
+    <https://arxiv.org/abs/1610.02357>`_"
+    """
+    LAYOUT = 'R' + 'wnacna'*3 + '&'
+    FILTERS = 'same'
+    STRIDES = [1]*6
+    RESIDUAL_END = {'strides': 1}
+
+
+
+class VGGBlock(nn.Module):
+    """ Convenient VGG block.
+
+    Parameters
+    ----------
+    depth3 : int
+        Number of 3x3 convolutions.
+    depth1 : int
+        Number of 1x1 convolutions.
+    """
+    def __init__(self, inputs=None, layout='cna', filters=None, depth3=1, depth1=0, **kwargs):
         super().__init__()
-        self.skip = skip
-        self.input_num_channels = get_num_channels(inputs)
 
-        if filters is not None:
-            if isinstance(filters, str):
-                filters = eval(filters, {}, {key: get_num_channels(inputs) for key in ['S', 'same']})
-            growth_rate = (filters - self.input_num_channels) // num_layers
-        filters = growth_rate
+        if isinstance(filters, str):
+            filters = safe_eval(filters, get_num_channels(inputs))
 
-        if bottleneck:
-            bottleneck = 4 if bottleneck is True else bottleneck
-            layout = 'cna' + layout
-            kernel_size = [1, kernel_size]
-            strides = [1, strides]
-            filters = [growth_rate * bottleneck, filters]
-
-        layout = 'R' + layout + '.'
-        self.block = ConvBlock(layout=layout, kernel_size=kernel_size, strides=strides, dropout_rate=dropout_rate,
-                               filters=filters, n_repeats=num_layers, inputs=inputs, **kwargs)
+        layout = layout * (depth3 + depth1)
+        kernels = [3]*depth3 + [1]*depth1
+        self.layer = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=kernels, **kwargs)
 
     def forward(self, x):
-        output = self.block(x)
-        return output if self.skip else output[:, self.input_num_channels:]
+        return self.layer(x)
+
 
 
 class ResBlock(nn.Module):
@@ -144,3 +154,34 @@ class ResBlock(nn.Module):
 
     def forward(self, x):
         return self.block(x)
+
+
+
+class DenseBlock(nn.Module):
+    """ DenseBlock module. """
+    def __init__(self, inputs=None, layout='nacd', filters=None, kernel_size=3, strides=1, dropout_rate=0.2,
+                 num_layers=4, growth_rate=12, skip=True, bottleneck=False, **kwargs):
+        super().__init__()
+        self.skip = skip
+        self.input_num_channels = get_num_channels(inputs)
+
+        if filters is not None:
+            if isinstance(filters, str):
+                filters = eval(filters, {}, {key: get_num_channels(inputs) for key in ['S', 'same']})
+            growth_rate = (filters - self.input_num_channels) // num_layers
+        filters = growth_rate
+
+        if bottleneck:
+            bottleneck = 4 if bottleneck is True else bottleneck
+            layout = 'cna' + layout
+            kernel_size = [1, kernel_size]
+            strides = [1, strides]
+            filters = [growth_rate * bottleneck, filters]
+
+        layout = 'R' + layout + '.'
+        self.block = ConvBlock(layout=layout, kernel_size=kernel_size, strides=strides, dropout_rate=dropout_rate,
+                               filters=filters, n_repeats=num_layers, inputs=inputs, **kwargs)
+
+    def forward(self, x):
+        output = self.block(x)
+        return output if self.skip else output[:, self.input_num_channels:]

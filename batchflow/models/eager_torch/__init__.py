@@ -7,4 +7,4 @@ from .resnet import ResNet, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, 
                     SEResNeXt18, SEResNeXt34, SEResNeXt50, SEResNeXt101, SEResNeXt152
 from .unet import UNet, ResUNet
 from .utils import get_shape, get_num_channels, get_num_dims, calc_padding, unpack_fn_from_config, safe_eval
-from .blocks import DefaultBlock, DenseBlock, ResBlock
+from .blocks import DefaultBlock, XceptionBlock, VGGBlock, ResBlock, DenseBlock

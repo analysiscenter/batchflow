@@ -283,9 +283,9 @@ class Combine(nn.Module):
 
         args = {'layout': 'c', 'filters': get_shape(inputs[0])[1], 'kernel_size': 1,
                 **kwargs}
-        conv = [ConvBlock(inputs=tensor, **args) for tensor in inputs]
+        conv = [ConvBlock(inputs=tensor, **args) for tensor in inputs[1:]]
         conv = nn.ModuleList(conv)
-        inputs = [conv(tensor) for conv, tensor in zip(conv, inputs)]
+        inputs = [conv(tensor) for conv, tensor in zip(conv, inputs[1:])]
         return Combine.sum(inputs)
 
     OPS = {
