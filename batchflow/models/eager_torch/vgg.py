@@ -20,7 +20,6 @@ class VGG(Encoder):
         return config
 
 
-
 class VGG7(VGG):
     """ VGG7 network. """
     @classmethod
@@ -32,7 +31,6 @@ class VGG7(VGG):
                                               depth1=[0, 0, 1])
         return config
 
-
 class VGG16(VGG):
     """ VGG16 network. """
     @classmethod
@@ -42,7 +40,6 @@ class VGG16(VGG):
         config['body/encoder/blocks'] += dict(filters=[64, 128, 256, 512, 512],
                                               depth3=[2, 2, 3, 3, 3], depth1=0)
         return config
-
 
 class VGG19(VGG):
     """ VGG19 network. """

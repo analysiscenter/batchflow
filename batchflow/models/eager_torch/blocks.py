@@ -167,8 +167,12 @@ class DenseBlock(nn.Module):
 
         if filters is not None:
             if isinstance(filters, str):
-                filters = eval(filters, {}, {key: get_num_channels(inputs) for key in ['S', 'same']})
-            growth_rate = (filters - self.input_num_channels) // num_layers
+                filters = safe_eval(filters, get_num_channels(inputs))
+
+            if filters > self.input_num_channels:
+                growth_rate = (filters - self.input_num_channels) // num_layers
+            else:
+                growth_rate = filters // num_layers
         filters = growth_rate
 
         if bottleneck:

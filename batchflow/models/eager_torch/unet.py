@@ -2,7 +2,7 @@
 <https://arxiv.org/abs/1505.04597>`_"
 """
 from .encoder_decoder import EncoderDecoder
-from .blocks import ResBlock
+from .blocks import ResBlock, DenseBlock
 
 
 
@@ -88,6 +88,7 @@ class UNet(EncoderDecoder):
 
         return config
 
+
 class ResUNet(UNet):
     """ UNet with residual blocks. """
     @classmethod
@@ -95,4 +96,13 @@ class ResUNet(UNet):
         config = super().default_config()
         config['body/encoder/blocks'] += dict(base=ResBlock, layout='cna', n_reps=2)
         config['body/decoder/blocks'] += dict(base=ResBlock, layout='cna', n_reps=2)
+        return config
+
+
+class DenseUNet(UNet):
+    """ UNet with dense blocks. """
+    @classmethod
+    def default_config(cls):
+        config = super().default_config()
+        config['body/encoder/blocks'] += dict(base=DenseBlock, growth_rate=16)
         return config
