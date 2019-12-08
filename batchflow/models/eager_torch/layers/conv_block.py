@@ -350,8 +350,8 @@ class BaseConvBlock(nn.Module):
 
                 elif letter in self.COMBINE_LETTERS:
                     args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-                    args['inputs'] = [residuals.pop(), inputs]
-                    layer = layer_class(op=letter, **args).to(device)
+                    args = {**args, 'inputs': [residuals.pop(), inputs], 'op': letter}
+                    layer = layer_class(**args).to(device)
                     shape_before = get_shape(inputs)
                     inputs = layer(args['inputs'])
                     shape_after = get_shape(inputs)
