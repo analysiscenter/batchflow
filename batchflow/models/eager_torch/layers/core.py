@@ -22,7 +22,6 @@ class Dense(nn.Module):
         super().__init__()
 
         in_units = np.prod(get_shape(inputs)[1:])
-        units = units
         if isinstance(units, str):
             units = safe_eval(units, in_units)
 

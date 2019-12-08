@@ -1,4 +1,7 @@
-""" Jegou S. et al "`The One Hundred Layers Tiramisu:
+"""
+Huang G. et al. "`Densely Connected Convolutional Networks
+<https://arxiv.org/abs/1608.06993>`_"
+Jegou S. et al "`The One Hundred Layers Tiramisu:
 Fully Convolutional DenseNets for Semantic Segmentation
 <https://arxiv.org/abs/1611.09326>`_"
 """

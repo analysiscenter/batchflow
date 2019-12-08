@@ -24,10 +24,10 @@ class DefaultBlock(nn.Module):
                  if name != 'forward' and '__' not in name}
         kwargs = {**attrs, **kwargs}
 
-        self.block = ConvBlock(**kwargs)
+        self.layer = ConvBlock(**kwargs)
 
     def forward(self, x):
-        return self.block(x)
+        return self.layer(x)
 
 
 
@@ -88,15 +88,15 @@ class ResBlock(nn.Module):
     strides : int, list of int
         Convolution stride. Default is 1.
     downsample : int, bool
-        If int, in first repetition of block downsampling with a factor `downsample`.
-        If True, in first repetition of block downsampling with a factor 2.
-        If False, without downsampling. Default is False.
+        If int, the first repetition of block will use downsampling with that factor.
+        If True, the first repetition of block will use downsampling with a factor of 2.
+        If False, then no downsampling. Default is False.
     bottleneck : bool, int
-        If True, then construct a canonical bottleneck block from the given layout.
+        If True, then add a canonical bottleneck (1x1 conv-batchnorm-activation) with that factor of filters increase.
         If False, then bottleneck is not used. Default is False.
     se : bool
-        If True, then construct a SE-ResNet block from the given layout.
-        If False, then squeeze and excitation is not used. Default is False.
+        If True, then add a squeeze-and-excitation block.
+        If False, then nothing is added. Default is False.
     groups : int
         Use `groups` convolution side by side, each  seeing 1 / `groups` the input channels,
         and producing 1 / `groups` the output channels, and both subsequently concatenated.
@@ -147,18 +147,42 @@ class ResBlock(nn.Module):
         layer_params = [{'strides': strides_downsample, 'side_branch/strides': side_branch_stride_downsample}]
         layer_params += [{}]*(n_reps-1)
 
-        self.block = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
+        self.layer = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
                                kernel_size=kernel_size, strides=strides, groups=groups,
                                side_branch={'layout': 'c', 'filters': filters[-1], 'strides': side_branch_stride},
                                op=op, **kwargs)
 
     def forward(self, x):
-        return self.block(x)
+        return self.layer(x)
 
 
 
 class DenseBlock(nn.Module):
-    """ DenseBlock module. """
+    """ DenseBlock module.
+
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
+    layout : str
+        A sequence of letters, each letter meaning individual operation.
+        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation. Default is 'nacd'.
+    num_layers : int
+        Number of consecutive layers to make. Each layer is made upon all of the previous tensors concatted together.
+    growth_rate : int
+        Amount of filters added after each layer.
+    skip : bool
+        Whether to concatenate inputs to the output result.
+    bottleneck : bool, int
+        If True, then add a canonical bottleneck (1x1 conv-batchnorm-activation) with that factor of filters increase.
+        If False, then bottleneck is not used. Default is False.
+    filters : int or None
+        If int and is bigger than number of channels in the input tensor, then `growth_rate` is adjusted so
+        that the number of output features is that number.
+        If int and is smaller or equal to the number of channels in the input tensor, then `growth_rate` is adjusted so
+        that the number of added output features is that number.
+        If None, then not used.
+    """
     def __init__(self, inputs=None, layout='nacd', filters=None, kernel_size=3, strides=1, dropout_rate=0.2,
                  num_layers=4, growth_rate=12, skip=True, bottleneck=False, **kwargs):
         super().__init__()
@@ -183,9 +207,9 @@ class DenseBlock(nn.Module):
             filters = [growth_rate * bottleneck, filters]
 
         layout = 'R' + layout + '.'
-        self.block = ConvBlock(layout=layout, kernel_size=kernel_size, strides=strides, dropout_rate=dropout_rate,
+        self.layer = ConvBlock(layout=layout, kernel_size=kernel_size, strides=strides, dropout_rate=dropout_rate,
                                filters=filters, n_repeats=num_layers, inputs=inputs, **kwargs)
 
     def forward(self, x):
-        output = self.block(x)
-        return output if self.skip else output[:, self.input_num_channels:]
+        x = self.layer(x)
+        return x if self.skip else x[:, self.input_num_channels:]
