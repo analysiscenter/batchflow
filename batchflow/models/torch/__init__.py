@@ -1,5 +1,5 @@
-""" Eagerly! """
-from .base import EagerTorch
+""" Various Torch models. """
+from .base import TorchModel
 from .encoder_decoder import Encoder, Decoder, EncoderDecoder, AutoEncoder, VariationalAutoEncoder
 from .vgg import VGG, VGG7, VGG16, VGG19
 from .resnet import ResNet, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \

@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 
-from .base import EagerTorch
+from .base import TorchModel
 from .utils import get_shape
 from .layers import ConvBlock, Upsample, Combine, Crop
 from .blocks import DefaultBlock
@@ -161,7 +161,7 @@ class DecoderModule(nn.Module):
 
 
 
-class Encoder(EagerTorch):
+class Encoder(TorchModel):
     """ Encoder architecture. Allows to combine blocks from different models,
     e.g. ResNet and DenseNet, in order to create new ones with just a few lines of code.
     Intended to be used for classification tasks.
@@ -209,7 +209,7 @@ class Encoder(EagerTorch):
 
 
 
-class Decoder(EagerTorch):
+class Decoder(TorchModel):
     """ Decoder architecture. Allows to combine blocks from different models,
     e.g. ResNet and DenseNet, in order to create new ones with just a few lines of code.
     Intended to be used for increasing spatial dimensionality of inputs.

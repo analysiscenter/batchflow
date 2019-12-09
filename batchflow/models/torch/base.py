@@ -50,7 +50,7 @@ DECAYS_DEFAULTS = {
 
 
 
-class EagerTorch:
+class TorchModel:
     r""" Base class for eager Torch models.
 
     Parameters
@@ -163,7 +163,7 @@ class EagerTorch:
         Note that in this case you are still free to change loss-function or scope.
 
         In order to use particular train step during train, one must pass `train_mode` argument to
-        :meth:`.EagerTorch.train` method.
+        :meth:`.TorchModel.train` method.
 
         Examples:
 
@@ -232,10 +232,10 @@ class EagerTorch:
 
     predictions : str or callable
         An operation applied to the head output to make the predictions tensor which is used in the loss function.
-        See :meth:`.EagerTorch.output` for details.
+        See :meth:`.TorchModel.output` for details.
 
     output : dict or list
-        Auxiliary operations to apply to network predictions. See :meth:`.EagerTorch.output` for details.
+        Auxiliary operations to apply to network predictions. See :meth:`.TorchModel.output` for details.
 
     common : dict
         Default parameters for all blocks (see :class:`~.eager_torch.layers.ConvBlock`).
@@ -247,12 +247,12 @@ class EagerTorch:
       block almost everywhere.
 
     * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding
-      :meth:`.EagerTorch.default_config`. Those parameters are then updated with external configuration dictionary.
+      :meth:`.TorchModel.default_config`. Those parameters are then updated with external configuration dictionary.
 
-    * Define config post-processing by overriding :meth:`~.EagerTorch.build_config`.
+    * Define config post-processing by overriding :meth:`~.TorchModel.build_config`.
       Its main use is to infer parameters that can't be known in advance (e.g. number of classes, shape of inputs).
 
-    * Override :meth:`~.EagerTorch.initial_block`, :meth:`~.EagerTorch.body` and :meth:`~.EagerTorch.head`, if needed.
+    * Override :meth:`~.TorchModel.initial_block`, :meth:`~.TorchModel.body` and :meth:`~.TorchModel.head`, if needed.
       You can either use usual `Torch layers <https://pytorch.org/docs/stable/nn.html>`_,
       or predefined layers like :class:`~eager_torch.layers.PyramidPooling`.
       Conveniently, 'initial_block' is used to make pre-processing (e.g. reshaping or agressive pooling) of inputs,
@@ -329,7 +329,7 @@ class EagerTorch:
         Put here all constants (like the number of filters, kernel sizes, block layouts, strides, etc)
         specific to the model, but independent of anything else (like image shapes, number of classes, etc).
 
-        These defaults can be changed in :meth:`~.EagerTorch.build_config` or when calling :meth:`.Pipeline.init_model`.
+        These defaults can be changed in :meth:`~.TorchModel.build_config` or when calling :meth:`.Pipeline.init_model`.
 
         Examples
         --------
@@ -337,7 +337,7 @@ class EagerTorch:
 
             @classmethod
             def default_config(cls):
-                config = EagerTorch.default_config()
+                config = TorchModel.default_config()
                 config['initial_block'] = dict(layout='cnap', filters=16, kernel_size=7, strides=2,
                                                pool_size=3, pool_strides=2)
                 config['body/filters'] = 32
@@ -378,7 +378,7 @@ class EagerTorch:
 
         * Don't forget to call ``super().build_config(names)`` in the beginning.
 
-        * Define parameters for :meth:`.EagerTorch.initial_block`, :meth:`.EagerTorch.body`, :meth:`.EagerTorch.head`,
+        * Define parameters for :meth:`.TorchModel.initial_block`, :meth:`.TorchModel.body`, :meth:`.TorchModel.head`,
           which depend on inputs.
 
         * Dont forget to return ``config`` at the end.
