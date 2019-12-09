@@ -1,10 +1,9 @@
 """ Contains pyramid layer """
 import numpy as np
-import torch
 import torch.nn as nn
 
 from .conv_block import ConvBlock
-from .upsample import Upsample
+from .resize import Upsample, Combine
 from ..utils import get_shape
 
 
@@ -14,56 +13,101 @@ class PyramidPooling(nn.Module):
 
     Parameters
     ----------
-    inputs : torch.Tensor, torch.nn.Module, numpy.ndarray or tuple
-        shape or an example of input tensor to infer shape
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
     layout : str
-        sequence of operations in convolution layer
+        Sequence of operations in convolution layer.
     filters : int
-        the number of filters in pyramid branches
+        Number of filters in pyramid branches.
     kernel_size : int
-        kernel size
+        Kernel size.
     pool_op : str
-        a pooling operation ('mean' or 'max')
+        Pooling operation ('mean' or 'max').
     pyramid : tuple of int
-        the number of feature regions in each dimension, default is (0, 1, 2, 3, 6).
+        Number of feature regions in each dimension.
         `0` is used to include `inputs` into the output tensor.
-
-    Returns
-    -------
-    torch.nn.Module
     """
     def __init__(self, inputs, layout='cna', filters=None, kernel_size=1, pool_op='mean',
                  pyramid=(0, 1, 2, 3, 6), **kwargs):
         super().__init__()
 
-        shape = get_shape(inputs)
-        self.axis = -1 if kwargs.get('data_format') == 'channels_last' else 1
-        filters = filters if filters else shape[self.axis] // len(pyramid)
-
-        if None in shape[1:]:
-            # if some dimension is undefined
-            raise ValueError("Pyramid pooling can only be applied to a tensor with a fully defined shape.")
-
-        item_shape = np.array(shape[2:] if self.axis == 1 else shape[1:-1])
+        spatial_shape = np.array(get_shape(inputs)[2:])
+        filters = filters if filters else 'same // {}'.format(len(pyramid))
 
         modules = nn.ModuleList()
         for level in pyramid:
             if level == 0:
-                module = None
+                module = nn.Identity()
             else:
-                pool_size = tuple(np.ceil(item_shape / level).astype(np.int32).tolist())
-                pool_strides = tuple(np.floor((item_shape - 1) / level + 1).astype(np.int32).tolist())
+                x = inputs
+                pool_size = tuple(np.ceil(spatial_shape / level).astype(np.int32).tolist())
+                pool_strides = tuple(np.floor((spatial_shape - 1) / level + 1).astype(np.int32).tolist())
 
-                pool = ConvBlock(inputs, 'p', pool_op=pool_op, pool_size=pool_size,
-                                 pool_strides=pool_strides, **kwargs)
-                conv = ConvBlock(pool, layout, filters=filters, kernel_size=kernel_size, **kwargs)
-                upsamp = Upsample(inputs=conv, factor=None, layout='b', shape=tuple(item_shape.tolist()), **kwargs)
-                module = nn.Sequential(pool, conv, upsamp)
+                layer = ConvBlock(inputs=x, layout='p' + layout, filters=filters, kernel_size=kernel_size,
+                                  pool_op=pool_op, pool_size=pool_size, pool_strides=pool_strides, **kwargs)
+                x = layer(x)
+
+                upsample_layer = Upsample(inputs=x, factor=None, layout='b',
+                                          shape=tuple(spatial_shape.tolist()), **kwargs)
+                module = nn.Sequential(layer, upsample_layer)
             modules.append(module)
-        self.blocks = modules
-        self.output_shape = shape
 
+        self.blocks = modules
+        self.combine = Combine(op='concat')
 
     def forward(self, x):
-        levels = [block(x) if block else x for block in self.blocks]
-        return torch.cat(levels, dim=self.axis)
+        levels = [layer(x) for layer in self.blocks]
+        return self.combine(levels)
+
+
+
+class ASPP(nn.Module):
+    """ Atrous Spatial Pyramid Pooling module.
+
+    Chen L. et al. "`Rethinking Atrous Convolution for Semantic Image Segmentation
+    <https://arxiv.org/abs/1706.05587>`_"
+
+    Parameters
+    ----------
+    layout : str
+        Layout for convolution layers.
+    filters : int
+        Number of filters in the output tensor.
+    kernel_size : int
+        Kernel size for dilated branches.
+    rates : tuple of int
+        Dilation rates for branches, default=(6, 12, 18).
+    pyramid : int or tuple of int
+        Number of image level features in each dimension.
+
+        Default is 2, i.e. 2x2=4 pooling features will be calculated for 2d images,
+        and 2x2x2=8 features per 3d item.
+        Tuple allows to define several image level features, e.g (2, 3, 4).
+
+    See also
+    --------
+    PyramidPooling
+    """
+    def __init__(self, inputs=None, layout='cna', filters='same', kernel_size=3,
+                 rates=(6, 12, 18), pyramid=2, **kwargs):
+        super().__init__()
+        pyramid = pyramid if isinstance(pyramid, (tuple, list)) else [pyramid]
+
+        modules = nn.ModuleList()
+        bottleneck = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=1, **kwargs)
+        modules.append(bottleneck)
+
+        for level in rates:
+            layer = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=kernel_size,
+                              dilation_rate=level, **kwargs)
+            modules.append(layer)
+
+        pyramid_layer = PyramidPooling(inputs=inputs, filters=filters, pyramid=pyramid, **kwargs)
+        modules.append(pyramid_layer)
+
+        self.blocks = modules
+        self.combine = Combine(op='concat')
+
+    def forward(self, x):
+        levels = [layer(x) for layer in self.blocks]
+        return self.combine(levels)
