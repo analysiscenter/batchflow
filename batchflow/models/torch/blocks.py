@@ -20,8 +20,8 @@ class DefaultBlock(nn.Module):
 
     def __init__(self, **kwargs):
         super().__init__()
-        attrs = {name.lower(): value for name, value in vars(self.__class__).items()
-                 if name != 'forward' and '__' not in name}
+        attrs = {name.lower(): value for name, value in vars(type(self)).items()
+                 if name.isupper()}
         kwargs = {**attrs, **kwargs}
 
         self.layer = ConvBlock(**kwargs)

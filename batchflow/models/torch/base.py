@@ -475,15 +475,17 @@ class TorchModel:
 
         if config.get('inputs'):
             classes, shapes = [], []
-            for name, cfg in config['inputs'].items():
+            for name in ['labels', 'masks', 'targets']:
+                cfg = config['inputs'].get(name, {})
                 if 'classes' in cfg:
                     classes.append(cfg['classes'])
-                    if 'shape' in cfg:
-                        shapes.append(cfg['shape'])
+                if 'shape' in cfg:
+                    shapes.append(cfg['shape'])
             if len(classes) == 1:
                 self.classes = classes[0]
-                if shapes:
-                    self.target_shape = shapes[0]
+            if len(shapes) == 1:
+                self.target_shape = (batch_size, *shapes[0])
+                self.classes = shapes[0][0]
 
 
     def _build(self, inputs=None):
