@@ -434,13 +434,13 @@ class TorchModel:
         else:
             devices = devices if isinstance(devices, list) else [devices]
             available_devices = ['cuda:{}'.format(i) for i in range(torch.cuda.device_count())] + ['cpu']
-
             for dev in devices:
                 if isinstance(dev, torch.device):
                     self.devices.append(dev)
                 elif isinstance(dev, str):
                     dev_ = dev.lower()
-                    dev_ = dev.replace('gpu', 'cuda')
+                    dev_ = dev_.replace('gpu', 'cuda')
+                    dev_ = dev_.replace('cpu:0', 'cpu')
 
                     devices = [torch.device(device) for device in available_devices
                                if re.search(dev_, device.lower()) is not None]
