@@ -104,6 +104,6 @@ class DenseUNet(UNet):
     @classmethod
     def default_config(cls):
         config = super().default_config()
-        config['body/encoder/blocks'] += dict(base=DenseBlock, growth_rate=16, skip=True)
-        config['body/decoder/blocks'] += dict(base=DenseBlock, growth_rate=16, skip=False)
+        config['body/encoder/blocks'] += dict(base=DenseBlock, layout='nacd', skip=True)
+        config['body/decoder/blocks'] += dict(base=DenseBlock, layout='nacd', skip=False)
         return config

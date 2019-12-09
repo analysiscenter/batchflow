@@ -113,10 +113,11 @@ class ResBlock(nn.Module):
                  downsample=False, bottleneck=False, se=False, groups=1, op='+', n_reps=1, **kwargs):
         super().__init__()
 
-        num_convs = sum([letter in CONV_LETTERS for letter in layout])
+        num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
-        filters = [safe_eval(str(item), get_num_channels(inputs)) for item in filters]
+        filters = [safe_eval(item, get_num_channels(inputs)) if isinstance(item, str) else item
+                   for item in filters]
 
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides
