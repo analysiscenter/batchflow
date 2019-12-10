@@ -115,17 +115,17 @@ class ASPP(nn.Module):
 
 class ImprovedSelfAttention(nn.Module):
     """ Improved self Attention module.
+
     Wang Z. et al. "'Less Memory, Faster Speed: Refining Self-Attention Module for Image
     Reconstruction <https://arxiv.org/pdf/1905.08008.pdf>'_"
 
     Parameters
     ----------
     reduction_ratio : float
-    The reduction ratio of filters in the inner convolutions.
+        The reduction ratio of filters in the inner convolutions.
     """
     def __init__(self, inputs=None, layout='c', kernel_size=1, reduction_ratio=8, strides=1, **kwargs):
         super().__init__()
-        from .conv_block import ConvBlock
         num_channels = get_num_channels(inputs)
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
 
@@ -139,7 +139,7 @@ class ImprovedSelfAttention(nn.Module):
         N = np.prod(spatial)
 
         phi = self.conv1(x).view(bs, -1, N) # (B, C/8, N)
-        theta = self.conv2(x).view(bs, N, -1)
+        theta = self.conv2(x).view(bs, N, -1) # (B, N, C)
         attention = torch.bmm(phi, theta) / N # (B, C/8, C)
 
         out = self.conv1(x).view(bs, N, -1) # (B, N, C/8)
