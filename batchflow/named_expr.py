@@ -223,7 +223,7 @@ class NamedExpression(metaclass=MetaNamedExpression):
         b = eval_expr(self.b, **kwargs)
         if self.op == '#attr':
             setattr(a, b, value)
-        elif self.op == '#slice':
+        elif self.op == '#item':
             a[b] = value
         else:
             raise NotImplementedError("assign should be implemented in child classes")
