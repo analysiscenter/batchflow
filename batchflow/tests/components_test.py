@@ -80,12 +80,12 @@ def advanced_dict(components, indices_type):
     return (index, ) + comps
 
 
-@pytest.mark.parametrize('components', [None, ('images', 'labels')])
+@pytest.mark.parametrize('components', [('images', 'labels')])
 @pytest.mark.parametrize('indices_type', ['list', 'array'])
 @pytest.mark.parametrize('source', [tuple_of_arrays, dict_of_arrays, dataframe, dataframe_with_str_index, advanced_dict])
 class TestComponents:
-    def test_getattr(self, source, indices_type):
-        _, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(indices_type)
+    def test_getattr(self, components, source, indices_type):
+        _, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(components, indices_type)
 
         if source is advanced_dict:
             assert (np.array(list(full.labels.values())) == np.arange(SIZE) + 100).all()
@@ -99,8 +99,8 @@ class TestComponents:
         assert (a37_39.labels == np.arange(37, 39) + 100).all()
         assert (a38.labels == 138).all()
 
-    def test_getitem_getattr(self, source, indices_type):
-        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(indices_type)
+    def test_getitem_getattr(self,components,  source, indices_type):
+        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(components, indices_type)
 
         assert (full[index[38]].labels == 138).all()
         assert (a12_68[index[38]].labels == 138).all()
@@ -116,8 +116,8 @@ class TestComponents:
                 assert (a38[index[38]].labels == 138).all()
 
 
-    def test_getitem_setattr1(self, source, indices_type):
-        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(indices_type)
+    def test_getitem_setattr1(self,components,  source, indices_type):
+        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(components, indices_type)
 
         a38.labels = 1000
 
@@ -129,8 +129,8 @@ class TestComponents:
         assert (a37_39[index[38]].labels == 1000).all()
         assert (a38.labels == 1000).all()
 
-    def test_getitem_setattr2(self, source, indices_type):
-        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(indices_type)
+    def test_getitem_setattr2(self,components,  source, indices_type):
+        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(components, indices_type)
 
         a32_42[index[38]].labels = 1000
 
@@ -142,8 +142,8 @@ class TestComponents:
         assert (a37_39[index[38]].labels == 138).all()
         assert (a38.labels == 138).all()
 
-    def test_getitem_setattr3(self, source, indices_type):
-        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(indices_type)
+    def test_getitem_setattr3(self,components, source, indices_type):
+        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(components, indices_type)
 
         if source is advanced_dict:
             return
@@ -158,8 +158,8 @@ class TestComponents:
         assert (a37_39[index[38]].labels == 138).all()
         assert (a38.labels == 138).all()
 
-    def test_getattr_setitem1(self, source, indices_type):
-        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(indices_type)
+    def test_getattr_setitem1(self, components, source, indices_type):
+        index, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(components, indices_type)
 
         a32_42.labels[6] = 1000
 
