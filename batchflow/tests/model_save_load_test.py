@@ -42,12 +42,12 @@ class TestModelSaveLoad:
             data_format = predict_args = predict_kwargs = None
             if issubclass(model_class, TFModel):
                 data_format = 'channels_last'
-                config.update({'channels': 'last', 'dtype': None})
+                config.update({'dtype': None})
                 predict_args = ()
                 predict_kwargs = dict(images=B('images'))
             elif issubclass(model_class, TorchModel):
                 data_format = 'channels_first'
-                config.update({'channels': 'first', 'dtype': 'float32'})
+                config.update({'dtype': 'float32'})
                 predict_args = (B('images'),)
                 predict_kwargs = dict()
 
@@ -57,13 +57,13 @@ class TestModelSaveLoad:
             save_pipeline = (Pipeline()
                              .init_variable('predictions', default=[])
                              .init_model('dynamic', C('model_class'), 'model', C('model_config'))
-                             .to_array(channels=C('channels'), dtype=C('dtype'))
+                             .to_array(dtype=C('dtype'))
                              .predict_model('model', *predict_args,
                                             fetches='predictions', save_to=V('predictions', mode='a'),
                                             **predict_kwargs))
             load_pipeline = (Pipeline()
                              .init_variable('predictions', default=[])
-                             .to_array(channels=C('channels'), dtype=C('dtype'))
+                             .to_array(dtype=C('dtype'))
                              .predict_model('model', *predict_args,
                                             fetches='predictions', save_to=V('predictions', mode='a'),
                                             **predict_kwargs))

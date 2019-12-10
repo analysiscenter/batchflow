@@ -34,7 +34,7 @@ def pipeline():
                      .init_variable('current_loss')
                      .init_model('dynamic', C('model_class'),
                                  'model', C('model_config'))
-                     .to_array(channels='first', dtype='float32')
+                     .to_array(dtype='float32')
                      .train_model('model',
                                   B('images'),
                                   B('labels'),
@@ -58,7 +58,7 @@ class Test_models:
     @pytest.mark.parametrize('decay', [None, 'exp'])
     def test_data_format(self, model, model_setup_images_clf, pipeline, decay):
         """ We can explicitly pass 'data_format' to inputs or common."""
-        dataset, model_config = model_setup_images_clf()
+        dataset, model_config = model_setup_images_clf('channels_first')
         model_config.update(decay=decay, n_iters=25)
         config = {'model_class': model, 'model_config': model_config}
         test_pipeline = (pipeline << dataset) << config
