@@ -1,10 +1,11 @@
 """ Contains pyramid layer """
 import numpy as np
+import torch
 import torch.nn as nn
 
 from .conv_block import ConvBlock
 from .resize import Upsample, Combine
-from ..utils import get_shape
+from ..utils import get_shape, get_num_channels
 
 
 class PyramidPooling(nn.Module):
@@ -111,3 +112,36 @@ class ASPP(nn.Module):
     def forward(self, x):
         levels = [layer(x) for layer in self.blocks]
         return self.combine(levels)
+
+class ImprovedSelfAttention(nn.Module):
+    """ Improved self Attention module.
+    Wang Z. et al. "'Less Memory, Faster Speed: Refining Self-Attention Module for Image
+    Reconstruction <https://arxiv.org/pdf/1905.08008.pdf>'_"
+
+    Parameters
+    ----------
+    reduction_ratio : float
+    The reduction ratio of filters in the inner convolutions.
+    """
+    def __init__(self, inputs=None, layout='c', kernel_size=1, reduction_ratio=8, strides=1, **kwargs):
+        super().__init__()
+        from .conv_block import ConvBlock
+        num_channels = get_num_channels(inputs)
+        self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
+
+        self.conv1 = ConvBlock(inputs=inputs, layout=layout, filters=num_channels//reduction_ratio,
+                               kernel_size=kernel_size, strides=strides, **kwargs)
+        self.conv2 = ConvBlock(inputs=inputs, layout=layout, filters=num_channels,
+                               kernel_size=kernel_size, strides=strides, **kwargs)
+
+    def forward(self, x):
+        bs, spatial = x.shape[0], x.shape[2:]
+        N = np.prod(spatial)
+
+        phi = self.conv1(x).view(bs, -1, N) # (B, C/8, N)
+        theta = self.conv2(x).view(bs, N, -1)
+        attention = torch.bmm(phi, theta) / N # (B, C/8, C)
+
+        out = self.conv1(x).view(bs, N, -1) # (B, N, C/8)
+        out = torch.bmm(out, attention).view(bs, -1, *spatial)
+        return self.gamma*out + x
