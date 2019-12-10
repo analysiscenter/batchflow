@@ -425,8 +425,8 @@ class Batch:
         return res
 
     def __getitem__(self, item):
-        if not isinstance(self._data, BaseComponents):
-            item = self.get_pos(None, None, item)
+        # if not isinstance(self._data, BaseComponents):
+        #     item = self.get_pos(None, None, item)
         return create_item_class(self.components, source=self.data, indices=item, crop=False)
 
     def __iter__(self):
