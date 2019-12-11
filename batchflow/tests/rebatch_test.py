@@ -63,7 +63,7 @@ def test_merge(merge_factor):
     """ merge `merge_factor` instances of a batch and check result's shape"""
     data = np.vstack([np.array([i, i]) for i in range(DATASET_SIZE)])
     data = (data,)
-    b = MyBatch(index=range(DATASET_SIZE), preloaded=data)
+    b = MyBatch(index=DATASET_SIZE, preloaded=data)
     merged, rest = MyBatch.merge([b] * merge_factor)
 
     assert merged.dummy.shape[0] == b.dummy.shape[0] * merge_factor
