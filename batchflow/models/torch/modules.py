@@ -1,11 +1,11 @@
-""" Contains pyramid layer """
+""" Functional modules for various deep network architectures."""
+
 import numpy as np
 import torch
 import torch.nn as nn
 
-from .conv_block import ConvBlock
-from .resize import Upsample, Combine
-from ..utils import get_shape, get_num_channels
+from .layers import ConvBlock, Upsample, Combine
+from .utils import get_shape
 
 
 class PyramidPooling(nn.Module):
@@ -113,7 +113,8 @@ class ASPP(nn.Module):
         levels = [layer(x) for layer in self.blocks]
         return self.combine(levels)
 
-class ImprovedSelfAttention(nn.Module):
+
+class SelfAttention(nn.Module):
     """ Improved self Attention module.
 
     Wang Z. et al. "'Less Memory, Faster Speed: Refining Self-Attention Module for Image
@@ -126,13 +127,12 @@ class ImprovedSelfAttention(nn.Module):
     """
     def __init__(self, inputs=None, layout='c', kernel_size=1, reduction_ratio=8, strides=1, **kwargs):
         super().__init__()
-        num_channels = get_num_channels(inputs)
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
 
-        self.conv1 = ConvBlock(inputs=inputs, layout=layout, filters=num_channels//reduction_ratio,
-                               kernel_size=kernel_size, strides=strides, **kwargs)
-        self.conv2 = ConvBlock(inputs=inputs, layout=layout, filters=num_channels,
-                               kernel_size=kernel_size, strides=strides, **kwargs)
+        args = dict(inputs=inputs, layout=layout, kernel_size=kernel_size, strides=strides)
+        self.conv1 = ConvBlock(filters='same//{}'.format(reduction_ratio), **{**args, **kwargs})
+        self.conv2 = ConvBlock(filters='same', **{**args, **kwargs})
+        self.conv3 = ConvBlock(filters='same//{}'.format(reduction_ratio), **{**args, **kwargs})
 
     def forward(self, x):
         bs, spatial = x.shape[0], x.shape[2:]
@@ -142,6 +142,6 @@ class ImprovedSelfAttention(nn.Module):
         theta = self.conv2(x).view(bs, N, -1) # (B, N, C)
         attention = torch.bmm(phi, theta) / N # (B, C/8, C)
 
-        out = self.conv1(x).view(bs, N, -1) # (B, N, C/8)
+        out = self.conv3(x).view(bs, N, -1) # (B, N, C/8)
         out = torch.bmm(out, attention).view(bs, -1, *spatial)
         return self.gamma*out + x
