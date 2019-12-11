@@ -11,6 +11,24 @@ IMAGE_SHAPE = 10, 10
 
 
 def get_batch(data, pipeline, index=DATASET_SIZE, batch_class=Batch, skip=2, dst=False):
+    """
+    Parameters
+    ----------
+    data
+        data to use
+    pipeline : bool or Pipeline
+        whether to get a batch from a dataset or a pipeline
+
+    index : DatasetIndex
+
+    batch_class : type
+
+    skip : int
+        how many batches to skip
+
+    dst : bool or list of str
+        preload data when False or load to components given
+    """
 
     if dst is False:
         dataset = Dataset(index, preloaded=data, batch_class=batch_class)
@@ -88,6 +106,12 @@ class TestOneComponent:
         labels = np.arange(DATASET_SIZE)
         data = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
 
+        if pipeline is True and dst is False:
+            with pytest.raises(AttributeError) as execinfo:
+                batch = get_batch(data, pipeline, batch_class=MyBatch1, skip=2, dst=dst)
+            assert "data not found in class" in str(execinfo.value)
+            return
+
         batch = get_batch(data, pipeline, batch_class=MyBatch1, skip=2, dst=dst)
 
         if dst is False:
@@ -95,7 +119,7 @@ class TestOneComponent:
             # this fails when preloading
             with pytest.raises(AttributeError) as execinfo:
                 _ = batch.images
-            assert "'numpy.ndarray' object has no attribute 'images'" in str(execinfo.value)
+            assert "data not found in class" in str(execinfo.value)
         else:
             # but does not fail when loading as it loads only one component
             assert (batch.images[:, 0, 0] == np.arange(20, 30)).all()
@@ -241,11 +265,11 @@ class TestAddComponents:
 
 @pytest.mark.parametrize('pipeline', [False, True])
 class TestItems:
-    @pytest.mark.parametrize('dst', ['images'])
-    def test_array(self, pipeline, dst):
+    @pytest.mark.parametrize('dst', [False, None])
+    def test_tuple(self, pipeline, dst):
         labels = np.arange(DATASET_SIZE)
         images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
-        data = images
+        data = (images,)
 
         batch = get_batch(data, pipeline, batch_class=MyBatch4, skip=2, dst=dst)
 
@@ -254,7 +278,7 @@ class TestItems:
         assert (item.images == 25).all()
         assert item.labels is None
 
-    @pytest.mark.parametrize('dst', [False, ('images', 'labels')])
+    @pytest.mark.parametrize('dst', [False, None])
     def test_dict(self, pipeline, dst):
         labels = np.arange(DATASET_SIZE)
         images = np.ones((DATASET_SIZE,) + IMAGE_SHAPE) * labels.reshape(-1, 1, 1)
