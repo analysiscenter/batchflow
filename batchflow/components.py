@@ -46,11 +46,7 @@ class BaseComponents:
         elif self.components is not None:
             new_data = {}
             for comp in self.components:
-                # if isinstance(self.data, BaseComponents):
-                #     comp_data = self.data.get(comp, indices)
-                # else:
-                #     comp_data = self.data.get(comp)[indices]
-                comp_data = self._get(comp, indices)
+                comp_data = self._get(comp, indices, cropped=False)
                 new_data[comp] = comp_data
             self.data = new_data
 
@@ -107,22 +103,21 @@ class BaseComponents:
     def __getitem__(self, item):
         if isinstance(item, slice):
             item = list(range(item.start, item.stop, item.step))
-        if self.components is None:
-            return self._get(item)
         if self._indices is not None and item not in self._indices:
             raise KeyError(item)
         return type(self)(self.components, self, item, crop=False)
 
     def find_in_index(self, item):
+        """ Return a posiition of an item in the index """
         if isinstance(self._indices, list):
             return self._indices.index(item)
         if isinstance(self._indices, np.ndarray):
-            it = np.where(self._indices == item)[0][0]
-            return it
+            return np.where(self._indices == item)[0][0]
         raise TypeError("Unknown index type: %s" % type(self._indices))
 
     def get_pos(self, component, indices):
         """ Return positions of given indices """
+        items = indices
         if self._indices is not None:
             # a cropped numpy array needs a position as an index
             if isinstance(self.data[component], np.ndarray):
@@ -130,23 +125,24 @@ class BaseComponents:
                     items = [self.find_in_index(i) for i in indices]
                 else:
                     items = self.find_in_index(indices)
-            else:
-                items = indices
-        else:
-            items = indices
         return items
 
-    def _get(self, component, indices=None):
+    def _get(self, component, indices=None, cropped=True):
         indices = indices if indices is not None else self._indices
+
         if self.data is None:
             return None
         if isinstance(self.data, BaseComponents):
             return self.data.get(component, indices)
+
         data = self.data.get(component, None)
         if data is None:
             return None
         if indices is not None:
-            items = self.get_pos(component, indices)
+            if cropped:
+                items = self.get_pos(component, indices)
+            else:
+                items = indices
             if isinstance(data, dict):
                 return AdvancedDict(data)[items]
             return data[items]
@@ -176,8 +172,6 @@ class BaseComponents:
             self.data[component] = value
 
     def __getattr__(self, name):
-        if self.components is None and self.data is not None:
-            return getattr(self.data, name)
         if name in self.components:
             return self.get(name, self.indices)
 
@@ -193,11 +187,11 @@ class BaseComponents:
 def _get_crop(source, indices):
     return source[indices] if source is not None else None
 
-def get_from_source(components=None, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
+def get_from_source(components, source, indices=None, crop=False, copy=False, cast_to_array=True):
     """ Return data source (and make a crop and a copy if necessary) """
     _ = components, crop, cast_to_array
 
-    source = data
+    data = source
     if indices is not None:
         if isinstance(source, (list, tuple)):
             data = type(source)([_get_crop(item, indices) for item in source])
@@ -207,7 +201,6 @@ def get_from_source(components=None, data=None, indices=None, crop=False, copy=F
         else:
             if isinstance(source, pd.DataFrame):
                 data = source.loc
-            print(data, indices)
             data = _get_crop(data, indices)
 
     if copy and data is not None:
@@ -218,16 +211,16 @@ def get_from_source(components=None, data=None, indices=None, crop=False, copy=F
 
 def create_item_class(components, source=None, indices=None, crop=None, copy=False, cast_to_array=True):
     """ Create components class """
-    item_class = BaseComponents
-    if components is not None:
+    if components is None:
+        # source is a memory-like object (numpy array, pandas dataframe, hdf5 storage, etc)
+        item_class = get_from_source
+    else:
         # source is an object supporting double-indexing `source[component][item_index]`
         # so it can be a tuple, dict, pd.DataFrame, etc
         if isinstance(source, (list, tuple)):
             source = dict(zip(components, source))
-    else:
-        # source is a memory-like object (ndarray, hdf5 storage, etc)
-        item_class = get_from_source
+        item_class = BaseComponents
 
-    item = item_class(components, data=source, indices=indices, crop=crop, copy=copy, cast_to_array=cast_to_array)
+    item = item_class(components, source, indices=indices, crop=crop, copy=copy, cast_to_array=cast_to_array)
 
     return item

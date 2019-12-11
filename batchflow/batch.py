@@ -425,9 +425,7 @@ class Batch:
         return res
 
     def __getitem__(self, item):
-        # if not isinstance(self._data, BaseComponents):
-        #     item = self.get_pos(None, None, item)
-        return create_item_class(self.components, source=self.data, indices=item, crop=False)
+        return self.data[item] if self.data is not None else None
 
     def __iter__(self):
         for item in self.indices:
@@ -832,11 +830,7 @@ class Batch:
     def _load_table(self, src, fmt, dst=None, post=None, *args, **kwargs):
         """ Load a data frame from table formats: csv, hdf5, feather """
         if fmt == 'csv':
-            if 'index_col' in kwargs:
-                index_col = kwargs.pop('index_col')
-                _data = pd.read_csv(src, *args, **kwargs).set_index(index_col)
-            else:
-                _data = pd.read_csv(src, *args, **kwargs)
+            _data = pd.read_csv(src, *args, **kwargs)
         elif fmt == 'feather':
             _data = feather.read_dataframe(src, *args, **kwargs)
         elif fmt == 'hdf5':
@@ -907,6 +901,9 @@ class Batch:
             self._data = create_item_class(self.components, source=src, indices=self.indices,
                                            crop=True, copy=self._copy)
         else:
+            if isinstance(dst, str):
+                dst = (dst,)
+                src = (src,)
             source = create_item_class(dst, source=src, indices=self.indices, crop=True, copy=self._copy)
             for comp in dst:
                 setattr(self, comp, getattr(source, comp))
@@ -934,20 +931,13 @@ class Batch:
         Loading creates new components if necessary.
         """
         _ = args
-        if  isinstance(dst, str):
-            components = (dst,)
-            src = (src,)
-        else:
-            components = dst
-        if components is not None:
-            self.add_components(np.setdiff1d(components, self.components).tolist())
 
         if fmt is None:
-            self._load_from_source(src=src, dst=components)
+            self._load_from_source(src=src, dst=dst)
         elif fmt == 'blosc':
-            self._load_blosc(src=src, dst=components, **kwargs)
+            self._load_blosc(src=src, dst=dst, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:
-            self._load_table(src=src, fmt=fmt, dst=components, **kwargs)
+            self._load_table(src=src, fmt=fmt, dst=dst, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
         return self
