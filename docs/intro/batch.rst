@@ -13,19 +13,20 @@ Index
 Data
 ====
 
-The base :class:`~batchflow.Batch` class has a private property :attr:`~batchflow.Batch._data` which you can use to store your data in. Just call :func:`~batchflow.Batch.put_into_data`. After that, you can access data through a public property :attr:`~batchflow.Batch.data`. This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.::
+The base :class:`~batchflow.Batch` class has a private property :attr:`~batchflow.Batch._data` which you can use to store your data in. Just call :func:`~batchflow.Batch.load`. After that, you can access data through a public property :attr:`~batchflow.Batch.data`. This approach allows to conceal an internal data structure and provides for a more convenient and (perhaps) more stable public interface to access the data.::
 
     class MyBatch(Batch):
         def some_method(self):
-            self.put_into_data(self.indices, some_data)
+            self.load(src=some_data)
 
 If your batch has components_, you might put only a few components::
 
     class MyBatch(Batch):
         def some_method(self):
-            self.put_into_data(self.indices, some_data, components=['comp1', 'comp2'])
+            self.load(src=some_data, components=['comp1', 'comp2'])
 
 Even though this is just a convention and you are not obliged to use it, many predefined methods follow it, thus making your life a bit easier.
+
 
 preloaded
 ^^^^^^^^^
@@ -40,9 +41,12 @@ You also might initialize the whole dataset::
 
    dataset = Dataset(index, batch_class=Mybatch, preloaded=data)
 
-Thus :func:`~batchflow.Dataset.gen_batch` and :func:`~batchflow.Dataset.next_batch` will create batches that contain preloaded data.
+Thus :func:`~batchflow.Dataset.gen_batch` and :func:`~batchflow.Dataset.next_batch` will automatically create batches that contain preloaded data.
 
-To put it simply, `preloaded=data` is roughly equivalent to `batch.load(data, fmt=None)`.
+To put it simply, `preloaded=data` is roughly equivalent to `batch.load(src=data)`.
+
+See :meth:`~batchflow.Batch.load` for details.
+
 
 .. _components:
 
@@ -73,6 +77,7 @@ Each batch also refers to a dataset which it was created from - `batch.dataset`.
 but the dataset reference does not change.
 
 Another way to access dataset attributes is to use :class:`~.batchflow.D`-expression.
+
 
 .. _actions:
 
@@ -170,16 +175,18 @@ Instead DO that::
            ...
 
        @action
-       def load(self, src, fmt=None):
+       def load(self, fmt=None, src=None):
            # load data from source
            ...
-           self.put_into_data(read(file))
+           self._data = read(src)
            return self
+
 
 Store your data in `_data` property
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 It is just a convenient convention which makes your life more consistent.
+
 
 Use components
 ^^^^^^^^^^^^^^
@@ -191,6 +198,7 @@ For a more flexible data processing and covenient actions create data components
         components = 'images', 'masks', 'labels'
 
 See above `for more details about components <#components>`_.
+
 
 Make `actions` whenever possible
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -207,12 +215,14 @@ So make it an `action`::
 
 `Actions` should return an instance of some batch class.
 
+
 Parallelize everyting you can
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you want a really fast data processing you can't do without `numba` or `cython`.
 And don't forget about input/output operations.
 For more details see :doc:`how to make a parallel actions <parallel>`.
+
 
 Define `load` and `dump` action-methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -224,9 +234,9 @@ Define `load` and `dump` action-methods
        @action
        def load(self, src, fmt='raw'):
            if fmt == 'raw':
-               self.put_into_data(...) # load from a raw file
+               ... # load from a raw file
            elif fmt == 'blosc':
-               self.put_into_data(...) # load from a blosc file
+               ... # load from a blosc file
            else:
                super().load(src, fmt)
            return self
@@ -234,9 +244,9 @@ Define `load` and `dump` action-methods
        @action
        def dump(self, dst, fmt='raw'):
            if fmt == 'raw':
-               # write self.data to a raw file
+               ... # write self.data to a raw file
            elif fmt == 'blosc':
-               # write self.data to a blosc file
+               ... # write self.data to a blosc file
            else:
                super().dum(dst, fmt)
            return self
@@ -249,6 +259,7 @@ This lets you create explicit pipeline workflows::
       .other_action(param2)
       .one_more_action()
       .dump('/other/path', 'blosc')
+
 
 Make all I/O in `async` methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -281,6 +292,7 @@ This is extremely important if you read batch data from many files.::
            else:
                self.put_into_data(np.concatenate(all_res))
            return self
+
 
 Make all I/O in `async` methods even if there is nothing to parallelize
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
