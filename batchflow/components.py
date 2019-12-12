@@ -139,12 +139,11 @@ class BaseComponents:
         if data is None:
             return None
         if indices is not None:
-            if cropped:
-                items = self.get_pos(component, indices)
-            else:
-                items = indices
+            if isinstance(data, (pd.DataFrame, pd.Series)):
+                return data.loc[indices]
             if isinstance(data, dict):
-                return AdvancedDict(data)[items]
+                return AdvancedDict(data)[indices]
+            items = self.get_pos(component, indices) if cropped else indices
             return data[items]
         return data
 

@@ -929,8 +929,42 @@ class Batch:
         Notes
         -----
         Loading creates new components if necessary.
+
+        Examples
+        --------
+        Load data from a pandas dataframe's columns into all batch components::
+
+            batch.load(src=dataframe)
+
+        Load data from dataframe's columns `features` and `labels` into components `features` and `labels`::
+
+            batch.load(src=dataframe, dst=('features', 'labels'))
+
+        Load a dataframe into a component `features`::
+
+            batch.load(src=dataframe, dst='features')
+
+        Load data from a dict into components `images` and `masks`::
+
+            batch.load(src=dict(images=images_array, masks=masks_array), dst=('images', 'masks'))
+
+        Load data from a tuple into components `images` and `masks`::
+
+            batch.load(src=(images_array, masks_array), dst=('images', 'masks'))
+
+        Load data from an array into a component `images`::
+
+            batch.load(src=images_array, dst='images')
+
+        Load data from a CSV file columns into components `features` and `labels`::
+
+            batch.load(fmt='csv', src='/path/to/file.csv', dst=('features', 'labels`), index_col=0)
         """
         _ = args
+
+        if dst is not None:
+            components = (dst,) if isinstance(dst, str) else dst
+            self.add_components(np.setdiff1d(components, self.components).tolist())
 
         if fmt is None:
             self._load_from_source(src=src, dst=dst)
