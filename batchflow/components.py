@@ -95,11 +95,6 @@ class BaseComponents:
     def __len__(self):
         return len(self.data)
 
-    # def __add__(self, other):
-    #     if not isinstance(other, tuple):
-    #         raise TypeError("Tuple is expected, while got %s" % type(other))
-    #     self.data = self.data + other
-
     def __getitem__(self, item):
         if isinstance(item, slice):
             item = list(range(item.start, item.stop, item.step))
