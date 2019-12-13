@@ -49,4 +49,4 @@ jobs:
         git add -A .
         git commit -am "Build docs"
         git remote add gh_pages https://${{ secrets.GITHUB_PUSH}}@github.com/${{ github.repository }}
-        git push gh_pages
+        git push -f gh_pages gh-pages
