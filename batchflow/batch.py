@@ -914,7 +914,7 @@ class Batch:
             a source format, one of None, 'blosc', 'csv', 'hdf5', 'feather'
 
         dst : None or str or tuple of str
-            components to load
+            components to load `src` to
 
         **kwargs :
             other parameters to pass to format-specific loaders
