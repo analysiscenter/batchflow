@@ -425,7 +425,14 @@ class Batch:
         return res
 
     def __getitem__(self, item):
-        return self.data[item] if self.data is not None else None
+        item_pos = self.index.get_pos(item)
+        if isinstance(self.data, np.ndarray):
+            return self.data[item_pos]
+        elif isinstance(self.data, pd.DataFrame):
+            return self.data.iloc[item_pos]
+        elif self.data is None:
+            return None
+        return self.data[item]
 
     def __iter__(self):
         for item in self.indices:
