@@ -956,7 +956,7 @@ class Batch:
         _ = args
 
         if dst is not None:
-            self.add_components(np.setdiff1d(components, self.components).tolist())
+            self.add_components(np.setdiff1d(dst, self.components).tolist())
 
         if fmt is None:
             self._load_from_source(src=src, dst=dst)
