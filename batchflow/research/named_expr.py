@@ -79,6 +79,17 @@ class ResearchPath(ResearchNamedExpression):
         path = self._get(**kwargs)
         return path
 
+class ResearchExperimentID(ResearchNamedExpression):
+    """ NamedExpression for id (sample_index) for the current experiment """
+    def _get(self, **kwargs):
+        _, kwargs = super()._get(**kwargs)
+        return kwargs['job'], kwargs['experiment']
+
+    def get(self, **kwargs):
+        job, experiment = self._get(**kwargs)
+        unit = list(experiment.values())[0]
+        return job.ids[unit.index]
+
 class ResearchExperimentPath(ResearchNamedExpression):
     """ NamedExpression for path to the current experiment """
     def _get(self, **kwargs):
