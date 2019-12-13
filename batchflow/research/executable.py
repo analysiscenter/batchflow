@@ -56,6 +56,7 @@ class Executable:
         self.args = []
         self.kwargs = dict()
         self.path = None
+        self.research_path = None
         self.config = None
         self.config_from_grid = None
         self.config_from_func = None
@@ -180,8 +181,11 @@ class Executable:
         if self.pipeline is not None:
             self.pipeline.set_config(self.config.config() + self.additional_config)
 
-    def dump_config(self, name):
-        with open(os.path.join(name, 'configs', self.config.alias(as_string=True)), 'wb') as file:
+    def set_research_path(self, path):
+        self.research_path = path
+
+    def dump_config(self):
+        with open(os.path.join(self.research_path, 'configs', self.config.alias(as_string=True)), 'wb') as file:
             dill.dump(self.config, file)
 
     def next_batch(self):
@@ -239,8 +243,8 @@ class Executable:
     def _call_function(self, job, iteration, experiment):
         function = eval_expr(self.function, job=job, iteration=iteration, experiment=experiment)
         if callable(function):
-            args = eval_expr(self.args, job=job, iteration=iteration, experiment=experiment)
-            kwargs = eval_expr(self.kwargs, job=job, iteration=iteration, experiment=experiment)
+            args = eval_expr(self.args, job=job, iteration=iteration, experiment=experiment, path=self.research_path)
+            kwargs = eval_expr(self.kwargs, job=job, iteration=iteration, experiment=experiment, path=self.research_path)
             result = function(*args, **kwargs)
         else:
             result = function
@@ -269,19 +273,19 @@ class Executable:
     def dump_result(self, task_id, iteration, filename):
         """ Dump pipeline results """
         if len(self.variables) > 0:
-            if not os.path.exists(os.path.join(self.path, task_id)):
-                os.makedirs(os.path.join(self.path, task_id))
+            if not os.path.exists(os.path.join(self.research_path, self.path, task_id)):
+                os.makedirs(os.path.join(self.research_path, self.path, task_id))
             self.result['sample_index'] = [task_id] * len(self.result['iteration'])
-            path = os.path.join(self.path, task_id, filename + '_' + str(iteration))
+            path = os.path.join(self.research_path, self.path, task_id, filename + '_' + str(iteration))
             with open(path, 'wb') as file:
                 dill.dump(self.result, file)
         self._clear_result()
 
-    def create_folder(self, name):
+    def create_folder(self):
         """ Create folder if it doesn't exist """
-        self.path = os.path.join(name, 'results', self.config.alias(as_string=True))
+        self.path = os.path.join('results', self.config.alias(as_string=True))
         try:
-            os.makedirs(self.path)
+            os.makedirs(os.path.join(self.path, self.research_path))
         except FileExistsError:
             pass
 
