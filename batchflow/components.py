@@ -6,6 +6,8 @@ try:
 except ImportError:
     import _fake as pd
 
+from .utils import is_iterable
+
 
 class AdvancedDict(dict):
     """ dict that supports advanced indexing """
@@ -27,21 +29,40 @@ class BaseComponents:
     """ Base class for a components storage """
     def __init__(self, components=None, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
         self.components = components
-        self.data = data.data if isinstance(data, BaseComponents) else data
-        self.indices = indices
         self._indices = indices
+        self.data = data
         self.cast_to_array = cast_to_array
+        self._crop = crop
         if crop:
-            self.crop(copy=copy)
+            self.crop()
+        if copy:
+            self.data = cp.deepcopy(self.data)
+
+    def crop(self, indices=None):
+        """ Crops from data in accordance with indices """
+        indices = indices if indices is not None else self._indices
+        if isinstance(self.data, pd.DataFrame):
+            self.data = self.data.loc[indices]
+        elif self.components is not None:
+            new_data = {}
+            for comp in self.components:
+                comp_data = self._get(comp, indices, cropped=False)
+                new_data[comp] = comp_data
+            self.data = new_data
+
+    @property
+    def indices(self):
+        return None if self._crop else self._indices
 
     def __str__(self):
         s = str(type(self)) + ':\n'
-        for comp in self.components:
-            d = getattr(self, comp, None)
-            s += '  ' + comp + ': ' + str(d) + '\n'
+        if self.components is not None:
+            for comp in self.components:
+                d = getattr(self, comp, None)
+                s += '  ' + comp + ': ' + str(d) + '\n'
         if self.indices is not None:
             s += 'indices: ' + str(self.indices) + '\n'
-        s += '  data: ' + str(self.data) +'\n'
+        #s += '  data: ' + str(self.data) +'\n'
         return s
 
     def as_list(self, components=None):
@@ -74,129 +95,126 @@ class BaseComponents:
     def __len__(self):
         return len(self.data)
 
-    def __add__(self, other):
-        if not isinstance(other, tuple):
-            raise TypeError("Tuple is expected, while got %s" % type(other))
-        self.data = self.data + other
-
     def __getitem__(self, item):
-        if self.components is None:
-            return self.data[item]
-        return type(self)(data=self.data, indices=item, crop=False)
+        if isinstance(item, slice):
+            item = list(range(item.start, item.stop, item.step))
+        if self._indices is not None and item not in self._indices:
+            raise KeyError(item)
+        return type(self)(self.components, self, item, crop=False)
 
-    def __setitem__(self, item, value):
-        if self.components is None:
-            self.data[item] = value
-        else:
-            raise NotImplementedError('Item assignment is not implemented.')
+    def find_in_index(self, item):
+        """ Return a posiition of an item in the index """
+        if isinstance(self._indices, list):
+            return self._indices.index(item)
+        if isinstance(self._indices, np.ndarray):
+            return np.where(self._indices == item)[0][0]
+        raise TypeError("Unknown index type: %s" % type(self._indices))
 
-    def _get_from(self, data, copy=False, cast=False):
-        if isinstance(data, dict):
-            data = AdvancedDict(data)
-        data = get_from_source(data=data, indices=self.indices, copy=copy)
+    def get_pos(self, component, indices):
+        """ Return positions of given indices """
+        items = indices
+        if self._indices is not None:
+            # a cropped numpy array needs a position as an index
+            if isinstance(self.data[component], np.ndarray):
+                if is_iterable(indices):
+                    items = [self.find_in_index(i) for i in indices]
+                else:
+                    items = self.find_in_index(indices)
+        return items
 
-        if cast and self.cast_to_array:
-            if isinstance(data, pd.Series):
-                data = data.values
-            elif isinstance(data, AdvancedDict):
-                data = data.as_array(self._indices)
+    def _get(self, component, indices=None, cropped=True):
+        indices = indices if indices is not None else self._indices
 
+        if self.data is None:
+            return None
+        if isinstance(self.data, BaseComponents):
+            return self.data.get(component, indices)
+
+        data = self.data.get(component, None)
+        if data is None:
+            return None
+        if indices is not None:
+            if isinstance(data, (pd.DataFrame, pd.Series)):
+                return data.loc[indices]
+            if isinstance(data, dict):
+                return AdvancedDict(data)[indices]
+            items = self.get_pos(component, indices) if cropped else indices
+            return data[items]
         return data
 
+    def get(self, component, indices=None):
+        """ Returns a value of a component with indices given """
+        data = self._get(component, indices)
 
-class ComponentsTuple(BaseComponents):
-    """ Components storage for tuple-like data """
-    def crop(self, copy=False):
-        """ Crops from data in accordance with indices """
-        if self.data is not None and self.indices is not None:
-            new_data = []
-            for data in self.data:
-                data = self._get_from(data, copy)
-                new_data.append(data)
-            self.data = new_data
-            self.indices = None
+        if self.cast_to_array:
+            if isinstance(data, pd.Series): # and np.all(data.index == self.indices):
+                data = data.values
+            elif isinstance(data, AdvancedDict):
+                data = data.as_array(self.indices)
+        return data
+
+    def set(self, component, indices, value):
+        """ Assign a value to a component with indices given """
+        if self.data is None:
+            self.data = {}
+        if isinstance(self.data, BaseComponents):
+            self.data.set(component, indices or self._indices, value)
+        elif indices is not None:
+            items = self.get_pos(component, indices)
+            self.data[component][items] = value
+        else:
+            self.data[component] = value
 
     def __getattr__(self, name):
-        if self.components is not None and name not in self.components:
-            raise AttributeError("%s does not have an attribute '%s'" % (type(self), name))
-
-        ix = self.components.index(name)
-        data = self.data[ix] if ix < len(self.data) else None
-        return self._get_from(data=data, cast=True)
+        if name in self.components:
+            return self.get(name, self.indices)
 
     def __setattr__(self, name, value):
-        if name in ('components', 'data'):
+        if name in ('data', 'components'):
             super().__setattr__(name, value)
         elif self.components is not None and name in self.components:
-            ix = self.components.index(name)
-
-            if self.indices is None:
-                new_data = list(self.data) if self.data is not None else []
-                new_data = new_data + [None for _ in range(max(len(self.components) - len(new_data), 0))]
-                new_data[ix] = value
-                self.data = new_data
-            else:
-                self.data[ix][self.indices] = value
+            self.set(name, self.indices, value)
         else:
             super().__setattr__(name, value)
 
 
-class ComponentsDict(BaseComponents):
-    """ Components storage for dict-like data """
-    def crop(self, copy=False):
-        """ Crops from data in accordance with indices """
-        if self.data is not None and self.indices is not None:
-            new_data = {}
-            components = self.components or list(self.data.keys())
-            for comp in components:
-                data = self.data.get(comp, None)
-                data = self._get_from(data, copy)
-                new_data[comp] = data
-            self.data = new_data
-            self.indices = None
+def _get_crop(source, indices):
+    return source[indices] if source is not None else None
 
-    def __getattr__(self, name):
-        if self.components is not None and name not in self.components:
-            raise AttributeError("%s does not have an attribute '%s'" % (type(self), name))
-        return self._get_from(data=self.data[name], cast=True)
-
-    def __setattr__(self, name, value):
-        if name in ('components', 'data'):
-            super().__setattr__(name, value)
-        elif self.components is not None and name in self.components:
-            if self.data is None:
-                self.data = {}
-            if self.indices is None:
-                self.data[name] = value
-            else:
-                self.data[name][self.indices] = value
-        else:
-            super().__setattr__(name, value)
-
-
-def get_from_source(components=None, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
+def get_from_source(components, source, indices=None, crop=False, copy=False, cast_to_array=True):
     """ Return data source (and make a crop and a copy if necessary) """
     _ = components, crop, cast_to_array
+
+    data = source
     if indices is not None:
-        data = data[indices] if data is not None else None
+        if isinstance(source, (list, tuple)):
+            data = type(source)([_get_crop(item, indices) for item in source])
+        elif isinstance(source, dict):
+            data = [_get_crop(source[item], indices) for item in source]
+            data = dict(zip(source.keys(), data))
+        else:
+            if isinstance(source, pd.DataFrame):
+                data = source.loc
+            data = _get_crop(data, indices)
+
     if copy and data is not None:
         data = cp.deepcopy(data)
+
     return data
 
 
-def create_item_class(components, data=None, indices=None, crop=False, copy=False, cast_to_array=True):
+def create_item_class(components, source=None, indices=None, crop=None, copy=False, cast_to_array=True):
     """ Create components class """
-    if data is None and components is not None:
-        # default components storage
-        item_class = ComponentsDict
-    elif isinstance(data, (dict, pd.DataFrame, ComponentsDict)):
-        item_class = ComponentsDict
-    elif isinstance(data, (list, tuple, ComponentsTuple)):
-        item_class = ComponentsTuple
-    else:
-        # source is a memory-like object (ndarray, hdf5 storage, etc)
+    if components is None:
+        # source is a memory-like object (numpy array, pandas dataframe, hdf5 storage, etc)
         item_class = get_from_source
+    else:
+        # source is an object supporting double-indexing `source[component][item_index]`
+        # so it can be a tuple, dict, pd.DataFrame, etc
+        if isinstance(source, (list, tuple)):
+            source = dict(zip(components, source))
+        item_class = BaseComponents
 
-    item = item_class(components, data=data, indices=indices, crop=crop, copy=copy, cast_to_array=cast_to_array)
+    item = item_class(components, source, indices=indices, crop=crop, copy=copy, cast_to_array=cast_to_array)
 
     return item
