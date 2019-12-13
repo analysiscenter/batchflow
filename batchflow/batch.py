@@ -956,7 +956,6 @@ class Batch:
         _ = args
 
         if dst is not None:
-            components = (dst,) if isinstance(dst, str) else dst
             self.add_components(np.setdiff1d(components, self.components).tolist())
 
         if fmt is None:
