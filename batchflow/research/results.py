@@ -14,11 +14,75 @@ class Results:
     ----------
     path : str
         path to root folder of research
+    names : str, list or None
+        names of units (pipleines and functions) to load
+    variables : str, list or None
+        names of variables to load
+    iterations : int, list or None
+        iterations to load
+    repetition : int
+        index of repetition to load
+    configs, aliases : dict, Config, Option, Domain or None
+        configs to load
+    use_alias : bool
+        if True, use alias for model name, else use its full name.
+        Defaults to True
+    concat_config : bool
+        if True, concatenate all config options into one string and store
+        it in 'config' column, else use separate column for each option.
+        Defaults to False
+    drop_columns : bool
+        used only if `concat_config=True`. Drop or not columns with options and
+        leave only concatenated config.
+    kwargs : dict
+        kwargs will be interpreted as config paramter
+
+    Returns
+    -------
+    pandas.DataFrame or dict
+        will have columns: iteration, name (of pipeline/function)
+        and column for config. Also it will have column for each variable of pipeline
+        and output of the function that was saved as a result of the research.
+
+    **How to perform slicing**
+        Method `load` with default parameters will create pandas.DataFrame with all dumped
+        parameters. To specify subset of results one can define names of pipelines/functions,
+        produced variables/outputs of them, iterations and configs. For example,
+        we have the following research:
+
+        ```
+        domain = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
+
+        research = (Research()
+        .add_pipeline(train_ppl, variables='loss', name='train')
+        .add_pipeline(test_ppl, name='test', execute=100, run=True, import_from='train')
+        .add_callable(accuracy, returns='accuracy', name='test_accuracy',
+                    execute=100, pipeline='test')
+        .add_domain(domain))
+
+        research.run(n_iters=10000)
+        ```
+        The code
+        ```
+        Results(research=research).load(iterations=np.arange(5000, 10000),
+                                        variables='accuracy', names='test_accuracy',
+                                        configs=Option('layout', ['cna', 'can']))
+        ```
+        will load output of ``accuracy`` function for configs
+        that contain layout 'cna' or 'can' for iterations starting with 5000.
+        The resulting dataframe will have columns 'iteration', 'name',
+        'accuracy', 'layout', 'model'. One can get the same in the follwing way:
+        ```
+        results = Results(research=research).load()
+        results = results[(results.iterations >= 5000) &
+                            (results.name == 'test_accuracy') & results.layout.isin(['cna', 'can'])]
+        ```
     """
-    def __init__(self, path):
+    def __init__(self, path, *args, **kwargs):
         self.path = path
         self.description = self._get_description()
         self.configs = None
+        self.df = self._load(*args, **kwargs)
 
     def _get_list(self, value):
         if not isinstance(value, list):
@@ -98,76 +162,8 @@ class Results:
         with open(os.path.join(self.path, 'description', 'research.json'), 'r') as file:
             return json.load(file)
 
-    def load(self, names=None, variables=None, iterations=None, repetition=None,
+    def _load(self, names=None, variables=None, iterations=None, repetition=None, sample_index=None,
              configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
-        """ Load results as pandas.DataFrame.
-
-        Parameters
-        ----------
-        names : str, list or None
-            names of units (pipleines and functions) to load
-        variables : str, list or None
-            names of variables to load
-        iterations : int, list or None
-            iterations to load
-        repetition : int
-            index of repetition to load
-        configs, aliases : dict, Config, Option, Domain or None
-            configs to load
-        use_alias : bool
-            if True, use alias for model name, else use its full name.
-            Defaults to True
-        concat_config : bool
-            if True, concatenate all config options into one string and store
-            it in 'config' column, else use separate column for each option.
-            Defaults to False
-        drop_columns : bool
-            used only if `concat_config=True`. Drop or not columns with options and
-            leave only concatenated config.
-        kwargs : dict
-            kwargs will be interpreted as config paramter
-
-        Returns
-        -------
-        pandas.DataFrame or dict
-            will have columns: iteration, name (of pipeline/function)
-            and column for config. Also it will have column for each variable of pipeline
-            and output of the function that was saved as a result of the research.
-
-        **How to perform slicing**
-            Method `load` with default parameters will create pandas.DataFrame with all dumped
-            parameters. To specify subset of results one can define names of pipelines/functions,
-            produced variables/outputs of them, iterations and configs. For example,
-            we have the following research:
-
-            ```
-            domain = Option('layout', ['cna', 'can', 'acn']) * Option('model', [VGG7, VGG16])
-
-            research = (Research()
-            .add_pipeline(train_ppl, variables='loss', name='train')
-            .add_pipeline(test_ppl, name='test', execute=100, run=True, import_from='train')
-            .add_callable(accuracy, returns='accuracy', name='test_accuracy',
-                      execute=100, pipeline='test')
-            .add_domain(domain))
-
-            research.run(n_iters=10000)
-            ```
-            The code
-            ```
-            Results(research=research).load(iterations=np.arange(5000, 10000),
-                                            variables='accuracy', names='test_accuracy',
-                                            configs=Option('layout', ['cna', 'can']))
-            ```
-            will load output of ``accuracy`` function for configs
-            that contain layout 'cna' or 'can' for iterations starting with 5000.
-            The resulting dataframe will have columns 'iteration', 'name',
-            'accuracy', 'layout', 'model'. One can get the same in the follwing way:
-            ```
-            results = Results(research=research).load()
-            results = results[(results.iterations >= 5000) &
-                              (results.name == 'test_accuracy') & results.layout.isin(['cna', 'can'])]
-            ```
-        """
         self.configs = []
         for filename in glob.glob(os.path.join(self.path, 'configs', '*')):
             with open(filename, 'rb') as f:
@@ -207,7 +203,7 @@ class Results:
             path = os.path.join(self.path, 'results', alias_str)
 
             for unit in names:
-                sample_folders = glob.glob(os.path.join(glob.escape(path), '*'))
+                sample_folders = glob.glob(os.path.join(glob.escape(path), '*' if sample_index is None else sample_index))
                 for sample_folder in sample_folders:
                     files = glob.glob(glob.escape(os.path.join(sample_folder, unit)) + '_[0-9]*')
                     files = self._sort_files(files, iterations)

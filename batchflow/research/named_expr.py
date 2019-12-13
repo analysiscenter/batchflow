@@ -3,7 +3,7 @@
 import os
 
 from .results import Results
-from ..named_expr import NamedExpression
+from ..named_expr import NamedExpression, eval_expr
 
 class ResearchNamedExpression(NamedExpression):
     """ NamedExpression base class for Research objects """
@@ -118,4 +118,4 @@ class ResearchResults(ResearchNamedExpression):
 
     def get(self, **kwargs):
         path = self._get(**kwargs)
-        return Results(path=path).load(*self.args, **self.kwargs)
+        return Results(path, *eval_expr(self.args, **kwargs), **eval_expr(self.kwargs, **kwargs))

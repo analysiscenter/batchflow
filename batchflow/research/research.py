@@ -157,7 +157,7 @@ class Research:
         and are running in current Job. Key is a name of `Executable`, value is `Executable`.
         """
 
-        name = name or 'func_' + str(len(self.executables) + 1)
+        name = name or function.__name__
 
         if name in self.executables:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
@@ -278,7 +278,7 @@ class Research:
 
     def load_results(self, *args, **kwargs):
         """ Load results of research as pandas.DataFrame or dict (see :meth:`~.Results.load`). """
-        return Results(path=self.name).load(*args, **kwargs)
+        return Results(self.name, *args, **kwargs)
 
     def run(self, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):
