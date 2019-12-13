@@ -305,7 +305,7 @@ class Batch:
 
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
-            attr = getattr(self.data, name)
+            attr = getattr(self.data, name, None)
             return attr
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
@@ -845,15 +845,8 @@ class Batch:
 
         if callable(post):
             _data = post(_data, src=src, fmt=fmt, dst=dst, **kwargs)
-        else:
-            components = tuple(dst or self.components)
-            _new_data = dict()
-            for i, comp in enumerate(components):
-                _new_data[comp] = _data.iloc[:, i].values
-            _data = _new_data
 
-        for comp, values in _data.items():
-            setattr(self, comp, values)
+        self.load(src=_data, dst=dst)
 
 
     @action(use_lock='__dump_table_lock')
