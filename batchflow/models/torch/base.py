@@ -7,6 +7,7 @@ from collections import OrderedDict
 from functools import partial
 from pprint import pprint
 
+import dill
 import numpy as np
 import torch
 import torch.nn as nn
@@ -292,7 +293,7 @@ class TorchModel:
 
         self.iter_info = {}
         self.preserve = ['full_config', 'input_shapes', 'target_shape', 'classes',
-                         'model', 'device', 'devices',
+                         'model',
                          'train_steps', 'sync_counter', 'microbatch']
 
         load = self.config.get('load')
@@ -1158,7 +1159,7 @@ class TorchModel:
             output = inputs.argmax(dim=class_axis)
         elif callable(oper):
             output = oper(inputs)
-            name = name or oper.__name__
+            name = oper.__name__
         return attr_prefix + name, output
 
 
@@ -1203,11 +1204,11 @@ class TorchModel:
 
         The model will be saved to /path/to/models/resnet34.
         """
-        _ = args, kwargs
+        _ = args
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
-        torch.save({item: getattr(self, item) for item in self.preserve}, path)
+        torch.save({item: getattr(self, item) for item in self.preserve}, path, pickle_module=dill, **kwargs)
 
     def load(self, path, *args, eval=False, **kwargs):
         """ Load a torch model from files.
@@ -1234,13 +1235,13 @@ class TorchModel:
 
         The model will be moved to device specified in the model config by key `device`.
         """
-        _ = args, kwargs
+        _ = args
         self._get_devices()
 
         if self.device:
-            checkpoint = torch.load(path, map_location=self.device)
+            checkpoint = torch.load(path, map_location=self.device, pickle_module=dill, **kwargs)
         else:
-            checkpoint = torch.load(path)
+            checkpoint = torch.load(path, pickle_module=dill, **kwargs)
 
         for item in self.preserve:
             setattr(self, item, checkpoint.get(item))
