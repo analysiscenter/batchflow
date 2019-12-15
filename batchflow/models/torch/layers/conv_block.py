@@ -11,7 +11,7 @@ from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, SideBlock, SEBlock, Combine
+from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, Branch, SEBlock, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
 from .... import Config
@@ -117,7 +117,7 @@ class BaseConvBlock(nn.Module):
         - resize_bilinear - parameters for parameters for :class:`~.layers.Interpolate`.
         - residual_bilinear_additive - parameters for parameters for :class:`~.layers.Interpolate`.
         - residual_se - parameters for parameters for :class:`~.layers.SEBlock`.
-        - side_branch - parameters for parameters for :class:`~.layers.BaseConvBlock`.
+        - branch - parameters for parameters for :class:`~.layers.BaseConvBlock`.
 
 
     Notes
@@ -165,9 +165,9 @@ class BaseConvBlock(nn.Module):
     """
     LETTERS_LAYERS = {
         'a': 'activation',
-        'R': 'residual_start',
+        'R': 'branch',
+        'B': 'branch', # the same as R
         'A': 'residual_bilinear_additive',
-        'B': 'side_branch', # formally, it is residual too
         'S': 'residual_se',
         '+': 'residual_end',
         '.': 'residual_end',
@@ -199,8 +199,7 @@ class BaseConvBlock(nn.Module):
 
     LAYERS_MODULES = {
         'activation': Activation,
-        'residual_start': nn.Identity,
-        'side_branch': SideBlock,
+        'branch': Branch,
         'residual_se': SEBlock,
         'residual_end': Combine,
         'increase_dim': IncreaseDim,
