@@ -509,6 +509,7 @@ class TorchModel:
             inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
             block = self._make_block(config_name, method, config, inputs)
             if block is not None:
+                block.to(self.device)
                 inputs = block(inputs)
                 blocks.append((block_name, block))
 
