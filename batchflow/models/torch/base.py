@@ -657,9 +657,9 @@ class TorchModel:
     def get_defaults(cls, name, kwargs):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
-        _config = config.get(name)
-        kwargs = kwargs or {}
-        config = {**config['common'], **_config, **kwargs}
+        _config = Config(config.get(name))
+        _config = _config + (kwargs or {})
+        config = {**config['common'], **_config}
         return config
 
     @classmethod
@@ -675,7 +675,7 @@ class TorchModel:
         torch.nn.Module or None
         """
         kwargs = cls.get_defaults('initial_block', kwargs)
-        if kwargs.get('layout'):
+        if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
@@ -692,7 +692,7 @@ class TorchModel:
         torch.nn.Module or None
         """
         kwargs = cls.get_defaults('body', kwargs)
-        if kwargs.get('layout'):
+        if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
@@ -711,9 +711,57 @@ class TorchModel:
         """
         _ = target_shape, classes
         kwargs = cls.get_defaults('head', kwargs)
-        if kwargs.get('layout'):
+        if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
+
+
+    def get(self, name, from_start=False, wrap=True):
+        """ Get parts from model.
+
+        Parameters
+        ----------
+        name : str
+            Name of model part to retrieve.
+        from_start : bool
+            If True, then model is retrieved up to the part specified by `name`.
+            If False, only specified part is retrieved.
+        wrap : bool
+            Whether to wrap returned module into separate class that returns only the last output.
+        """
+        if self.model is None:
+            raise ValueError('Model is not created yet.')
+
+        order = self.full_config['order']
+
+        if name in order:
+            if from_start is False:
+                blocks = [(name, getattr(self.model, name) if hasattr(self.model, name) else None)]
+            if from_start is True:
+                index = order.index(name) + 1
+                blocks = [(item, getattr(self.model, item)) for item in order[:index] if hasattr(self.model, item)]
+
+        if name == 'encoder':
+            if hasattr(self.model.body, name):
+                encoder = self.model.body.encoder
+
+            if wrap is True and encoder.return_all is True:
+                class WrappedEncoder(nn.Module):
+                    """ Wrapper around encoder to make it return only one tensor. """
+                    def __init__(self):
+                        super().__init__()
+                        self.encoder = encoder
+
+                    def forward(self, x):
+                        return self.encoder(x)[-1]
+                encoder = WrappedEncoder()
+
+            if from_start is True:
+                index = order.index('body')
+                blocks = [(item, getattr(self.model, item)) for item in order[:index] if hasattr(self.model, item)]
+                blocks.append(('encoder', encoder))
+
+        return nn.Sequential(OrderedDict(blocks))
 
 
     def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
