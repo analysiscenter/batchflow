@@ -78,7 +78,7 @@ class ResNet(Encoder):
                                         pool_size=3, pool_strides=2)
 
         config['body/encoder/num_stages'] = 4
-        config['body/encoder/order'] = ['block']
+        config['body/encoder/order'] = ['skip', 'block']
         config['body/encoder/blocks'] += dict(base=ResBlock, layout='cnacna',
                                               filters=[64, 128, 256, 512],
                                               n_reps=[1, 1, 1, 1],
