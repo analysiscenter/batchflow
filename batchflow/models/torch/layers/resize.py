@@ -287,6 +287,16 @@ class Combine(nn.Module):
         conv = nn.ModuleList(conv)
         inputs = [conv(tensor) for conv, tensor in zip(conv, inputs[1:])]
         return Combine.sum(inputs)
+    @staticmethod
+    def gau(inputs, **kwargs):
+        """ Global Attention Upsample module. https://arxiv.org/pdf/1805.10180.pdf """
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        low, high = inputs[0], inputs[1]
+        num_channels = high.size(1)
+        conv1 = ConvBlock(inputs=low, layout='cna', kernel_size=3, filters=num_channels, **kwargs)(low)
+        conv2 = ConvBlock(inputs=high, layout='V > cna', kernel_size=1, filters='same', padding=0, stride=1, **kwargs)(high)
+        weighted = Combine.mul([conv1, conv2])
+        return Combine.sum([weighted, high])
 
     OPS = {
         concat: ['concat', 'cat', '.'],
@@ -294,8 +304,8 @@ class Combine(nn.Module):
         mul: ['multi', 'mul', '*'],
         mean: ['average', 'avg', 'mean'],
         softsum: ['softsum', '&'],
+        gau: ['gau']
     }
-
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
     def __init__(self, inputs=None, op='concat', force_resize=True, **kwargs):
