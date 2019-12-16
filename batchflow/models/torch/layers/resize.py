@@ -14,7 +14,7 @@ class IncreaseDim(nn.Module):
         self.dim = dim
 
     def forward(self, x):
-        dim = get_num_dims(x) + self.dim
+        dim = len(get_shape(x)) - 2 + self.dim
         ones = [1] * dim
         return x.view(x.size(0), -1, *ones)
 
@@ -287,16 +287,17 @@ class Combine(nn.Module):
         conv = nn.ModuleList(conv)
         inputs = [conv(tensor) for conv, tensor in zip(conv, inputs[1:])]
         return Combine.sum(inputs)
+
     @staticmethod
     def gau(inputs, **kwargs):
         """ Global Attention Upsample module. https://arxiv.org/pdf/1805.10180.pdf """
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-        low, high = inputs[0], inputs[1]
+        x, skip = inputs[0], inputs[1]
         num_channels = high.size(1)
-        conv1 = ConvBlock(inputs=low, layout='cna', kernel_size=3, filters=num_channels, **kwargs)(low)
-        conv2 = ConvBlock(inputs=high, layout='V > cna', kernel_size=1, filters='same', padding=0, stride=1, **kwargs)(high)
+        conv1 = ConvBlock(inputs=x, layout='cna', kernel_size=3, filters=num_channels, **kwargs)(x)
+        conv2 = ConvBlock(inputs=skip, layout='V >> cna', kernel_size=1, filters='same', padding=0, stride=1, **kwargs)(skip)
         weighted = Combine.mul([conv1, conv2])
-        return Combine.sum([weighted, high])
+        return Combine.sum([weighted, skip])
 
     OPS = {
         concat: ['concat', 'cat', '.'],
@@ -316,7 +317,7 @@ class Combine(nn.Module):
 
         if op in self.OPS:
             op = self.OPS[op]
-            if op.__name__ == 'softsum':
+            if op.__name__ in ['softsum', 'gau']:
                 self.op = lambda inputs: op(inputs, **kwargs)
             else:
                 self.op = op
