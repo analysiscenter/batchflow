@@ -914,7 +914,7 @@ class Batch:
             a source format, one of None, 'blosc', 'csv', 'hdf5', 'feather'
 
         dst : None or str or tuple of str
-            components to load
+            components to load `src` to
 
         **kwargs :
             other parameters to pass to format-specific loaders
@@ -956,8 +956,7 @@ class Batch:
         _ = args
 
         if dst is not None:
-            components = (dst,) if isinstance(dst, str) else dst
-            self.add_components(np.setdiff1d(components, self.components).tolist())
+            self.add_components(np.setdiff1d(dst, self.components).tolist())
 
         if fmt is None:
             self._load_from_source(src=src, dst=dst)
