@@ -765,12 +765,18 @@ class TorchModel:
         return nn.Sequential(OrderedDict(blocks))
 
 
-    def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
+    def information(self, config=True, num_params=True,  devices=True, train_steps=True, model=False, misc=True):
         """ Show information about model configuration, used devices, train steps, architecture and more. """
         template = '\n##### {}:'
+
         if config:
             print(template.format('Config'))
             pprint(self.full_config.config)
+
+        if num_params:
+            num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+            print(template.format('Num params'))
+            print('Number of trainable parameters: {}'.format(num_params))
 
         if devices:
             print(template.format('Devices'))
