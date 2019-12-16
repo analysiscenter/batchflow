@@ -7,4 +7,3 @@ from .pooling import MaxPool, AvgPool, Pool, AdaptiveMaxPool, AdaptiveAvgPool, A
 					 GlobalPool, GlobalMaxPool, GlobalAvgPool
 from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, PixelShuffle, SubPixelConv, \
 					Branch, Upsample, Combine, SEBlock, Crop
-from .pyramid import PyramidPooling, ASPP
