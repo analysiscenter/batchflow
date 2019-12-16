@@ -285,7 +285,7 @@ class Executable:
         """ Create folder if it doesn't exist """
         self.path = os.path.join('results', self.config.alias(as_string=True))
         try:
-            os.makedirs(os.path.join(self.path, self.research_path))
+            os.makedirs(os.path.join(self.research_path, self.path))
         except FileExistsError:
             pass
 

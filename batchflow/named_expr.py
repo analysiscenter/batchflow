@@ -9,7 +9,7 @@ class _DummyBatch:
     """ A fake batch for static models """
     def __init__(self, pipeline):
         self.pipeline = pipeline
-        self.dataset = pipeline.dataset if pipeline else None
+        self.dataset = pipeline.dataset if pipeline is None else None
 
 
 def eval_expr(expr, **kwargs):
