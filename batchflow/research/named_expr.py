@@ -1,5 +1,7 @@
 """ Contains named expression classes for Research """
 
+import os
+
 from .results import Results
 from ..named_expr import NamedExpression
 
@@ -76,6 +78,17 @@ class ResearchPath(ResearchNamedExpression):
     def get(self, **kwargs):
         path = self._get(**kwargs)
         return path
+
+class ResearchExperimentPath(ResearchNamedExpression):
+    """ NamedExpression for path to the current experiment """
+    def _get(self, **kwargs):
+        _, kwargs = super()._get(**kwargs)
+        return kwargs['job'], kwargs['experiment']
+
+    def get(self, **kwargs):
+        job, experiment = self._get(**kwargs)
+        unit = list(experiment.values())[0]
+        return os.path.join(unit.path, job.ids[unit.index])
 
 class ResearchResults(ResearchNamedExpression):
     """ NamedExpression for Results of the Research """

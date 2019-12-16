@@ -305,7 +305,7 @@ class Batch:
 
     def __getattr__(self, name):
         if self.components is not None and name in self.components:   # pylint: disable=unsupported-membership-test
-            attr = getattr(self.data, name)
+            attr = getattr(self.data, name, None)
             return attr
         raise AttributeError("%s not found in class %s" % (name, self.__class__.__name__))
 
@@ -425,8 +425,7 @@ class Batch:
         return res
 
     def __getitem__(self, item):
-        # pylint: disable=not-callable
-        return create_item_class(self.components, data=self._data, indices=item, crop=False)
+        return self.data[item] if self.data is not None else None
 
     def __iter__(self):
         for item in self.indices:
@@ -831,11 +830,7 @@ class Batch:
     def _load_table(self, src, fmt, dst=None, post=None, *args, **kwargs):
         """ Load a data frame from table formats: csv, hdf5, feather """
         if fmt == 'csv':
-            if 'index_col' in kwargs:
-                index_col = kwargs.pop('index_col')
-                _data = pd.read_csv(src, *args, **kwargs).set_index(index_col)
-            else:
-                _data = pd.read_csv(src, *args, **kwargs)
+            _data = pd.read_csv(src, *args, **kwargs)
         elif fmt == 'feather':
             _data = feather.read_dataframe(src, *args, **kwargs)
         elif fmt == 'hdf5':
@@ -850,15 +845,8 @@ class Batch:
 
         if callable(post):
             _data = post(_data, src=src, fmt=fmt, dst=dst, **kwargs)
-        else:
-            components = tuple(dst or self.components)
-            _new_data = dict()
-            for i, comp in enumerate(components):
-                _new_data[comp] = _data.iloc[:, i].values
-            _data = _new_data
 
-        for comp, values in _data.items():
-            setattr(self, comp, values)
+        self.load(src=_data, dst=dst)
 
 
     @action(use_lock='__dump_table_lock')
@@ -901,11 +889,15 @@ class Batch:
         return self
 
     def _load_from_source(self, dst, src):
-        """ Load data from a memroy object (tuple, ndarray, pd.DataFrame, etc) """
+        """ Load data from a memory object (tuple, ndarray, pd.DataFrame, etc) """
         if dst is None:
-            self._data = create_item_class(self.components, data=src, indices=self.indices, crop=True)
+            self._data = create_item_class(self.components, source=src, indices=self.indices,
+                                           crop=True, copy=self._copy)
         else:
-            source = create_item_class(dst, data=src, indices=self.indices, crop=True)
+            if isinstance(dst, str):
+                dst = (dst,)
+                src = (src,)
+            source = create_item_class(dst, source=src, indices=self.indices, crop=True, copy=self._copy)
             for comp in dst:
                 setattr(self, comp, getattr(source, comp))
 
@@ -930,22 +922,49 @@ class Batch:
         Notes
         -----
         Loading creates new components if necessary.
+
+        Examples
+        --------
+        Load data from a pandas dataframe's columns into all batch components::
+
+            batch.load(src=dataframe)
+
+        Load data from dataframe's columns `features` and `labels` into components `features` and `labels`::
+
+            batch.load(src=dataframe, dst=('features', 'labels'))
+
+        Load a dataframe into a component `features`::
+
+            batch.load(src=dataframe, dst='features')
+
+        Load data from a dict into components `images` and `masks`::
+
+            batch.load(src=dict(images=images_array, masks=masks_array), dst=('images', 'masks'))
+
+        Load data from a tuple into components `images` and `masks`::
+
+            batch.load(src=(images_array, masks_array), dst=('images', 'masks'))
+
+        Load data from an array into a component `images`::
+
+            batch.load(src=images_array, dst='images')
+
+        Load data from a CSV file columns into components `features` and `labels`::
+
+            batch.load(fmt='csv', src='/path/to/file.csv', dst=('features', 'labels`), index_col=0)
         """
         _ = args
-        if  isinstance(dst, str):
-            components = (dst,)
-            src = (src,)
-        else:
-            components = dst
-        if components is not None:
+
+        if dst is not None:
+            components = (dst,) if isinstance(dst, str) else dst
             self.add_components(np.setdiff1d(components, self.components).tolist())
 
         if fmt is None:
-            self._load_from_source(src=src, dst=components)
+            self._load_from_source(src=src, dst=dst)
         elif fmt == 'blosc':
-            self._load_blosc(src=src, dst=components, **kwargs)
+            self._load_blosc(src=src, dst=dst, **kwargs)
         elif fmt in ['csv', 'hdf5', 'feather']:
-            self._load_table(src=src, fmt=fmt, dst=components, **kwargs)
+            self._load_table(src=src, fmt=fmt, dst=dst, **kwargs)
         else:
             raise ValueError("Unknown format " + fmt)
         return self

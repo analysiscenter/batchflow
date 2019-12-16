@@ -223,7 +223,7 @@ class SEBlock(nn.Module):
 
 
 
-class SideBlock(nn.Module):
+class Branch(nn.Module):
     """ Add side branch to a :class:`~.layers.ConvBlock`. """
     def __init__(self, inputs=None, **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
