@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .layers import ConvBlock, Upsample, Combine
+from .layers import ConvBlock, Upsample, Combine, BaseConvBlock
 from .utils import get_shape
 
 
@@ -145,3 +145,33 @@ class SelfAttention(nn.Module):
         out = self.conv3(x).view(bs, N, -1) # (B, N, C/8)
         out = torch.bmm(out, attention).view(bs, -1, *spatial)
         return self.gamma*out + x
+
+class FeaturePyramidAttention(nn.Module):
+    """ https://arxiv.org/pdf/1805.10180.pdf """
+    def __init__(self, inputs=None, kernel_size=[7, 5, 3], filters='same', layout='cna', upsample='t', **kwargs):
+        super().__init__()
+        inputs_spatial_shape = get_shape(inputs)[2:]
+        self.attention = BaseConvBlock(inputs=inputs, layout='V >> cna' + upsample, filters=filters, 
+                                              kernel_size=[1, inputs_spatial_shape], **kwargs)
+
+        depth = len(kernel_size)
+        enc_layout = ('B' + 'p' + layout) * depth
+        emb_layout = layout + upsample
+        combine_layout = '*' + '+' * (depth - 1)
+        layout = enc_layout + emb_layout + combine_layout
+        kernel_size = kernel_size + [kernel_size[-1]] + [2]
+        strides = [1] * (depth + 1) + [2]
+
+        branch_layout = layout + (layout + upsample) * (depth - 1)
+        branch_kernel_size = [1] + list(zip(kernel_size[:-1], [2] * (depth - 1)))
+        branch_strides = [1] + [1, 2] * (depth - 1)
+        self.pyramid = BaseConvBlock(layout=layout, inputs=inputs, filters=filters,
+                                            kernel_size=kernel_size, strides=strides,
+                                            branch=dict(layout=branch_layout, kernel_size=branch_kernel_size, 
+                                                        filters=filters, strides=branch_strides), **kwargs)
+        self.combine = Combine(op='+')
+
+    def forward(self, x):
+        attention = self.attention(x)
+        main = self.pyramid(x)
+        return self.combine([attention, main])
