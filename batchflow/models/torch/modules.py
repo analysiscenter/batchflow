@@ -131,10 +131,10 @@ class SelfAttention(nn.Module):
         super().__init__()
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
 
-        args = dict(inputs=inputs, layout=layout, kernel_size=kernel_size, strides=strides, **kwargs)
-        self.conv1 = ConvBlock(filters='same//{}'.format(reduction_ratio), **args)
-        self.conv2 = ConvBlock(filters='same', **args)
-        self.conv3 = ConvBlock(filters='same//{}'.format(reduction_ratio), **args)
+        args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size, strides=strides)}
+        self.conv1 = ConvBlock(**args, filters='same//{}'.format(reduction_ratio),)
+        self.conv2 = ConvBlock(**args, filters='same')
+        self.conv3 = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
 
     def forward(self, x):
         bs, spatial = x.shape[0], x.shape[2:]
@@ -148,33 +148,84 @@ class SelfAttention(nn.Module):
         out = torch.bmm(out, attention).view(bs, -1, *spatial)
         return self.gamma*out + x
 
+
 class FeaturePyramidAttention(nn.Module):
     """ https://arxiv.org/abs/1805.10180 """
-    def __init__(self, inputs=None, kernel_size=[7, 5, 3], filters='same', layout='cna', upsample='t', **kwargs):
+    def __init__(self, inputs=None, pyramid_kernel_size=[7, 5, 3], filters='same', layout='cna', 
+                 downsample_layout='p', upsample_layout='t', **kwargs):
         super().__init__()
+        depth = len(pyramid_kernel_size)
         inputs_spatial_shape = get_shape(inputs)[2:]
-        self.attention = BaseConvBlock(inputs=inputs, layout='V >> cna' + upsample, filters=filters, 
-                                              kernel_size=[1, inputs_spatial_shape], **kwargs)
+        self.attention = ConvBlock(inputs=inputs, layout='V >>' + layout + upsample_layout, 
+                                       filters=filters, kernel_size=[1, inputs_spatial_shape], **kwargs)
 
-        depth = len(kernel_size)
-        enc_layout = ('B' + 'p' + layout) * depth
-        emb_layout = layout + upsample
-        slayout = layout
+        enc_layout = ('B' + downsample_layout + layout) * depth
+        emb_layout = layout + upsample_layout
         combine_layout = '+' * (depth - 1) + '*'
-        layout = enc_layout + emb_layout + combine_layout
-        kernel_size = kernel_size + [kernel_size[-1]] + [2]
-        strides = [1] * (depth + 1) + [2]
+        main_layout = enc_layout + emb_layout + combine_layout
+        main_kernel_size = pyramid_kernel_size + [pyramid_kernel_size[-1]] + [2]
+        main_strides = [1] * (depth + 1) + [2]
 
-        branch_layout = [slayout] + [(slayout + upsample)] * (depth - 1)
-        branch_kernel_size = [1] + list(chain(*zip(kernel_size[:-1], [2] * (depth - 1))))
-        branch_strides = [1] + [1, 2] * (depth - 1)
-        self.pyramid = BaseConvBlock(layout=layout, inputs=inputs, filters=filters,
-                                            kernel_size=kernel_size, strides=strides,
-                                            branch=dict(layout=branch_layout, kernel_size=branch_kernel_size, 
-                                                        filters=filters, strides=branch_strides), **kwargs)
+        branches = [dict(layout=layout, filters=filters, kernel_size=1)]
+        for kernel_size in pyramid_kernel_size[:-1]:
+            args = dict(layout = layout + upsample_layout, kernel_size=[kernel_size, 2], strides=[1, 2], filters=filters)
+            branches.append(args)
+
+        self.pyramid = ConvBlock(layout=main_layout, inputs=inputs, filters=filters, kernel_size=main_kernel_size,
+                                 strides=main_strides, branch=branches, **kwargs)
         self.combine = Combine(op='+')
 
     def forward(self, x):
         attention = self.attention(x)
         main = self.pyramid(x)
         return self.combine([attention, main])
+
+class FPA(nn.Module):
+    def __init__(self, inputs=None, pyramid_kernel_size=[7, 5, 3], filters='same', layout='cna', 
+                 downsample_layout='p', upsample_layout='t', **kwargs):
+        super().__init__()
+        inputs_spatial_shape = get_shape(inputs)[2:]
+        self.attention_branch = ConvBlock(inputs=inputs, layout='V >>' + layout + upsample_layout, filters=filters, 
+                                              kernel_size=[1, inputs_spatial_shape], **kwargs)
+
+        self.mid_branch = ConvBlock(inputs=inputs, layout=layout, kernel_size=1, filters=filters, **kwargs)
+
+        x = inputs
+        skips, upsamples, depth  = torch.nn.ModuleList(), torch.nn.ModuleList(), torch.nn.ModuleList()
+        for kernel_size in pyramid_kernel_size:
+            args = dict(layout=downsample_layout + layout, kernel_size=kernel_size, filters=filters, **kwargs)
+            depth_layer = ConvBlock(args, inputs=x)
+            depth.append(depth_layer)
+
+            x = depth_layer(x)
+
+            skip_layer = ConvBlock({**args, 'layout': layout}, inputs=x)
+            skips.append(skip_layer)
+
+            skip_out = skip_layer(x)
+
+            upsample_layer = Upsample(layout=upsample_layout, filters=filters, inputs=skip_out)
+            upsamples.append(upsample_layer)
+        
+        self.depth_layers = depth
+        self.skip_layers = skips
+        self.upsample_layers = upsamples
+        self.combine_pyramid = [Combine(op='*')] + [Combine(op='+')] * (len(pyramid_kernel_size) - 1)
+        self.combine_attention = Combine(op='+')
+
+    def forward(self, x):
+        mid = self.mid_branch(x)
+        skips = [mid]
+        for depth_layer, skip_layer in zip(self.depth_layers, self.skip_layers):
+            x = depth_layer(x)
+            skip = skip_layer(x)
+            skips.append(skip)
+
+        pyramid_out = skips[-1]
+        for i, (upsample, combine) in enumerate(self.upsample_layers[::-1], self.combine_pyramid[::-1]):
+            i += 1
+            pyramid_out = upsample(pyramid_out)
+            pyramid_out = combine([skip[-i -1], pyramid_out])
+
+        attention = self.attention_branch(x)
+        return self.combine_attention([pyramid_out, attention])
