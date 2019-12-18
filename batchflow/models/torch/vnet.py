@@ -11,6 +11,8 @@ class VNet(EncoderDecoder):
 
     Parameters
     ----------
+    build_from_stages : bool
+        If True, create all filters and layouts in accordance with `body/encoder/num_stages`
     body : dict
         encoder : dict
             num_stages : int
@@ -77,38 +79,18 @@ class VNet(EncoderDecoder):
     def build_config(self):
         config = super().build_config()
 
-        num_stages = config.get('body/encoder/num_stages')
+        if config.get('build_from_stages'):
+            num_stages = config.get('body/encoder/num_stages')
+            encoder_filters = [16 * 2**i for i in range(num_stages)]
+            encoder_layout = ['cna', 'cna'*2] + ['cna'*3] * (num_stages - 2) if num_stages != 1 else 'cna'
+            downsample_filters = [32 * 2**i for i in range(num_stages)]
 
-        if config.get('body/encoder/blocks/filters') is None:
-            config['body/encoder/blocks/filters'] = [16 * 2**i for i in range(num_stages)]
-
-        if config.get('body/encoder/blocks/layout') is None:
-            encoder_layout = ['cna', 'cna'*2] + ['cna'*3] * (num_stages - 2)
-            config['body/encoder/blocks/layout'] = encoder_layout[:num_stages]
-
-        if config.get('body/encoder/downsample/filters') is None:
-            config['body/encoder/downsample/filters'] = [32 * 2**i for i in range(num_stages)]
-
-        if config.get('body/embedding/filters') is None:
-            downsample_filters = config['body/encoder/downsample/filters']
+            config['body/encoder/blocks/filters'] = encoder_filters
+            config['body/encoder/blocks/layout'] = encoder_layout
+            config['body/encoder/downsample/filters'] = downsample_filters
             config['body/embedding/filters'] = downsample_filters[-1]
-
-        if config.get('body/embedding/filters') is None:
-            config['body/embedding/filters'] = 16 * 2**num_stages
-
-        if config.get('body/embedding/layout') is None:
-            config['body/embedding/layout'] = 'cna' * 3
-
-        if config.get('body/decoder/blocks/filters') is None:
-            downsample_filters = config.get('body/encoder/downsample/filters')
             config['body/decoder/blocks/filters'] = downsample_filters[::-1]
-
-        if config.get('body/decoder/blocks/layout') is None:
-            layout = config.get('body/encoder/blocks/layout')
-            config['body/decoder/blocks/layout'] = layout[::-1]
-
-        if config.get('body/decoder/upsample/filters') is None:
-            encoder_filters = config.get('body/encoder/blocks/filters')
+            config['body/decoder/blocks/layout'] = encoder_layout[::-1]
             config['body/decoder/upsample/filters'] = encoder_filters[::-1]
 
         return config
