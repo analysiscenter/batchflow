@@ -182,7 +182,6 @@ class Upsample(nn.Module):
             kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
             kwargs['strides'] = kwargs.get('strides') or factor
             kwargs['filters'] = kwargs.get('filters') or 'same'
-
         self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
 
     def forward(self, x):
@@ -290,7 +289,7 @@ class Combine(nn.Module):
 
     @staticmethod
     def gau(inputs, **kwargs):
-        """ Global Attention Upsample module. https://arxiv.org/pdf/1805.10180.pdf """
+        """ Global Attention Upsample module. https://arxiv.org/abs/1805.10180 """
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         x, skip = inputs[0], inputs[1]
         num_channels = high.size(1)

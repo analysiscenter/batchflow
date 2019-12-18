@@ -1,5 +1,7 @@
 """ Functional modules for various deep network architectures."""
 
+from itertools import chain
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -118,7 +120,7 @@ class SelfAttention(nn.Module):
     """ Improved self Attention module.
 
     Wang Z. et al. "'Less Memory, Faster Speed: Refining Self-Attention Module for Image
-    Reconstruction <https://arxiv.org/pdf/1905.08008.pdf>'_"
+    Reconstruction <https://arxiv.org/abs/1905.08008>'_"
 
     Parameters
     ----------
@@ -129,10 +131,10 @@ class SelfAttention(nn.Module):
         super().__init__()
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
 
-        args = dict(inputs=inputs, layout=layout, kernel_size=kernel_size, strides=strides)
-        self.conv1 = ConvBlock(filters='same//{}'.format(reduction_ratio), **{**args, **kwargs})
-        self.conv2 = ConvBlock(filters='same', **{**args, **kwargs})
-        self.conv3 = ConvBlock(filters='same//{}'.format(reduction_ratio), **{**args, **kwargs})
+        args = dict(inputs=inputs, layout=layout, kernel_size=kernel_size, strides=strides, **kwargs)
+        self.conv1 = ConvBlock(filters='same//{}'.format(reduction_ratio), **args)
+        self.conv2 = ConvBlock(filters='same', **args)
+        self.conv3 = ConvBlock(filters='same//{}'.format(reduction_ratio), **args)
 
     def forward(self, x):
         bs, spatial = x.shape[0], x.shape[2:]
@@ -147,7 +149,7 @@ class SelfAttention(nn.Module):
         return self.gamma*out + x
 
 class FeaturePyramidAttention(nn.Module):
-    """ https://arxiv.org/pdf/1805.10180.pdf """
+    """ https://arxiv.org/abs/1805.10180 """
     def __init__(self, inputs=None, kernel_size=[7, 5, 3], filters='same', layout='cna', upsample='t', **kwargs):
         super().__init__()
         inputs_spatial_shape = get_shape(inputs)[2:]
@@ -157,13 +159,14 @@ class FeaturePyramidAttention(nn.Module):
         depth = len(kernel_size)
         enc_layout = ('B' + 'p' + layout) * depth
         emb_layout = layout + upsample
-        combine_layout = '*' + '+' * (depth - 1)
+        slayout = layout
+        combine_layout = '+' * (depth - 1) + '*'
         layout = enc_layout + emb_layout + combine_layout
         kernel_size = kernel_size + [kernel_size[-1]] + [2]
         strides = [1] * (depth + 1) + [2]
 
-        branch_layout = layout + (layout + upsample) * (depth - 1)
-        branch_kernel_size = [1] + list(zip(kernel_size[:-1], [2] * (depth - 1)))
+        branch_layout = [slayout] + [(slayout + upsample)] * (depth - 1)
+        branch_kernel_size = [1] + list(chain(*zip(kernel_size[:-1], [2] * (depth - 1))))
         branch_strides = [1] + [1, 2] * (depth - 1)
         self.pyramid = BaseConvBlock(layout=layout, inputs=inputs, filters=filters,
                                             kernel_size=kernel_size, strides=strides,
