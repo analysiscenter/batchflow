@@ -214,3 +214,51 @@ class DenseBlock(nn.Module):
     def forward(self, x):
         x = self.layer(x)
         return x if self.skip else x[:, self.input_num_channels:]
+
+
+
+class MobileBlock(nn.Module):
+    """ MobileNet building block.
+
+    Parameters
+    ----------
+    inputs : torch.Tensor
+        Example of input tensor to this layer.
+    kernel_size : int
+        Depthwise convolution kernel size. Default is 3. Note, that kernel size of second convolution
+        is hardcoded to equal 1, since it acts as a pointwise one as described in the original paper.
+    strides : int
+        Depthwise convolutions stride. Default is 1. Note, that stride for second convolution is also
+        hardcoded to equal 1.
+    downsample : int, bool
+        If int, the last repetition of block will use downsampling with that factor.
+        If True, the last repetition of block will use downsampling with a factor of 2.
+        If False, then no downsampling applied. Default is False.
+    n_reps : int
+        Number of times to repeat the whole block. Default is 1.
+    kwargs : dict
+        Other named arguments for the :class:`~.layers.ConvBlock`
+    """
+    layout = 'wna cna'
+    filters = ['same', 'same']
+
+    def __init__(self, inputs=None, kernel_size=3, strides=1, downsample=False, n_reps=1, **kwargs):
+        super().__init__()
+
+        filters = [safe_eval(item, get_num_channels(inputs)) for item in self.filters]
+        filters_downsample = filters
+        if downsample:
+            downsample = 2 if downsample is True else downsample
+            filters_downsample[-1] *= downsample
+
+        kernel_size = [kernel_size, 1]
+        strides = [strides, 1]
+
+        layer_params = [{}]*(n_reps-1)
+        layer_params = [{'filters': filters_downsample}]
+
+        self.layer = ConvBlock(*layer_params, inputs=inputs, layout=self.layout, filters=filters,
+                               kernel_size=kernel_size, strides=strides, **kwargs)
+
+    def forward(self, x):
+        return self.layer(x)
