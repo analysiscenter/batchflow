@@ -11,10 +11,15 @@ class VNet(EncoderDecoder):
 
     Parameters
     ----------
-    auto_build_stages : int, optional
-        number of encoder/decoder stages to auto-build all `filters` and `layout` in accordance
-        with the idea described in the original paper. Note that any of these config params,
-        if passed, will be replaced by auto-built ones.
+    auto_build : dict, optional
+        Parameters for auto-building `filters` and `layout` in accordance with the idea described in the original paper.
+        Note that any of these config params, if passed, will be replaced by auto-built ones.
+
+        num_stages : int
+            number of encoder/decoder stages — defines network depth and the number of its skip connections
+        filters : None, int
+            number of filters in first encoder block — each of the following ones will be doubled until embedding
+
     body : dict
         encoder : dict
             num_stages : int
@@ -81,11 +86,12 @@ class VNet(EncoderDecoder):
     def build_config(self):
         config = super().build_config()
 
-        if config.get('auto_build_stages'):
-            num_stages = config.get('auto_build_stages')
-            encoder_filters = [16 * 2**i for i in range(num_stages)]
+        if config.get('auto_build'):
+            num_stages = config.get('auto_build/num_stages')
+            filters = config.get('auto_build/filters', 16)
+            encoder_filters = [filters * 2**i for i in range(num_stages)]
             encoder_layout = ['cna', 'cna'*2] + ['cna'*3] * (num_stages - 2) if num_stages != 1 else 'cna'
-            downsample_filters = [32 * 2**i for i in range(num_stages)]
+            downsample_filters = [filters * 2**(i + 1) for i in range(num_stages)]
 
             config['body/encoder/num_stages'] = num_stages
             config['body/encoder/blocks/filters'] = encoder_filters
