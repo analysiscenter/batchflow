@@ -1182,7 +1182,7 @@ class TorchModel:
         outputs = {}
         for i, tensor in enumerate(inputs):
             if not isinstance(tensor, torch.Tensor):
-                raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
+                raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(tensor)))
 
             prefix = [*ops.keys()][i]
             attr_prefix = prefix + '_' if prefix else ''

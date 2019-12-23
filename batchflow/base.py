@@ -161,7 +161,7 @@ class Baseset:
         """ Return iteration params with default values to start iteration from scratch """
         return dict(_stop_iter=False, _start_index=0, _order=None, _n_iters=0, _n_epochs=0, _random_state=None)
 
-    @deprecated("Use reset('iter').")
+    @deprecated("`reset_iter()` is deprecated, use `reset('iter')` instead")
     def reset_iter(self):
         self.reset('iter')
 
