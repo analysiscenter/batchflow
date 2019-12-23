@@ -157,7 +157,7 @@ class DecoderModule(nn.Module):
 
                     if skip and (i < len(inputs) - 2):
                         layer = Combine(inputs=[x, inputs[-i - 3]])
-                        x = layer([inputs[-i - 3], x])
+                        x = layer([x, inputs[-i - 3]])
                         self.decoder_c.append(layer)
                 else:
                     raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
