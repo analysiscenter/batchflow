@@ -11,13 +11,28 @@ from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, Branch, SEBlock, Combine
+from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, SEBlock, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
 from .... import Config
 
 
 logger = logging.getLogger(__name__)
+
+
+
+class Branch(nn.Module):
+    """ Add side branch to a :class:`~.layers.ConvBlock`. """
+    def __init__(self, inputs=None, **kwargs):
+        super().__init__()
+
+        if kwargs.get('layout'):
+            self.layer = ConvBlock(inputs=inputs, **kwargs)
+        else:
+            self.layer = nn.Identity()
+
+    def forward(self, x):
+        return self.layer(x)
 
 
 

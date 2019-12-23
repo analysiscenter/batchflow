@@ -223,22 +223,6 @@ class SEBlock(nn.Module):
 
 
 
-class Branch(nn.Module):
-    """ Add side branch to a :class:`~.layers.ConvBlock`. """
-    def __init__(self, inputs=None, **kwargs):
-        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-        super().__init__()
-
-        if kwargs.get('layout'):
-            self.layer = ConvBlock(inputs=inputs, **kwargs)
-        else:
-            self.layer = nn.Identity()
-
-    def forward(self, x):
-        return self.layer(x)
-
-
-
 class Combine(nn.Module):
     """ Combine list of tensor into one.
 
