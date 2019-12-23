@@ -140,7 +140,7 @@ class Batch:
                    **batch.get_attrs())
 
     @classmethod
-    def merge(cls, batches, batch_size=None):
+    def merge(cls, batches, batch_size=None, components=None):
         """ Merge several batches to form a new batch of a given size
 
         Parameters
@@ -165,7 +165,11 @@ class Batch:
 
         def _make_batch(data):
             index = _make_index(data[0])
-            return cls.from_data(index, tuple(data)) if index is not None else None
+            batch = cls.from_data(index, tuple(data)) if index is not None else None
+            if batch is not None:
+                batch.components = tuple([item for item in components if item not in batch.components])
+                _ = batch.data
+            return batch
 
         if batch_size is None:
             break_point = len(batches)
@@ -182,8 +186,10 @@ class Batch:
 
                 cur_size += cur_batch_len
                 last_batch_len = cur_batch_len
-
-        components = batches[0].components or (None,)
+        if components is None:
+            components = batches[0].components or (None,)
+        elif isinstance(components, str):
+            components = (components, )
         new_data = list(None for _ in components)
         rest_data = list(None for _ in components)
         for i, comp in enumerate(components):

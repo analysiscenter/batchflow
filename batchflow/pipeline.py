@@ -161,6 +161,10 @@ class Pipeline:
             other = other.pipeline
         if not isinstance(other, Pipeline):
             raise TypeError("Both operands should be Pipelines")
+        if len(other._actions) > 0 and other._actions[0]['name'] == REBATCH_ID:
+            new_p = self.from_pipeline(other)
+            new_p._actions[0]['pipeline'] = self + new_p._actions[0]['pipeline']
+            return new_p
         return self.concat(self, other)
 
     def __matmul__(self, other):
@@ -689,7 +693,7 @@ class Pipeline:
 
                 if _action['name'] == MERGE_ID:
                     if _action['fn'] is None:
-                        batch, _ = batch.merge([batch] + join_batches)
+                        batch, _ = batch.merge([batch] + join_batches, components=_action['components'])
                     else:
                         batch, _ = _action['fn']([batch] + join_batches)
                     join_batches = None
@@ -1148,14 +1152,14 @@ class Pipeline:
         """ Join one or several pipelines """
         return self._add_action(JOIN_ID, _args=dict(pipelines=pipelines, mode='i'))
 
-    def merge(self, *pipelines, fn=None):
+    def merge(self, *pipelines, fn=None, components=None):
         """ Merge pipelines """
-        return self._add_action(MERGE_ID, _args=dict(pipelines=pipelines, mode='n', fn=fn))
+        return self._add_action(MERGE_ID, _args=dict(pipelines=pipelines, mode='n', fn=fn, components=components))
 
-    def rebatch(self, batch_size, fn=None):
+    def rebatch(self, batch_size, fn=None, components=None):
         """ Set the output batch size """
         new_p = type(self)(self.dataset)
-        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn))    # pylint:disable=protected-access
+        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn, components=components))    # pylint:disable=protected-access
 
     def _put_batches_into_queue(self, gen_batch, bar, bar_desc):
         while not self._stop_flag:
@@ -1298,9 +1302,11 @@ class Pipeline:
                 break
 
             if _action['fn'] is None:
-                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'])
+                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'], 
+                                                           components=_action['components'])
             else:
-                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'])
+                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'],
+                                                        components=_action['components'])
             yield batch
 
 
