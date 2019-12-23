@@ -314,6 +314,7 @@ class TorchModel:
         self._get_devices()
         self._get_placeholder_shapes()
         self.full_config = self.build_config()
+
         # If the inputs are set in config with their shapes we can build right away
         if self.input_shapes:
             self._build()
