@@ -486,7 +486,8 @@ class TorchModel:
                 self.classes = classes[0]
             if len(shapes) == 1:
                 self.target_shape = (batch_size, *shapes[0])
-                self.classes = shapes[0][0]
+                if self.classes is None:
+                    self.classes = shapes[0][0]
 
 
     def _build(self, inputs=None):
@@ -818,6 +819,7 @@ class TorchModel:
         return tuple([self._fill_param(arg) for arg in args])
 
     def _fill_output(self, fetches, outputs):
+        fetches = fetches if fetches is not None else []
         _fetches = [fetches] if isinstance(fetches, str) else fetches
 
         output = []
