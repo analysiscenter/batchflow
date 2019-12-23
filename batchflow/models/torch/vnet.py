@@ -11,8 +11,10 @@ class VNet(EncoderDecoder):
 
     Parameters
     ----------
-    build_from_stages : bool
-        If True, create all filters and layouts in accordance with `body/encoder/num_stages`
+    auto_build_stages : int, optional
+        number of encoder/decoder stages to auto-build all `filters` and `layout` in accordance
+        with the idea described in the original paper. Note that any of these config params,
+        if passed, will be replaced by auto-built ones.
     body : dict
         encoder : dict
             num_stages : int
@@ -79,16 +81,18 @@ class VNet(EncoderDecoder):
     def build_config(self):
         config = super().build_config()
 
-        if config.get('build_from_stages'):
-            num_stages = config.get('body/encoder/num_stages')
+        if config.get('auto_build_stages'):
+            num_stages = config.get('auto_build_stages')
             encoder_filters = [16 * 2**i for i in range(num_stages)]
             encoder_layout = ['cna', 'cna'*2] + ['cna'*3] * (num_stages - 2) if num_stages != 1 else 'cna'
             downsample_filters = [32 * 2**i for i in range(num_stages)]
 
+            config['body/encoder/num_stages'] = num_stages
             config['body/encoder/blocks/filters'] = encoder_filters
             config['body/encoder/blocks/layout'] = encoder_layout
             config['body/encoder/downsample/filters'] = downsample_filters
             config['body/embedding/filters'] = downsample_filters[-1]
+            config['body/decoder/num_stages'] = num_stages
             config['body/decoder/blocks/filters'] = downsample_filters[::-1]
             config['body/decoder/blocks/layout'] = encoder_layout[::-1]
             config['body/decoder/upsample/filters'] = encoder_filters[::-1]
