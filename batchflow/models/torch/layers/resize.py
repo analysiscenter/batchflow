@@ -282,33 +282,46 @@ class Combine(nn.Module):
 
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
-    def __init__(self, inputs=None, op='concat', force_resize=True, **kwargs):
+    def __init__(self, inputs=None, op='concat', force_resize=None, **kwargs):
         super().__init__()
-
-        self.force_resize = force_resize
         self.name = op
+        self.input_shapes, self.resized_shapes, self.output_shape = None, None, None
 
         if op in self.OPS:
             op = self.OPS[op]
             if op.__name__ == 'softsum':
                 self.op = lambda inputs: op(inputs, **kwargs)
+                self.force_resize = force_resize if force_resize is not None else False
             else:
                 self.op = op
+                self.force_resize = force_resize if force_resize is not None else True
         elif callable(op):
             self.op = op
+            self.force_resize = force_resize if force_resize is not None else False
         else:
             raise ValueError('Combine operation must be a callable or \
                               one from {}, instead got {}.'.format(list(self.OPS.keys()), op))
 
     def forward(self, inputs):
+        self.input_shapes = [get_shape(item) for item in inputs]
         if self.force_resize:
             inputs = self.spatial_resize(inputs)
-        return self.op(inputs)
+            self.resized_shapes = [get_shape(item) for item in inputs]
+        output = self.op(inputs)
+        self.output_shape = get_shape(output)
+        return output
 
     def extra_repr(self):
         if isinstance(self.name, str):
-            return 'op=' + self.name
-        return 'op=' + 'callable ' + self.name.__name__
+            res = 'op=' + self.name
+        else:
+            res = 'op=' + 'callable ' + self.name.__name__
+
+        res += ',\ninput_shapes=[{}]'.format(self.input_shapes)
+        if self.force_resize:
+            res += ',\nresized_shapes=[{}]'.format(self.resized_shapes)
+        res += ',\noutput_shape={}'.format(self.output_shape)
+        return res
 
 
     def spatial_resize(self, inputs):
@@ -322,7 +335,7 @@ class Combine(nn.Module):
             shape = get_shape(item)
             dim = get_num_dims(item)
             spatial_shape = shape[-dim:]
-            if dim > 0 and spatial_shape_ != tuple([1]*dim) and spatial_shape != spatial_shape_:
+            if dim > 0 and spatial_shape != tuple([1]*dim) and spatial_shape != spatial_shape_:
                 item = Crop(inputs[0])(item)
             resized.append(item)
         return resized

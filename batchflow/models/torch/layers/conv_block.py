@@ -295,7 +295,7 @@ class BaseConvBlock(nn.Module):
                 residuals += [self.skip_modules[s_counter](x)]
                 s_counter += 1
             elif letter in self.COMBINE_LETTERS:
-                x = self.combine_modules[c_counter]([residuals.pop(), x])
+                x = self.combine_modules[c_counter]([x, residuals.pop()])
                 c_counter += 1
         return x
 
@@ -364,7 +364,7 @@ class BaseConvBlock(nn.Module):
 
                 elif letter in self.COMBINE_LETTERS:
                     args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-                    args = {**args, 'inputs': [residuals.pop(), inputs], 'op': letter}
+                    args = {**args, 'inputs': [inputs, residuals.pop()], 'op': letter}
                     layer = layer_class(**args).to(device)
                     shape_before = get_shape(inputs)
                     inputs = layer(args['inputs'])
