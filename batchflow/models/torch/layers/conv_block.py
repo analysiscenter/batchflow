@@ -11,13 +11,28 @@ from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, Branch, SEBlock, Combine
+from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, SEBlock, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
 from .... import Config
 
 
 logger = logging.getLogger(__name__)
+
+
+
+class Branch(nn.Module):
+    """ Add side branch to a :class:`~.layers.ConvBlock`. """
+    def __init__(self, inputs=None, **kwargs):
+        super().__init__()
+
+        if kwargs.get('layout'):
+            self.layer = ConvBlock(inputs=inputs, **kwargs)
+        else:
+            self.layer = nn.Identity()
+
+    def forward(self, x):
+        return self.layer(x)
 
 
 
@@ -280,7 +295,7 @@ class BaseConvBlock(nn.Module):
                 residuals += [self.skip_modules[s_counter](x)]
                 s_counter += 1
             elif letter in self.COMBINE_LETTERS:
-                x = self.combine_modules[c_counter]([residuals.pop(), x])
+                x = self.combine_modules[c_counter]([x, residuals.pop()])
                 c_counter += 1
         return x
 
@@ -349,7 +364,7 @@ class BaseConvBlock(nn.Module):
 
                 elif letter in self.COMBINE_LETTERS:
                     args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-                    args = {**args, 'inputs': [residuals.pop(), inputs], 'op': letter}
+                    args = {**args, 'inputs': [inputs, residuals.pop()], 'op': letter}
                     layer = layer_class(**args).to(device)
                     shape_before = get_shape(inputs)
                     inputs = layer(args['inputs'])

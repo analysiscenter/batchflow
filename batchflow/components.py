@@ -10,7 +10,7 @@ from .utils import is_iterable
 
 
 class AdvancedDict(dict):
-    """ dict that supports advanced indexing """
+    """ Dict that supports indexing by `list` and `np.ndarray` """
     def __getitem__(self, item):
         if isinstance(item, (list, np.ndarray)):
             d = type(self)()
