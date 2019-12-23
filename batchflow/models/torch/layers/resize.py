@@ -273,12 +273,19 @@ class Combine(nn.Module):
 
     @staticmethod
     def gau(inputs, **kwargs):
-        """ Global Attention Upsample module. https://arxiv.org/abs/1805.10180 """
+        """ Global Attention Upsample module. 
+        Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang. Pyramid Attention Network 
+        for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_" 
+
+        Notes
+        -----
+        Must be used after upsampling operator in encoder
+        """
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         x, skip = inputs[0], inputs[1]
-        num_channels = high.size(1)
+        num_channels = skip.size(1)
         conv1 = ConvBlock(inputs=x, layout='cna', kernel_size=3, filters=num_channels, **kwargs)(x)
-        conv2 = ConvBlock(inputs=skip, layout='V >> cna', kernel_size=1, filters='same', padding=0, stride=1, **kwargs)(skip)
+        conv2 = ConvBlock(inputs=skip, layout='V >> cna', kernel_size=1, filters='same', **kwargs)(skip)
         weighted = Combine.mul([conv1, conv2])
         return Combine.sum([weighted, skip])
 
