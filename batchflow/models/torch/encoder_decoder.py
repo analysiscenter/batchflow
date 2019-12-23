@@ -287,9 +287,9 @@ class Decoder(TorchModel):
                 inputs = layer(inputs)
                 layers.append(layer)
 
-                if get_shape(inputs)[1] != classes:
-                    layer = ConvBlock(inputs=inputs, layout='c', filters=classes, kernel_size=1)
-                    layers.append(layer)
+        if get_shape(inputs)[1] != classes:
+            layer = ConvBlock(inputs=inputs, layout='c', filters=classes, kernel_size=1)
+            layers.append(layer)
         return nn.Sequential(*layers)
 
 

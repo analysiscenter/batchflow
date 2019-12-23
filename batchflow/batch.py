@@ -140,7 +140,7 @@ class Batch:
                    **batch.get_attrs())
 
     @classmethod
-    def merge(cls, batches, batch_size=None, components=None):
+    def merge(cls, batches, batch_size=None, components=None, batch_class=None):
         """ Merge several batches to form a new batch of a given size
 
         Parameters
@@ -160,14 +160,16 @@ class Batch:
         ValueError
             If component is `None` in some batches and not `None` in others.
         """
+        batch_class = batch_class or cls
         def _make_index(data):
             return DatasetIndex(data.shape[0]) if data is not None and data.shape[0] > 0 else None
 
         def _make_batch(data):
             index = _make_index(data[0])
-            batch = cls.from_data(index, tuple(data)) if index is not None else None
+            batch = batch_class.from_data(index, tuple(data)) if index is not None else None
             if batch is not None:
-                batch.components = tuple([item for item in components if item not in batch.components])
+                # batch.components = tuple([item for item in components if item not in batch.components])
+                batch.components = tuple(components)
                 _ = batch.data
             return batch
 
