@@ -246,11 +246,15 @@ class Combine(nn.Module):
 
     @staticmethod
     def sum(inputs):
-        return torch.stack(inputs, dim=0).sum(dim=0)
+        """ Addition with broadcasting. """
+        result = 0
+        for item in inputs:
+            result = result + item
+        return result
 
     @staticmethod
     def mul(inputs):
-        """ Multiplication. """
+        """ Multiplication with broadcasting. """
         result = 1
         for item in inputs:
             result = result * item
