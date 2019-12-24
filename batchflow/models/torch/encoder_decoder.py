@@ -156,11 +156,7 @@ class DecoderModule(nn.Module):
                     args = {**kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
 
                     if skip and (i < len(inputs) - 2):
-<<<<<<< HEAD
-                        layer = Combine(inputs=[inputs[-i - 3], x], **args)
-=======
-                        layer = Combine(inputs=[x, inputs[-i - 3]])
->>>>>>> torch_improvements
+                        layer = Combine(inputs=[x, inputs[-i - 3]], **args)
                         x = layer([inputs[-i - 3], x])
                         self.decoder_c.append(layer)
                 else:

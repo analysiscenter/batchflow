@@ -184,7 +184,7 @@ class FPA(nn.Module):
 
         enc_layout = ('B' + downsample_layout + layout) * depth # B pcna B pcna B pcna
         emb_layout = layout + upsample_layout # cnat
-        combine_layout = ('+' + upsample_layout) * (depth - 1) + '*' # ++*
+        combine_layout = ('+' + upsample_layout) * (depth - 1) + '*' # +t+t*
         main_layout = enc_layout + emb_layout + combine_layout # B pcna B pcna B pcna cnat ++*
         main_kernel_size = pyramid_kernel_size + [pyramid_kernel_size[-1]] + [factor] * (depth) # [7 5 3 3 2 2 2]
         main_strides = [1] * (depth + 1) + [factor] * depth # [1, 1, 1, 1, 2, 2, 2]
