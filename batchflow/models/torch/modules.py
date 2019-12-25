@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from .layers import ConvBlock, Upsample, Combine
-from .utils import get_shape, get_num_dims
+from .utils import get_shape, get_num_dims, get_num_channels
 
 
 class PyramidPooling(nn.Module):
@@ -53,12 +53,10 @@ class PyramidPooling(nn.Module):
             modules.append(module)
 
         self.blocks = modules
-        self.combine = Combine(op='concat')
 
     def forward(self, x):
         levels = [layer(x) for layer in self.blocks]
-        return self.combine(levels)
-
+        return Combine.concat(levels)
 
 
 class ASPP(nn.Module):
@@ -79,7 +77,6 @@ class ASPP(nn.Module):
         Dilation rates for branches, default=(6, 12, 18).
     pyramid : int or tuple of int
         Number of image level features in each dimension.
-
         Default is 2, i.e. 2x2=4 pooling features will be calculated for 2d images,
         and 2x2x2=8 features per 3d item.
         Tuple allows to define several image level features, e.g (2, 3, 4).
@@ -106,47 +103,10 @@ class ASPP(nn.Module):
         modules.append(pyramid_layer)
 
         self.blocks = modules
-        self.combine = Combine(op='concat')
 
     def forward(self, x):
         levels = [layer(x) for layer in self.blocks]
-        return self.combine(levels)
-
-
-class SelfAttention(nn.Module):
-    """ Improved self Attention module.
-
-    Wang Z. et al. "'Less Memory, Faster Speed: Refining Self-Attention Module for Image
-    Reconstruction <https://arxiv.org/abs/1905.08008>'_"
-
-    Parameters
-    ----------
-    reduction_ratio : int
-        The reduction ratio of filters in the inner convolutions.
-    kernel_size : int
-        Kernel size.
-    layout : str
-        Layout for convolution layers.
-    """
-    def __init__(self, inputs=None, layout='cna', kernel_size=1, reduction_ratio=8, **kwargs):
-        super().__init__()
-        self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
-        args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size)}
-        self.top_branch = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
-        self.mid_branch = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
-        self.bot_branch = ConvBlock(**args, filters='same')
-
-    def forward(self, x):
-        batch_size, spatial = x.shape[0], x.shape[2:]
-        num_features = np.prod(spatial)
-
-        phi = self.mid_branch(x).view(batch_size, -1, num_features) # (B, C/8, N)
-        theta = self.bot_branch(x).view(batch_size, num_features, -1) # (B, N, C)
-        attention = torch.bmm(phi, theta) / num_features # (B, C/8, C)
-
-        out = self.top_branch(x).view(batch_size, num_features, -1) # (B, N, C/8)
-        out = torch.bmm(out, attention).view(batch_size, -1, *spatial)
-        return self.gamma*out + x
+        return Combine.concat(levels)
 
 
 class FPA(nn.Module):
@@ -193,7 +153,7 @@ class FPA(nn.Module):
         branches = [dict(layout=layout, filters='same', kernel_size=1)] # the mid branch from inputs tensor directly
 
         if use_dilation:
-            base_kernel_size = pyramid_kernel_size[-1] # 3
+            base_kernel_size = 3
             main_kernel_size = [base_kernel_size] * (depth + 1) + [factor] * (depth) # 3 3 3 3 2 2 2
             # infering coresponding dilation for every kernel_size in pyramid block
             pyramid_dilation = [round((rf - base_kernel_size) / (base_kernel_size - 1)) + 1
@@ -203,26 +163,64 @@ class FPA(nn.Module):
                 args = dict(layout=layout, kernel_size=base_kernel_size, dilation_rate=d, filters='same')
                 branches.append(args)
         else:
-            main_kernel_size = pyramid_kernel_size + [pyramid_kernel_size[-1]] + [factor] * (depth) # [7 5 3 3 2 2 2]
+            main_kernel_size = list(pyramid_kernel_size) + [pyramid_kernel_size[-1]] + [factor] * (depth) # [7533222]
             main_dilation = 1
             for kernel_size in pyramid_kernel_size[:-1]:
                 args = dict(layout=layout, kernel_size=kernel_size, filters='same')
                 branches.append(args)
 
-        pyramid_args = {**kwargs, 'layout': main_layout, 'filters': 'same', 'kernel_size': main_kernel_size,
+        pyramid_args = {'layout': main_layout, 'filters': 'same', 'kernel_size': main_kernel_size,
                         'strides': main_strides, 'dilation_rate': main_dilation, 'branch': branches}
 
         if bottleneck:
             bottleneck = 4 if bottleneck is True else bottleneck
-            out_filters = inputs.shape[1]
+            out_filters = get_num_channels(inputs)
             inner_filters = out_filters // bottleneck
             self.pyramid = ConvBlock(dict(layout=layout, kernel_size=1, filters=inner_filters),
                                      pyramid_args,
-                                     dict(layout=layout, kernel_size=1, filters=out_filters), inputs=inputs)
+                                     dict(layout=layout, kernel_size=1, filters=out_filters), inputs=inputs, **kwargs)
         else:
-            self.pyramid = ConvBlock(pyramid_args, inputs=inputs)
+            self.pyramid = ConvBlock(pyramid_args, inputs=inputs, **kwargs)
+
+        self.combine = Combine(op='+')
 
     def forward(self, x):
         attention = self.attention(x)
         main = self.pyramid(x)
-        return Combine.sum([attention, main])
+        return self.combine([attention, main])
+
+
+class SelfAttention(nn.Module):
+    """ Improved self Attention module.
+
+    Wang Z. et al. "'Less Memory, Faster Speed: Refining Self-Attention Module for Image
+    Reconstruction <https://arxiv.org/abs/1905.08008>'_"
+
+    Parameters
+    ----------
+    reduction_ratio : int
+        The reduction ratio of filters in the inner convolutions.
+    kernel_size : int
+        Kernel size.
+    layout : str
+        Layout for convolution layers.
+    """
+    def __init__(self, inputs=None, layout='cna', kernel_size=1, reduction_ratio=8, **kwargs):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
+        args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size)}
+        self.top_branch = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
+        self.mid_branch = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
+        self.bot_branch = ConvBlock(**args, filters='same')
+
+    def forward(self, x):
+        batch_size, spatial = x.shape[0], x.shape[2:]
+        num_features = np.prod(spatial)
+
+        phi = self.mid_branch(x).view(batch_size, -1, num_features) # (B, C/8, N)
+        theta = self.bot_branch(x).view(batch_size, num_features, -1) # (B, N, C)
+        attention = torch.bmm(phi, theta) / num_features # (B, C/8, C)
+
+        out = self.top_branch(x).view(batch_size, num_features, -1) # (B, N, C/8)
+        out = torch.bmm(out, attention).view(batch_size, -1, *spatial)
+        return self.gamma*out + x

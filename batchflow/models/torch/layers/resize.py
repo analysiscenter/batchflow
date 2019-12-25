@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_shape, get_num_dims
+from ..utils import get_shape, get_num_dims, get_num_channels
 
 
 
@@ -124,7 +124,7 @@ class Crop(nn.Module):
                 # Increase input tensor's shape by zero padding
                 zeros_shape = list(i_shape)
                 zeros_shape[i + 2] = r_shape_
-                zeros = torch.zeros(zeros_shape)
+                zeros = torch.zeros(zeros_shape, device=inputs.device)
 
                 shape = [slice(None, None)] * len(i_shape)
                 shape[i + 2] = slice(None, i_shape_)
@@ -283,9 +283,10 @@ class Combine(nn.Module):
         """
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         x, skip = inputs[0], inputs[1]
-        num_channels = skip.size(1)
+        num_channels = get_num_channels(skip)
+        num_dims = get_num_dims(skip)
         conv1 = ConvBlock(inputs=x, layout='cna', kernel_size=3, filters=num_channels, **kwargs)(x)
-        conv2 = ConvBlock(inputs=skip, layout='V >> cna', kernel_size=1, filters='same', **kwargs)(skip)
+        conv2 = ConvBlock(inputs=skip, layout='V > cna', kernel_size=1, filters='same', dim=num_dims, **kwargs)(skip)
         weighted = Combine.mul([conv1, conv2])
         return Combine.sum([weighted, skip])
 
