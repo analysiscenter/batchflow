@@ -1,13 +1,10 @@
 """ Functional modules for various deep network architectures."""
-
-from itertools import chain
-
 import numpy as np
 import torch
 import torch.nn as nn
 
-from .layers import ConvBlock, Upsample, Combine, BaseConvBlock
-from .utils import get_shape
+from .layers import ConvBlock, Upsample, Combine
+from .utils import get_shape, get_num_dims
 
 
 class PyramidPooling(nn.Module):
@@ -134,29 +131,28 @@ class SelfAttention(nn.Module):
     def __init__(self, inputs=None, layout='cna', kernel_size=1, reduction_ratio=8, **kwargs):
         super().__init__()
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
-
         args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size)}
         self.top_branch = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
         self.mid_branch = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
         self.bot_branch = ConvBlock(**args, filters='same')
 
     def forward(self, x):
-        bs, spatial = x.shape[0], x.shape[2:]
-        N = np.prod(spatial)
+        batch_size, spatial = x.shape[0], x.shape[2:]
+        num_features = np.prod(spatial)
 
-        phi = self.mid_branch(x).view(bs, -1, N) # (B, C/8, N)
-        theta = self.bot_branch(x).view(bs, N, -1) # (B, N, C)
-        attention = torch.bmm(phi, theta) / N # (B, C/8, C)
+        phi = self.mid_branch(x).view(batch_size, -1, num_features) # (B, C/8, N)
+        theta = self.bot_branch(x).view(batch_size, num_features, -1) # (B, N, C)
+        attention = torch.bmm(phi, theta) / num_features # (B, C/8, C)
 
-        out = self.top_branch(x).view(bs, N, -1) # (B, N, C/8)
-        out = torch.bmm(out, attention).view(bs, -1, *spatial)
+        out = self.top_branch(x).view(batch_size, num_features, -1) # (B, N, C/8)
+        out = torch.bmm(out, attention).view(batch_size, -1, *spatial)
         return self.gamma*out + x
 
 
 class FPA(nn.Module):
-    """ Feature Pyramid Attention. 
-    Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang. 
-    Pyramid Attention Network for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_" 
+    """ Feature Pyramid Attention.
+    Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang.
+    Pyramid Attention Network for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_"
 
     Parameters
     ----------
@@ -164,52 +160,69 @@ class FPA(nn.Module):
         Kernel sizes in pyramid block convolutions
     layout: str
         Layout for convolution layers.
-    downsample_layout: str, default 'p'
-        Layout for downsampling layers
-    upsample_layout: str, default 't'
-        Layout for upsampling layers
-    factor: int, default 2
-        Scaling factor for upsampling layers
+    downsample_layout: str
+        Layout for downsampling layers. Default is 'p'
+    upsample_layout: str
+        Layout for upsampling layers. Default is 't
+    factor: int
+        Scaling factor for upsampling layers. Default is 2
     bottleneck : bool, int
-        If True, then add a canonical bottleneck  with that factor of filters increase.
+        If True, then add a 1x1 convolutions before and after pyramid block with that factor of filters reduction.
         If False, then bottleneck is not used. Default is False.
+    use_dilation: bool
+        If True, then the convolutions with bigger kernels in the pyramid block are replaced by top one
+        with corresponding dilation_rate, i.e. 5x5 -> 3x3 with dilation=2, 7x7 -> 3x3 with dilation=3.
+        If False, the dilated convolutions are not used. Default is False.
     """
-    def __init__(self, inputs=None, pyramid_kernel_size=[7, 5, 3], bottleneck=4, layout='cna', 
-                 downsample_layout='p', upsample_layout='t', factor=2, **kwargs):
+    def __init__(self, inputs=None, pyramid_kernel_size=(7, 5, 3), bottleneck=False, layout='cna',
+                 downsample_layout='p', upsample_layout='t', factor=2, use_dilation=False, **kwargs):
         super().__init__()
         depth = len(pyramid_kernel_size)
-        inputs_spatial_shape = get_shape(inputs)[2:]
-        self.attention = ConvBlock(inputs=inputs, layout='V >>' + layout + upsample_layout, 
-                                       filters='same', kernel_size=[1, inputs_spatial_shape], **kwargs)
+        spatial_shape = get_shape(inputs)[2:]
+        num_dims = get_num_dims(inputs)
+        self.attention = ConvBlock(inputs=inputs, layout='V >' + layout + 'b', kernel_size=1,
+                                   filters='same', shape=spatial_shape, dim=num_dims, **kwargs)
 
         enc_layout = ('B' + downsample_layout + layout) * depth # B pcna B pcna B pcna
         emb_layout = layout + upsample_layout # cnat
         combine_layout = ('+' + upsample_layout) * (depth - 1) + '*' # +t+t*
-        main_layout = enc_layout + emb_layout + combine_layout # B pcna B pcna B pcna cnat ++*
-        main_kernel_size = pyramid_kernel_size + [pyramid_kernel_size[-1]] + [factor] * (depth) # [7 5 3 3 2 2 2]
+        main_layout = enc_layout + emb_layout + combine_layout # B pcna B pcna B pcna cnat +t+t*
         main_strides = [1] * (depth + 1) + [factor] * depth # [1, 1, 1, 1, 2, 2, 2]
 
-        # list with args for BaseBlocks of each branch 
+        # list with args for BaseBlocks of each branch
         branches = [dict(layout=layout, filters='same', kernel_size=1)] # the mid branch from inputs tensor directly
-        for kernel_size in pyramid_kernel_size[:-1]:
-            args = dict(layout = layout, kernel_size=kernel_size, filters='same')
-            branches.append(args)
+
+        if use_dilation:
+            base_kernel_size = pyramid_kernel_size[-1] # 3
+            main_kernel_size = [base_kernel_size] * (depth + 1) + [factor] * (depth) # 3 3 3 3 2 2 2
+            # infering coresponding dilation for every kernel_size in pyramid block
+            pyramid_dilation = [round((rf - base_kernel_size) / (base_kernel_size - 1)) + 1
+                                for rf in pyramid_kernel_size] # 3 2 1
+            main_dilation = pyramid_dilation + [pyramid_dilation[-1]] + [1] * depth # 3 2 1 1 1 1 1
+            for d in pyramid_dilation[:-1]:
+                args = dict(layout=layout, kernel_size=base_kernel_size, dilation_rate=d, filters='same')
+                branches.append(args)
+        else:
+            main_kernel_size = pyramid_kernel_size + [pyramid_kernel_size[-1]] + [factor] * (depth) # [7 5 3 3 2 2 2]
+            main_dilation = 1
+            for kernel_size in pyramid_kernel_size[:-1]:
+                args = dict(layout=layout, kernel_size=kernel_size, filters='same')
+                branches.append(args)
 
         pyramid_args = {**kwargs, 'layout': main_layout, 'filters': 'same', 'kernel_size': main_kernel_size,
-                        'strides': main_strides, 'branches': branches}
+                        'strides': main_strides, 'dilation_rate': main_dilation, 'branch': branches}
 
         if bottleneck:
             bottleneck = 4 if bottleneck is True else bottleneck
             out_filters = inputs.shape[1]
-            inner_filters = out_filters // bottleneck    
-            self.pyramid = ConvBlock(dict(layout=layout, kernel_size=1, filters=inner_filters), 
-                                     pyramid_args, 
+            inner_filters = out_filters // bottleneck
+            self.pyramid = ConvBlock(dict(layout=layout, kernel_size=1, filters=inner_filters),
+                                     pyramid_args,
                                      dict(layout=layout, kernel_size=1, filters=out_filters), inputs=inputs)
         else:
             self.pyramid = ConvBlock(pyramid_args, inputs=inputs)
-        self.combine = Combine(op='+')
 
     def forward(self, x):
         attention = self.attention(x)
         main = self.pyramid(x)
-        return self.combine([attention, main])
+        return Combine.sum([attention, main])

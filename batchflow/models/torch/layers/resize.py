@@ -272,14 +272,10 @@ class Combine(nn.Module):
         return Combine.sum(inputs)
 
     @staticmethod
-    def gau(inputs, **kwargs):
-        """ Global Attention Upsample module. 
-        Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang. Pyramid Attention Network 
-        for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_" 
-
-        Notes
-        -----
-        Must be used after upsampling operator in encoder
+    def attention(inputs, **kwargs):
+        """ Global Attention Upsample module.
+        Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang. Pyramid Attention Network
+        for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_"
         """
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         x, skip = inputs[0], inputs[1]
@@ -295,7 +291,7 @@ class Combine(nn.Module):
         mul: ['multi', 'mul', '*'],
         mean: ['average', 'avg', 'mean'],
         softsum: ['softsum', '&'],
-        gau: ['gau']
+        attention: ['attention']
     }
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
@@ -306,7 +302,7 @@ class Combine(nn.Module):
 
         if op in self.OPS:
             op = self.OPS[op]
-            if op.__name__ in ['softsum', 'gau']:
+            if op.__name__ in ['softsum', 'attention']:
                 self.op = lambda inputs: op(inputs, **kwargs)
                 self.force_resize = force_resize if force_resize is not None else False
             else:
