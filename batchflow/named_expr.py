@@ -9,7 +9,7 @@ class _DummyBatch:
     """ A fake batch for static models """
     def __init__(self, pipeline):
         self.pipeline = pipeline
-        self.dataset = pipeline.dataset
+        self.dataset = pipeline.dataset if pipeline is not None else None
 
 
 def eval_expr(expr, **kwargs):
@@ -291,7 +291,6 @@ class AlgebraicNamedExpression(NamedExpression):
 
     def get(self, **kwargs):
         """ Return a value of an algebraic expression """
-        kwargs = self.get_params(**kwargs)
         a = eval_expr(self.a, **kwargs)
         b = eval_expr(self.b, **kwargs)
         c = eval_expr(self.c, **kwargs)
