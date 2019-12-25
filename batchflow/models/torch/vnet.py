@@ -87,7 +87,7 @@ class VNet(EncoderDecoder):
         config = super().build_config()
 
         if config.get('auto_build'):
-            num_stages = config.get('auto_build/num_stages')
+            num_stages = config.get('auto_build/num_stages', 4)
             filters = config.get('auto_build/filters', 16)
             encoder_filters = [filters * 2**i for i in range(num_stages)]
             encoder_layout = ['cna', 'cna'*2] + ['cna'*3] * (num_stages - 2) if num_stages != 1 else 'cna'

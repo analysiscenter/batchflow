@@ -81,7 +81,7 @@ class UNet(EncoderDecoder):
         config = super().build_config()
 
     if config.get('auto_build'):
-            num_stages = config.get('auto_build/num_stages')
+            num_stages = config.get('auto_build/num_stages', 4)
             filters = config.get('auto_build/filters', 64)
             encoder_filters = [filters * 2**i for i in range(num_stages)]
 
