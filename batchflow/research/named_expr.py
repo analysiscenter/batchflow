@@ -11,7 +11,7 @@ class ResearchNamedExpression(NamedExpression):
         name = self._get_name(**kwargs)
         return name, kwargs
 
-class REU(ResearchNamedExpression): #ResearchExecutableUnit
+class REU(ResearchNamedExpression): # ResearchExecutableUnit
     """ NamedExpression for ExecutableUnit """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
@@ -79,7 +79,7 @@ class RD(ResearchNamedExpression): # ResearchDir
         path = self._get(**kwargs)
         return path
 
-class RID(ResearchNamedExpression): #ResearchExperimentID
+class RID(ResearchNamedExpression): # ResearchExperimentID
     """ NamedExpression for id (sample_index) for the current experiment """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
@@ -90,7 +90,7 @@ class RID(ResearchNamedExpression): #ResearchExperimentID
         unit = list(experiment.values())[0]
         return job.ids[unit.index]
 
-class REP(ResearchNamedExpression): #ResearchExperimentPath
+class REP(ResearchNamedExpression): # ResearchExperimentPath
     """ NamedExpression for path to the current experiment """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
