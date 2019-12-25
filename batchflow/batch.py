@@ -150,6 +150,13 @@ class Batch:
         batch_size : int or None
             if `None`, just merge all batches into one batch (the rest will be `None`),
             if `int`, then make one batch of `batch_size` and a batch with the rest of data.
+        components : str, tuple or None
+            if `None`, all components from initial batches will be created,
+            if `str` or `tuple`, then create thay components in new batches.
+        batch_class : Batch or None
+            if `None`, created batches will be of the same class as initial batch,
+            if `Batch`, created batches will be of that class.
+
 
         Returns
         -------
@@ -168,7 +175,6 @@ class Batch:
             index = _make_index(data[0])
             batch = batch_class.from_data(index, tuple(data)) if index is not None else None
             if batch is not None:
-                # batch.components = tuple([item for item in components if item not in batch.components])
                 batch.components = tuple(components)
                 _ = batch.data
             return batch
