@@ -17,7 +17,7 @@ class VNet(EncoderDecoder):
 
         num_stages : int
             number of encoder/decoder stages — defines network depth and the number of its skip connections
-        filters : None, int
+        filters : int, optional
             number of filters in first encoder block — each of the following ones will be doubled until embedding
 
     body : dict
