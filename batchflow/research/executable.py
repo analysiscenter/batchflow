@@ -55,7 +55,7 @@ class Executable:
         self.on_root = None
         self.args = []
         self.kwargs = dict()
-        self.path = None
+        self.experiment_path = None
         self.research_path = None
         self.config = None
         self.config_from_grid = None
@@ -273,19 +273,19 @@ class Executable:
     def dump_result(self, task_id, iteration, filename):
         """ Dump pipeline results """
         if len(self.variables) > 0:
-            if not os.path.exists(os.path.join(self.research_path, self.path, task_id)):
-                os.makedirs(os.path.join(self.research_path, self.path, task_id))
+            if not os.path.exists(os.path.join(self.research_path, self.experiment_path, task_id)):
+                os.makedirs(os.path.join(self.research_path, self.experiment_path, task_id))
             self.result['sample_index'] = [task_id] * len(self.result['iteration'])
-            path = os.path.join(self.research_path, self.path, task_id, filename + '_' + str(iteration))
+            path = os.path.join(self.research_path, self.experiment_path, task_id, filename + '_' + str(iteration))
             with open(path, 'wb') as file:
                 dill.dump(self.result, file)
         self._clear_result()
 
     def create_folder(self):
         """ Create folder if it doesn't exist """
-        self.path = os.path.join('results', self.config.alias(as_string=True))
+        self.experiment_path = os.path.join('results', self.config.alias(as_string=True))
         try:
-            os.makedirs(os.path.join(self.research_path, self.path))
+            os.makedirs(os.path.join(self.research_path, self.experiment_path))
         except FileExistsError:
             pass
 
