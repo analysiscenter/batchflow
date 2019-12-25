@@ -1,4 +1,6 @@
 """ Encoder, decoder, encoder-decoder architectures. """
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
 
@@ -65,7 +67,8 @@ class EncoderModule(nn.Module):
                 elif letter in ['s']:
                     pass
                 else:
-                    raise ValueError('BAD', letter)
+                    raise ValueError('Unknown letter in order {}, use one of "b", "d", "p", "s"'
+                                     .format(letter))
 
 
 
@@ -105,7 +108,7 @@ class DecoderModule(nn.Module):
                     u_counter += 1
                 elif letter in ['c']:
                     if self.skip and (i < len(inputs) - 2):
-                        x = self.decoder_c[c_counter]([inputs[-i - 3], x])
+                        x = self.decoder_c[c_counter]([x, inputs[-i - 3]])
                         c_counter += 1
         return x
 
@@ -153,11 +156,11 @@ class DecoderModule(nn.Module):
                     args = {**kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
 
                     if skip and (i < len(inputs) - 2):
-                        layer = Combine(inputs=[inputs[-i - 3], x])
-                        x = layer([inputs[-i - 3], x])
+                        layer = Combine(inputs=[x, inputs[-i - 3]], **args)
+                        x = layer([x, inputs[-i - 3]])
                         self.decoder_c.append(layer)
                 else:
-                    raise ValueError('BAD')
+                    raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
 
 
 
@@ -202,10 +205,11 @@ class Encoder(TorchModel):
         return config
 
     @classmethod
-    def body(cls, inputs, **kwargs):
+    def body(cls, inputs, return_all=False, **kwargs):
         kwargs = cls.get_defaults('body', kwargs)
         encoder = kwargs.pop('encoder')
-        return EncoderModule(inputs=inputs, return_all=False, **{**kwargs, **encoder})
+        layers = [('encoder', EncoderModule(inputs=inputs, return_all=return_all, **{**kwargs, **encoder}))]
+        return nn.Sequential(OrderedDict(layers))
 
 
 
@@ -262,7 +266,7 @@ class Decoder(TorchModel):
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=DefaultBlock)
-        config['body/decoder/combine'] = dict(op='concat')
+        config['body/decoder/combine'] = dict(op='concat', leading_index=1)
         return config
 
 
@@ -270,7 +274,8 @@ class Decoder(TorchModel):
     def body(cls, inputs, **kwargs):
         kwargs = cls.get_defaults('body', kwargs)
         decoder = kwargs.pop('decoder')
-        return DecoderModule(inputs=inputs, **{**kwargs, **decoder})
+        layers = [('decoder', DecoderModule(inputs=inputs, **{**kwargs, **decoder}))]
+        return nn.Sequential(OrderedDict(layers))
 
     @classmethod
     def head(cls, inputs, target_shape, classes, **kwargs):
@@ -287,9 +292,10 @@ class Decoder(TorchModel):
                 inputs = layer(inputs)
                 layers.append(layer)
 
-                if get_shape(inputs)[1] != classes:
-                    layer = ConvBlock(inputs=inputs, layout='c', filters=classes, kernel_size=1)
-                    layers.append(layer)
+        if classes:
+            if get_shape(inputs)[1] != classes:
+                layer = ConvBlock(inputs=inputs, layout='c', filters=classes, kernel_size=1)
+                layers.append(layer)
         return nn.Sequential(*layers)
 
 
@@ -422,7 +428,7 @@ class EncoderDecoder(Decoder):
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=DefaultBlock)
-        config['body/decoder/combine'] = dict(op='concat')
+        config['body/decoder/combine'] = dict(op='concat', leading_index=1)
         return config
 
 
@@ -436,22 +442,27 @@ class EncoderDecoder(Decoder):
         layers = []
         encoder = cls.encoder(inputs=inputs, **{**kwargs, **encoder})
         encoder_outputs = encoder(inputs)
-        layers.append(encoder)
+        layers.append(('encoder', encoder))
 
         if embedding is not None:
             embedding = cls.embedding(inputs=encoder_outputs, **{**kwargs, **embedding})
         else:
             embedding = nn.Identity()
         encoder_outputs = embedding(encoder_outputs)
-        layers.append(embedding)
+        layers.append(('embedding', embedding))
 
         decoder = cls.decoder(inputs=encoder_outputs, **{**kwargs, **decoder})
-        layers.append(decoder)
+        layers.append(('decoder', decoder))
 
-        return nn.Sequential(*layers)
+        return nn.Sequential(OrderedDict(layers))
 
     @classmethod
     def encoder(cls, inputs, **kwargs):
+        """ Create encoder either from base model or block args. """
+        if 'base_model' in kwargs:
+            base_model = kwargs['base_model']
+            base_model_kwargs = kwargs.get('base_model_kwargs', {})
+            return base_model.body(inputs=inputs, return_all=True, encoder=base_model_kwargs).encoder
         return EncoderModule(inputs=inputs, **kwargs)
 
     @classmethod

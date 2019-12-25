@@ -8,6 +8,7 @@ from collections import OrderedDict
 from functools import partial
 from pprint import pprint
 
+import dill
 import numpy as np
 import torch
 import torch.nn as nn
@@ -293,7 +294,7 @@ class TorchModel:
 
         self.iter_info = {}
         self.preserve = ['full_config', 'input_shapes', 'target_shape', 'classes',
-                         'model', 'device', 'devices',
+                         'model',
                          'train_steps', 'sync_counter', 'microbatch']
 
         load = self.config.get('load')
@@ -486,7 +487,8 @@ class TorchModel:
                 self.classes = classes[0]
             if len(shapes) == 1:
                 self.target_shape = (batch_size, *shapes[0])
-                self.classes = shapes[0][0]
+                if self.classes is None:
+                    self.classes = shapes[0][0]
 
 
     def _build(self, inputs=None):
@@ -509,6 +511,7 @@ class TorchModel:
             inputs = inputs[0] if isinstance(inputs, (tuple, list)) and len(inputs) == 1 else inputs
             block = self._make_block(config_name, method, config, inputs)
             if block is not None:
+                block.to(self.device)
                 inputs = block(inputs)
                 blocks.append((block_name, block))
 
@@ -657,9 +660,9 @@ class TorchModel:
     def get_defaults(cls, name, kwargs):
         """ Fill block params from default config and kwargs """
         config = cls.default_config()
-        _config = config.get(name)
-        kwargs = kwargs or {}
-        config = {**config['common'], **_config, **kwargs}
+        _config = Config(config.get(name))
+        _config = _config + (kwargs or {})
+        config = {**config['common'], **_config}
         return config
 
     @classmethod
@@ -675,7 +678,7 @@ class TorchModel:
         torch.nn.Module or None
         """
         kwargs = cls.get_defaults('initial_block', kwargs)
-        if kwargs.get('layout'):
+        if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
@@ -692,7 +695,7 @@ class TorchModel:
         torch.nn.Module or None
         """
         kwargs = cls.get_defaults('body', kwargs)
-        if kwargs.get('layout'):
+        if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
@@ -711,7 +714,7 @@ class TorchModel:
         """
         _ = target_shape, classes
         kwargs = cls.get_defaults('head', kwargs)
-        if kwargs.get('layout'):
+        if kwargs.get('layout') or kwargs.get('base_block'):
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
@@ -744,8 +747,12 @@ class TorchModel:
             if self.target_shape:
                 print('Target has shape {}'.format(self.target_shape))
 
+            if self.model:
+                num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+                print('\nTotal number of parameters in model: {}'.format(num_params))
+
             iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
-            print('Total number of training iterations: {}'.format(sum(list(iters.values()))))
+            print('\nTotal number of training iterations: {}'.format(sum(list(iters.values()))))
             if len(iters) > 1:
                 print('Number of training iterations for individual train steps:')
                 pprint(iters)
@@ -817,6 +824,7 @@ class TorchModel:
         return tuple([self._fill_param(arg) for arg in args])
 
     def _fill_output(self, fetches, outputs):
+        fetches = fetches if fetches is not None else []
         _fetches = [fetches] if isinstance(fetches, str) else fetches
 
         output = []
@@ -943,6 +951,7 @@ class TorchModel:
         output = output[0] if isinstance(fetches, str) else output
 
         self.iter_info.update({'microbatch': microbatch,
+                               'sync_frequency': sync_frequency,
                                'steps': steps,
                                'train_mode': train_mode,
                                })
@@ -1135,7 +1144,7 @@ class TorchModel:
         outputs = {}
         for i, tensor in enumerate(inputs):
             if not isinstance(tensor, torch.Tensor):
-                raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(inputs)))
+                raise TypeError("Network output is expected to be a Tensor, but given {}".format(type(tensor)))
 
             prefix = [*ops.keys()][i]
             attr_prefix = prefix + '_' if prefix else ''
@@ -1161,7 +1170,7 @@ class TorchModel:
             output = inputs.argmax(dim=class_axis)
         elif callable(oper):
             output = oper(inputs)
-            name = name or oper.__name__
+            name = oper.__name__
         return attr_prefix + name, output
 
 
@@ -1206,11 +1215,11 @@ class TorchModel:
 
         The model will be saved to /path/to/models/resnet34.
         """
-        _ = args, kwargs
+        _ = args
         dirname = os.path.dirname(path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
-        torch.save({item: getattr(self, item) for item in self.preserve}, path)
+        torch.save({item: getattr(self, item) for item in self.preserve}, path, pickle_module=dill, **kwargs)
 
     def load(self, path, *args, eval=False, **kwargs):
         """ Load a torch model from files.
@@ -1237,13 +1246,13 @@ class TorchModel:
 
         The model will be moved to device specified in the model config by key `device`.
         """
-        _ = args, kwargs
+        _ = args
         self._get_devices()
 
         if self.device:
-            checkpoint = torch.load(path, map_location=self.device)
+            checkpoint = torch.load(path, map_location=self.device, pickle_module=dill, **kwargs)
         else:
-            checkpoint = torch.load(path)
+            checkpoint = torch.load(path, pickle_module=dill, **kwargs)
 
         for item in self.preserve:
             setattr(self, item, checkpoint.get(item))

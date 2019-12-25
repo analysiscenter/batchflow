@@ -160,7 +160,7 @@ class Dropout(nn.Module):
 
                 splitted = torch.split(x, sizes)
                 dropped = [self.layer(branch) for branch in splitted]
-                output = torch.cat(dropped, axis=0)
+                output = torch.cat(dropped, dim=0)
             else:
                 raise ValueError('Unknown type of multisample: {}'.format(self.multisample))
         else:
