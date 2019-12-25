@@ -11,6 +11,15 @@ class UNet(EncoderDecoder):
 
     Parameters
     ----------
+    auto_build : dict, optional
+        Parameters for auto-building `filters` in accordance with the idea described in the original paper.
+        Note that any of `filters`, if passed, will be replaced by auto-built ones.
+
+        num_stages : int
+            number of encoder/decoder stages — defines network depth and the number of its skip connections
+        filters : int, optional
+            number of filters in first encoder block — each of the following ones will be doubled until embedding
+
     body : dict
         encoder : dict
             num_stages : int
@@ -71,20 +80,16 @@ class UNet(EncoderDecoder):
     def build_config(self):
         config = super().build_config()
 
-        num_stages = config.get('body/encoder/num_stages')
+    if config.get('auto_build'):
+            num_stages = config.get('auto_build/num_stages')
+            filters = config.get('auto_build/filters', 64)
+            encoder_filters = [filters * 2**i for i in range(num_stages)]
 
-        if config.get('body/encoder/blocks/filters') is None:
-            config['body/encoder/blocks/filters'] = [64 * 2**i for i in range(num_stages)]
-
-        if config.get('body/embedding/filters') is None:
-            config['body/embedding/filters'] = 64 * 2**num_stages
-
-        if config.get('body/decoder/blocks/filters') is None:
-            enc_filters = config.get('body/encoder/blocks/filters')
-            config['body/decoder/blocks/filters'] = enc_filters[::-1]
-
-        if config.get('body/decoder/upsample/filters') is None:
-            config['body/decoder/upsample/filters'] = config.get('body/decoder/blocks/filters')
+            config['body/encoder/num_stages'] = num_stages
+            config['body/encoder/blocks/filters'] = encoder_filters
+            config['body/embedding/filters'] = encoder_filters[-1] * 2
+            config['body/decoder/num_stages'] = num_stages
+            config['body/decoder/blocks/filters'] = encoder_filters[::-1]
 
         return config
 
