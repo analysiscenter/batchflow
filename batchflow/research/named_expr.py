@@ -5,7 +5,7 @@ import os
 from .results import Results
 from ..named_expr import NamedExpression, eval_expr
 
-class ResearchNamedExpression(NamedExpression): #ResearchNamedExpression
+class ResearchNamedExpression(NamedExpression):
     """ NamedExpression base class for Research objects """
     def _get(self, **kwargs):
         name = self._get_name(**kwargs)
