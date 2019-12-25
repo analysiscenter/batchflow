@@ -486,7 +486,8 @@ class TorchModel:
                 self.classes = classes[0]
             if len(shapes) == 1:
                 self.target_shape = (batch_size, *shapes[0])
-                self.classes = shapes[0][0]
+                if self.classes is None:
+                    self.classes = shapes[0][0]
 
 
     def _build(self, inputs=None):
@@ -750,8 +751,12 @@ class TorchModel:
             if self.target_shape:
                 print('Target has shape {}'.format(self.target_shape))
 
+            if self.model:
+                num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+                print('\nTotal number of parameters in model: {}'.format(num_params))
+
             iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
-            print('Total number of training iterations: {}'.format(sum(list(iters.values()))))
+            print('\nTotal number of training iterations: {}'.format(sum(list(iters.values()))))
             if len(iters) > 1:
                 print('Number of training iterations for individual train steps:')
                 pprint(iters)
@@ -823,6 +828,7 @@ class TorchModel:
         return tuple([self._fill_param(arg) for arg in args])
 
     def _fill_output(self, fetches, outputs):
+        fetches = fetches if fetches is not None else []
         _fetches = [fetches] if isinstance(fetches, str) else fetches
 
         output = []
@@ -949,6 +955,7 @@ class TorchModel:
         output = output[0] if isinstance(fetches, str) else output
 
         self.iter_info.update({'microbatch': microbatch,
+                               'sync_frequency': sync_frequency,
                                'steps': steps,
                                'train_mode': train_mode,
                                })

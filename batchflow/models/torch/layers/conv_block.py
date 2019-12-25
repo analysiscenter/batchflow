@@ -413,6 +413,9 @@ class BaseConvBlock(nn.Module):
         self.skip_modules = skip_modules or None
         self.combine_modules = combine_modules or None
 
+    def extra_repr(self):
+        return 'layout={}\n'.format(self.layout)
+
 
 def update_layers(letter, module, name=None):
     """ Add custom letter to layout parsing procedure.

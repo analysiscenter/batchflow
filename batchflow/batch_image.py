@@ -1,5 +1,6 @@
 """ Contains Batch classes for images """
 import os
+import warnings
 from numbers import Number
 from functools import wraps
 
@@ -957,6 +958,10 @@ class ImagesBatch(BaseImagesBatch):
         """
         multiplier = np.float32(multiplier)
         if isinstance(image, PIL.Image.Image):
+            if preserve_type is False:
+                warnings.warn("Note that some info might be lost during `multiply` transformation since PIL.image "
+                              "stores data as `np.uint8`. To suppress this warning, use `preserve_type=True` or "
+                              "consider using `to_array` action before multiplication.")
             return PIL.Image.fromarray(np.clip(multiplier*np.asarray(image), 0, 255).astype(np.uint8))
         dtype = image.dtype if preserve_type else np.float
         if clip:

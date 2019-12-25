@@ -140,7 +140,7 @@ class Batch:
                    **batch.get_attrs())
 
     @classmethod
-    def merge(cls, batches, batch_size=None):
+    def merge(cls, batches, batch_size=None, components=None, batch_class=None):
         """ Merge several batches to form a new batch of a given size
 
         Parameters
@@ -150,6 +150,13 @@ class Batch:
         batch_size : int or None
             if `None`, just merge all batches into one batch (the rest will be `None`),
             if `int`, then make one batch of `batch_size` and a batch with the rest of data.
+        components : str, tuple or None
+            if `None`, all components from initial batches will be created,
+            if `str` or `tuple`, then create thay components in new batches.
+        batch_class : Batch or None
+            if `None`, created batches will be of the same class as initial batch,
+            if `Batch`, created batches will be of that class.
+
 
         Returns
         -------
@@ -160,12 +167,17 @@ class Batch:
         ValueError
             If component is `None` in some batches and not `None` in others.
         """
+        batch_class = batch_class or cls
         def _make_index(data):
             return DatasetIndex(data.shape[0]) if data is not None and data.shape[0] > 0 else None
 
         def _make_batch(data):
             index = _make_index(data[0])
-            return cls.from_data(index, tuple(data)) if index is not None else None
+            batch = batch_class.from_data(index, tuple(data)) if index is not None else None
+            if batch is not None:
+                batch.components = tuple(components)
+                _ = batch.data
+            return batch
 
         if batch_size is None:
             break_point = len(batches)
@@ -182,8 +194,10 @@ class Batch:
 
                 cur_size += cur_batch_len
                 last_batch_len = cur_batch_len
-
-        components = batches[0].components or (None,)
+        if components is None:
+            components = batches[0].components or (None,)
+        elif isinstance(components, str):
+            components = (components, )
         new_data = list(None for _ in components)
         rest_data = list(None for _ in components)
         for i, comp in enumerate(components):

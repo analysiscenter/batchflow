@@ -108,7 +108,7 @@ class DecoderModule(nn.Module):
                     u_counter += 1
                 elif letter in ['c']:
                     if self.skip and (i < len(inputs) - 2):
-                        x = self.decoder_c[c_counter]([inputs[-i - 3], x])
+                        x = self.decoder_c[c_counter]([x, inputs[-i - 3]])
                         c_counter += 1
         return x
 
@@ -157,7 +157,7 @@ class DecoderModule(nn.Module):
 
                     if skip and (i < len(inputs) - 2):
                         layer = Combine(inputs=[x, inputs[-i - 3]], **args)
-                        x = layer([inputs[-i - 3], x])
+                        x = layer([x, inputs[-i - 3]])
                         self.decoder_c.append(layer)
                 else:
                     raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
@@ -266,7 +266,7 @@ class Decoder(TorchModel):
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=DefaultBlock)
-        config['body/decoder/combine'] = dict(op='concat')
+        config['body/decoder/combine'] = dict(op='concat', leading_index=1)
         return config
 
 
@@ -428,7 +428,7 @@ class EncoderDecoder(Decoder):
                                       order=['upsampling', 'block', 'combine'])
         config['body/decoder/upsample'] = dict(layout='tna')
         config['body/decoder/blocks'] = dict(base=DefaultBlock)
-        config['body/decoder/combine'] = dict(op='concat')
+        config['body/decoder/combine'] = dict(op='concat', leading_index=1)
         return config
 
 
