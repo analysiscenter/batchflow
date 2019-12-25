@@ -1,6 +1,7 @@
 """ Eager version of TorchModel. """
 import os
 import re
+import warnings
 import threading
 import inspect
 from collections import OrderedDict
@@ -1043,6 +1044,8 @@ class TorchModel:
         """
         feed_dict = {**(feed_dict or {}), **kwargs}
         if feed_dict:
+            if targets is not None and 'targets' in feed_dict.keys():
+                warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
             feed_dict = {'targets': targets, **feed_dict}
             *inputs, targets = self._fill_input(*args, **feed_dict)
         else:
