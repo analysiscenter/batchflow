@@ -286,9 +286,14 @@ class Combine(nn.Module):
 
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
-    def __init__(self, inputs=None, op='concat', force_resize=None, **kwargs):
+    def __init__(self, inputs=None, op='concat', force_resize=None, leading_index=0, **kwargs):
         super().__init__()
         self.name = op
+        self.idx = leading_index
+
+        if self.idx != 0:
+            inputs[0], inputs[self.idx] = inputs[self.idx], inputs[0]
+
         self.input_shapes, self.resized_shapes, self.output_shape = None, None, None
 
         if op in self.OPS:
@@ -307,6 +312,9 @@ class Combine(nn.Module):
                               one from {}, instead got {}.'.format(list(self.OPS.keys()), op))
 
     def forward(self, inputs):
+        if self.idx != 0:
+            inputs[0], inputs[self.idx] = inputs[self.idx], inputs[0]
+
         self.input_shapes = [get_shape(item) for item in inputs]
         if self.force_resize:
             inputs = self.spatial_resize(inputs)
@@ -320,6 +328,7 @@ class Combine(nn.Module):
             res = 'op=' + self.name
         else:
             res = 'op=' + 'callable ' + self.name.__name__
+        res += ',\nleading_idx={}'.format(self.idx)
 
         res += ',\ninput_shapes=[{}]'.format(self.input_shapes)
         if self.force_resize:
