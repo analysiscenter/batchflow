@@ -53,10 +53,11 @@ class PyramidPooling(nn.Module):
             modules.append(module)
 
         self.blocks = modules
+        self.combine = Combine(op='concat')
 
     def forward(self, x):
         levels = [layer(x) for layer in self.blocks]
-        return Combine.concat(levels)
+        return self.combine(levels)
 
 
 class ASPP(nn.Module):
@@ -103,10 +104,11 @@ class ASPP(nn.Module):
         modules.append(pyramid_layer)
 
         self.blocks = modules
+        self.combine = Combine(op='concat')
 
     def forward(self, x):
         levels = [layer(x) for layer in self.blocks]
-        return Combine.concat(levels)
+        return self.combine(levels)
 
 
 class FPA(nn.Module):
