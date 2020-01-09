@@ -21,7 +21,7 @@ from .job import Job
 from .logger import BasicLogger
 from .utils import get_metrics
 from .executable import Executable
-from .named_expr import ResearchPipeline
+from .named_expr import RP
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
@@ -91,12 +91,12 @@ class Research:
             include execution information to log file or not
         kwargs : dict
             parameters that will be added to pipeline config.
-            Can be `:class:~.ResearchPipeline`.
+            Can be `:class:~.RP`.
 
             For example,
             if test pipeline imports model from the other pipeline with name `'train'` in Research,
             corresponding parameter in `import_model` must be `C('import_from')` and `add_pipeline`
-            must be called with parameter `import_from=ResearchPipeline('train')`.
+            must be called with parameter `import_from=RP('train')`.
 
 
         **How to define changing parameters**
@@ -157,7 +157,7 @@ class Research:
         and are running in current Job. Key is a name of `Executable`, value is `Executable`.
         """
 
-        name = name or 'func_' + str(len(self.executables) + 1)
+        name = name or function.__name__
 
         if name in self.executables:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
@@ -204,7 +204,7 @@ class Research:
         """
         name = pipeline + '_metrics'
         self.add_callable(get_metrics, name=name, execute=execute, dump=dump, returns=returns,
-                          on_root=False, logging=logging, pipeline=ResearchPipeline(pipeline),
+                          on_root=False, logging=logging, pipeline=RP(pipeline),
                           metrics_var=metrics_var, metrics_name=metrics_name)
         return self
 
@@ -278,7 +278,7 @@ class Research:
 
     def load_results(self, *args, **kwargs):
         """ Load results of research as pandas.DataFrame or dict (see :meth:`~.Results.load`). """
-        return Results(path=self.name).load(*args, **kwargs)
+        return Results(self.name, *args, **kwargs)
 
     def run(self, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):
