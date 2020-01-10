@@ -602,8 +602,7 @@ class TorchModel:
                 loss_fn = partial(loss, **args)
             else:
                 raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
-
-            loss_fn = loss_fn or loss(*args)
+            loss_fn = loss_fn or loss(**args)
             if isinstance(loss_fn, nn.Module):
                 loss_fn.to(device=self.device)
             losses.append(loss_fn)
