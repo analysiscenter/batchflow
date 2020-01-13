@@ -1,6 +1,7 @@
 """ Eager version of TorchModel. """
 import os
 import re
+import warnings
 import threading
 import inspect
 from collections import OrderedDict
@@ -601,8 +602,7 @@ class TorchModel:
                 loss_fn = partial(loss, **args)
             else:
                 raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
-
-            loss_fn = loss_fn or loss(*args)
+            loss_fn = loss_fn or loss(**args)
             if isinstance(loss_fn, nn.Module):
                 loss_fn.to(device=self.device)
             losses.append(loss_fn)
@@ -1048,6 +1048,8 @@ class TorchModel:
         """
         feed_dict = {**(feed_dict or {}), **kwargs}
         if feed_dict:
+            if targets is not None and 'targets' in feed_dict.keys():
+                warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
             feed_dict = {'targets': targets, **feed_dict}
             *inputs, targets = self._fill_input(*args, **feed_dict)
         else:

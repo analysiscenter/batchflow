@@ -3,7 +3,7 @@
 import os
 
 from .results import Results
-from ..named_expr import NamedExpression
+from ..named_expr import NamedExpression, eval_expr
 
 class ResearchNamedExpression(NamedExpression):
     """ NamedExpression base class for Research objects """
@@ -11,7 +11,7 @@ class ResearchNamedExpression(NamedExpression):
         name = self._get_name(**kwargs)
         return name, kwargs
 
-class ResearchExecutableUnit(ResearchNamedExpression):
+class REU(ResearchNamedExpression): # ResearchExecutableUnit
     """ NamedExpression for ExecutableUnit """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
@@ -31,7 +31,7 @@ class ResearchExecutableUnit(ResearchNamedExpression):
             return res
         return experiment
 
-class ResearchPipeline(ResearchExecutableUnit):
+class RP(REU): # ResearchPipeline
     """ NamedExpression for Pipeline in Research """
     def __init__(self, name=None, root=False):
         super().__init__(name)
@@ -47,7 +47,7 @@ class ResearchPipeline(ResearchExecutableUnit):
             return [getattr(item, attr) for item in res]
         return getattr(res, attr)
 
-class ResearchIteration(ResearchNamedExpression):
+class RI(ResearchNamedExpression): # ResearchIteration
     """ NamedExpression for iteration of Research """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
@@ -57,7 +57,7 @@ class ResearchIteration(ResearchNamedExpression):
         iteration = self._get(**kwargs)
         return iteration
 
-class ResearchConfig(ResearchExecutableUnit):
+class RC(REU): # ResearchConfig
     """ NamedExpression for Config of the ExecutableUnit """
     def __init__(self, name):
         super().__init__(name=name)
@@ -69,8 +69,8 @@ class ResearchConfig(ResearchExecutableUnit):
             return [getattr(item, 'config') for item in res]
         return getattr(res, 'config')
 
-class ResearchPath(ResearchNamedExpression):
-    """ NamedExpression for path to the Research """
+class RD(ResearchNamedExpression): # ResearchDir
+    """ NamedExpression for fodler with the Research """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
         return kwargs['path']
@@ -79,7 +79,18 @@ class ResearchPath(ResearchNamedExpression):
         path = self._get(**kwargs)
         return path
 
-class ResearchExperimentPath(ResearchNamedExpression):
+class RID(ResearchNamedExpression): # ResearchExperimentID
+    """ NamedExpression for id (sample_index) for the current experiment """
+    def _get(self, **kwargs):
+        _, kwargs = super()._get(**kwargs)
+        return kwargs['job'], kwargs['experiment']
+
+    def get(self, **kwargs):
+        job, experiment = self._get(**kwargs)
+        unit = list(experiment.values())[0]
+        return job.ids[unit.index]
+
+class REP(ResearchNamedExpression): # ResearchExperimentPath
     """ NamedExpression for path to the current experiment """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
@@ -90,7 +101,7 @@ class ResearchExperimentPath(ResearchNamedExpression):
         unit = list(experiment.values())[0]
         return os.path.join(unit.path, job.ids[unit.index])
 
-class ResearchResults(ResearchNamedExpression):
+class RR(ResearchNamedExpression): # ResearchResults
     """ NamedExpression for Results of the Research """
     def __init__(self, *args, name=None, **kwargs):
         super().__init__(name)
@@ -107,4 +118,4 @@ class ResearchResults(ResearchNamedExpression):
 
     def get(self, **kwargs):
         path = self._get(**kwargs)
-        return Results(path=path).load(*self.args, **self.kwargs)
+        return Results(path, *eval_expr(self.args, **kwargs), **eval_expr(self.kwargs, **kwargs))

@@ -1,19 +1,19 @@
-"""  Ronneberger O. et al "`U-Net: Convolutional Networks for Biomedical Image Segmentation
-<https://arxiv.org/abs/1505.04597>`_"
+"""  Milletari F. et al "`V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation
+<https://arxiv.org/abs/1606.04797>`_"
 """
 from .encoder_decoder import EncoderDecoder
-from .blocks import ResBlock, DenseBlock
+from .blocks import ResBlock
 
 
 
-class UNet(EncoderDecoder):
-    """ UNet-like model.
+class VNet(EncoderDecoder):
+    """ VNet-like model.
 
     Parameters
     ----------
     auto_build : dict, optional
-        Parameters for auto-building `filters` in accordance with the idea described in the original paper.
-        Note that any of `filters`, if passed, will be replaced by auto-built ones.
+        Parameters for auto-building `filters` and `layout` in accordance with the idea described in the original paper.
+        Note that any of these config params, if passed, will be replaced by auto-built ones.
 
         num_stages : int
             number of encoder/decoder stages — defines network depth and the number of its skip connections
@@ -69,12 +69,16 @@ class UNet(EncoderDecoder):
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/order'] = ['block', 'skip', 'downsampling']
-        config['body/encoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[64, 128, 256, 512])
+        config['body/encoder/blocks'] += dict(base=ResBlock, layout=['cna', 'cna'*2, 'cna'*3, 'cna'*3],
+                                              filters=[16, 32, 64, 128], kernel_size=5)
+        config['body/encoder/downsample'] += dict(layout='cna', filters=[32, 64, 128, 256], kernel_size=2, strides=2)
 
-        config['body/embedding'] += dict(layout='cna cna', kernel_size=3, filters=1024)
+        config['body/embedding'] += dict(base=ResBlock, layout='cna'*3, filters=256, kernel_size=5)
 
         config['body/decoder/order'] = ['upsampling', 'combine', 'block']
-        config['body/decoder/blocks'] += dict(layout='cna cna', kernel_size=3, filters=[512, 256, 128, 64])
+        config['body/decoder/blocks'] += dict(base=ResBlock, layout=['cna'*3, 'cna'*3, 'cna'*2, 'cna'],
+                                              filters=[256, 128, 64, 32], kernel_size=5)
+        config['body/decoder/upsample'] += dict(layout='tna', filters=[128, 64, 32, 16], kernel_size=2, strides=2)
 
         config['loss'] = 'ce'
         return config
@@ -84,33 +88,19 @@ class UNet(EncoderDecoder):
 
         if config.get('auto_build'):
             num_stages = config.get('auto_build/num_stages', 4)
-            filters = config.get('auto_build/filters', 64)
+            filters = config.get('auto_build/filters', 16)
             encoder_filters = [filters * 2**i for i in range(num_stages)]
+            encoder_layout = ['cna', 'cna'*2] + ['cna'*3] * (num_stages - 2) if num_stages != 1 else 'cna'
+            downsample_filters = [filters * 2**(i + 1) for i in range(num_stages)]
 
             config['body/encoder/num_stages'] = num_stages
             config['body/encoder/blocks/filters'] = encoder_filters
-            config['body/embedding/filters'] = encoder_filters[-1] * 2
+            config['body/encoder/blocks/layout'] = encoder_layout
+            config['body/encoder/downsample/filters'] = downsample_filters
+            config['body/embedding/filters'] = downsample_filters[-1]
             config['body/decoder/num_stages'] = num_stages
-            config['body/decoder/blocks/filters'] = encoder_filters[::-1]
+            config['body/decoder/blocks/filters'] = downsample_filters[::-1]
+            config['body/decoder/blocks/layout'] = encoder_layout[::-1]
+            config['body/decoder/upsample/filters'] = encoder_filters[::-1]
 
-        return config
-
-
-class ResUNet(UNet):
-    """ UNet with residual blocks. """
-    @classmethod
-    def default_config(cls):
-        config = super().default_config()
-        config['body/encoder/blocks'] += dict(base=ResBlock, layout='cna', n_reps=2)
-        config['body/decoder/blocks'] += dict(base=ResBlock, layout='cna', n_reps=2)
-        return config
-
-
-class DenseUNet(UNet):
-    """ UNet with dense blocks. """
-    @classmethod
-    def default_config(cls):
-        config = super().default_config()
-        config['body/encoder/blocks'] += dict(base=DenseBlock, layout='nacd', skip=True)
-        config['body/decoder/blocks'] += dict(base=DenseBlock, layout='nacd', skip=False)
         return config

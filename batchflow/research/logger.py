@@ -5,7 +5,7 @@ import traceback
 import logging
 import requests
 
-from .named_expr import ResearchPath
+from .named_expr import RD
 from ..named_expr import eval_expr
 
 def _get_traceback(exception):
@@ -83,7 +83,7 @@ class BasicLogger(Logger):
     """ Basic logging class """
     def __init__(self):
         super().__init__()
-        self._loggers = [{'info': log_info, 'error': log_error, 'kwargs': dict(path=ResearchPath())}]
+        self._loggers = [{'info': log_info, 'error': log_error, 'kwargs': dict(path=RD())}]
 
 class PrintLogger(Logger):
     """ Logging by print """
