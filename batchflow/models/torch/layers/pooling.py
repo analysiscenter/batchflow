@@ -1,5 +1,6 @@
 """ Pooling layers. """
 #pylint: disable=not-callable, invalid-name
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -8,6 +9,7 @@ from ..utils import get_shape, get_num_dims, calc_padding
 
 MAX_ALIASES = ['max', 'p', 'P']
 AVG_ALIASES = ['avg', 'mean', 'v', 'V']
+SUM_ALIASES = ['sum', 'plus', '+']
 
 
 class BasePool(nn.Module):
@@ -130,3 +132,18 @@ class GlobalAvgPool(GlobalPool):
     """ Multi-dimensional global avg pooling layer. """
     def __init__(self, inputs=None):
         super().__init__(inputs=inputs, op='avg')
+
+
+class ChannelPool(nn.Module):
+    """ Channel pooling layer. """
+    OP_SELECTOR = {**{op:  torch.max for op in MAX_ALIASES},
+                   **{op:  torch.sum for op in SUM_ALIASES},
+                   **{op:  torch.mean for op in AVG_ALIASES}}
+
+    def __init__(self, op='mean'):
+        super().__init__()
+        self.op = self.OP_SELECTOR[op]
+
+    def forward(self, x):
+        result = self.op(x, dim=1, keepdim=True)
+        return result[0] if isinstance(result, tuple) else result
