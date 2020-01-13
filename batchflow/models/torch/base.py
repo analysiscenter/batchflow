@@ -602,8 +602,7 @@ class TorchModel:
                 loss_fn = partial(loss, **args)
             else:
                 raise ValueError("Loss is not defined in the model %s" % self.__class__.__name__)
-
-            loss_fn = loss_fn or loss(*args)
+            loss_fn = loss_fn or loss(**args)
             if isinstance(loss_fn, nn.Module):
                 loss_fn.to(device=self.device)
             losses.append(loss_fn)
@@ -718,18 +717,13 @@ class TorchModel:
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
-    def information(self, config=True, num_params=True,  devices=True, train_steps=True, model=False, misc=True):
+    def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
         """ Show information about model configuration, used devices, train steps, architecture and more. """
         template = '\n##### {}:'
 
         if config:
             print(template.format('Config'))
             pprint(self.full_config.config)
-
-        if num_params:
-            num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-            print(template.format('Num params'))
-            print('Number of trainable parameters: {}'.format(num_params))
 
         if devices:
             print(template.format('Devices'))
