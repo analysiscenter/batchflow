@@ -717,10 +717,10 @@ class TorchModel:
             return ConvBlock(inputs=inputs, **kwargs)
         return None
 
-
     def information(self, config=True, devices=True, train_steps=True, model=False, misc=True):
         """ Show information about model configuration, used devices, train steps, architecture and more. """
         template = '\n##### {}:'
+
         if config:
             print(template.format('Config'))
             pprint(self.full_config.config)

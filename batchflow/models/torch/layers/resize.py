@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_shape, get_num_dims
+from ..utils import get_shape, get_num_dims, get_num_channels
 
 
 
@@ -14,7 +14,7 @@ class IncreaseDim(nn.Module):
         self.dim = dim
 
     def forward(self, x):
-        dim = get_num_dims(x) + self.dim
+        dim = len(get_shape(x)) - 2 + self.dim
         ones = [1] * dim
         return x.view(x.size(0), -1, *ones)
 
@@ -124,7 +124,7 @@ class Crop(nn.Module):
                 # Increase input tensor's shape by zero padding
                 zeros_shape = list(i_shape)
                 zeros_shape[i + 2] = r_shape_
-                zeros = torch.zeros(zeros_shape)
+                zeros = torch.zeros(zeros_shape, device=inputs.device)
 
                 shape = [slice(None, None)] * len(i_shape)
                 shape[i + 2] = slice(None, i_shape_)
@@ -182,7 +182,6 @@ class Upsample(nn.Module):
             kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
             kwargs['strides'] = kwargs.get('strides') or factor
             kwargs['filters'] = kwargs.get('filters') or 'same'
-
         self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
 
     def forward(self, x):
@@ -276,14 +275,29 @@ class Combine(nn.Module):
         inputs = [conv(tensor) for conv, tensor in zip(conv, inputs[1:])]
         return Combine.sum(inputs)
 
+    @staticmethod
+    def attention(inputs, **kwargs):
+        """ Global Attention Upsample module.
+        Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang. Pyramid Attention Network
+        for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_"
+        """
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        x, skip = inputs[0], inputs[1]
+        num_channels = get_num_channels(skip)
+        num_dims = get_num_dims(skip)
+        conv1 = ConvBlock(inputs=x, layout='cna', kernel_size=3, filters=num_channels, **kwargs)(x)
+        conv2 = ConvBlock(inputs=skip, layout='V > cna', kernel_size=1, filters='same', dim=num_dims, **kwargs)(skip)
+        weighted = Combine.mul([conv1, conv2])
+        return Combine.sum([weighted, skip])
+
     OPS = {
         concat: ['concat', 'cat', '.'],
         sum: ['sum', 'plus', '+'],
         mul: ['multi', 'mul', '*'],
         mean: ['average', 'avg', 'mean'],
         softsum: ['softsum', '&'],
+        attention: ['attention']
     }
-
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
     def __init__(self, inputs=None, op='concat', force_resize=None, leading_index=0, **kwargs):
@@ -298,7 +312,7 @@ class Combine(nn.Module):
 
         if op in self.OPS:
             op = self.OPS[op]
-            if op.__name__ == 'softsum':
+            if op.__name__ in ['softsum', 'attention']:
                 self.op = lambda inputs: op(inputs, **kwargs)
                 self.force_resize = force_resize if force_resize is not None else False
             else:
