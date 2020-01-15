@@ -87,7 +87,7 @@ class AvgPool(BasePoolWithPadding):
 
 
 class Pool(nn.Module):
-    """ Multi-dimensional pooling layer, that selects aggregation strategy (avg or max) """
+    """ Multi-dimensional pooling layer that selects aggregation strategy (avg or max) """
     OP_SELECTOR = {**{op:  MaxPool for op in MAX_ALIASES},
                    **{op:  AvgPool for op in AVG_ALIASES}}
 
