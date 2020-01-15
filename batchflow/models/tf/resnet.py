@@ -416,7 +416,6 @@ class ResNet18(ResNet):
         config['body/block/bottleneck'] = None
         return config
 
-
 class ResNet34(ResNet):
     """ The original ResNet-34 architecture """
     @classmethod
@@ -426,7 +425,6 @@ class ResNet34(ResNet):
         config['body/block/bottleneck'] = None
         return config
 
-
 class ResNet50(ResNet):
     """ The original ResNet-50 architecture """
     @classmethod
@@ -434,7 +432,6 @@ class ResNet50(ResNet):
         config = ResNet34.default_config()
         config['body/block/bottleneck'] = 4
         return config
-
 
 class ResNet101(ResNet):
     """ The original ResNet-101 architecture """
@@ -444,7 +441,6 @@ class ResNet101(ResNet):
         config['body/num_blocks'] = [3, 4, 23, 3]
         config['body/block/bottleneck'] = 4
         return config
-
 
 class ResNet152(ResNet):
     """ The original ResNet-152 architecture """
@@ -464,7 +460,6 @@ class ResNeXt18(ResNet):
         config['body/block/resnext'] = 32
         return config
 
-
 class ResNeXt34(ResNet):
     """ The ResNeXt-34 architecture """
     @classmethod
@@ -472,7 +467,6 @@ class ResNeXt34(ResNet):
         config = ResNet34.default_config()
         config['body/block/resnext'] = 32
         return config
-
 
 class ResNeXt50(ResNet):
     """ The ResNeXt-50 architecture """
@@ -482,7 +476,6 @@ class ResNeXt50(ResNet):
         config['body/block/resnext'] = 32
         return config
 
-
 class ResNeXt101(ResNet):
     """ The ResNeXt-101 architecture """
     @classmethod
@@ -491,11 +484,92 @@ class ResNeXt101(ResNet):
         config['body/block/resnext'] = 32
         return config
 
-
 class ResNeXt152(ResNet):
     """ The ResNeXt-152 architecture """
     @classmethod
     def default_config(cls):
         config = ResNet152.default_config()
         config['body/block/resnext'] = 32
+        return config
+
+
+class SEResNet18(ResNet):
+    """ The ResNet-18 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNet18.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+class SEResNet34(ResNet):
+    """ The ResNet-34 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNet34.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+class SEResNet50(ResNet):
+    """ The ResNet-50 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNet50.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+class SEResNet101(ResNet):
+    """ The ResNet-101 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNet101.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+class SEResNet152(ResNet):
+    """ The ResNet-152 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNet152.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+
+class SEResNeXt18(ResNet):
+    """ The ResNeXt-18 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNeXt18.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+class SEResNeXt34(ResNet):
+    """ The ResNeXt-34 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNeXt34.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+class SEResNeXt50(ResNet):
+    """ The ResNeXt-50 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNeXt50.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+class SEResNeXt101(ResNet):
+    """ The ResNeXt-101 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNeXt101.default_config()
+        config['body/block/se_block/ratio'] = 16
+        return config
+
+class SEResNeXt152(ResNet):
+    """ The ResNeXt-152 architecture with squeeze-and-excitation blocks."""
+    @classmethod
+    def default_config(cls):
+        config = ResNeXt152.default_config()
+        config['body/block/se_block/ratio'] = 16
         return config

@@ -28,7 +28,9 @@ from .unet import UNet, UNetPP
 from .vnet import VNet
 from .fcn import FCN, FCN32, FCN16, FCN8
 from .resnet import ResNet, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152, \
-                    ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152
+                    ResNeXt18, ResNeXt34, ResNeXt50, ResNeXt101, ResNeXt152, \
+                    SEResNet18, SEResNet34, SEResNet50, SEResNet101, SEResNet152, \
+                    SEResNeXt18, SEResNeXt34, SEResNeXt50, SEResNeXt101, SEResNeXt152
 from .inception_v1 import Inception_v1
 from .inception_v3 import Inception_v3
 from .inception_v4 import Inception_v4
