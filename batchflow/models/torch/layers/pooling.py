@@ -13,7 +13,7 @@ SUM_ALIASES = ['sum', 'plus', '+']
 
 
 class BasePool(nn.Module):
-    """ A universal pooling layer. """
+    """ Base class that can select appropriate torch.nn layer depending on input's number of dimensions. """
     LAYERS = {}
 
     def __init__(self, inputs=None, **kwargs):
@@ -25,8 +25,29 @@ class BasePool(nn.Module):
         return self.layer(x)
 
 
-class BasePoolParam(BasePool):
-    """ A universal pooling layer. """
+class AdaptiveMaxPool(BasePool):
+    """ Multi-dimensional adaptive max pooling layer. """
+    LAYERS = {
+        1: nn.AdaptiveMaxPool1d,
+        2: nn.AdaptiveMaxPool2d,
+        3: nn.AdaptiveMaxPool3d,
+    }
+
+
+class AdaptiveAvgPool(BasePool):
+    """ Multi-dimensional adaptive average pooling layer. """
+    LAYERS = {
+        1: nn.AdaptiveAvgPool1d,
+        2: nn.AdaptiveAvgPool2d,
+        3: nn.AdaptiveAvgPool3d,
+    }
+
+
+class BasePoolWithPadding(BasePool):
+    """
+    Base class that selects torch.nn layer depending on input's number of dimensions
+    AND makes proper padding
+    """
 
     def __init__(self, inputs=None, pool_size=2, pool_strides=2, padding='same'):
         self.padding = None
@@ -49,7 +70,7 @@ class BasePoolParam(BasePool):
         return super().forward(x)
 
 
-class MaxPool(BasePoolParam):
+class MaxPool(BasePoolWithPadding):
     """ Multi-dimensional max pooling layer. """
     LAYERS = {
         1: nn.MaxPool1d,
@@ -58,7 +79,7 @@ class MaxPool(BasePoolParam):
     }
 
 
-class AvgPool(BasePoolParam):
+class AvgPool(BasePoolWithPadding):
     """ Multi-dimensional average pooling layer. """
     LAYERS = {
         1: nn.AvgPool1d,
@@ -68,7 +89,7 @@ class AvgPool(BasePoolParam):
 
 
 class Pool(nn.Module):
-    """ Multi-dimensional pooling layer. """
+    """ Multi-dimensional pooling layer that selects aggregation strategy (avg or max) """
     OP_SELECTOR = {**{op:  MaxPool for op in MAX_ALIASES},
                    **{op:  AvgPool for op in AVG_ALIASES}}
 
@@ -82,26 +103,8 @@ class Pool(nn.Module):
         return x
 
 
-class AdaptiveMaxPool(BasePool):
-    """ Multi-dimensional adaptive max pooling layer. """
-    LAYERS = {
-        1: nn.AdaptiveMaxPool1d,
-        2: nn.AdaptiveMaxPool2d,
-        3: nn.AdaptiveMaxPool3d,
-    }
-
-
-class AdaptiveAvgPool(BasePool):
-    """ Multi-dimensional adaptive average pooling layer. """
-    LAYERS = {
-        1: nn.AdaptiveAvgPool1d,
-        2: nn.AdaptiveAvgPool2d,
-        3: nn.AdaptiveAvgPool3d,
-    }
-
-
 class AdaptivePool(nn.Module):
-    """ Multi-dimensional global pooling layer. """
+    """ Multi-dimensional adaptive pooling layer, that selects aggregation strategy (avg or max) """
     OP_SELECTOR = {**{op:  AdaptiveMaxPool for op in MAX_ALIASES},
                    **{op:  AdaptiveAvgPool for op in AVG_ALIASES}}
 
@@ -110,8 +113,7 @@ class AdaptivePool(nn.Module):
         self.pool = self.OP_SELECTOR[op](output_size=output_size, inputs=inputs)
 
     def forward(self, x):
-        x = self.pool(x)
-        return x.view(x.size(0), -1)
+        return self.pool(x)
 
 
 class GlobalPool(AdaptivePool):
@@ -120,6 +122,10 @@ class GlobalPool(AdaptivePool):
         shape = get_shape(inputs)
         pool_shape = [1] * len(shape[2:])
         super().__init__(inputs=inputs, op=op, output_size=pool_shape)
+
+    def forward(self, x):
+        x = super().forward(x)
+        return x.view(x.size(0), -1)
 
 
 class GlobalMaxPool(GlobalPool):
