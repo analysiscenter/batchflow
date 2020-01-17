@@ -305,7 +305,7 @@ class CBAM(nn.Module):
             self.pool_layers.append(pool)
 
         tensor = self.pool_layers[0](inputs)
-        self.share_layer = ConvBlock(inputs=tensor, layout='faf>',
+        self.shared_layer = ConvBlock(inputs=tensor, layout='faf>',
                                      units=[num_channels // ratio, num_channels],
                                      activation='relu', dim=num_dims, **kwargs)
 
@@ -323,7 +323,7 @@ class CBAM(nn.Module):
         tensor_list = []
         for pool in self.pool_layers:
             pool_feature = pool(x)
-            tensor = self.share_layer(pool_feature)
+            tensor = self.shared_layer(pool_feature)
             tensor_list.append(tensor)
         tensor = self.combine_cam(tensor_list)
         attention = Activation('sigmoid')(tensor)
