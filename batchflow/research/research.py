@@ -18,7 +18,7 @@ from .distributor import Distributor
 from .workers import PipelineWorker
 from .domain import Domain, Option, ConfigAlias
 from .job import Job
-from .logger import BasicLogger
+from .logger import Logger, BasicLogger, PrintLogger, TelegramLogger
 from .utils import get_metrics
 from .executable import Executable
 from .named_expr import RP
@@ -271,9 +271,36 @@ class Research:
         }
         return self
 
-    def add_logger(self, logger):
-        """ Add custom Logger into Research """
-        self.logger = logger
+    def add_logger(self, logger, **kwargs):
+        """ Add custom Logger into Research.
+
+        Parameters
+        ----------
+        logger : str, tuple, list or Logger
+            if str, it can be 'basic', 'print' or 'tg',
+            if tuple, pair of str and kwargs for initialization
+            if list then list of str or Logger instances.
+        kwargs :
+            initialization parameters for Logger (if `logger` not a list)
+        """
+        if not isinstance(logger, list, **kwargs):
+            logger = [logger]
+
+        self.logger = Logger()
+        for item in logger:
+            if isinstance(item, str):
+                item = (item, {})
+            if isinstance(item, tuple):
+                if item[0] == 'basic':
+                    self.logger += BasicLogger()
+                elif item[0] == 'print':
+                    self.logger += PrintLogger()
+                elif item[0] == 'tg':
+                    self.logger += TelegramLogger(**item[1])
+                else:
+                    raise ValueError('Unknown logger: ' + item[0])
+            else:
+                self.logger += item
         return self
 
     def load_results(self, *args, **kwargs):
