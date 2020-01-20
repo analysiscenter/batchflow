@@ -283,7 +283,7 @@ class Research:
         kwargs :
             initialization parameters for Logger (if `logger` not a list)
         """
-        if not isinstance(logger, list, **kwargs):
+        if not isinstance(logger, list):
             logger = [logger]
 
         self.logger = Logger()
