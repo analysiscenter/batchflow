@@ -273,34 +273,36 @@ class Research:
 
     def add_logger(self, logger, **kwargs):
         """ Add custom Logger into Research.
-
         Parameters
         ----------
-        logger : str, tuple, list or Logger
-            if str, it can be 'basic', 'print' or 'tg',
-            if tuple, pair of str and kwargs for initialization
-            if list then list of str or Logger instances.
+        logger : str, Logger, tuple or list
+            if str, it can be 'basic', 'print' or 'tg'
+            if tuple, pair of str or Logger and kwargs for them
+            if list then of str, Logger and tuples of them and kwargs
         kwargs :
-            initialization parameters for Logger (if `logger` not a list)
+            initialization parameters for Logger (if `logger` is str or Logger)
         """
-        if not isinstance(logger, list):
-            logger = [logger]
+        loggers = [logger] if not isinstance(logger, list) else logger
 
         self.logger = Logger()
-        for item in logger:
-            if isinstance(item, str):
-                item = (item, {})
-            if isinstance(item, tuple):
-                if item[0] == 'basic':
+
+        for item in loggers:
+            if not isinstance(item, tuple):
+                item = (item, kwargs)
+            logger, params = item
+
+            if isinstance(logger, str):
+                if logger == 'basic':
                     self.logger += BasicLogger()
-                elif item[0] == 'print':
+                elif logger == 'print':
                     self.logger += PrintLogger()
-                elif item[0] == 'tg':
-                    self.logger += TelegramLogger(**item[1])
+                elif logger == 'tg':
+                    self.logger += TelegramLogger(**params)
                 else:
-                    raise ValueError('Unknown logger: ' + item[0])
+                    raise ValueError('Unknown logger: ' + logger)
             else:
-                self.logger += item
+                self.logger += logger(**params)
+
         return self
 
     def load_results(self, *args, **kwargs):
