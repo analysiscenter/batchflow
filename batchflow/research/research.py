@@ -275,12 +275,12 @@ class Research:
         """ Add custom Logger into Research.
         Parameters
         ----------
-        logger : str, Logger, tuple or list
+        logger : str, Logger class, tuple or list
             if str, it can be 'basic', 'print' or 'tg'
-            if tuple, pair of str or Logger and kwargs for them
-            if list then of str, Logger and tuples of them and kwargs
+            if tuple, pair of str or Logger class and kwargs for them
+            if list then of str, Logger class and tuples of them and kwargs
         kwargs :
-            initialization parameters for Logger (if `logger` is str or Logger)
+            initialization parameters for Logger (if `logger` is str or Logger class)
         """
         loggers = [logger] if not isinstance(logger, list) else logger
 
