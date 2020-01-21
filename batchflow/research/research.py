@@ -299,9 +299,11 @@ class Research:
                 elif logger == 'tg':
                     self.logger += TelegramLogger(**params)
                 else:
-                    raise ValueError('Unknown logger: ' + logger)
-            else:
+                    raise ValueError('Unknown logger: {}'.format(logger))
+            elif issubclass(logger, Logger):
                 self.logger += logger(**params)
+            else:
+                raise ValueError('Unknown logger: {}'.format(logger))
 
         return self
 
