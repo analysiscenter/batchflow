@@ -24,10 +24,10 @@ def log_error(exception, path):
     logging.basicConfig(format='%(levelname)-8s [%(asctime)s] %(message)s', filename=filename, level=logging.ERROR)
     logging.info(_get_traceback(exception))
 
-class Logger:
+class BaseLogger:
     """ Basic logging class.
 
-    Logger consists of one or few pairs of functions (info logging and error logging).
+    BaseLogger consists of one or few pairs of functions (info logging and error logging).
     """
     def __init__(self, loggers=None):
         if loggers is None:
@@ -75,23 +75,23 @@ class Logger:
 
     def __add__(self, other):
         # pylint: disable=protected-access
-        if isinstance(other, Logger):
-            return Logger(self._loggers + other._loggers)
+        if isinstance(other, BaseLogger):
+            return BaseLogger(self._loggers + other._loggers)
         raise TypeError("unsupported operand type(s) for +: '{}' and '{}'".format(type(self), type(other)))
 
-class BasicLogger(Logger):
+class FileLogger(BaseLogger):
     """ Basic logging class """
     def __init__(self):
         super().__init__()
         self._loggers = [{'info': log_info, 'error': log_error, 'kwargs': dict(path=RD())}]
 
-class PrintLogger(Logger):
+class PrintLogger(BaseLogger):
     """ Logging by print """
     def __init__(self):
         super().__init__()
         self._loggers = [{'info': print, 'error': print, 'kwargs': dict()}]
 
-class TelegramLogger(Logger):
+class TelegramLogger(BaseLogger):
     """ Telegram Logger """
     def __init__(self, bot_token, chat_id):
         """ Initialize Logger

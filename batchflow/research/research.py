@@ -18,7 +18,7 @@ from .distributor import Distributor
 from .workers import PipelineWorker
 from .domain import Domain, Option, ConfigAlias
 from .job import Job
-from .logger import Logger, BasicLogger, PrintLogger, TelegramLogger
+from .logger import BaseLogger, FileLogger, PrintLogger, TelegramLogger
 from .utils import get_metrics
 from .executable import Executable
 from .named_expr import RP
@@ -42,7 +42,7 @@ class Research:
         self.n_reps = None
         self.n_configs = None
         self.repeat_each = None
-        self.logger = BasicLogger()
+        self.logger = FileLogger()
 
         # update parameters for config. None or dict with keys (function, params, cache)
         self._update_config = None
@@ -273,18 +273,19 @@ class Research:
 
     def add_logger(self, logger, **kwargs):
         """ Add custom Logger into Research.
+
         Parameters
         ----------
-        logger : str, Logger class, tuple or list
-            if str, it can be 'basic', 'print' or 'tg'
-            if tuple, pair of str or Logger class and kwargs for them
-            if list then of str, Logger class and tuples of them and kwargs
+        logger : str, BaseLogger class, tuple or list
+            if str, it can be 'file', 'print' or 'tg'
+            if tuple, pair of str or BaseLogger class and kwargs for them
+            if list then of str, BaseLogger class and tuples of them and kwargs
         kwargs :
-            initialization parameters for Logger (if `logger` is str or Logger class)
+            initialization parameters for BaseLogger (if `logger` is str or BaseLogger class)
         """
         loggers = [logger] if not isinstance(logger, list) else logger
 
-        self.logger = Logger()
+        self.logger = BaseLogger()
 
         for item in loggers:
             if not isinstance(item, tuple):
@@ -292,15 +293,15 @@ class Research:
             logger, params = item
 
             if isinstance(logger, str):
-                if logger == 'basic':
-                    self.logger += BasicLogger()
+                if logger == 'file':
+                    self.logger += FileLogger()
                 elif logger == 'print':
                     self.logger += PrintLogger()
                 elif logger == 'tg':
                     self.logger += TelegramLogger(**params)
                 else:
                     raise ValueError('Unknown logger: {}'.format(logger))
-            elif issubclass(logger, Logger):
+            elif issubclass(logger, BaseLogger):
                 self.logger += logger(**params)
             else:
                 raise ValueError('Unknown logger: {}'.format(logger))
