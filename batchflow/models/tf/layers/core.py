@@ -7,6 +7,8 @@ from .layer import Layer, add_as_function
 
 
 
+
+
 @add_as_function
 class Flatten2D:
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) """
@@ -33,6 +35,18 @@ class Flatten:
         dim = np.prod(shape[1:])
         x = tf.reshape(x, [-1, dim], **self.kwargs)
         return x
+
+
+@add_as_function
+class Activation(Layer):
+    """ Wrapper for activation functions. """
+    def __init__(self, activation, **kwargs):
+        self.activation = activation
+        self.kwargs = kwargs
+
+    def __call__(self, inputs):
+        if self.activation is not None:
+            return self.activation(inputs)
 
 
 
@@ -66,32 +80,82 @@ class Combine(Layer):
 
     data_format : str {'channels_last', 'channels_first'}
         Data format.
+    leading_index : int
+        Index of tensor to broadcast to.
     kwargs : dict
         Arguments for :class:`.ConvBlock`.
     """
-    def __init__(self, op='softsum', data_format='channels_last', name='combine', **kwargs):
+    @staticmethod
+    def concat(inputs, data_format='channels_last', axis=None, **kwargs):
+        """ Concatenate tensors along specified axis or data format. """
+        axis = axis or (1 if data_format == "channels_first" or data_format.startswith("NC") else -1)
+        return tf.concat(inputs, axis=axis, name='combine-concat')
+
+    @staticmethod
+    def sum(inputs, **kwargs):
+        """ Addition with broadcasting. """
+        _ = kwargs
+        result = 0
+        for item in inputs:
+            result = result + item
+        return result
+
+    @staticmethod
+    def mul(inputs, **kwargs):
+        """ Multiplication with broadcasting. """
+        _ = kwargs
+        result = 1
+        for item in inputs:
+            result = result * item
+        return result
+
+    @staticmethod
+    def mean(inputs, **kwargs):
+        """ Mean with broadcasting. """
+        _ = kwargs
+        return Combine.sum(inputs, name='combine-softsum') / len(inputs)
+
+    @staticmethod
+    def softsum(inputs, data_format='channels_last', **kwargs):
+        """ Softsum. """
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        axis = 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
+        filters = inputs[0].get_shape().as_list()[axis]
+        args = {'layout': 'c', 'filters': filters, 'kernel_size': 1, **kwargs}
+        for i in range(1, len(inputs)):
+            inputs[i] = ConvBlock(name='combine-conv', **args)(inputs[i])
+        return Combine.sum(inputs, name='combine-softsum')
+
+
+    OPS = {
+        concat: ['concat', 'cat', '.'],
+        sum: ['sum', 'plus', '+'],
+        mul: ['multi', 'mul', '*'],
+        mean: ['avg', 'mean', 'average'],
+        softsum: ['softsum', '&']
+    }
+    OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
+
+    def __init__(self, op='softsum', data_format='channels_last', leading_index=0, name='combine', **kwargs):
         self.op = op
-        self.data_format, self.name = data_format, name
+        self.data_format, self.name, self.idx = data_format, name, leading_index
         self.kwargs = kwargs
 
     def __call__(self, inputs):
         with tf.variable_scope(self.name):
-            axis = 1 if self.data_format == "channels_first" or self.data_format.startswith("NC") else -1
+            if self.idx != 0:
+                inputs[0], inputs[self.idx] = inputs[self.idx], inputs[0]
 
-            if self.op == 'concat':
-                return tf.concat(inputs, axis=axis, name='combine-concat')
-            if self.op in ['avg', 'average', 'mean']:
-                return tf.reduce_mean(tf.stack(inputs, axis=0), axis=0, name='combine-mean')
-            if self.op in ['sum', 'add']:
-                return tf.add_n(inputs, name='combine-sum')
-            if self.op in ['softsum', 'convsum']:
-                from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-                filters = inputs[0].get_shape().as_list()[axis]
-                args = {'layout': 'c', 'filters': filters, 'kernel_size': 1, **self.kwargs}
-                for i in range(1, len(inputs)):
-                    inputs[i] = ConvBlock(name='combine-conv', **args)(inputs[i])
-                return tf.add_n(inputs, name='combine-softsum')
-            raise ValueError('Unknown operation {}.'.format(self.op))
+            if self.op in self.OPS:
+                op = self.OPS[self.op]
+            elif callable(self.op):
+                op = self.op
+            else:
+                raise ValueError('Combine operation must be a callable or \
+                                  one from {}, instead got {}.'.format(list(self.OPS.keys()), op))
+
+            return op(inputs, data_format=self.data_format, **self.kwargs)
+
 
 
 

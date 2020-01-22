@@ -1,9 +1,10 @@
 """ Contains convolution layers """
+import inspect
 import logging
 import numpy as np
 import tensorflow as tf
 
-from .core import Dense, Dropout, AlphaDropout, BatchNormalization, Mip
+from .core import Activation, Dense, Dropout, AlphaDropout, BatchNormalization, Combine, Mip
 from .conv import Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, DepthwiseConv, DepthwiseConvTranspose
 from .pooling import Pooling, GlobalPooling
 from .drop_block import Dropblock
@@ -13,6 +14,20 @@ from ...utils import unpack_args
 
 
 logger = logging.getLogger(__name__)
+
+
+
+class Branch:
+    def __init__(self, *args, name='branch', **kwargs):
+        self.name = name
+        self.args, self.kwargs = args, kwargs
+
+    def __call__(self, inputs):
+        with tf.variable_scope(self.name):
+            if self.kwargs.get('layout') is not None:
+                return ConvBlock(self.args, **self.kwargs)(inputs)
+            return inputs
+
 
 
 
@@ -154,10 +169,6 @@ class ConvBlock:
     """
     LETTERS_LAYERS = {
         'a': 'activation',
-        'R': 'residual_start',
-        '+': 'residual_end',
-        '.': 'residual_end',
-        '*': 'residual_end',
         'f': 'dense',
         'c': 'conv',
         't': 'transposed_conv',
@@ -174,17 +185,19 @@ class ConvBlock:
         'D': 'alpha_dropout',
         'O': 'dropblock',
         'm': 'mip',
-        'A': 'residual_bilinear_additive',
         'b': 'resize_bilinear',
         'B': 'resize_bilinear_additive',
         'N': 'resize_nn',
-        'X': 'subpixel_conv'
+        'X': 'subpixel_conv',
+        'R': 'residual_start',
+        'A': 'residual_bilinear_additive',
+        '+': 'residual_end',
+        '.': 'residual_end',
+        '*': 'residual_end',
     }
 
     LAYERS_CLASSES = {
-        'activation': None,
-        'residual_start': None,
-        'residual_end': None,
+        'activation': Activation,
         'dense': Dense,
         'conv': Conv,
         'transposed_conv': ConvTranspose,
@@ -199,11 +212,13 @@ class ConvBlock:
         'alpha_dropout': AlphaDropout,
         'dropblock': Dropblock,
         'mip': Mip,
-        'residual_bilinear_additive': None,
         'resize_bilinear': ResizeBilinear,
         'resize_bilinear_additive': ResizeBilinearAdditive,
         'resize_nn': ResizeNn,
-        'subpixel_conv': SubpixelConv
+        'subpixel_conv': SubpixelConv,
+        'residual_start': Branch,
+        'residual_end': Combine,
+        'residual_bilinear_additive': ResizeBilinearAdditive,
     }
 
     DEFAULT_LETTERS = LETTERS_LAYERS.keys()
@@ -224,6 +239,9 @@ class ConvBlock:
         'N': 'b',
         'X': 'b',
         })
+
+    SKIP_LETTERS = ['R', 'A', 'B', 'S']
+    COMBINE_LETTERS = ['+', '*', '.', '&']
 
     def __init__(self, layout='',
                  filters=0, kernel_size=3, strides=1, dilation_rate=1, depth_multiplier=1,
@@ -269,6 +287,25 @@ class ConvBlock:
         self.LETTERS_GROUPS.update({letter: letter})
 
 
+    def fill_layer_params(self, layer_name, layer_class, counters):
+        """ Inspect which parameters should be passed to the layer and get them from instance. """
+        if hasattr(layer_class, 'params'):
+            layer_params = layer_class.params
+        else:
+            layer_params = inspect.getfullargspec(layer_class.__init__)[0]
+            layer_params.remove('self')
+
+        args = {param: getattr(self, param, self.kwargs.get(param, None))
+                for param in layer_params
+                if (hasattr(self, param) or param in self.kwargs)}
+
+        layer_args = unpack_args(self.kwargs, *counters)
+        layer_args = layer_args.get(layer_name, {})
+        args = {**args, **layer_args}
+        args = unpack_args(args, *counters)
+        return args
+
+
     def __call__(self, inputs, training=None):
         layout = self.layout or ''
         layout = layout.replace(' ', '')
@@ -304,43 +341,23 @@ class ConvBlock:
             layer_class = self.LAYERS_CLASSES[layer_name]
             layout_dict[letter_group][0] += 1
 
-            if letter == 'a':
-                args = dict(activation=self.activation)
-                activation_fn = unpack_args(args, *layout_dict[letter_group])['activation']
-                if activation_fn is not None:
-                    tensor = activation_fn(tensor)
-            elif letter == 'R':
-                residuals += [tensor]
-            elif letter == 'A':
-                args = dict(factor=self.kwargs.get('factor'), data_format=self.data_format)
-                args = unpack_args(args, *layout_dict[letter_group])
-                t = self.LAYERS_CLASSES['resize_bilinear_additive'](**args, name='rba-%d' % i)(tensor)
-                residuals += [t]
-            elif letter == '+':
-                tensor = tensor + residuals[-1]
-                residuals = residuals[:-1]
-            elif letter == '*':
-                tensor = tensor * residuals[-1]
-                residuals = residuals[:-1]
-            elif letter == '.':
-                axis = -1 if self.data_format == 'channels_last' else 1
-                tensor = tf.concat([tensor, residuals[-1]], axis=axis, name='concat-%d' % i)
-                residuals = residuals[:-1]
+            if letter in self.DEFAULT_LETTERS:
+                args = self.fill_layer_params(layer_name, layer_class, layout_dict[letter_group])
+            else:
+                args = {}
+
+            if letter in self.SKIP_LETTERS:
+                skip = layer_class(**args)(tensor)
+                residuals.append(skip)
+            elif letter in self.COMBINE_LETTERS:
+                tensor = layer_class(**args)([tensor, residuals.pop()])
             else:
                 layer_args = self.kwargs.get(layer_name, {})
                 skip_layer = layer_args is False or \
                              isinstance(layer_args, dict) and layer_args.get('disable', False)
 
-                # Create params for the layer call
-                if skip_layer:
-                    pass
-                elif letter in self.DEFAULT_LETTERS:
-                    args = {param: getattr(self, param, self.kwargs.get(param, None))
-                            for param in layer_class.params
-                            if (hasattr(self, param) or param in self.kwargs)}
-                else:
-                    if letter not in self.LETTERS_LAYERS.keys():
-                        raise ValueError('Unknown letter symbol - %s' % letter)
+                if letter not in self.LETTERS_LAYERS.keys():
+                    raise ValueError('Unknown letter symbol - %s' % letter)
 
                 # Additional params for some layers
                 if letter_group == 'd':

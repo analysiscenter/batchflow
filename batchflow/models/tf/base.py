@@ -13,7 +13,7 @@ from tensorflow.python.client import device_lib
 from ... import Config
 from ..utils import unpack_fn_from_config
 from ..base import BaseModel
-from .layers import mip, conv_block, upsample
+from .layers import mip, conv_block, upsample, ConvBlock
 from .losses import softmax_cross_entropy, dice
 from .nn import piecewise_constant, cyclic_learning_rate
 
@@ -1472,7 +1472,7 @@ class TFModel(BaseModel):
         """
         kwargs = cls.fill_params('initial_block', **kwargs)
         if kwargs.get('layout'):
-            return conv_block(inputs, name=name, **kwargs)
+            return ConvBlock(name=name, **kwargs)(inputs)
         return inputs
 
     @classmethod
@@ -1502,7 +1502,7 @@ class TFModel(BaseModel):
         """
         kwargs = cls.fill_params('body', **kwargs)
         if kwargs.get('layout'):
-            return conv_block(inputs, name=name, **kwargs)
+            return ConvBlock(name=name, **kwargs)(inputs)
         return inputs
 
     @classmethod
@@ -1584,7 +1584,7 @@ class TFModel(BaseModel):
         """
         kwargs = cls.fill_params('head', **kwargs)
         if kwargs.get('layout'):
-            return conv_block(inputs, name=name, **kwargs)
+            return ConvBlock(name=name, **kwargs)(inputs)
         return inputs
 
     def output(self, inputs, predictions=None, ops=None, **kwargs):

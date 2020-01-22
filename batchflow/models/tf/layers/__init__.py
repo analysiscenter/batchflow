@@ -3,8 +3,8 @@
 from .layer import Layer
 from .conv_block import conv_block, upsample
 from .conv_block import ConvBlock, Upsample
-from .core import flatten, flatten2d, maxout, mip, xip, combine
-from .core import Flatten, Flatten2D, Maxout, Mip, Xip, Combine
+from .core import flatten, flatten2d, activation, dense, maxout, mip, xip, combine
+from .core import Flatten, Flatten2D, Activation, Dense, Dropout, AlphaDropout, Maxout, Mip, Xip, Combine
 from .conv import conv1d_transpose, conv1d_transpose_nn, conv_transpose, \
 				  separable_conv, separable_conv_transpose, depthwise_conv, depthwise_conv_transpose
 from .conv import Conv1DTranspose, Conv1DTransposeNn, ConvTranspose, \
