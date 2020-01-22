@@ -79,7 +79,7 @@ class ResNet(Encoder):
 
         config['body/encoder/num_stages'] = 4
         config['body/encoder/order'] = ['skip', 'block']
-        config['body/encoder/blocks'] += dict(base=ResBlock, layout='cnacna',
+        config['body/encoder/blocks'] += dict(base=ResBlock, layout='cnacn',
                                               filters=[64, 128, 256, 512],
                                               n_reps=[1, 1, 1, 1],
                                               downsample=[False, True, True, True],
@@ -87,7 +87,6 @@ class ResNet(Encoder):
                                               se=False)
 
         config['head'] += dict(layout='Vdf', dropout_rate=.4)
-
         config['loss'] = 'ce'
         return config
 

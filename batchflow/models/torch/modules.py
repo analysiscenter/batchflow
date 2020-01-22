@@ -210,10 +210,12 @@ class SelfAttention(nn.Module):
     def __init__(self, inputs=None, layout='cna', kernel_size=1, reduction_ratio=8, **kwargs):
         super().__init__()
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
-        args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size)}
-        self.top_branch = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
-        self.mid_branch = ConvBlock(**args, filters='same//{}'.format(reduction_ratio))
-        self.bot_branch = ConvBlock(**args, filters='same')
+        top_mid_args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size,
+                                         filters='same//{}'.format(reduction_ratio))}
+        bot_args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size, filters='same')}
+        self.top_branch = ConvBlock(**top_mid_args)
+        self.mid_branch = ConvBlock(**top_mid_args)
+        self.bot_branch = ConvBlock(**bot_args)
 
     def forward(self, x):
         batch_size, spatial = x.shape[0], x.shape[2:]

@@ -143,14 +143,19 @@ class ResBlock(nn.Module):
             filters = [filters[0]] + filters + [filters[0] * bottleneck]
         if se:
             layout += 'S*'
-        layout = 'B' + layout + op
+        layout = 'B' + layout + op + 'a'
 
-        layer_params = [{'strides': strides_downsample, 'branch/strides': branch_stride_downsample}]
+        if get_num_channels(inputs) != filters[0]:
+            branch_params = {'layout': 'cn', 'filters': filters[0],
+                             'kernel_size': 1, 'strides': branch_stride_downsample}
+        else:
+            branch_params = {}
+        layer_params = [{'strides': strides_downsample,
+                         'branch': branch_params,
+                         'branch/strides': branch_stride_downsample}]
         layer_params += [{}]*(n_reps-1)
-
         self.layer = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
                                kernel_size=kernel_size, strides=strides, groups=groups,
-                               branch={'layout': 'c', 'filters': filters[-1], 'strides': branch_stride},
                                **kwargs)
 
     def forward(self, x):
