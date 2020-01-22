@@ -44,7 +44,7 @@ class ModelDirectory:
 
     def reset(self):
         """ Reset all models """
-        for model in self.models:
+        for model in self.models.values():
             model.reset()
 
     def eval_expr(self, expr, batch=None):
