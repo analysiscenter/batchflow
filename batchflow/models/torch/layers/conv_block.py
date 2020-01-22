@@ -25,6 +25,7 @@ class Branch(nn.Module):
     """ Add side branch to a :class:`~.layers.ConvBlock`. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
+
         if kwargs.get('layout'):
             self.layer = ConvBlock(inputs=inputs, **kwargs)
         else:
@@ -280,6 +281,7 @@ class BaseConvBlock(nn.Module):
         self.kwargs = kwargs
 
         self._make_modules(inputs)
+
 
     def forward(self, x):
         b_counter, s_counter, c_counter = 0, 0, 0

@@ -109,8 +109,8 @@ class ResBlock(nn.Module):
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
-    def __init__(self, inputs=None, layout='cnacna', filters='same', kernel_size=3, strides=1,
-                 downsample=False, bottleneck=False, se=False, groups=1, op='+', n_reps=1, **kwargs):
+    def __init__(self, inputs=None, layout='cnacn', filters='same', kernel_size=3, strides=1,
+                 downsample=False, bottleneck=False, se=False, groups=1, op='+a', n_reps=1, **kwargs):
         super().__init__()
 
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
@@ -143,17 +143,18 @@ class ResBlock(nn.Module):
             filters = [filters[0]] + filters + [filters[0] * bottleneck]
         if se:
             layout += 'S*'
-        layout = 'B' + layout + op + 'a'
-
         if get_num_channels(inputs) != filters[0]:
             branch_params = {'layout': 'cn', 'filters': filters[0],
                              'kernel_size': 1, 'strides': branch_stride_downsample}
         else:
             branch_params = {}
+        layout = 'B' + layout + op
+
         layer_params = [{'strides': strides_downsample,
                          'branch': branch_params,
                          'branch/strides': branch_stride_downsample}]
         layer_params += [{}]*(n_reps-1)
+
         self.layer = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
                                kernel_size=kernel_size, strides=strides, groups=groups,
                                **kwargs)

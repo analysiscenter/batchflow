@@ -296,7 +296,7 @@ class Combine(nn.Module):
         mul: ['multi', 'mul', '*'],
         mean: ['average', 'avg', 'mean'],
         softsum: ['softsum', '&'],
-        attention: ['attention'],
+        attention: ['attention']
     }
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
