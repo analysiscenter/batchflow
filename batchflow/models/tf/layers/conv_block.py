@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class Branch:
+    """ Add side branch to a :class:`~.layers.ConvBlock`. """
     def __init__(self, *args, name='branch', **kwargs):
         self.name = name
         self.args, self.kwargs = args, kwargs
@@ -500,7 +501,7 @@ class ConvBlock:
 
     layer = ConvBlock({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
     """
-    def __init__(self, *args, inputs=None, base_block=BaseConvBlock, n_repeats=1, **kwargs):
+    def __init__(self, *args, base_block=BaseConvBlock, n_repeats=1, **kwargs):
         base_block = kwargs.pop('base', None) or base_block
         self.n_repeats = n_repeats
         self.base_block = base_block
@@ -520,7 +521,7 @@ class ConvBlock:
                     block = item.pop('base_block', None) or item.pop('base', None) or base_block
                     block_args = {'inputs': inputs, **dict(Config(kwargs) + Config(item))}
                     inputs = block(**block_args)(inputs)
-                elif isinstance(item, K.Layer) or isinstance(item, Layer):
+                elif isinstance(item, (Layer, K.Layer)):
                     inputs = item(inputs)
                 else:
                     raise ValueError('Positional arguments of ConvBlock must be either dicts or nn.Modules, \
@@ -531,4 +532,3 @@ class ConvBlock:
             elif callable(base_block):
                 inputs = base_block(inputs=inputs, **kwargs)
         return inputs
-

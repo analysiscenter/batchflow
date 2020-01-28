@@ -47,6 +47,7 @@ class Activation(Layer):
     def __call__(self, inputs):
         if self.activation is not None:
             return self.activation(inputs)
+        return inputs
 
 
 
@@ -88,6 +89,7 @@ class Combine(Layer):
     @staticmethod
     def concat(inputs, data_format='channels_last', axis=None, **kwargs):
         """ Concatenate tensors along specified axis or data format. """
+        _ = kwargs
         axis = axis or (1 if data_format == "channels_first" or data_format.startswith("NC") else -1)
         return tf.concat(inputs, axis=axis, name='combine-concat')
 
