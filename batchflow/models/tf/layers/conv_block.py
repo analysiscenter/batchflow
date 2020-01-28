@@ -3,14 +3,16 @@ import inspect
 import logging
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.layers as K # pylint: disable=import-error
 
 from .core import Activation, Dense, Dropout, AlphaDropout, BatchNormalization, Combine, Mip
 from .conv import Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, DepthwiseConv, DepthwiseConvTranspose
 from .pooling import Pooling, GlobalPooling
 from .drop_block import Dropblock
 from .resize import ResizeBilinearAdditive, ResizeBilinear, ResizeNn, SubpixelConv
-from .layer import add_as_function
+from .layer import add_as_function, Layer
 from ...utils import unpack_args
+from .... import Config
 
 
 logger = logging.getLogger(__name__)
@@ -32,7 +34,7 @@ class Branch:
 
 
 @add_as_function
-class ConvBlock:
+class BaseConvBlock:
     """ Complex multi-dimensional block to apply sequence of different operations.
 
     Parameters
@@ -466,5 +468,67 @@ class Upsample:
             if 'strides' not in kwargs:
                 self.kwargs['strides'] = self.factor
 
-        return ConvBlock(self.layout, factor=self.factor, shape=self.shape,
+        return ConvBlock(layout=self.layout, factor=self.factor, shape=self.shape,
                          name=self.name, **self.kwargs)(inputs, *args, **kwargs)
+
+
+@add_as_function
+class ConvBlock:
+    """ Convenient wrapper for chaining multiple base blocks.
+
+    Parameters
+    ----------
+    args : sequence
+        Layers to be chained.
+        If element of a sequence is a module, then it is used as is.
+        If element of a sequence is a dictionary, then it is used as arguments of a layer creation.
+        Function that is used as layer is either `base_block` or `base`/`base_block` keys inside the dictionary.
+
+    base, base_block : Layer or K.Layer
+        Tensor processing function.
+
+    n_repeats : int
+        Number of times to repeat the whole block.
+
+    kwargs : dict
+        Default arguments for layers creation in case of dicts present in `args`.
+
+    Examples
+    --------
+    Simple encoder that reduces spatial dimensions by 32 times and increases number
+    of features to maintain the same tensor size::
+
+    layer = ConvBlock({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
+    """
+    def __init__(self, *args, inputs=None, base_block=BaseConvBlock, n_repeats=1, **kwargs):
+        base_block = kwargs.pop('base', None) or base_block
+        self.n_repeats = n_repeats
+        self.base_block = base_block
+        self.args, self.kwargs = args, kwargs
+
+
+    def __call__(self, inputs, training=None):
+        for _ in range(self.n_repeats):
+            inputs = self._apply_layers(*self.args, inputs=inputs, base_block=self.base_block, **self.kwargs)
+        return inputs
+
+    def _apply_layers(self, *args, inputs=None, base_block=BaseConvBlock, **kwargs):
+        # each element in `args` is a dict or layer: make a sequential out of them
+        if args:
+            for item in args:
+                if isinstance(item, dict):
+                    block = item.pop('base_block', None) or item.pop('base', None) or base_block
+                    block_args = {'inputs': inputs, **dict(Config(kwargs) + Config(item))}
+                    inputs = block(**block_args)(inputs)
+                elif isinstance(item, K.Layer) or isinstance(item, Layer):
+                    inputs = item(inputs)
+                else:
+                    raise ValueError('Positional arguments of ConvBlock must be either dicts or nn.Modules, \
+                                      got instead {}'.format(type(item)))
+        else: # one block only
+            if isinstance(base_block, type):
+                inputs = base_block(inputs=inputs, **kwargs)(inputs)
+            elif callable(base_block):
+                inputs = base_block(inputs=inputs, **kwargs)
+        return inputs
+

@@ -123,7 +123,8 @@ class VGG(TFModel):
         layout = kwargs.pop('layout') * (depth3 + depth1) + 'p' * downscale
         kernels = [3] * depth3 + [1] * depth1
         with tf.variable_scope(name):
-            x = conv_block(inputs, layout, filters, kernels, name='conv', **kwargs)
+            x = conv_block(inputs, layout=layout, filters=filters, kernel_size=kernels,
+                           name='conv', **kwargs)
             x = tf.identity(x, name='output')
         return x
 

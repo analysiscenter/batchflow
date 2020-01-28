@@ -323,7 +323,7 @@ class ResNet(TFModel):
         """
         n = layout.count('c') + layout.count('C') - 1
         strides = ([2] + [1] * n) if downsample else 1
-        return conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
+        return conv_block(inputs, layout=layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
 
     @classmethod
     def bottleneck_block(cls, inputs, layout=None, filters=None, kernel_size=None, bottleneck=None,
@@ -360,7 +360,7 @@ class ResNet(TFModel):
             strides = kwargs.pop('strides')
         if isinstance(filters, int):
             filters = [filters, filters, filters * bottleneck]
-        x = conv_block(inputs, layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
+        x = conv_block(inputs, layout=layout, filters=filters, kernel_size=kernel_size, strides=strides, **kwargs)
         return x
 
     @classmethod

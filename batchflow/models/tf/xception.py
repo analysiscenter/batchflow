@@ -103,7 +103,7 @@ class Xception(TFModel):
         with tf.variable_scope(name):
             x = depthwise_conv(inputs, kernel_size=kernel_size, strides=strides, dilation_rate=rate,
                                data_format=data_format, padding='same', name='depthwise')
-            x = conv_block(x, layout, filters=filters, kernel_size=1, **kwargs)
+            x = conv_block(x, layout=layout, filters=filters, kernel_size=1, **kwargs)
         return x
 
 

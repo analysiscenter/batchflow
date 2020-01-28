@@ -281,7 +281,7 @@ class EncoderDecoder(TFModel):
 
                         for letter in order:
                             if letter == 'b':
-                                x = base_block(x, name='block', **args)
+                                x = conv_block(x, base_block=base_block, name='block', **args)
                             elif letter == 's':
                                 encoder_outputs.append(x)
                             elif letter in ['d', 'p']:
@@ -318,7 +318,7 @@ class EncoderDecoder(TFModel):
         tf.Tensor
         """
         base_block = kwargs.get('base', cls.block)
-        return base_block(inputs, name=name, **kwargs)
+        return conv_block(inputs, base_block=base_block, name=name, **kwargs)
 
     @classmethod
     def decoder(cls, inputs, name='decoder', return_all=False, **kwargs):
@@ -419,7 +419,7 @@ class EncoderDecoder(TFModel):
 
                     for letter in order:
                         if letter == 'b':
-                            x = base_block(x, name='block', **args)
+                            x = conv_block(x, base_block=base_block, name='block', **args)
                         elif letter in ['u']:
                             if upsample.get('layout') is not None:
                                 x = cls.upsample(x, name='upsample', **upsample_args)

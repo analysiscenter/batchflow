@@ -150,7 +150,7 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
     with tf.variable_scope(name):
         if layout:
             from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-            x = ConvBlock(layout, kernel_size=1, name='conv', data_format=data_format, **kwargs)(inputs)
+            x = ConvBlock(layout=layout, kernel_size=1, name='conv', data_format=data_format, **kwargs)(inputs)
         x = depth_to_space(x, block_size=factor, name='d2s', data_format=data_format)
     return x
 
@@ -180,7 +180,7 @@ def resize_bilinear_additive(inputs, factor=2, name='bilinear_additive', data_fo
     with tf.variable_scope(name):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         x = resize_bilinear(inputs, factor, name=name, data_format=data_format, **kwargs)
-        x = ConvBlock(layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)(x)
+        x = ConvBlock(layout=layout, filters=channels*factor**dim, kernel_size=1, name='conv', **kwargs)(x)
         x = Xip(depth=factor**dim, reduction='sum', name='addition')(x)
     return x
 
