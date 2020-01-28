@@ -7,8 +7,6 @@ from .layer import Layer, add_as_function
 
 
 
-
-
 @add_as_function
 class Flatten2D:
     """ Flatten tensor to two dimensions (batch_size, item_vector_size) """

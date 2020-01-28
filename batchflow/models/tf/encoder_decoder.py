@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 from . import TFModel
-from .layers import conv_block, combine
+from .layers import ConvBlock, combine
 from ..utils import unpack_args
 
 
@@ -198,7 +198,7 @@ class EncoderDecoder(TFModel):
             channels = cls.num_channels(targets)
             if cls.num_channels(x) != channels:
                 args = {**kwargs, **dict(layout='c', kernel_size=1, filters=channels, strides=1)}
-                x = conv_block(x, name='conv1x1', **args)
+                x = ConvBlock(name='conv1x1', **args)(x)
 
         return x
 
@@ -210,7 +210,7 @@ class EncoderDecoder(TFModel):
         """
         layout = kwargs.pop('layout', 'cna')
         filters = kwargs.pop('filters', cls.num_channels(inputs))
-        return conv_block(inputs, layout=layout, filters=filters, name=name, **kwargs)
+        return ConvBlock(layout=layout, filters=filters, name=name, **kwargs)(inputs)
 
 
     @classmethod
@@ -281,12 +281,12 @@ class EncoderDecoder(TFModel):
 
                         for letter in order:
                             if letter == 'b':
-                                x = conv_block(x, base_block=base_block, name='block', **args)
+                                x = ConvBlock(base_block=base_block, name='block', **args)(x)
                             elif letter == 's':
                                 encoder_outputs.append(x)
                             elif letter in ['d', 'p']:
                                 if downsample.get('layout') is not None:
-                                    x = conv_block(x, name='downsample', **downsample_args)
+                                    x = ConvBlock(name='downsample', **downsample_args)(x)
                             else:
                                 raise ValueError('Unknown letter in order {}, use one of "b", "d", "p", "s"'
                                                  .format(letter))
@@ -318,7 +318,7 @@ class EncoderDecoder(TFModel):
         tf.Tensor
         """
         base_block = kwargs.get('base', cls.block)
-        return conv_block(inputs, base_block=base_block, name=name, **kwargs)
+        return ConvBlock(base_block=base_block, name=name, **kwargs)(inputs)
 
     @classmethod
     def decoder(cls, inputs, name='decoder', return_all=False, **kwargs):
@@ -419,7 +419,7 @@ class EncoderDecoder(TFModel):
 
                     for letter in order:
                         if letter == 'b':
-                            x = conv_block(x, base_block=base_block, name='block', **args)
+                            x = ConvBlock(base_block=base_block, name='block', **args)(x)
                         elif letter in ['u']:
                             if upsample.get('layout') is not None:
                                 x = cls.upsample(x, name='upsample', **upsample_args)

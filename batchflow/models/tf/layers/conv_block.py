@@ -197,6 +197,7 @@ class BaseConvBlock:
         '+': 'residual_end',
         '.': 'residual_end',
         '*': 'residual_end',
+        '&': 'residual_end',
     }
 
     LAYERS_CLASSES = {
