@@ -321,7 +321,7 @@ class EncoderDecoder(TFModel):
         return base_block(inputs, name=name, **kwargs)
 
     @classmethod
-    def decoder(cls, inputs, name='decoder', **kwargs):
+    def decoder(cls, inputs, name='decoder', return_all=False, **kwargs):
         """ Create decoder with a given number of upsampling stages.
 
         Parameters
@@ -389,6 +389,8 @@ class EncoderDecoder(TFModel):
         order = ''.join([item[0] for item in order])
         base_block = block_args.get('base')
 
+        outputs = []
+
         if isinstance(factor, int):
             factor = int(factor ** (1/steps))
             factor = [factor] * steps
@@ -428,8 +430,10 @@ class EncoderDecoder(TFModel):
                                 x = combine([x, inputs[-i - 3]], **combine_args)
                         else:
                             raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
+                    if return_all:
+                        outputs.append(x)
 
-        return x
+        return outputs if return_all else x
 
 
 

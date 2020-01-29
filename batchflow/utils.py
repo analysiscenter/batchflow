@@ -11,6 +11,17 @@ from matplotlib import pyplot as plt
 from .named_expr import NamedExpression, eval_expr
 
 
+def is_iterable(obj):
+    """ Check if an object is a sequence """
+    if isinstance(obj, str):
+        return False
+    try:
+        iter(obj)
+    except TypeError:
+        return False
+    return True
+
+
 def partialmethod(func, *frozen_args, **frozen_kwargs):
     """Wrap a method with partial application of given positional and keyword
     arguments.

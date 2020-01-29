@@ -50,9 +50,10 @@ class Job:
                     kwargs_config = dict()
                 unit.set_config(config, additional_config,
                                 {**branch_config, **device_configs[index]}, worker_config, kwargs_config)
-                unit.dump_config(self.research_path)
+                unit.set_research_path(self.research_path)
+                unit.dump_config()
                 unit.index = index
-                unit.create_folder(self.research_path)
+                unit.create_folder()
                 units[name] = unit
 
 

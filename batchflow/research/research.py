@@ -18,10 +18,10 @@ from .distributor import Distributor
 from .workers import PipelineWorker
 from .domain import Domain, Option, ConfigAlias
 from .job import Job
-from .logger import BasicLogger
+from .logger import BaseLogger, FileLogger, PrintLogger, TelegramLogger
 from .utils import get_metrics
 from .executable import Executable
-from .named_expr import ResearchPipeline
+from .named_expr import RP
 
 class Research:
     """ Class Research for multiple parallel experiments with pipelines. """
@@ -42,7 +42,7 @@ class Research:
         self.n_reps = None
         self.n_configs = None
         self.repeat_each = None
-        self.logger = BasicLogger()
+        self.logger = FileLogger()
 
         # update parameters for config. None or dict with keys (function, params, cache)
         self._update_config = None
@@ -91,12 +91,12 @@ class Research:
             include execution information to log file or not
         kwargs : dict
             parameters that will be added to pipeline config.
-            Can be `:class:~.ResearchPipeline`.
+            Can be `:class:~.RP`.
 
             For example,
             if test pipeline imports model from the other pipeline with name `'train'` in Research,
             corresponding parameter in `import_model` must be `C('import_from')` and `add_pipeline`
-            must be called with parameter `import_from=ResearchPipeline('train')`.
+            must be called with parameter `import_from=RP('train')`.
 
 
         **How to define changing parameters**
@@ -157,7 +157,7 @@ class Research:
         and are running in current Job. Key is a name of `Executable`, value is `Executable`.
         """
 
-        name = name or 'func_' + str(len(self.executables) + 1)
+        name = name or function.__name__
 
         if name in self.executables:
             raise ValueError('Executable unit with name {} was alredy existed'.format(name))
@@ -204,7 +204,7 @@ class Research:
         """
         name = pipeline + '_metrics'
         self.add_callable(get_metrics, name=name, execute=execute, dump=dump, returns=returns,
-                          on_root=False, logging=logging, pipeline=ResearchPipeline(pipeline),
+                          on_root=False, logging=logging, pipeline=RP(pipeline),
                           metrics_var=metrics_var, metrics_name=metrics_name)
         return self
 
@@ -271,14 +271,46 @@ class Research:
         }
         return self
 
-    def add_logger(self, logger):
-        """ Add custom Logger into Research """
-        self.logger = logger
+    def add_logger(self, logger, **kwargs):
+        """ Add custom Logger into Research.
+
+        Parameters
+        ----------
+        logger : str, BaseLogger class, tuple or list
+            if str, it can be 'file', 'print' or 'tg'
+            if tuple, pair of str or BaseLogger class and kwargs for them
+            if list then of str, BaseLogger class and tuples of them and kwargs
+        kwargs :
+            initialization parameters for BaseLogger (if `logger` is str or BaseLogger class)
+        """
+        loggers = [logger] if not isinstance(logger, list) else logger
+
+        self.logger = BaseLogger()
+
+        for item in loggers:
+            if not isinstance(item, tuple):
+                item = (item, kwargs)
+            logger, params = item
+
+            if isinstance(logger, str):
+                if logger == 'file':
+                    self.logger += FileLogger()
+                elif logger == 'print':
+                    self.logger += PrintLogger()
+                elif logger == 'tg':
+                    self.logger += TelegramLogger(**params)
+                else:
+                    raise ValueError('Unknown logger: {}'.format(logger))
+            elif issubclass(logger, BaseLogger):
+                self.logger += logger(**params)
+            else:
+                raise ValueError('Unknown logger: {}'.format(logger))
+
         return self
 
     def load_results(self, *args, **kwargs):
         """ Load results of research as pandas.DataFrame or dict (see :meth:`~.Results.load`). """
-        return Results(path=self.name).load(*args, **kwargs)
+        return Results(self.name, *args, **kwargs)
 
     def run(self, n_iters=None, workers=1, branches=1, name=None,
             bar=False, devices=None, worker_class=None, timeout=5, trials=2):
