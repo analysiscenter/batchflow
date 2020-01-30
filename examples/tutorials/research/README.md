@@ -30,3 +30,7 @@
     * Domains with weights
 
 1. [Domain update](./05_update_domain_in_research.ipynb)
+
+1. [How to use custom callables and Named Expressions](./06_callables.ipynb)
+    * callables in research
+    * named expressions as callable parameters
