@@ -32,8 +32,8 @@ class Imagenette(ImagesOpenset):
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette.tgz'
     num_classes = 10
-    name_classes = ['tench', 'English springer', 'cassette player', 'chain saw', 'church',
-                    'French horn', 'garbage truck', 'gas pump', 'golf ball', 'parachute']
+    classes = ['tench', 'English springer', 'cassette player', 'chain saw', 'church',
+               'French horn', 'garbage truck', 'gas pump', 'golf ball', 'parachute']
 
     def __init__(self, *args, drop_grayscale=True, bar=False, preloaded=None, train_test=True, **kwargs):
         self.bar = tqdm.tqdm(total=2) if  bar else None
@@ -126,8 +126,8 @@ class ImageWoof(Imagenette):
     Contains 12454 train and 500 test images. Total size 1.3GB
     """
     SOURCE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagewoof.tgz'
-    name_classes = ['Australian terrier', 'Border terrier', 'Samoyed', 'Beagle', 'Shih-Tzu', 'English foxhound',
-                    'Rhodesian ridgeback', 'Dingo', 'Golden retriever', 'Old English sheepdog']
+    classes = ['Australian terrier', 'Border terrier', 'Samoyed', 'Beagle', 'Shih-Tzu', 'English foxhound',
+               'Rhodesian ridgeback', 'Dingo', 'Golden retriever', 'Old English sheepdog']
 
 
 class ImageWoof320(ImageWoof):
