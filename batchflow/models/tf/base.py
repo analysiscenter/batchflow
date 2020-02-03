@@ -13,7 +13,7 @@ from tensorflow.python.client import device_lib
 from ... import Config
 from ..utils import unpack_fn_from_config
 from ..base import BaseModel
-from .layers import mip, conv_block, upsample, ConvBlock
+from .layers import Mip, Upsample, ConvBlock
 from .losses import softmax_cross_entropy, dice
 from .nn import piecewise_constant, cyclic_learning_rate
 
@@ -597,7 +597,7 @@ class TFModel(BaseModel):
             raise ValueError('mip transform requires shape specified in the inputs config')
         if depth is None:
             raise ValueError("mip should be specified as mip @ depth, e.g. 'mip @ 3'")
-        tensor = mip(tensor, depth=depth, data_format=self.data_format(input_name))
+        tensor = Mip(depth=depth, data_format=self.data_format(input_name))(tensor)
         return tensor
 
     def to_classes(self, tensor, input_name, name=None):
@@ -969,9 +969,11 @@ class TFModel(BaseModel):
         _feed_dict = {}
         for placeholder, value in feed_dict.items():
             if self.has_classes(placeholder):
-                classes = self.classes(placeholder)
-                get_indices = np.vectorize(lambda c, arr=classes: np.where(c == arr)[0])
-                value = get_indices(value)
+                classes = self.get_tensor_config(placeholder).get('classes')
+                if not isinstance(classes, int):
+                    classes = self.classes(placeholder)
+                    get_indices = np.vectorize(lambda c, arr=classes: np.where(c == arr)[0])
+                    value = get_indices(value)
             placeholder = self._map_name(placeholder, device)
             value = self._map_name(value, device)
             _feed_dict.update({placeholder: value})
@@ -2093,34 +2095,10 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
-            Input tensor.
         ratio : int
             Squeeze ratio for the number of filters.
-
-        Returns
-        -------
-        tf.Tensor
         """
-        with tf.variable_scope(name):
-            data_format = kwargs.get('data_format')
-            in_filters = cls.num_channels(inputs, data_format)
-            if isinstance(kwargs.get('activation'), list) and len(kwargs.get('activation')) == 2:
-                activation = kwargs.pop('activation')
-            elif kwargs.get('activation') is not None:
-                activation = [kwargs.get('activation'), tf.nn.sigmoid]
-            else:
-                activation = [tf.nn.relu, tf.nn.sigmoid]
-
-            x = conv_block(inputs,
-                           **{**kwargs, 'layout': 'Vfafa', 'units': [in_filters//ratio, in_filters],
-                              'name': 'se', 'activation': activation})
-
-            shape = [-1] + [1] * (cls.spatial_dim(inputs) + 1)
-            axis = cls.channels_axis(data_format)
-            shape[axis] = in_filters
-            scale = tf.reshape(x, shape)
-            x = inputs * scale
+        x = ConvBlock(**{**kwargs, 'layout': 'S', 'attention_mode': 'se', 'ratio': ratio, 'name': name})(inputs)
         return x
 
     @classmethod
@@ -2132,24 +2110,12 @@ class TFModel(BaseModel):
 
         Parameters
         ----------
-        inputs : tf.Tensor
-            Input tensor.
         ratio : int, optional
             Squeeze ratio for the number of filters in spatial squeeze
             and channel excitation block. Default is 2.
-
-        Returns
-        -------
-        tf.Tensor
         """
-        with tf.variable_scope(name):
-            cse = cls.se_block(inputs, ratio, name='cse', **kwargs)
-
-            x = conv_block(inputs, **{**kwargs, 'layout': 'ca', 'filters': 1, 'kernel_size': 1,
-                                      'activation': tf.nn.sigmoid, 'name': 'sse'})
-
-            scse = cse + tf.multiply(x, inputs)
-        return scse
+        x = ConvBlock(**{**kwargs, 'layout': 'S', 'attention_mode': 'scse', 'ratio': ratio, 'name': name})(inputs)
+        return x
 
     @classmethod
     def upsample(cls, inputs, factor=None, resize_to=None, layout='b', name='upsample', **kwargs):
@@ -2182,7 +2148,7 @@ class TFModel(BaseModel):
         if kwargs.get('filters') is None:
             kwargs['filters'] = cls.num_channels(inputs, kwargs['data_format'])
 
-        x = upsample(inputs, factor=factor, layout=layout, name=name, **kwargs)
+        x = Upsample(factor=factor, layout=layout, name=name, **kwargs)(inputs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])
         return x

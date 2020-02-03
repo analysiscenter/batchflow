@@ -34,6 +34,94 @@ class Branch:
 
 
 
+class SelfAttention:
+    """ Adds attention based on tensor itself.
+
+    Parameters
+    ----------
+    attention_mode : callable or str
+        Operation to apply to tensor to generate output.
+        If callable, then directly applied to tensor.
+        If str, then on of predefined: 'se', 'scse'.
+    """
+    @staticmethod
+    def squeeze_and_excitation(inputs, ratio=16, **kwargs):
+        """ Squeeze and excitation operation.
+
+        Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
+
+        Parameters
+        ----------
+        ratio : int
+            Squeeze ratio for the number of filters.
+        """
+        data_format = kwargs.get('data_format')
+        in_filters = get_num_channels(inputs, data_format)
+
+        activation = kwargs.pop('activation', None)
+        if isinstance(activation, list) and len(activation) == 2:
+            pass
+        elif callable(activation):
+            activation = [activation, tf.nn.sigmoid]
+        else:
+            activation = [tf.nn.relu, tf.nn.sigmoid]
+
+        kwargs = {**kwargs, 'layout': 'Vfafa',
+                  'units': [in_filters//ratio, in_filters],
+                  'activation': activation,
+                  'name': 'se'}
+        x = ConvBlock(**kwargs)(inputs)
+
+        shape = [-1] + [1] * (get_spatial_dim(inputs) + 1)
+        axis = get_channels_axis(data_format)
+        shape[axis] = in_filters
+        scale = tf.reshape(x, shape)
+        x = inputs * scale
+        return x
+
+    @staticmethod
+    def scse(inputs, ratio=2, **kwargs):
+        """ Concurrent spatial and channel squeeze and excitation.
+
+        Roy A.G. et al. "`Concurrent Spatial and Channel ‘Squeeze & Excitation’
+        in Fully Convolutional Networks <https://arxiv.org/abs/1803.02579>`_"
+
+        Parameters
+        ----------
+        ratio : int, optional
+            Squeeze ratio for the number of filters in spatial squeeze and channel excitation block.
+        """
+        cse = SelfAttention.squeeze_and_excitation(inputs, ratio, name='cse', **kwargs)
+
+        kwargs = {**kwargs,
+                  'layout': 'ca', 'filters': 1, 'kernel_size': 1,
+                  'activation': tf.nn.sigmoid, 'name': 'sse'}
+        x = ConvBlock(**kwargs)(inputs)
+        return cse + tf.multiply(x, inputs)
+
+    ATTENTIONS = {
+        squeeze_and_excitation: ['se', 'squeeze_and_excitation'],
+        scse: ['scse'],
+    }
+    ATTENTIONS = {alias: getattr(method, '__func__') for method, aliases in ATTENTIONS.items() for alias in aliases}
+
+    def __init__(self, attention_mode='se', data_format='channels_last', name='attention', **kwargs):
+        self.data_format, self.name = data_format, name
+        self.attention_mode, self.kwargs = attention_mode, kwargs
+
+    def __call__(self, inputs):
+        with tf.variable_scope(self.name):
+            if self.attention_mode in self.ATTENTIONS:
+                op = self.ATTENTIONS[self.attention_mode]
+            elif callable(self.attention_mode):
+                op = self.attention_mode
+            else:
+                raise ValueError('Attention mode must be a callable or one from {}, instead got {}.'
+                                 .format(list(self.ATTENTIONS.keys()), self.attention_mode))
+
+            return op(inputs, data_format=self.data_format, **self.kwargs)
+
+
 
 @add_as_function
 class BaseConvBlock:
@@ -187,6 +275,7 @@ class BaseConvBlock:
         'n': 'batch_norm',
         'd': 'dropout',
         'D': 'alpha_dropout',
+        'S': 'self_attention',
         'O': 'dropblock',
         'm': 'mip',
         'b': 'resize_bilinear',
@@ -216,6 +305,7 @@ class BaseConvBlock:
         'dropout': Dropout,
         'alpha_dropout': AlphaDropout,
         'dropblock': Dropblock,
+        'self_attention': SelfAttention,
         'mip': Mip,
         'resize_bilinear': ResizeBilinear,
         'resize_bilinear_additive': ResizeBilinearAdditive,
@@ -245,7 +335,7 @@ class BaseConvBlock:
         'X': 'b',
         })
 
-    SKIP_LETTERS = ['R', 'A', 'B', 'S']
+    SKIP_LETTERS = ['R', 'A', 'B']
     COMBINE_LETTERS = ['+', '*', '.', '&']
 
     def __init__(self, layout='',
