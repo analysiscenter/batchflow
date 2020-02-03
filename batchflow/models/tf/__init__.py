@@ -22,6 +22,7 @@ sys.modules['tensorflow'] = SilentTF()
 
 
 from .base import TFModel
+from .utils import get_shape, get_channels_axis, get_num_channels, get_batch_size, get_spatial_dim, get_spatial_shape
 from .vgg import VGG, VGG16, VGG19, VGG7
 from .linknet import LinkNet
 from .unet import UNet, UNetPP

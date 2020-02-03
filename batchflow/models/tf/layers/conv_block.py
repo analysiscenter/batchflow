@@ -11,6 +11,7 @@ from .pooling import Pooling, GlobalPooling
 from .drop_block import Dropblock
 from .resize import ResizeBilinearAdditive, ResizeBilinear, ResizeNn, SubpixelConv
 from .layer import add_as_function, Layer
+from ..utils import get_num_channels, get_spatial_dim, get_channels_axis
 from ...utils import unpack_args
 from .... import Config
 

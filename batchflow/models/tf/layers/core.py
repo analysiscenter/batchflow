@@ -80,7 +80,7 @@ class Combine(Layer):
     data_format : str {'channels_last', 'channels_first'}
         Data format.
     leading_index : int
-        Index of tensor to broadcast to.
+        Index of tensor to broadcast to. Allows to change the order of input tensors.
     kwargs : dict
         Arguments for :class:`.ConvBlock`.
     """
