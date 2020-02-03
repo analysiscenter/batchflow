@@ -92,14 +92,31 @@ class RID(ResearchNamedExpression): # ResearchExperimentID
 
 class REP(ResearchNamedExpression): # ResearchExperimentPath
     """ NamedExpression for path to the current experiment """
+    def __init__(self, name=None, inner=False):
+        """ NamedExpression for path inside to experiment folder.
+
+        Parameters
+        ----------
+        name : str or None
+            NamedExpression name
+        inner : bool
+            if True, absolute path including name of the fodler research, else
+            the path inside of the research fodler.
+        """
+        super().__init__(name)
+        self.inner = inner
+
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
-        return kwargs['job'], kwargs['experiment']
+        return kwargs['job'], kwargs['experiment'], kwargs['path']
 
     def get(self, **kwargs):
-        job, experiment = self._get(**kwargs)
+        job, experiment, path = self._get(**kwargs)
         unit = list(experiment.values())[0]
-        return os.path.join(unit.path, job.ids[unit.index])
+        if self.inner:
+            return os.path.join(unit.experiment_path, job.ids[unit.index])
+        else:
+            return os.path.join(path, unit.experiment_path, job.ids[unit.index])
 
 class RR(ResearchNamedExpression): # ResearchResults
     """ NamedExpression for Results of the Research """
