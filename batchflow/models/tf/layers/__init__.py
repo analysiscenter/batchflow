@@ -16,8 +16,9 @@ from .pooling import MaxPooling, AveragePooling, Pooling, \
                      GlobalPooling, GlobalAveragePooling, GlobalMaxPooling, \
                      FractionalPooling
 from .roi import roi_pooling_layer, non_max_suppression
-from .resize import subpixel_conv, resize_bilinear_additive, resize_nn, resize_bilinear, depth_to_space
-from .resize import SubpixelConv, ResizeBilinearAdditive, ResizeNn, ResizeBilinear, DepthToSpace
+from .resize import subpixel_conv, resize_bilinear_additive, resize_nn, resize_bilinear, depth_to_space, \
+					SubpixelConv, ResizeBilinearAdditive, ResizeNn, ResizeBilinear, DepthToSpace, \
+					IncreaseDim, Reshape
 from .pyramid import pyramid_pooling, aspp
 from .drop_block import dropblock
 from .drop_block import Dropblock

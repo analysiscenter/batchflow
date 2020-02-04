@@ -5,6 +5,39 @@ import tensorflow as tf
 from .layer import Layer
 from .conv import ConvTranspose
 from .core import Xip
+from ..utils import get_shape, get_batch_size
+
+
+
+class IncreaseDim(Layer):
+    """ Increase dimensionality of passed tensor by desired amount. """
+    def __init__(self, dim=1, insert=True, name='increase_dim', **kwargs):
+        self.dim, self.insert = dim, insert
+        self.name, self.kwargs = name, kwargs
+
+    def __call__(self, inputs):
+        with tf.variable_scope(self.name):
+            batch_size = get_batch_size(inputs, dynamic=True)
+            shape = get_shape(inputs)
+            ones = [1] * self.dim
+            if self.insert:
+                return tf.reshape(inputs, (batch_size, *ones, *shape))
+            return tf.reshape(inputs, (batch_size, *shape, *ones))
+
+
+class Reshape(Layer):
+    """ Enforce desired shape of tensor. """
+    def __init__(self, reshape_to=None, name='reshape', **kwargs):
+        self.reshape_to = reshape_to
+        self.name, self.kwargs = name, kwargs
+
+    def __call__(self, inputs):
+        with tf.variable_scope(self.name):
+            print('I', inputs)
+            batch_size = get_batch_size(inputs, dynamic=True)
+            output = tf.reshape(inputs, (batch_size, *self.reshape_to))
+            print('O', output)
+            return output
 
 
 

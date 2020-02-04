@@ -4,6 +4,7 @@ import tensorflow as tf
 import tensorflow.keras.layers as K # pylint: disable=import-error
 
 from .layer import Layer, add_as_function
+from ..utils import get_num_channels, get_num_dims
 
 
 
@@ -127,12 +128,29 @@ class Combine(Layer):
         return Combine.sum(inputs, name='combine-softsum')
 
 
+    @staticmethod
+    def attention(inputs, **kwargs):
+        """ Global Attention Upsample module.
+        Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang. Pyramid Attention Network
+        for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_"
+        """
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        x, skip = inputs[0], inputs[1]
+        num_channels = get_num_channels(skip)
+        num_dims = get_num_dims(skip) + 1
+        conv1 = ConvBlock(layout='cna', kernel_size=3, filters=num_channels, name='conv-x', **kwargs)(x)
+        conv2 = ConvBlock(layout='V > cna', kernel_size=1, filters=num_channels, dim=num_dims,
+                          name='conv-skip', **kwargs)(skip)
+        weighted = Combine.mul([conv1, conv2])
+        return Combine.sum([weighted, skip])
+
     OPS = {
         concat: ['concat', 'cat', '.'],
         sum: ['sum', 'plus', '+'],
         mul: ['multi', 'mul', '*'],
         mean: ['avg', 'mean', 'average'],
-        softsum: ['softsum', '&']
+        softsum: ['softsum', '&'],
+        attention: ['attention'],
     }
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 

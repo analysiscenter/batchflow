@@ -9,7 +9,7 @@ from .core import Activation, Dense, Dropout, AlphaDropout, BatchNormalization, 
 from .conv import Conv, ConvTranspose, SeparableConv, SeparableConvTranspose, DepthwiseConv, DepthwiseConvTranspose
 from .pooling import Pooling, GlobalPooling
 from .drop_block import Dropblock
-from .resize import ResizeBilinearAdditive, ResizeBilinear, ResizeNn, SubpixelConv
+from .resize import ResizeBilinearAdditive, ResizeBilinear, ResizeNn, SubpixelConv, IncreaseDim, Reshape
 from .layer import add_as_function, Layer
 from ..utils import get_num_channels, get_spatial_dim, get_channels_axis
 from ...utils import unpack_args
@@ -42,10 +42,10 @@ class SelfAttention:
     attention_mode : callable or str
         Operation to apply to tensor to generate output.
         If callable, then directly applied to tensor.
-        If str, then on of predefined: 'se', 'scse'.
+        If str, then one of predefined: 'se', 'scse'.
     """
     @staticmethod
-    def squeeze_and_excitation(inputs, ratio=16, **kwargs):
+    def squeeze_and_excitation(inputs, ratio=16, name='se', **kwargs):
         """ Squeeze and excitation operation.
 
         Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
@@ -69,7 +69,7 @@ class SelfAttention:
         kwargs = {**kwargs, 'layout': 'Vfafa',
                   'units': [in_filters//ratio, in_filters],
                   'activation': activation,
-                  'name': 'se'}
+                  'name': name}
         x = ConvBlock(**kwargs)(inputs)
 
         shape = [-1] + [1] * (get_spatial_dim(inputs) + 1)
@@ -278,6 +278,8 @@ class BaseConvBlock:
         'S': 'self_attention',
         'O': 'dropblock',
         'm': 'mip',
+        '>': 'increase_dim',
+        'r': 'reshape',
         'b': 'resize_bilinear',
         'B': 'resize_bilinear_additive',
         'N': 'resize_nn',
@@ -307,6 +309,8 @@ class BaseConvBlock:
         'dropblock': Dropblock,
         'self_attention': SelfAttention,
         'mip': Mip,
+        'increase_dim': IncreaseDim,
+        'reshape': Reshape,
         'resize_bilinear': ResizeBilinear,
         'resize_bilinear_additive': ResizeBilinearAdditive,
         'resize_nn': ResizeNn,
@@ -389,6 +393,7 @@ class BaseConvBlock:
         else:
             layer_params = inspect.getfullargspec(layer_class.__init__)[0]
             layer_params.remove('self')
+            layer_params.remove('name')
 
         args = {param: getattr(self, param, self.kwargs.get(param, None))
                 for param in layer_params

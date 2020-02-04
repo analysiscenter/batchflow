@@ -23,6 +23,12 @@ def get_shape(tensor, dynamic=False):
         shape = tensor.get_shape().as_list()
     return shape[1:]
 
+def get_num_dims(tensor):
+    """ Return a number of semantic dimensions (i.e. excluding batch and channels axis)"""
+    shape = get_shape(tensor)
+    dim = len(shape)
+    return max(1, dim - 2)
+
 
 def get_channels_axis(data_format='channels_last'):
     """ Return the integer channels axis based on string data format. """
@@ -44,7 +50,7 @@ def get_num_channels(tensor, data_format='channels_last'):
     return shape[axis]
 
 
-def get_batch_size(tensor):
+def get_batch_size(tensor, dynamic=False):
     """ Return batch size (the length of the first dimension) of the input tensor.
 
     Parameters
@@ -55,6 +61,8 @@ def get_batch_size(tensor):
     -------
     batch size : int or None
     """
+    if dynamic:
+        return tf.shape(tensor)[0]
     return tensor.get_shape().as_list()[0]
 
 
