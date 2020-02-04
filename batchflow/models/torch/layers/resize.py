@@ -205,14 +205,16 @@ class SEBlock(nn.Module):
     squeeze_activations : str or sequence of str
         Activations of dense layers.
     """
-    def __init__(self, inputs=None, ratio=4, squeeze_layout='Vfafa', squeeze_units=None, squeeze_activations=None):
+    def __init__(self, inputs=None, ratio=4, squeeze_layout='Vfafa',
+                 squeeze_units=None, squeeze_activations=None, bias=False, **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
         in_units = get_shape(inputs)[1]
         units = squeeze_units or [in_units // ratio, in_units]
         activations = squeeze_activations or ['relu', 'sigmoid']
 
-        self.layer = ConvBlock(layout=squeeze_layout, units=units, activations=activations, inputs=inputs)
+        self.layer = ConvBlock(inputs=inputs, layout=squeeze_layout, units=units,
+                               activation=activations, bias=bias, **kwargs)
 
 
     def forward(self, x):
