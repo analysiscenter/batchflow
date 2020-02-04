@@ -1,7 +1,6 @@
-""" Contains convolution layers """
+""" Contains layers, that are used as separate letters in layout convention, as well as convenient combining block. """
 import inspect
 import logging
-import numpy as np
 import tensorflow as tf
 import tensorflow.keras.layers as K # pylint: disable=import-error
 
@@ -21,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 class Branch:
-    """ Add side branch to a :class:`~.layers.ConvBlock`. """
+    """ Add side branch to a :class:`~.tf.layers.ConvBlock`.
+    Used for `R` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     def __init__(self, *args, name='branch', **kwargs):
         self.name = name
         self.args, self.kwargs = args, kwargs
@@ -36,6 +37,7 @@ class Branch:
 
 class SelfAttention:
     """ Adds attention based on tensor itself.
+    Used for `S` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -147,8 +149,11 @@ class BaseConvBlock:
         - V - global average pooling
         - d - dropout
         - D - alpha dropout
+        - S - self attention
         - O - dropblock
         - m - maximum intensity projection (:class:`~.layers.Mip`)
+        - > - increase tensor dimensionality
+        - r - reshape tensor
         - b - upsample with bilinear resize
         - B - upsample with bilinear additive resize
         - N - upsample with nearest neighbors resize
@@ -196,6 +201,10 @@ class BaseConvBlock:
     reuse : bool
         Whether to user layer variables if exist
 
+    branch : dict
+        Parameters for residual branches, that are passed directly to :class:`~.tf.layers.ConvBlock`.
+    residual_end : dict
+        Parameters for combining main flow and side branches. Passed directly to :class:`~.tf.layers.Combine`.
     dense : dict
         Parameters for dense layers, like initializers, regularalizers, etc.
     conv : dict
@@ -212,6 +221,8 @@ class BaseConvBlock:
         Parameters for dropout layers, like noise_shape, etc
         If None or inculdes parameters 'off' or 'disable' set to True or 1,
         the layer will be excluded whatsoever.
+    self_attention : dict
+        Parameters for self attention layers, like attention mode, ratio, etc.
     dropblock : dict or None
         Parameters for dropblock layers, like dropout_rate, block_size, etc.
     subpixel_conv : dict or None
@@ -513,61 +524,6 @@ def update_layers(letter, func, name=None):
     ConvBlock.LAYERS_CLASSES.update({name: func})
     ConvBlock.LETTERS_GROUPS.update({letter: letter})
 
-
-
-@add_as_function
-class Upsample:
-    """ Upsample inputs with a given factor.
-
-    Parameters
-    ----------
-    factor : int
-        An upsamping scale
-    shape : tuple of int
-        Shape to upsample to (used by bilinear and NN resize)
-    layout : str
-        Resizing technique, a sequence of:
-
-        - A - use residual connection with bilinear additive upsampling
-        - b - bilinear resize
-        - B - bilinear additive upsampling
-        - N - nearest neighbor resize
-        - t - transposed convolution
-        - T - separable transposed convolution
-        - X - subpixel convolution
-
-        all other :class:`.ConvBlock` layers are also allowed.
-
-    Examples
-    --------
-    A simple bilinear upsampling::
-
-        x = upsample(shape=(256, 256), layout='b')(x)
-
-    Upsampling with non-linear normalized transposed convolution::
-
-        x = Upsample(factor=2, layout='nat', kernel_size=3)(x)
-
-    Subpixel convolution with a residual bilinear additive connection::
-
-        x = Upsample(factor=2, layout='AX+')(x)
-    """
-    def __init__(self, factor=None, shape=None, layout='b', name='upsample', **kwargs):
-        self.factor, self.shape, self.layout = factor, shape, layout
-        self.name, self.kwargs = name, kwargs
-
-    def __call__(self, inputs, *args, **kwargs):
-        if np.all(self.factor == 1):
-            return inputs
-
-        if 't' in self.layout or 'T' in self.layout:
-            if 'kernel_size' not in self.kwargs:
-                self.kwargs['kernel_size'] = self.factor
-            if 'strides' not in kwargs:
-                self.kwargs['strides'] = self.factor
-
-        return ConvBlock(layout=self.layout, factor=self.factor, shape=self.shape,
-                         name=self.name, **self.kwargs)(inputs, *args, **kwargs)
 
 
 @add_as_function

@@ -158,7 +158,8 @@ class FractionalPooling:
 
 @add_as_function
 class Pooling(Layer):
-    """ Multi-dimensional pooling layer.
+    """ Multi-dimensional pooling layer
+    Used for `p`, 'v' letters in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -203,6 +204,7 @@ class Pooling(Layer):
 @add_as_function
 class GlobalPooling(Layer):
     """ Multi-dimensional global pooling layer.
+    Used for `P`, `V` letters in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------

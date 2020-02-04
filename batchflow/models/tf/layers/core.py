@@ -38,7 +38,9 @@ class Flatten:
 
 @add_as_function
 class Activation(Layer):
-    """ Wrapper for activation functions. """
+    """ Wrapper for activation functions.
+    Used for `a` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     def __init__(self, activation, **kwargs):
         self.activation = activation
         self.kwargs = kwargs
@@ -52,7 +54,9 @@ class Activation(Layer):
 
 @add_as_function
 class Dense(Layer):
-    """ Wrapper for fully-connected layer. """
+    """ Wrapper for fully-connected layer.
+    Used for `f` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     def __init__(self, units, **kwargs):
         self.units = units
         self.kwargs = kwargs
@@ -67,6 +71,7 @@ class Dense(Layer):
 @add_as_function
 class Combine(Layer):
     """ Combine inputs into one tensor via various transformations.
+    Used for `.`, `+`, `*`, `&` letters in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -77,6 +82,8 @@ class Combine(Layer):
         If one of 'sum', 'add', inputs are summed.
         If one of 'softsum', 'convsum', every tensor is passed through 1x1 convolution in order to have
         the same number of channels as the first tensor, and then summed.
+        If one of 'attention', 'gau', then the first tensor is used to create multiplicative attention for second,
+        and the output is added to second tensor.
 
     data_format : str {'channels_last', 'channels_first'}
         Data format.
@@ -150,7 +157,7 @@ class Combine(Layer):
         mul: ['multi', 'mul', '*'],
         mean: ['avg', 'mean', 'average'],
         softsum: ['softsum', '&'],
-        attention: ['attention'],
+        attention: ['attention', 'gau'],
     }
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
@@ -242,18 +249,23 @@ class BaseDropout(Layer):
 
 
 class Dropout(BaseDropout):
-    """ Wrapper for dropout layer. """
+    """ Wrapper for dropout layer.
+    Used for `d` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     LAYER = K.Dropout
 
 
 class AlphaDropout(BaseDropout):
-    """ Wrapper for self-normalizing dropout layer. """
+    """ Wrapper for self-normalizing dropout layer.
+    Used for `D` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     LAYER = K.AlphaDropout
 
 
 
 class BatchNormalization(Layer):
     """ Wrapper for batch normalization layer.
+    Used for `n` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Note that Keras layers does not add update operations to `UPDATE_OPS` collection,
     so we must do it manually.
@@ -330,7 +342,9 @@ class Xip:
 
 @add_as_function
 class Mip(Layer):
-    """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels """
+    """ Maximum intensity projection by shrinking the channels dimension with max pooling every ``depth`` channels.
+    Used for `m` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     def __init__(self, depth, data_format='channels_last', name='max'):
         self.depth, self.data_format = depth, data_format
         self.name = name

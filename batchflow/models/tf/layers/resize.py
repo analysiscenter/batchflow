@@ -2,7 +2,7 @@
 import numpy as np
 import tensorflow as tf
 
-from .layer import Layer
+from .layer import Layer, add_as_function
 from .conv import ConvTranspose
 from .core import Xip
 from ..utils import get_shape, get_batch_size
@@ -10,7 +10,9 @@ from ..utils import get_shape, get_batch_size
 
 
 class IncreaseDim(Layer):
-    """ Increase dimensionality of passed tensor by desired amount. """
+    """ Increase dimensionality of passed tensor by desired amount.
+    Used for `>` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     def __init__(self, dim=1, insert=True, name='increase_dim', **kwargs):
         self.dim, self.insert = dim, insert
         self.name, self.kwargs = name, kwargs
@@ -26,17 +28,17 @@ class IncreaseDim(Layer):
 
 
 class Reshape(Layer):
-    """ Enforce desired shape of tensor. """
+    """ Enforce desired shape of tensor.
+    Used for `r` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    """
     def __init__(self, reshape_to=None, name='reshape', **kwargs):
         self.reshape_to = reshape_to
         self.name, self.kwargs = name, kwargs
 
     def __call__(self, inputs):
         with tf.variable_scope(self.name):
-            print('I', inputs)
             batch_size = get_batch_size(inputs, dynamic=True)
             output = tf.reshape(inputs, (batch_size, *self.reshape_to))
-            print('O', output)
             return output
 
 
@@ -155,6 +157,7 @@ class UpsamplingLayer(Layer):
 
 class SubpixelConv(UpsamplingLayer):
     """ Resize input tensor with subpixel convolution (depth to space operation).
+    Used for `X` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -190,6 +193,7 @@ def subpixel_conv(inputs, factor=2, name='subpixel', data_format='channels_last'
 
 class ResizeBilinearAdditive(UpsamplingLayer):
     """ Resize input tensor with bilinear additive technique.
+    Used for `A` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -336,7 +340,8 @@ def _calc_size_after_resize(inputs, size, axis):
 
 
 class ResizeBilinear(UpsamplingLayer):
-    """ Resize input tensor with bilinear method,
+    """ Resize input tensor with bilinear method.
+    Used for `b` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -380,6 +385,7 @@ def resize_bilinear(inputs, factor=2, shape=None, name='resize', data_format='ch
 
 class ResizeNn(UpsamplingLayer):
     """ Resize input tensor with nearest neighbors method.
+    Used for `N` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------
@@ -403,3 +409,60 @@ def resize_nn(inputs, factor=2, shape=None, name=None, data_format='channels_las
     if shape is None:
         shape, _ = _calc_size(inputs, factor, data_format)
     return tf.image.resize_nearest_neighbor(inputs, size=shape, name=name, **kwargs)
+
+
+
+@add_as_function
+class Upsample:
+    """ Upsample inputs with a given factor.
+
+    Parameters
+    ----------
+    factor : int
+        An upsamping scale
+    shape : tuple of int
+        Shape to upsample to (used by bilinear and NN resize)
+    layout : str
+        Resizing technique, a sequence of:
+
+        - A - use residual connection with bilinear additive upsampling
+        - b - bilinear resize
+        - B - bilinear additive upsampling
+        - N - nearest neighbor resize
+        - t - transposed convolution
+        - T - separable transposed convolution
+        - X - subpixel convolution
+
+        all other :class:`.ConvBlock` layers are also allowed.
+
+    Examples
+    --------
+    A simple bilinear upsampling::
+
+        x = upsample(shape=(256, 256), layout='b')(x)
+
+    Upsampling with non-linear normalized transposed convolution::
+
+        x = Upsample(factor=2, layout='nat', kernel_size=3)(x)
+
+    Subpixel convolution with a residual bilinear additive connection::
+
+        x = Upsample(factor=2, layout='AX+')(x)
+    """
+    def __init__(self, factor=None, shape=None, layout='b', name='upsample', **kwargs):
+        self.factor, self.shape, self.layout = factor, shape, layout
+        self.name, self.kwargs = name, kwargs
+
+    def __call__(self, inputs, *args, **kwargs):
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        if np.all(self.factor == 1):
+            return inputs
+
+        if 't' in self.layout or 'T' in self.layout:
+            if 'kernel_size' not in self.kwargs:
+                self.kwargs['kernel_size'] = self.factor
+            if 'strides' not in kwargs:
+                self.kwargs['strides'] = self.factor
+
+        return ConvBlock(layout=self.layout, factor=self.factor, shape=self.shape,
+                         name=self.name, **self.kwargs)(inputs, *args, **kwargs)
