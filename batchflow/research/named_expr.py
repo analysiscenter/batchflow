@@ -70,7 +70,7 @@ class RC(REU): # ResearchConfig
         return getattr(res, 'config')
 
 class RD(ResearchNamedExpression): # ResearchDir
-    """ NamedExpression for fodler with the Research """
+    """ NamedExpression for folder with the Research """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
         return kwargs['path']
@@ -91,20 +91,20 @@ class RID(ResearchNamedExpression): # ResearchExperimentID
         return job.ids[unit.index]
 
 class REP(ResearchNamedExpression): # ResearchExperimentPath
-    """ NamedExpression for path to the current experiment """
-    def __init__(self, name=None, inner=False):
+    """ NamedExpression for path to folder corresponding to the current config """
+    def __init__(self, name=None, relative=False):
         """ NamedExpression for path inside to experiment folder.
 
         Parameters
         ----------
         name : str or None
             NamedExpression name
-        inner : bool
-            if True, absolute path including name of the fodler research, else
-            the path inside of the research fodler.
+        relative : bool
+            if True, absolute path including name of the root research folder,
+            if False, the path inside of the research folder.
         """
         super().__init__(name)
-        self.inner = inner
+        self.relative = relative
 
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
@@ -113,7 +113,7 @@ class REP(ResearchNamedExpression): # ResearchExperimentPath
     def get(self, **kwargs):
         job, experiment, path = self._get(**kwargs)
         unit = list(experiment.values())[0]
-        if self.inner:
+        if self.relative:
             return os.path.join(unit.experiment_path, job.ids[unit.index])
         else:
             return os.path.join(path, unit.experiment_path, job.ids[unit.index])
