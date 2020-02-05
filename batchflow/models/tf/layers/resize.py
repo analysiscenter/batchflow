@@ -149,10 +149,10 @@ def _depth_to_space(inputs, block_size, name='d2s'):
 
 class UpsamplingLayer(Layer):
     """ Parent for all the upsampling layers with the same parameters. """
-    def __init__(self, factor=2, shape=None, data_format='channels_last', **kwargs):
+    def __init__(self, factor=2, shape=None, data_format='channels_last', name='upsampling', **kwargs):
         self.factor, self.shape = factor, shape
         self.data_format = data_format
-        self.kwargs = kwargs
+        self.name, self.kwargs = name, kwargs
 
 
 class SubpixelConv(UpsamplingLayer):

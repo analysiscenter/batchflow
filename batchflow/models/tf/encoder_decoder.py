@@ -267,7 +267,6 @@ class EncoderDecoder(TFModel):
             steps, downsample, block_args = cls.pop(['num_stages', 'downsample', 'blocks'], kwargs)
             order = ''.join([item[0] for item in order])
 
-            base_block = block_args.get('base')
             with tf.variable_scope(name):
                 x = inputs
                 encoder_outputs = []
@@ -281,7 +280,7 @@ class EncoderDecoder(TFModel):
 
                         for letter in order:
                             if letter == 'b':
-                                x = ConvBlock(base_block=base_block, name='block', **args)(x)
+                                x = ConvBlock(name='block', **args)(x)
                             elif letter == 's':
                                 encoder_outputs.append(x)
                             elif letter in ['d', 'p']:
@@ -317,8 +316,7 @@ class EncoderDecoder(TFModel):
         -------
         tf.Tensor
         """
-        base_block = kwargs.get('base', cls.block)
-        return ConvBlock(base_block=base_block, name=name, **kwargs)(inputs)
+        return ConvBlock(name=name, **kwargs)(inputs)
 
     @classmethod
     def decoder(cls, inputs, name='decoder', return_all=False, **kwargs):
@@ -387,7 +385,6 @@ class EncoderDecoder(TFModel):
         factor = kwargs.pop('factor') or [2]*steps
         skip, order, upsample, block_args = cls.pop(['skip', 'order', 'upsample', 'blocks'], kwargs)
         order = ''.join([item[0] for item in order])
-        base_block = block_args.get('base')
 
         outputs = []
 
@@ -419,7 +416,7 @@ class EncoderDecoder(TFModel):
 
                     for letter in order:
                         if letter == 'b':
-                            x = ConvBlock(base_block=base_block, name='block', **args)(x)
+                            x = ConvBlock(name='block', **args)(x)
                         elif letter in ['u']:
                             if upsample.get('layout') is not None:
                                 x = cls.upsample(x, name='upsample', **upsample_args)

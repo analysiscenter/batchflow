@@ -404,7 +404,8 @@ class BaseConvBlock:
         else:
             layer_params = inspect.getfullargspec(layer_class.__init__)[0]
             layer_params.remove('self')
-            layer_params.remove('name')
+            if 'name' in layer_params:
+                layer_params.remove('name')
 
         args = {param: getattr(self, param, self.kwargs.get(param, None))
                 for param in layer_params
