@@ -230,34 +230,36 @@ class MobileBlock(nn.Module):
     strides : int
         Depthwise convolutions stride. Default is 1. Note, that stride for second convolution is also
         hardcoded to equal 1.
-    downsample : int, bool
-        If int, the last repetition of block will use downsampling with that factor.
-        If True, the last repetition of block will use downsampling with a factor of 2.
-        If False, then no downsampling applied. Default is False.
+    rescale_filters : str, bool
+        Rescale number of filters in last 1x1 convolution.
+
+        If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
+        number of filters in the previous tensor. Note the `eval` usage under the hood.
+        If True, then number of filters is be doubled.
+        If False, then number of filters left the same. Default is False.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
-    layout = 'wna cna'
-    filters = ['same', 'same']
 
-    def __init__(self, inputs=None, kernel_size=3, strides=1, downsample=False, n_reps=1, **kwargs):
+    def __init__(self, inputs=None, layout='wna cna', filters=['same', 'same'],
+                 kernel_size=3, strides=1, rescale_filters=False, n_reps=1, **kwargs):
         super().__init__()
+        filters = [safe_eval(item, get_num_channels(inputs)) for item in filters]
 
-        filters = [safe_eval(item, get_num_channels(inputs)) for item in self.filters]
-        filters_downsample = filters
-        if downsample:
-            downsample = 2 if downsample is True else downsample
-            filters_downsample[-1] *= downsample
+        layer_params = [{}] * n_reps
+        
+        if rescale_filters:
+            final_filters = filters[:]
+            scale = 'same * 2' if rescale_filters is True else rescale_filters
+            final_filters[-1] = safe_eval(scale, final_filters[-2])
+            layer_params[-1].update({'filters': final_filters})
 
         kernel_size = [kernel_size, 1]
         strides = [strides, 1]
 
-        layer_params = [{}]*(n_reps-1)
-        layer_params = [{'filters': filters_downsample}]
-
-        self.layer = ConvBlock(*layer_params, inputs=inputs, layout=self.layout, filters=filters,
+        self.layer = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
                                kernel_size=kernel_size, strides=strides, **kwargs)
 
     def forward(self, x):

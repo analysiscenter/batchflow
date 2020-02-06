@@ -4,8 +4,9 @@
 from .encoder_decoder import Encoder
 from .blocks import MobileBlock
 
-MOBILENET_V1_ENCODER_CONFIG = dict(strides=[1, 2, 1, 2, 1, 2, 1, 2, 2],
-                                   downsample=[True, True, False, True, False, True, False, True, False],
+MOBILENET_V1_ENCODER_CONFIG = dict(layout = 'wna cna',
+                                   strides=[1, 2, 1, 2, 1, 2, 1, 2, 1],
+                                   rescale_filters=[True, True, False, True, False, True, False, True, False],
                                    n_reps=[1, 1, 1, 1, 1, 1, 5, 1, 1])
 
 class MobileNet(Encoder):
