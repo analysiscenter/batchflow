@@ -3,8 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .layers import ConvBlock, Upsample, Combine
-from .utils import get_shape, get_num_dims, get_num_channels
+from .layers import ConvBlock, Upsample, Combine, Pool, ChannelPool, Activation, Conv
+from .utils import get_shape, get_num_dims, get_num_channels, safe_eval
 
 
 class PyramidPooling(nn.Module):
@@ -228,3 +228,190 @@ class SelfAttention(nn.Module):
         out = self.top_branch(x).view(batch_size, num_features, -1) # (B, N, C/8)
         out = torch.bmm(out, attention).view(batch_size, -1, *spatial)
         return self.gamma*out + x
+
+
+class BAM(nn.Module):
+    """ Bottleneck Attention Module.
+
+    Jongchan Park. et al. "'BAM: Bottleneck Attention Module
+    <https://arxiv.org/abs/1807.06514>'_"
+
+    Parameters
+    ----------
+    ratio : int
+        Squeeze ratio for the number of filters.
+        Default is 16.
+    dilation_rate : int
+        The dilation rate in the convolutions in the spatial attention submodule.
+        Default is 4.
+    """
+    def __init__(self, inputs=None, ratio=16, dilation_rate=4, **kwargs):
+        super().__init__()
+        self.bam_attention = ConvBlock(
+            inputs=inputs, layout='S' + 'cna'*4 + '+ a',
+            filters=['same//{}'.format(ratio), 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
+            dilation_rate=[1, dilation_rate, dilation_rate, 1], activation=['relu']*4+['sigmoid'],
+            squeeze_layout='Vfnaf', ratio=ratio, squeeze_activations='relu', **kwargs)
+        self.desc_kwargs = {
+            'class': self.__class__.__name__,
+            'in_filters': get_num_channels(inputs),
+            'out_filters': get_num_channels(inputs),
+            'dilation_rate': dilation_rate,
+            'ratio': ratio
+        }
+
+    def forward(self, x):
+        return x * (1 + self.bam_attention(x))
+
+    def __repr__(self):
+        layer_desc = ('{class}({in_filters}, {out_filters}, '
+                      'dilation_rate={dilation_rate}, ratio={ratio})').format(**self.desc_kwargs)
+        return layer_desc
+
+
+class CBAM(nn.Module):
+    """ Convolutional Block Attention Module.
+
+    Sanghyun Woo. et al. "'CBAM: Convolutional Block Attention Module
+    <https://arxiv.org/abs/1807.06521>'_"
+
+    Parameters
+    ----------
+    ratio : int
+        Squeeze ratio for the number of filters.
+        Default is 16.
+    pool_ops : list of str
+        Pooling operations for channel_attention module.
+        Default is `('avg', 'max')`.
+    """
+    def __init__(self, inputs=None, ratio=16, pool_ops=('avg', 'max'), **kwargs):
+        super().__init__()
+        self.channel_attention(inputs, ratio, pool_ops, **kwargs)
+        self.spatial_attention(inputs, **kwargs)
+        self.desc_kwargs = {
+            'class': self.__class__.__name__,
+            'in_filters': get_num_channels(inputs),
+            'out_filters': get_num_channels(inputs),
+            'pool_ops': ('avg', 'max'),
+            'ratio': ratio
+        }
+
+    def channel_attention(self, inputs, ratio, pool_ops, **kwargs):
+        " Channel attention module."
+        self.pool_layers = []
+        num_dims = get_num_dims(inputs)
+        num_channels = get_num_channels(inputs)
+
+        for pool_op in pool_ops:
+            pool = Pool(inputs=inputs, op=pool_op)
+            self.pool_layers.append(pool)
+
+        tensor = self.pool_layers[0](inputs)
+        self.shared_layer = ConvBlock(inputs=tensor, layout='faf>',
+                                     units=[num_channels // ratio, num_channels],
+                                     activation='relu', dim=num_dims, **kwargs)
+
+        self.combine_cam = Combine(op='sum')
+
+    def spatial_attention(self, inputs, **kwargs):
+        " Spatial attention module."
+        self.combine_sam = Combine(op='concat')
+        cat_features = self.combine_sam([ChannelPool(op='mean')(inputs),
+                                         ChannelPool(op='max')(inputs)])
+        self.sam = ConvBlock(inputs=cat_features, layout='cna', filters=1, kernel_size=7,
+                             activation='sigmoid', **kwargs)
+
+    def forward(self, x):
+        tensor_list = []
+        for pool in self.pool_layers:
+            pool_feature = pool(x)
+            tensor = self.shared_layer(pool_feature)
+            tensor_list.append(tensor)
+        tensor = self.combine_cam(tensor_list)
+        attention = Activation('sigmoid')(tensor)
+        x = x * attention
+        cat_features = self.combine_sam([ChannelPool(op='mean')(x),
+                                         ChannelPool(op='max')(x)])
+        attention = self.sam(cat_features)
+        return x * attention
+
+    def __repr__(self):
+        layer_desc = ('{class}({in_filters}, {out_filters}, '
+                      'pool_ops={pool_ops}, ratio={ratio})').format(**self.desc_kwargs)
+        return layer_desc
+
+
+class SelectiveKernelConv(nn.Module):
+    """ Selective Kernel Convolution.
+
+    Xiang Li. et al. "'Selective Kernel Networks
+    <https://arxiv.org/abs/1903.06586>'_"
+
+    Parameters
+    ----------
+    kernels : tuple of int
+        Tuple of kernel_sizes for branches in split part.
+        Default is `(3, 5)`.
+    use_dilation : bool
+        If ``True``, then convolution in split part uses instead of the `kernel_size`
+        from the `kernels` the `kernel_size=3` and the appropriate dilation rate.
+        If ``False``, then dilated convolutions are not used. Default is ``False``.
+    """
+
+    def __init__(self, filters, kernels=(3, 5), strides=1, padding='same',
+                 use_dilation=False, groups=1, bias=True, ratio=4, inputs=None):
+        super().__init__()
+
+        if isinstance(filters, str):
+            filters = safe_eval(filters, get_num_channels(inputs))
+
+        num_kernels = len(kernels)
+        num_dims = get_num_dims(inputs)
+
+        if use_dilation:
+            dilations = tuple((kernel - 3) // 2 + 1 for kernel in kernels)
+            kernels = (3,) * num_kernels
+        else:
+            dilations = (1,) * num_kernels
+
+        self.desc_kwargs = {
+            'class': self.__class__.__name__,
+            'in_filters': get_num_channels(inputs),
+            'out_filters': filters,
+            'kernel_sizes': kernels,
+            'dilations': dilations
+        }
+
+        self.split_layers = nn.ModuleList()
+        tensors = []
+        for kernel_size, dilation_rate in zip(kernels, dilations):
+            branch = ConvBlock(inputs=inputs, layout='cna', filters=filters,
+                               kernel_size=kernel_size, strides=strides, padding=padding,
+                               dilation_rate=dilation_rate, groups=groups, bias=bias)
+            self.split_layers.append(branch)
+            tensors.append(branch(inputs))
+
+        self.combine = Combine(op='sum')
+        tensor = self.combine(tensors)
+        self.fuse = ConvBlock(inputs=tensor, layout='Vfna>', dim=num_dims, units='same // {}'.format(ratio))
+
+        fused_tensor = self.fuse(tensor)
+        self.attention_branches = nn.ModuleList([
+            Conv(inputs=fused_tensor, filters=filters, kernel_size=1) for i in range(num_kernels)])
+
+    def forward(self, x):
+        tensors = [layer(x) for layer in self.split_layers]
+        tensor = self.combine(tensors)
+        fused_tensor = self.fuse(tensor)
+        attention_vectors = torch.stack([attention(fused_tensor) for attention in self.attention_branches], dim=-1)
+        attention_vectors = nn.Softmax(dim=-1)(attention_vectors)
+        attention_vectors = [attention_vectors[..., idx] for idx in range(attention_vectors.shape[-1])]
+
+        result = [tensor * attention for tensor, attention in zip(tensors, attention_vectors)]
+        result = torch.stack(result, dim=-1).sum(-1)
+        return result
+
+    def __repr__(self):
+        layer_desc = ('{class}({in_filters}, {out_filters}, '
+                      'kernel_sizes={kernel_sizes}, dilations={dilations})').format(**self.desc_kwargs)
+        return layer_desc
