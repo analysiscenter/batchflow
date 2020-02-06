@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .layers import ConvBlock, Upsample, Combine, Pool, ChannelPool, Activation, Conv
+from .layers import ConvBlock, Upsample, Combine, GlobalPool, ChannelPool, Activation, Conv
 from .utils import get_shape, get_num_dims, get_num_channels, safe_eval
 
 
@@ -248,10 +248,10 @@ class BAM(nn.Module):
     def __init__(self, inputs=None, ratio=16, dilation_rate=4, **kwargs):
         super().__init__()
         self.bam_attention = ConvBlock(
-            inputs=inputs, layout='S' + 'cna'*4 + '+ a',
+            inputs=inputs, layout='S' + 'cna'*3  + 'c' + '+ a',
             filters=['same//{}'.format(ratio), 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
             dilation_rate=[1, dilation_rate, dilation_rate, 1], activation=['relu']*4+['sigmoid'],
-            squeeze_layout='Vfnaf', ratio=ratio, squeeze_activations='relu', **kwargs)
+            squeeze_layout='Vfnaf', ratio=ratio, squeeze_activations='relu', bias=True, **kwargs)
         self.desc_kwargs = {
             'class': self.__class__.__name__,
             'in_filters': get_num_channels(inputs),
@@ -303,13 +303,13 @@ class CBAM(nn.Module):
         num_channels = get_num_channels(inputs)
 
         for pool_op in pool_ops:
-            pool = Pool(inputs=inputs, op=pool_op)
+            pool = GlobalPool(inputs=inputs, op=pool_op)
             self.pool_layers.append(pool)
 
         tensor = self.pool_layers[0](inputs)
         self.shared_layer = ConvBlock(inputs=tensor, layout='faf>',
-                                     units=[num_channels // ratio, num_channels],
-                                     activation='relu', dim=num_dims, **kwargs)
+                                      units=[num_channels // ratio, num_channels],
+                                      activation='relu', dim=num_dims, **kwargs)
 
         self.combine_cam = Combine(op='sum')
 
@@ -356,10 +356,12 @@ class SelectiveKernelConv(nn.Module):
         If ``True``, then convolution in split part uses instead of the `kernel_size`
         from the `kernels` the `kernel_size=3` and the appropriate dilation rate.
         If ``False``, then dilated convolutions are not used. Default is ``False``.
+    min_units: int
+        Minimum length of fused vector. Default is 32.
     """
 
     def __init__(self, filters, kernels=(3, 5), strides=1, padding='same',
-                 use_dilation=False, groups=1, bias=True, ratio=4, inputs=None):
+                 use_dilation=False, groups=1, bias=False, ratio=4, min_units=32, inputs=None):
         super().__init__()
 
         if isinstance(filters, str):
@@ -393,11 +395,12 @@ class SelectiveKernelConv(nn.Module):
 
         self.combine = Combine(op='sum')
         tensor = self.combine(tensors)
-        self.fuse = ConvBlock(inputs=tensor, layout='Vfna>', dim=num_dims, units='same // {}'.format(ratio))
+        self.fuse = ConvBlock(inputs=tensor, layout='Vfna>', units='max(same // {}, {})'.format(ratio, min_units),
+                              dim=num_dims, bias=bias)
 
         fused_tensor = self.fuse(tensor)
         self.attention_branches = nn.ModuleList([
-            Conv(inputs=fused_tensor, filters=filters, kernel_size=1) for i in range(num_kernels)])
+            Conv(inputs=fused_tensor, filters=filters, kernel_size=1, bias=bias) for i in range(num_kernels)])
 
     def forward(self, x):
         tensors = [layer(x) for layer in self.split_layers]
