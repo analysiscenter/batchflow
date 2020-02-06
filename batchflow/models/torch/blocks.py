@@ -142,7 +142,7 @@ class ResBlock(nn.Module):
             groups = [1] + groups + [1]
             filters = [filters[0]] + filters + [filters[0] * bottleneck]
         if se:
-            layout += 'S*'
+            layout += 'S'
         if get_num_channels(inputs) != filters[0]:
             branch_params = {'layout': 'cn', 'filters': filters[0],
                              'kernel_size': 1, 'strides': branch_stride_downsample}

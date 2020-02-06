@@ -11,7 +11,7 @@ from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import IncreaseDim, ReduceDim, Reshape, Interpolate, SubPixelConv, SEBlock, Combine
+from .resize import IncreaseDim, Reshape, Interpolate, SubPixelConv, SelfAttention, Combine
 from ..utils import get_shape
 from ...utils import unpack_args
 from .... import Config
@@ -131,7 +131,7 @@ class BaseConvBlock(nn.Module):
         - subpixel_conv - parameters for :class:`~.layers.SubPixelConv`.
         - resize_bilinear - parameters for parameters for :class:`~.layers.Interpolate`.
         - residual_bilinear_additive - parameters for parameters for :class:`~.layers.Interpolate`.
-        - residual_se - parameters for parameters for :class:`~.layers.SEBlock`.
+        - residual_se - parameters for parameters for :class:`~.layers.SelfAttention`.
         - branch - parameters for parameters for :class:`~.layers.BaseConvBlock`.
 
 
@@ -183,13 +183,11 @@ class BaseConvBlock(nn.Module):
         'R': 'branch',
         'B': 'branch', # the same as R
         'A': 'residual_bilinear_additive',
-        'S': 'residual_se',
         '+': 'residual_end',
         '.': 'residual_end',
         '*': 'residual_end',
         '&': 'residual_end',
         '>': 'increase_dim',
-        '<': 'reduce_dim',
         'r': 'reshape',
         'f': 'dense',
         'c': 'conv',
@@ -205,6 +203,7 @@ class BaseConvBlock(nn.Module):
         'n': 'batch_norm',
         'd': 'dropout',
         'D': 'alpha_dropout',
+        'S': 'self_attention',
         # 'O': 'dropblock',
         # 'm': 'mip',
         'b': 'resize_bilinear',
@@ -215,10 +214,8 @@ class BaseConvBlock(nn.Module):
     LAYERS_MODULES = {
         'activation': Activation,
         'branch': Branch,
-        'residual_se': SEBlock,
         'residual_end': Combine,
         'increase_dim': IncreaseDim,
-        'reduce_dim': ReduceDim,
         'reshape': Reshape,
         'dense': Dense,
         'conv': Conv,
@@ -234,6 +231,7 @@ class BaseConvBlock(nn.Module):
         'alpha_dropout': AlphaDropout,
         # 'dropblock': None, # TODO
         # 'mip': None, # TODO?
+        'self_attention': SelfAttention,
         'residual_bilinear_additive': Interpolate,
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
@@ -259,7 +257,7 @@ class BaseConvBlock(nn.Module):
         })
 
 
-    SKIP_LETTERS = ['R', 'A', 'B', 'S']
+    SKIP_LETTERS = ['R', 'A', 'B']
     COMBINE_LETTERS = ['+', '*', '.', '&']
 
     def __init__(self, inputs=None, layout='',
@@ -313,8 +311,8 @@ class BaseConvBlock(nn.Module):
 
         layer_args = unpack_args(self.kwargs, *counters)
         layer_args = layer_args.get(layer_name, {})
-        args = {**args, **layer_args}
         args = unpack_args(args, *counters)
+        args = {**args, **layer_args}
         return args
 
     def _make_modules(self, inputs):
@@ -351,7 +349,6 @@ class BaseConvBlock(nn.Module):
 
                 if letter in self.SKIP_LETTERS:
                     args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-
                     layer = layer_class(**args).to(device)
                     skip = layer(inputs)
                     residuals.append(skip)

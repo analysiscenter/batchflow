@@ -14,21 +14,10 @@ class IncreaseDim(nn.Module):
         self.dim = dim
 
     def forward(self, x):
+        shape = get_shape(x)
         dim = len(get_shape(x)) - 2 + self.dim
         ones = [1] * dim
-        return x.view(x.size(0), -1, *ones)
-
-
-class ReduceDim(nn.Module):
-    """ Reduce dimensionality of passed tensor by one. """
-    def __init__(self, dim=1):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x):
-        dim = max(get_num_dims(x) - self.dim, 0)
-        ones = [1] * dim
-        return x.view(x.size(0), -1, *ones)
+        return x.view(*shape, *ones)
 
 
 class Reshape(nn.Module):
@@ -191,36 +180,137 @@ class Upsample(nn.Module):
 
 class SEBlock(nn.Module):
     """ Squeeze and excitation block.
-
     Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
 
     Parameters
     ----------
     ratio : int
         Squeeze ratio for the number of filters.
-    squeeze_layout : str
-        Operations of tensor processing.
-    squeeze_units : int or sequence of ints
-        Sizes of dense layers.
-    squeeze_activations : str or sequence of str
-        Activations of dense layers.
     """
-    def __init__(self, inputs=None, ratio=4, squeeze_layout='Vfafa',
-                 squeeze_units=None, squeeze_activations=None, bias=False, **kwargs):
+    def __init__(self, inputs=None, ratio=4, bias=False, **kwargs):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
         in_units = get_shape(inputs)[1]
-        units = squeeze_units or [in_units // ratio, in_units]
-        activations = squeeze_activations or ['relu', 'sigmoid']
-
-        self.layer = ConvBlock(inputs=inputs, layout=squeeze_layout, units=units,
-                               activation=activations, bias=bias, **kwargs)
-
+        units = [in_units // ratio, in_units]
+        activations = ['relu', 'sigmoid']
+        kwargs = {'layout': 'Vfafa >',
+                  'units': units, 'activation': activations,
+                  'dim': get_num_dims(inputs),
+                  'bias': bias,
+                  **kwargs}
+        self.layer = ConvBlock(inputs=inputs, **kwargs)
 
     def forward(self, x):
-        ones = [1] * get_num_dims(x)
-        x = self.layer(x)
-        return x.view(x.size(0), -1, *ones)
+        return Combine.mul((x, self.layer(x)))
+
+
+class SCSEBlock(nn.Module):
+    """ Concurrent spatial and channel squeeze and excitation.
+    Roy A.G. et al. "`Concurrent Spatial and Channel ‘Squeeze & Excitation’
+    in Fully Convolutional Networks <https://arxiv.org/abs/1803.02579>`_"
+
+    Parameters
+    ----------
+    ratio : int, optional
+        Squeeze ratio for the number of filters.
+    """
+    def __init__(self, inputs=None, ratio=2, bias=False, **kwargs):
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        super().__init__()
+
+        self.cse = SEBlock(inputs=inputs, ratio=ratio, bias=bias, **kwargs)
+        kwargs = {'layout': 'ca',
+                  'filters': 1, 'kernel_size': 1, 'activation': 'sigmoid',
+                  **kwargs}
+        self.sse = ConvBlock(inputs=inputs, **kwargs)
+
+    def forward(self, x):
+        cse = self.cse(x)
+        sse = self.sse(x)
+        return Combine.sum((cse, Combine.mul((x, sse))))
+
+
+class SelfAttention(nn.Module):
+    """ Attention based on tensor itself.
+
+    Parameters
+    ----------
+    attention_mode : str or callable
+        If str, then one of predefined attention layers: `se`, `scse`, `bam`, `cbam`, `fpa`.
+        If callable, then directly applied to the input tensor.
+    """
+    @staticmethod
+    def identity(inputs, **kwargs):
+        """ Return tensor unchanged. """
+        _ = inputs, kwargs
+        return nn.Identity()
+
+    @staticmethod
+    def squeeze_and_excitation(inputs, ratio=4, **kwargs):
+        """ Squeeze and excitation. """
+        return SEBlock(inputs=inputs, ratio=ratio, **kwargs)
+
+    @staticmethod
+    def scse(inputs, ratio=2, **kwargs):
+        """ Concurrent spatial and channel squeeze and excitation. """
+        return SCSEBlock(inputs=inputs, ratio=ratio, **kwargs)
+
+    @staticmethod
+    def ssa(inputs, ratio=8, **kwargs):
+        """ Simple Self Attention. """
+        from .modules import SimpleSelfAttention # can't be imported in the file beginning due to recursive imports
+        return SimpleSelfAttention(inputs=inputs, ratio=ratio, **kwargs)
+
+    @staticmethod
+    def bam(inputs, ratio=16, **kwargs):
+        """ Bottleneck Attention Module. """
+        from .modules import BAM # can't be imported in the file beginning due to recursive imports
+        return BAM(inputs=inputs, ratio=ratio, **kwargs)
+
+    @staticmethod
+    def cbam(inputs, ratio=16, **kwargs):
+        """ Convolutional Block Attention Module. """
+        from .modules import CBAM # can't be imported in the file beginning due to recursive imports
+        return CBAM(inputs=inputs, ratio=ratio, **kwargs)
+
+    @staticmethod
+    def fpa(inputs, pyramid_kernel_size=(7, 5, 3), bottleneck=False, **kwargs):
+        """ Feature Pyramid Attention. """
+        from .modules import FPA # can't be imported in the file beginning due to recursive imports
+        return FPA(inputs=inputs, pyramid_kernel_size=pyramid_kernel_size, bottleneck=bottleneck, **kwargs)
+
+    ATTENTIONS = {
+        squeeze_and_excitation: ['se', 'squeeze_and_excitation', 'SE'],
+        scse: ['scse', 'SCSE'],
+        ssa: ['ssa', 'SSA'],
+        bam: ['bam', 'BAM'],
+        cbam: ['cbam', 'CBAM'],
+        fpa: ['fpa', 'FPA'],
+        identity: ['identity', None],
+    }
+    ATTENTIONS = {alias: getattr(method, '__func__') for method, aliases in ATTENTIONS.items() for alias in aliases}
+
+    def __init__(self, inputs=None, attention_mode='se', **kwargs):
+        super().__init__()
+        self.attention_mode = attention_mode
+        print('AM', attention_mode, kwargs)
+
+        if attention_mode in self.ATTENTIONS:
+            op = self.ATTENTIONS[attention_mode]
+            self.op = op(inputs, **kwargs)
+        elif callable(attention_mode):
+            self.op = attention_mode(inputs, **kwargs)
+        else:
+            raise ValueError('Attention mode must be a callable or one from {}, instead got {}.'
+                             .format(list(self.ATTENTIONS.keys()), self.attention_mode))
+
+    def forward(self, inputs):
+        return self.op(inputs)
+
+    def extra_repr(self):
+        if isinstance(self.attention_mode, str):
+            return 'op=' + self.attention_mode
+        return 'op=' + 'callable ' + self.attention_mode.__name__
 
 
 
@@ -298,7 +388,7 @@ class Combine(nn.Module):
         mul: ['multi', 'mul', '*'],
         mean: ['average', 'avg', 'mean'],
         softsum: ['softsum', '&'],
-        attention: ['attention']
+        attention: ['attention'],
     }
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 

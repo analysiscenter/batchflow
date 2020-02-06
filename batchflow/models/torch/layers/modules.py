@@ -3,8 +3,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .layers import ConvBlock, Upsample, Combine, GlobalPool, ChannelPool, Activation, Conv
-from .utils import get_shape, get_num_dims, get_num_channels, safe_eval
+from .core import Activation
+from .conv import Conv
+from .resize import Upsample, Combine
+from .pooling import GlobalPool, ChannelPool
+from .conv_block import ConvBlock
+from ..utils import get_shape, get_num_dims, get_num_channels, safe_eval
 
 
 class PyramidPooling(nn.Module):
@@ -184,15 +188,26 @@ class FPA(nn.Module):
         else:
             self.pyramid = ConvBlock(pyramid_args, inputs=inputs, **kwargs)
 
-        self.combine = Combine(op='+')
+        self.desc_kwargs = {
+            'class': self.__class__.__name__,
+            'pyramid_kernel_size': pyramid_kernel_size,
+            'bottleneck': bottleneck,
+            'use_dilation': use_dilation,
+            'factor': factor
+        }
 
     def forward(self, x):
         attention = self.attention(x)
         main = self.pyramid(x)
-        return self.combine([attention, main])
+        return Combine.add([attention, main])
+
+    def __repr__(self):
+        layer_desc = ('{class}(pyramid_kernel_size={pyramid_kernel_size}, bottleneck={bottleneck}, '
+                      'use_dilation={use_dilation}, factor={factor})').format(**self.desc_kwargs)
+        return layer_desc
 
 
-class SelfAttention(nn.Module):
+class SimpleSelfAttention(nn.Module):
     """ Improved self Attention module.
 
     Wang Z. et al. "'Less Memory, Faster Speed: Refining Self-Attention Module for Image
@@ -207,15 +222,22 @@ class SelfAttention(nn.Module):
     layout : str
         Layout for convolution layers.
     """
-    def __init__(self, inputs=None, layout='cna', kernel_size=1, reduction_ratio=8, **kwargs):
+    def __init__(self, inputs=None, layout='cna', kernel_size=1, ratio=8, **kwargs):
         super().__init__()
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
         top_mid_args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size,
-                                         filters='same//{}'.format(reduction_ratio))}
+                                         filters='same//{}'.format(ratio))}
         bot_args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size, filters='same')}
         self.top_branch = ConvBlock(**top_mid_args)
         self.mid_branch = ConvBlock(**top_mid_args)
         self.bot_branch = ConvBlock(**bot_args)
+
+        self.desc_kwargs = {
+            'class': self.__class__.__name__,
+            'layout': layout,
+            'kernel_size': kernel_size,
+            'ratio': ratio,
+        }
 
     def forward(self, x):
         batch_size, spatial = x.shape[0], x.shape[2:]
@@ -228,6 +250,11 @@ class SelfAttention(nn.Module):
         out = self.top_branch(x).view(batch_size, num_features, -1) # (B, N, C/8)
         out = torch.bmm(out, attention).view(batch_size, -1, *spatial)
         return self.gamma*out + x
+
+    def __repr__(self):
+        layer_desc = ('{class}(layout={layout}, kernel_size={kernel_size}, ratio={ratio})'
+                      .format(**self.desc_kwargs))
+        return layer_desc
 
 
 class BAM(nn.Module):
@@ -247,15 +274,17 @@ class BAM(nn.Module):
     """
     def __init__(self, inputs=None, ratio=16, dilation_rate=4, **kwargs):
         super().__init__()
+        in_channels = get_num_channels(inputs)
         self.bam_attention = ConvBlock(
-            inputs=inputs, layout='S' + 'cna'*3  + 'c' + '+ a',
+            inputs=inputs, layout='R' + 'cna'*3  + 'c' + '+ a',
             filters=['same//{}'.format(ratio), 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
             dilation_rate=[1, dilation_rate, dilation_rate, 1], activation=['relu']*4+['sigmoid'],
-            squeeze_layout='Vfnaf', ratio=ratio, squeeze_activations='relu', bias=True, **kwargs)
+            branch={'layout': 'Vfnaf >', 'units': [in_channels//ratio, in_channels], 'dim': get_num_dims(inputs),
+                    'activation': 'relu', 'bias': True, **kwargs})
         self.desc_kwargs = {
             'class': self.__class__.__name__,
-            'in_filters': get_num_channels(inputs),
-            'out_filters': get_num_channels(inputs),
+            'in_filters': in_channels,
+            'out_filters': in_channels,
             'dilation_rate': dilation_rate,
             'ratio': ratio
         }
@@ -297,7 +326,7 @@ class CBAM(nn.Module):
         }
 
     def channel_attention(self, inputs, ratio, pool_ops, **kwargs):
-        " Channel attention module."
+        """ Channel attention module."""
         self.pool_layers = []
         num_dims = get_num_dims(inputs)
         num_channels = get_num_channels(inputs)
@@ -314,7 +343,7 @@ class CBAM(nn.Module):
         self.combine_cam = Combine(op='sum')
 
     def spatial_attention(self, inputs, **kwargs):
-        " Spatial attention module."
+        """ Spatial attention module."""
         self.combine_sam = Combine(op='concat')
         cat_features = self.combine_sam([ChannelPool(op='mean')(inputs),
                                          ChannelPool(op='max')(inputs)])

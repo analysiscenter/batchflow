@@ -12,4 +12,3 @@ from .vnet import VNet
 from .densenet import SegmentationDenseNet, DenseNetFC56, DenseNetFC67, DenseNetFC103
 from .utils import get_shape, get_num_channels, get_num_dims, calc_padding, unpack_fn_from_config, safe_eval
 from .blocks import DefaultBlock, XceptionBlock, VGGBlock, ResBlock, DenseBlock
-from .modules import PyramidPooling, ASPP, SelfAttention, FPA, BAM, CBAM, SelectiveKernelConv
