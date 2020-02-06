@@ -100,7 +100,7 @@ class REP(ResearchNamedExpression): # ResearchExperimentPath
         name : str or None
             NamedExpression name
         relative : bool
-            if True, absolute path including name of the root research folder,
+            if False, absolute path including name of the root research folder,
             if False, the path inside of the research folder.
         """
         super().__init__(name)
