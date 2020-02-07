@@ -1,8 +1,10 @@
 """ Eager version of TorchModel. """
 import os
 import re
-import threading
 import inspect
+import warnings
+import threading
+
 from collections import OrderedDict
 from functools import partial
 from pprint import pprint
@@ -12,8 +14,8 @@ import torch
 import torch.nn as nn
 
 from .utils import unpack_fn_from_config, get_shape
-from .layers import ConvBlock
 from .losses import CrossEntropyLoss
+from .layers import ConvBlock
 from ... import Config
 
 
@@ -381,7 +383,7 @@ class TorchModel:
         * Define parameters for :meth:`.TorchModel.initial_block`, :meth:`.TorchModel.body`, :meth:`.TorchModel.head`,
           which depend on inputs.
 
-        * Dont forget to return ``config`` at the end.
+        * Don't forget to return ``config`` at the end.
 
         Examples
         --------
@@ -417,10 +419,17 @@ class TorchModel:
         config['head/target_shape'] = self.target_shape
         config['head/classes'] = self.classes
 
-        if config.get('head/units') is None:
-            config['head/units'] = self.classes
-        if config.get('head/filters') is None:
-            config['head/filters'] = self.classes
+        for param in ['head/units', 'head/filters']:
+            old = config.get(param)
+            if isinstance(old, list):
+                if old[-1] != self.classes:
+                    new = old[:-1] + [self.classes]
+                    if old[-1] is not None:
+                        warnings.warn("{0} changed from {1} to {2} to match classes").format(param, old, new)
+                    config[param] = new
+            elif old is None:
+                config[param] = self.classes
+
         return config
 
 
