@@ -278,7 +278,7 @@ class BAM(nn.Module):
         self.bam_attention = ConvBlock(
             inputs=inputs, layout='R' + 'cna'*3  + 'c' + '+ a',
             filters=['same//{}'.format(ratio), 'same', 'same', 1], kernel_size=[1, 3, 3, 1],
-            dilation_rate=[1, dilation_rate, dilation_rate, 1], activation=['relu']*4+['sigmoid'],
+            dilation_rate=[1, dilation_rate, dilation_rate, 1], activation=['relu']*3+['sigmoid'], bias=True,
             branch={'layout': 'Vfnaf >', 'units': [in_channels//ratio, in_channels], 'dim': get_num_dims(inputs),
                     'activation': 'relu', 'bias': True, **kwargs})
         self.desc_kwargs = {
@@ -321,7 +321,7 @@ class CBAM(nn.Module):
             'class': self.__class__.__name__,
             'in_filters': get_num_channels(inputs),
             'out_filters': get_num_channels(inputs),
-            'pool_ops': ('avg', 'max'),
+            'pool_ops': pool_ops,
             'ratio': ratio
         }
 
