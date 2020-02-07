@@ -116,8 +116,7 @@ class ResBlock(nn.Module):
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
-        filters = [safe_eval(item, get_num_channels(inputs)) if isinstance(item, str) else item
-                   for item in filters]
+        filters = [safe_eval(item, get_num_channels(inputs)) if isinstance(item, str) else item for item in filters]
 
         kernel_size = [kernel_size] * num_convs if isinstance(kernel_size, int) else kernel_size
         strides = [strides] * num_convs if isinstance(strides, int) else strides
@@ -224,43 +223,64 @@ class MobileBlock(nn.Module):
     ----------
     inputs : torch.Tensor
         Example of input tensor to this layer.
-    kernel_size : int
-        Depthwise convolution kernel size. Default is 3. Note, that kernel size of second convolution
-        is hardcoded to equal 1, since it acts as a pointwise one as described in the original paper.
-    strides : int
-        Depthwise convolutions stride. Default is 1. Note, that stride for second convolution is also
-        hardcoded to equal 1.
-    rescale_filters : str, bool
-        Rescale number of filters in last 1x1 convolution.
-
+    layout : str
+        A sequence of letters, each letter meaning individual operation.
+        See more in :class:`~.layers.conv_block.BaseConvBlock` documentation.
+    filters : int, str, list of int, list of str
         If `str`, then number of filters is calculated by its evaluation. ``'S'`` and ``'same'`` stand for the
         number of filters in the previous tensor. Note the `eval` usage under the hood.
-        If True, then number of filters is be doubled.
-        If False, then number of filters left the same. Default is False.
+        If int, then number of filters in the output tensor. Default value is 'same'.
+    kernel_size : int
+        Depthwise convolution kernel size. Default is 3. Note, that kernel size of normal convolution
+        is hardcoded to equal 1, since it acts as a pointwise as described in the original paper.
+    strides : int
+        Depthwise convolutions stride. Default is 1. Note, that stride for normal convolution is hardcoded to equal 1.
+    expansion : int
+        Factor of inner expansion for 'c w c'-like layout. Scales the number of filters in first convolution.
+    residual : bool
+        Whether add residual connection to the block or not. Default is False.
+    final_filters : int
+        The number of filters in last convolution.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
 
-    def __init__(self, inputs=None, layout='wna cna', filters=['same', 'same'],
-                 kernel_size=3, strides=1, rescale_filters=False, n_reps=1, **kwargs):
+    def __init__(self, inputs=None, layout=None, filters='same', kernel_size=3, strides=1,
+                 expansion=None, residual=False, final_filters=None, n_reps=1, **kwargs):
         super().__init__()
-        filters = [safe_eval(item, get_num_channels(inputs)) for item in filters]
 
-        layer_params = [{}] * n_reps
-        
-        if rescale_filters:
-            final_filters = filters[:]
-            scale = 'same * 2' if rescale_filters is True else rescale_filters
-            final_filters[-1] = safe_eval(scale, final_filters[-2])
-            layer_params[-1].update({'filters': final_filters})
+        convs = [letter for letter in layout if letter in CONV_LETTERS]
+        pointwise_pos = convs.index('c')
+        depthwise_pos = convs.index('w')
+        num_convs = len(convs)
 
-        kernel_size = [kernel_size, 1]
-        strides = [strides, 1]
+        first_block_layout = layout[:]
+        if residual:
+            layout = 'R' + layout + '+'
+
+        filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
+        filters = [safe_eval(item, get_num_channels(inputs)) if isinstance(item, str) else item for item in filters]
+
+        if final_filters:
+            filters[-1] = final_filters
+
+        if expansion:
+            filters[pointwise_pos] *= expansion
+
+        block_kernel_size = [1] * num_convs
+        block_kernel_size[depthwise_pos] = kernel_size
+
+        block_strides = [1] * num_convs
+        first_block_strides = block_strides[:]
+        first_block_strides[depthwise_pos] = strides
+
+        layer_params = [{} for _ in range(n_reps)]
+        layer_params[0].update({'layout': first_block_layout, 'strides': first_block_strides})
 
         self.layer = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
-                               kernel_size=kernel_size, strides=strides, **kwargs)
+                               kernel_size=block_kernel_size, strides=block_strides, **kwargs)
 
     def forward(self, x):
         return self.layer(x)
