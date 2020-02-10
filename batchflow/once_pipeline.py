@@ -6,7 +6,7 @@ import logging
 import numpy as np
 
 from .named_expr import NamedExpression, eval_expr
-from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID, UPDATE_ID
+from ._const import ACTIONS, LOAD_MODEL_ID, SAVE_MODEL_ID, UPDATE_ID, INIT_MODEL_ID
 
 
 class OncePipeline:
@@ -142,8 +142,15 @@ class OncePipeline:
         >>> pipeline.before
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self.pipeline.models.init_model(mode, model_class, name, config=config)
+        self._add_action(INIT_MODEL_ID, _args=dict(mode=mode, model_class=model_class, model_name=name, config=config))
         return self
+
+    def _exec_init_model(self, action):
+        name = eval_expr(action['model_name'], pipeline=self.pipeline)
+        model_class = eval_expr(action['model_class'], pipeline=self.pipeline)
+        mode = eval_expr(action['mode'], pipeline=self.pipeline)
+        config = eval_expr(action['config'], pipeline=self.pipeline)
+        self.pipeline.models.init_model(mode, model_class, name, config)
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """
