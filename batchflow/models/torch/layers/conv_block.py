@@ -1,7 +1,6 @@
 """ Convenient combining block """
 import logging
 import inspect
-from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -36,7 +35,7 @@ class Branch(nn.Module):
 
 
 
-class BaseConvBlock(nn.Module):
+class BaseConvBlock(nn.ModuleDict):
     """ Complex multi-dimensional block to apply sequence of different operations.
 
     Parameters
@@ -270,6 +269,7 @@ class BaseConvBlock(nn.Module):
         super().__init__()
 
         self.layout = layout
+        self.device = inputs.device
         self.filters, self.kernel_size, self.strides = filters, kernel_size, strides
         self.dilation_rate, self.depth_multiplier = dilation_rate, depth_multiplier
         self.activation = activation
@@ -282,19 +282,15 @@ class BaseConvBlock(nn.Module):
 
 
     def forward(self, x):
-        b_counter, s_counter, c_counter = 0, 0, 0
         residuals = []
 
-        for letter in self.module_layout:
-            if letter == '_':
-                x = self.block_modules[b_counter](x)
-                b_counter += 1
-            elif letter in self.SKIP_LETTERS:
-                residuals += [self.skip_modules[s_counter](x)]
-                s_counter += 1
+        for letter, layer in zip(self.layout, self.values()):
+            if letter in self.SKIP_LETTERS:
+                residuals += [layer(x)]
             elif letter in self.COMBINE_LETTERS:
-                x = self.combine_modules[c_counter]([x, residuals.pop()])
-                c_counter += 1
+                x = layer([x, residuals.pop()])
+            else:
+                x = layer(x)
         return x
 
 
@@ -316,61 +312,45 @@ class BaseConvBlock(nn.Module):
         return args
 
     def _make_modules(self, inputs):
-        """ Create necessary ModuleLists from instance parameters. """
-        module_layout = ''
-        device = inputs.device
-
-        layout = self.layout or ''
-        layout = layout.replace(' ', '')
-        if len(layout) == 0:
+        """ Create necessary modules from instance parameters. """
+        self.layout = self.layout or ''
+        self.layout = self.layout.replace(' ', '')
+        if len(self.layout) == 0:
             logger.warning('BaseConvBlock: layout is empty, so there is nothing to do, just returning inputs.')
 
         layout_dict = {}
-        for letter in layout:
+        for letter in self.layout:
             letter_group = self.LETTERS_GROUPS[letter]
             letter_counts = layout_dict.setdefault(letter_group, [-1, 0])
             letter_counts[1] += 1
+        residuals = []
 
-        block_modules, skip_modules, combine_modules = nn.ModuleList(), nn.ModuleList(), nn.ModuleList()
-        layers, residuals = [], []
-
-        for i, letter in enumerate(layout):
+        for i, letter in enumerate(self.layout):
             letter_group = self.LETTERS_GROUPS[letter]
             layer_name = self.LETTERS_LAYERS[letter]
             layer_class = self.LAYERS_MODULES[layer_name]
             layout_dict[letter_group][0] += 1
 
-            if letter in self.SKIP_LETTERS + self.COMBINE_LETTERS:
-                if len(layers) >= 1:
-                    module_layout += '_'
-                    block_modules.append(nn.Sequential(OrderedDict(layers)))
-                    layers = []
-                module_layout += letter
+            if letter in self.SKIP_LETTERS:
+                args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
+                layer = layer_class(**args).to(self.device)
+                skip = layer(inputs)
+                residuals.append(skip)
 
-                if letter in self.SKIP_LETTERS:
-                    args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-                    layer = layer_class(**args).to(device)
-                    skip = layer(inputs)
-                    residuals.append(skip)
+                layer_desc = 'Layer {}, skip-letter "{}"; {} -> {}'.format(i, letter,
+                                                                           get_shape(inputs),
+                                                                           get_shape(skip))
+            elif letter in self.COMBINE_LETTERS:
+                args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
+                args = {**args, 'inputs': [inputs, residuals.pop()], 'op': letter}
+                layer = layer_class(**args).to(self.device)
 
-                    layer_desc = 'Layer {}, skip-letter "{}"; {} -> {}'.format(i, letter,
-                                                                               get_shape(inputs),
-                                                                               get_shape(skip))
-                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
-                    skip_modules.append(layer)
+                shape_before = get_shape(inputs)
+                inputs = layer(args['inputs'])
+                shape_after = get_shape(inputs)
 
-                elif letter in self.COMBINE_LETTERS:
-                    args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-                    args = {**args, 'inputs': [inputs, residuals.pop()], 'op': letter}
-                    layer = layer_class(**args).to(device)
-                    shape_before = get_shape(inputs)
-                    inputs = layer(args['inputs'])
-                    shape_after = get_shape(inputs)
-
-                    shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
-                    layer_desc = 'Layer {}: combine; {} -> {}'.format(i, shape_before, shape_after)
-                    layer = nn.Sequential(OrderedDict([(layer_desc, layer)]))
-                    combine_modules.append(layer)
+                shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
+                layer_desc = 'Layer {}: combine; {} -> {}'.format(i, shape_before, shape_after)
             else:
                 layer_args = self.kwargs.get(layer_name, {})
                 skip_layer = layer_args is False \
@@ -391,27 +371,18 @@ class BaseConvBlock(nn.Module):
                     args['mode'] = args.get('mode', letter.lower())
 
                 if not skip_layer:
-                    layer = layer_class(**args).to(device)
-
+                    layer = layer_class(**args).to(self.device)
                     shape_before = get_shape(inputs)
                     inputs = layer(inputs)
                     shape_after = get_shape(inputs)
 
                     shape_before, shape_after = (None, *shape_before[1:]), (None, *shape_after[1:])
                     layer_desc = 'Layer {}, letter "{}"; {} -> {}'.format(i, letter, shape_before, shape_after)
-                    layers.append((layer_desc, layer))
 
-        if len(layers) > 0:
-            module_layout += '_'
-            block_modules.append(nn.Sequential(OrderedDict(layers)))
-
-        self.module_layout = module_layout
-        self.block_modules = block_modules or None
-        self.skip_modules = skip_modules or None
-        self.combine_modules = combine_modules or None
+            self.update([(layer_desc, layer)])
 
     def extra_repr(self):
-        return 'layout={}\n'.format(self.layout)
+        return 'layout={}, device={}'.format(self.layout, self.device)
 
 
 def update_layers(letter, module, name=None):
@@ -441,7 +412,7 @@ def update_layers(letter, module, name=None):
 
 
 
-class ConvBlock(nn.Module):
+class ConvBlock(nn.Sequential):
     """ Convenient wrapper for chaining/splitting multiple base blocks.
 
     Parameters
@@ -458,12 +429,6 @@ class ConvBlock(nn.Module):
     n_repeats : int
         Number of times to repeat the whole block.
 
-    n_branches : int
-        Number of times to apply the whole block to the inputs; later, this branches are combined into one output.
-
-    combine : str or callable
-        Way of combining separate branches. See :class:`~.layers.Combine` for details.
-
     kwargs : dict
         Default arguments for layers creation in case of dicts present in `args`.
 
@@ -474,51 +439,27 @@ class ConvBlock(nn.Module):
 
     layer = ConvBlock({layout='cnap', filters='same*2'}, inputs=inputs, n_repeats=5)
 
-    Make multiple (3) branches of previous encoder, then combine them into one::
-
-    splitted = layer % 3
-
     Repeat the whole construction two times::
 
     repeated = splitted * 2
     """
-    def __init__(self, *args, inputs=None, base_block=BaseConvBlock, n_repeats=1, n_branches=1, combine='+', **kwargs):
-        super().__init__()
+    def __init__(self, *args, inputs=None, base_block=BaseConvBlock, n_repeats=1, **kwargs):
         base_block = kwargs.pop('base', None) or base_block
         self.input_shape, self.device = get_shape(inputs), inputs.device
-        self.n_repeats, self.n_branches = n_repeats, n_branches
-        self.base_block, self.combine = base_block, combine
+        self.base_block, self.n_repeats = base_block, n_repeats
         self.args, self.kwargs = args, kwargs
 
         self._make_modules(inputs)
-
-    def forward(self, x):
-        for r in range(self.n_repeats):
-            branch_outputs = [layer(x) for layer in self.group_modules[r]]
-            x = self.combine_modules[r](branch_outputs) if self.n_branches > 1 else branch_outputs[0]
-        return x
+        super().__init__(*self.layers)
 
 
     def _make_modules(self, inputs):
-        modules, combine_modules = nn.ModuleList(), nn.ModuleList()
+        layers = []
         for _ in range(self.n_repeats):
-
-            branch_layers, branch_outputs = nn.ModuleList(), []
-            for _ in range(self.n_branches):
-                layer = self._make_layer(*self.args, inputs=inputs, base_block=self.base_block, **self.kwargs)
-                branch_layers.append(layer)
-                branch_outputs.append(layer(inputs))
-            modules.append(branch_layers)
-
-            if self.n_branches > 1:
-                combine_layer = Combine(inputs=branch_outputs, op=self.combine)
-                inputs = combine_layer(branch_outputs)
-                combine_modules.append(combine_layer)
-            else:
-                inputs = branch_outputs[0]
-
-        self.group_modules = modules
-        self.combine_modules = combine_modules if combine_modules else None
+            layer = self._make_layer(*self.args, inputs=inputs, base_block=self.base_block, **self.kwargs)
+            inputs = layer(inputs)
+            layers.append(layer)
+        self.layers = layers
 
     def _make_layer(self, *args, inputs=None, base_block=BaseConvBlock, **kwargs):
         # each element in `args` is a dict or module: make a sequential out of them
@@ -553,42 +494,7 @@ class ConvBlock(nn.Module):
         layers = []
         for _ in range(other):
             layer = ConvBlock(*self.args, inputs=inputs, base_block=self.base_block,
-                              n_repeats=self.n_repeats, n_branches=self.n_branches, combine=self.combine,
-                              **self.kwargs)
+                              n_repeats=self.n_repeats, **self.kwargs)
             inputs = layer(inputs)
             layers.append(layer)
         return nn.Sequential(*layers)
-
-
-    def __mod__(self, other):
-        inputs = self._make_inputs()
-        return Splitted(*self.args, inputs=inputs, base_block=self.base_block,
-                        n_repeats=self.n_repeats, n_branches=self.n_branches, combine=self.combine,
-                        other=other, **self.kwargs)
-
-
-
-class Splitted(nn.Module):
-    """ Allows for more levels of splitting. """
-    def __init__(self, *args, inputs=None, base_block=BaseConvBlock, n_repeats=1, n_branches=1, combine='+',
-                 other=1, **kwargs):
-        super().__init__()
-
-        branch_layers, branch_outputs = nn.ModuleList(), []
-        for _ in range(other):
-            layer = ConvBlock(*args, inputs=inputs, base_block=base_block,
-                              n_repeats=n_repeats, n_branches=n_branches,
-                              combine=combine, **kwargs)
-            branch_layers.append(layer)
-            branch_outputs.append(layer(inputs))
-        self.branch_layers = branch_layers
-
-        if other > 1:
-            self.combine_layer = Combine(inputs=branch_outputs, op=combine)
-        else:
-            self.combine_layer = None
-
-    def forward(self, x):
-        branch_outputs = [layer(x) for layer in self.branch_layers]
-        x = self.combine_layer(branch_outputs) if self.combine_layer is not None else branch_outputs[0]
-        return x

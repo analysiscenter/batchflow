@@ -432,7 +432,7 @@ class Combine(nn.Module):
         if isinstance(self.name, str):
             res = 'op={}'.format(self.name)
         else:
-            res = 'op=callable + '.format(self.name.__name__)
+            res = 'op=callable {}'.format(self.name.__name__)
         res += ',\nleading_idx={}'.format(self.idx)
 
         res += ',\ninput_shapes=[{}]'.format(self.input_shapes)

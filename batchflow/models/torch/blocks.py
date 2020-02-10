@@ -1,6 +1,5 @@
 """ Contains blocks for various deep network architectures."""
 import numpy as np
-import torch.nn as nn
 
 from .layers import ConvBlock
 from .utils import get_num_channels, safe_eval
@@ -11,23 +10,19 @@ CONV_LETTERS = ['c', 'C', 'w', 'W', 't', 'T']
 
 
 
-class DefaultBlock(nn.Module):
+class DefaultBlock(ConvBlock):
     """ Block with default parameters.
     Allows creation of modules with predefined arguments for :class:`~.ConvBlock`.
     """
     LAYOUT = 'cna'
     FILTERS = 'same'
 
-    def __init__(self, **kwargs):
-        super().__init__()
+    def __init__(self, inputs=None, **kwargs):
         attrs = {name.lower(): value for name, value in vars(type(self)).items()
                  if name.isupper()}
         kwargs = {**attrs, **kwargs}
 
-        self.layer = ConvBlock(**kwargs)
-
-    def forward(self, x):
-        return self.layer(x)
+        super().__init__(inputs=inputs, **kwargs)
 
 
 
@@ -43,7 +38,7 @@ class XceptionBlock(DefaultBlock):
 
 
 
-class VGGBlock(nn.Module):
+class VGGBlock(ConvBlock):
     """ Convenient VGG block.
 
     Parameters
@@ -54,21 +49,16 @@ class VGGBlock(nn.Module):
         Number of 1x1 convolutions.
     """
     def __init__(self, inputs=None, layout='cna', filters=None, depth3=1, depth1=0, **kwargs):
-        super().__init__()
-
         if isinstance(filters, str):
             filters = safe_eval(filters, get_num_channels(inputs))
 
         layout = layout * (depth3 + depth1)
         kernels = [3]*depth3 + [1]*depth1
-        self.layer = ConvBlock(inputs=inputs, layout=layout, filters=filters, kernel_size=kernels, **kwargs)
-
-    def forward(self, x):
-        return self.layer(x)
+        super().__init__(inputs=inputs, layout=layout, filters=filters, kernel_size=kernels, **kwargs)
 
 
 
-class ResBlock(nn.Module):
+class ResBlock(ConvBlock):
     """ ResNet Module: pass tensor through one or multiple (`n_reps`) blocks, each of which is a
     configurable residual layer, potentially including downsampling, bottleneck, squeeze-and-excitation and groups.
 
@@ -111,8 +101,6 @@ class ResBlock(nn.Module):
     """
     def __init__(self, inputs=None, layout='cnacn', filters='same', kernel_size=3, strides=1,
                  downsample=False, bottleneck=False, attention_mode=False, groups=1, op='+a', n_reps=1, **kwargs):
-        super().__init__()
-
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
@@ -143,8 +131,8 @@ class ResBlock(nn.Module):
             filters = [filters[0]] + filters + [filters[0] * bottleneck]
         if attention_mode:
             layout += 'S'
-        if get_num_channels(inputs) != filters[0]:
-            branch_params = {'layout': 'cn', 'filters': filters[0],
+        if get_num_channels(inputs) != filters[-1]:
+            branch_params = {'layout': 'cn', 'filters': filters[-1],
                              'kernel_size': 1, 'strides': branch_stride_downsample}
         else:
             branch_params = {}
@@ -155,16 +143,13 @@ class ResBlock(nn.Module):
                          'branch/strides': branch_stride_downsample}]
         layer_params += [{}]*(n_reps-1)
 
-        self.layer = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
-                               kernel_size=kernel_size, strides=strides, groups=groups, attention_mode=attention_mode,
-                               **kwargs)
-
-    def forward(self, x):
-        return self.layer(x)
+        super().__init__(*layer_params, inputs=inputs, layout=layout, filters=filters,
+                         kernel_size=kernel_size, strides=strides, groups=groups, attention_mode=attention_mode,
+                         **kwargs)
 
 
 
-class DenseBlock(nn.Module):
+class DenseBlock(ConvBlock):
     """ DenseBlock module.
 
     Parameters
@@ -192,7 +177,6 @@ class DenseBlock(nn.Module):
     """
     def __init__(self, inputs=None, layout='nacd', filters=None, kernel_size=3, strides=1, dropout_rate=0.2,
                  num_layers=4, growth_rate=12, skip=True, bottleneck=False, **kwargs):
-        super().__init__()
         self.skip = skip
         self.input_num_channels = get_num_channels(inputs)
 
@@ -214,9 +198,9 @@ class DenseBlock(nn.Module):
             filters = [growth_rate * bottleneck, filters]
 
         layout = 'R' + layout + '.'
-        self.layer = ConvBlock(layout=layout, kernel_size=kernel_size, strides=strides, dropout_rate=dropout_rate,
-                               filters=filters, n_repeats=num_layers, inputs=inputs, **kwargs)
+        super().__init__(layout=layout, kernel_size=kernel_size, strides=strides, dropout_rate=dropout_rate,
+                         filters=filters, n_repeats=num_layers, inputs=inputs, **kwargs)
 
     def forward(self, x):
-        x = self.layer(x)
+        x = super().forward(x)
         return x if self.skip else x[:, self.input_num_channels:]
