@@ -293,7 +293,6 @@ class SelfAttention(nn.Module):
     def __init__(self, inputs=None, attention_mode='se', **kwargs):
         super().__init__()
         self.attention_mode = attention_mode
-        print('AM', attention_mode, kwargs)
 
         if attention_mode in self.ATTENTIONS:
             op = self.ATTENTIONS[attention_mode]
