@@ -280,7 +280,7 @@ class SelfAttention(nn.Module):
         return FPA(inputs=inputs, pyramid_kernel_size=pyramid_kernel_size, bottleneck=bottleneck, **kwargs)
 
     ATTENTIONS = {
-        squeeze_and_excitation: ['se', 'squeeze_and_excitation', 'SE'],
+        squeeze_and_excitation: ['se', 'squeeze_and_excitation', 'SE', True],
         scse: ['scse', 'SCSE'],
         ssa: ['ssa', 'SSA'],
         bam: ['bam', 'BAM'],
@@ -307,9 +307,9 @@ class SelfAttention(nn.Module):
         return self.op(inputs)
 
     def extra_repr(self):
-        if isinstance(self.attention_mode, str):
-            return 'op=' + self.attention_mode
-        return 'op=' + 'callable ' + self.attention_mode.__name__
+        if isinstance(self.attention_mode, (str, bool)):
+            return 'op={}'.format(self.attention_mode)
+        return 'op=callable {}'.format(self.attention_mode.__name__)
 
 
 
@@ -430,9 +430,9 @@ class Combine(nn.Module):
 
     def extra_repr(self):
         if isinstance(self.name, str):
-            res = 'op=' + self.name
+            res = 'op={}'.format(self.name)
         else:
-            res = 'op=' + 'callable ' + self.name.__name__
+            res = 'op=callable + '.format(self.name.__name__)
         res += ',\nleading_idx={}'.format(self.idx)
 
         res += ',\ninput_shapes=[{}]'.format(self.input_shapes)

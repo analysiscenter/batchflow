@@ -110,7 +110,7 @@ class ResBlock(nn.Module):
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
     def __init__(self, inputs=None, layout='cnacn', filters='same', kernel_size=3, strides=1,
-                 downsample=False, bottleneck=False, se=False, groups=1, op='+a', n_reps=1, **kwargs):
+                 downsample=False, bottleneck=False, attention_mode=False, groups=1, op='+a', n_reps=1, **kwargs):
         super().__init__()
 
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
@@ -141,7 +141,7 @@ class ResBlock(nn.Module):
             strides_downsample = [1] + strides_downsample + [1]
             groups = [1] + groups + [1]
             filters = [filters[0]] + filters + [filters[0] * bottleneck]
-        if se:
+        if attention_mode:
             layout += 'S'
         if get_num_channels(inputs) != filters[0]:
             branch_params = {'layout': 'cn', 'filters': filters[0],
@@ -156,7 +156,7 @@ class ResBlock(nn.Module):
         layer_params += [{}]*(n_reps-1)
 
         self.layer = ConvBlock(*layer_params, inputs=inputs, layout=layout, filters=filters,
-                               kernel_size=kernel_size, strides=strides, groups=groups,
+                               kernel_size=kernel_size, strides=strides, groups=groups, attention_mode=attention_mode,
                                **kwargs)
 
     def forward(self, x):

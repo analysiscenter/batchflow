@@ -944,8 +944,8 @@ class TorchModel:
 
         outputs = [outputs] if isinstance(fetches, str) else outputs
         output = []
-        for i in range(len(outputs)):
-            lst = [item[i] for item in outputs]
+        for i, _ in enumerate(outputs[0]):
+            lst = [np.asarray(item[i]) for item in outputs]
             output.append(np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst))
         output = output[0] if isinstance(fetches, str) else output
 
