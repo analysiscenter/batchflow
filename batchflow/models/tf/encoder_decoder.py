@@ -63,10 +63,8 @@ class EncoderDecoder(TFModel):
                 If list, upsampling factors for each stage.
 
             skip : bool, dict
-                If bool, then whether to combine upsampled tensor with stored pre-downsample encoding by
-                using `combine_op`, that can be specified for each of blocks separately.
-                If dict, then parameters for combining upsampled tensor with stored pre-downsample encoding,
-                see :class:`~.tf.layers.Combine`.
+                Whether to combine upsampled tensor with stored pre-downsample encoding by
+                using `combine`, that can be specified for each of blocks separately.
 
             order : str, sequence of str
                 Determines order of applying layers.

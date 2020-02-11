@@ -1,4 +1,5 @@
 """ Contains common layers """
+from functools import partial
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.layers as K # pylint: disable=import-error
@@ -158,7 +159,6 @@ class Combine(Layer):
         """ Global Attention Upsample module. """
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         from .resize import Crop
-        from functools import partial
         x, skip = inputs[0], inputs[1]
         num_dims = get_num_dims(skip) + 1
         leaky_relu = partial(tf.nn.leaky_relu, alpha=0.1)
@@ -209,7 +209,7 @@ class Combine(Layer):
                     force_resize = True
             if force_resize:
                 from .resize import Crop
-                inputs = [Crop(resize_to=inputs[-1])(item) for item in inputs]
+                inputs = [Crop(resize_to=inputs[-1], data_format=self.data_format)(item) for item in inputs]
 
             return op(inputs, data_format=self.data_format, **self.kwargs)
 

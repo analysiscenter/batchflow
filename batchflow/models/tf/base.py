@@ -1398,22 +1398,6 @@ class TFModel(BaseModel):
             return type(name)({key: self._to_graph_items(name[key]) for key in name.keys()})
         raise ValueError('Unrecognized type of value.')
 
-    @classmethod
-    def crop(cls, inputs, resize_to, data_format='channels_last'):
-        """ Crop input tensor to a shape of a given image.
-        If resize_to does not have a fully defined shape (resize_to.get_shape() has at least one None),
-        the returned tf.Tensor will be of unknown shape except the number of channels.
-
-        Parameters
-        ----------
-        inputs : tf.Tensor
-            Input tensor.
-        resize_to : tf.Tensor
-            Tensor which shape the inputs should be resized to.
-        data_format : str {'channels_last', 'channels_first'}
-            Data format.
-        """
-        return Crop(resize_to=resize_to, data_format=data_format)(inputs)
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
@@ -1550,6 +1534,7 @@ class TFModel(BaseModel):
         if kwargs.get('layout'):
             return ConvBlock(name=name, **kwargs)(inputs)
         return inputs
+
 
     def output(self, inputs, predictions=None, ops=None, **kwargs):
         """ Add output operations to the model graph, like predicted probabilities or labels, etc.
@@ -2043,11 +2028,28 @@ class TFModel(BaseModel):
         """
         return tensor.get_shape().as_list()[0]
 
-
     @classmethod
     def channels_axis(cls, data_format='channels_last'):
         """ Return the integer channels axis based on string data format. """
         return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
+
+
+    @classmethod
+    def crop(cls, inputs, resize_to, data_format='channels_last'):
+        """ Crop input tensor to a shape of a given image.
+        If resize_to does not have a fully defined shape (resize_to.get_shape() has at least one None),
+        the returned tf.Tensor will be of unknown shape except the number of channels.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            Input tensor.
+        resize_to : tf.Tensor
+            Tensor which shape the inputs should be resized to.
+        data_format : str {'channels_last', 'channels_first'}
+            Data format.
+        """
+        return Crop(resize_to=resize_to, data_format=data_format)(inputs)
 
     @classmethod
     def se_block(cls, inputs, ratio, name='se', **kwargs):
