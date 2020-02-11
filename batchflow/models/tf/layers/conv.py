@@ -108,7 +108,7 @@ class Conv1DTransposeNn:
 @add_as_function
 class ConvTranspose(Layer):
     """ Transposed Nd convolution layer.
-    Used for `C` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
+    Used for `t` letter in layout convention of :class:`~.tf.layers.ConvBlock`.
 
     Parameters
     ----------

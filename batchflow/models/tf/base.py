@@ -13,7 +13,7 @@ from tensorflow.python.client import device_lib
 from ... import Config
 from ..utils import unpack_fn_from_config
 from ..base import BaseModel
-from .layers import Mip, Upsample, ConvBlock
+from .layers import Mip, Upsample, ConvBlock, Crop
 from .losses import softmax_cross_entropy, dice
 from .nn import piecewise_constant, cyclic_learning_rate
 
@@ -1413,45 +1413,7 @@ class TFModel(BaseModel):
         data_format : str {'channels_last', 'channels_first'}
             Data format.
         """
-        static_shape = cls.spatial_shape(resize_to, data_format, False)
-        dynamic_shape = cls.spatial_shape(resize_to, data_format, True)
-
-        if None in cls.shape(inputs) + static_shape:
-            return cls._dynamic_crop(inputs, static_shape, dynamic_shape, data_format)
-        return cls._static_crop(inputs, static_shape, data_format)
-
-    @classmethod
-    def _static_crop(cls, inputs, shape, data_format='channels_last'):
-        input_shape = np.array(cls.spatial_shape(inputs, data_format))
-
-        if np.abs(input_shape - shape).sum() > 0:
-            begin = [0] * inputs.shape.ndims
-            if data_format == "channels_last":
-                size = [-1] + shape + [-1]
-            else:
-                size = [-1, -1] + shape
-            x = tf.slice(inputs, begin=begin, size=size)
-        else:
-            x = inputs
-        return x
-
-    @classmethod
-    def _dynamic_crop(cls, inputs, static_shape, dynamic_shape, data_format='channels_last'):
-        input_shape = cls.spatial_shape(inputs, data_format, True)
-        n_channels = cls.num_channels(inputs, data_format)
-        if data_format == 'channels_last':
-            slice_size = [(-1,), dynamic_shape, (n_channels,)]
-            output_shape = [None] * (len(static_shape) + 1) + [n_channels]
-        else:
-            slice_size = [(-1, n_channels), dynamic_shape]
-            output_shape = [None, n_channels] + [None] * len(static_shape)
-
-        begin = [0] * len(inputs.get_shape().as_list())
-        size = tf.concat(slice_size, axis=0)
-        cond = tf.reduce_sum(tf.abs(input_shape - dynamic_shape)) > 0
-        x = tf.cond(cond, lambda: tf.slice(inputs, begin=begin, size=size), lambda: inputs)
-        x.set_shape(output_shape)
-        return x
+        return Crop(resize_to=resize_to, data_format=data_format)(inputs)
 
     @classmethod
     def initial_block(cls, inputs, name='initial_block', **kwargs):
@@ -2142,12 +2104,6 @@ class TFModel(BaseModel):
         -------
         tf.Tensor
         """
-        if np.all(factor == 1):
-            return inputs
-
-        if kwargs.get('filters') is None:
-            kwargs['filters'] = cls.num_channels(inputs, kwargs['data_format'])
-
         x = Upsample(factor=factor, layout=layout, name=name, **kwargs)(inputs)
         if resize_to is not None:
             x = cls.crop(x, resize_to, kwargs['data_format'])

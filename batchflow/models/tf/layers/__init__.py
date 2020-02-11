@@ -17,7 +17,7 @@ from .pooling import MaxPooling, AveragePooling, Pooling, \
 from .roi import roi_pooling_layer, non_max_suppression
 from .resize import subpixel_conv, resize_bilinear_additive, resize_nn, resize_bilinear, depth_to_space, \
 					SubpixelConv, ResizeBilinearAdditive, ResizeNn, ResizeBilinear, DepthToSpace, \
-					IncreaseDim, Reshape, upsample, Upsample
+					IncreaseDim, Reshape, upsample, Upsample, Crop
 from .pyramid import pyramid_pooling, aspp
 from .drop_block import dropblock
 from .drop_block import Dropblock

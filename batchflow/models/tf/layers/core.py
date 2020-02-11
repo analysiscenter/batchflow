@@ -89,6 +89,8 @@ class Combine(Layer):
         Data format.
     leading_index : int
         Index of tensor to broadcast to. Allows to change the order of input tensors.
+    force_resize : None or bool
+        Whether to crop every tensor to the leading one.
     kwargs : dict
         Arguments for :class:`.ConvBlock`.
     """
@@ -137,7 +139,7 @@ class Combine(Layer):
 
     @staticmethod
     def attention(inputs, **kwargs):
-        """ Global Attention Upsample module.
+        """ Attention combine module.
         Hanchao Li, Pengfei Xiong, Jie An, Lingxue Wang. Pyramid Attention Network
         for Semantic Segmentation <https://arxiv.org/abs/1805.10180>'_"
         """
@@ -151,19 +153,40 @@ class Combine(Layer):
         weighted = Combine.mul([conv1, conv2])
         return Combine.sum([weighted, skip])
 
+    @staticmethod
+    def gau(inputs, filters=None, **kwargs):
+        """ Global Attention Upsample module. """
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        from .resize import Crop
+        from functools import partial
+        x, skip = inputs[0], inputs[1]
+        num_dims = get_num_dims(skip) + 1
+        leaky_relu = partial(tf.nn.leaky_relu, alpha=0.1)
+        conv1 = ConvBlock(layout='ca', filters=filters, activation=leaky_relu, name='conv-low', **kwargs)(x)
+        conv2 = ConvBlock(layout='Vfna >', units=filters, activation=leaky_relu, dim=num_dims,
+                          name='conv-high', **kwargs)(skip)
+        gated = Combine.mul([conv1, conv2])
+
+        gated = ConvBlock(layout='caN', filters=filters, activation=leaky_relu, name='conv-gated')(gated)
+        clamped = ConvBlock(layout='ca', filters=filters, activation=leaky_relu, name='conv-clamped', **kwargs)(skip)
+        gated = Crop(resize_to=clamped)(gated)
+        return Combine.sum([gated, clamped])
+
     OPS = {
         concat: ['concat', 'cat', '.'],
         sum: ['sum', 'plus', '+'],
         mul: ['multi', 'mul', '*'],
         mean: ['avg', 'mean', 'average'],
         softsum: ['softsum', '&'],
-        attention: ['attention', 'gau'],
+        attention: ['attention'],
+        gau: ['gau'],
     }
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
-    def __init__(self, op='softsum', data_format='channels_last', leading_index=0, name='combine', **kwargs):
+    def __init__(self, op='softsum', data_format='channels_last', leading_index=0, force_resize=None,
+                 name='combine', **kwargs):
         self.op = op
-        self.data_format, self.name, self.idx = data_format, name, leading_index
+        self.data_format, self.name, self.idx, self.force_resize = data_format, name, leading_index, force_resize
         self.kwargs = kwargs
 
     def __call__(self, inputs):
@@ -178,6 +201,15 @@ class Combine(Layer):
             else:
                 raise ValueError('Combine operation must be a callable or \
                                   one from {}, instead got {}.'.format(list(self.OPS.keys()), op))
+
+            if self.force_resize is None:
+                if op.__name__ in ['gau', 'softsum']:
+                    force_resize = False
+                else:
+                    force_resize = True
+            if force_resize:
+                from .resize import Crop
+                inputs = [Crop(resize_to=inputs[-1])(item) for item in inputs]
 
             return op(inputs, data_format=self.data_format, **self.kwargs)
 

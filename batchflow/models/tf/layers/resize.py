@@ -5,7 +5,7 @@ import tensorflow as tf
 from .layer import Layer, add_as_function
 from .conv import ConvTranspose
 from .core import Xip
-from ..utils import get_shape, get_batch_size
+from ..utils import get_shape, get_num_channels, get_spatial_shape
 
 
 
@@ -19,12 +19,11 @@ class IncreaseDim(Layer):
 
     def __call__(self, inputs):
         with tf.variable_scope(self.name):
-            batch_size = get_batch_size(inputs, dynamic=True)
             shape = get_shape(inputs)
             ones = [1] * self.dim
             if self.insert:
-                return tf.reshape(inputs, (batch_size, *ones, *shape))
-            return tf.reshape(inputs, (batch_size, *shape, *ones))
+                return tf.reshape(inputs, (-1, *ones, *shape))
+            return tf.reshape(inputs, (-1, *shape, *ones))
 
 
 class Reshape(Layer):
@@ -37,9 +36,66 @@ class Reshape(Layer):
 
     def __call__(self, inputs):
         with tf.variable_scope(self.name):
-            batch_size = get_batch_size(inputs, dynamic=True)
-            output = tf.reshape(inputs, (batch_size, *self.reshape_to))
-            return output
+            return tf.reshape(inputs, (-1, *self.reshape_to))
+
+
+class Crop:
+    """ Crop input tensor to a shape of a given image.
+    If resize_to does not have a fully defined shape (resize_to.get_shape() has at least one None),
+    the returned tf.Tensor will be of unknown shape except the number of channels.
+
+    Parameters
+    ----------
+    inputs : tf.Tensor
+        Input tensor.
+    resize_to : tf.Tensor
+        Tensor which shape the inputs should be resized to.
+    data_format : str {'channels_last', 'channels_first'}
+        Data format.
+    """
+    def __init__(self, resize_to, data_format='channels_last', name='crop'):
+        self.resize_to = resize_to
+        self.data_format, self.name = data_format, name
+
+    def __call__(self, inputs):
+        with tf.variable_scope(self.name):
+            static_shape = get_spatial_shape(self.resize_to, self.data_format, False)
+            dynamic_shape = get_spatial_shape(self.resize_to, self.data_format, True)
+
+            if None in get_shape(inputs) + static_shape:
+                return self._dynamic_crop(inputs, static_shape, dynamic_shape, self.data_format)
+            return self._static_crop(inputs, static_shape, self.data_format)
+
+    def _static_crop(self, inputs, shape, data_format='channels_last'):
+        input_shape = np.array(get_spatial_shape(inputs, data_format))
+
+        if np.abs(input_shape - shape).sum() > 0:
+            begin = [0] * inputs.shape.ndims
+            if data_format == "channels_last":
+                size = [-1] + shape + [-1]
+            else:
+                size = [-1, -1] + shape
+            x = tf.slice(inputs, begin=begin, size=size)
+        else:
+            x = inputs
+        return x
+
+    def _dynamic_crop(self, inputs, static_shape, dynamic_shape, data_format='channels_last'):
+        input_shape = get_spatial_shape(inputs, data_format, True)
+        n_channels = get_num_channels(inputs, data_format)
+        if data_format == 'channels_last':
+            slice_size = [(-1,), dynamic_shape, (n_channels,)]
+            output_shape = [None] * (len(static_shape) + 1) + [n_channels]
+        else:
+            slice_size = [(-1, n_channels), dynamic_shape]
+            output_shape = [None, n_channels] + [None] * len(static_shape)
+
+        begin = [0] * len(inputs.get_shape().as_list())
+        size = tf.concat(slice_size, axis=0)
+        cond = tf.reduce_sum(tf.abs(input_shape - dynamic_shape)) > 0
+        x = tf.cond(cond, lambda: tf.slice(inputs, begin=begin, size=size), lambda: inputs)
+        x.set_shape(output_shape)
+        return x
 
 
 
@@ -457,6 +513,10 @@ class Upsample:
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         if np.all(self.factor == 1):
             return inputs
+
+        if self.kwargs.get('filters') is None:
+            self.kwargs['filters'] = get_num_channels(inputs,
+                                                      data_format=self.kwargs.get('data_format', 'channels_last'))
 
         if 't' in self.layout or 'T' in self.layout:
             if 'kernel_size' not in self.kwargs:
