@@ -11,9 +11,10 @@ import requests
 import numpy as np
 
 from . import ImagesOpenset
-from .. import FilesIndex, any_action_failed, parallel
+from .. import FilesIndex, any_action_failed, parallel, ImagesBatch, inbatch_parallel
 
 logger = logging.getLogger('COCO')
+
 
 class BaseCOCO(ImagesOpenset):
 
@@ -58,6 +59,15 @@ class BaseCOCO(ImagesOpenset):
         else: # working with DatasetIndex
             # load data to preloaded
             raise NotImplementedError
+
+
+class COCOStuffImagesBatch(ImagesBatch):
+
+    @inbatch_parallel(init='indices', post='_assemble')
+    def _load_mask(self, ix, src, dst):
+        name_no_ext = ix.split('.')[0]
+        path_to_mask = os.path.join(self._dataset.masks_directory, name_no_ext) + '.png'
+        return PIL.Image.open(path_to_mask)
     
 
 class COCOStuff(BaseCOCO):
@@ -65,9 +75,9 @@ class COCOStuff(BaseCOCO):
     MASKS_URL = 'http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip'
     ALL_URLS = [*BaseCOCO.ALL_URLS, MASKS_URL]
 
-    def __init__(self, *args, load_to_ram=False, **kwargs):
+    def __init__(self, *args, load_to_ram=False, batch_class=COCOStuffImagesBatch, **kwargs):
         self.load_to_ram = load_to_ram
-        super().__init__(*args,  **kwargs)
+        super().__init__(*args, batch_class=batch_class,  **kwargs)
 
     @property
     def _get_from_urls(self):
