@@ -10,7 +10,7 @@ class Openset(Dataset):
         self.train_test = train_test
         self._train_index, self._test_index = None, None
         if preloaded is None:
-            preloaded = self.download(path=path)
+            preloaded, index = self.download(path=path)
         super().__init__(index, batch_class, preloaded=preloaded, **kwargs)
         if train_test:
             self.split()
