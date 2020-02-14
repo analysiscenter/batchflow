@@ -212,12 +212,11 @@ class SimpleSelfAttention(nn.Module):
         from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
         super().__init__()
         self.gamma = nn.Parameter(torch.zeros(1, device=inputs.device))
-        top_mid_args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size,
-                                         filters='same//{}'.format(ratio))}
-        bot_args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size, filters='same')}
-        self.top_branch = ConvBlock(**top_mid_args)
-        self.mid_branch = ConvBlock(**top_mid_args)
-        self.bot_branch = ConvBlock(**bot_args)
+
+        args = {**kwargs, **dict(inputs=inputs, layout=layout, kernel_size=kernel_size)}
+        self.top_branch = ConvBlock(**args, filters='same//{}'.format(ratio))
+        self.mid_branch = ConvBlock(**args, filters='same//{}'.format(ratio))
+        self.bot_branch = ConvBlock(**args, filters='same')
 
         self.desc_kwargs = {
             'class': self.__class__.__name__,

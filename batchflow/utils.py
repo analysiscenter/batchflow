@@ -129,7 +129,8 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
             ax.grid(True)
             ax.legend()
 
-def show_research(df, layout=None, average_repetitions=False, log_scale=False, rolling_window=None, color=None): # pylint: disable=too-many-branches
+def show_research(df, layout=None, average_repetitions=False, log_scale=False, 
+                  rolling_window=None, color=None, scale=(9, 7)): # pylint: disable=too-many-branches
     """Show plots given by research dataframe.
 
     Parameters
@@ -137,16 +138,20 @@ def show_research(df, layout=None, average_repetitions=False, log_scale=False, r
     df : DataFrame
         Research's results
     layout : list, optional
-        list of strings where each element consists two parts that splited by /. First part is the type
+        List of strings where each element consists two parts that splited by /. First part is the type
         of calculated value wrote in the "name" column. Second is name of column  with the parameters
         that will be drawn.
     average_repetitions : bool, optional
         If True, then a separate line will be drawn for each repetition
         else one mean line will be drawn for each repetition.
-    log_scale : bool, optional
+    log_scale : bool or sequence of bools, optional
         If True, values will be logarithmised.
-    rolling_window : None or int, optional
+    rolling_window : int of sequence of ints, optional
         Size of rolling window.
+    color: sequence of matplotlib.colors, optional
+        Colors for plots would be randomly sampled from given set.
+    scale: tuple, default: (9, 7)
+        Scaling factors for the figure.
     """
     if layout is None:
         layout = []
@@ -166,7 +171,7 @@ def show_research(df, layout=None, average_repetitions=False, log_scale=False, r
     replace = not len(color) > df_len
     chosen_colors = np.random.choice(color, replace=replace, size=df_len)
 
-    _, ax = plt.subplots(1, len(layout), figsize=(9 * len(layout), 7))
+    _, ax = plt.subplots(1, len(layout), figsize=(scale[0] * len(layout), scale[1]))
     if len(layout) == 1:
         ax = (ax, )
 
