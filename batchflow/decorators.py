@@ -82,6 +82,15 @@ def action(*args, **kwargs):
     # action with arguments
     return _make_action_wrapper_with_args(*args, **kwargs)
 
+def apply_transform(method):
+    """ Mark method for transform in metaclass by `apply_transform` """
+    method.transform = True
+    return method
+
+def apply_transform_all(method):
+    """ Mark method for transform in metaclass by `apply_transform_all` """
+    method.transform = 'all'
+    return method
 
 def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """
