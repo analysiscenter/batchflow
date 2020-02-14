@@ -6,5 +6,6 @@ from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, Se
 from .pooling import MaxPool, AvgPool, Pool, AdaptiveMaxPool, AdaptiveAvgPool, AdaptivePool, \
 					 GlobalPool, GlobalMaxPool, GlobalAvgPool, ChannelPool
 from .resize import IncreaseDim, Reshape, Interpolate, PixelShuffle, SubPixelConv, \
-					Upsample, Combine, SelfAttention, Crop
-from .modules import PyramidPooling, ASPP, SimpleSelfAttention, FPA, BAM, CBAM, SelectiveKernelConv
+					Upsample, Combine, Crop
+from .attention import SelfAttention, SEBlock, SCSEBlock, SimpleSelfAttention, BAM, CBAM, FPA, SelectiveKernelConv
+from .modules import PyramidPooling, ASPP

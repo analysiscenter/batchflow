@@ -44,18 +44,21 @@ class EncoderModule(nn.ModuleDict):
 
         for i in range(num_stages):
             for letter in encoder_layout:
+
                 if letter in ['b']:
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=inputs, **args)
                     inputs = layer(inputs)
                     layer_desc = 'block-{}'.format(i)
+
                 elif letter in ['d', 'p']:
                     args = {**kwargs, **downsample_args, **unpack_args(downsample_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=inputs, **args)
                     inputs = layer(inputs)
                     layer_desc = 'downsample-{}'.format(i)
+
                 elif letter in ['s']:
                     layer = nn.Identity()
                     layer_desc = 'skip-{}'.format(i)
@@ -125,12 +128,14 @@ class DecoderModule(nn.ModuleDict):
 
         for i in range(num_stages):
             for letter in decoder_layout:
+
                 if letter in ['b']:
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=x, **args)
                     x = layer(x)
                     layer_desc = 'block-{}'.format(i)
+
                 elif letter in ['u']:
                     args = {'factor': factor[i],
                             **kwargs, **upsample_args, **unpack_args(upsample_args, i, num_stages)}
@@ -138,6 +143,7 @@ class DecoderModule(nn.ModuleDict):
                     layer = Upsample(inputs=x, **args)
                     x = layer(x)
                     layer_desc = 'upsample-{}'.format(i)
+
                 elif letter in ['c']:
                     if self.skip and (i < len(inputs) - 2):
                         args = {**kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}

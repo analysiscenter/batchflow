@@ -34,7 +34,7 @@ class XceptionBlock(DefaultBlock):
     LAYOUT = 'R' + 'wnacna'*3 + '&'
     FILTERS = 'same'
     STRIDES = [1]*6
-    RESIDUAL_END = {'strides': 1}
+    BRANCH_END = {'strides': 1}
 
 
 
@@ -84,23 +84,25 @@ class ResBlock(ConvBlock):
     bottleneck : bool, int
         If True, then add a canonical bottleneck (1x1 conv-batchnorm-activation) with that factor of filters increase.
         If False, then bottleneck is not used. Default is False.
-    se : bool
+    attention_mode : None, bool or str
+        If None or False, then nothing is added. Default is False.
         If True, then add a squeeze-and-excitation block.
-        If False, then nothing is added. Default is False.
+        If str, then any of allowed self-attentions. For more info about possible operations,
+        check :class:`~.layers.SelfAttention`.
     groups : int
         Use `groups` convolution side by side, each  seeing 1 / `groups` the input channels,
         and producing 1 / `groups` the output channels, and both subsequently concatenated.
         Number of `inputs` channels must be divisible by `groups`. Default is 1.
     op : str or callable
         Operation for combination shortcut and residual.
-        See more :class:`~.layers.Combine` documentation. Default is '+'.
+        See more :class:`~.layers.Combine` documentation. Default is '+a'.
     n_reps : int
         Number of times to repeat the whole block. Default is 1.
     kwargs : dict
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
     def __init__(self, inputs=None, layout='cnacn', filters='same', kernel_size=3, strides=1,
-                 downsample=False, bottleneck=False, attention_mode=False, groups=1, op='+a', n_reps=1, **kwargs):
+                 downsample=False, bottleneck=False, attention_mode=None, groups=1, op='+a', n_reps=1, **kwargs):
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
@@ -117,27 +119,35 @@ class ResBlock(ConvBlock):
         strides_downsample = list(strides)
         branch_stride_downsample = int(branch_stride)
 
+        # Parse all the parameters
         if downsample:
+            # The first repetition of the block optionally downsamples inputs
             downsample = 2 if downsample is True else downsample
             strides_downsample[0] *= downsample
             branch_stride_downsample *= downsample
         if bottleneck:
+            # Bottleneck: apply 1x1 conv before and after main flow computations to change number of filters
             bottleneck = 4 if bottleneck is True else bottleneck
-            layout = 'cna' + layout + 'cna'
+            layout = 'cna' + layout + 'acn'
             kernel_size = [1] + kernel_size + [1]
             strides = [1] + strides + [1]
             strides_downsample = [1] + strides_downsample + [1]
             groups = [1] + groups + [1]
             filters = [filters[0]] + filters + [filters[0] * bottleneck]
         if attention_mode:
+            # Attention: add self-attention to the main flow
             layout += 'S'
         if get_num_channels(inputs) != filters[-1]:
+            # If main flow changes the number of filters, so must do the side branch.
+            # No activation, because it will be applied after summation with the main flow
             branch_params = {'layout': 'cn', 'filters': filters[-1],
                              'kernel_size': 1, 'strides': branch_stride_downsample}
         else:
             branch_params = {}
-        layout = 'B' + layout + op
+        layout = 'R' + layout + op
 
+        # Pass optional downsample parameters both to the main flow and to the side branch:
+        # Only the first repetition is to be changed
         layer_params = [{'strides': strides_downsample,
                          'branch': branch_params,
                          'branch/strides': branch_stride_downsample}]
@@ -173,7 +183,7 @@ class DenseBlock(ConvBlock):
         that the number of output features is that number.
         If int and is smaller or equal to the number of channels in the input tensor, then `growth_rate` is adjusted so
         that the number of added output features is that number.
-        If None, then not used.
+        If None, then is not used.
     """
     def __init__(self, inputs=None, layout='nacd', filters=None, kernel_size=3, strides=1, dropout_rate=0.2,
                  num_layers=4, growth_rate=12, skip=True, bottleneck=False, **kwargs):

@@ -10,7 +10,8 @@ from .core import Activation, Dense, BatchNorm, Dropout, AlphaDropout
 from .conv import Conv, ConvTranspose, DepthwiseConv, DepthwiseConvTranspose, \
                   SeparableConv, SeparableConvTranspose
 from .pooling import Pool, GlobalPool
-from .resize import IncreaseDim, Reshape, Interpolate, SubPixelConv, SelfAttention, Combine
+from .resize import IncreaseDim, Reshape, Interpolate, SubPixelConv, Combine
+from .attention import SelfAttention
 from ..utils import get_shape
 from ...utils import unpack_args
 from .... import Config
@@ -46,7 +47,6 @@ class BaseConvBlock(nn.ModuleDict):
         A sequence of letters, each letter meaning individual operation:
 
         - `>` - add new axis to tensor
-        - `<` - remove trailing axis from tensor
         - r - reshape tensor to desired shape
         - c - convolution
         - t - transposed convolution
@@ -63,17 +63,15 @@ class BaseConvBlock(nn.ModuleDict):
         - V - global average pooling
         - d - dropout
         - D - alpha dropout
+        - S - attention based on tensor itself (for example, squeeze and excitation)
         - b - upsample with bilinear resize
         - N - upsample with nearest neighbors resize
         - X - upsample with subpixel convolution (:class:`~.layers.SubpixelConv`)
-        - R - start residual connection
-        - A - start residual connection with bilinear additive upsampling
-        - S - start residual connection with squeeze and excitation
-        - B - start residual connection with auxilliary :class:`~.layers.BaseConvBlock`
-        - `.` - end residual connection with concatenation
-        - `+` - end residual connection with summation
-        - `*` - end residual connection with multiplication
-        - `&` - end residual connection with softsum
+        - B, R - start a new branch with auxilliary :class:`~.layers.BaseConvBlock`
+        - `.` - end the most recent created branch with concatenation
+        - `+` - end the most recent created branch with summation
+        - `*` - end the most recent created branch with multiplication
+        - `&` - end the most recent created branch with softsum
 
         Default is ''.
 
@@ -128,10 +126,10 @@ class BaseConvBlock(nn.ModuleDict):
         - pooling - parameters like initializers, regularalizers, etc.
         - dropout - parameters like noise_shape, dropout_rate, etc.
         - subpixel_conv - parameters for :class:`~.layers.SubPixelConv`.
-        - resize_bilinear - parameters for parameters for :class:`~.layers.Interpolate`.
-        - residual_bilinear_additive - parameters for parameters for :class:`~.layers.Interpolate`.
-        - residual_se - parameters for parameters for :class:`~.layers.SelfAttention`.
-        - branch - parameters for parameters for :class:`~.layers.BaseConvBlock`.
+        - resize_bilinear - parameters for :class:`~.layers.Interpolate`.
+        - self_attention - parameters for :class:`~.layers.SelfAttention`.
+        - branch - parameters for :class:`~.layers.ConvBlock`.
+        - branch_end - parameters for :class:`~.layers.Combine`.
 
 
     Notes
@@ -179,13 +177,12 @@ class BaseConvBlock(nn.ModuleDict):
     """
     LETTERS_LAYERS = {
         'a': 'activation',
-        'R': 'branch',
-        'B': 'branch', # the same as R
-        'A': 'residual_bilinear_additive',
-        '+': 'residual_end',
-        '.': 'residual_end',
-        '*': 'residual_end',
-        '&': 'residual_end',
+        'B': 'branch',
+        'R': 'branch', # stands for `R`esidual
+        '+': 'branch_end',
+        '.': 'branch_end',
+        '*': 'branch_end',
+        '&': 'branch_end',
         '>': 'increase_dim',
         'r': 'reshape',
         'f': 'dense',
@@ -203,8 +200,6 @@ class BaseConvBlock(nn.ModuleDict):
         'd': 'dropout',
         'D': 'alpha_dropout',
         'S': 'self_attention',
-        # 'O': 'dropblock',
-        # 'm': 'mip',
         'b': 'resize_bilinear',
         'N': 'resize_nn',
         'X': 'subpixel_conv'
@@ -213,7 +208,7 @@ class BaseConvBlock(nn.ModuleDict):
     LAYERS_MODULES = {
         'activation': Activation,
         'branch': Branch,
-        'residual_end': Combine,
+        'branch_end': Combine,
         'increase_dim': IncreaseDim,
         'reshape': Reshape,
         'dense': Dense,
@@ -228,10 +223,7 @@ class BaseConvBlock(nn.ModuleDict):
         'batch_norm': BatchNorm,
         'dropout': Dropout,
         'alpha_dropout': AlphaDropout,
-        # 'dropblock': None, # TODO
-        # 'mip': None, # TODO?
         'self_attention': SelfAttention,
-        'residual_bilinear_additive': Interpolate,
         'resize_bilinear': Interpolate,
         'resize_nn': Interpolate,
         'subpixel_conv': SubPixelConv,
@@ -248,15 +240,13 @@ class BaseConvBlock(nn.ModuleDict):
         'v': 'p',
         'V': 'P',
         'D': 'd',
-        # 'O': 'd',
         'n': 'd',
-        'A': 'b',
         'N': 'b',
         'X': 'b',
         })
 
 
-    SKIP_LETTERS = ['R', 'A', 'B']
+    BRANCH_LETTERS = ['R', 'B']
     COMBINE_LETTERS = ['+', '*', '.', '&']
 
     def __init__(self, inputs=None, layout='',
@@ -282,13 +272,13 @@ class BaseConvBlock(nn.ModuleDict):
 
 
     def forward(self, x):
-        residuals = []
+        branches = []
 
         for letter, layer in zip(self.layout, self.values()):
-            if letter in self.SKIP_LETTERS:
-                residuals += [layer(x)]
+            if letter in self.BRANCH_LETTERS:
+                branches += [layer(x)]
             elif letter in self.COMBINE_LETTERS:
-                x = layer([x, residuals.pop()])
+                x = layer([x, branches.pop()])
             else:
                 x = layer(x)
         return x
@@ -323,7 +313,7 @@ class BaseConvBlock(nn.ModuleDict):
             letter_group = self.LETTERS_GROUPS[letter]
             letter_counts = layout_dict.setdefault(letter_group, [-1, 0])
             letter_counts[1] += 1
-        residuals = []
+        branches = []
 
         for i, letter in enumerate(self.layout):
             letter_group = self.LETTERS_GROUPS[letter]
@@ -331,18 +321,18 @@ class BaseConvBlock(nn.ModuleDict):
             layer_class = self.LAYERS_MODULES[layer_name]
             layout_dict[letter_group][0] += 1
 
-            if letter in self.SKIP_LETTERS:
+            if letter in self.BRANCH_LETTERS:
                 args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
                 layer = layer_class(**args).to(self.device)
                 skip = layer(inputs)
-                residuals.append(skip)
+                branches.append(skip)
 
                 layer_desc = 'Layer {}, skip-letter "{}"; {} -> {}'.format(i, letter,
                                                                            get_shape(inputs),
                                                                            get_shape(skip))
             elif letter in self.COMBINE_LETTERS:
                 args = self.fill_layer_params(layer_name, layer_class, inputs, layout_dict[letter_group])
-                args = {**args, 'inputs': [inputs, residuals.pop()], 'op': letter}
+                args = {**args, 'inputs': [inputs, branches.pop()], 'op': letter}
                 layer = layer_class(**args).to(self.device)
 
                 shape_before = get_shape(inputs)
@@ -382,7 +372,7 @@ class BaseConvBlock(nn.ModuleDict):
             self.update([(layer_desc, layer)])
 
     def extra_repr(self):
-        return 'layout={}, device={}'.format(self.layout, self.device)
+        return 'layout={}\n'.format(self.layout)
 
 
 def update_layers(letter, module, name=None):

@@ -31,58 +31,6 @@ class Reshape(nn.Module):
 
 
 
-class Interpolate(nn.Module):
-    """ Upsample inputs with a given factor.
-
-    Notes
-    -----
-    This is just a wrapper around ``F.interpolate``.
-
-    For brevity ``mode`` can be specified with the first letter only: 'n', 'l', 'b', 't'.
-
-    All the parameters should the specified as keyword arguments (i.e. with names and values).
-    """
-    MODES = {
-        'n': 'nearest',
-        'l': 'linear',
-        'b': 'bilinear',
-        't': 'trilinear',
-    }
-
-    def __init__(self, mode='b', shape=None, scale_factor=None, **kwargs):
-        super().__init__()
-        self.shape, self.scale_factor = shape, scale_factor
-
-        if mode in self.MODES:
-            mode = self.MODES[mode]
-        self.mode = mode
-        self.kwargs = kwargs
-
-    def forward(self, x):
-        return F.interpolate(x, mode=self.mode, size=self.shape, scale_factor=self.scale_factor,
-                             align_corners=True, **self.kwargs)
-
-    def extra_repr(self):
-        if self.scale_factor is not None:
-            info = 'scale_factor=' + str(self.scale_factor)
-        else:
-            info = 'size=' + str(self.shape)
-        info += ', mode=' + self.mode
-        return info
-
-
-class PixelShuffle(nn.PixelShuffle):
-    """ Resize input tensor with depth to space operation. """
-    def __init__(self, upscale_factor=None):
-        super().__init__(upscale_factor)
-
-
-class SubPixelConv(PixelShuffle):
-    """ An alias for PixelShuffle. """
-    pass
-
-
-
 class Crop(nn.Module):
     """ Crop tensor to desired shape.
 
@@ -95,9 +43,7 @@ class Crop(nn.Module):
     """
     def __init__(self, resize_to):
         super().__init__()
-
         self.resize_to = resize_to
-
 
     def forward(self, inputs):
         i_shape = get_shape(inputs)
@@ -123,193 +69,6 @@ class Crop(nn.Module):
                 pass
             i_shape = get_shape(output)
         return output
-
-
-
-class Upsample(nn.Module):
-    """ Upsample inputs with a given factor.
-
-    Parameters
-    ----------
-    inputs
-        Input tensor.
-    factor : int
-        Upsamping scale.
-    shape : tuple of int
-        Shape to upsample to (used by bilinear and NN resize).
-    layout : str
-        Resizing technique, a sequence of:
-
-        - b - bilinear resize
-        - N - nearest neighbor resize
-        - t - transposed convolution
-        - T - separable transposed convolution
-        - X - subpixel convolution
-
-        all other :class:`~.torch.ConvBlock` layers are also allowed.
-
-
-    Examples
-    --------
-    A simple bilinear upsampling::
-
-        x = Upsample(layout='b', shape=(256, 256), inputs=inputs)
-
-    Upsampling with non-linear normalized transposed convolution::
-
-        x = Upsample(layout='nat', factor=2, kernel_size=3, inputs=inputs)
-
-    Subpixel convolution::
-
-        x = Upsample(layout='X', factor=2, inputs=inputs)
-    """
-    def __init__(self, factor=2, shape=None, layout='b', inputs=None, **kwargs):
-        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-        super().__init__()
-
-        if 't' in layout or 'T' in layout:
-            kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
-            kwargs['strides'] = kwargs.get('strides') or factor
-            kwargs['filters'] = kwargs.get('filters') or 'same'
-        self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
-
-    def forward(self, x):
-        return self.layer(x)
-
-
-
-class SEBlock(nn.Module):
-    """ Squeeze and excitation block.
-    Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
-
-    Parameters
-    ----------
-    ratio : int
-        Squeeze ratio for the number of filters.
-    """
-    def __init__(self, inputs=None, ratio=4, bias=False, **kwargs):
-        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-        super().__init__()
-        in_units = get_shape(inputs)[1]
-        units = [in_units // ratio, in_units]
-        activations = ['relu', 'sigmoid']
-        kwargs = {'layout': 'Vfafa >',
-                  'units': units, 'activation': activations,
-                  'dim': get_num_dims(inputs),
-                  'bias': bias,
-                  **kwargs}
-        self.layer = ConvBlock(inputs=inputs, **kwargs)
-
-    def forward(self, x):
-        return Combine.mul((x, self.layer(x)))
-
-
-class SCSEBlock(nn.Module):
-    """ Concurrent spatial and channel squeeze and excitation.
-    Roy A.G. et al. "`Concurrent Spatial and Channel ‘Squeeze & Excitation’
-    in Fully Convolutional Networks <https://arxiv.org/abs/1803.02579>`_"
-
-    Parameters
-    ----------
-    ratio : int, optional
-        Squeeze ratio for the number of filters.
-    """
-    def __init__(self, inputs=None, ratio=2, bias=False, **kwargs):
-        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-        super().__init__()
-
-        self.cse = SEBlock(inputs=inputs, ratio=ratio, bias=bias, **kwargs)
-        kwargs = {'layout': 'ca',
-                  'filters': 1, 'kernel_size': 1, 'activation': 'sigmoid',
-                  **kwargs}
-        self.sse = ConvBlock(inputs=inputs, **kwargs)
-
-    def forward(self, x):
-        cse = self.cse(x)
-        sse = self.sse(x)
-        return Combine.sum((cse, Combine.mul((x, sse))))
-
-
-class SelfAttention(nn.Module):
-    """ Attention based on tensor itself.
-
-    Parameters
-    ----------
-    attention_mode : str or callable
-        If str, then one of predefined attention layers: `se`, `scse`, `bam`, `cbam`, `fpa`.
-        If callable, then directly applied to the input tensor.
-    """
-    @staticmethod
-    def identity(inputs, **kwargs):
-        """ Return tensor unchanged. """
-        _ = inputs, kwargs
-        return nn.Identity()
-
-    @staticmethod
-    def squeeze_and_excitation(inputs, ratio=4, **kwargs):
-        """ Squeeze and excitation. """
-        return SEBlock(inputs=inputs, ratio=ratio, **kwargs)
-
-    @staticmethod
-    def scse(inputs, ratio=2, **kwargs):
-        """ Concurrent spatial and channel squeeze and excitation. """
-        return SCSEBlock(inputs=inputs, ratio=ratio, **kwargs)
-
-    @staticmethod
-    def ssa(inputs, ratio=8, **kwargs):
-        """ Simple Self Attention. """
-        from .modules import SimpleSelfAttention # can't be imported in the file beginning due to recursive imports
-        return SimpleSelfAttention(inputs=inputs, ratio=ratio, **kwargs)
-
-    @staticmethod
-    def bam(inputs, ratio=16, **kwargs):
-        """ Bottleneck Attention Module. """
-        from .modules import BAM # can't be imported in the file beginning due to recursive imports
-        return BAM(inputs=inputs, ratio=ratio, **kwargs)
-
-    @staticmethod
-    def cbam(inputs, ratio=16, **kwargs):
-        """ Convolutional Block Attention Module. """
-        from .modules import CBAM # can't be imported in the file beginning due to recursive imports
-        return CBAM(inputs=inputs, ratio=ratio, **kwargs)
-
-    @staticmethod
-    def fpa(inputs, pyramid_kernel_size=(7, 5, 3), bottleneck=False, **kwargs):
-        """ Feature Pyramid Attention. """
-        from .modules import FPA # can't be imported in the file beginning due to recursive imports
-        return FPA(inputs=inputs, pyramid_kernel_size=pyramid_kernel_size, bottleneck=bottleneck, **kwargs)
-
-    ATTENTIONS = {
-        squeeze_and_excitation: ['se', 'squeeze_and_excitation', 'SE', True],
-        scse: ['scse', 'SCSE'],
-        ssa: ['ssa', 'SSA'],
-        bam: ['bam', 'BAM'],
-        cbam: ['cbam', 'CBAM'],
-        fpa: ['fpa', 'FPA'],
-        identity: ['identity', None],
-    }
-    ATTENTIONS = {alias: getattr(method, '__func__') for method, aliases in ATTENTIONS.items() for alias in aliases}
-
-    def __init__(self, inputs=None, attention_mode='se', **kwargs):
-        super().__init__()
-        self.attention_mode = attention_mode
-
-        if attention_mode in self.ATTENTIONS:
-            op = self.ATTENTIONS[attention_mode]
-            self.op = op(inputs, **kwargs)
-        elif callable(attention_mode):
-            self.op = attention_mode(inputs, **kwargs)
-        else:
-            raise ValueError('Attention mode must be a callable or one from {}, instead got {}.'
-                             .format(list(self.ATTENTIONS.keys()), self.attention_mode))
-
-    def forward(self, inputs):
-        return self.op(inputs)
-
-    def extra_repr(self):
-        if isinstance(self.attention_mode, (str, bool)):
-            return 'op={}'.format(self.attention_mode)
-        return 'op=callable {}'.format(self.attention_mode.__name__)
 
 
 
@@ -457,3 +216,106 @@ class Combine(nn.Module):
                 item = Crop(inputs[0])(item)
             resized.append(item)
         return resized
+
+
+
+class Interpolate(nn.Module):
+    """ Upsample inputs with a given factor.
+
+    Notes
+    -----
+    This is just a wrapper around ``F.interpolate``.
+
+    For brevity ``mode`` can be specified with the first letter only: 'n', 'l', 'b', 't'.
+
+    All the parameters should the specified as keyword arguments (i.e. with names and values).
+    """
+    MODES = {
+        'n': 'nearest',
+        'l': 'linear',
+        'b': 'bilinear',
+        't': 'trilinear',
+    }
+
+    def __init__(self, mode='b', shape=None, scale_factor=None, **kwargs):
+        super().__init__()
+        self.shape, self.scale_factor = shape, scale_factor
+
+        if mode in self.MODES:
+            mode = self.MODES[mode]
+        self.mode = mode
+        self.kwargs = kwargs
+
+    def forward(self, x):
+        return F.interpolate(x, mode=self.mode, size=self.shape, scale_factor=self.scale_factor,
+                             align_corners=True, **self.kwargs)
+
+    def extra_repr(self):
+        if self.scale_factor is not None:
+            info = 'scale_factor=' + str(self.scale_factor)
+        else:
+            info = 'size=' + str(self.shape)
+        info += ', mode=' + self.mode
+        return info
+
+
+class PixelShuffle(nn.PixelShuffle):
+    """ Resize input tensor with depth to space operation. """
+    def __init__(self, upscale_factor=None):
+        super().__init__(upscale_factor)
+
+class SubPixelConv(PixelShuffle):
+    """ An alias for PixelShuffle. """
+    pass
+
+
+
+class Upsample(nn.Module):
+    """ Upsample inputs with a given factor.
+
+    Parameters
+    ----------
+    inputs
+        Input tensor.
+    factor : int
+        Upsamping scale.
+    shape : tuple of int
+        Shape to upsample to (used by bilinear and NN resize).
+    layout : str
+        Resizing technique, a sequence of:
+
+        - b - bilinear resize
+        - N - nearest neighbor resize
+        - t - transposed convolution
+        - T - separable transposed convolution
+        - X - subpixel convolution
+
+        all other :class:`~.torch.ConvBlock` layers are also allowed.
+
+
+    Examples
+    --------
+    A simple bilinear upsampling::
+
+        x = Upsample(layout='b', shape=(256, 256), inputs=inputs)
+
+    Upsampling with non-linear normalized transposed convolution::
+
+        x = Upsample(layout='nat', factor=2, kernel_size=3, inputs=inputs)
+
+    Subpixel convolution::
+
+        x = Upsample(layout='X', factor=2, inputs=inputs)
+    """
+    def __init__(self, factor=2, shape=None, layout='b', inputs=None, **kwargs):
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        super().__init__()
+
+        if 't' in layout or 'T' in layout:
+            kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
+            kwargs['strides'] = kwargs.get('strides') or factor
+            kwargs['filters'] = kwargs.get('filters') or 'same'
+        self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
+
+    def forward(self, x):
+        return self.layer(x)
