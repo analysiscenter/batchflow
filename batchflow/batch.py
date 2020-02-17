@@ -4,7 +4,7 @@ import os
 import traceback
 import threading
 import warnings
-from functools import wraps
+from functools import wraps, partial
 
 import dill
 try:
@@ -64,9 +64,10 @@ class MethodsTransformingMeta(type):
         """ Wrap passed `method` in accordance with `transformed` arg value """
         @wraps(method)
         def inner(self, *args, src=src, target=target, **kwargs):
+            method_ = partial(method, self)
             if transform == 'all':
-                return self.apply_transform_all(method, src=src, use_self=True, target=target, *args, **kwargs)
-            return self.apply_transform(method, src=src, use_self=True, target=target, *args, **kwargs)
+                return self.apply_transform_all(method_, src=src, target=target, *args, **kwargs)
+            return self.apply_transform(method_, src=src, target=target, *args, **kwargs)
         return action(inner)
 
 
@@ -521,7 +522,7 @@ class Batch(metaclass=MethodsTransformingMeta):
 
     @action
     @inbatch_parallel(init='indices', post='_assemble')
-    def apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+    def apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
         Parameters
@@ -553,9 +554,6 @@ class Batch(metaclass=MethodsTransformingMeta):
             if not None, indices of relevant batch elements will be passed ``func``
             as a named arg ``indices``.
 
-        use_self : bool
-            whether to pass ``self`` to ``func``
-
         args, kwargs
             other parameters passed to ``func``
 
@@ -575,7 +573,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         ::
 
             apply_transform(make_masks_fn, src='images', dst='masks')
-            apply_transform(apply_mask, src=('images', 'masks'), dst='images', use_self=True)
+            apply_transform(apply_mask, src=('images', 'masks'), dst='images')
             apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
         """
         dst = src if dst is None else dst
@@ -588,11 +586,11 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         if isinstance(src, list) and len(src) > 1 and isinstance(dst, list) and len(src) == len(dst):
             return tuple([self._apply_transform(ix, func, *args, src=src_component,
-                                                dst=dst_component, p=p, use_self=use_self, **kwargs)
+                                                dst=dst_component, p=p, **kwargs)
                           for src_component, dst_component in zip(src, dst)])
-        return self._apply_transform(ix, func, *args, src=src, dst=dst, p=p, use_self=use_self, **kwargs)
+        return self._apply_transform(ix, func, *args, src=src, dst=dst, p=p, **kwargs)
 
-    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
         Parameters
@@ -615,9 +613,6 @@ class Batch(metaclass=MethodsTransformingMeta):
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
-        use_self : bool
-            whether to pass ``self`` to ``func``
-
         args, kwargs
             other parameters passed to ``func``
         """
@@ -635,8 +630,6 @@ class Batch(metaclass=MethodsTransformingMeta):
             _args = tuple([*src_attr, *args])
 
         if p:
-            if use_self:
-                return func(self, *_args, **kwargs)
             return func(*_args, **kwargs)
 
         if len(src_attr) == 1:
@@ -644,7 +637,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         return src_attr
 
     @action
-    def apply_transform_all(self, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+    def apply_transform_all(self, func, *args, src=None, dst=None, p=None, **kwargs):
         """ Apply a function the whole batch at once
 
         Parameters
@@ -671,9 +664,6 @@ class Batch(metaclass=MethodsTransformingMeta):
             if not None, indices of relevant batch elements will be passed ``func``
             as a named arg ``indices``.
 
-        use_self : bool
-            whether to pass ``self`` to ``func``
-
         args, kwargs
             other parameters passed to ``func``
 
@@ -687,17 +677,13 @@ class Batch(metaclass=MethodsTransformingMeta):
 
             self.dst = func(self.src, *args, indices=random_indices, **kwargs)
 
-        Transform functions might be methods as well, when ``use_self=True``::
-
-            self.dst = func(self, self.src, *args, **kwargs)
-
         Examples
         --------
 
         ::
 
             apply_transform_all(make_masks_fn, src='images', dst='masks')
-            apply_transform_all(MyBatch.make_masks, src='images', dst='masks', use_self=True)
+            apply_transform_all(MyBatch.make_masks, src='images', dst='masks')
             apply_transform_all(custom_crop, src='images', dst='augmented_images', p=.2)
 
         """
@@ -716,8 +702,6 @@ class Batch(metaclass=MethodsTransformingMeta):
         if p is not None:
             indices = np.where(np.random.binomial(1, p, len(self)))[0]
             kwargs['indices'] = indices
-        if use_self:
-            _args = (self, *_args)
         tr_res = func(*_args, **kwargs)
 
         if dst is None:
