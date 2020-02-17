@@ -91,26 +91,26 @@ class SelfAttention(nn.Module):
     }
     ATTENTIONS = {alias: getattr(method, '__func__') for method, aliases in ATTENTIONS.items() for alias in aliases}
 
-    def __init__(self, inputs=None, attention_mode='se', **kwargs):
+    def __init__(self, inputs=None, attention='se', **kwargs):
         super().__init__()
-        self.attention_mode = attention_mode
+        self.attention = attention
 
-        if attention_mode in self.ATTENTIONS:
-            op = self.ATTENTIONS[attention_mode]
+        if attention in self.ATTENTIONS:
+            op = self.ATTENTIONS[attention]
             self.op = op(inputs, **kwargs)
-        elif callable(attention_mode):
-            self.op = attention_mode(inputs, **kwargs)
+        elif callable(attention):
+            self.op = attention(inputs, **kwargs)
         else:
             raise ValueError('Attention mode must be a callable or one from {}, instead got {}.'
-                             .format(list(self.ATTENTIONS.keys()), self.attention_mode))
+                             .format(list(self.ATTENTIONS.keys()), attention))
 
     def forward(self, inputs):
         return self.op(inputs)
 
     def extra_repr(self):
-        if isinstance(self.attention_mode, (str, bool)):
-            return 'op={}'.format(self.attention_mode)
-        return 'op=callable {}'.format(self.attention_mode.__name__)
+        if isinstance(self.attention, (str, bool)):
+            return 'op={}'.format(self.attention)
+        return 'op=callable {}'.format(self.attention.__name__)
 
 
 

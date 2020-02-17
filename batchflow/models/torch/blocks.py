@@ -84,7 +84,7 @@ class ResBlock(ConvBlock):
     bottleneck : bool, int
         If True, then add a canonical bottleneck (1x1 conv-batchnorm-activation) with that factor of filters increase.
         If False, then bottleneck is not used. Default is False.
-    attention_mode : None, bool or str
+    attention : None, bool or str
         If None or False, then nothing is added. Default is False.
         If True, then add a squeeze-and-excitation block.
         If str, then any of allowed self-attentions. For more info about possible operations,
@@ -102,7 +102,7 @@ class ResBlock(ConvBlock):
         Other named arguments for the :class:`~.layers.ConvBlock`
     """
     def __init__(self, inputs=None, layout='cnacn', filters='same', kernel_size=3, strides=1,
-                 downsample=False, bottleneck=False, attention_mode=None, groups=1, op='+a', n_reps=1, **kwargs):
+                 downsample=False, bottleneck=False, attention=None, groups=1, op='+a', n_reps=1, **kwargs):
         num_convs = sum(letter in CONV_LETTERS for letter in layout)
 
         filters = [filters] * num_convs if isinstance(filters, (int, str)) else filters
@@ -134,7 +134,7 @@ class ResBlock(ConvBlock):
             strides_downsample = [1] + strides_downsample + [1]
             groups = [1] + groups + [1]
             filters = [filters[0]] + filters + [filters[0] * bottleneck]
-        if attention_mode:
+        if attention:
             # Attention: add self-attention to the main flow
             layout += 'S'
         if get_num_channels(inputs) != filters[-1]:
@@ -154,7 +154,7 @@ class ResBlock(ConvBlock):
         layer_params += [{}]*(n_reps-1)
 
         super().__init__(*layer_params, inputs=inputs, layout=layout, filters=filters,
-                         kernel_size=kernel_size, strides=strides, groups=groups, attention_mode=attention_mode,
+                         kernel_size=kernel_size, strides=strides, groups=groups, attention=attention,
                          **kwargs)
 
 
