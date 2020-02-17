@@ -22,9 +22,8 @@ class BaseCOCO(ImagesOpenset):
     TEST_IMAGES_URL = 'http://images.cocodataset.org/zips/val2017.zip'
     ALL_URLS = [TRAIN_IMAGES_URL, TEST_IMAGES_URL]
 
-    def __init__(self, *args, unpack=True, preloaded=None, train_test=False, **kwargs):
-        self.unpack = unpack
-        super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
+    def __init__(self, *args, preloaded=None, **kwargs):
+        super().__init__(*args, preloaded=preloaded, **kwargs)
 
     def _post_fn(self, all_res, *args, **kwargs):
         if not self.load_to_ram:
@@ -48,30 +47,34 @@ class BaseCOCO(ImagesOpenset):
                 for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, unit='MB',
                                        desc=filename, leave=True):
                     f.write(chunk)
+        
         return self.extract_all(localname, content)
 
 
-class COCOStuffImagesBatch(ImagesBatch):
+class COCOSegmentationBatch(ImagesBatch):
 
     @inbatch_parallel(init='indices', post='_assemble')
     def _load_mask(self, ix, src, dst):
+        fullpath = self._make_path(ix)
         name_no_ext = ix.split('.')[0]
-        path_to_mask = os.path.join(self._dataset.masks_directory, name_no_ext) + '.png'
+        part = fullpath.split('/')[-2]
+        path_to_mask = os.path.join(self._dataset.masks_directory, part, name_no_ext) + '.png'
         return PIL.Image.open(path_to_mask)
-    
 
-class COCOStuff(BaseCOCO):
+
+class COCOSegmentation(BaseCOCO):
 
     MASKS_URL = 'http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip'
     ALL_URLS = [*BaseCOCO.ALL_URLS, MASKS_URL]
 
-    def __init__(self, *args, load_to_ram=False, batch_class=COCOStuffImagesBatch, **kwargs):
+    def __init__(self, *args, batch_class=COCOSegmentationBatch, train_test=True, load_to_ram=False, **kwargs):
         self.load_to_ram = load_to_ram
-        super().__init__(*args, batch_class=batch_class,  **kwargs)
+        self.masks_directory = None
+        super().__init__(*args, batch_class=COCOSegmentationBatch, train_test=train_test, **kwargs)
 
     @property
     def _get_from_urls(self):
-        """ List of URLs and type of content (True - images, False - masks) """
+        """ List of URLs and type of content (0 - train images, 1 - test images, 2 - train+test masks) """
         return [[self.ALL_URLS[i], i] for i in range(len(self.ALL_URLS))]
     
     def _extract_archive(self, localname, extract_to):
@@ -96,6 +99,7 @@ class COCOStuff(BaseCOCO):
         else:
             directory = '/COCOMasks'
             extract_to = dirname(localname) + directory
+            self.masks_directory = extract_to
             path = tuple([os.path.join(extract_to, folder_name) for folder_name in ['train2017', 'val2017']])
             if all([os.path.isdir(p) for p in path]):
                 pass
@@ -105,16 +109,19 @@ class COCOStuff(BaseCOCO):
                     
     
     def _gather_fi(self, all_res, *args, **kwargs):
-        _ = args, kwargs
         if any_action_failed(all_res):
             raise IOError('Could not download files:', all_res)
 
-        self.train_images_dir = all_res[0]
-        self.test_images_dir = all_res[1]
-        self.train_masks_dir, self.test_masks_dir = all_res[2]
-        return None, FilesIndex(path=self.train_images_dir + '/*')
+        self._train_index = FilesIndex(path=all_res[0] + '/*')
+        self._test_index = FilesIndex(path=all_res[1] + '/*')
+        return None, FilesIndex(path=[all_res[0] + '/*', all_res[1] + '/*'])
 
-    @property
-    def masks_directory(self):
-        return self.train_masks_dir
+
+class COCOObjectDetection(BaseCOCO):
+    pass
+
+
+class COCOKeyPoint(BaseCOCO):
+    pass
+
 
