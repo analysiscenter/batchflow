@@ -8,21 +8,18 @@ from .. import DatasetIndex
 
 class Openset(Dataset):
     """ The base class for open datasets """
-    def __init__(self, index=None, batch_class=None, train_test=False, path=None, preloaded=None, **kwargs):
-        self.train_test = train_test
+    def __init__(self, index=None, batch_class=None, path=None, preloaded=None, **kwargs):
         self._train_index, self._test_index = None, None
+
         if preloaded is None and index is None:
-            preloaded, index = self.download(path=path) 
-            if preloaded is not None and train_test:
-                train_data, test_data = preloaded  # pylint:disable=unpacking-non-sequence
+            preloaded, index = self.download(path=path)
+            if preloaded is not None:
                 preloaded = tuple(np.concatenate(i) for i in np.array(preloaded).T)
-
+                
         super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
-
-        train_data, test_data = preloaded, preloaded
-        if self.train_test and self._train_index:
-            self.train = type(self)(self._train_index, batch_class=self.batch_class, train_test=False, preloaded=train_data)
-            self.test = type(self)(self._test_index, batch_class=self.batch_class, train_test=False, preloaded=test_data)
+        if self._train_index and self._test_index:
+            self.train = type(self)(self._train_index, batch_class=self.batch_class, preloaded=preloaded)
+            self.test = type(self)(self._test_index, batch_class=self.batch_class, preloaded=preloaded)
 
 
     @staticmethod
