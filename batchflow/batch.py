@@ -60,7 +60,7 @@ class MethodsTransformingMeta(type):
         return super().__new__(cls, name, bases, namespace_)
 
     @classmethod
-    def apply_transform(cls, method, transform, src, target):
+    def apply_transform(cls, method, transform, src, target): #pylint: disable=unused-argument
         """ Wrap passed `method` in accordance with `transformed` arg value """
         @wraps(method)
         def inner(self, *args, src=src, target=target, **kwargs):
