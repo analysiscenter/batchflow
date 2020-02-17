@@ -1,7 +1,9 @@
 """ Contains the base class for open datasets """
+import numpy as np
 
 from .. import Dataset
 from .. import ImagesBatch
+from .. import DatasetIndex
 
 
 class Openset(Dataset):
@@ -9,11 +11,21 @@ class Openset(Dataset):
     def __init__(self, index=None, batch_class=None, train_test=False, path=None, preloaded=None, **kwargs):
         self.train_test = train_test
         self._train_index, self._test_index = None, None
+
         if preloaded is None:
-            preloaded, index = self.download(path=path)
-        super().__init__(index, batch_class, preloaded=preloaded, **kwargs)
-        if train_test:
-            self.split()
+            preloaded = self.download(path=path) 
+            if train_test:
+                train_data, test_data = preloaded  # pylint:disable=unpacking-non-sequence
+
+            preloaded = tuple(np.concatenate(i) for i in np.array(preloaded).T)
+
+        index = index or DatasetIndex(len(preloaded[0]))
+        super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
+
+        if self.train_test:  
+            self.train = type(self)(self._train_index, self.batch_class, train_test=False, preloaded=train_data)
+            self.test = type(self)(self._test_index, self.batch_class, train_test=False, preloaded=test_data)
+
 
     @staticmethod
     def uild_index(index):
@@ -26,14 +38,6 @@ class Openset(Dataset):
         """ Download a dataset from the source web-site """
         _ = path
         return None
-
-    def split(self, shares=0.8, shuffle=False):
-        if self.train_test:
-            train_data, test_data = self.preloaded  # pylint:disable=unpacking-non-sequence
-            self.train = type(self)(self._train_index, self.batch_class, train_test=False, preloaded=train_data)
-            self.test = type(self)(self._test_index, self.batch_class, train_test=False, preloaded=test_data)
-        else:
-            super().split(shares, shuffle)
 
 
 class ImagesOpenset(Openset):
