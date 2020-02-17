@@ -3,12 +3,11 @@ import os
 from os.path import dirname, basename
 from zipfile import ZipFile
 import tempfile
+import logging
 
 import PIL
 import tqdm
-import logging
 import requests
-import numpy as np
 
 from . import ImagesOpenset
 from .. import FilesIndex, any_action_failed, parallel, ImagesBatch, inbatch_parallel
@@ -18,7 +17,7 @@ logger = logging.getLogger('COCO')
 
 class BaseCOCO(ImagesOpenset):
 
-    TRAIN_IMAGES_URL = 'http://images.cocodataset.org/zips/train2017.zip' 
+    TRAIN_IMAGES_URL = 'http://images.cocodataset.org/zips/train2017.zip'
     TEST_IMAGES_URL = 'http://images.cocodataset.org/zips/val2017.zip'
     ALL_URLS = [TRAIN_IMAGES_URL, TEST_IMAGES_URL]
 
@@ -30,7 +29,7 @@ class BaseCOCO(ImagesOpenset):
         """ Download archive"""
         if path is None:
             path = tempfile.gettempdir()
-        filename = os.path.basename(url)
+        filename = basename(url)
         localname = os.path.join(path, filename)
         if not os.path.isfile(localname):
             r = requests.get(self.SOURCE_URL, stream=True)
@@ -42,7 +41,7 @@ class BaseCOCO(ImagesOpenset):
                 for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, unit='MB',
                                        desc=filename, leave=True):
                     f.write(chunk)
-        
+
         return self._extract_if_not_exist(localname, folder, train_val)
 
 
@@ -50,7 +49,7 @@ class COCOSegmentationBatch(ImagesBatch):
 
     @inbatch_parallel(init='indices', post='_assemble')
     def _load_mask(self, ix, src, dst):
-        fullpath = self._make_path(ix)   
+        fullpath = self._make_path(ix)
         train_val = fullpath.split('/')[-2]     # 'train2017' or 'val2017
         name_no_ext = ix.split('.')[0]          # filename wo extension
         path_to_mask = os.path.join(self._dataset.masks_directory, # /tmp/COCOMasks
@@ -71,8 +70,8 @@ class COCOSegmentation(BaseCOCO):
         """ List of URL to download, folder where to extract,
         and indicator whether its train or val part"""
         return [[url, folder, train_val] for url, folder, train_val in zip(self.ALL_URLS,
-                                                                ['COCOImages', 'COCOImages', 'COCOMasks'],
-                                                                ['train2017', 'val2017', 'train2017'])]
+                                                                           ['COCOImages', 'COCOImages', 'COCOMasks'],
+                                                                           ['train2017', 'val2017', 'train2017'])]
 
     def _extract_archive(self, localname, extract_to):
         with ZipFile(localname, 'r') as archive:
@@ -80,14 +79,15 @@ class COCOSegmentation(BaseCOCO):
 
     def _extract_if_not_exist(self, localname, folder, train_val):
         extract_to = os.path.join(dirname(localname), folder)
-        path =  os.path.join(extract_to, train_val)
+        path = os.path.join(extract_to, train_val)
         if os.path.isdir(path):
             pass
         else:
             self._extract_archive(localname, extract_to)
-        return path                    
-    
+        return path
+
     def _post_fn(self, all_res, *args, **kwargs):
+        _ = args, kwargs
         if any_action_failed(all_res):
             raise IOError('Could not download files:', all_res)
 

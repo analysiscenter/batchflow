@@ -3,7 +3,6 @@ import numpy as np
 
 from .. import Dataset
 from .. import ImagesBatch
-from .. import DatasetIndex
 
 
 class Openset(Dataset):
@@ -15,7 +14,7 @@ class Openset(Dataset):
             preloaded, index = self.download(path=path)
             if preloaded is not None:
                 preloaded = tuple(np.concatenate(i) for i in np.array(preloaded).T)
-                
+
         super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
         if self._train_index and self._test_index:
             self.train = type(self)(self._train_index, batch_class=self.batch_class, preloaded=preloaded)
