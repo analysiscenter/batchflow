@@ -20,7 +20,6 @@ class Openset(Dataset):
             self.train = type(self)(self._train_index, batch_class=self.batch_class, preloaded=preloaded)
             self.test = type(self)(self._test_index, batch_class=self.batch_class, preloaded=preloaded)
 
-
     @staticmethod
     def uild_index(index):
         """ Create an index """

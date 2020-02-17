@@ -27,21 +27,21 @@ class BaseCOCO(ImagesOpenset):
     @parallel(init='_get_from_urls', post='_post_fn', target='t')
     def download(self, url, folder, train_val, path=None):
         """ Download archive"""
+        logger.info('Downloading %s', url)
         if path is None:
             path = tempfile.gettempdir()
         filename = basename(url)
         localname = os.path.join(path, filename)
         if not os.path.isfile(localname):
-            r = requests.get(self.SOURCE_URL, stream=True)
+            r = requests.get(url, stream=True)
             file_size = int(r.headers['Content-Length'])
             chunk = 1
-            chunk_size = 1024 * 1e3 #MBs
+            chunk_size = 1024 * 1000 #MBs
             num_bars = int(file_size / chunk_size)
             with open(localname, 'wb') as f:
                 for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, unit='MB',
                                        desc=filename, leave=True):
                     f.write(chunk)
-
         return self._extract_if_not_exist(localname, folder, train_val)
 
 
@@ -74,8 +74,8 @@ class COCOSegmentation(BaseCOCO):
                                                                            ['train2017', 'val2017', 'train2017'])]
 
     def _extract_archive(self, localname, extract_to):
-        with ZipFile(localname, 'r') as archive:
-            archive.extract_all(extract_to)
+            with ZipFile(localname, 'r') as archive:
+                archive.extractall(extract_to)
 
     def _extract_if_not_exist(self, localname, folder, train_val):
         extract_to = os.path.join(dirname(localname), folder)
@@ -94,7 +94,7 @@ class COCOSegmentation(BaseCOCO):
         self._train_index = FilesIndex(path=all_res[0] + '/*')
         self._test_index = FilesIndex(path=all_res[1] + '/*')
         self.masks_directory = dirname(all_res[2])
-        return None, FilesIndex(path=[all_res[0] + '/*', all_res[1] + '/*'])
+        return None, FilesIndex.concat(self._train_index, self._test_index)
 
 
 class COCOObjectDetection(BaseCOCO):
