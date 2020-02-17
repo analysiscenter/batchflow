@@ -13,13 +13,11 @@ class Openset(Dataset):
         self._train_index, self._test_index = None, None
 
         if preloaded is None:
-            preloaded = self.download(path=path) 
+            preloaded, index = self.download(path=path) 
             if train_test:
                 train_data, test_data = preloaded  # pylint:disable=unpacking-non-sequence
-
-            preloaded = tuple(np.concatenate(i) for i in np.array(preloaded).T)
-
-        index = index or DatasetIndex(len(preloaded[0]))
+                preloaded = tuple(np.concatenate(i) for i in np.array(preloaded).T)
+                
         super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
 
         if self.train_test:  

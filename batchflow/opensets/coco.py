@@ -23,6 +23,7 @@ class BaseCOCO(ImagesOpenset):
     ALL_URLS = [TRAIN_IMAGES_URL, TEST_IMAGES_URL]
 
     def __init__(self, *args, unpack=True, preloaded=None, train_test=False, **kwargs):
+        self.unpack = unpack
         super().__init__(*args, preloaded=preloaded, train_test=train_test, **kwargs)
 
     def _post_fn(self, all_res, *args, **kwargs):
@@ -47,18 +48,7 @@ class BaseCOCO(ImagesOpenset):
                 for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, unit='MB',
                                        desc=filename, leave=True):
                     f.write(chunk)
-
-        if not self.load_to_ram: # working with FileIndex
-            with ZipFile(localname, 'r') as archive:
-                directory = '/COCOImages' if content else '/COCOMasks'
-                extract_to = dirname(localname) + directory
-                logger.info('Extracting %s', localname)
-                archive.extractall(extract_to)
-            return extract_to
-
-        else: # working with DatasetIndex
-            # load data to preloaded
-            raise NotImplementedError
+        return self.extract_all(localname, content)
 
 
 class COCOStuffImagesBatch(ImagesBatch):
@@ -82,18 +72,47 @@ class COCOStuff(BaseCOCO):
     @property
     def _get_from_urls(self):
         """ List of URLs and type of content (True - images, False - masks) """
-        return [[self.ALL_URLS[i], i in [0, 1]] for i in range(len(self.ALL_URLS))]
+        return [[self.ALL_URLS[i], i] for i in range(len(self.ALL_URLS))]
+    
+    def _extract_archive(self, localname, extract_to):
+        with ZipFile(localname, 'r') as archive:
+            archive.extract_all(extract_to)
+
+    def extract_all(self, localname, content):
+        directory = '/COCOImages'
+        extract_to = dirname(localname) + directory
+        if content == 0:
+            path =  os.path.join(extract_to, 'train2017')
+            if os.path.isdir(path):
+                pass
+            else:
+                self._extract_archive(localname, extract_to)
+        elif content == 1:
+            path = os.path.join(extract_to, 'val2017')
+            if os.path.isdir(path):
+                pass
+            else:
+                self._extract_archive(localname, extract_to)
+        else:
+            directory = '/COCOMasks'
+            extract_to = dirname(localname) + directory
+            path = tuple([os.path.join(extract_to, folder_name) for folder_name in ['train2017', 'val2017']])
+            if all([os.path.isdir(p) for p in path]):
+                pass
+            else:
+                self._extract_archive(localname, extract_to)
+        return path
+                    
     
     def _gather_fi(self, all_res, *args, **kwargs):
         _ = args, kwargs
         if any_action_failed(all_res):
             raise IOError('Could not download files:', all_res)
 
-        self.train_images_dir = all_res[0] + '/train2017/'
-        self.test_images_dir = all_res[1] + '/val2017/'
-        self.train_masks_dir = all_res[2] + '/train2017/'
-        self.test_masks_dir = all_res[2] + '/val2017/'
-        return None, FilesIndex(path=self.train_images_dir + '*')
+        self.train_images_dir = all_res[0]
+        self.test_images_dir = all_res[1]
+        self.train_masks_dir, self.test_masks_dir = all_res[2]
+        return None, FilesIndex(path=self.train_images_dir + '/*')
 
     @property
     def masks_directory(self):
