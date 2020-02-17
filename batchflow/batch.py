@@ -4,6 +4,7 @@ import os
 import traceback
 import threading
 import warnings
+from functools import wraps
 
 import dill
 try:
@@ -29,8 +30,54 @@ from .decorators import action, inbatch_parallel, any_action_failed
 from .components import create_item_class, BaseComponents
 
 
-class Batch:
-    """ The core Batch class """
+class MethodsTransformingMeta(type):
+    """ A metaclass to transform all class methods in the way described below,
+        if their `transform` attribute is not None (set by @apply_transform):
+
+        1. Wrap method with either `apply_tansform` or `apply_transform_all`
+           depending on the value of `transform` attribute, which is set via
+           decorator of the same name. Then add this wrapped method to a class
+           namespace by its original name.
+
+        2. Add the original version of the method (i.e. unwrapped) to a class
+           namespace using name with underscores: `'_{}_'.format(name)`. This
+           is necessary in order to allow inner calls of untransformed versions
+           (e.g. `ImagesBatch.scale` calls `ImagesBatch.crop` under the hood).
+    """
+    def __new__(cls, name, bases, namespace):
+        namespace_ = namespace.copy()
+        for object_name, object_ in namespace.items():
+            transform = getattr(object_, 'transform', None)
+            if transform:
+                src = getattr(object_, 'src')
+                target = getattr(object_, 'target')
+                namespace_[object_name] = cls.apply_transform(object_, transform, src, target)
+
+                disclaimer = "This is an unparalleled version of `{}`.\n\n".format(object_.__qualname__)
+                object_.__doc__ = disclaimer + object_.__doc__
+                namespace_['_' + object_name + '_'] = object_
+
+        return super().__new__(cls, name, bases, namespace_)
+
+    @classmethod
+    def apply_transform(cls, method, transform, src, target):
+        """ Wrap passed `method` in accordance with `transformed` arg value """
+        @wraps(method)
+        def inner(self, *args, src=src, target=target, **kwargs):
+            if transform == 'all':
+                return self.apply_transform_all(method, src=src, use_self=True, target=target, *args, **kwargs)
+            return self.apply_transform(method, src=src, use_self=True, target=target, *args, **kwargs)
+        return action(inner)
+
+
+class Batch(metaclass=MethodsTransformingMeta):
+    """ The core Batch class
+
+    Note, that if any class method is wrapped with `@apply_transform` decorator
+    than for inner calls (i.e. from other class methods) should be used version
+    of desired method with underscores. (For example, if there is a decorated
+    `method` than you need to call `_method_` from inside of `other_method`).
+    """
     components = None
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
