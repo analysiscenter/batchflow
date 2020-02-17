@@ -144,7 +144,7 @@ class BaseImagesBatch(Batch):
     """ Batch class for 2D images """
     components = "images", "labels", "masks"
     formats_lower = ['jpg', 'png', 'jpeg']
-    formats = set(formats_lower + [x.upper() for x in formats_lower])
+    formats = formats_lower + [x.upper() for x in formats_lower]
 
     def _make_path(self, ix, src=None):
         """ Compose path.
