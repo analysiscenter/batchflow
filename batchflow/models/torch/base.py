@@ -764,6 +764,14 @@ class TorchModel:
         """ Show information about model configuration, used devices, train steps and more. """
         self.information()
 
+    def set_debug_mode(self, mode=True):
+        """ Changes representation of model to a more or less detailed.
+        By default, model representation reduces the description of the most complex modules.
+        """
+        if self.model is None:
+            raise ValueError('Model is not initialized yet. ')
+        self.model.apply(lambda module: setattr(module, 'debug', mode))
+
 
     def save_graph(self, log_dir=None, **kwargs):
         """ Save model graph for later visualization via tensorboard.
@@ -944,8 +952,8 @@ class TorchModel:
 
         outputs = [outputs] if isinstance(fetches, str) else outputs
         output = []
-        for i in range(len(outputs)):
-            lst = [item[i] for item in outputs]
+        for i, _ in enumerate(outputs[0]):
+            lst = [np.asarray(item[i]) for item in outputs]
             output.append(np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst))
         output = output[0] if isinstance(fetches, str) else output
 
@@ -953,6 +961,8 @@ class TorchModel:
                                'sync_frequency': sync_frequency,
                                'steps': steps,
                                'train_mode': train_mode,
+                               'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
+                               'actual_model_outputs_shape': get_shape(_targets),
                                })
         return output
 
