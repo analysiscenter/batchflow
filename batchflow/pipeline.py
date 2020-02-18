@@ -1154,14 +1154,16 @@ class Pipeline:
 
     def merge(self, *pipelines, fn=None, components=None, batch_class=None):
         """ Merge pipelines """
-        return self._add_action(MERGE_ID, _args=dict(pipelines=pipelines, mode='n', fn=fn,
-                                components=components, batch_class=batch_class))
+        _args = dict(pipelines=pipelines, mode='n', fn=fn,
+                     components=components, batch_class=batch_class)
+        return self._add_action(MERGE_ID, _args=_args)
 
     def rebatch(self, batch_size, fn=None, components=None, batch_class=None):
         """ Set the output batch size """
         new_p = type(self)(self.dataset)
-        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn, 
-                                 components=components, batch_class=batch_class))    # pylint:disable=protected-access
+        _args = dict(batch_size=batch_size, pipeline=self, fn=fn,
+                     components=components, batch_class=batch_class)
+        return new_p._add_action(REBATCH_ID, _args=_args) # pylint:disable=protected-access
 
     def _put_batches_into_queue(self, gen_batch, bar, bar_desc):
         while not self._stop_flag:
@@ -1304,10 +1306,12 @@ class Pipeline:
                 break
 
             if _action['fn'] is None:
-                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'], components=_action['components'],
+                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'],
+                                                           components=_action['components'],
                                                            batch_class=_action['batch_class'])
             else:
-                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'], components=_action['components'],
+                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'],
+                                                        components=_action['components'],
                                                         batch_class=_action['batch_class'])
             yield batch
 
@@ -1499,7 +1503,7 @@ class Pipeline:
                 raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
             args, kwargs = self._lazy_run
             batch_res = self.next_batch(*args, **kwargs)
-        elif True or kwargs.get('prefetch', 0) > 0:
+        elif True or kwargs.get('prefetch', 0) > 0: # TODO: Rework temporary fix
             if self._batch_generator is None:
                 self._lazy_run = args, kwargs
                 self._batch_generator = self.gen_batch(*args, **kwargs)
