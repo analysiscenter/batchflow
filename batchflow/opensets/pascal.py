@@ -98,7 +98,7 @@ class PascalSegmentation(BasePascal):
 
 
         # download PascalVOC dataset and extract the archive content
-        pascal = MNIST(unpack=True)
+        pascal = PascalSegmentation(unpack=True)
 
     Notes
     -----
@@ -151,7 +151,7 @@ class PascalClassification(BasePascal):
 
 
         # download PascalVOC dataet and replace uncertain labels with 1 class
-        pascal = MNIST(replace_zero=1)
+        pascal = PascalClassification(replace_zero=1)
 
 
     Notes

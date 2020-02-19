@@ -39,10 +39,10 @@ PascalClassification
     :show-inheritance:
 
 
-PascalClassification
+PascalSegmentation
 --------
 
-.. autoclass:: batchflow.opensets.PascalClassification
+.. autoclass:: batchflow.opensets.PascalSegmentation
     :members: 
     :undoc-members:
     :show-inheritance:

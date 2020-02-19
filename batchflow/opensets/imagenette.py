@@ -37,7 +37,7 @@ class Imagenette(ImagesOpenset):
 
 
         # download Imagenette dataset and drop gray scale images
-        imagenette = MNIST(drop_grayscale=True)
+        imagenette = Imagenette(drop_grayscale=True)
 
     Notes
     -----
