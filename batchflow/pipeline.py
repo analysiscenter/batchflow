@@ -702,8 +702,27 @@ class Pipeline:
                 self.profile_info = self.profile_info.append(df)
 
     def show_profile_info(self, per_iter=False, detailed=False,
-                          groupby=None, columns=None, limit=10, sortby=None):
-        """ Show stored profiling information with varying levels of details. """
+                          groupby=None, columns=None, sortby=None, limit=10):
+        """ Show stored profiling information with varying levels of details.
+
+        Parameters
+        ----------
+        per_iter : bool
+            Whether to make an aggregation over iters or not.
+        detailed : bool
+            Whether to use information from :class:`cProfiler` or not.
+        groupby : str or sequence of str
+            Used only when `per_iter` is True, directly passed to pandas.
+        columns : sequence of str
+            Columns to show in resultining dataframe.
+        sortby : str or tuple of str
+            Column id to sort on. Note that if data is aggregated over iters (`per_iter` is False),
+            then it must be a full identificator of a column.
+        limit : int
+            Limits the length of resulting dataframe.
+        parse : bool
+            Allows to re-create underlying dataframe from scratches.
+        """
         if per_iter is False and detailed is False:
             columns = columns or ['total_time', 'pipeline_time']
             sortby = sortby or ('total_time', 'sum')

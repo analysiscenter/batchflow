@@ -191,6 +191,10 @@ class TorchModel:
         Whether to optimize network's forward pass after the first batch. Can speed up training if shapes of inputs
         are constant.
 
+    profile : bool
+        Whether to collect stats of model training timings.
+        If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
+
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
 
@@ -929,6 +933,9 @@ class TorchModel:
             accumulating gradients from microbatches and applying them once in the end.
             If True, then value from config is used (default value is not to use microbatching).
             If False or None, then microbatching is not used.
+        profile : bool
+            Whether to collect stats of model training timings.
+            If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
         kwargs : dict
             Additional named arguments directly passed to `feed_dict`.
 
