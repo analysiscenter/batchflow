@@ -24,6 +24,21 @@ class Imagenette(ImagesOpenset):
     """ Imagenette dataset.
     Contains 12894 train and 500 test images. Total size 1.4GB.
 
+    Examples
+    --------
+
+    ::
+
+        # download Imagenette dataset
+        imagenette = Imagenette()
+        # iterate over the train part of the dataset
+        for batch in imagenette.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
+            # do something with a batch
+
+
+        # download Imagenette dataset and drop gray scale images
+        imagenette = MNIST(drop_grayscale=True)
+
     Notes
     -----
     - Datasets contain both grayscale and colored images, ratio ~ 1:100

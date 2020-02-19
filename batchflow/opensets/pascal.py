@@ -85,6 +85,21 @@ class BasePascal(ImagesOpenset):
 class PascalSegmentation(BasePascal):
     """ Contains 2913 images and masks.
 
+    Examples
+    --------
+
+    ::
+
+        # download PascalVOC dataset
+        pascal = PascalSegmentation()
+        # iterate over the train part of the dataset
+        for batch in pascal.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
+            # do something with a batch
+
+
+        # download PascalVOC dataset and extract the archive content
+        pascal = MNIST(unpack=True)
+
     Notes
     -----
     Class 0 corresponds to background and class 255 corresponds to 'void' or unlabelled.
@@ -121,7 +136,23 @@ class PascalSegmentation(BasePascal):
 
 
 class PascalClassification(BasePascal):
-    """ Contains 11540 images and corresponding classes
+    """ PascalVOC dataset for classification track. Contains 11540 images and corresponding classes
+
+    Examples
+    --------
+
+    ::
+
+        # download PascalVOC dataset
+        pascal = PascalClassification()
+        # iterate over the train part of the dataset
+        for batch in pascal.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
+            # do something with a batch
+
+
+        # download PascalVOC dataet and replace uncertain labels with 1 class
+        pascal = MNIST(replace_zero=1)
+
 
     Notes
     -----

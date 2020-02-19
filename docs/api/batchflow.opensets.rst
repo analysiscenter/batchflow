@@ -30,3 +30,73 @@ CIFAR100
     :show-inheritance:
 
 
+PascalClassification
+--------
+
+.. autoclass:: batchflow.opensets.PascalClassification
+    :members: 
+    :undoc-members:
+    :show-inheritance:
+
+
+PascalClassification
+--------
+
+.. autoclass:: batchflow.opensets.PascalClassification
+    :members: 
+    :undoc-members:
+    :show-inheritance:
+
+
+Imagenette
+--------
+
+.. autoclass:: batchflow.opensets.Imagenette
+    :members: 
+    :undoc-members:
+    :show-inheritance:
+
+
+Imagenette320
+--------
+
+.. autoclass:: batchflow.opensets.Imagenette320
+    :members: 
+    :undoc-members:
+    :show-inheritance:
+
+
+Imagenette160
+--------
+
+.. autoclass:: batchflow.opensets.Imagenette160
+    :members: 
+    :undoc-members:
+    :show-inheritance:
+
+
+ImageWoof
+--------
+
+.. autoclass:: batchflow.opensets.ImageWoof
+    :members: 
+    :undoc-members:
+    :show-inheritance:
+
+
+ImageWoof320
+--------
+
+.. autoclass:: batchflow.opensets.ImageWoof320
+    :members: 
+    :undoc-members:
+    :show-inheritance:
+
+
+ImageWoof160
+--------
+
+.. autoclass:: batchflow.opensets.ImageWoof160
+    :members: 
+    :undoc-members:
+    :show-inheritance:
