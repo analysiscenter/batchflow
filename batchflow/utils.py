@@ -129,7 +129,7 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
             ax.grid(True)
             ax.legend()
 
-def show_research(df, layout=None, average_repetitions=False, log_scale=False, 
+def show_research(df, layout=None, average_repetitions=False, log_scale=False,
                   rolling_window=None, color=None, scale=(9, 7)): # pylint: disable=too-many-branches
     """Show plots given by research dataframe.
 

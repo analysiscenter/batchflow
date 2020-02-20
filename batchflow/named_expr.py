@@ -348,7 +348,9 @@ class PipelineNamedExpression(NamedExpression):
     """ Base class for pipeline expressions """
     def _get(self, **kwargs):
         name, kwargs = super()._get(**kwargs)
-        pipeline = kwargs['batch'].pipeline
+        batch = kwargs.get('batch')
+        pipeline = kwargs.get('pipeline')
+        pipeline = batch.pipeline if batch is not None else pipeline
         return name, pipeline, kwargs
 
 class C(PipelineNamedExpression):
@@ -392,6 +394,7 @@ class C(PipelineNamedExpression):
         name, pipeline, _ = self._get(**kwargs)
         config = pipeline.config or {}
         config[name] = value
+
 
 class V(PipelineNamedExpression):
     """ Pipeline variable name
