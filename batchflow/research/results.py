@@ -203,7 +203,7 @@ class Results:
             path = os.path.join(self.path, 'results', alias_str)
 
             for unit in names:
-                sample_folders = glob.glob(os.path.join(glob.escape(path), '*' if sample_index is None else sample_index))
+                sample_folders = glob.glob(os.path.join(glob.escape(path), sample_index or '*'))
                 for sample_folder in sample_folders:
                     files = glob.glob(glob.escape(os.path.join(sample_folder, unit)) + '_[0-9]*')
                     files = self._sort_files(files, iterations)

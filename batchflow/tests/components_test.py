@@ -1,8 +1,10 @@
 # pylint: disable=missing-docstring, redefined-outer-name
+import sys
 import pytest
 import numpy as np
 import pandas as pd
 
+sys.path.append('../..')
 from batchflow.components import create_item_class
 from batchflow.utils import is_iterable
 
@@ -29,14 +31,14 @@ def i(item, dtype='int', indices_type='list'):
 
 
 def make_components(components, source, dtype='int', indices_type='array'):
-    a0 = create_item_class(components, source)
-    a1 = create_item_class(components, a0, i(range(12, 68), dtype, indices_type), crop=False)
-    a2 = create_item_class(components, a1, i(range(25, 48), dtype, indices_type), crop=True)
-    a3 = create_item_class(components, a2, i(range(32, 42), dtype, indices_type), crop=False)
-    a4 = create_item_class(components, a3, i(range(35, 40), dtype, indices_type), crop=True)
-    a5 = create_item_class(components, a4, i(range(37, 39), dtype, indices_type), crop=False)
-    a6 = create_item_class(components, a5, i(38, dtype, indices_type), crop=False)
-    return a0, a1, a2, a3, a4, a5, a6
+    comp0 = create_item_class(components, source)
+    comp1 = create_item_class(components, comp0, i(range(12, 68), dtype, indices_type), crop=False)
+    comp2 = create_item_class(components, comp1, i(range(25, 48), dtype, indices_type), crop=True)
+    comp3 = create_item_class(components, comp2, i(range(32, 42), dtype, indices_type), crop=False)
+    comp4 = create_item_class(components, comp3, i(range(35, 40), dtype, indices_type), crop=True)
+    comp5 = create_item_class(components, comp4, i(range(37, 39), dtype, indices_type), crop=False)
+    comp6 = create_item_class(components, comp5, i(38, dtype, indices_type), crop=False)
+    return comp0, comp1, comp2, comp3, comp4, comp5, comp6
 
 def common_data():
     index = np.arange(SIZE)
@@ -179,10 +181,10 @@ class TestComponents:
 # ------------------
 
 def make_no_components(source, dtype='int', indices_type='array'):
-    a0 = create_item_class(None, source)
-    a1 = create_item_class(None, a0, i(range(12, 68), dtype, indices_type))
-    a2 = create_item_class(None, a0, i(38, dtype, indices_type))
-    return a0, a1, a2
+    comp0 = create_item_class(None, source)
+    comp1 = create_item_class(None, comp0, i(range(12, 68), dtype, indices_type))
+    comp2 = create_item_class(None, comp0, i(38, dtype, indices_type))
+    return comp0, comp1, comp2
 
 def array_nc(indices_type, *_):
     index, _, *source = common_data()
