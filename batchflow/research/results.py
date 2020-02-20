@@ -163,7 +163,7 @@ class Results:
             return json.load(file)
 
     def _load(self, names=None, variables=None, iterations=None, repetition=None, sample_index=None,
-             configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
+              configs=None, aliases=None, use_alias=True, concat_config=False, drop_columns=True, **kwargs):
         self.configs = []
         for filename in glob.glob(os.path.join(self.path, 'configs', '*')):
             with open(filename, 'rb') as f:

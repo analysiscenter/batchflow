@@ -38,7 +38,7 @@ def base_config_clf():
     config = {'inputs/images/shape': (1, 64, 64),
               'inputs/labels/classes': 10,
               'initial_block/inputs': 'images',
-              'loss': 'ce'
+              'loss': 'ce',
     }
     return config
 

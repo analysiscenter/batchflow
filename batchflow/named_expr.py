@@ -296,10 +296,9 @@ class AlgebraicNamedExpression(NamedExpression):
         c = eval_expr(self.c, **kwargs)
         if self.op in UNARY_OPS:
             return OPERATIONS[self.op](a)
-        elif self.op in BINARY_OPS:
+        if self.op in BINARY_OPS:
             return OPERATIONS[self.op](a, b)
-        else:
-            return OPERATIONS[self.op](a, b, c)
+        return OPERATIONS[self.op](a, b, c)
 
 class B(NamedExpression):
     """ Batch component or attribute name

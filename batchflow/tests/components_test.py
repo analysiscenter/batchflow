@@ -81,7 +81,8 @@ def advanced_dict(indices_type):
 
 
 @pytest.mark.parametrize('indices_type', ['list', 'array'])
-@pytest.mark.parametrize('source', [tuple_of_arrays, dict_of_arrays, dataframe, dataframe_with_str_index, advanced_dict])
+@pytest.mark.parametrize('source', [tuple_of_arrays, dict_of_arrays, dataframe, dataframe_with_str_index,
+                                    advanced_dict])
 class TestComponents:
     def test_getattr(self, source, indices_type):
         _, full, a12_68, a25_48, a32_42, a35_40, a37_39, a38 = source(indices_type)

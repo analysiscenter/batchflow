@@ -24,7 +24,7 @@ from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics)
 from ._const import *       # pylint:disable=wildcard-import
-from .utils import create_bar, update_bar, save_to
+from .utils import create_bar, update_bar, save_data_to
 
 
 METRICS = dict(
@@ -948,7 +948,7 @@ class Pipeline:
         return args, kwargs
 
     def _save_output(self, batch, model, output, locations):
-        save_to(output, locations, batch=batch, model=model)
+        save_data_to(output, locations, batch=batch, model=model)
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
@@ -1135,13 +1135,14 @@ class Pipeline:
     def merge(self, *pipelines, fn=None, components=None, batch_class=None):
         """ Merge pipelines """
         return self._add_action(MERGE_ID, _args=dict(pipelines=pipelines, mode='n', fn=fn,
-                                components=components, batch_class=batch_class))
+                                                     components=components, batch_class=batch_class))
 
     def rebatch(self, batch_size, fn=None, components=None, batch_class=None):
         """ Set the output batch size """
+        # pylint:disable=protected-access
         new_p = type(self)(self.dataset)
-        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn, 
-                                 components=components, batch_class=batch_class))    # pylint:disable=protected-access
+        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn,
+                                                        components=components, batch_class=batch_class))
 
     def _put_batches_into_queue(self, gen_batch, bar, bar_desc):
         while not self._stop_flag:
@@ -1284,10 +1285,12 @@ class Pipeline:
                 break
 
             if _action['fn'] is None:
-                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'], components=_action['components'],
+                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'],
+                                                           components=_action['components'],
                                                            batch_class=_action['batch_class'])
             else:
-                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'], components=_action['components'],
+                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'],
+                                                        components=_action['components'],
                                                         batch_class=_action['batch_class'])
             yield batch
 
