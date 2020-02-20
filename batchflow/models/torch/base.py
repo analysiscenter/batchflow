@@ -1004,6 +1004,7 @@ class TorchModel:
                     self.sync_counter += 1
 
                 curr_lr = [group['lr'] for group in optimizer.param_groups]
+                self.iter_info.setdefault('lr', []).append(curr_lr)
 
                 if decays:
                     for decay, step_meta in zip(decays, decay_step):
