@@ -129,7 +129,7 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
             ax.grid(True)
             ax.legend()
 
-def show_research(df, layout=None, average_repetitions=False, log_scale=False, 
+def show_research(df, layout=None, average_repetitions=False, log_scale=False,
                   rolling_window=None, color=None, scale=(9, 7)): # pylint: disable=too-many-branches
     """Show plots given by research dataframe.
 
@@ -297,3 +297,35 @@ def update_bar(bar, bar_desc, **kwargs):
             desc = str(desc)
         bar.set_description(desc)
     bar.update(1)
+
+
+def save_to(what, where, **kwargs):
+    """ Store data to a specified location
+
+    Parameters
+    ----------
+    what : value of a list of values
+
+    where : NamedExpression, array or a list of them
+
+    kwargs
+        arguments to be passed into a NamedExpression
+    """
+    if not isinstance(where, (tuple, list)):
+        where = [where]
+        if isinstance(what, (tuple, list)):
+            what = [what]
+    if not isinstance(what, (tuple, list)):
+        what = [what]
+
+    if len(where) != len(what):
+        raise ValueError("The lengths of outputs and saving locations mismatch")
+
+    for i, var in enumerate(where):
+        item = what[i]
+        if isinstance(var, NamedExpression):
+            var.set(item, **kwargs)
+        elif isinstance(var, np.ndarray):
+            var[:] = item
+        else:
+            where[i] = item

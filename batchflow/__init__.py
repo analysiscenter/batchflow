@@ -16,6 +16,7 @@ from .dsindex import DatasetIndex, FilesIndex
 from .decorators import action, inbatch_parallel, parallel, any_action_failed, mjit, deprecated
 from .exceptions import SkipBatchException, EmptyBatchSequence
 from .sampler import Sampler, ConstantSampler, NumpySampler, HistoSampler, ScipySampler
+from .utils import save_to
 
 
 __version__ = '0.3.0'

@@ -24,7 +24,7 @@ from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics)
 from ._const import *       # pylint:disable=wildcard-import
-from .utils import create_bar, update_bar
+from .utils import create_bar, update_bar, save_to
 
 
 METRICS = dict(
@@ -947,28 +947,8 @@ class Pipeline:
 
         return args, kwargs
 
-    def _save_output(self, batch, model, output, save_to):
-        if not isinstance(save_to, (tuple, list)):
-            save_to = [save_to]
-            if isinstance(output, (tuple, list)):
-                output = [output]
-        if not isinstance(output, (tuple, list)):
-            output = [output]
-
-        if len(save_to) != len(output):
-            raise ValueError("The number of model outputs does not equal the number of 'save_to' locations.")
-
-        for i, var in enumerate(save_to):
-            if len(output) <= i:
-                raise ValueError("'%s' output has fewer items than expected." \
-                                 % model.name)
-            item = output[i]
-            if isinstance(var, NamedExpression):
-                var.set(item, batch=batch, model=model)
-            elif isinstance(var, np.ndarray):
-                var[:] = item
-            else:
-                save_to[i] = item
+    def _save_output(self, batch, model, output, locations):
+        save_to(output, locations, batch=batch, model=model)
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
