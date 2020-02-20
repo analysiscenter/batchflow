@@ -105,6 +105,7 @@ class Pipeline:
         self._profile = None
         self._profiler = Profile()
         self.profile_info = None
+        self.elapsed_time = 0.0
         self._profile_info_lock = threading.Lock()
 
     def __enter__(self):
@@ -207,13 +208,16 @@ class Pipeline:
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
 
-    def get_action_name(self, action):
+    def get_action_name(self, action, add_index=False):
         """ Return a pretty action name """
         if action['name'] == '#_from_ns':
-            return action['method'].__name__
+            name = action['method'].__name__
         if action['name'].startswith('#_'):
-            return action['name'][2:]
-        return action['name']
+            name = action['name'][2:]
+        else:
+            name = action['name']
+        idx = self._actions.index(action)
+        return name if add_index is False else '{} #{}'.format(name, idx)
 
     def add_namespace(self, *namespaces):
         self._namespaces.extend(namespaces)
@@ -667,7 +671,7 @@ class Pipeline:
         return batch
 
     def _add_profile_info(self, batch, action, exec_time, **kwargs):
-        name = self.get_action_name(action)
+        name = self.get_action_name(action, add_index=True)
         iter_no = self._iter_params['_n_iters']
 
         start_time = time.time()
@@ -723,6 +727,10 @@ class Pipeline:
         parse : bool
             Allows to re-create underlying dataframe from scratches.
         """
+        actions_time = self.profile_info.groupby(['action', 'iter']).agg({'total_time' : 'mean'})['total_time'].sum()
+        print('Total time taken by actions: {}'.format(actions_time))
+        print('Total time taken by pipeline: {}'.format(self.elapsed_time))
+
         if per_iter is False and detailed is False:
             columns = columns or ['total_time', 'pipeline_time']
             sortby = sortby or ('total_time', 'sum')
@@ -1483,6 +1491,7 @@ class Pipeline:
 
     def _gen_batch(self, *args, **kwargs):
         """ Generate batches """
+        start_time = time.time()
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
@@ -1565,6 +1574,7 @@ class Pipeline:
 
         if self.after:
             self.after.run()
+        self.elapsed_time += time.time() - start_time
 
 
     def create_batch(self, batch_index, *args, **kwargs):
