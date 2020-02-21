@@ -727,10 +727,6 @@ class Pipeline:
         parse : bool
             Allows to re-create underlying dataframe from scratches.
         """
-        actions_time = self.profile_info.groupby(['action', 'iter']).agg({'total_time' : 'mean'})['total_time'].sum()
-        print('Total time taken by actions: {}'.format(actions_time))
-        print('Total time taken by pipeline: {}'.format(self.elapsed_time))
-
         if per_iter is False and detailed is False:
             columns = columns or ['total_time', 'pipeline_time']
             sortby = sortby or ('total_time', 'sum')
