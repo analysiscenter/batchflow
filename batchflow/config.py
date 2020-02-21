@@ -1,4 +1,5 @@
 """ Config class"""
+from pprint import pformat
 import numpy as np
 
 
@@ -262,6 +263,11 @@ class Config:
     def __delitem__(self, key):
         self.pop(key)
 
+    def __getattr__(self, key):
+        value = self._get(key)
+        value = Config(value) if isinstance(value, dict) else value
+        return value
+
     def __len__(self):
         return len(self.config)
 
@@ -354,4 +360,4 @@ class Config:
         return iter(self.config)
 
     def __repr__(self):
-        return "Config(" + str(self.config) + ")"
+        return "Config(\n{}\n)".format(pformat(self.config))
