@@ -4,7 +4,7 @@ import os
 import traceback
 import threading
 import warnings
-from functools import wraps, partial
+from functools import wraps
 
 import dill
 try:
@@ -32,12 +32,13 @@ from .components import create_item_class, BaseComponents
 
 class MethodsTransformingMeta(type):
     """ A metaclass to transform all class methods in the way described below,
-        if their `transform` attribute is not None (set by @apply_transform):
+        if their `transform_kwargs` attribute is not None
+        (set by @mark_apply_transform decorator):
 
-        1. Wrap method with either `apply_tansform` or `apply_transform_all`
-           depending on the value of `transform` attribute, which is set via
-           decorator of the same name. Then add this wrapped method to a class
-           namespace by its original name.
+        1. Wrap method with either `apply_transform` or `apply_transform_all`
+           depending on the value of `all` argument (from `transform_kwargs`),
+           which is set via decorator @mark_apply_transform. Then add this
+           wrapped method to a class namespace by its original name.
 
         2. Add the original version of the method (i.e. unwrapped) to a class
            namespace using name with underscores: `'_{}_'.format(name)`. This
@@ -47,28 +48,25 @@ class MethodsTransformingMeta(type):
     def __new__(cls, name, bases, namespace):
         namespace_ = namespace.copy()
         for object_name, object_ in namespace.items():
-            transform = getattr(object_, 'transform', None)
-            if transform:
-                src = getattr(object_, 'src')
-                target = getattr(object_, 'target')
-                namespace_[object_name] = cls.apply_transform(object_, transform, src, target)
+            transform_kwargs = getattr(object_, 'transform_kwargs', None)
+            if transform_kwargs:
+                namespace_[object_name] = cls.apply_transform(object_, **transform_kwargs)
 
-                disclaimer = "This is an unparalleled version of `{}`.\n\n".format(object_.__qualname__)
+                disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
                 object_.__doc__ = disclaimer + object_.__doc__
                 namespace_['_' + object_name + '_'] = object_
 
         return super().__new__(cls, name, bases, namespace_)
 
     @classmethod
-    def apply_transform(cls, method, transform, src, target): #pylint: disable=unused-argument
-        """ Wrap passed `method` in accordance with `transformed` arg value """
+    def apply_transform(cls, method, all, **transform_kwargs): #pylint: disable=unused-argument
+        """ Wrap passed `method` in accordance with `all` arg value """
         @wraps(method)
-        def inner(self, *args, src=src, target=target, **kwargs):
-            method_ = partial(method, self)
-            if transform == 'all':
-                return self.apply_transform_all(method_, src=src, target=target, *args, **kwargs)
-            return self.apply_transform(method_, src=src, target=target, *args, **kwargs)
-        return action(inner)
+        def apply_transform_wrapper(self, *args, **kwargs):
+            if all:
+                return self.apply_transform_all(method, *args, **kwargs, **transform_kwargs)
+            return self.apply_transform(method, *args, **kwargs, **transform_kwargs)
+        return action(apply_transform_wrapper)
 
 
 class Batch(metaclass=MethodsTransformingMeta):
@@ -521,9 +519,14 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self
 
     @action
-    @inbatch_parallel(init='indices', post='_assemble')
-    def apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs):
+    def apply_transform(self, func, *args, init='indices', src=None, dst=None, target='threads', p=None, **kwargs):
         """ Apply a function to each item in the batch.
+
+        It makes sense to redefine this function in child classes and change
+        defaults for arguments above (in order to avoid multiple repetitions of
+        `@mark_apply_transform(init='indices', src='images', target='for')`
+        which will be equivalent to `@mark_apply_transform()`, assuming that
+        the defaults are redefined for the class where actions are transformed)
 
         Parameters
         ----------
@@ -532,7 +535,6 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         src : str, sequence, list of str
             the source to get data from, can be:
-
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - sequence - a numpy-array, list, etc
@@ -541,11 +543,9 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         dst : str or array
             the destination to put the result in, can be:
-
             - None - in this case dst is set to be same as src
             - str - a component name, e.g. 'images' or 'masks'
             - tuple of list of str, e.g. ['images', 'masks']
-
             if src is a list, dst should be either list or None.
 
         p : float or None
@@ -576,21 +576,11 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_transform(apply_mask, src=('images', 'masks'), dst='images')
             apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
         """
-        dst = src if dst is None else dst
+        parallel = inbatch_parallel(init=init, target=target, post='_assemble')
+        return parallel(self._apply_transform)(self, func, *args, src=src, dst=dst, p=p, **kwargs)
 
-        if not (isinstance(dst, str) or
-                (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
-            raise TypeError("dst should be str or tuple or list of str")
-
-        p = 1 if p is None or np.random.binomial(1, p) else 0
-
-        if isinstance(src, list) and len(src) > 1 and isinstance(dst, list) and len(src) == len(dst):
-            return tuple([self._apply_transform(ix, func, *args, src=src_component,
-                                                dst=dst_component, p=p, **kwargs)
-                          for src_component, dst_component in zip(src, dst)])
-        return self._apply_transform(ix, func, *args, src=src, dst=dst, p=p, **kwargs)
-
-    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs):
+    @staticmethod
+    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs): # pylint:disable=bad-staticmethod-argument
         """ Apply a function to each item in the batch.
 
         Parameters
@@ -600,7 +590,6 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         src : str, sequence, list of str
             the source to get data from, can be:
-
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - sequence - a numpy-array, list, etc
@@ -608,14 +597,25 @@ class Batch(metaclass=MethodsTransformingMeta):
 
         dst : str or array
             the destination to put the result in, can be:
-
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
+        p : float or None
+            probability of applying transform to an element in the batch
+
+            if not None, indices of relevant batch elements will be passed ``func``
+            as a named arg ``indices``.
+
         args, kwargs
             other parameters passed to ``func``
         """
+        dst = src if dst is None else dst
+
+        if not (isinstance(dst, str) or
+                (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
+            raise TypeError("dst should be str or tuple or list of str")
+
         if src is None:
             _args = args
         else:
@@ -629,8 +629,9 @@ class Batch(metaclass=MethodsTransformingMeta):
                 src_attr = (src[pos],)
             _args = tuple([*src_attr, *args])
 
+        p = 1 if p is None or np.random.binomial(1, p) else 0
         if p:
-            return func(*_args, **kwargs)
+            return func(self, *_args, **kwargs)
 
         if len(src_attr) == 1:
             return src_attr[0]
