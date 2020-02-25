@@ -8,17 +8,17 @@ from .. import ImagesBatch
 class Openset(Dataset):
     """ The base class for open datasets """
     def __init__(self, index=None, batch_class=None, path=None, preloaded=None, **kwargs):
-        self._train_index, self._test_index = None, None
-
         if preloaded is None and index is None:
-            preloaded, index = self.download(path=path)
-            if preloaded is not None:
+
+            preloaded, index, train_index, test_index = self.download(path=path)
+            if preloaded is not None and train_test:
                 preloaded = tuple(np.concatenate(i) for i in np.array(preloaded).T)
 
+            if train_index and test_index:
+                self.train = type(self)(train_index, batch_class=batch_class, preloaded=preloaded)
+                self.test = type(self)(test_index, batch_class=batch_class, preloaded=preloaded)
+
         super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
-        if self._train_index and self._test_index:
-            self.train = type(self)(self._train_index, batch_class=self.batch_class, preloaded=preloaded)
-            self.test = type(self)(self._test_index, batch_class=self.batch_class, preloaded=preloaded)
 
     @staticmethod
     def uild_index(index):

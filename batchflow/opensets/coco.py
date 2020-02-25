@@ -76,10 +76,11 @@ class COCOSegmentation(BaseCOCO):
                                                                            ['train2017', 'val2017', 'train2017'])]
 
     def _extract_archive(self, localname, extract_to):
-            with ZipFile(localname, 'r') as archive:
-                archive.extractall(extract_to)
+        with ZipFile(localname, 'r') as archive:
+            archive.extractall(extract_to)
 
     def _extract_if_not_exist(self, localname, folder, train_val):
+        """ Extracts the arcive to the specific folder. Returns the path to this filder"""
         extract_to = os.path.join(dirname(localname), folder)
         path = os.path.join(extract_to, train_val)
         if os.path.isdir(path):
@@ -98,14 +99,15 @@ class COCOSegmentation(BaseCOCO):
             raise IOError('Could not download files:', all_res)
 
         if self.drop_grayscale:
-            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0])) # 10s for _rgb_images_paths(),  
-            self._test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]))  # 270s for constructor
+            train_index = FilesIndex(path=self._rgb_images_paths(all_res[0])) # 10s for _rgb_images_paths(),  
+            test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]))  # 270s for constructor
         else:
-            self._train_index = FilesIndex(path=all_res[0] + '/*')
-            self._test_index = FilesIndex(path=all_res[1] + '/*')
+            train_index = FilesIndex(path=all_res[0] + '/*')
+            test_index = FilesIndex(path=all_res[1] + '/*')
 
         self.masks_directory = dirname(all_res[2])
-        return None, FilesIndex.concat(self._train_index, self._test_index)
+        return (None, FilesIndex.concat(train_index, test_index), #index
+               train_index, test_index)
 
 
 class COCOObjectDetection(BaseCOCO):
