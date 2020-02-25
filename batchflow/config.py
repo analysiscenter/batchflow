@@ -264,7 +264,7 @@ class Config:
         self.pop(key)
 
     def __getattr__(self, key):
-        if value in self.config:
+        if key in self.config:
             value = self._get(key)
             value = Config(value) if isinstance(value, dict) else value
             return value
