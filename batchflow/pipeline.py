@@ -103,7 +103,7 @@ class Pipeline:
         self._not_init_vars = True
 
         self._profile = None
-        self._profiler = Profile()
+        self._profiler = None
         self.profile_info = None
         self.elapsed_time = 0.0
         self._profile_info_lock = threading.Lock()
@@ -1461,6 +1461,8 @@ class Pipeline:
         self.reset(reset)
         self._iter_params = iter_params or self._iter_params or Baseset.get_default_iter_params()
         self._profile = profile
+        if profile:
+            self._profiler = Profile()
 
         return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
 
