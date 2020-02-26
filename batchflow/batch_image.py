@@ -70,9 +70,9 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
                 #pylint: disable=cell-var-from-loop
                 added_func = func
                 @wraps(added_func)
-                def _method(_, *args, **kwargs):
+                def _method(*args, **kwargs):
                     return added_func(*args, **kwargs)
-                return _method
+                return staticmethod(_method)
             method_name = ''.join((prefix, func_name, suffix))
             added_method = _method_decorator()
             setattr(cls, method_name, added_method)
@@ -226,11 +226,15 @@ class ImagesBatch(BaseImagesBatch):
 
     Pixel's position is defined as (x, y)
 
-    Note, that if any class method is wrapped with `@mark_apply_transform` decorator
+    Note, that if any class method is wrapped with `@mark_apply_transform`,
     than for inner calls (i.e. from other class methods) should be used version
     of desired method with underscores. (For example, if there is a decorated
     `method` than you need to call `_method_` from inside of `other_method`).
     """
+    default_target = 'for'
+    default_src = 'images'
+    default_dst = 'images'
+
     @classmethod
     def _get_image_shape(cls, image):
         if isinstance(image, PIL.Image.Image):
@@ -304,42 +308,6 @@ class ImagesBatch(BaseImagesBatch):
                 array_result = np.empty(len(result), dtype=object)
                 array_result[:] = result
                 setattr(self, component, array_result)
-
-    @action
-    def apply_transform(self, func, *args, init='indices', src='images', dst=None, target='for', p=None, **kwargs):
-        """ Apply a function to each item in the batch.
-
-        Parameters
-        ----------
-        func : callable
-            a function to apply to each item from the source
-
-        src : str, sequence, list of str
-            the source to get data from, can be:
-            - None
-            - str - a component name, e.g. 'images' or 'masks'
-            - sequence - a numpy-array, list, etc
-            - tuple of str - get data from several components
-            - list of str, sequences or tuples - apply same transform to each item in list
-
-        dst : str or array
-            the destination to put the result in, can be:
-            - None - in this case dst is set to be same as src
-            - str - a component name, e.g. 'images' or 'masks'
-            - tuple of list of str, e.g. ['images', 'masks']
-            if src is a list, dst should be either list or None.
-
-        p : float or None
-            probability of applying transform to an element in the batch
-
-            if not None, indices of relevant batch elements will be passed ``func``
-            as a named arg ``indices``.
-
-        args, kwargs
-            other parameters passed to ``func``
-        """
-        parallel = inbatch_parallel(init=init, target=target, post='_assemble')
-        return parallel(self._apply_transform)(self, func, *args, src=src, dst=dst, p=p, **kwargs)
 
     @mark_apply_transform()
     def to_array(self, image, dtype=None, channels='last'):

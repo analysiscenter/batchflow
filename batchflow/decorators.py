@@ -97,11 +97,11 @@ def mark_apply_transform(all=False, **kwargs):
             other parameters passed to `apply_transform` method of the class
             where this decorator is being used
         """
-    def inner(method):
+    def mark(method):
         method.transform_kwargs = kwargs
         method.transform_kwargs.update({'all': all})
         return method
-    return inner
+    return mark
 
 def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """

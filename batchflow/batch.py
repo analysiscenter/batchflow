@@ -59,25 +59,30 @@ class MethodsTransformingMeta(type):
         return super().__new__(cls, name, bases, namespace_)
 
     @classmethod
-    def apply_transform(cls, method, all, **transform_kwargs): #pylint: disable=unused-argument
+    def apply_transform(cls, method, all, **transform_kwargs):
         """ Wrap passed `method` in accordance with `all` arg value """
         @wraps(method)
         def apply_transform_wrapper(self, *args, **kwargs):
+            method_ = method.__get__(self, type(self)) # bound method to class
             if all:
-                return self.apply_transform_all(method, *args, **kwargs, **transform_kwargs)
-            return self.apply_transform(method, *args, **kwargs, **transform_kwargs)
+                return self.apply_transform_all(method_, *args, **kwargs, **transform_kwargs)
+            return self.apply_transform(method_, *args, **kwargs, **transform_kwargs)
         return action(apply_transform_wrapper)
 
 
 class Batch(metaclass=MethodsTransformingMeta):
     """ The core Batch class
 
-    Note, that if any class method is wrapped with `@apply_transform` decorator
+    Note, that if any class method is wrapped with `@mark_apply_transform`,
     than for inner calls (i.e. from other class methods) should be used version
     of desired method with underscores. (For example, if there is a decorated
     `method` than you need to call `_method_` from inside of `other_method`).
     """
     components = None
+
+    default_target = 'threads'
+    default_src = None
+    default_dst = None
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
@@ -519,19 +524,23 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self
 
     @action
-    def apply_transform(self, func, *args, init='indices', src=None, dst=None, target='threads', p=None, **kwargs):
+    def apply_transform(self, func, *args, init='indices', src=None, dst=None, target=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
-        It makes sense to redefine this function in child classes and change
-        defaults for arguments above (in order to avoid multiple repetitions of
+        Consider redefining `default_target`, `default_src` and `default_dst`
+        in child classes to change the defaults for components transformation
+        (this is done solely for the purpose of brevity to avoid something like
         `@mark_apply_transform(init='indices', src='images', target='for')`
-        which will be equivalent to `@mark_apply_transform()`, assuming that
+        which is actually equivalent to `@mark_apply_transform()` assuming that
         the defaults are redefined for the class where actions are transformed)
 
         Parameters
         ----------
         func : callable
             a function to apply to each item from the source
+
+        init : str, callable or iterable
+            See :func:`~batchflow.inbatch_parallel` for details.
 
         src : str, sequence, list of str
             the source to get data from, can be:
@@ -547,6 +556,9 @@ class Batch(metaclass=MethodsTransformingMeta):
             - str - a component name, e.g. 'images' or 'masks'
             - tuple of list of str, e.g. ['images', 'masks']
             if src is a list, dst should be either list or None.
+
+        target : str
+            See :func:`~batchflow.inbatch_parallel` for details.
 
         p : float or None
             probability of applying transform to an element in the batch
@@ -576,11 +588,15 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_transform(apply_mask, src=('images', 'masks'), dst='images')
             apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
         """
-        parallel = inbatch_parallel(init=init, target=target, post='_assemble')
-        return parallel(self._apply_transform)(self, func, *args, src=src, dst=dst, p=p, **kwargs)
+        target = self.default_target if target is None else target
+        src = self.default_src if src is None else src
+        dst = self.default_dst if dst is None else dst
 
-    @staticmethod
-    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs): # pylint:disable=bad-staticmethod-argument
+        parallel = inbatch_parallel(init=init, target=target, post='_assemble')
+        transform = parallel(type(self)._apply_transform)
+        return transform(self, func, *args, src=src, dst=dst, p=p, **kwargs)
+
+    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
         Parameters
@@ -629,9 +645,8 @@ class Batch(metaclass=MethodsTransformingMeta):
                 src_attr = (src[pos],)
             _args = tuple([*src_attr, *args])
 
-        p = 1 if p is None or np.random.binomial(1, p) else 0
-        if p:
-            return func(self, *_args, **kwargs)
+        if p is None or np.random.binomial(1, p):
+            return func(*_args, **kwargs)
 
         if len(src_attr) == 1:
             return src_attr[0]
