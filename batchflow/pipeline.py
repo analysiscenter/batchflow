@@ -1571,6 +1571,7 @@ class Pipeline:
         --------
         :meth:`~Pipeline.gen_batch`
         """
+        start_time = time.time()
         if len(args) == 0 and len(kwargs) == 0:
             if self._lazy_run is None:
                 raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
@@ -1594,6 +1595,7 @@ class Pipeline:
                     batch_res = self.create_batch(batch_index, **_kwargs)
                 except SkipBatchException:
                     pass
+        self.elapsed_time += time.time() - start_time
         return batch_res
 
     def run(self, *args, **kwargs):
