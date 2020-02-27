@@ -4,7 +4,7 @@ import os
 import traceback
 import threading
 import warnings
-from functools import wraps
+import functools
 
 import dill
 try:
@@ -61,7 +61,7 @@ class MethodsTransformingMeta(type):
     @classmethod
     def apply_transform(cls, method, all, **transform_kwargs):
         """ Wrap passed `method` in accordance with `all` arg value """
-        @wraps(method)
+        @functools.wraps(method)
         def apply_transform_wrapper(self, *args, **kwargs):
             method_ = method.__get__(self, type(self)) # bound method to class
             if all:

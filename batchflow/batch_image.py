@@ -1,8 +1,8 @@
 """ Contains Batch classes for images """
 import os
 import warnings
+import functools
 from numbers import Number
-from functools import wraps
 
 import numpy as np
 from skimage.transform import resize
@@ -69,7 +69,7 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
             def _method_decorator():
                 #pylint: disable=cell-var-from-loop
                 added_func = func
-                @wraps(added_func)
+                @functools.wraps(added_func)
                 def _method(*args, **kwargs):
                     return added_func(*args, **kwargs)
                 return staticmethod(_method)
