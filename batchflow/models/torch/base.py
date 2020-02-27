@@ -993,7 +993,7 @@ class TorchModel:
 
         profile = profile or config.profile
         if profile:
-            profiler = torch.autograd.profiler.profile()
+            profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
             profiler.__enter__()
 
         if use_lock:

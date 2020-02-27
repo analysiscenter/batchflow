@@ -299,12 +299,12 @@ def update_bar(bar, bar_desc, **kwargs):
     bar.update(1)
 
 
-def save_to(what, where, **kwargs):
-    """ Store data to a specified location
+def save_data_to(what, where, **kwargs):
+    """ Store data to specified locations
 
     Parameters
     ----------
-    what : value of a list of values
+    what : value or a list of values
 
     where : NamedExpression, array or a list of them
 

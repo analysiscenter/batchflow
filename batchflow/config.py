@@ -264,9 +264,19 @@ class Config:
         self.pop(key)
 
     def __getattr__(self, key):
-        value = self._get(key)
-        value = Config(value) if isinstance(value, dict) else value
-        return value
+        if key in self.config:
+            value = self._get(key)
+            value = Config(value) if isinstance(value, dict) else value
+            return value
+        raise AttributeError(key)
+
+    def __getstate__(self):
+        """ Must be explicitly defined for pickling to work. """
+        return vars(self)
+
+    def __setstate__(self, state):
+        """ Must be explicitly defined for pickling to work. """
+        vars(self).update(state)
 
     def __len__(self):
         return len(self.config)
