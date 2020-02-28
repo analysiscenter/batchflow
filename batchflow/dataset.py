@@ -216,7 +216,7 @@ class Dataset(Baseset):
             Parameters
             ----------
             index : DatasetIndex
-                Indices of dataset objects that shoud be included into batch
+                Indices of dataset objects that should be included into batch
 
             pos : bool
                 Whether `index` contains elements positions. Defaults to False

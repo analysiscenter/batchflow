@@ -64,10 +64,9 @@ class MethodsTransformingMeta(type):
         @functools.wraps(method)
         def apply_transform_wrapper(self, *args, **kwargs):
             method_ = method.__get__(self, type(self)) # bound method to class
-            full_kwargs = self.defaults.copy()
-            full_kwargs.update(transform_kwargs)
-            full_kwargs.update(kwargs)
+            full_kwargs = {**self.defaults, **transform_kwargs, **kwargs}
             if all:
+                _ = [full_kwargs.pop(keyname, None) for keyname in ['init', 'target', 'post']]
                 return self.apply_transform_all(method_, *args, **full_kwargs)
             return self.apply_transform(method_, *args, **full_kwargs)
         return action(apply_transform_wrapper)
