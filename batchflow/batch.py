@@ -31,13 +31,11 @@ from .components import create_item_class, BaseComponents
 
 
 class MethodsTransformingMeta(type):
-    """ A metaclass to transform all class methods in the way described below,
-        if their `transform_kwargs` attribute is not None
-        (set by @mark_apply_transform decorator):
+    """ A metaclass to transform all class methods in the way described below:
 
         1. Wrap method with either `apply_transform` or `apply_transform_all`
            depending on the value of `all` argument (from `transform_kwargs`),
-           which is set via decorator @mark_apply_transform. Then add this
+           which is set via decorator @apply_transform. Then add this
            wrapped method to a class namespace by its original name.
 
         2. Add the original version of the method (i.e. unwrapped) to a class
@@ -54,7 +52,9 @@ class MethodsTransformingMeta(type):
 
                 disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
                 object_.__doc__ = disclaimer + object_.__doc__
-                namespace_['_' + object_name + '_'] = object_
+                object_.__name__ = '_' + object_name + '_'
+                object_.__qualname__ = object_.__qualname__.replace(object_name, object_.__name__)
+                namespace_[object_.__name__] = object_
 
         return super().__new__(cls, name, bases, namespace_)
 
@@ -64,25 +64,31 @@ class MethodsTransformingMeta(type):
         @functools.wraps(method)
         def apply_transform_wrapper(self, *args, **kwargs):
             method_ = method.__get__(self, type(self)) # bound method to class
+            full_kwargs = self.defaults.copy()
+            full_kwargs.update(transform_kwargs)
+            full_kwargs.update(kwargs)
             if all:
-                return self.apply_transform_all(method_, *args, **kwargs, **transform_kwargs)
-            return self.apply_transform(method_, *args, **kwargs, **transform_kwargs)
+                return self.apply_transform_all(method_, *args, **full_kwargs)
+            return self.apply_transform(method_, *args, **full_kwargs)
         return action(apply_transform_wrapper)
 
 
 class Batch(metaclass=MethodsTransformingMeta):
     """ The core Batch class
 
-    Note, that if any class method is wrapped with `@mark_apply_transform`,
+    Note, that if any class method is wrapped with `@apply_transform` decorator
     than for inner calls (i.e. from other class methods) should be used version
     of desired method with underscores. (For example, if there is a decorated
     `method` than you need to call `_method_` from inside of `other_method`).
+    Same is applicable for all child classes of :class:`batch.Batch`.
     """
     components = None
-
-    default_target = 'threads'
-    default_src = None
-    default_dst = None
+    # Class-specific defaults for :meth:`.Batch.apply_transform`
+    defaults = dict(init='indices',
+                    target='threads',
+                    post='_assemble',
+                    src=None,
+                    dst=None)
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
@@ -524,15 +530,15 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self
 
     @action
-    def apply_transform(self, func, *args, init='indices', src=None, dst=None, target=None, p=None, **kwargs):
+    def apply_transform(self, func, *args, init, target, post, src, dst, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
-        Consider redefining `default_target`, `default_src` and `default_dst`
-        in child classes to change the defaults for components transformation
-        (this is done solely for the purpose of brevity to avoid something like
-        `@mark_apply_transform(init='indices', src='images', target='for')`
-        which is actually equivalent to `@mark_apply_transform()` assuming that
-        the defaults are redefined for the class where actions are transformed)
+        Consider redefining `defaults` attr in child classes in order to change
+        defaults for components transformation (this is proposed solely for the
+        purpose of brevity — to avoid repeated heavily loaded decoration, e.g.
+        `@apply_transform(init='indices', target='for', src='images')` which in
+        most cases is actually equivalent to `@apply_transform()` assuming that
+        the defaults are redefined for the class where methods are transformed)
 
         Parameters
         ----------
@@ -586,13 +592,11 @@ class Batch(metaclass=MethodsTransformingMeta):
 
             apply_transform(make_masks_fn, src='images', dst='masks')
             apply_transform(apply_mask, src=('images', 'masks'), dst='images')
-            apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
+            FIXME apply_transform(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
+            apply_transform(Batch._some_static_method, p=.5)
+            apply_transform(B()._some_class_method_, p=.5)
         """
-        target = self.default_target if target is None else target
-        src = self.default_src if src is None else src
-        dst = self.default_dst if dst is None else dst
-
-        parallel = inbatch_parallel(init=init, target=target, post='_assemble')
+        parallel = inbatch_parallel(init=init, target=target, post=post)
         transform = parallel(type(self)._apply_transform)
         return transform(self, func, *args, src=src, dst=dst, p=p, **kwargs)
 

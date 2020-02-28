@@ -82,7 +82,7 @@ def action(*args, **kwargs):
     # action with arguments
     return _make_action_wrapper_with_args(*args, **kwargs)
 
-def mark_apply_transform(all=False, **kwargs):
+def apply_transform(all=False, **kwargs):
     """ Mark class method for transform in its metaclass.
 
         Decorator writes `kwargs` to the method attribute `transform_kwargs`,
