@@ -1,6 +1,5 @@
 """ Test that all Torch can be constructed """
-# pylint: disable=import-error, no-name-in-module
-# pylint: disable=redefined-outer-name
+# pylint: disable=import-error, no-name-in-module, redefined-outer-name, unused-import
 import pytest
 
 from batchflow.models.torch import VGG7, VGG16, VGG19
@@ -35,10 +34,11 @@ MODELS_SEG = [
 @pytest.fixture()
 def base_config_clf():
     """ Fixture to hold default configuration for classification. """
-    config = {'inputs/images/shape': (1, 64, 64),
-              'inputs/labels/classes': 10,
-              'initial_block/inputs': 'images',
-              'loss': 'ce'
+    config = {
+        'inputs/images/shape': (1, 64, 64),
+        'inputs/labels/classes': 10,
+        'initial_block/inputs': 'images',
+        'loss': 'ce',
     }
     return config
 

@@ -1,4 +1,4 @@
-# pylint: disable=undefined-variable, no-name-in-module
+# pylint: disable=undefined-variable, no-name-in-module, import-error
 """ Contains base class for tensorflow models """
 import os
 import glob

@@ -14,21 +14,10 @@ class IncreaseDim(nn.Module):
         self.dim = dim
 
     def forward(self, x):
+        shape = get_shape(x)
         dim = len(get_shape(x)) - 2 + self.dim
         ones = [1] * dim
-        return x.view(x.size(0), -1, *ones)
-
-
-class ReduceDim(nn.Module):
-    """ Reduce dimensionality of passed tensor by one. """
-    def __init__(self, dim=1):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x):
-        dim = max(get_num_dims(x) - self.dim, 0)
-        ones = [1] * dim
-        return x.view(x.size(0), -1, *ones)
+        return x.view(*shape, *ones)
 
 
 class Reshape(nn.Module):
@@ -39,58 +28,6 @@ class Reshape(nn.Module):
 
     def forward(self, x):
         return x.view(x.size(0), *self.reshape_to)
-
-
-
-class Interpolate(nn.Module):
-    """ Upsample inputs with a given factor.
-
-    Notes
-    -----
-    This is just a wrapper around ``F.interpolate``.
-
-    For brevity ``mode`` can be specified with the first letter only: 'n', 'l', 'b', 't'.
-
-    All the parameters should the specified as keyword arguments (i.e. with names and values).
-    """
-    MODES = {
-        'n': 'nearest',
-        'l': 'linear',
-        'b': 'bilinear',
-        't': 'trilinear',
-    }
-
-    def __init__(self, mode='b', shape=None, scale_factor=None, **kwargs):
-        super().__init__()
-        self.shape, self.scale_factor = shape, scale_factor
-
-        if mode in self.MODES:
-            mode = self.MODES[mode]
-        self.mode = mode
-        self.kwargs = kwargs
-
-    def forward(self, x):
-        return F.interpolate(x, mode=self.mode, size=self.shape, scale_factor=self.scale_factor,
-                             align_corners=True, **self.kwargs)
-
-    def extra_repr(self):
-        if self.scale_factor is not None:
-            info = 'scale_factor=' + str(self.scale_factor)
-        else:
-            info = 'size=' + str(self.shape)
-        info += ', mode=' + self.mode
-        return info
-
-
-class PixelShuffle(nn.PixelShuffle):
-    """ Resize input tensor with depth to space operation. """
-    def __init__(self, upscale_factor=None):
-        super().__init__(upscale_factor)
-
-
-class SubPixelConv(PixelShuffle):
-    """ An alias for PixelShuffle. """
-    pass
 
 
 
@@ -106,9 +43,7 @@ class Crop(nn.Module):
     """
     def __init__(self, resize_to):
         super().__init__()
-
         self.resize_to = resize_to
-
 
     def forward(self, inputs):
         i_shape = get_shape(inputs)
@@ -134,91 +69,6 @@ class Crop(nn.Module):
                 pass
             i_shape = get_shape(output)
         return output
-
-
-
-class Upsample(nn.Module):
-    """ Upsample inputs with a given factor.
-
-    Parameters
-    ----------
-    inputs
-        Input tensor.
-    factor : int
-        Upsamping scale.
-    shape : tuple of int
-        Shape to upsample to (used by bilinear and NN resize).
-    layout : str
-        Resizing technique, a sequence of:
-
-        - b - bilinear resize
-        - N - nearest neighbor resize
-        - t - transposed convolution
-        - T - separable transposed convolution
-        - X - subpixel convolution
-
-        all other :class:`~.torch.ConvBlock` layers are also allowed.
-
-
-    Examples
-    --------
-    A simple bilinear upsampling::
-
-        x = Upsample(layout='b', shape=(256, 256), inputs=inputs)
-
-    Upsampling with non-linear normalized transposed convolution::
-
-        x = Upsample(layout='nat', factor=2, kernel_size=3, inputs=inputs)
-
-    Subpixel convolution::
-
-        x = Upsample(layout='X', factor=2, inputs=inputs)
-    """
-    def __init__(self, factor=2, shape=None, layout='b', inputs=None, **kwargs):
-        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-        super().__init__()
-
-        if 't' in layout or 'T' in layout:
-            kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
-            kwargs['strides'] = kwargs.get('strides') or factor
-            kwargs['filters'] = kwargs.get('filters') or 'same'
-        self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
-
-    def forward(self, x):
-        return self.layer(x)
-
-
-
-class SEBlock(nn.Module):
-    """ Squeeze and excitation block.
-
-    Hu J. et al. "`Squeeze-and-Excitation Networks <https://arxiv.org/abs/1709.01507>`_"
-
-    Parameters
-    ----------
-    ratio : int
-        Squeeze ratio for the number of filters.
-    squeeze_layout : str
-        Operations of tensor processing.
-    squeeze_units : int or sequence of ints
-        Sizes of dense layers.
-    squeeze_activations : str or sequence of str
-        Activations of dense layers.
-    """
-    def __init__(self, inputs=None, ratio=4, squeeze_layout='Vfafa', squeeze_units=None, squeeze_activations=None):
-        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
-        super().__init__()
-        in_units = get_shape(inputs)[1]
-        units = squeeze_units or [in_units // ratio, in_units]
-        activations = squeeze_activations or ['relu', 'sigmoid']
-
-        self.layer = ConvBlock(layout=squeeze_layout, units=units, activations=activations, inputs=inputs)
-
-
-    def forward(self, x):
-        ones = [1] * get_num_dims(x)
-        x = self.layer(x)
-        return x.view(x.size(0), -1, *ones)
 
 
 
@@ -296,7 +146,7 @@ class Combine(nn.Module):
         mul: ['multi', 'mul', '*'],
         mean: ['average', 'avg', 'mean'],
         softsum: ['softsum', '&'],
-        attention: ['attention']
+        attention: ['attention'],
     }
     OPS = {alias: getattr(method, '__func__') for method, aliases in OPS.items() for alias in aliases}
 
@@ -339,9 +189,9 @@ class Combine(nn.Module):
 
     def extra_repr(self):
         if isinstance(self.name, str):
-            res = 'op=' + self.name
+            res = 'op={}'.format(self.name)
         else:
-            res = 'op=' + 'callable ' + self.name.__name__
+            res = 'op=callable {}'.format(self.name.__name__)
         res += ',\nleading_idx={}'.format(self.idx)
 
         res += ',\ninput_shapes=[{}]'.format(self.input_shapes)
@@ -366,3 +216,106 @@ class Combine(nn.Module):
                 item = Crop(inputs[0])(item)
             resized.append(item)
         return resized
+
+
+
+class Interpolate(nn.Module):
+    """ Upsample inputs with a given factor.
+
+    Notes
+    -----
+    This is just a wrapper around ``F.interpolate``.
+
+    For brevity ``mode`` can be specified with the first letter only: 'n', 'l', 'b', 't'.
+
+    All the parameters should the specified as keyword arguments (i.e. with names and values).
+    """
+    MODES = {
+        'n': 'nearest',
+        'l': 'linear',
+        'b': 'bilinear',
+        't': 'trilinear',
+    }
+
+    def __init__(self, mode='b', shape=None, scale_factor=None, **kwargs):
+        super().__init__()
+        self.shape, self.scale_factor = shape, scale_factor
+
+        if mode in self.MODES:
+            mode = self.MODES[mode]
+        self.mode = mode
+        self.kwargs = kwargs
+
+    def forward(self, x):
+        return F.interpolate(x, mode=self.mode, size=self.shape, scale_factor=self.scale_factor,
+                             align_corners=True, **self.kwargs)
+
+    def extra_repr(self):
+        if self.scale_factor is not None:
+            info = 'scale_factor=' + str(self.scale_factor)
+        else:
+            info = 'size=' + str(self.shape)
+        info += ', mode=' + self.mode
+        return info
+
+
+class PixelShuffle(nn.PixelShuffle):
+    """ Resize input tensor with depth to space operation. """
+    def __init__(self, upscale_factor=None):
+        super().__init__(upscale_factor)
+
+class SubPixelConv(PixelShuffle):
+    """ An alias for PixelShuffle. """
+    pass
+
+
+
+class Upsample(nn.Module):
+    """ Upsample inputs with a given factor.
+
+    Parameters
+    ----------
+    inputs
+        Input tensor.
+    factor : int
+        Upsamping scale.
+    shape : tuple of int
+        Shape to upsample to (used by bilinear and NN resize).
+    layout : str
+        Resizing technique, a sequence of:
+
+        - b - bilinear resize
+        - N - nearest neighbor resize
+        - t - transposed convolution
+        - T - separable transposed convolution
+        - X - subpixel convolution
+
+        all other :class:`~.torch.ConvBlock` layers are also allowed.
+
+
+    Examples
+    --------
+    A simple bilinear upsampling::
+
+        x = Upsample(layout='b', shape=(256, 256), inputs=inputs)
+
+    Upsampling with non-linear normalized transposed convolution::
+
+        x = Upsample(layout='nat', factor=2, kernel_size=3, inputs=inputs)
+
+    Subpixel convolution::
+
+        x = Upsample(layout='X', factor=2, inputs=inputs)
+    """
+    def __init__(self, factor=2, shape=None, layout='b', inputs=None, **kwargs):
+        from .conv_block import ConvBlock # can't be imported in the file beginning due to recursive imports
+        super().__init__()
+
+        if 't' in layout or 'T' in layout:
+            kwargs['kernel_size'] = kwargs.get('kernel_size') or factor
+            kwargs['strides'] = kwargs.get('strides') or factor
+            kwargs['filters'] = kwargs.get('filters') or 'same'
+        self.layer = ConvBlock(inputs=inputs, layout=layout, factor=factor, shape=shape, **kwargs)
+
+    def forward(self, x):
+        return self.layer(x)
