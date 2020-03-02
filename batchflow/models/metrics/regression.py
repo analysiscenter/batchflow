@@ -5,6 +5,7 @@ from . import Metrics
 
 METRICS_ALIASES = {'mae': 'mean_absolute_error',
                    'mse': 'mean_squared_error',
+                   'mape': 'mean_absolute_percentage_error',
                    'rmse': 'root_mean_squared_error',
                    'r2': 'r2_score',
                    'acc': 'accuracy'}
@@ -107,6 +108,9 @@ class RegressionMetrics(Metrics):
 
     def mean_absolute_error(self):
         return np.average(np.abs(self.predictions - self.targets), axis=0, weights=self.weights)
+
+    def mean_absolute_percentage_error(self):
+        return np.average(np.abs((self.predictions - self.targets) / self.targets), axis=0, weights=self.weights) * 100
 
     def mean_squared_error(self):
         return np.average((self.predictions - self.targets) ** 2, axis=0, weights=self.weights)
