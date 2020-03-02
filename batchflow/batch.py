@@ -64,7 +64,7 @@ class MethodsTransformingMeta(type):
         @functools.wraps(method)
         def apply_transform_wrapper(self, *args, **kwargs):
             method_ = method.__get__(self, type(self)) # bound method to class
-            full_kwargs = {**self.defaults, **transform_kwargs, **kwargs}
+            full_kwargs = {**transform_kwargs, **kwargs}
             if all:
                 _ = [full_kwargs.pop(keyname, None) for keyname in ['init', 'target', 'post']]
                 return self.apply_transform_all(method_, *args, **full_kwargs)
@@ -529,7 +529,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self
 
     @action
-    def apply_transform(self, func, *args, init, target, post, src, dst, p=None, **kwargs):
+    def apply_transform(self, func, *args, init=None, target=None, post=None, src=None, dst=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
         Consider redefining `defaults` attr in child classes in order to change
@@ -592,9 +592,15 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_transform(make_masks_fn, src='images', dst='masks')
             apply_transform(apply_mask, src=('images', 'masks'), dst='images')
             FIXME apply_transform(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
-            apply_transform(Batch._some_static_method, p=.5)
-            apply_transform(B()._some_class_method_, p=.5)
+            apply_transform(MyBatch.some_static_method, p=.5)
+            apply_transform(B.some_method, p=.5)
         """
+        init = init or self.defaults['init']
+        target = target or self.defaults['target']
+        post = post or self.defaults['post']
+        src = src or self.defaults['src']
+        dst = dst or self.defaults['dst']
+
         parallel = inbatch_parallel(init=init, target=target, post=post)
         transform = parallel(type(self)._apply_transform)
         return transform(self, func, *args, src=src, dst=dst, p=p, **kwargs)
