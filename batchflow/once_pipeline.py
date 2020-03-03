@@ -142,15 +142,14 @@ class OncePipeline:
         >>> pipeline.before
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self._add_action(INIT_MODEL_ID, _args=dict(mode=mode, model_class=model_class, model_name=name, config=config))
-        return self
+        action = dict(mode=mode, model_class=model_class, model_name=name, config=config)
+        if mode == 'static':
+            self._exec_init_model(action)
+            return self
+        return self._add_action(INIT_MODEL_ID, _args=action)
 
     def _exec_init_model(self, action):
-        name = eval_expr(action['model_name'], pipeline=self.pipeline)
-        model_class = eval_expr(action['model_class'], pipeline=self.pipeline)
-        mode = eval_expr(action['mode'], pipeline=self.pipeline)
-        config = eval_expr(action['config'], pipeline=self.pipeline)
-        self.pipeline.models.init_model(mode, model_class, name, config)
+        self.pipeline._exec_init_model(None, action)
 
     def save_model(self, name, *args, **kwargs):
         """ Save a model """

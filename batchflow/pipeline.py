@@ -794,6 +794,13 @@ class Pipeline:
         """
         self.before.init_model(mode, model_class, name, config)
         return self
+    
+    def _exec_init_model(self, batch, action):
+        mode = self._eval_expr(action['mode'], batch=batch)
+        name = self._eval_expr(action['model_name'], batch=batch)
+        model_class = self._eval_expr(action['model_class'], batch=batch)
+        config = self._eval_expr(action['config'], batch=batch)
+        self.models.init_model(mode, model_class, name, config)
 
     def import_model(self, model, pipeline=None, name=None):
         """ Import a model from another pipeline
