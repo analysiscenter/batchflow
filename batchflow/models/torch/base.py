@@ -1082,7 +1082,7 @@ class TorchModel:
 
         config = self.full_config
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
-                                         ops=config['output'], **config['common'])
+                                         ops=config['output'])
         output_container = {**output_container, **additional_outputs}
         output = self._fill_output(fetches, output_container)
         return output
@@ -1118,10 +1118,12 @@ class TorchModel:
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
         feed_dict = {**(feed_dict or {}), **kwargs}
+        if len(feed_dict) == 1:
+            _, value = feed_dict.popitem()
+            args = (*args, value)
         if feed_dict:
             if targets is not None and 'targets' in feed_dict.keys():
                 warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
-            feed_dict = {'targets': targets, **feed_dict}
             *inputs, targets = self._fill_input(*args, **feed_dict)
         else:
             inputs = self._fill_input(*args)
@@ -1148,13 +1150,13 @@ class TorchModel:
 
         config = self.full_config
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
-                                         ops=config['output'], **config['common'])
+                                         ops=config['output'])
         output_container = {**output_container, **additional_outputs}
         output = self._fill_output(fetches, output_container)
         return output
 
 
-    def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
+    def output(self, inputs, predictions=None, ops=None):
         """ Add output operations to the model, like predicted probabilities or labels, etc.
 
         Parameters
@@ -1224,13 +1226,13 @@ class TorchModel:
             prefix = [*ops.keys()][i]
             attr_prefix = prefix + '_' if prefix else ''
 
-            self._add_output_op(tensor, predictions, 'predictions', '', **kwargs)
+            self._add_output_op(tensor, predictions, 'predictions', '')
             for oper in ops[prefix]:
-                name, output = self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
+                name, output = self._add_output_op(tensor, oper, oper, attr_prefix)
                 outputs[name] = output
         return outputs
 
-    def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
+    def _add_output_op(self, inputs, oper, name, attr_prefix):
         if oper is None:
             output = inputs
         elif oper == 'softplus':
@@ -1238,8 +1240,7 @@ class TorchModel:
         elif oper == 'sigmoid':
             output = torch.nn.functional.sigmoid(inputs)
         elif oper == 'proba':
-            axis = self.channels_axis(kwargs.get('data_format'))
-            output = torch.nn.functional.softmax(inputs, dim=axis)
+            output = torch.nn.functional.softmax(inputs, dim=1)
         elif oper == 'labels':
             output = inputs.argmax(dim=1)
         elif callable(oper):
