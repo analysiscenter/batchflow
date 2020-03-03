@@ -919,6 +919,8 @@ class TorchModel:
             splitted_inputs = [inputs]
             splitted_targets = [targets]
 
+        if use_lock:
+            self.train_lock.acquire()
 
         if self.model is None:
             if isinstance(splitted_inputs[0], (list, tuple)):
@@ -935,9 +937,6 @@ class TorchModel:
             self._build(splitted_inputs[0])
 
         self.model.train()
-
-        if use_lock:
-            self.train_lock.acquire()
 
         outputs = []
         for i in range(steps):
