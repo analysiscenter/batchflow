@@ -1,4 +1,5 @@
 """ Config class"""
+from pprint import pformat
 import numpy as np
 
 
@@ -262,6 +263,21 @@ class Config:
     def __delitem__(self, key):
         self.pop(key)
 
+    def __getattr__(self, key):
+        if key in self.config:
+            value = self._get(key)
+            value = Config(value) if isinstance(value, dict) else value
+            return value
+        raise AttributeError(key)
+
+    def __getstate__(self):
+        """ Must be explicitly defined for pickling to work. """
+        return vars(self)
+
+    def __setstate__(self, state):
+        """ Must be explicitly defined for pickling to work. """
+        vars(self).update(state)
+
     def __len__(self):
         return len(self.config)
 
@@ -354,4 +370,4 @@ class Config:
         return iter(self.config)
 
     def __repr__(self):
-        return "Config(" + str(self.config) + ")"
+        return "Config(\n{}\n)".format(pformat(self.config))

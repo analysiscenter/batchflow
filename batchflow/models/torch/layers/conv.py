@@ -12,7 +12,7 @@ class BaseConv(nn.Module):
     TRANSPOSED = False
 
     def __init__(self, filters, kernel_size=3, strides=1, padding='same',
-                 dilation_rate=1, groups=1, bias=True, inputs=None):
+                 dilation_rate=1, groups=1, bias=False, inputs=None):
         super().__init__()
 
         if isinstance(filters, str):
@@ -70,7 +70,7 @@ class BaseDepthwiseConv(nn.Module):
     LAYER = None
 
     def __init__(self, kernel_size=3, strides=1, padding='same',
-                 dilation_rate=1, bias=True, depth_multiplier=1, inputs=None):
+                 dilation_rate=1, bias=False, depth_multiplier=1, inputs=None):
         super().__init__()
 
         args = {
@@ -105,7 +105,7 @@ class BaseSeparableConv(nn.Module):
     LAYER = None
 
     def __init__(self, filters, kernel_size=3, strides=1, padding='same',
-                 dilation_rate=1, bias=True, depth_multiplier=1, inputs=None):
+                 dilation_rate=1, bias=False, depth_multiplier=1, inputs=None):
         super().__init__()
 
         self.layer = nn.Sequential(

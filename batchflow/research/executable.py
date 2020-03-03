@@ -244,7 +244,8 @@ class Executable:
         function = eval_expr(self.function, job=job, iteration=iteration, experiment=experiment)
         if callable(function):
             args = eval_expr(self.args, job=job, iteration=iteration, experiment=experiment, path=self.research_path)
-            kwargs = eval_expr(self.kwargs, job=job, iteration=iteration, experiment=experiment, path=self.research_path)
+            kwargs = eval_expr(self.kwargs, job=job, iteration=iteration, experiment=experiment,
+                               path=self.research_path)
             result = function(*args, **kwargs)
         else:
             result = function
