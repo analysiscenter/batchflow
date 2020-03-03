@@ -296,10 +296,9 @@ class AlgebraicNamedExpression(NamedExpression):
         c = eval_expr(self.c, **kwargs)
         if self.op in UNARY_OPS:
             return OPERATIONS[self.op](a)
-        elif self.op in BINARY_OPS:
+        if self.op in BINARY_OPS:
             return OPERATIONS[self.op](a, b)
-        else:
-            return OPERATIONS[self.op](a, b, c)
+        return OPERATIONS[self.op](a, b, c)
 
 class B(NamedExpression):
     """ Batch component or attribute name
@@ -348,7 +347,9 @@ class PipelineNamedExpression(NamedExpression):
     """ Base class for pipeline expressions """
     def _get(self, **kwargs):
         name, kwargs = super()._get(**kwargs)
-        pipeline = kwargs['batch'].pipeline
+        batch = kwargs.get('batch')
+        pipeline = kwargs.get('pipeline')
+        pipeline = batch.pipeline if batch is not None else pipeline
         return name, pipeline, kwargs
 
 class C(PipelineNamedExpression):
@@ -392,6 +393,7 @@ class C(PipelineNamedExpression):
         name, pipeline, _ = self._get(**kwargs)
         config = pipeline.config or {}
         config[name] = value
+
 
 class V(PipelineNamedExpression):
     """ Pipeline variable name

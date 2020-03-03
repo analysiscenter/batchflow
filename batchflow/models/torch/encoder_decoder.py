@@ -12,7 +12,7 @@ from ..utils import unpack_args
 
 
 
-class EncoderModule(nn.Module):
+class EncoderModule(nn.ModuleDict):
     """ Encoder: create compressed representation of an input by reducing its spatial dimensions. """
     def __init__(self, inputs=None, return_all=True, **kwargs):
         super().__init__()
@@ -20,19 +20,13 @@ class EncoderModule(nn.Module):
         self._make_modules(inputs, **kwargs)
 
     def forward(self, x):
-        b_counter, d_counter = 0, 0
         outputs = []
 
-        for _ in range(self.num_stages):
-            for letter in self.encoder_layout:
-                if letter in ['b']:
-                    x = self.encoder_b[b_counter](x)
-                    b_counter += 1
-                elif letter in ['d', 'p']:
-                    x = self.encoder_d[d_counter](x)
-                    d_counter += 1
-                elif letter in ['s']:
-                    outputs.append(x)
+        for letter, layer in zip(self.layout, self.values()):
+            if letter in ['b', 'd', 'p']:
+                x = layer(x)
+            elif letter in ['s']:
+                outputs.append(x)
         outputs.append(x)
 
         if self.return_all:
@@ -43,32 +37,37 @@ class EncoderModule(nn.Module):
     def _make_modules(self, inputs, **kwargs):
         num_stages = kwargs.pop('num_stages')
         encoder_layout = ''.join([item[0] for item in kwargs.pop('order')])
-        self.num_stages, self.encoder_layout = num_stages, encoder_layout
 
         block_args = kwargs.pop('blocks')
         downsample_args = kwargs.pop('downsample')
-
-        self.encoder_b, self.encoder_d = nn.ModuleList(), nn.ModuleList()
+        self.layout = ''
 
         for i in range(num_stages):
             for letter in encoder_layout:
+
                 if letter in ['b']:
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=inputs, **args)
                     inputs = layer(inputs)
-                    self.encoder_b.append(layer)
+                    layer_desc = 'block-{}'.format(i)
+
                 elif letter in ['d', 'p']:
                     args = {**kwargs, **downsample_args, **unpack_args(downsample_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=inputs, **args)
                     inputs = layer(inputs)
-                    self.encoder_d.append(layer)
+                    layer_desc = 'downsample-{}'.format(i)
+
                 elif letter in ['s']:
-                    pass
+                    layer = nn.Identity()
+                    layer_desc = 'skip-{}'.format(i)
                 else:
                     raise ValueError('Unknown letter in order {}, use one of "b", "d", "p", "s"'
                                      .format(letter))
+
+                self.update([(layer_desc, layer)])
+                self.layout += letter
 
 
 
@@ -87,29 +86,23 @@ class EmbeddingModule(nn.Module):
 
 
 
-class DecoderModule(nn.Module):
+class DecoderModule(nn.ModuleDict):
     """ Decoder: increasing spatial dimensions. """
     def __init__(self, inputs=None, **kwargs):
         super().__init__()
         self._make_modules(inputs, **kwargs)
 
     def forward(self, x):
-        b_counter, u_counter, c_counter = 0, 0, 0
         inputs = x if isinstance(x, list) else [x]
         x = inputs[-1]
+        i = 0
 
-        for i in range(self.num_stages):
-            for letter in self.decoder_layout:
-                if letter in ['b']:
-                    x = self.decoder_b[b_counter](x)
-                    b_counter += 1
-                elif letter in ['u']:
-                    x = self.decoder_u[u_counter](x)
-                    u_counter += 1
-                elif letter in ['c']:
-                    if self.skip and (i < len(inputs) - 2):
-                        x = self.decoder_c[c_counter]([x, inputs[-i - 3]])
-                        c_counter += 1
+        for letter, layer in zip(self.layout, self.values()):
+            if letter in ['b', 'u']:
+                x = layer(x)
+            elif letter in ['c'] and self.skip and (i < len(inputs) - 2):
+                x = layer([x, inputs[-i - 3]])
+                i += 1
         return x
 
 
@@ -119,10 +112,7 @@ class DecoderModule(nn.Module):
 
         num_stages = kwargs.pop('num_stages') or len(inputs) - 2
         decoder_layout = ''.join([item[0] for item in kwargs.pop('order')])
-        self.num_stages, self.decoder_layout = num_stages, decoder_layout
-
-        skip = kwargs.pop('skip')
-        self.skip = skip
+        self.skip = kwargs.pop('skip')
 
         factor = kwargs.pop('factor') or [2]*num_stages
         if isinstance(factor, int):
@@ -134,34 +124,38 @@ class DecoderModule(nn.Module):
         block_args = kwargs.pop('blocks')
         upsample_args = kwargs.pop('upsample')
         combine_args = kwargs.pop('combine')
-
-        self.decoder_b, self.decoder_u, self.decoder_c = nn.ModuleList(), nn.ModuleList(), nn.ModuleList()
+        self.layout = ''
 
         for i in range(num_stages):
             for letter in decoder_layout:
+
                 if letter in ['b']:
                     args = {**kwargs, **block_args, **unpack_args(block_args, i, num_stages)}
 
                     layer = ConvBlock(inputs=x, **args)
                     x = layer(x)
-                    self.decoder_b.append(layer)
+                    layer_desc = 'block-{}'.format(i)
+
                 elif letter in ['u']:
                     args = {'factor': factor[i],
                             **kwargs, **upsample_args, **unpack_args(upsample_args, i, num_stages)}
 
                     layer = Upsample(inputs=x, **args)
                     x = layer(x)
-                    self.decoder_u.append(layer)
-                elif letter in ['c']:
-                    args = {**kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
+                    layer_desc = 'upsample-{}'.format(i)
 
-                    if skip and (i < len(inputs) - 2):
+                elif letter in ['c']:
+                    if self.skip and (i < len(inputs) - 2):
+                        args = {**kwargs, **combine_args, **unpack_args(combine_args, i, num_stages)}
+
                         layer = Combine(inputs=[x, inputs[-i - 3]], **args)
                         x = layer([x, inputs[-i - 3]])
-                        self.decoder_c.append(layer)
+                        layer_desc = 'combine-{}'.format(i)
                 else:
                     raise ValueError('Unknown letter in order {}, use one of ("b", "u", "c")'.format(letter))
 
+                self.update([(layer_desc, layer)])
+                self.layout += letter
 
 
 class Encoder(TorchModel):
