@@ -1,4 +1,5 @@
 """ Test torch layers """
+# pylint: disable=import-error, no-name-in-module
 import pytest
 
 import torch

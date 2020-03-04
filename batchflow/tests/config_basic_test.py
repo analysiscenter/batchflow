@@ -152,12 +152,22 @@ def test_get():
     assert config.get(get_key) == exp_ret
     assert config.flatten() == exp_flat
 
+    #Get scalar value by slashed-structured key via dotted access
+    config = Config({'a' : {'b' : 1}})
+    get_key = 'a/b'
+    exp_ret = 1
+    exp_flat = {'a/b' : 1}
+    for simple_key in get_key.split('/'):
+        config = getattr(config, simple_key)
+    assert config == exp_ret
+
     #Get dict value by simple key
     config = Config({'a' : {'b' : 1}})
     get_key = 'a'
     exp_ret = {'b' : 1}
     exp_flat = {'a/b' : 1}
     assert config.get(get_key) == exp_ret
+    assert getattr(config, get_key).flatten() == exp_ret # check dotted access
     assert config.flatten() == exp_flat
 
 def test_put():

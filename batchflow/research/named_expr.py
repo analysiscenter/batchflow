@@ -112,13 +112,13 @@ class REP(ResearchNamedExpression): # ResearchExperimentPath
 
     def get(self, **kwargs):
         job, experiment, path = self._get(**kwargs)
-        unit = next(iter(experiment.values())) # unit to get attributes (each unit will have the same so we take the first)
+        # unit to get attributes (each unit will have the same so we take the first)
+        unit = next(iter(experiment.values()))
         experiment_path = unit.experiment_path # path to folder with current experiment
         index = unit.index # index of the branch corresponding to the current experiment
         if self.relative:
             return os.path.join(experiment_path, job.ids[index])
-        else:
-            return os.path.join(path, experiment_path, job.ids[index])
+        return os.path.join(path, experiment_path, job.ids[index])
 
 class RR(ResearchNamedExpression): # ResearchResults
     """ NamedExpression for Results of the Research """
