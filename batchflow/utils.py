@@ -130,7 +130,7 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
             ax.legend()
 
 def show_research(df, layout=None, average_repetitions=False, log_scale=False,
-                  rolling_window=None, color=None, scale=(9, 7)): # pylint: disable=too-many-branches
+                  rolling_window=None, color=None, **kwargs): # pylint: disable=too-many-branches
     """Show plots given by research dataframe.
 
     Parameters
@@ -150,8 +150,12 @@ def show_research(df, layout=None, average_repetitions=False, log_scale=False,
         Size of rolling window.
     color: sequence of matplotlib.colors, optional
         Colors for plots would be randomly sampled from given set.
-    scale: tuple, default: (9, 7)
-        Scaling factors for the figure.
+    kwargs:
+        Additional named arguments directly passed to `plt.subplots`.
+        With default parameters:
+            - ``figsize = (9 * len(layout), 7)``
+            - ``nrows = 1``
+            - ``ncols = len(layout)``
     """
     if layout is None:
         layout = []
@@ -171,7 +175,9 @@ def show_research(df, layout=None, average_repetitions=False, log_scale=False,
     replace = not len(color) > df_len
     chosen_colors = np.random.choice(color, replace=replace, size=df_len)
 
-    _, ax = plt.subplots(1, len(layout), figsize=(scale[0] * len(layout), scale[1]))
+    kwargs = {'figsize': (9 * len(layout), 7), 'nrows': 1, 'ncols': len(layout), **kwargs}
+
+    _, ax = plt.subplots(**kwargs)
     if len(layout) == 1:
         ax = (ax, )
 

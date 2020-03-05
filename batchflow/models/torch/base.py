@@ -83,11 +83,10 @@ class TorchModel:
         If `inputs` is specified with all the required shapes, then it serves as size of batch dimension during
         placeholder (usually np.ndarrays with zeros) creation. Default value is 2.
 
-    loss : str, tuple, dict, list
+    loss : str, dict, list
         Loss function, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, **kwargs)``.
         If dict, then ``{'name': name, **kwargs}``.
         If list, then sequence of losses in previous formats.
 
@@ -101,16 +100,15 @@ class TorchModel:
         Examples:
 
         - ``{'loss': 'mse'}``
-        - ``{'loss': ('KLDiv', {'reduction': 'none'})``
+        - ``{'loss': {'name': KLDiv', 'reduction': 'none'}}``
         - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
         - ``{'loss': my_custom_loss_fn}``
         - ``{'loss': ['dice', 'bce']}``
 
-    optimizer : str, tuple, dict
+    optimizer : str, dict
         Optimizer, might be defined in multiple formats.
 
         If str, then short ``name``.
-        If tuple, then ``(name, **kwargs)``.
         If dict, then ``{'name': name, **kwargs}``.
 
         Name must be one of:
@@ -122,18 +120,19 @@ class TorchModel:
         Examples:
 
         - ``{'optimizer': 'Adam'}``
-        - ``{'optimizer': ('SparseAdam', {'lr': 0.01})}``
-        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}``
-        - ``{'optimizer': {'name': MyCustomOptimizer, momentum: 0.95}}``
+        - ``{'optimizer': {'name': 'SparseAdam', 'lr': 0.01}}``
+        - ``{'optimizer': {'name': 'Adagrad', 'initial_accumulator_value': 0.01}}``
+        - ``{'optimizer': {'name': MyCustomOptimizer, 'momentum': 0.95}}``
 
-    decay : str, tuple, dict
-        Learning rate decay algorithm, might be defined in multiple formats.
-        All decays require to have 'step' as a key in a configuration
-        dictionary that contains the number of iterations in one epoch.
-        Each decay might have optional parameters 'first_iter' and 'last_iter'
-        that defines iterations between which decay works.
+    decay : dict, list of dicts
+        The learning rate decay algorithm might be defined in multiple formats.
+        All decays require to have 'frequency' as a key in a configuration dictionary.
+        Parameter 'frequency' sets how often do decay step: at every `'frequency'`
+        iteration. Each decay might have optional parameters 'first_iter' and 'last_iter'
+        that defines the closed range of iterations where decay is at work.
+        If you want to use a learning rate warmup and decay together,
+        you should use a list of decays (see examples).
 
-        If tuple, then ``(name, **kwargs)``.
         If dict, then ``{'name': name, **kwargs}``.
         If list, then sequence of decays in previous formats.
 
@@ -148,9 +147,11 @@ class TorchModel:
 
         Examples:
 
-        - ``{'decay': 'exp', {'step': 5, 'first_iter': 6, 'last_iter': 20}}``
-        - ``{'decay': ('StepLR', {'steps_size': 10000, 'step': 5})}``
-        - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5, 'step': 15, 'first_iter': 400}``
+        - ``{'decay': {'name: 'exp', 'frequency': 5, 'first_iter': 6, 'last_iter': 20}}``
+        - ``{'decay': {'name': StepLR', 'steps_size': 10000, 'frequency': 5}}``
+        - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5, 'frequency': 15, 'first_iter': 400}``
+        - ``{'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
+                       {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]``
 
     train_steps : dict
         Configuration of different training procedures.
@@ -293,7 +294,7 @@ class TorchModel:
         self.devices = []
         self.train_steps = None
 
-        self.sync_counter = 0
+        self.sync_counter = 1
         self.microbatch = None
 
         self.iter_info = {}
@@ -645,12 +646,12 @@ class TorchModel:
             if decay is None:
                 return decays, list_kwargs, list_steps
 
-            step_meta_keys = ['step', 'first_iter', 'last_iter']
+            step_meta_keys = ['frequency', 'first_iter', 'last_iter']
             step_meta_defaults = [None, 0, np.finfo(np.float).max]
             step_meta = {key: decay_args.pop(key, default) for key, default in zip(step_meta_keys, step_meta_defaults)}
 
-            if step_meta['step'] is None:
-                raise ValueError("Missing required key 'decay/step' in the configuration dict.")
+            if step_meta['frequency'] is None:
+                raise ValueError("Missing required key 'decay/frequency' in the configuration dict.")
             if callable(decay) or isinstance(decay, type):
                 pass
             elif isinstance(decay, str) and hasattr(torch.optim.lr_scheduler, decay):
@@ -663,7 +664,7 @@ class TorchModel:
             if decay in DECAYS_DEFAULTS:
                 decay_dict = DECAYS_DEFAULTS.get(decay).copy()
                 if decay == DECAYS['cos']:
-                    decay_dict.update(T_max=step_meta['step'])
+                    decay_dict.update(T_max=step_meta['frequency'])
                 decay_dict.update(decay_args)
                 decay_args = decay_dict.copy()
 
@@ -912,7 +913,7 @@ class TorchModel:
         return output
 
 
-    def train(self, *args, feed_dict=None, fetches=None, use_lock=False, train_mode='',
+    def train(self, *args, feed_dict=None, fetches=None, use_lock=True, train_mode='',
               accumulate_grads=True, sync_frequency=True, microbatch=True, profile=False, **kwargs):
         """ Train the model with the data provided
 
@@ -984,10 +985,8 @@ class TorchModel:
             splitted_inputs = [inputs]
             splitted_targets = [targets]
 
-        if use_lock:
-            self.train_lock.acquire()
-
         if self.model is None:
+            self.train_lock.acquire()
             if isinstance(splitted_inputs[0], (list, tuple)):
                 self.input_shapes = [get_shape(item) for item in splitted_inputs[0]]
             else:
@@ -1000,6 +999,7 @@ class TorchModel:
 
             self.build_config()
             self._build(splitted_inputs[0])
+            self.train_lock.release()
 
         self.model.train()
 
@@ -1007,6 +1007,9 @@ class TorchModel:
         if profile:
             profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
             profiler.__enter__()
+
+        if use_lock:
+            self.train_lock.acquire()
 
         outputs = []
         for i in range(steps):
@@ -1060,7 +1063,7 @@ class TorchModel:
 
             for name, step in train_fetches:
                 loss_fn, optimizer = step['loss'], step['optimizer']
-                decays, decay_step = step['decay'], step['decay_step']
+                decays, decay_steps = step['decay'], step['decay_step']
                 if 'initialized' not in step:
                     optimizer.zero_grad()
                     step['initialized'] = True
@@ -1069,7 +1072,7 @@ class TorchModel:
                 loss = sum([loss_fn_(predictions, targets) for loss_fn_ in loss_fn]) / len(loss_fn)
                 mode_loss += loss
                 loss.backward()
-                step['iter'] = step.get('iter', -1) + 1
+                step['iter'] = step.get('iter', 0) + 1
 
                 if self.sync_counter >= sync_frequency:
                     self.sync_counter = 1
@@ -1082,11 +1085,10 @@ class TorchModel:
                 self.iter_info.setdefault('lr', []).append(curr_lr)
 
                 if decays:
-                    for decay, step_meta in zip(decays, decay_step):
-                        step_condition = (step['iter'] - step_meta['first_iter']) % step_meta['step'] == 0
-                        border_condition = (step['iter'] >= step_meta['first_iter'] and
-                                            step['iter'] <= step_meta['last_iter'])
-                        if step_condition and border_condition:
+                    for decay, decay_step in zip(decays, decay_steps):
+                        step_condition = (step['iter'] - decay_step['first_iter']) % decay_step['frequency'] == 0
+                        range_condition = decay_step['first_iter'] <= step['iter'] <= decay_step['last_iter']
+                        if step_condition and range_condition:
                             decay.step()
 
                 output_container['loss' + '_'*bool(len(name)) + name] = loss
