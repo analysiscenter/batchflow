@@ -40,7 +40,7 @@ class BaseCOCO(ImagesOpenset):
             chunk_size = 1024 * 1000 #MBs
             num_bars = int(file_size / chunk_size)
             with open(localname, 'wb') as f:
-                for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars, 
+                for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars,
                                        unit='MB', desc=filename, leave=True):
                     f.write(chunk)
         return self._extract_if_not_exist(localname, folder, train_val)
@@ -87,10 +87,10 @@ class COCOSegmentation(BaseCOCO):
         else:
             self._extract_archive(localname, extract_to)
         return path
-    
+
     def _rgb_images_paths(self, path):
-        return  [filename for filename in glob(path + '/*') 
-                if Image.open(filename).mode == 'RGB']
+        return  [filename for filename in glob(path + '/*')
+                 if Image.open(filename).mode == 'RGB']
 
     def _post_fn(self, all_res, *args, **kwargs):
         _ = args, kwargs
@@ -98,7 +98,7 @@ class COCOSegmentation(BaseCOCO):
             raise IOError('Could not download files:', all_res)
 
         if self.drop_grayscale:
-            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0])) # 10s for _rgb_images_paths(),  
+            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0])) # 10s for _rgb_images_paths(),
             self._test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]))  # 270s for constructor
         else:
             self._train_index = FilesIndex(path=all_res[0] + '/*')
