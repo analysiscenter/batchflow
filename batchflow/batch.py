@@ -47,26 +47,25 @@ class MethodsTransformingMeta(type):
         namespace_ = namespace.copy()
         for object_name, object_ in namespace.items():
             transform_kwargs = getattr(object_, 'transform_kwargs', None)
-            if transform_kwargs:
+            if transform_kwargs is not None:
                 namespace_[object_name] = cls.apply_transform(object_, **transform_kwargs)
 
                 disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
                 object_.__doc__ = disclaimer + object_.__doc__
                 object_.__name__ = '_' + object_name + '_'
-                object_.__qualname__ = object_.__qualname__.replace(object_name, object_.__name__)
+                object_.__qualname__ = '.'.join(object_.__qualname__.split('.')[:-1] + [object_.__name__])
                 namespace_[object_.__name__] = object_
 
         return super().__new__(cls, name, bases, namespace_)
 
     @classmethod
-    def apply_transform(cls, method, all, **transform_kwargs):
+    def apply_transform(cls, method, **transform_kwargs):
         """ Wrap passed `method` in accordance with `all` arg value """
         @functools.wraps(method)
         def apply_transform_wrapper(self, *args, **kwargs):
             method_ = method.__get__(self, type(self)) # bound method to class
             full_kwargs = {**transform_kwargs, **kwargs}
-            if all:
-                _ = [full_kwargs.pop(keyname, None) for keyname in ['init', 'target', 'post']]
+            if self.apply_transform_defaults['all']:
                 return self.apply_transform_all(method_, *args, **full_kwargs)
             return self.apply_transform(method_, *args, **full_kwargs)
         return action(apply_transform_wrapper)
@@ -83,11 +82,12 @@ class Batch(metaclass=MethodsTransformingMeta):
     """
     components = None
     # Class-specific defaults for :meth:`.Batch.apply_transform`
-    defaults = dict(target='threads',
-                    init='indices',
-                    post='_assemble',
-                    src=None,
-                    dst=None)
+    apply_transform_defaults = dict(target='threads',
+                                    init='indices',
+                                    post='_assemble',
+                                    src=None,
+                                    dst=None,
+                                    all=False)
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
@@ -532,12 +532,12 @@ class Batch(metaclass=MethodsTransformingMeta):
     def apply_transform(self, func, *args, target=None, init=None, post=None, src=None, dst=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
-        Consider redefining `defaults` attr in child classes in order to change
-        defaults for components transformation (this is proposed solely for the
-        purpose of brevity — to avoid repeated heavily loaded decoration, e.g.
-        `@apply_transform(init='indices', target='for', src='images')` which in
-        most cases is actually equivalent to `@apply_transform()` assuming that
-        the defaults are redefined for the class where methods are transformed)
+        Consider redefining `apply_transform_defaults` attr in child classes
+        (this is proposed solely for the purpose of brevity — in order to avoid
+        repeated heavily loaded class methods decoration, e.g.
+        `@apply_transform(init='indices', target='for', src='images')`
+        which in most cases is actually equivalent to simple `@apply_transform`
+        assuming that the defaults are redefined for the class).
 
         Parameters
         ----------
@@ -598,11 +598,11 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_transform(MyBatch.some_static_method, p=.5)
             apply_transform(B.some_method, p=.5)
         """
-        target = target if target is not None else self.defaults['target']
-        init = init if init is not None else self.defaults['init']
-        post = post if post is not None else self.defaults['post']
-        src = src if src is not None else self.defaults['src']
-        dst = dst if dst is not None else self.defaults['dst']
+        target = target if target is not None else self.apply_transform_defaults['target']
+        init = init if init is not None else self.apply_transform_defaults['init']
+        post = post if post is not None else self.apply_transform_defaults['post']
+        src = src if src is not None else self.apply_transform_defaults['src']
+        dst = dst if dst is not None else self.apply_transform_defaults['dst']
 
         parallel = inbatch_parallel(init=init, post=post, target=target)
         transform = parallel(type(self)._apply_transform)
