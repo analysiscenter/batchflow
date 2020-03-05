@@ -14,10 +14,6 @@ class Openset(Dataset):
         if index is None:
             preloaded, index = self.download(path=path)
 
-            if preloaded is not None:
-                if train_test: # temporary solution for MNIST, CIFAR, ...
-                    preloaded = tuple(np.concatenate(i) for i in np.array(preloaded).T)
-
         super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
         if self._train_index and self._test_index:
             self.train = type(self).from_dataset(self, self._train_index, batch_class=batch_class,
