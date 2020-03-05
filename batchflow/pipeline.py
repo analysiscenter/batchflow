@@ -764,15 +764,15 @@ class Pipeline:
         actions = actions or self._actions
 
         for action in actions:
+            if self._profile:
+                start_time = time.time()
+                self._profiler.enable()
+
             _action = action.copy()
             if 'args' in action:
                 _action['args'] = self._eval_expr(action['args'], batch=batch)
             if 'kwargs' in action:
                 _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
-
-            if self._profile:
-                start_time = time.time()
-                self._profiler.enable()
 
             if _action.get('#dont_run', False):
                 pass
