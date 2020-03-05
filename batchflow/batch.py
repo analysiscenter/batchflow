@@ -83,8 +83,8 @@ class Batch(metaclass=MethodsTransformingMeta):
     """
     components = None
     # Class-specific defaults for :meth:`.Batch.apply_transform`
-    defaults = dict(init='indices',
-                    target='threads',
+    defaults = dict(target='threads',
+                    init='indices',
                     post='_assemble',
                     src=None,
                     dst=None)
@@ -529,7 +529,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self
 
     @action
-    def apply_transform(self, func, *args, init=None, target=None, post=None, src=None, dst=None, p=None, **kwargs):
+    def apply_transform(self, func, *args, target=None, init=None, post=None, src=None, dst=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
         Consider redefining `defaults` attr in child classes in order to change
@@ -544,7 +544,13 @@ class Batch(metaclass=MethodsTransformingMeta):
         func : callable
             a function to apply to each item from the source
 
+        target : str
+            See :func:`~batchflow.inbatch_parallel` for details.
+
         init : str, callable or iterable
+            See :func:`~batchflow.inbatch_parallel` for details.
+
+        post : str or callable
             See :func:`~batchflow.inbatch_parallel` for details.
 
         src : str, sequence, list of str
@@ -561,9 +567,6 @@ class Batch(metaclass=MethodsTransformingMeta):
             - str - a component name, e.g. 'images' or 'masks'
             - tuple of list of str, e.g. ['images', 'masks']
             if src is a list, dst should be either list or None.
-
-        target : str
-            See :func:`~batchflow.inbatch_parallel` for details.
 
         p : float or None
             probability of applying transform to an element in the batch
@@ -595,13 +598,13 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_transform(MyBatch.some_static_method, p=.5)
             apply_transform(B.some_method, p=.5)
         """
-        init = init or self.defaults['init']
-        target = target or self.defaults['target']
-        post = post or self.defaults['post']
-        src = src or self.defaults['src']
-        dst = dst or self.defaults['dst']
+        target = target if target is not None else self.defaults['target']
+        init = init if init is not None else self.defaults['init']
+        post = post if post is not None else self.defaults['post']
+        src = src if src is not None else self.defaults['src']
+        dst = dst if dst is not None else self.defaults['dst']
 
-        parallel = inbatch_parallel(init=init, target=target, post=post)
+        parallel = inbatch_parallel(init=init, post=post, target=target)
         transform = parallel(type(self)._apply_transform)
         return transform(self, func, *args, src=src, dst=dst, p=p, **kwargs)
 

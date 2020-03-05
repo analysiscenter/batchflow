@@ -91,8 +91,8 @@ class BaseImagesBatch(Batch):
     """
     components = "images", "labels", "masks"
     # Class-specific defaults for :meth:`.Batch.apply_transform`
-    defaults = dict(init='indices',
-                    target='for',
+    defaults = dict(target='for',
+                    init='indices',
                     post='_assemble',
                     src='images',
                     dst='images')
