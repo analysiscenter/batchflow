@@ -64,7 +64,6 @@ class COCOSegmentation(BaseCOCO):
 
     def __init__(self, *args, batch_class=COCOSegmentationBatch, drop_grayscale=True, **kwargs):
         self.drop_grayscale = drop_grayscale
-        self.masks_directory = None
         super().__init__(*args, batch_class=COCOSegmentationBatch, **kwargs)
 
     @property
@@ -99,15 +98,14 @@ class COCOSegmentation(BaseCOCO):
             raise IOError('Could not download files:', all_res)
 
         if self.drop_grayscale:
-            train_index = FilesIndex(path=self._rgb_images_paths(all_res[0])) # 10s for _rgb_images_paths(),  
-            test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]))  # 270s for constructor
+            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0])) # 10s for _rgb_images_paths(),  
+            self._test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]))  # 270s for constructor
         else:
-            train_index = FilesIndex(path=all_res[0] + '/*')
-            test_index = FilesIndex(path=all_res[1] + '/*')
+            self._train_index = FilesIndex(path=all_res[0] + '/*')
+            self._test_index = FilesIndex(path=all_res[1] + '/*')
 
         self.masks_directory = dirname(all_res[2])
-        return (None, FilesIndex.concat(train_index, test_index), #index
-               train_index, test_index)
+        return None, FilesIndex.concat(self._train_index, self._test_index)
 
 
 class COCOObjectDetection(BaseCOCO):
