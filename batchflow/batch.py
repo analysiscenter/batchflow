@@ -607,11 +607,11 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_transform(B.some_method, p=.5)
         """
         kwargs_full = {**self.transform_defaults, **kwargs}
-        target, init, post, src, dst, _ = [kwargs_full.pop(k) for k in ['target', 'init', 'post', 'src', 'dst', 'all']]
+        target, init, post, _ = [kwargs_full.pop(keyname) for keyname in ['target', 'init', 'post', 'all']]
 
         parallel = inbatch_parallel(init=init, post=post, target=target)
         transform = parallel(type(self)._apply_transform)
-        return transform(self, func, *args, src=src, dst=dst, **kwargs_full)
+        return transform(self, func, *args, **kwargs_full)
 
     def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
