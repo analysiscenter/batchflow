@@ -2,6 +2,7 @@
 import os
 import warnings
 from numbers import Number
+from collections import OrderedDict
 
 import numpy as np
 from skimage.transform import resize
@@ -83,12 +84,12 @@ class BaseImagesBatch(Batch):
     """
     components = "images", "labels", "masks"
     # Class-specific defaults for :meth:`.Batch.apply_transform`
-    apply_transform_defaults = dict(target='for',
-                                    init='indices',
-                                    post='_assemble',
-                                    src='images',
-                                    dst='images',
-                                    all=False)
+    transform_defaults = OrderedDict([('target', 'for'),
+                                      ('init', 'indices'),
+                                      ('post', '_assemble'),
+                                      ('src', 'images'),
+                                      ('dst', 'images'),
+                                      ('all', False)])
 
     def _make_path(self, ix, src=None):
         """ Compose path.
