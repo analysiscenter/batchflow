@@ -5,7 +5,6 @@ import traceback
 import threading
 import warnings
 import functools
-from collections import OrderedDict
 
 import dill
 try:
@@ -87,12 +86,12 @@ class Batch(metaclass=MethodsTransformingMeta):
     """
     components = None
     # Class-specific defaults for :meth:`.Batch.apply_transform`
-    transform_defaults = OrderedDict([('target', 'threads'),
-                                      ('init', 'indices'),
-                                      ('post', '_assemble'),
-                                      ('src', None),
-                                      ('dst', None),
-                                      ('all', False)])
+    transform_defaults = dict(target='threads',
+                              init='indices',
+                              post='_assemble',
+                              src=None,
+                              dst=None,
+                              all=False)
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
@@ -544,7 +543,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         order to avoid repeated heavily loaded class methods decoration, e.g.
         `@apply_transform(init='indices', target='for', src='images')` which in
         most cases is actually equivalent to simple `@apply_transform` assuming
-        that the defaults are redefined for the class where methods are being
+        that the defaults are redefined for the class whose methods are being
         transformed. Note, that if no defaults redefined those from the nearest
         parent class will be used in :class:`batch.MethodsTransformingMeta`.
 
@@ -608,7 +607,7 @@ class Batch(metaclass=MethodsTransformingMeta):
             apply_transform(B.some_method, p=.5)
         """
         kwargs_full = {**self.transform_defaults, **kwargs}
-        target, init, post, src, dst, _ = [kwargs_full.pop(keyname) for keyname in self.transform_defaults.keys()]
+        target, init, post, src, dst, _ = [kwargs_full.pop(k) for k in ['target', 'init', 'post', 'src', 'dst', 'all']]
 
         parallel = inbatch_parallel(init=init, post=post, target=target)
         transform = parallel(type(self)._apply_transform)
