@@ -8,6 +8,8 @@ import concurrent.futures as cf
 import asyncio
 import logging
 import warnings
+from cProfile import Profile
+from pstats import Stats
 import queue as q
 import numpy as np
 import pandas as pd
@@ -24,7 +26,7 @@ from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics)
 from ._const import *       # pylint:disable=wildcard-import
-from .utils import create_bar, update_bar
+from .utils import create_bar, update_bar, save_data_to
 
 
 METRICS = dict(
@@ -99,9 +101,12 @@ class Pipeline:
         self._rest_batch = None
         self._iter_params = None
         self._not_init_vars = True
-        self._debug = None
-        self.debug_info = None
-        self._debug_info_lock = threading.Lock()
+
+        self._profile = None
+        self._profiler = None
+        self.profile_info = None
+        self.elapsed_time = 0.0
+        self._profile_info_lock = threading.Lock()
 
     def __enter__(self):
         """ Create a context and return an empty pipeline non-bound to any dataset """
@@ -203,13 +208,16 @@ class Pipeline:
             return True
         return any(self._is_batch_method(name, subcls) for subcls in namespace.__subclasses__())
 
-    def get_action_name(self, action):
+    def get_action_name(self, action, add_index=False):
         """ Return a pretty action name """
         if action['name'] == '#_from_ns':
-            return action['method'].__name__
+            name = action['method'].__name__
         if action['name'].startswith('#_'):
-            return action['name'][2:]
-        return action['name']
+            name = action['name'][2:]
+        else:
+            name = action['name']
+        idx = self._actions.index(action)
+        return name if add_index is False else '{} #{}'.format(name, idx)
 
     def add_namespace(self, *namespaces):
         self._namespaces.extend(namespaces)
@@ -662,9 +670,94 @@ class Pipeline:
                 batch = self._exec_all_actions(batch, action['pipeline']._actions)  # pylint: disable=protected-access
         return batch
 
-    def _create_debug_info(self, batch, action, **kwargs):
-        name = self.get_action_name(action)
-        return dict(batch=id(batch), action=name, **kwargs)
+    def _add_profile_info(self, batch, action, exec_time, **kwargs):
+        name = self.get_action_name(action, add_index=True)
+        iter_no = self._iter_params['_n_iters']
+
+        start_time = time.time()
+        stats = Stats(self._profiler)
+        self._profiler.clear()
+
+        indices, values = [], []
+        for key, value in stats.stats.items():
+            for k, v in value[4].items():
+                # action name, method_name, file_name, line_no, callee
+                indices.append((name, '{}::{}::{}::{}'.format(key[2], *k)))
+                row_dict = {
+                    'iter': iter_no, 'total_time': exec_time, 'pipeline_time': stats.total_tt, # base stats
+                    'ncalls': v[0], 'tottime': v[2], 'cumtime': v[3], # detailed stats
+                    'batch_id': id(batch), **kwargs
+                }
+                values.append(row_dict)
+
+
+        multiindex = pd.MultiIndex.from_tuples(indices, names=['action', 'id'])
+        df = pd.DataFrame(values, index=multiindex,
+                          columns=['iter', 'total_time', 'pipeline_time',
+                                   'ncalls', 'tottime', 'cumtime',
+                                   'batch_id', *list(kwargs.keys())])
+        df['total_time'] += time.time() - start_time
+
+        if self.profile_info is None:
+            with self._profile_info_lock:
+                self.profile_info = df
+        else:
+            with self._profile_info_lock:
+                self.profile_info = self.profile_info.append(df)
+
+    def show_profile_info(self, per_iter=False, detailed=False,
+                          groupby=None, columns=None, sortby=None, limit=10):
+        """ Show stored profiling information with varying levels of details.
+
+        Parameters
+        ----------
+        per_iter : bool
+            Whether to make an aggregation over iters or not.
+        detailed : bool
+            Whether to use information from :class:`cProfiler` or not.
+        groupby : str or sequence of str
+            Used only when `per_iter` is True, directly passed to pandas.
+        columns : sequence of str
+            Columns to show in resultining dataframe.
+        sortby : str or tuple of str
+            Column id to sort on. Note that if data is aggregated over iters (`per_iter` is False),
+            then it must be a full identificator of a column.
+        limit : int
+            Limits the length of resulting dataframe.
+        parse : bool
+            Allows to re-create underlying dataframe from scratches.
+        """
+        if per_iter is False and detailed is False:
+            columns = columns or ['total_time', 'pipeline_time']
+            sortby = sortby or ('total_time', 'sum')
+            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
+            result = (self.profile_info.groupby(['action', 'iter'])[columns].mean().groupby('action').agg(aggs)
+                      .sort_values(sortby, ascending=False))
+
+        elif per_iter is False and detailed is True:
+            columns = columns or ['ncalls', 'tottime', 'cumtime']
+            sortby = sortby or ('tottime', 'sum')
+            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
+            result = (self.profile_info.reset_index().groupby(['action', 'id']).agg(aggs)
+                      .sort_values(['action', sortby], ascending=[True, False])
+                      .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
+
+        elif per_iter is True and detailed is False:
+            groupby = groupby or ['iter', 'action']
+            columns = columns or ['action', 'total_time', 'pipeline_time', 'batch_id']
+            sortby = sortby or 'total_time'
+            result = (self.profile_info.reset_index().groupby(groupby)[columns].mean()
+                      .sort_values(['iter', sortby], ascending=[True, False]))
+
+        elif per_iter is True and detailed is True:
+            groupby = groupby or ['iter', 'action', 'id']
+            columns = columns or ['ncalls', 'tottime', 'cumtime']
+            sortby = sortby or 'tottime'
+            result = (self.profile_info.reset_index().set_index(groupby)[columns]
+                      .sort_values(['iter', 'action', sortby], ascending=[True, True, False])
+                      .groupby(level=[0, 1]).apply(lambda df: df[:limit]).droplevel([0, 1]))
+        return result
+
 
     def _exec_all_actions(self, batch, actions=None):
         join_batches = None
@@ -677,8 +770,9 @@ class Pipeline:
             if 'kwargs' in action:
                 _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
 
-            if self._debug:
+            if self._profile:
                 start_time = time.time()
+                self._profiler.enable()
 
             if _action.get('#dont_run', False):
                 pass
@@ -713,15 +807,11 @@ class Pipeline:
 
                 batch = self._exec_one_action(batch, _action, _action_args, _action['kwargs'])
 
-            if self._debug:
+            if self._profile:
+                self._profiler.disable()
                 exec_time = time.time() - start_time
-                debug_info = self._create_debug_info(batch, action, start_time=start_time, time=exec_time)
-                if self.debug_info is None:
-                    with self._debug_info_lock:
-                        self.debug_info = pd.DataFrame(debug_info, index=[0])
-                else:
-                    with self._debug_info_lock:
-                        self.debug_info = self.debug_info.append(debug_info, ignore_index=True, sort=False)
+                self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time)
+
 
         return batch
 
@@ -947,28 +1037,8 @@ class Pipeline:
 
         return args, kwargs
 
-    def _save_output(self, batch, model, output, save_to):
-        if not isinstance(save_to, (tuple, list)):
-            save_to = [save_to]
-            if isinstance(output, (tuple, list)):
-                output = [output]
-        if not isinstance(output, (tuple, list)):
-            output = [output]
-
-        if len(save_to) != len(output):
-            raise ValueError("The number of model outputs does not equal the number of 'save_to' locations.")
-
-        for i, var in enumerate(save_to):
-            if len(output) <= i:
-                raise ValueError("'%s' output has fewer items than expected." \
-                                 % model.name)
-            item = output[i]
-            if isinstance(var, NamedExpression):
-                var.set(item, batch=batch, model=model)
-            elif isinstance(var, np.ndarray):
-                var[:] = item
-            else:
-                save_to[i] = item
+    def _save_output(self, batch, model, output, locations):
+        save_data_to(output, locations, batch=batch, model=model)
 
     def _exec_train_model(self, batch, action):
         model = self.get_model_by_name(action['model_name'], batch=batch)
@@ -1155,13 +1225,14 @@ class Pipeline:
     def merge(self, *pipelines, fn=None, components=None, batch_class=None):
         """ Merge pipelines """
         return self._add_action(MERGE_ID, _args=dict(pipelines=pipelines, mode='n', fn=fn,
-                                components=components, batch_class=batch_class))
+                                                     components=components, batch_class=batch_class))
 
     def rebatch(self, batch_size, fn=None, components=None, batch_class=None):
         """ Set the output batch size """
+        # pylint:disable=protected-access
         new_p = type(self)(self.dataset)
-        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn, 
-                                 components=components, batch_class=batch_class))    # pylint:disable=protected-access
+        return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn,
+                                                        components=components, batch_class=batch_class))
 
     def _put_batches_into_queue(self, gen_batch, bar, bar_desc):
         while not self._stop_flag:
@@ -1304,15 +1375,17 @@ class Pipeline:
                 break
 
             if _action['fn'] is None:
-                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'], components=_action['components'],
+                batch, self._rest_batch = batches[0].merge(batches, batch_size=_action['batch_size'],
+                                                           components=_action['components'],
                                                            batch_class=_action['batch_class'])
             else:
-                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'], components=_action['components'],
+                batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'],
+                                                        components=_action['components'],
                                                         batch_class=_action['batch_class'])
             yield batch
 
 
-    def gen_batch(self, *args, iter_params=None, reset='iter', debug=False, **kwargs):
+    def gen_batch(self, *args, iter_params=None, reset='iter', profile=False, **kwargs):
         """ Generate batches
 
         Parameters
@@ -1390,13 +1463,16 @@ class Pipeline:
         kwargs_value = self._eval_expr(kwargs)
         self.reset(reset)
         self._iter_params = iter_params or self._iter_params or Baseset.get_default_iter_params()
-        self._debug = debug
+        self._profile = profile
+        if profile:
+            self._profiler = Profile()
 
         return self._gen_batch(*args_value, iter_params=self._iter_params, **kwargs_value)
 
 
     def _gen_batch(self, *args, **kwargs):
         """ Generate batches """
+        start_time = time.time()
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
@@ -1479,6 +1555,7 @@ class Pipeline:
 
         if self.after:
             self.after.run()
+        self.elapsed_time += time.time() - start_time
 
 
     def create_batch(self, batch_index, *args, **kwargs):
@@ -1494,12 +1571,13 @@ class Pipeline:
         --------
         :meth:`~Pipeline.gen_batch`
         """
+        start_time = time.time()
         if len(args) == 0 and len(kwargs) == 0:
             if self._lazy_run is None:
                 raise RuntimeError("next_batch without arguments requires a lazy run at the end of the pipeline")
             args, kwargs = self._lazy_run
             batch_res = self.next_batch(*args, **kwargs)
-        elif True or kwargs.get('prefetch', 0) > 0:
+        elif True or kwargs.get('prefetch', 0) > 0: # FIXME
             if self._batch_generator is None:
                 self._lazy_run = args, kwargs
                 self._batch_generator = self.gen_batch(*args, **kwargs)
@@ -1517,6 +1595,7 @@ class Pipeline:
                     batch_res = self.create_batch(batch_index, **_kwargs)
                 except SkipBatchException:
                     pass
+        self.elapsed_time += time.time() - start_time
         return batch_res
 
     def run(self, *args, **kwargs):

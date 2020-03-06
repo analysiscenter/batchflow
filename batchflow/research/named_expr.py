@@ -70,7 +70,7 @@ class RC(REU): # ResearchConfig
         return getattr(res, 'config')
 
 class RD(ResearchNamedExpression): # ResearchDir
-    """ NamedExpression for fodler with the Research """
+    """ NamedExpression for folder with the Research """
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
         return kwargs['path']
@@ -91,15 +91,34 @@ class RID(ResearchNamedExpression): # ResearchExperimentID
         return job.ids[unit.index]
 
 class REP(ResearchNamedExpression): # ResearchExperimentPath
-    """ NamedExpression for path to the current experiment """
+    """ NamedExpression for path to folder corresponding to the current config """
+    def __init__(self, name=None, relative=False):
+        """ NamedExpression for path inside to experiment folder.
+
+        Parameters
+        ----------
+        name : str or None
+            NamedExpression name
+        relative : bool
+            if False, absolute path including name of the root research folder,
+            if True, the path inside of the research folder.
+        """
+        super().__init__(name)
+        self.relative = relative
+
     def _get(self, **kwargs):
         _, kwargs = super()._get(**kwargs)
-        return kwargs['job'], kwargs['experiment']
+        return kwargs['job'], kwargs['experiment'], kwargs['path']
 
     def get(self, **kwargs):
-        job, experiment = self._get(**kwargs)
-        unit = list(experiment.values())[0]
-        return os.path.join(unit.path, job.ids[unit.index])
+        job, experiment, path = self._get(**kwargs)
+        # unit to get attributes (each unit will have the same so we take the first)
+        unit = next(iter(experiment.values()))
+        experiment_path = unit.experiment_path # path to folder with current experiment
+        index = unit.index # index of the branch corresponding to the current experiment
+        if self.relative:
+            return os.path.join(experiment_path, job.ids[index])
+        return os.path.join(path, experiment_path, job.ids[index])
 
 class RR(ResearchNamedExpression): # ResearchResults
     """ NamedExpression for Results of the Research """

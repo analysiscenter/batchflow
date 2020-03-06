@@ -168,6 +168,7 @@ class BaseComponents:
     def __getattr__(self, name):
         if name in self.components:
             return self.get(name, self.indices)
+        return None
 
     def __setattr__(self, name, value):
         if name in ('data', 'components'):
