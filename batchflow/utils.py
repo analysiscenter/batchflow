@@ -306,7 +306,7 @@ def update_bar(bar, bar_desc, **kwargs):
 def plot_loss(loss, xlabel='Iterations', figsize=(15, 5)):
     """ Plot loss function. """
     plt.figure(figsize=figsize)
-    plt.xlabel(xlabel) 
+    plt.xlabel(xlabel)
     plt.ylabel("Loss")
     plt.plot(loss)
 
