@@ -82,7 +82,8 @@ class BasePascal(ImagesOpenset):
         list_ids = raw_ids.read().decode().split('\n')
         return list_ids[:-1]
 
-class PascalSegmentation(BasePascal):
+
+class PascalVOCSegmentation(BasePascal):
     """ Contains 2913 images and masks.
 
     Examples
@@ -98,7 +99,7 @@ class PascalSegmentation(BasePascal):
 
 
         # download PascalVOC dataset and extract the archive content
-        pascal = PascalSegmentation(unpack=True)
+        pascal = PascalVOCSegmentation(unpack=True)
 
     Notes
     -----
@@ -135,7 +136,7 @@ class PascalSegmentation(BasePascal):
             return (train_images, train_masks), (test_images, test_masks)
 
 
-class PascalClassification(BasePascal):
+class PascalVOCClassification(BasePascal):
     """ PascalVOC dataset for classification track. Contains 11540 images and corresponding classes
 
     Examples
@@ -151,7 +152,7 @@ class PascalClassification(BasePascal):
 
 
         # download PascalVOC dataet and replace uncertain labels with 1 class
-        pascal = PascalClassification(replace_zero=1)
+        pascal = PascalVOCClassification(replace_zero=1)
 
 
     Notes
