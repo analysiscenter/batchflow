@@ -75,7 +75,7 @@ class MethodsTransformingMeta(type):
         return action(apply_transform_wrapper)
 
 
-class Batch(metaclass=MethodsTransformingMeta):
+class Batch():
     """ The core Batch class
 
     Note, that if any class method is wrapped with `@apply_transform` decorator

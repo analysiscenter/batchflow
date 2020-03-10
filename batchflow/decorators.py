@@ -12,6 +12,7 @@ try:
 except ImportError:
     jit = None
 
+# from .batch import Batch
 from .named_expr import P
 
 
@@ -82,31 +83,24 @@ def action(*args, **kwargs):
     # action with arguments
     return _make_action_wrapper_with_args(*args, **kwargs)
 
-def apply_transform(*args, **kwargs):
-    """ Mark class method for transform in its metaclass.
+def apply_transform(*dec_args, **dec_kwargs):
+    """Wrap class method into apply_transform if called from pipeline"""
+    # TODO: make use of decorator arguments
+    def make_action(method):
+        def choose_transform(self, *args, **kwargs):
+            called_from_pipeline = traceback.format_stack()[-3].split(' ')[3].endswith('/pipeline.py",')
+            if called_from_pipeline:
+                method_ = method.__get__(self, type(self))
+                return self.apply_transform(method_, *args, **kwargs)
+            return method(self, *args, **kwargs)
+        return action(choose_transform)
 
-        Decorator writes `kwargs` to the method attribute `transform_kwargs`,
-        so they can be extracted and used in metaclass.
-
-        Parameters
-        ----------
-        all : bool
-            whether call `apply_transform_all` instead of `apply_transform`
-
-        args, kwargs
-            other parameters passed to `apply_transform` method of the class
-            where this decorator is being used
-        """
-    def mark(method):
-        method.transform_kwargs = kwargs
-        return method
-
-    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-        return mark(args[0])
-    if len(args) != 0:
+    if len(dec_args) == 1 and len(dec_kwargs) == 0 and callable(dec_args[0]):
+        return make_action(dec_args[0])
+    if len(dec_args) != 0:
         raise ValueError("This decorator accepts only named arguments")
 
-    return mark
+    return make_action
 
 def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """

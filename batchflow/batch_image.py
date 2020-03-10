@@ -605,8 +605,8 @@ class ImagesBatch(BaseImagesBatch):
                 background = np.zeros(original_shape, dtype=np.uint8)
             else:
                 background = np.zeros((*original_shape, n_channels), dtype=np.uint8)
-            return self._put_on_background_(transformed_image, background, origin)
-        return self._crop_(transformed_image, origin, original_shape, True)
+            return self.put_on_background(transformed_image, background, origin)
+        return self.crop(transformed_image, origin, original_shape, True)
 
     @apply_transform
     def filter(self, image, mode, *args, **kwargs):
@@ -1125,7 +1125,7 @@ class ImagesBatch(BaseImagesBatch):
             Probability of applying the transform. Default is 1.
         """
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
-        return self._add_(image, noise, clip, preserve_type)
+        return self.add(image, noise, clip, preserve_type)
 
     @apply_transform
     def multiplicative_noise(self, image, noise, clip=False, preserve_type=False):
@@ -1148,7 +1148,7 @@ class ImagesBatch(BaseImagesBatch):
             Probability of applying the transform. Default is 1.
         """
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
-        return self._multiply_(image, noise, clip, preserve_type)
+        return self.multiply(image, noise, clip, preserve_type)
 
     @apply_transform
     def elastic_transform(self, image, alpha, sigma, **kwargs):
