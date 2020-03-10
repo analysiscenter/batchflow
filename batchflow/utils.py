@@ -2,7 +2,7 @@
 import sys
 import copy
 import math
-from functools import wraps
+import functools
 import tqdm
 
 import numpy as np
@@ -42,7 +42,7 @@ def partialmethod(func, *frozen_args, **frozen_kwargs):
     method : callable
         Wrapped method.
     """
-    @wraps(func)
+    @functools.wraps(func)
     def method(self, *args, **kwargs):
         """Wrapped method."""
         return func(self, *frozen_args, *args, **frozen_kwargs, **kwargs)
@@ -128,6 +128,7 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
             ax.set_ylabel(val.replace('_', ' ').capitalize())
             ax.grid(True)
             ax.legend()
+
 
 def show_research(df, layout=None, average_repetitions=False, log_scale=False,
                   rolling_window=None, color=None, scale=(9, 7)): # pylint: disable=too-many-branches
@@ -298,6 +299,15 @@ def update_bar(bar, bar_desc, **kwargs):
         bar.set_description(desc)
     bar.update(1)
 
+
+def plot_loss(loss, xlabel='Iterations', figsize=(15, 5)):
+    """ Plot loss function. """
+    plt.figure(figsize=figsize)
+    plt.xlabel(xlabel)
+    plt.ylabel("Loss")
+    plt.plot(loss)
+
+
 def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, **kwargs):
     """ Plot images and optionally true labels as well as predicted class proba.
         - In case labels and proba are not passed, just shows images.
@@ -309,26 +319,20 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
     Parameters
     ----------
     images : np.array
-        batch of images
-
+        Batch of images.
     labels : array-like, optional
-        images labels
-
+        Images labels.
     proba: np.array with the shape (n_images, n_classes) or list of such arrays, optional
-        predicted probabilities for each class for each model
-
+        Predicted probabilities for each class for each model.
     ncols: int
-        number of images to plot in a row
-
+        Number of images to plot in a row.
     classes: list of strings
-        class names. In case not specified the list [`1`, `2`, .., `proba.shape[1]`] would be assigned.
-
+        Class names. In case not specified the list [`1`, `2`, .., `proba.shape[1]`] would be assigned.
     models_names: string or list of strings
-        models names. In case not specified and the single model predictions provided will not display any name.
+        Models names. In case not specified and the single model predictions provided will not display any name.
         Otherwise the list [`Model 1`, `Model 2`, ..] is being assigned.
-
     kwargs : dict
-        additional keyword arguments for plt.subplots().
+        Additional keyword arguments for plt.subplots().
     """
     if isinstance(models_names, str):
         models_names = (models_names, )
@@ -357,18 +361,21 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
         ax[i].imshow(images[i])
         if labels is not None: # plot images with labels
             true_class_name = classes[labels[i]]
-            title = 'Label: {}'.format(true_class_name)
+            title = 'Real answer: {}'.format(true_class_name)
             if proba[0] is not None: # plot images with labels and predictions
                 for j, model_proba in enumerate(proba): # the case of preidctions of several models
                     class_pred = np.argmax(model_proba, axis=1)[i]
                     class_proba = model_proba[i][class_pred]
                     pred_class_name = classes[class_pred]
-                    title += '\n {0} pred: {1}, p = {2:.2f}'.format(models_names[j], pred_class_name, class_proba)
+                    title += '\n {} Prediction: {} with {:.2f}%'.format(models_names[j],
+                                                                        pred_class_name, class_proba * 100)
             ax[i].title.set_text(title)
+            ax[i].title.set_size(28)
         ax[i].grid(b=None)
 
     for i in range(n_items, nrows * ncols):
         fig.delaxes(ax[i])
+
 
 def save_data_to(what, where, **kwargs):
     """ Store data to specified locations

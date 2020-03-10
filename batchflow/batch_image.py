@@ -2,7 +2,6 @@
 import os
 import warnings
 from numbers import Number
-from functools import wraps
 
 import numpy as np
 from skimage.transform import resize
@@ -15,7 +14,7 @@ import PIL.ImageFilter
 import PIL.ImageEnhance
 
 from .batch import Batch
-from .decorators import action, inbatch_parallel
+from .decorators import action, apply_transform, inbatch_parallel
 from .dsindex import FilesIndex
 
 
@@ -50,66 +49,6 @@ def get_scipy_transforms():
     return scipy_transformations
 
 
-def transform_actions(prefix='', suffix='', wrapper=None):
-    """ Transforms classmethods that have names like <prefix><name><suffix> to pipeline's actions executed in parallel.
-
-    First, it finds all *class methods* which names have the form <prefix><method_name><suffix>
-    (ignores those that start and end with '__').
-
-    Then, all found classmethods are decorated through ``wrapper`` and resulting
-    methods are added to the class with the names of the form <method_name>.
-
-    Parameters
-    ----------
-    prefix : str
-    suffix : str
-    wrapper : str
-        name of the wrapper inside ``Batch`` class
-
-    Examples
-    --------
-    >>> from dataset import ImagesBatch
-    >>> @transform_actions(prefix='_', suffix='_')
-    ... class MyImagesBatch(ImagesBatch):
-    ...     @classmethod
-    ...     def _flip_(cls, image):
-    ...             return image[:,::-1]
-
-    Note that if you only want to redefine actions you still have to decorate your class.
-
-    >>> from dataset.opensets import CIFAR10
-    >>> dataset = CIFAR10(batch_class=MyImagesBatch, path='.')
-
-    Now dataset.pipeline has flip action that operates as described above.
-    If you want to apply an action with some probability, then specify ``p`` parameter:
-
-    >>> from dataset import Pipeline
-    >>> pipeline = (Pipeline()
-    ...                 ...preprocessing...
-    ...                 .flip(p=0.7)
-    ...                 ...postprocessing...
-
-    Now each image will be flipped with probability 0.7.
-    """
-    def _decorator(cls):
-        for method_name, method in cls.__dict__.copy().items():
-            if method_name.startswith(prefix) and method_name.endswith(suffix) and\
-               not method_name.startswith('__') and not method_name.endswith('__'):
-                def _wrapper():
-                    #pylint: disable=cell-var-from-loop
-                    wrapped_method = method
-                    @wraps(wrapped_method)
-                    def _func(self, *args, src='images', target='for', **kwargs):
-                        return getattr(cls, wrapper)(self, wrapped_method, src=src,
-                                                     use_self=True, target=target, *args, **kwargs)
-                    return _func
-                name_slice = slice(len(prefix), -len(suffix))
-                wrapped_method_name = method_name[name_slice]
-                setattr(cls, wrapped_method_name, action(_wrapper()))
-        return cls
-    return _decorator
-
-
 def add_methods(transformations=None, prefix='_', suffix='_'):
     """ Bounds given functions to a decorated class
 
@@ -126,25 +65,30 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
     """
     def _decorator(cls):
         for func_name, func in transformations.items():
-            def _method_decorator():
-                #pylint: disable=cell-var-from-loop
-                added_func = func
-                @wraps(added_func)
-                def _method(_, *args, **kwargs):
-                    return added_func(*args, **kwargs)
-                return _method
             method_name = ''.join((prefix, func_name, suffix))
-            added_method = _method_decorator()
+            added_method = staticmethod(func)
             setattr(cls, method_name, added_method)
         return cls
     return _decorator
 
 
 class BaseImagesBatch(Batch):
-    """ Batch class for 2D images """
+    """ Batch class for 2D images.
+
+    Note, that if any class method is wrapped with `@apply_transform` decorator
+    than for inner calls (i.e. from other class methods) should be used version
+    of desired method with underscores. (For example, if there is a decorated
+    `method` than you need to call `_method_` from inside of `other_method`).
+    Same is applicable for all child classes of :class:`batch.Batch`.
+    """
     components = "images", "labels", "masks"
-    formats_lower = ['jpg', 'png', 'jpeg']
-    formats = set(formats_lower + [x.upper() for x in formats_lower])
+    # Class-specific defaults for :meth:`.Batch.apply_transform`
+    transform_defaults = dict(target='for',
+                              init='indices',
+                              post='_assemble',
+                              src='images',
+                              dst='images',
+                              all=False)
 
     def _make_path(self, ix, src=None):
         """ Compose path.
@@ -261,8 +205,6 @@ class BaseImagesBatch(Batch):
         return super().dump(dst=dst, fmt=fmt, components=components, *args, **kwargs)
 
 
-@transform_actions(prefix='_', suffix='_all', wrapper='apply_transform_all')
-@transform_actions(prefix='_', suffix='_', wrapper='apply_transform')
 @add_methods(transformations={**get_scipy_transforms(),
                               'pad': np.pad,
                               'resize': resize}, prefix='_sp_', suffix='_')
@@ -283,7 +225,14 @@ class ImagesBatch(BaseImagesBatch):
         Y v
 
     Pixel's position is defined as (x, y)
+
+    Note, that if any class method is wrapped with `@apply_transform` decorator
+    than for inner calls (i.e. from other class methods) should be used version
+    of desired method with underscores. (For example, if there is a decorated
+    `method` than you need to call `_method_` from inside of `other_method`).
+    Same is applicable for all child classes of :class:`batch.Batch`.
     """
+
     @classmethod
     def _get_image_shape(cls, image):
         if isinstance(image, PIL.Image.Image):
@@ -358,8 +307,9 @@ class ImagesBatch(BaseImagesBatch):
                 array_result[:] = result
                 setattr(self, component, array_result)
 
-    def _to_array_(self, image, dtype=None, channels='last'):
-        """converts images in Batch to np.ndarray format
+    @apply_transform
+    def to_array(self, image, dtype=None, channels='last'):
+        """ Converts batch images to np.ndarray format
 
         Parameters
         ----------
@@ -380,7 +330,8 @@ class ImagesBatch(BaseImagesBatch):
 
         return image
 
-    def _to_pil_(self, image, mode=None):
+    @apply_transform
+    def to_pil(self, image, mode=None):
         """converts images in Batch to PIL format
 
         Parameters
@@ -473,7 +424,8 @@ class ImagesBatch(BaseImagesBatch):
 
         return np.asarray(origin, dtype=np.int)
 
-    def _scale_(self, image, factor, preserve_shape=False, origin='center', resample=0):
+    @apply_transform
+    def scale(self, image, factor, preserve_shape=False, origin='center', resample=0):
         """ Scale the content of each image in the batch.
 
         Resulting shape is obtained as original_shape * factor.
@@ -539,7 +491,8 @@ class ImagesBatch(BaseImagesBatch):
             rescaled_image = self._preserve_shape(original_shape, rescaled_image, origin)
         return rescaled_image
 
-    def _crop_(self, image, origin, shape, crop_boundaries=False):
+    @apply_transform
+    def crop(self, image, origin, shape, crop_boundaries=False):
         """ Crop an image.
 
         Extract image data from the window of the size given by `shape` and placed at `origin`.
@@ -578,7 +531,8 @@ class ImagesBatch(BaseImagesBatch):
 
         return image.crop((*origin, *right_bottom))
 
-    def _put_on_background_(self, image, background, origin, mask=None):
+    @apply_transform
+    def put_on_background(self, image, background, origin, mask=None):
         """ Put an image on a background at given origin
 
         Parameters
@@ -654,7 +608,8 @@ class ImagesBatch(BaseImagesBatch):
             return self._put_on_background_(transformed_image, background, origin)
         return self._crop_(transformed_image, origin, original_shape, True)
 
-    def _filter_(self, image, mode, *args, **kwargs):
+    @apply_transform
+    def filter(self, image, mode, *args, **kwargs):
         """ Filters an image. Calls ``image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))``.
 
         For more details see `ImageFilter <http://pillow.readthedocs.io/en/stable/reference/ImageFilter.html>_`.
@@ -672,7 +627,8 @@ class ImagesBatch(BaseImagesBatch):
         """
         return image.filter(getattr(PIL.ImageFilter, mode)(*args, **kwargs))
 
-    def _transform_(self, image, *args, **kwargs):
+    @apply_transform
+    def transform(self, image, *args, **kwargs):
         """ Calls ``image.transform(*args, **kwargs)``.
 
         For more information see
@@ -690,7 +646,8 @@ class ImagesBatch(BaseImagesBatch):
         size = kwargs.pop('size', self._get_image_shape(image))
         return image.transform(*args, size=size, **kwargs)
 
-    def _resize_(self, image, size, *args, **kwargs):
+    @apply_transform
+    def resize(self, image, size, *args, **kwargs):
         """ Calls ``image.resize(*args, **kwargs)``.
 
         For more details see `<https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image.resize>_`.
@@ -718,7 +675,8 @@ class ImagesBatch(BaseImagesBatch):
 
         return image.resize(new_size, *args, **kwargs)
 
-    def _shift_(self, image, offset, mode='const'):
+    @apply_transform
+    def shift(self, image, offset, mode='const'):
         """ Shifts an image.
 
         Parameters
@@ -743,7 +701,8 @@ class ImagesBatch(BaseImagesBatch):
             raise ValueError("mode must be one of ['const', 'wrap']")
         return image
 
-    def _pad_(self, image, *args, **kwargs):
+    @apply_transform
+    def pad(self, image, *args, **kwargs):
         """ Calls ``PIL.ImageOps.expand``.
 
         For more details see `<http://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.expand>`_.
@@ -763,7 +722,8 @@ class ImagesBatch(BaseImagesBatch):
         """
         return PIL.ImageOps.expand(image, *args, **kwargs)
 
-    def _rotate_(self, image, *args, **kwargs):
+    @apply_transform
+    def rotate(self, image, *args, **kwargs):
         """ Rotates an image.
 
             kwargs are passed to PIL.Image.rotate
@@ -787,7 +747,8 @@ class ImagesBatch(BaseImagesBatch):
         """
         return image.rotate(*args, **kwargs)
 
-    def _flip_(self, image, mode='lr'):
+    @apply_transform
+    def flip(self, image, mode='lr'):
         """ Flips image.
 
         Parameters
@@ -807,7 +768,8 @@ class ImagesBatch(BaseImagesBatch):
             return PIL.ImageOps.mirror(image)
         return PIL.ImageOps.flip(image)
 
-    def _invert_(self, image, channels='all'):
+    @apply_transform
+    def invert(self, image, channels='all'):
         """ Invert givn channels.
 
         Parameters
@@ -831,7 +793,8 @@ class ImagesBatch(BaseImagesBatch):
             image = PIL.Image.merge('RGB', bands)
         return image
 
-    def _salt_(self, image, p_noise=.015, color=255, size=(1, 1)):
+    @apply_transform
+    def salt(self, image, p_noise=.015, color=255, size=(1, 1)):
         """ Set random pixel on image to givan value.
 
         Every pixel will be set to ``color`` value with probability ``p_noise``.
@@ -876,7 +839,8 @@ class ImagesBatch(BaseImagesBatch):
 
         return PIL.Image.fromarray(image)
 
-    def _clip_(self, image, low=0, high=255):
+    @apply_transform
+    def clip(self, image, low=0, high=255):
         """ Truncate image's pixels.
 
         Parameters
@@ -903,7 +867,8 @@ class ImagesBatch(BaseImagesBatch):
         low = PIL.Image.new('RGB', image.size, low)
         return PIL.ImageChops.lighter(PIL.ImageChops.darker(image, high), low)
 
-    def _enhance_(self, image, layout='hcbs', factor=(1, 1, 1, 1)):
+    @apply_transform
+    def enhance(self, image, layout='hcbs', factor=(1, 1, 1, 1)):
         """ Apply enhancements from PIL.ImageEnhance to the image.
 
         Parameters
@@ -938,7 +903,8 @@ class ImagesBatch(BaseImagesBatch):
 
         return image
 
-    def _multiply_(self, image, multiplier=1., clip=False, preserve_type=False):
+    @apply_transform
+    def multiply(self, image, multiplier=1., clip=False, preserve_type=False):
         """ Multiply each pixel by the given multiplier.
 
         Parameters
@@ -970,7 +936,8 @@ class ImagesBatch(BaseImagesBatch):
             image = multiplier * image
         return image.astype(dtype)
 
-    def _add_(self, image, term=1., clip=False, preserve_type=False):
+    @apply_transform
+    def add(self, image, term=1., clip=False, preserve_type=False):
         """ Add term to each pixel.
 
         Parameters
@@ -998,7 +965,8 @@ class ImagesBatch(BaseImagesBatch):
             image = term + image
         return image.astype(dtype)
 
-    def _pil_convert_(self, image, mode="L"):
+    @apply_transform
+    def pil_convert(self, image, mode="L"):
         """ Convert image. Actually calls ``image.convert(mode)``.
 
         Parameters
@@ -1014,7 +982,8 @@ class ImagesBatch(BaseImagesBatch):
         """
         return image.convert(mode)
 
-    def _posterize_(self, image, bits=4):
+    @apply_transform
+    def posterize(self, image, bits=4):
         """ Posterizes image.
 
         More concretely, it quantizes pixels' values so that they have``2^bits`` colors
@@ -1032,7 +1001,8 @@ class ImagesBatch(BaseImagesBatch):
         """
         return PIL.ImageOps.posterize(image, bits)
 
-    def _cutout_(self, image, origin, shape, color):
+    @apply_transform
+    def cutout(self, image, origin, shape, color):
         """ Fills given areas with color
 
         .. note:: It is assumed that ``origins``, ``shapes`` and ``colors`` have the same length.
@@ -1134,7 +1104,8 @@ class ImagesBatch(BaseImagesBatch):
 
         return np.array(patches, dtype=object)
 
-    def _additive_noise_(self, image, noise, clip=False, preserve_type=False):
+    @apply_transform
+    def additive_noise(self, image, noise, clip=False, preserve_type=False):
         """ Add additive noise to an image.
 
         Parameters
@@ -1156,7 +1127,8 @@ class ImagesBatch(BaseImagesBatch):
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._add_(image, noise, clip, preserve_type)
 
-    def _multiplicative_noise_(self, image, noise, clip=False, preserve_type=False):
+    @apply_transform
+    def multiplicative_noise(self, image, noise, clip=False, preserve_type=False):
         """ Add multiplicative noise to an image.
 
         Parameters
@@ -1178,7 +1150,8 @@ class ImagesBatch(BaseImagesBatch):
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
         return self._multiply_(image, noise, clip, preserve_type)
 
-    def _elastic_transform_(self, image, alpha, sigma, **kwargs):
+    @apply_transform
+    def elastic_transform(self, image, alpha, sigma, **kwargs):
         """ Deformation of images as described by Simard, Steinkraus and Platt, `Best Practices for Convolutional
         Neural Networks applied to Visual Document Analysis <http://cognitivemedium.com/assets/rmnist/Simard.pdf>_`.
 
