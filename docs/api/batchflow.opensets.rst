@@ -30,19 +30,19 @@ CIFAR100
     :show-inheritance:
 
 
-PascalClassification
+PascalVOCClassification
 --------
 
-.. autoclass:: batchflow.opensets.PascalClassification
+.. autoclass:: batchflow.opensets.PascalVOCClassification
     :members: 
     :undoc-members:
     :show-inheritance:
 
 
-PascalSegmentation
+PascalVOCSegmentation
 --------
 
-.. autoclass:: batchflow.opensets.PascalSegmentation
+.. autoclass:: batchflow.opensets.PascalVOCSegmentation
     :members: 
     :undoc-members:
     :show-inheritance:

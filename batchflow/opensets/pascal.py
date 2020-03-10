@@ -92,7 +92,7 @@ class PascalVOCSegmentation(BasePascal):
     ::
 
         # download PascalVOC dataset
-        pascal = PascalSegmentation()
+        pascal = PascalVOCSegmentation()
         # iterate over the train part of the dataset
         for batch in pascal.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
             # do something with a batch
@@ -145,7 +145,7 @@ class PascalVOCClassification(BasePascal):
     ::
 
         # download PascalVOC dataset
-        pascal = PascalClassification()
+        pascal = PascalVOCClassification()
         # iterate over the train part of the dataset
         for batch in pascal.train.gen_batch(BATCH_SIZE, shuffle=True, n_epochs=2):
             # do something with a batch
