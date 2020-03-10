@@ -308,7 +308,7 @@ def plot_loss(loss, xlabel='Iterations', figsize=(15, 5)):
     plt.plot(loss)
 
 
-def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, **kwargs):
+def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, title_size=28, **kwargs):
     """ Plot images and optionally true labels as well as predicted class proba.
         - In case labels and proba are not passed, just shows images.
         - In case labels are passed and proba is not, shows images with labels.
@@ -331,6 +331,8 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
     models_names: string or list of strings
         Models names. In case not specified and the single model predictions provided will not display any name.
         Otherwise the list [`Model 1`, `Model 2`, ..] is being assigned.
+    title_size: int
+        The font size for images titles(labels and/or predictions), default 28.
     kwargs : dict
         Additional keyword arguments for plt.subplots().
     """
@@ -370,7 +372,7 @@ def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_n
                     title += '\n {} Prediction: {} with {:.2f}%'.format(models_names[j],
                                                                         pred_class_name, class_proba * 100)
             ax[i].title.set_text(title)
-            ax[i].title.set_size(28)
+            ax[i].title.set_size(title_size)
         ax[i].grid(b=None)
 
     for i in range(n_items, nrows * ncols):
