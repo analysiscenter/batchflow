@@ -75,11 +75,9 @@ def add_methods(transformations=None, prefix='_', suffix='_'):
 class BaseImagesBatch(Batch):
     """ Batch class for 2D images.
 
-    Note, that if any class method is wrapped with `@apply_transform` decorator
-    than for inner calls (i.e. from other class methods) should be used version
-    of desired method with underscores. (For example, if there is a decorated
-    `method` than you need to call `_method_` from inside of `other_method`).
-    Same is applicable for all child classes of :class:`batch.Batch`.
+    Note, that if any class method is wrapped with `@apply_transform` than for
+    calls from other class methods you must specify `apply_transform=False` as
+    an argument. Same is applicable for child classes of :class:`.ImagesBatch`.
     """
     components = "images", "labels", "masks"
     # Class-specific defaults for :meth:`.Batch.apply_transform`
@@ -605,8 +603,8 @@ class ImagesBatch(BaseImagesBatch):
                 background = np.zeros(original_shape, dtype=np.uint8)
             else:
                 background = np.zeros((*original_shape, n_channels), dtype=np.uint8)
-            return self.put_on_background(transformed_image, background, origin)
-        return self.crop(transformed_image, origin, original_shape, True)
+            return self.put_on_background(transformed_image, background, origin, apply_transform=False) # pylint: disable=unexpected-keyword-arg
+        return self.crop(transformed_image, origin, original_shape, True, apply_transform=False) # pylint: disable=unexpected-keyword-arg
 
     @apply_transform
     def filter(self, image, mode, *args, **kwargs):
@@ -1125,7 +1123,7 @@ class ImagesBatch(BaseImagesBatch):
             Probability of applying the transform. Default is 1.
         """
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
-        return self.add(image, noise, clip, preserve_type)
+        return self.add(image, noise, clip, preserve_type, apply_transform=False) # pylint: disable=unexpected-keyword-arg
 
     @apply_transform
     def multiplicative_noise(self, image, noise, clip=False, preserve_type=False):
@@ -1148,7 +1146,7 @@ class ImagesBatch(BaseImagesBatch):
             Probability of applying the transform. Default is 1.
         """
         noise = noise(size=(*image.size, len(image.getbands())) if isinstance(image, PIL.Image.Image) else image.shape)
-        return self.multiply(image, noise, clip, preserve_type)
+        return self.multiply(image, noise, clip, preserve_type, apply_transform=False) # pylint: disable=unexpected-keyword-arg
 
     @apply_transform
     def elastic_transform(self, image, alpha, sigma, **kwargs):

@@ -4,7 +4,6 @@ import os
 import traceback
 import threading
 import warnings
-import functools
 
 import dill
 try:
@@ -30,59 +29,12 @@ from .decorators import action, inbatch_parallel, any_action_failed
 from .components import create_item_class, BaseComponents
 
 
-class MethodsTransformingMeta(type):
-    """ A metaclass to transform all class methods in the way described below:
-
-        1. Wrap method with either `apply_transform` or `apply_transform_all`
-           depending on the value of `all` argument (from `transform_kwargs`),
-           which is set via decorator @apply_transform. Then add this
-           wrapped method to a class namespace by its original name.
-
-        2. Add the original version of the method (i.e. unwrapped) to a class
-           namespace using name with underscores: `'_{}_'.format(name)`. This
-           is necessary in order to allow inner calls of untransformed versions
-           (e.g. `ImagesBatch.scale` calls `ImagesBatch.crop` under the hood).
-    """
-    def __new__(cls, name, bases, namespace):
-        namespace_ = namespace.copy()
-        for object_name, object_ in namespace.items():
-            transform_kwargs = getattr(object_, 'transform_kwargs', None)
-            if transform_kwargs is not None:
-                namespace_[object_name] = cls.apply_transform(object_, **transform_kwargs)
-
-                disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
-                object_.__doc__ = disclaimer + object_.__doc__
-                object_.__name__ = '_' + object_name + '_'
-                object_.__qualname__ = '.'.join(object_.__qualname__.split('.')[:-1] + [object_.__name__])
-                namespace_[object_.__name__] = object_
-
-        return super().__new__(cls, name, bases, namespace_)
-
-    @classmethod
-    def apply_transform(cls, method, **transform_kwargs):
-        """ Wrap passed `method` in accordance with `all` arg value """
-        @functools.wraps(method)
-        def apply_transform_wrapper(self, *args, **kwargs):
-            transform = self.apply_transform
-            method_ = method.__get__(self, type(self)) # bound method to class
-            transform_kwargs_full = {**self.transform_defaults, **transform_kwargs}
-            all = transform_kwargs_full.pop('all')
-            if all:
-                transform = self.apply_transform_all
-                _ = [transform_kwargs_full.pop(keyname) for keyname in ['target', 'init', 'post']]
-            kwargs_full = {**transform_kwargs_full, **kwargs}
-            return transform(method_, *args, **kwargs_full)
-        return action(apply_transform_wrapper)
-
-
 class Batch():
     """ The core Batch class
 
-    Note, that if any class method is wrapped with `@apply_transform` decorator
-    than for inner calls (i.e. from other class methods) should be used version
-    of desired method with underscores. (For example, if there is a decorated
-    `method` than you need to call `_method_` from inside of `other_method`).
-    Same is applicable for all child classes of :class:`batch.Batch`.
+    Note, that if any class method is wrapped with `@apply_transform` than for
+    calls from other class methods you must specify `apply_transform=False` as
+    an argument. Same is applicable for all child classes of :class:`.Batch`.
     """
     components = None
     # Class-specific defaults for :meth:`.Batch.apply_transform`
@@ -545,7 +497,7 @@ class Batch():
         most cases is actually equivalent to simple `@apply_transform` assuming
         that the defaults are redefined for the class whose methods are being
         transformed. Note, that if no defaults redefined those from the nearest
-        parent class will be used in :class:`batch.MethodsTransformingMeta`.
+        parent class will be used.
 
         Parameters
         ----------

@@ -84,14 +84,20 @@ def action(*args, **kwargs):
     return _make_action_wrapper_with_args(*args, **kwargs)
 
 def apply_transform(*dec_args, **dec_kwargs):
-    """Wrap class method into apply_transform if called from pipeline"""
-    # TODO: make use of decorator arguments
+    """Wrap class method into apply_transform if needed"""
     def make_action(method):
-        def choose_transform(self, *args, **kwargs):
-            called_from_pipeline = traceback.format_stack()[-3].split(' ')[3].endswith('/pipeline.py",')
-            if called_from_pipeline:
-                method_ = method.__get__(self, type(self))
-                return self.apply_transform(method_, *args, **kwargs)
+        @functools.wraps(method)
+        def choose_transform(self, *args, apply_transform=True, **kwargs): # pylint: disable=redefined-outer-name
+            if apply_transform:
+                transform = self.apply_transform
+                method_ = method.__get__(self, type(self)) # bound method to class
+                transform_kwargs = {**self.transform_defaults, **dec_kwargs}
+                all = transform_kwargs.pop('all')
+                if all:
+                    transform = self.apply_transform_all
+                    _ = [transform_kwargs.pop(keyname) for keyname in ['target', 'init', 'post']]
+                kwargs_full = {**transform_kwargs, **kwargs}
+                return transform(method_, *args, **kwargs_full)
             return method(self, *args, **kwargs)
         return action(choose_transform)
 
