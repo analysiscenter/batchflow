@@ -11,7 +11,7 @@ A fast intro into how to create and train ready to use models like ResNet, VGG a
 4. [Linear models as an example](./04_linear_models_example.ipynb) — a longer immersion into models training and configuration.
 5. [Creating your own model](./05_creating_CNN.ipynb). This tutorial shows how to create and train a simple model to recognize the digits from MNIST database.
 6. [Working with images](./06_image_augmentation.ipynb). How to augment images with ImagesBatch actions.
-7. [Sampling](./07_sampler.ipynb). How to sampling of multivariate distributions.
+7. [Sampling](./07_sampler.ipynb). A convenient sampling process from multivariate distributions.
 
 Next you might want some more tutorials.
 
