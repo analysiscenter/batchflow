@@ -60,12 +60,15 @@ class MNIST(ImagesOpenset):
         if any_action_failed(all_res):
             raise IOError('Could not download files:', all_res)
 
-        train_data = all_res[0], all_res[1]
-        test_data = all_res[2], all_res[3]
-        self._train_index = DatasetIndex(len(train_data[0]))
-        self._test_index = DatasetIndex(len(test_data[0]))
+        images = np.concatenate([all_res[0], all_res[2]])
+        labels = np.concatenate([all_res[1], all_res[3]])
 
-        return train_data, test_data
+        self._train_index = DatasetIndex(len(all_res[0]))
+        self._test_index = DatasetIndex(np.arange(len(all_res[2]), len(all_res[0]) + len(all_res[2])))
+
+        index = DatasetIndex(len(all_res[0]) + len(all_res[2]))
+        preloaded = images, labels
+        return preloaded, index
 
     @parallel(init='_get_from_urls', post='_gather_data', target='t')
     def download(self, url, content, path=None):
