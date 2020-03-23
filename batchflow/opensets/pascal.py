@@ -104,20 +104,16 @@ class PascalSegmentation(BasePascal):
             train_ids = self._extract_ids(archive, 'train')
             test_ids = self._extract_ids(archive, 'val')
 
-            train_images = np.array([self._extract_image(archive, self._image_path(name)) \
-                                     for name in train_ids], dtype=object)
-            test_images = np.array([self._extract_image(archive, self._image_path(name)) \
-                                    for name in test_ids], dtype=object)
+            images = np.array([self._extract_image(archive, self._image_path(name)) \
+                               for name in  [*train_ids, *test_ids]], dtype=object)
+            masks = np.array([self._extract_image(archive, self._mask_path(name)) \
+                              for name in [*train_ids, *test_ids]], dtype=object)
 
-            train_masks = np.array([self._extract_image(archive, self._mask_path(name)) \
-                                    for name in train_ids], dtype=object)
-            test_masks = np.array([self._extract_image(archive, self._mask_path(name)) \
-                                   for name in test_ids], dtype=object)
-            self._train_index = DatasetIndex(np.arange(len(train_images)))
-            self._test_index = DatasetIndex(np.arange(len(train_images), len(train_images) + len(test_images)))
+            self._train_index = DatasetIndex(np.arange(len(train_ids)))
+            self._test_index = DatasetIndex(np.arange(len(train_ids), len(train_ids) + len(test_ids)))
 
-            index = DatasetIndex(np.arange(len(train_images) + len(test_images)))
-            preloaded = np.append(train_images, test_images), np.append(train_masks, test_masks)
+            index = DatasetIndex(np.arange(len(train_ids) + len(test_ids)))
+            preloaded = images, masks
             return preloaded, index
 
 
@@ -164,18 +160,15 @@ class PascalClassification(BasePascal):
             train_ids = self._extract_ids(archive, 'train')
             test_ids = self._extract_ids(archive, 'val')
 
-            train_images = np.array([self._extract_image(archive, self._image_path(name)) \
-                                     for name in train_ids], dtype=object)
-            test_images = np.array([self._extract_image(archive, self._image_path(name)) \
-                                    for name in test_ids], dtype=object)
+            images = np.array([self._extract_image(archive, self._image_path(name))
+                              for name in [*train_ids, *test_ids]], dtype=object)
 
-            train_targets = np.array([d[self._name(name)] for name in train_ids])
-            train_labels = self._process_targets(train_targets)
+            targets = np.array([d[self._name(name)] for name in [*train_ids, *test_ids]])
+            labels = self._process_targets(targets)
 
-            test_targets = np.array([d[self._name(name)] for name in test_ids])
-            test_labels = self._process_targets(test_targets)
+            self._train_index = DatasetIndex(np.arange(len(train_ids)))
+            self._test_index = DatasetIndex(np.arange(len(train_ids), len(train_ids) + len(test_ids)))
 
-            self._train_index = DatasetIndex(np.arange(len(train_images)))
-            self._test_index = DatasetIndex(np.arange(len(test_images)))
-
-        return (train_images, train_labels), (test_images, test_labels)
+            index = DatasetIndex(np.arange(len(train_ids) + len(test_ids)))
+            preloaded = images, labels
+            return preloaded, index
