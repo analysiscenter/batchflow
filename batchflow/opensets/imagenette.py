@@ -98,9 +98,15 @@ class Imagenette(ImagesOpenset):
         if self.bar:
             self.bar.update(1)
 
+        images = np.concatenate([train_data[0], test_data[0]])
+        labels = np.concatenate([train_data[1], test_data[1]])
+
         self._train_index = DatasetIndex(np.arange(len(train_data[0])))
-        self._test_index = DatasetIndex(np.arange(len(test_data[0])))
-        return train_data, test_data
+        self._test_index = DatasetIndex(np.arange(len(train_data[0]), len(train_data[0]) + len(test_data[0])))
+
+        preloaded = images, labels
+        index = DatasetIndex(len(train_data[0]) + len(test_data[0]))
+        return preloaded, index
 
 
 class Imagenette320(Imagenette):
