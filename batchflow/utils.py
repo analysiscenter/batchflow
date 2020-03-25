@@ -201,7 +201,7 @@ def show_research(df, layout=None, average_repetitions=False, log_scale=False,
                     ax[i].plot(rdf['iteration'].values, y_values,
                                label='/'.join([str(repet), str(clabel)]), color=curr_color)
         ax[i].set_xlabel('iteration')
-        ax[i].set_title(title)
+        ax[i].set_title('{} ({})'.format(attr, name))
         ax[i].legend()
     plt.show()
 
@@ -238,9 +238,10 @@ def print_results(df, layout, average_repetitions=False, sort_by=None, ascending
     name, attr = layout.split('/')
     ndf = df[df['name'] == name]
     if average_repetitions:
-        columns.extend([name + '_mean', name + '_std'])
+        columns.extend([attr + ' (mean)', attr + ' (std)'])
     else:
-        columns.extend([name + '_' + str(i) for i in [*ndf['repetition'].unique(), 'mean', 'std']])
+        repetition_cols = [' (exec {})'.format(i) for i in ndf['repetition'].unique()]
+        columns.extend([attr + col_name for col_name in [*repetition_cols, ' (mean)', ' (std)']])
     for config, cdf in ndf.groupby("config"):
         index.append(config)
         cdf = cdf.drop(['config', 'name'], axis=1).dropna(axis=1).astype('float')
