@@ -172,8 +172,8 @@ class Research:
 
         return self
 
-    def get_metrics(self, pipeline, metrics_var, metrics_name,
-                    returns=None, execute=1, dump='last', logging=False):
+    def get_metrics(self, pipeline, metrics_var, metrics_name, *args,
+                    returns=None, execute=1, dump='last', logging=False, agg='mean', **kwargs):
         """ Evaluate metrics.
 
         Parameters
@@ -203,9 +203,9 @@ class Research:
             include execution information to log file or not
         """
         name = pipeline + '_metrics'
-        self.add_callable(get_metrics, name=name, execute=execute, dump=dump, returns=returns,
+        self.add_callable(get_metrics, *args, name=name, execute=execute, dump=dump, returns=returns,
                           on_root=False, logging=logging, pipeline=RP(pipeline),
-                          metrics_var=metrics_var, metrics_name=metrics_name)
+                          metrics_var=metrics_var, metrics_name=metrics_name, agg=agg, **kwargs)
         return self
 
     def init_domain(self, domain=None, n_configs=None, n_reps=1, repeat_each=100):
