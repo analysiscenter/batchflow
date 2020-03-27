@@ -160,7 +160,7 @@ class Research:
         name = name or function.__name__
 
         if name in self.executables:
-            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
+            raise ValueError('Executable unit with name {} already exists'.format(name))
 
         if on_root and returns is not None:
             raise ValueError("If function on root, then it mustn't have returns")
@@ -202,7 +202,7 @@ class Research:
         logging : bool
             include execution information to log file or not
         """
-        name = pipeline + '_metrics'
+        name = pipeline + '_' + metrics_var
         self.add_callable(get_metrics, *args, name=name, execute=execute, dump=dump, returns=returns,
                           on_root=False, logging=logging, pipeline=RP(pipeline),
                           metrics_var=metrics_var, metrics_name=metrics_name, agg=agg, **kwargs)
