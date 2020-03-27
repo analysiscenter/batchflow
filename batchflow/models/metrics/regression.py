@@ -105,23 +105,29 @@ class RegressionMetrics(Metrics):
         name = METRICS_ALIASES.get(name, name)
         return object.__getattribute__(self, name)
 
-    def mean_absolute_error(self):
+    def mean_absolute_error(self, *args, **kwargs):
+        _ = args, kwargs
         return np.average(np.abs(self.predictions - self.targets), axis=0, weights=self.weights)
 
-    def mean_squared_error(self):
+    def mean_squared_error(self, *args, **kwargs):
+        _ = args, kwargs
         return np.average((self.predictions - self.targets) ** 2, axis=0, weights=self.weights)
 
-    def median_absolute_error(self):
+    def median_absolute_error(self, *args, **kwargs):
+        _ = args, kwargs
         return np.median(np.abs(self.predictions - self.targets), axis=0)
 
-    def max_error(self):
+    def max_error(self, *args, **kwargs):
+        _ = args, kwargs
         return np.max(np.abs(self.predictions - self.targets), axis=0)
 
-    def root_mean_squared_error(self):
+    def root_mean_squared_error(self, *args, **kwargs):
+        _ = args, kwargs
         return np.sqrt(self.mean_squared_error())
 
-    def r2_score(self):
+    def r2_score(self, *args, **kwargs):
         # pylint: disable=missing-docstring
+        _ = args, kwargs
         if self.weights is not None:
             weight = self.weights[:, np.newaxis]
         else:
@@ -132,8 +138,9 @@ class RegressionMetrics(Metrics):
         denominator = (weight * (self.targets - targets_avg) ** 2).sum(axis=0)
         return 1 - (numerator / denominator)
 
-    def explained_variance_ratio(self):
+    def explained_variance_ratio(self, *args, **kwargs):
         # pylint: disable=missing-docstring
+        _ = args, kwargs
         diff_avg = np.average(self.predictions - self.targets, axis=0, weights=self.weights)
         numerator = np.average((self.predictions - self.targets - diff_avg) ** 2, axis=0, weights=self.weights)
 
@@ -141,7 +148,7 @@ class RegressionMetrics(Metrics):
         denominator = np.average((self.targets - targets_avg) ** 2, axis=0, weights=self.weights)
         return 1 - (numerator / denominator)
 
-    def accuracy(self, gap=3):
+    def accuracy(self, gap=3, *args, **kwargs):
         """ Accuracy metric in the regression task can be interpreted as the ratio of samples
          for which `abs(target-predictoin) < gap`.
 
@@ -150,5 +157,5 @@ class RegressionMetrics(Metrics):
          gap : int, default 3
             The maximum difference between pred and true values to classify sample as correct.
          """
+        _ = args, kwargs
         return (np.abs(self.predictions - self.targets) < gap).sum(axis=0) / self.targets.shape[0]
-    

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from . import Metrics
+from .base import Metrics
 
 
 class Loss(Metrics):
@@ -17,15 +17,22 @@ class Loss(Metrics):
         loss value obtained from model
     """
 
-    def __init__(self, loss):
+    def __init__(self, loss, batch_len):
         super().__init__()
 
-        self.__losses = [loss]
-        self._agg_fn_dict.update(mean=np.mean)
+        self.losses = [loss]
+        self.batch_lengths = [batch_len]
+
+        def agg_loss(args):
+            losses, blens = args
+            return np.sum(np.asarray(losses) * np.asarray(blens)) / np.sum(blens)
+
+        self._agg_fn_dict.update(mean=agg_loss)
 
     def append(self, metrics):
         """ Extend with data from another metrics"""
-        self.__losses.extend(metrics.loss())
+        self.losses.extend(metrics.losses)
+        self.batch_lengths.extend(metrics.batch_lengths)
 
-    def loss(self):
-        return self.__losses[:]
+    def loss(self, agg='mean'):
+        return self.losses if agg is None else (self.losses, self.batch_lengths)
