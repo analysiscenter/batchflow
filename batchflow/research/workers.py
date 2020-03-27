@@ -175,12 +175,12 @@ class PipelineWorker(Worker):
         i, job = self.job
         n_branches = len(job.configs)
         mapping = {
-            item: i
-            for i, item in enumerate({self.devices[i]['device'] for i in range(n_branches)})
+            item: 'gpu:' + str(i)
+            for i, item in enumerate({device for i in range(n_branches) for device in self.devices[i]['device']})
         }
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([self.devices[i]['device'] for i in range(n_branches)])
-        self.device_configs = [{'device': 'gpu:'+str(mapping[self.devices[i]['device']])} for i in range(n_branches)]
+        os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([device for i in range(n_branches) for device in self.devices[i]['device']])
+        self.device_configs = [{'device': [mapping[device] for device in self.devices[i]['device']]} for i in range(n_branches)]
 
         job.init(self.worker_config, self.device_configs, self.last_update_time)
         description = job.get_description()
