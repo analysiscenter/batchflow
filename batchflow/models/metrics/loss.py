@@ -29,10 +29,16 @@ class Loss(Metrics):
 
         self._agg_fn_dict.update(mean=agg_loss)
 
+        def batchwise_loss(args):
+            losses, _ = args
+            return losses
+
+        self._agg_fn_dict.update(batchwise=batchwise_loss)
+
     def append(self, metrics):
         """ Extend with data from another metrics"""
         self.losses.extend(metrics.losses)
         self.batch_lengths.extend(metrics.batch_lengths)
 
-    def loss(self, agg='mean'):
-        return self.losses if agg is None else (self.losses, self.batch_lengths)
+    def loss(self):
+        return self.losses, self.batch_lengths

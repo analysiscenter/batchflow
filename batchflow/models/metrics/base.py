@@ -61,7 +61,7 @@ class Metrics:
         res = {}
         for name in _metrics:
             metric_fn = getattr(self, name)
-            metric_val = metric_fn(*args, agg=agg, **kwargs)
+            metric_val = metric_fn(*args, **kwargs)
             res[name] = self._aggregate(metric_val, agg)
         res = res[metrics] if isinstance(metrics, str) else res
 

@@ -312,9 +312,8 @@ class ClassificationMetrics(Metrics):
         """
         return self._calc_agg(self.condition_positive, self.total_population, *args, **kwargs, when_zero=(0, 0))
 
-    def accuracy(self, *args, **kwargs):
+    def accuracy(self):
         """ An accuracy of detecting all the classes combined """
-        _ = args, kwargs
         return np.sum([self.true_positive(l) for l in self._all_labels()], axis=0) / self.total_population()
 
     def positive_predictive_value(self, *args, **kwargs):
