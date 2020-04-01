@@ -175,7 +175,7 @@ class PipelineWorker(Worker):
         i, job = self.job
         n_branches = len(job.configs)
         all_devices = {
-            device for i in range(n_branches) for device in self.devices[i]['device'] if device is not None]
+            device for i in range(n_branches) for device in self.devices[i]['device'] if device is not None
         }
 
         if len(all_devices) > 0:
