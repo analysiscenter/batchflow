@@ -174,14 +174,14 @@ class PipelineWorker(Worker):
         """ Run before job execution. """
         i, job = self.job
         n_branches = len(job.configs)
-        all_devices = [device for i in range(n_branches) for device in self.devices[i]['device'] if device is not None]
+        all_devices = set([device for i in range(n_branches) for device in self.devices[i]['device'] if device is not None])
 
         if len(all_devices) > 0:
             os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
             os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
 
         mapping = {
-            item: 'gpu:' + str(i) for i, item in enumerate(set(all_devices))
+            item: 'gpu:' + str(i) for i, item in enumerate(all_devices)
         }
 
         self.device_configs = [
