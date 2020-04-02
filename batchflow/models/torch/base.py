@@ -88,7 +88,7 @@ class TorchModel:
 
         If str, then short ``name``.
         If dict, then ``{'name': name, **kwargs}``.
-        If list, then sequence of losses in previous formats.
+        If list, then each item is a dict of format described above.
 
         Name must be one of:
             - short name (e.g. ``'mse'``, ``'ce'``, ``'l1'``, ``'cos'``, ``'hinge'``,
@@ -100,7 +100,7 @@ class TorchModel:
         Examples:
 
         - ``{'loss': 'mse'}``
-        - ``{'loss': {'name': KLDiv', 'reduction': 'none'}}``
+        - ``{'loss': {'name': 'KLDiv', 'reduction': 'none'}}``
         - ``{'loss': {'name': MyCustomLoss, 'epsilon': 1e-6}}``
         - ``{'loss': my_custom_loss_fn}``
         - ``{'loss': ['dice', 'bce']}``
@@ -134,21 +134,22 @@ class TorchModel:
         you should use a list of decays (see examples).
 
         If dict, then ``{'name': name, **kwargs}``.
-        If list, then sequence of decays in previous formats.
+        If list, then each item is a dict of format described above.
 
         Name must be one of:
 
-        - short name (``'exp'``, ``'invtime'``, ``'naturalexp'``, ``'const'``, ``'poly'``)
         - a class name from `torch.optim.lr_scheduler
           <https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate>`_
           (e.g. ``'LambdaLR'``) except ``'ReduceLROnPlateau'``.
+        - short name (``'exp'`` - ExponentialLR, ``'lambda'`` - LambdaLR, ``'step'`` - StepLR,
+                      ``'multistep'`` - MultiStepLR, ``'cos'`` - CosineAnnealingLR)
         - a class with ``_LRScheduler`` interface
         - a callable which takes optimizer and optional args
 
         Examples:
 
         - ``{'decay': {'name: 'exp', 'frequency': 5, 'first_iter': 6, 'last_iter': 20}}``
-        - ``{'decay': {'name': StepLR', 'steps_size': 10000, 'frequency': 5}}``
+        - ``{'decay': {'name': 'StepLR', 'steps_size': 10000, 'frequency': 5}}``
         - ``{'decay': {'name': MyCustomDecay, 'decay_rate': .5, 'frequency': 15, 'first_iter': 400}``
         - ``{'decay': [{'name': 'exp', 'gamma': 1, 'frequency': 1, 'last_iter': 900},
                        {'name': 'exp', 'gamma': 0.96, 'frequency': 2, 'first_iter': 901}]``
@@ -635,7 +636,7 @@ class TorchModel:
         decays, list_kwargs, list_steps = self._make_decay(config)
 
         if decays:
-            decays = [decay(optimizer, **decay_args) for decay, decay_args in zip(decays, list_kwargs)]
+            decays = [decay(optimizer, **decay_kwargs) for decay, decay_kwargs in zip(decays, list_kwargs)]
         return optimizer, decays, list_steps
 
     def _make_decay(self, config):
@@ -647,7 +648,7 @@ class TorchModel:
                 return decays, list_kwargs, list_steps
 
             step_meta_keys = ['frequency', 'first_iter', 'last_iter']
-            step_meta_defaults = [None, 0, np.finfo(np.float).max]
+            step_meta_defaults = [None, 0, np.inf]
             step_meta = {key: decay_args.pop(key, default) for key, default in zip(step_meta_keys, step_meta_defaults)}
 
             if step_meta['frequency'] is None:
@@ -665,8 +666,7 @@ class TorchModel:
                 decay_dict = DECAYS_DEFAULTS.get(decay).copy()
                 if decay == DECAYS['cos']:
                     decay_dict.update(T_max=step_meta['frequency'])
-                decay_dict.update(decay_args)
-                decay_args = decay_dict.copy()
+                decay_args = {**decay_dict, **decay_args}
 
             decays.append(decay)
             list_kwargs.append(decay_args)
