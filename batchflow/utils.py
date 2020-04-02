@@ -129,7 +129,7 @@ def plot_results_by_config(results, variables, figsize=None, layout=None, **kwar
             ax.grid(True)
             ax.legend()
 
-def show_research(df, layout=None, average_repetitions=False, log_scale=False,
+def show_research(df, layouts=None, titles=None, average_repetitions=False, log_scale=False,
                   rolling_window=None, color=None, **kwargs): # pylint: disable=too-many-branches
     """Show plots given by research dataframe.
 
@@ -137,10 +137,12 @@ def show_research(df, layout=None, average_repetitions=False, log_scale=False,
     ----------
     df : DataFrame
         Research's results
-    layout : list, optional
+    layouts : list, optional
         List of strings where each element consists two parts that splited by /. First part is the type
         of calculated value wrote in the "name" column. Second is name of column  with the parameters
         that will be drawn.
+    titles : list, optional
+        List of titles for plots that defined by layout.
     average_repetitions : bool, optional
         If True, then a separate line will be drawn for each repetition
         else one mean line will be drawn for each repetition.
@@ -153,36 +155,37 @@ def show_research(df, layout=None, average_repetitions=False, log_scale=False,
     kwargs:
         Additional named arguments directly passed to `plt.subplots`.
         With default parameters:
-            - ``figsize = (9 * len(layout), 7)``
+            - ``figsize = (9 * len(layouts), 7)``
             - ``nrows = 1``
-            - ``ncols = len(layout)``
+            - ``ncols = len(layouts)``
     """
-    if layout is None:
-        layout = []
+    if layouts is None:
+        layouts = []
         for nlabel, ndf in df.groupby("name"):
             ndf = ndf.drop(['config', 'name', 'iteration', 'repetition'], axis=1).dropna(axis=1)
             for attr in ndf.columns.values:
-                layout.append('/'.join([str(nlabel), str(attr)]))
+                layouts.append('/'.join([str(nlabel), str(attr)]))
+    titles = layouts if titles is None else titles
     if isinstance(log_scale, bool):
-        log_scale = [log_scale] * len(layout)
+        log_scale = [log_scale] * len(layouts)
     if isinstance(rolling_window, int) or (rolling_window is None):
-        rolling_window = [rolling_window] * len(layout)
+        rolling_window = [rolling_window] * len(layouts)
     rolling_window = [x if x is not None else 1 for x in rolling_window]
 
     if color is None:
-        color = list(mcolors.CSS4_COLORS.keys())
+        color = list(mcolors.TABLEAU_COLORS.keys())
     df_len = len(df['config'].unique())
     replace = not len(color) > df_len
     chosen_colors = np.random.choice(color, replace=replace, size=df_len)
 
-    kwargs = {'figsize': (9 * len(layout), 7), 'nrows': 1, 'ncols': len(layout), **kwargs}
+    kwargs = {'figsize': (9 * len(layouts), 7), 'nrows': 1, 'ncols': len(layouts), **kwargs}
 
     _, ax = plt.subplots(**kwargs)
-    if len(layout) == 1:
+    if len(layouts) == 1:
         ax = (ax, )
 
-    for i, (title, log, roll_w) in enumerate(list(zip(*[layout, log_scale, rolling_window]))):
-        name, attr = title.split('/')
+    for i, (layout, title, log, roll_w) in enumerate(list(zip(*[layouts, titles, log_scale, rolling_window]))):
+        name, attr = layout.split('/')
         ndf = df[df['name'] == name]
         for (clabel, cdf), curr_color in zip(ndf.groupby("config"), chosen_colors):
             cdf = cdf.drop(['config', 'name'], axis=1).dropna(axis=1).astype('float')
@@ -201,7 +204,7 @@ def show_research(df, layout=None, average_repetitions=False, log_scale=False,
                     ax[i].plot(rdf['iteration'].values, y_values,
                                label='/'.join([str(repet), str(clabel)]), color=curr_color)
         ax[i].set_xlabel('iteration')
-        ax[i].set_title('{} ({})'.format(attr, name))
+        ax[i].set_title(title)
         ax[i].legend()
     plt.show()
 
@@ -240,23 +243,20 @@ def print_results(df, layout, average_repetitions=False, sort_by=None, ascending
     if average_repetitions:
         columns.extend([attr + ' (mean)', attr + ' (std)'])
     else:
-        repetition_cols = [' (exec {})'.format(i) for i in ndf['repetition'].unique()]
+        repetition_cols = ['　(repetition {})'.format(i) for i in ndf['repetition'].unique()]
         columns.extend([attr + col_name for col_name in [*repetition_cols, ' (mean)', ' (std)']])
+
     for config, cdf in ndf.groupby("config"):
         index.append(config)
         cdf = cdf.drop(['config', 'name'], axis=1).dropna(axis=1).astype('float')
+        rep = []
+        for _, rdf in cdf.groupby('repetition'):
+            rdf = rdf.drop('repetition', axis=1)
+            rdf = rdf[rdf['iteration'] > rdf['iteration'].max() - n_last]
+            rep.append(rdf[attr].mean())
         if average_repetitions:
-            idf = cdf.groupby('iteration').mean().drop('repetition', axis=1)
-            max_iter = idf.index.max()
-            idf = idf[idf.index > max_iter - n_last]
-            data.append([idf[attr].mean(), idf[attr].std()])
+            data.append([np.mean(rep), np.std(rep)])
         else:
-            rep = []
-            for _, rdf in cdf.groupby('repetition'):
-                rdf = rdf.drop('repetition', axis=1)
-                max_iter = rdf['iteration'].max()
-                rdf = rdf[rdf['iteration'] > max_iter - n_last]
-                rep.append(rdf[attr].mean())
             data.append([*rep, np.mean(rep), np.std(rep)])
 
     res_df = pd.DataFrame(data=data, index=index, columns=columns)
