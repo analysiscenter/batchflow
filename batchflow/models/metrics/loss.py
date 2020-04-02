@@ -36,7 +36,7 @@ class Loss(Metrics):
         self._agg_fn_dict.update(batchwise=batchwise_loss)
 
     def append(self, metrics):
-        """ Extend with data from another metrics"""
+        """ Extend with data from another metrics. """
         self.losses.extend(metrics.losses)
         self.batch_lengths.extend(metrics.batch_lengths)
 
