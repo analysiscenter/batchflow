@@ -3,7 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from pandas import ewma
+import pandas as pd
 
 
 plt.style.use('seaborn-poster')
@@ -41,8 +41,8 @@ def draw(first, first_label, second=None, second_label=None, type_data='loss', w
     axis : None or element of subplot
         If you want to draw more subplots give the element of subplot """
 
-    firt_ewma = ewma(np.array(first), span=window, adjust=False)
-    second_ewma = ewma(np.array(second), span=window, adjust=False) if second else None
+    firt_ewma = pd.ewma(np.array(first), span=window, adjust=False)
+    second_ewma = pd.ewma(np.array(second), span=window, adjust=False) if second else None
 
     plot = axis or matplotlib.pyplot
     plot.plot(firt_ewma, label='{} {}'.format(first_label, type_data))
@@ -242,7 +242,7 @@ def draw_avgpooling(maps, answers, axis=None, span=350, model=True):
 
     filters = np.array([np.mean(maps[indices[i]], axis=0).reshape(-1) for i in range(10)])
     for i in range(10):
-        plt.plot(ewma(filters[i], span=span, adjust=False), color=col[i], label=str(i))
+        plt.plot(pd.ewma(filters[i], span=span, adjust=False), color=col[i], label=str(i))
 
     plt.title("Distribution of average pooling in "+("SE ResNet" if model else 'simple ResNet'))
     plt.legend(fontsize=16, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -299,9 +299,9 @@ def four_losses_draw(losses, names, title):
     _, axis = plt.subplots(1, 2)
     for loss, name in zip(losses, names):
         axis[0].plot(loss[-100:], label='%s'%name)
-        axis[0].plot(ewma(np.array(loss[-100:]), span=10, adjust=False), label='%s'%name)
+        axis[0].plot(pd.ewma(np.array(loss[-100:]), span=10, adjust=False), label='%s'%name)
         axis[1].plot(loss, label='%s'%name)
-        axis[1].plot(ewma(np.array(loss), span=10, adjust=False), label='%s'%name)
+        axis[1].plot(pd.ewma(np.array(loss), span=10, adjust=False), label='%s'%name)
 
     axis[0].set_title(title)
     axis[0].legend()

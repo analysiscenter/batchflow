@@ -4,6 +4,7 @@ import os
 import traceback
 import threading
 import warnings
+import functools
 
 import dill
 try:
@@ -29,9 +30,68 @@ from .decorators import action, inbatch_parallel, any_action_failed
 from .components import create_item_class, BaseComponents
 
 
-class Batch:
-    """ The core Batch class """
+class MethodsTransformingMeta(type):
+    """ A metaclass to transform all class methods in the way described below:
+
+        1. Wrap method with either `apply_transform` or `apply_transform_all`
+           depending on the value of `all` argument (from `transform_kwargs`),
+           which is set via decorator @apply_transform. Then add this
+           wrapped method to a class namespace by its original name.
+
+        2. Add the original version of the method (i.e. unwrapped) to a class
+           namespace using name with underscores: `'_{}_'.format(name)`. This
+           is necessary in order to allow inner calls of untransformed versions
+           (e.g. `ImagesBatch.scale` calls `ImagesBatch.crop` under the hood).
+    """
+    def __new__(cls, name, bases, namespace):
+        namespace_ = namespace.copy()
+        for object_name, object_ in namespace.items():
+            transform_kwargs = getattr(object_, 'transform_kwargs', None)
+            if transform_kwargs is not None:
+                namespace_[object_name] = cls.apply_transform(object_, **transform_kwargs)
+
+                disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
+                object_.__doc__ = disclaimer + object_.__doc__
+                object_.__name__ = '_' + object_name + '_'
+                object_.__qualname__ = '.'.join(object_.__qualname__.split('.')[:-1] + [object_.__name__])
+                namespace_[object_.__name__] = object_
+
+        return super().__new__(cls, name, bases, namespace_)
+
+    @classmethod
+    def apply_transform(cls, method, **transform_kwargs):
+        """ Wrap passed `method` in accordance with `all` arg value """
+        @functools.wraps(method)
+        def apply_transform_wrapper(self, *args, **kwargs):
+            transform = self.apply_transform
+            method_ = method.__get__(self, type(self)) # bound method to class
+            transform_kwargs_full = {**self.transform_defaults, **transform_kwargs}
+            all = transform_kwargs_full.pop('all')
+            if all:
+                transform = self.apply_transform_all
+                _ = [transform_kwargs_full.pop(keyname) for keyname in ['target', 'init', 'post']]
+            kwargs_full = {**transform_kwargs_full, **kwargs}
+            return transform(method_, *args, **kwargs_full)
+        return action(apply_transform_wrapper)
+
+
+class Batch(metaclass=MethodsTransformingMeta):
+    """ The core Batch class
+
+    Note, that if any class method is wrapped with `@apply_transform` decorator
+    than for inner calls (i.e. from other class methods) should be used version
+    of desired method with underscores. (For example, if there is a decorated
+    `method` than you need to call `_method_` from inside of `other_method`).
+    Same is applicable for all child classes of :class:`batch.Batch`.
+    """
     components = None
+    # Class-specific defaults for :meth:`.Batch.apply_transform`
+    transform_defaults = dict(target='threads',
+                              init='indices',
+                              post='_assemble',
+                              src=None,
+                              dst=None,
+                              all=False)
 
     def __init__(self, index, dataset=None, pipeline=None, preloaded=None, copy=False, *args, **kwargs):
         _ = args
@@ -473,18 +533,36 @@ class Batch:
         return self
 
     @action
-    @inbatch_parallel(init='indices', post='_assemble')
-    def apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+    def apply_transform(self, func, *args, **kwargs):
         """ Apply a function to each item in the batch.
+
+        Notes
+        -----
+        Redefine :attr:`self.transform_defaults <.Batch.transform_defaults>` in
+        child classes. This is proposed solely for the purposes of brevity — in
+        order to avoid repeated heavily loaded class methods decoration, e.g.
+        `@apply_transform(init='indices', target='for', src='images')` which in
+        most cases is actually equivalent to simple `@apply_transform` assuming
+        that the defaults are redefined for the class whose methods are being
+        transformed. Note, that if no defaults redefined those from the nearest
+        parent class will be used in :class:`batch.MethodsTransformingMeta`.
 
         Parameters
         ----------
         func : callable
             a function to apply to each item from the source
 
+        target : str
+            See :func:`~batchflow.inbatch_parallel` for details.
+
+        init : str, callable or iterable
+            See :func:`~batchflow.inbatch_parallel` for details.
+
+        post : str or callable
+            See :func:`~batchflow.inbatch_parallel` for details.
+
         src : str, sequence, list of str
             the source to get data from, can be:
-
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - sequence - a numpy-array, list, etc
@@ -493,11 +571,9 @@ class Batch:
 
         dst : str or array
             the destination to put the result in, can be:
-
             - None - in this case dst is set to be same as src
             - str - a component name, e.g. 'images' or 'masks'
             - tuple of list of str, e.g. ['images', 'masks']
-
             if src is a list, dst should be either list or None.
 
         p : float or None
@@ -505,9 +581,6 @@ class Batch:
 
             if not None, indices of relevant batch elements will be passed ``func``
             as a named arg ``indices``.
-
-        use_self : bool
-            whether to pass ``self`` to ``func``
 
         args, kwargs
             other parameters passed to ``func``
@@ -528,24 +601,19 @@ class Batch:
         ::
 
             apply_transform(make_masks_fn, src='images', dst='masks')
-            apply_transform(apply_mask, src=('images', 'masks'), dst='images', use_self=True)
-            apply_transform_all(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
+            apply_transform(apply_mask, src=('images', 'masks'), dst='images')
+            FIXME apply_transform(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
+            apply_transform(MyBatch.some_static_method, p=.5)
+            apply_transform(B.some_method, p=.5)
         """
-        dst = src if dst is None else dst
+        kwargs_full = {**self.transform_defaults, **kwargs}
+        target, init, post, _ = [kwargs_full.pop(keyname) for keyname in ['target', 'init', 'post', 'all']]
 
-        if not (isinstance(dst, str) or
-                (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
-            raise TypeError("dst should be str or tuple or list of str")
+        parallel = inbatch_parallel(init=init, post=post, target=target)
+        transform = parallel(type(self)._apply_transform)
+        return transform(self, func, *args, **kwargs_full)
 
-        p = 1 if p is None or np.random.binomial(1, p) else 0
-
-        if isinstance(src, list) and len(src) > 1 and isinstance(dst, list) and len(src) == len(dst):
-            return tuple([self._apply_transform(ix, func, *args, src=src_component,
-                                                dst=dst_component, p=p, use_self=use_self, **kwargs)
-                          for src_component, dst_component in zip(src, dst)])
-        return self._apply_transform(ix, func, *args, src=src, dst=dst, p=p, use_self=use_self, **kwargs)
-
-    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+    def _apply_transform(self, ix, func, *args, src=None, dst=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
 
         Parameters
@@ -555,7 +623,6 @@ class Batch:
 
         src : str, sequence, list of str
             the source to get data from, can be:
-
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - sequence - a numpy-array, list, etc
@@ -563,17 +630,25 @@ class Batch:
 
         dst : str or array
             the destination to put the result in, can be:
-
             - None
             - str - a component name, e.g. 'images' or 'masks'
             - array-like - a numpy-array, list, etc
 
-        use_self : bool
-            whether to pass ``self`` to ``func``
+        p : float or None
+            probability of applying transform to an element in the batch
+
+            if not None, indices of relevant batch elements will be passed ``func``
+            as a named arg ``indices``.
 
         args, kwargs
             other parameters passed to ``func``
         """
+        dst = src if dst is None else dst
+
+        if not (isinstance(dst, str) or
+                (isinstance(dst, (list, tuple)) and np.all([isinstance(component, str) for component in dst]))):
+            raise TypeError("dst should be str or tuple or list of str")
+
         if src is None:
             _args = args
         else:
@@ -587,9 +662,7 @@ class Batch:
                 src_attr = (src[pos],)
             _args = tuple([*src_attr, *args])
 
-        if p:
-            if use_self:
-                return func(self, *_args, **kwargs)
+        if p is None or np.random.binomial(1, p):
             return func(*_args, **kwargs)
 
         if len(src_attr) == 1:
@@ -597,7 +670,7 @@ class Batch:
         return src_attr
 
     @action
-    def apply_transform_all(self, func, *args, src=None, dst=None, p=None, use_self=False, **kwargs):
+    def apply_transform_all(self, func, *args, src=None, dst=None, p=None, **kwargs):
         """ Apply a function the whole batch at once
 
         Parameters
@@ -624,9 +697,6 @@ class Batch:
             if not None, indices of relevant batch elements will be passed ``func``
             as a named arg ``indices``.
 
-        use_self : bool
-            whether to pass ``self`` to ``func``
-
         args, kwargs
             other parameters passed to ``func``
 
@@ -640,17 +710,13 @@ class Batch:
 
             self.dst = func(self.src, *args, indices=random_indices, **kwargs)
 
-        Transform functions might be methods as well, when ``use_self=True``::
-
-            self.dst = func(self, self.src, *args, **kwargs)
-
         Examples
         --------
 
         ::
 
             apply_transform_all(make_masks_fn, src='images', dst='masks')
-            apply_transform_all(MyBatch.make_masks, src='images', dst='masks', use_self=True)
+            apply_transform_all(MyBatch.make_masks, src='images', dst='masks')
             apply_transform_all(custom_crop, src='images', dst='augmented_images', p=.2)
 
         """
@@ -669,8 +735,6 @@ class Batch:
         if p is not None:
             indices = np.where(np.random.binomial(1, p, len(self)))[0]
             kwargs['indices'] = indices
-        if use_self:
-            _args = (self, *_args)
         tr_res = func(*_args, **kwargs)
 
         if dst is None:
