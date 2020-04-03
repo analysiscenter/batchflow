@@ -24,7 +24,7 @@ from .once_pipeline import OncePipeline
 from .model_dir import ModelDirectory
 from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
-                             SegmentationMetricsByInstances, RegressionMetrics)
+                             SegmentationMetricsByInstances, RegressionMetrics, Loss)
 from ._const import *       # pylint:disable=wildcard-import
 from .utils import create_bar, update_bar, save_data_to
 
@@ -34,7 +34,8 @@ METRICS = dict(
     segmentation=SegmentationMetricsByPixels,
     mask=SegmentationMetricsByPixels,
     instance=SegmentationMetricsByInstances,
-    regression=RegressionMetrics
+    regression=RegressionMetrics,
+    loss=Loss,
 )
 
 

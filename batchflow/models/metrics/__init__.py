@@ -4,3 +4,4 @@ from .base import Metrics
 from .classify import ClassificationMetrics
 from .segment import SegmentationMetricsByPixels, SegmentationMetricsByInstances
 from .regression import RegressionMetrics
+from .loss import Loss

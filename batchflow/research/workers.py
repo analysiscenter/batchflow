@@ -174,18 +174,21 @@ class PipelineWorker(Worker):
         """ Run before job execution. """
         i, job = self.job
         n_branches = len(job.configs)
+        all_devices = set(device for i in range(n_branches)
+                          for device in self.devices[i]['device'] if device is not None)
+
+        if len(all_devices) > 0:
+            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
+
         mapping = {
-            item: 'gpu:' + str(i)
-            for i, item in enumerate({device for i in range(n_branches) for device in self.devices[i]['device']})
+            item: 'gpu:' + str(i) for i, item in enumerate(all_devices)
         }
-        all_devices = [device for i in range(n_branches) for device in self.devices[i]['device']]
-        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(all_devices)
+
         self.device_configs = [
-            {'device': [mapping[device] for device in self.devices[i]['device']]}
+            {'device': [mapping[device] for device in self.devices[i]['device'] if device is not None]}
             for i in range(n_branches)
         ]
-
         job.init(self.worker_config, self.device_configs, self.last_update_time)
         description = job.get_description()
         self.logger.info('Job {} has the following configs:\n{}'.format(i, description))

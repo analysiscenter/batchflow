@@ -160,7 +160,7 @@ class Research:
         name = name or function.__name__
 
         if name in self.executables:
-            raise ValueError('Executable unit with name {} was alredy existed'.format(name))
+            raise ValueError('Executable unit with name {} already exists'.format(name))
 
         if on_root and returns is not None:
             raise ValueError("If function on root, then it mustn't have returns")
@@ -172,8 +172,8 @@ class Research:
 
         return self
 
-    def get_metrics(self, pipeline, metrics_var, metrics_name,
-                    returns=None, execute=1, dump='last', logging=False):
+    def get_metrics(self, pipeline, metrics_var, metrics_name, *args,
+                    returns=None, execute=1, dump='last', logging=False, agg='mean', **kwargs):
         """ Evaluate metrics.
 
         Parameters
@@ -202,10 +202,10 @@ class Research:
         logging : bool
             include execution information to log file or not
         """
-        name = pipeline + '_metrics'
-        self.add_callable(get_metrics, name=name, execute=execute, dump=dump, returns=returns,
+        name = pipeline + '_' + metrics_var
+        self.add_callable(get_metrics, *args, name=name, execute=execute, dump=dump, returns=returns,
                           on_root=False, logging=logging, pipeline=RP(pipeline),
-                          metrics_var=metrics_var, metrics_name=metrics_name)
+                          metrics_var=metrics_var, metrics_name=metrics_name, agg=agg, **kwargs)
         return self
 
     def init_domain(self, domain=None, n_configs=None, n_reps=1, repeat_each=100):
