@@ -772,7 +772,11 @@ class Batch:
                 new_items[:] = result
             else:
                 raise e
-        setattr(self, component, new_items)
+
+        if hasattr(self, component):
+            setattr(self, component, new_items)
+        else:
+            self.add_components(component, new_items)
 
     def _assemble(self, all_results, *args, dst=None, **kwargs):
         """ Assembles the batch after a parallel action.

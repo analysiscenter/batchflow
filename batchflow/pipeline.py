@@ -774,6 +774,9 @@ class Pipeline:
             if 'kwargs' in action:
                 _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
 
+            if self._profile:
+                eval_expr_time = time.time() - start_time
+
             if _action.get('#dont_run', False):
                 pass
             elif _action['name'] in [JOIN_ID, MERGE_ID]:
@@ -810,7 +813,8 @@ class Pipeline:
             if self._profile:
                 self._profiler.disable()
                 exec_time = time.time() - start_time
-                self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time)
+                self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
+                                       eval_expr_time=eval_expr_time)
 
 
         return batch
