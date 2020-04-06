@@ -765,6 +765,10 @@ class Pipeline:
         actions = actions or self._actions
 
         for action in actions:
+            if self._profile:
+                start_time = time.time()
+                self._profiler.enable()
+
             _action = action.copy()
             if 'args' in action:
                 _action['args'] = self._eval_expr(action['args'], batch=batch)
@@ -772,8 +776,7 @@ class Pipeline:
                 _action['kwargs'] = self._eval_expr(action['kwargs'], batch=batch)
 
             if self._profile:
-                start_time = time.time()
-                self._profiler.enable()
+                eval_expr_time = time.time() - start_time
 
             if _action.get('#dont_run', False):
                 pass
@@ -811,7 +814,8 @@ class Pipeline:
             if self._profile:
                 self._profiler.disable()
                 exec_time = time.time() - start_time
-                self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time)
+                self._add_profile_info(batch, action, start_time=start_time, exec_time=exec_time,
+                                       eval_expr_time=eval_expr_time)
 
 
         return batch

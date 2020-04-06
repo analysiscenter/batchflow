@@ -388,6 +388,7 @@ class NumpySampler(Sampler):
         self._params = copy(kwargs)
         self.state = np.random.RandomState(seed=seed)
 
+
     def sample(self, size):
         """ Sampling method of ``NumpySampler``.
 
@@ -495,7 +496,15 @@ class HistoSampler(Sampler):
         else:
             raise ValueError('Either `histo` or `edges` should be specified.')
 
+        self.l_all = cart_prod(*(range_dim[:-1] for range_dim in self.edges))
+        self.h_all = cart_prod(*(range_dim[1:] for range_dim in self.edges))
+
+        self.probs = (self.bins / np.sum(self.bins)).reshape(-1)
+        self.nonzero_probs_idx = np.asarray(self.probs != 0.0).nonzero()[0]
+        self.nonzero_probs = self.probs[self.nonzero_probs_idx]
+
         self.state = np.random.RandomState(seed=seed)
+        self.state_sampler = self.state.uniform
 
     def sample(self, size):
         """ Sampling method of ``HistoSampler``.
@@ -513,7 +522,12 @@ class HistoSampler(Sampler):
         np.ndarray
             array of shape (size, histo dimension).
         """
-        return sample_histodd((self.bins, self.edges), size, self.state)
+        # Choose bins to use according to non-zero probabilities
+        bin_nums = np.random.choice(self.nonzero_probs_idx, p=self.nonzero_probs, size=size)
+
+        # uniformly generate samples from selected boxes
+        low, high = self.l_all[bin_nums], self.h_all[bin_nums]
+        return self.state_sampler(low=low, high=high)
 
     def update(self, points):
         """ Update bins of sampler's histogram by throwing in additional points.
@@ -525,6 +539,7 @@ class HistoSampler(Sampler):
         """
         histo_update = np.histogramdd(sample=points, bins=self.edges)
         self.bins += histo_update[0]
+
 
 def cart_prod(*arrs):
     """ Get array of cartesian tuples from arbitrary number of arrays.
@@ -543,35 +558,3 @@ def cart_prod(*arrs):
     """
     grids = np.meshgrid(*arrs, indexing='ij')
     return np.stack(grids, axis=-1).reshape(-1, len(arrs))
-
-def sample_histodd(histo, size, state=None):
-    """ Create a sample of size=size from distribution represented by a histogram
-    with arbitrary number of dimensions.
-
-    Parameters
-    ----------
-    histo : tuple
-        (bins, edges) of np.histogramdd(). `bins` is a ndarray, number of points in a specific cube.
-        `edges` is a list of histo_dim arrays of len = (nbins_in_dimension + 1), represents bounds of bins' boxes.
-    size : int
-        length of sample to be generated.
-    state : np.random.RandomState
-        random state used for sampling. If None, samples from np.random.
-
-    Returns
-    -------
-    ndarray
-        2d-array of shape = (size, histo_dim), containing samples.
-    """
-    # infer probabilities of bins, sample number of bins according to these probs
-    probs = (histo[0] / np.sum(histo[0])).reshape(-1)
-    bin_nums = np.random.choice(np.arange(histo[0].size), p=probs, size=size)
-
-    # lower and upper bounds of boxes
-    l_all = cart_prod(*(range_dim[:-1] for range_dim in histo[1]))
-    h_all = cart_prod(*(range_dim[1:] for range_dim in histo[1]))
-
-    # uniformly generate samples from selected boxes
-    low, high = l_all[bin_nums], h_all[bin_nums]
-    sampler = np.random.uniform if state is None else state.uniform
-    return sampler(low=low, high=high)
