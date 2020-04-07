@@ -1,4 +1,4 @@
-# pylint: disable=undefined-variable, no-name-in-module
+# pylint: disable=undefined-variable, no-name-in-module, import-error
 """ Contains base class for tensorflow models """
 import os
 import glob
@@ -373,7 +373,7 @@ class TFModel(BaseModel):
         # finally, individual train steps with desired loss, optimizer, decay and scope are created
         with self.graph.as_default():
             with tf.variable_scope(self.__class__.__name__):
-                with tf.variable_scope('globals'):
+                with tf.variable_scope('globals'), tf.device(self.leading_device):
                     is_training = tf.placeholder(tf.bool, name='is_training')
                     self.store_to_attr('is_training', is_training)
 
@@ -405,7 +405,7 @@ class TFModel(BaseModel):
 
     def reset(self):
         """ Reset the trained model to allow a new training from scratch """
-        with self.session.graph.as_default():
+        with self.session.graph.as_default(), tf.device(self.leading_device):
             self.session.run(tf.global_variables_initializer())
 
     def _get_devices(self):
@@ -689,10 +689,10 @@ class TFModel(BaseModel):
                                     'multi_update_grads': update_op,
                                     'multi_apply_grads': apply_op})
 
-            # We need to explicitly initialize variable for every optimizer in order to not
-            # interfere with capability to reuse optimizers for different train_steps
-            if init:
-                self.session.run(tf.variables_initializer(optimizer.variables()))
+                # We need to explicitly initialize variable for every optimizer in order to not
+                # interfere with capability to reuse optimizers for different train_steps
+                if init:
+                    self.session.run(tf.variables_initializer(optimizer.variables()))
 
             # Store all the created operations
             train_steps.update({key: ops})

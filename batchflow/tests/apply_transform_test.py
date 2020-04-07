@@ -68,6 +68,9 @@ SRC_COMPS, DST_COMPS = list(zip(*list(product(SRC_OPTS, DST_OPTS))))
 EXPECTATION = [pytest.raises(RuntimeError), does_not_raise(), does_not_raise(),
                does_not_raise(), does_not_raise(), does_not_raise(), does_not_raise()] * 6
 EXPECTATION[1] = pytest.raises(RuntimeError)
+# FIXME And also when dst=['comp1', 'comp3'] or src=['comp1', 'comp2'] and dst=None
+EXPECTATION[36] = pytest.raises(ValueError)
+EXPECTATION[41] = pytest.raises(ValueError)
 ADDENDUM = [7, P(R('uniform', seed=SEED))]
 
 # Functions used are defined by src and dst
@@ -93,7 +96,7 @@ def batch():
 
 
 @pytest.mark.parametrize('addendum', ADDENDUM)
-@pytest.mark.parametrize('src,dst,expectation,func', list(zip(SRC_COMPS, DST_COMPS, EXPECTATION, FUNCTIONS)))
+@pytest.mark.parametrize('src, dst, expectation, func', list(zip(SRC_COMPS, DST_COMPS, EXPECTATION, FUNCTIONS)))
 def test_apply_transform(src, dst, expectation, func, addendum, batch,):
     """ Test checks for different types and shapes of `src` and `dst`.
 

@@ -2,6 +2,7 @@
     Yet contains only the dataset for Semantic Segmentation. """
 
 import os
+import logging
 import tempfile
 from glob import glob
 from zipfile import ZipFile
@@ -12,7 +13,9 @@ import requests
 from PIL import Image
 
 from . import ImagesOpenset
-from .. import FilesIndex, any_action_failed, parallel, ImagesBatch, inbatch_parallel
+from .. import FilesIndex, any_action_failed, parallel
+
+logger = logging.getLogger('COCO')
 
 
 class BaseCOCO(ImagesOpenset):
@@ -90,14 +93,15 @@ class COCOSegmentation(BaseCOCO):
         _ = args, kwargs
         if any_action_failed(all_res):
             raise IOError('Could not download files:', all_res)
- 
+
         if self.drop_grayscale:
-            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0]), no_ext=True) 
-            self._test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]), no_ext=True)  
+            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0]), no_ext=True)
+            self._test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]), no_ext=True)
         else:
             self._train_index = FilesIndex(path=all_res[0] + '/*', no_ext=True)
             self._test_index = FilesIndex(path=all_res[1] + '/*', no_ext=True)
 
         # store the paths to the folders with masks as attributes
-        self.path_train_masks, self.path_test_masks = all_res[2], all_res[3]
+        setattr('path_train_masks', all_res[2])
+        setattr('path_test_masks', all_res[3])
         return None, FilesIndex.concat(self._train_index, self._test_index)

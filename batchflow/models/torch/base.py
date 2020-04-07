@@ -10,6 +10,7 @@ from pprint import pprint
 
 import dill
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 
@@ -190,6 +191,10 @@ class TorchModel:
         Whether to optimize network's forward pass after the first batch. Can speed up training if shapes of inputs
         are constant.
 
+    profile : bool
+        Whether to collect stats of model training timings.
+        If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
+
     sync_frequency : int
         How often to apply accumulated gradients to the weights. Default value is to apply them after each batch.
 
@@ -293,6 +298,8 @@ class TorchModel:
         self.microbatch = None
 
         self.iter_info = {}
+        self.profilers = []
+        self.profile_info = None
         self.preserve = ['full_config', 'input_shapes', 'target_shape', 'classes',
                          'model',
                          'train_steps', 'sync_counter', 'microbatch']
@@ -352,6 +359,7 @@ class TorchModel:
 
         config['device'] = None
         config['benchmark'] = True
+        config['profile'] = False
         config['microbatch'] = None
         config['sync_frequency'] = 1
 
@@ -751,7 +759,7 @@ class TorchModel:
                 print('\nTotal number of parameters in model: {}'.format(num_params))
 
             iters = {key: value.get('iter', 0) for key, value in self.train_steps.items()}
-            print('\nTotal number of training iterations: {}'.format(sum(list(iters.values()))))
+            print('\nTotal number of passed training iterations: {}'.format(sum(list(iters.values()))))
             if len(iters) > 1:
                 print('Number of training iterations for individual train steps:')
                 pprint(iters)
@@ -763,6 +771,60 @@ class TorchModel:
     def info(self):
         """ Show information about model configuration, used devices, train steps and more. """
         self.information()
+
+    def show_profile_info(self, per_iter=False, sortby=None, limit=10, parse=False):
+        """ Show stored profiling information with varying levels of details. """
+        if (self.profile_info is None) or parse:
+            self._parse_profilers()
+
+        if self.device.type == 'cpu':
+            columns = ['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CPU_tottime_avg']
+            if sortby is None:
+                sortby = ('CPU_tottime', 'sum') if per_iter is False else 'CPU_tottime'
+        else:
+            columns = ['ncalls', 'CUDA_cumtime', 'CUDA_cumtime_avg']
+            if sortby is None:
+                sortby = ('CUDA_cumtime', 'sum') if per_iter is False else 'CUDA_cumtime'
+
+        if per_iter is False:
+            aggs = {key: ['sum', 'mean', 'max'] for key in columns}
+            result = (self.profile_info.reset_index().groupby(['name']).agg(aggs)
+                      .sort_values(sortby, ascending=False)[:limit])
+        else:
+            result = (self.profile_info.reset_index().set_index(['iter', 'name'])[columns]
+                      .sort_values(['iter', sortby], ascending=[True, False])
+                      .groupby(level=0).apply(lambda df: df[:limit]).droplevel(0))
+        return result
+
+    def _parse_profilers(self):
+        us_in_s = 1000.0 * 1000.0
+
+        indices, values = [], []
+        for i, profiler in enumerate(self.profilers):
+            for evt in profiler.function_events.key_averages():
+                indices.append((i, evt.key))
+                row_dict = {
+                    'ncalls': evt.count,
+                    'CPU_tottime': evt.self_cpu_time_total / us_in_s,
+                    'CPU_cumtime': evt.cpu_time_total / us_in_s,
+                    'CUDA_cumtime': evt.cuda_time_total / us_in_s,
+                }
+                values.append(row_dict)
+        multiindex = pd.MultiIndex.from_tuples(indices, names=['iter', 'name'])
+
+        self.profile_info = pd.DataFrame(values, index=multiindex,
+                                         columns=['ncalls', 'CPU_tottime', 'CPU_cumtime', 'CUDA_cumtime'])
+        self.profile_info['CPU_tottime_avg'] = self.profile_info['CPU_tottime'] / self.profile_info['ncalls']
+        self.profile_info['CUDA_cumtime_avg'] = self.profile_info['CUDA_cumtime'] / self.profile_info['ncalls']
+
+
+    def set_debug_mode(self, mode=True):
+        """ Changes representation of model to a more or less detailed.
+        By default, model representation reduces the description of the most complex modules.
+        """
+        if self.model is None:
+            raise ValueError('Model is not initialized yet. ')
+        self.model.apply(lambda module: setattr(module, 'debug', mode))
 
 
     def save_graph(self, log_dir=None, **kwargs):
@@ -841,7 +903,7 @@ class TorchModel:
 
 
     def train(self, *args, feed_dict=None, fetches=None, use_lock=False, train_mode='',
-              accumulate_grads=True, sync_frequency=True, microbatch=True, **kwargs):
+              accumulate_grads=True, sync_frequency=True, microbatch=True, profile=False, **kwargs):
         """ Train the model with the data provided
 
         Parameters
@@ -871,6 +933,9 @@ class TorchModel:
             accumulating gradients from microbatches and applying them once in the end.
             If True, then value from config is used (default value is not to use microbatching).
             If False or None, then microbatching is not used.
+        profile : bool
+            Whether to collect stats of model training timings.
+            If True, then stats can be accessed via `profile_info` attribute or :meth:`.show_profile_info` method.
         kwargs : dict
             Additional named arguments directly passed to `feed_dict`.
 
@@ -926,6 +991,11 @@ class TorchModel:
 
         self.model.train()
 
+        profile = profile or config.profile
+        if profile:
+            profiler = torch.autograd.profiler.profile(use_cuda='cpu' not in self.device.type)
+            profiler.__enter__()
+
         if use_lock:
             self.train_lock.acquire()
 
@@ -944,15 +1014,21 @@ class TorchModel:
 
         outputs = [outputs] if isinstance(fetches, str) else outputs
         output = []
-        for i in range(len(outputs)):
-            lst = [item[i] for item in outputs]
+        for i, _ in enumerate(outputs[0]):
+            lst = [np.asarray(item[i]) for item in outputs]
             output.append(np.concatenate(lst, axis=0) if lst[0].size != 1 else np.mean(lst))
         output = output[0] if isinstance(fetches, str) else output
+
+        if profile:
+            profiler.__exit__(None, None, None)
+            self.profilers.append(profiler)
 
         self.iter_info.update({'microbatch': microbatch,
                                'sync_frequency': sync_frequency,
                                'steps': steps,
                                'train_mode': train_mode,
+                               'actual_model_inputs_shape': [get_shape(item) for item in _inputs],
+                               'actual_model_outputs_shape': get_shape(_targets),
                                })
         return output
 
@@ -1006,7 +1082,7 @@ class TorchModel:
 
         config = self.full_config
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
-                                         ops=config['output'], **config['common'])
+                                         ops=config['output'])
         output_container = {**output_container, **additional_outputs}
         output = self._fill_output(fetches, output_container)
         return output
@@ -1042,10 +1118,12 @@ class TorchModel:
             model.predict(B('images'), targets=B('labels'), fetches='loss')
         """
         feed_dict = {**(feed_dict or {}), **kwargs}
+        if len(feed_dict) == 1:
+            _, value = feed_dict.popitem()
+            args = (*args, value)
         if feed_dict:
             if targets is not None and 'targets' in feed_dict.keys():
                 warnings.warn("`targets` already present in `feed_dict`, so those passed as keyword arg won't be used")
-            feed_dict = {'targets': targets, **feed_dict}
             *inputs, targets = self._fill_input(*args, **feed_dict)
         else:
             inputs = self._fill_input(*args)
@@ -1072,13 +1150,13 @@ class TorchModel:
 
         config = self.full_config
         additional_outputs = self.output(inputs=predictions, predictions=config['predictions'],
-                                         ops=config['output'], **config['common'])
+                                         ops=config['output'])
         output_container = {**output_container, **additional_outputs}
         output = self._fill_output(fetches, output_container)
         return output
 
 
-    def output(self, inputs, predictions=None, ops=None, prefix=None, **kwargs):
+    def output(self, inputs, predictions=None, ops=None):
         """ Add output operations to the model, like predicted probabilities or labels, etc.
 
         Parameters
@@ -1148,13 +1226,13 @@ class TorchModel:
             prefix = [*ops.keys()][i]
             attr_prefix = prefix + '_' if prefix else ''
 
-            self._add_output_op(tensor, predictions, 'predictions', '', **kwargs)
+            self._add_output_op(tensor, predictions, 'predictions', '')
             for oper in ops[prefix]:
-                name, output = self._add_output_op(tensor, oper, oper, attr_prefix, **kwargs)
+                name, output = self._add_output_op(tensor, oper, oper, attr_prefix)
                 outputs[name] = output
         return outputs
 
-    def _add_output_op(self, inputs, oper, name, attr_prefix, **kwargs):
+    def _add_output_op(self, inputs, oper, name, attr_prefix):
         if oper is None:
             output = inputs
         elif oper == 'softplus':
@@ -1162,34 +1240,13 @@ class TorchModel:
         elif oper == 'sigmoid':
             output = torch.nn.functional.sigmoid(inputs)
         elif oper == 'proba':
-            axis = self.channels_axis(kwargs.get('data_format'))
-            output = torch.nn.functional.softmax(inputs, dim=axis)
+            output = torch.nn.functional.softmax(inputs, dim=1)
         elif oper == 'labels':
-            class_axis = self.channels_axis(kwargs.get('data_format'))
-            output = inputs.argmax(dim=class_axis)
+            output = inputs.argmax(dim=1)
         elif callable(oper):
             output = oper(inputs)
             name = oper.__name__
         return attr_prefix + name, output
-
-
-    @classmethod
-    def channels_axis(cls, data_format='channels_first'):
-        """ Get channel axis. """
-        data_format = data_format if data_format else 'channels_first'
-        return 1 if data_format == "channels_first" or data_format.startswith("NC") else -1
-
-    def num_classes(self, tensor, data_format='channels_first'):
-        """ Get number of channels. """
-        if isinstance(tensor, str) and self.config.get('inputs') is not None:
-            inputs_config = self.config['inputs']
-            if inputs_config.get(tensor) is not None:
-                tensor_config = inputs_config[tensor]
-                if tensor_config.get('shape') is not None:
-                    shape = tensor_config['shape']
-        else:
-            shape = get_shape(tensor)
-        return shape[self.channels_axis(data_format)]
 
 
     def save(self, path, *args, **kwargs):

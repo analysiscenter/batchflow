@@ -67,7 +67,7 @@ class Activation(nn.Module):
             self.activation = None
         elif isinstance(activation, nn.Module):
             self.activation = activation
-        elif issubclass(activation, nn.Module):
+        elif isinstance(activation, type) and issubclass(activation, nn.Module):
             # check if activation has `in_place` parameter
             has_inplace = 'inplace' in inspect.getfullargspec(activation).args
             if has_inplace:

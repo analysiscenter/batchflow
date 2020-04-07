@@ -2,8 +2,6 @@ name: status
 
 on:
   push:
-    branches:
-    - !gh-pages
     paths-ignore:
     - 'docs/**'
 

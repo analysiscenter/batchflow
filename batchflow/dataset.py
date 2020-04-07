@@ -216,10 +216,10 @@ class Dataset(Baseset):
             Parameters
             ----------
             index : DatasetIndex
-                DatasetIndex object which consists of mast be included to the batch elements
+                Indices of dataset objects that should be included into batch
 
             pos : bool
-                Flag, which shows does index contain positions of elements or indices
+                Whether `index` contains elements positions. Defaults to False
 
             Returns
             -------
@@ -227,9 +227,9 @@ class Dataset(Baseset):
 
             Notes
             -----
-            if `pos` is `False`, then `index` should contain the indices
-            that should be included in the batch
-            otherwise `index` should contain their positions in the current index
+            If `pos` is `False`, then `index` should contain the indices
+            that should be included in the batch, otherwise `index`
+            should contain their positions in current index.
         """
         if not isinstance(index, DatasetIndex):
             index = self.index.create_batch(index, pos, *args, **kwargs)

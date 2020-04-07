@@ -1,6 +1,4 @@
 """ Contains the base class for open datasets """
-import numpy as np
-
 from .. import Dataset
 from .. import ImagesBatch
 

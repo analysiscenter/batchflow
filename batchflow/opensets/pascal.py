@@ -161,7 +161,7 @@ class PascalClassification(BasePascal):
             test_ids = self._extract_ids(archive, 'val')
 
             images = np.array([self._extract_image(archive, self._image_path(name))
-                              for name in [*train_ids, *test_ids]], dtype=object)
+                               for name in [*train_ids, *test_ids]], dtype=object)
 
             targets = np.array([d[self._name(name)] for name in [*train_ids, *test_ids]])
             labels = self._process_targets(targets)

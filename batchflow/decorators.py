@@ -82,6 +82,31 @@ def action(*args, **kwargs):
     # action with arguments
     return _make_action_wrapper_with_args(*args, **kwargs)
 
+def apply_transform(*args, **kwargs):
+    """ Mark class method for transform in its metaclass.
+
+        Decorator writes `kwargs` to the method attribute `transform_kwargs`,
+        so they can be extracted and used in metaclass.
+
+        Parameters
+        ----------
+        all : bool
+            whether call `apply_transform_all` instead of `apply_transform`
+
+        args, kwargs
+            other parameters passed to `apply_transform` method of the class
+            where this decorator is being used
+        """
+    def mark(method):
+        method.transform_kwargs = kwargs
+        return method
+
+    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+        return mark(args[0])
+    if len(args) != 0:
+        raise ValueError("This decorator accepts only named arguments")
+
+    return mark
 
 def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """
@@ -97,7 +122,7 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
         use_self = '.' in method.__qualname__ if _use_self is None else _use_self
 
         def _check_functions(self):
-            """ Check dcorator's `init` and `post` parameters """
+            """ Check decorator's `init` and `post` parameters """
             if init is None:
                 raise ValueError("init cannot be None")
 
@@ -294,7 +319,6 @@ def inbatch_parallel(init, post=None, target='threads', _use_self=None, **dec_kw
         def wrap_with_for(self, args, kwargs):
             """ Run a method sequentially (without parallelism) """
             init_fn, post_fn = _check_functions(self)
-
             _ = kwargs.pop('n_workers', _workers_count())
             futures = []
             args, kwargs, params = _prepare_args(self, args, kwargs)
