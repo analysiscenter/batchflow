@@ -8,18 +8,16 @@ from .. import ImagesBatch
 class Openset(Dataset):
     """ The base class for open datasets """
     def __init__(self, index=None, batch_class=None, train_test=False, path=None, preloaded=None, **kwargs):
-        self.masks_directory = None
         self.train_test = train_test
         self._train_index, self._test_index = None, None
+
         if index is None:
             preloaded, index = self.download(path=path)
-
         super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
+
         if self._train_index and self._test_index:
-            self.train = type(self).from_dataset(self, self._train_index, batch_class=batch_class,
-                                                 masks_directory=self.masks_directory, **kwargs)
-            self.test = type(self).from_dataset(self, self._test_index, batch_class=batch_class,
-                                                masks_directory=self.masks_directory, **kwargs)
+            self.train = type(self).from_dataset(self, self._train_index, batch_class=batch_class, **kwargs)
+            self.test = type(self).from_dataset(self, self._test_index, batch_class=batch_class, **kwargs)
 
     @staticmethod
     def uild_index(index):

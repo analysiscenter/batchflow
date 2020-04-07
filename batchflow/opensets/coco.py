@@ -1,10 +1,11 @@
-""" Contains COCO-Stuff dataset for Semantic Segmentation """
+""" Datasets for COCO challenge tasks, http://cocodataset.org/#home.
+    Yet contains only the dataset for Semantic Segmentation. """
+
 import os
 import tempfile
-import logging
-from os.path import dirname, basename
-from zipfile import ZipFile
 from glob import glob
+from zipfile import ZipFile
+from os.path import dirname, basename
 
 import tqdm
 import requests
@@ -13,21 +14,25 @@ from PIL import Image
 from . import ImagesOpenset
 from .. import FilesIndex, any_action_failed, parallel, ImagesBatch, inbatch_parallel
 
-logger = logging.getLogger('COCO')
-
 
 class BaseCOCO(ImagesOpenset):
+    """ Base class for COCO datasets. """
 
     TRAIN_IMAGES_URL = 'http://images.cocodataset.org/zips/train2017.zip'
     TEST_IMAGES_URL = 'http://images.cocodataset.org/zips/val2017.zip'
-    ALL_URLS = [TRAIN_IMAGES_URL, TEST_IMAGES_URL]
+    IMAGES_URLS = [TRAIN_IMAGES_URL, TEST_IMAGES_URL]
+
 
     def __init__(self, *args, preloaded=None, **kwargs):
         super().__init__(*args, preloaded=preloaded, **kwargs)
 
+
     @parallel(init='_get_from_urls', post='_post_fn', target='t')
     def download(self, url, folder, train_val, path=None):
-        """ Download archive"""
+        """ Download the archives and extracts it's content. Downloading is performed in parallel manner.
+        Set of URL's to download from is defined in the `_get_from_urls` method.
+        The aggregation of the content from all archives is performed in `_post_fn` method.
+        """
         logger.info('Downloading %s', url)
         if path is None:
             path = tempfile.gettempdir()
@@ -46,33 +51,23 @@ class BaseCOCO(ImagesOpenset):
         return self._extract_if_not_exist(localname, folder, train_val)
 
 
-class COCOSegmentationBatch(ImagesBatch):
-
-    @inbatch_parallel(init='indices', post='_assemble')
-    def _load_mask(self, ix, src, dst):
-        fullpath = self._make_path(ix)
-        train_val = fullpath.split('/')[-2]     # 'train2017' or 'val2017
-        name_no_ext = ix.split('.')[0]          # filename wo extension
-        path_to_mask = os.path.join(self._dataset.masks_directory, # /tmp/COCOMasks
-                                    train_val, name_no_ext + '.' + self.formats[1])
-        return Image.open(path_to_mask)
-
 class COCOSegmentation(BaseCOCO):
-
+    """ The dataset for COCO """
     MASKS_URL = 'http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip'
-    ALL_URLS = [*BaseCOCO.ALL_URLS, MASKS_URL]
 
-    def __init__(self, *args, batch_class=COCOSegmentationBatch, drop_grayscale=True, **kwargs):
+
+    def __init__(self, *args, drop_grayscale=True, **kwargs):
         self.drop_grayscale = drop_grayscale
-        super().__init__(*args, batch_class=COCOSegmentationBatch, **kwargs)
+        super().__init__(*args, **kwargs)
+
 
     @property
     def _get_from_urls(self):
-        """ List of URL to download, folder where to extract,
-        and indicator whether its train or val part"""
-        return [[url, folder, train_val] for url, folder, train_val in zip(self.ALL_URLS,
-                                                                           ['COCOImages', 'COCOImages', 'COCOMasks'],
-                                                                           ['train2017', 'val2017', 'train2017'])]
+        """ List of URL to download from, folder where to extract, and indicator whether its train or val part. """
+        iterator = zip([self.TRAIN_IMAGES_URL, self.TEST_IMAGES_URL, self.MASKS_URL, self.MASKS_URL],
+                       ['COCOImages', 'COCOImages', 'COCOMasks', 'COCOMasks'],
+                       ['train2017', 'val2017', 'train2017', 'val2017'])
+        return [[url, folder, train_val] for url, folder, train_val in iterator]
 
     def _extract_archive(self, localname, extract_to):
         with ZipFile(localname, 'r') as archive:
@@ -89,28 +84,20 @@ class COCOSegmentation(BaseCOCO):
         return path
 
     def _rgb_images_paths(self, path):
-        return  [filename for filename in glob(path + '/*')
-                 if Image.open(filename).mode == 'RGB']
+        return  [filename for filename in glob(path + '/*') if Image.open(filename).mode == 'RGB']
 
     def _post_fn(self, all_res, *args, **kwargs):
         _ = args, kwargs
         if any_action_failed(all_res):
             raise IOError('Could not download files:', all_res)
-
+ 
         if self.drop_grayscale:
-            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0])) # 10s for _rgb_images_paths(),
-            self._test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]))  # 270s for constructor
+            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0]), no_ext=True) 
+            self._test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]), no_ext=True)  
         else:
-            self._train_index = FilesIndex(path=all_res[0] + '/*')
-            self._test_index = FilesIndex(path=all_res[1] + '/*')
+            self._train_index = FilesIndex(path=all_res[0] + '/*', no_ext=True)
+            self._test_index = FilesIndex(path=all_res[1] + '/*', no_ext=True)
 
-        self.masks_directory = dirname(all_res[2])
+        # store the paths to the folders with masks as attributes
+        self.path_train_masks, self.path_test_masks = all_res[2], all_res[3]
         return None, FilesIndex.concat(self._train_index, self._test_index)
-
-
-class COCOObjectDetection(BaseCOCO):
-    pass
-
-
-class COCOKeyPoint(BaseCOCO):
-    pass
