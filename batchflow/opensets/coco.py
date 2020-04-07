@@ -23,8 +23,6 @@ class BaseCOCO(ImagesOpenset):
 
     TRAIN_IMAGES_URL = 'http://images.cocodataset.org/zips/train2017.zip'
     TEST_IMAGES_URL = 'http://images.cocodataset.org/zips/val2017.zip'
-    IMAGES_URLS = [TRAIN_IMAGES_URL, TEST_IMAGES_URL]
-
 
     def __init__(self, *args, preloaded=None, **kwargs):
         super().__init__(*args, preloaded=preloaded, **kwargs)
@@ -55,9 +53,16 @@ class BaseCOCO(ImagesOpenset):
 
 
 class COCOSegmentation(BaseCOCO):
-    """ The dataset for COCO """
-    MASKS_URL = 'http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip'
+    """ The dataset for COCOStuff challenge for pixel-wise segmentation. Total size 18GB.
+    Contains 118060 train and 4990 test images/masks.
 
+    Notes
+    -----
+    - Datasets contain both grayscale and colored images
+      Argument `drop_grayscale` controls whether grayscale images should be dropped.
+    """
+
+    MASKS_URL = 'http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip'
 
     def __init__(self, *args, drop_grayscale=True, **kwargs):
         self.drop_grayscale = drop_grayscale
@@ -102,6 +107,6 @@ class COCOSegmentation(BaseCOCO):
             self._test_index = FilesIndex(path=all_res[1] + '/*', no_ext=True)
 
         # store the paths to the folders with masks as attributes
-        setattr('path_train_masks', all_res[2])
-        setattr('path_test_masks', all_res[3])
+        setattr(self, 'path_train_masks', all_res[2])
+        setattr(self, 'path_test_masks', all_res[3])
         return None, FilesIndex.concat(self._train_index, self._test_index)
