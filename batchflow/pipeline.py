@@ -1350,6 +1350,9 @@ class Pipeline:
 
     def gen_rebatch(self, *args, **kwargs):
         """ Generate batches for rebatch operation """
+        bar = kwargs.pop('bar', None)
+        bar_desc = kwargs.pop('bar_desc', None)
+
         _action = self._actions[0]
 
         if _action['pipeline'].dataset is None:
@@ -1371,6 +1374,8 @@ class Pipeline:
             while cur_len < _action['batch_size']:
                 try:
                     new_batch = pipeline.next_batch(*args, **kwargs)
+                    if bar:
+                        update_bar(bar, None, step=1)
                 except StopIteration:
                     break
                 else:
@@ -1387,6 +1392,8 @@ class Pipeline:
                 batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'],
                                                         components=_action['components'],
                                                         batch_class=_action['batch_class'])
+            if bar:
+                update_bar(bar, bar_desc, step=0, pipeline=self, batch=batch)
             yield batch
 
 
@@ -1400,7 +1407,6 @@ class Pipeline:
 
         shuffle : bool, int, class:`numpy.random.RandomState` or callable
             specifies the order of items, could be:
-
             - bool - if `False`, items go sequentionally, one after another as they appear in the index.
                 if `True`, items are shuffled randomly before each epoch.
 
@@ -1484,15 +1490,6 @@ class Pipeline:
         bar = kwargs.pop('bar', None)
         bar_desc = kwargs.pop('bar_desc', None)
 
-        if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
-            batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
-            prefetch = 0
-        else:
-            batch_generator = self._dataset.gen_batch(*args, **kwargs)
-
-        if self._not_init_vars:
-            self._init_all_variables()
-            self._not_init_vars = False
 
         batch_size = args[0] if len(args) != 0 else kwargs.get('batch_size')
         n_iters = kwargs.get('n_iters')
@@ -1502,6 +1499,21 @@ class Pipeline:
         if bar:
             bar = create_bar(bar, batch_size, n_iters, n_epochs,
                              drop_last, len(self._dataset.index))
+
+        if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
+            batch_generator = self.gen_rebatch(*args, **kwargs, bar=bar, bar_desc=bar_desc, prefetch=prefetch)
+            prefetch = 0
+        else:
+            def _batch_generator():
+                for batch in self._dataset.gen_batch(*args, **kwargs):
+                    if bar:
+                        update_bar(bar, bar_desc, pipeline=self, batch=batch)
+                    yield batch
+            batch_generator = _batch_generator()
+
+        if self._not_init_vars:
+            self._init_all_variables()
+            self._not_init_vars = False
 
 
         if self.before:
@@ -1542,8 +1554,6 @@ class Pipeline:
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
-                    if bar:
-                        update_bar(bar, bar_desc, pipeline=self, batch=batch)
                 except SkipBatchException:
                     pass
                 else:

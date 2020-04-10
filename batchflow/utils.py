@@ -278,7 +278,7 @@ def create_bar(bar, batch_size, n_iters, n_epochs, drop_last, length):
     return progressbar
 
 
-def update_bar(bar, bar_desc, **kwargs):
+def update_bar(bar, bar_desc, step=1, **kwargs):
     """ Update bar with description and one step."""
     current_iter = bar.n
     if bar_desc:
@@ -296,7 +296,7 @@ def update_bar(bar, bar_desc, **kwargs):
             desc = eval_expr(bar_desc, **kwargs)
             desc = str(desc)
         bar.set_description(desc)
-    bar.update(1)
+    bar.update(step)
 
 def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, **kwargs):
     """ Plot images and optionally true labels as well as predicted class proba.
