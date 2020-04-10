@@ -1392,9 +1392,9 @@ class Pipeline:
                 batch, self._rest_batch = _action['fn'](batches, batch_size=_action['batch_size'],
                                                         components=_action['components'],
                                                         batch_class=_action['batch_class'])
+            yield batch
             if bar:
                 update_bar(bar, bar_desc, step=0, pipeline=self, batch=batch)
-            yield batch
 
 
     def gen_batch(self, *args, iter_params=None, reset='iter', profile=False, **kwargs):
@@ -1506,9 +1506,9 @@ class Pipeline:
         else:
             def _batch_generator():
                 for batch in self._dataset.gen_batch(*args, **kwargs):
+                    yield batch
                     if bar:
                         update_bar(bar, bar_desc, pipeline=self, batch=batch)
-                    yield batch
             batch_generator = _batch_generator()
 
         if self._not_init_vars:
