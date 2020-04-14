@@ -27,10 +27,14 @@ class BaseCOCO(ImagesOpenset):
     def __init__(self, *args, preloaded=None, **kwargs):
         super().__init__(*args, preloaded=preloaded, **kwargs)
 
+    def _rgb_images_paths(self, path):
+        """Find RGB images(avoid grayscale) in the folder and return their paths. """
+        return  [filename for filename in glob(path + '/*') if Image.open(filename).mode == 'RGB']
 
     @parallel(init='_get_from_urls', post='_post_fn', target='t')
-    def download(self, url, folder, train_val, path=None):
+    def download(self, url, content, train_val, path=None):
         """ Download the archives and extract their contents in a parallel manner.
+        Returns the path to the folder where the archive extracted.
         Set of URL's to download from is defined in the `_get_from_urls` method.
         The aggregation of the content from all archives is performed in `_post_fn` method.
         """
@@ -42,14 +46,24 @@ class BaseCOCO(ImagesOpenset):
         if not os.path.isfile(localname):
             r = requests.get(url, stream=True)
             file_size = int(r.headers['Content-Length'])
-            chunk = 1
             chunk_size = 1024 * 1000 #MBs
             num_bars = int(file_size / chunk_size)
+            # downloading 
             with open(localname, 'wb') as f:
                 for chunk in tqdm.tqdm(r.iter_content(chunk_size=chunk_size), total=num_bars,
-                                       unit='MB', desc=filename, leave=True):
-                    f.write(chunk)
-        return self._extract_if_not_exist(localname, folder, train_val)
+                                       unit='MB', desc=filename, leave=True, disable=self.disable_tqdm):
+                    f.write(chunk) 
+
+        folder_to_extract = os.path.join(dirname(localname), content)
+        #check that root folder from the archive already exists to avoid extracting, as its time consuming
+        path_to_extracted = os.path.join(folder_to_extract, train_val)
+        if os.path.isdir(path_to_extracted):
+            pass
+        else:
+            # extracting
+            with ZipFile(localname, 'r') as archive:
+                archive.extractall(folder_to_extract)
+        return path_to_extracted
 
 
 class COCOSegmentation(BaseCOCO):
@@ -64,10 +78,10 @@ class COCOSegmentation(BaseCOCO):
 
     MASKS_URL = 'http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip'
 
-    def __init__(self, *args, drop_grayscale=True, **kwargs):
+    def __init__(self, *args, bar=False, drop_grayscale=True, **kwargs):
+        self.disable_tqdm = not bar
         self.drop_grayscale = drop_grayscale
         super().__init__(*args, **kwargs)
-
 
     @property
     def _get_from_urls(self):
@@ -75,24 +89,7 @@ class COCOSegmentation(BaseCOCO):
         iterator = zip([self.TRAIN_IMAGES_URL, self.TEST_IMAGES_URL, self.MASKS_URL, self.MASKS_URL],
                        ['COCOImages', 'COCOImages', 'COCOMasks', 'COCOMasks'],
                        ['train2017', 'val2017', 'train2017', 'val2017'])
-        return [[url, folder, train_val] for url, folder, train_val in iterator]
-
-    def _extract_archive(self, localname, extract_to):
-        with ZipFile(localname, 'r') as archive:
-            archive.extractall(extract_to)
-
-    def _extract_if_not_exist(self, localname, folder, train_val):
-        """ Extracts the arcive to the specific folder. Returns the path to this filder"""
-        extract_to = os.path.join(dirname(localname), folder)
-        path = os.path.join(extract_to, train_val)
-        if os.path.isdir(path):
-            pass
-        else:
-            self._extract_archive(localname, extract_to)
-        return path
-
-    def _rgb_images_paths(self, path):
-        return  [filename for filename in glob(path + '/*') if Image.open(filename).mode == 'RGB']
+        return [[url, content, train_val] for url, content, train_val in iterator]
 
     def _post_fn(self, all_res, *args, **kwargs):
         _ = args, kwargs
@@ -106,6 +103,7 @@ class COCOSegmentation(BaseCOCO):
             train_index = FilesIndex(path=all_res[0] + '/*', no_ext=True)
             test_index = FilesIndex(path=all_res[1] + '/*', no_ext=True)
         index = FilesIndex.concat(train_index, test_index)
+
         # store the paths to the folders with masks as attributes
         setattr(self, 'path_train_masks', all_res[2])
         setattr(self, 'path_test_masks', all_res[3])
