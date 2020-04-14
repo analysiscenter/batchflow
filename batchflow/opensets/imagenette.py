@@ -100,13 +100,12 @@ class Imagenette(ImagesOpenset):
 
         images = np.concatenate([train_data[0], test_data[0]])
         labels = np.concatenate([train_data[1], test_data[1]])
-
-        self._train_index = DatasetIndex(np.arange(len(train_data[0])))
-        self._test_index = DatasetIndex(np.arange(len(train_data[0]), len(train_data[0]) + len(test_data[0])))
-
         preloaded = images, labels
-        index = DatasetIndex(len(train_data[0]) + len(test_data[0]))
-        return preloaded, index
+
+        train_len, test_len = len(train_data[0]), len(test_data[0])
+        index, train_index, test_index = self._infer_train_test_index(train_len, test_len)
+
+        return preloaded, index, train_index, test_index
 
 
 class Imagenette320(Imagenette):

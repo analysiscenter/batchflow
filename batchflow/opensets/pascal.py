@@ -108,13 +108,12 @@ class PascalSegmentation(BasePascal):
                                for name in  [*train_ids, *test_ids]], dtype=object)
             masks = np.array([self._extract_image(archive, self._mask_path(name)) \
                               for name in [*train_ids, *test_ids]], dtype=object)
-
-            self._train_index = DatasetIndex(np.arange(len(train_ids)))
-            self._test_index = DatasetIndex(np.arange(len(train_ids), len(train_ids) + len(test_ids)))
-
-            index = DatasetIndex(np.arange(len(train_ids) + len(test_ids)))
             preloaded = images, masks
-            return preloaded, index
+
+            train_len, test_len = len(train_ids), len(test_ids)
+            index, train_index, test_index = self._infer_train_test_index(train_len, test_len)
+
+            return preloaded, index, train_index, test_index
 
 
 class PascalClassification(BasePascal):
@@ -165,10 +164,9 @@ class PascalClassification(BasePascal):
 
             targets = np.array([d[self._name(name)] for name in [*train_ids, *test_ids]])
             labels = self._process_targets(targets)
-
-            self._train_index = DatasetIndex(np.arange(len(train_ids)))
-            self._test_index = DatasetIndex(np.arange(len(train_ids), len(train_ids) + len(test_ids)))
-
-            index = DatasetIndex(np.arange(len(train_ids) + len(test_ids)))
             preloaded = images, labels
-            return preloaded, index
+
+            train_len, test_len = len(train_ids), len(test_ids)
+            index, train_index, test_index = self._infer_train_test_index(train_len, test_len)
+
+            return preloaded, index, train_index, test_index

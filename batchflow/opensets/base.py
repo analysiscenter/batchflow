@@ -1,16 +1,14 @@
 """ Contains the base class for open datasets """
-from .. import Dataset
+from .. import Dataset, DatasetIndex
 from .. import ImagesBatch
 
 
 class Openset(Dataset):
     """ The base class for open datasets """
-    def __init__(self, index=None, batch_class=None, train_test=False, path=None, preloaded=None, **kwargs):
-        self.train_test = train_test
+    def __init__(self, index=None, batch_class=None, path=None, preloaded=None, **kwargs):
         self._train_index, self._test_index = None, None
-
         if index is None:
-            preloaded, index = self.download(path=path)
+            preloaded, index, self._train_index, self._test_index = self.download(path=path)
         super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
 
         if self._train_index and self._test_index:
@@ -28,6 +26,13 @@ class Openset(Dataset):
         """ Download a dataset from the source web-site """
         _ = path
         return None
+    
+    def _infer_train_test_index(self, train_len, test_len):
+        total_len = train_len + test_len
+        index = DatasetIndex(list(range(total_len)))
+        train_index = DatasetIndex(list(range(train_len)))
+        test_index = DatasetIndex(list(range(train_len, total_len)))
+        return index, train_index, test_index
 
 
 class ImagesOpenset(Openset):

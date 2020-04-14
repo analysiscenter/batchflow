@@ -62,13 +62,12 @@ class MNIST(ImagesOpenset):
 
         images = np.concatenate([all_res[0], all_res[2]])
         labels = np.concatenate([all_res[1], all_res[3]])
-
-        self._train_index = DatasetIndex(len(all_res[0]))
-        self._test_index = DatasetIndex(np.arange(len(all_res[2]), len(all_res[0]) + len(all_res[2])))
-
-        index = DatasetIndex(len(all_res[0]) + len(all_res[2]))
         preloaded = images, labels
-        return preloaded, index
+
+        train_len, test_len = len(all_res[0]), len(all_res[2])
+        index, train_index, test_index = self._infer_train_test_index(train_len, test_len)
+        
+        return preloaded, index, train_index, test_index
 
     @parallel(init='_get_from_urls', post='_gather_data', target='t')
     def download(self, url, content, path=None):

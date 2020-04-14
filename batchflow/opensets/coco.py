@@ -1,5 +1,5 @@
 """ Datasets for COCO challenge tasks, http://cocodataset.org/#home.
-    Yet contains only the dataset for Semantic Segmentation. """
+    Currently contains only the dataset for Semantic Segmentation. """
 
 import os
 import logging
@@ -30,7 +30,7 @@ class BaseCOCO(ImagesOpenset):
 
     @parallel(init='_get_from_urls', post='_post_fn', target='t')
     def download(self, url, folder, train_val, path=None):
-        """ Download the archives and extracts it's content. Downloading is performed in parallel manner.
+        """ Download the archives and extract their contents in a parallel manner.
         Set of URL's to download from is defined in the `_get_from_urls` method.
         The aggregation of the content from all archives is performed in `_post_fn` method.
         """
@@ -100,13 +100,13 @@ class COCOSegmentation(BaseCOCO):
             raise IOError('Could not download files:', all_res)
 
         if self.drop_grayscale:
-            self._train_index = FilesIndex(path=self._rgb_images_paths(all_res[0]), no_ext=True)
-            self._test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]), no_ext=True)
+            train_index = FilesIndex(path=self._rgb_images_paths(all_res[0]), no_ext=True)
+            test_index = FilesIndex(path=self._rgb_images_paths(all_res[1]), no_ext=True)
         else:
-            self._train_index = FilesIndex(path=all_res[0] + '/*', no_ext=True)
-            self._test_index = FilesIndex(path=all_res[1] + '/*', no_ext=True)
-
+            train_index = FilesIndex(path=all_res[0] + '/*', no_ext=True)
+            test_index = FilesIndex(path=all_res[1] + '/*', no_ext=True)
+        index = FilesIndex.concat(train_index, test_index)
         # store the paths to the folders with masks as attributes
         setattr(self, 'path_train_masks', all_res[2])
         setattr(self, 'path_test_masks', all_res[3])
-        return None, FilesIndex.concat(self._train_index, self._test_index)
+        return None, index, train_index, test_index
