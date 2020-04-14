@@ -11,7 +11,6 @@ import PIL
 import tqdm
 import numpy as np
 
-from ..dsindex import DatasetIndex
 from .base import ImagesOpenset
 
 

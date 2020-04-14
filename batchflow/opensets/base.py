@@ -26,7 +26,7 @@ class Openset(Dataset):
         """ Download a dataset from the source web-site """
         _ = path
         return None
-    
+
     def _infer_train_test_index(self, train_len, test_len):
         total_len = train_len + test_len
         index = DatasetIndex(list(range(total_len)))

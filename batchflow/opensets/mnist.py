@@ -11,7 +11,6 @@ import numpy as np
 
 
 from . import ImagesOpenset
-from .. import DatasetIndex
 from .. import parallel, any_action_failed
 
 
@@ -66,7 +65,7 @@ class MNIST(ImagesOpenset):
 
         train_len, test_len = len(all_res[0]), len(all_res[2])
         index, train_index, test_index = self._infer_train_test_index(train_len, test_len)
-        
+
         return preloaded, index, train_index, test_index
 
     @parallel(init='_get_from_urls', post='_gather_data', target='t')

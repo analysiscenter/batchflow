@@ -13,7 +13,6 @@ import numpy as np
 import requests
 
 from . import ImagesOpenset
-from .. import DatasetIndex
 
 
 class BasePascal(ImagesOpenset):

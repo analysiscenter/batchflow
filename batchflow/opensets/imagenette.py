@@ -14,7 +14,6 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder
 
 from . import ImagesOpenset
-from .. import DatasetIndex
 
 
 logger = logging.getLogger('SmallImagenet')
