@@ -186,7 +186,7 @@ class Research:
             metrics to evaluate
         returns : str, list of str or None
             names to save metrics into results
-            if None, `function` will be executed without any saving results and dumping
+            if None, `returns` will be equal to `metrics_name`
         execute : int, str or list of int and str
             If `'last'`, metrics will be gathered just at last iteration (if `iteration + 1 == n_iters`
             or `StopIteration` was raised)
@@ -203,6 +203,7 @@ class Research:
             include execution information to log file or not
         """
         name = pipeline + '_' + metrics_var
+        returns = returns or metrics_name
         self.add_callable(get_metrics, *args, name=name, execute=execute, dump=dump, returns=returns,
                           on_root=False, logging=logging, pipeline=RP(pipeline),
                           metrics_var=metrics_var, metrics_name=metrics_name, agg=agg, **kwargs)
