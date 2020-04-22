@@ -26,7 +26,8 @@ except ImportError:
     import _fake as dd
 
 from .dsindex import DatasetIndex, FilesIndex
-from .decorators import action, inbatch_parallel, any_action_failed, apply_transform
+# renaming apply_transform decorator is needed as Batch.apply_transform method is also in the same namespace
+from .decorators import action, inbatch_parallel, any_action_failed, apply_transform as apply_transform_
 from .components import create_item_class, BaseComponents
 
 
@@ -48,7 +49,7 @@ class MethodsTransformingMeta(type):
         for object_name, object_ in namespace.items():
             transform_kwargs = getattr(object_, 'transform_kwargs', None)
             if transform_kwargs is not None:
-                namespace_[object_name] = cls.apply_transform(object_, **transform_kwargs)
+                namespace_[object_name] = cls.use_apply_transform(object_, **transform_kwargs)
 
                 disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
                 object_.__doc__ = disclaimer + object_.__doc__
@@ -59,7 +60,7 @@ class MethodsTransformingMeta(type):
         return super().__new__(cls, name, bases, namespace_)
 
     @classmethod
-    def apply_transform(cls, method, **transform_kwargs):
+    def use_apply_transform(cls, method, **transform_kwargs):
         """ Wrap passed `method` in accordance with `all` arg value """
         @functools.wraps(method)
         def apply_transform_wrapper(self, *args, **kwargs):
@@ -1090,7 +1091,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         """ Save batch data to a file (an alias for dump method)"""
         return self.dump(*args, **kwargs)
 
-    @apply_transform
+    @apply_transform_
     def to_array(self, comp, dtype=None, channels='last'):
         """ Converts batch components to np.ndarray format
 

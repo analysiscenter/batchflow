@@ -76,11 +76,12 @@ def action(*args, **kwargs):
         def another_critical_section(self, some_arg, another_arg):
             ...
     """
-    if len(args) == 1 and callable(args[0]):
+    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
         # action without arguments
         return _make_action_wrapper(action_method=args[0])
     # action with arguments
     return _make_action_wrapper_with_args(*args, **kwargs)
+
 
 def apply_transform(*args, **kwargs):
     """ Mark class method for transform in its metaclass.
@@ -107,6 +108,7 @@ def apply_transform(*args, **kwargs):
         raise ValueError("This decorator accepts only named arguments")
 
     return mark
+
 
 def any_action_failed(results):
     """ Return `True` if some parallelized invocations threw exceptions """

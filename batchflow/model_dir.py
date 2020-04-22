@@ -120,7 +120,7 @@ class ModelDirectory:
         config : dict
             model configurations parameters, where each key and value could be named expressions
         """
-        model_class = model_class if model_class is not None else config.pop('model_class',  None)
+        model_class = model_class if model_class is not None else config.pop('model_class', None)
         if mode == 'static':
             model = self.create_model(model_class, config)
         else:
