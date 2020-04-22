@@ -121,7 +121,7 @@ class OncePipeline:
         ----------
         mode : {'static', 'dynamic'}
         model_class : class
-            a model class
+            a model class (optional if config contains model_class)
         name : str
             a name for the model. Default - a model class name.
         config : dict
