@@ -308,29 +308,6 @@ class ImagesBatch(BaseImagesBatch):
                 setattr(self, component, array_result)
 
     @apply_transform
-    def to_array(self, image, dtype=None, channels='last'):
-        """ Converts batch images to np.ndarray format
-
-        Parameters
-        ----------
-        src : str
-            Component to get images from. Default is 'images'.
-        dst : str
-            Component to write images to. Default is 'images'.
-        """
-        image = np.array(image)
-        if len(image.shape) == 2:
-            image = image[:, :, np.newaxis]
-
-        if channels != 'last':
-            image = np.moveaxis(image, -1, 0)
-
-        if dtype is not None:
-            image = image.astype(dtype)
-
-        return image
-
-    @apply_transform
     def to_pil(self, image, mode=None):
         """converts images in Batch to PIL format
 

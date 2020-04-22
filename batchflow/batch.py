@@ -26,7 +26,7 @@ except ImportError:
     import _fake as dd
 
 from .dsindex import DatasetIndex, FilesIndex
-from .decorators import action, inbatch_parallel, any_action_failed
+from .decorators import action, inbatch_parallel, any_action_failed, apply_transform
 from .components import create_item_class, BaseComponents
 
 
@@ -66,7 +66,7 @@ class MethodsTransformingMeta(type):
             transform = self.apply_transform
             method_ = method.__get__(self, type(self)) # bound method to class
             transform_kwargs_full = {**self.transform_defaults, **transform_kwargs}
-            all = transform_kwargs_full.pop('all')
+            all = transform_kwargs_full.pop('all', False)
             if all:
                 transform = self.apply_transform_all
                 _ = [transform_kwargs_full.pop(keyname) for keyname in ['target', 'init', 'post']]
@@ -78,8 +78,8 @@ class MethodsTransformingMeta(type):
 class Batch(metaclass=MethodsTransformingMeta):
     """ The core Batch class
 
-    Note, that if any class method is wrapped with `@apply_transform` decorator
-    than for inner calls (i.e. from other class methods) should be used version
+    Note, that if any method is wrapped with `@apply_transform` decorator
+    than for inner calls (i.e. from other methods) should be used version
     of desired method with underscores. (For example, if there is a decorated
     `method` than you need to call `_method_` from inside of `other_method`).
     Same is applicable for all child classes of :class:`batch.Batch`.
@@ -1089,3 +1089,26 @@ class Batch(metaclass=MethodsTransformingMeta):
     def save(self, *args, **kwargs):
         """ Save batch data to a file (an alias for dump method)"""
         return self.dump(*args, **kwargs)
+
+    @apply_transform
+    def to_array(self, comp, dtype=None, channels='last'):
+        """ Converts batch components to np.ndarray format
+
+        Parameters
+        ----------
+        src : str
+            Component to get images from. Default is 'images'.
+        dst : str
+            Component to write images to. Default is 'images'.
+        """
+        comp = np.array(comp)
+        if len(comp.shape) == 2:
+            comp = comp[:, :, np.newaxis]
+
+        if channels != 'last':
+            comp = np.moveaxis(comp, -1, 0)
+
+        if dtype is not None:
+            comp = comp.astype(dtype)
+
+        return comp
