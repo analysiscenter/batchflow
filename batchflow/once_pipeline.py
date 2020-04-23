@@ -121,11 +121,11 @@ class OncePipeline:
         ----------
         mode : {'static', 'dynamic'}
         name : str
-            a name for the model. Default - a model class name.
-        model_class : class
-            a model class (optional if config contains model_class)
+            (optional) a name for the model. Default - a model class name.
+        model_class : class or named expression
+            (optional) a model class (if not specified in the config).
         config : dict or Config
-            model configurations parameters, where each key and value could be named expressions.
+            (optional) model configurations parameters, where each key and value could be named expressions.
 
         Examples
         --------
@@ -152,10 +152,10 @@ class OncePipeline:
     def _exec_save_model(self, action):
         self.pipeline._exec_save_model(None, action)        # pylint:disable=protected-access
 
-    def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
+    def load_model(self, mode, name=None, model_class=None, *args, **kwargs):
         """ Load a model """
         if mode == 'static':
-            self.pipeline.models.load_model(mode, model_class, name, *args, **kwargs)
+            self.pipeline.models.load_model(mode, name, model_class, *args, **kwargs)
             return self
         return self._add_action(LOAD_MODEL_ID, *args,
                                 _args=dict(mode=mode, model_class=model_class, model_name=name),

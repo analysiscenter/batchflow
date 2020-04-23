@@ -180,7 +180,7 @@ Loading a model
 
 A model can be loaded into a pipeline::
 
-   some_pipeline.load_model('dynamic', ResNet18, 'my_model', path='/some/path')
+   some_pipeline.load_model('dynamic', 'my_model', ResNet18, path='/some/path')
 
 The parameters are the same as in :ref:`the model initalization <init_a_model>`.
 
@@ -192,7 +192,7 @@ on the specific circumstances.
 
 To load model only once before the pipeline is executed you might use :ref:`before <after_pipeline>` pipeline::
 
-    some_pipeline.before.load_model('dynamic', ResNet18, 'my_model', path='/some/path')
+    some_pipeline.before.load_model('dynamic', 'my_model', ResNet18, path='/some/path')
 
 There is also and imperative :meth:`~batchflow.Pipeline.load_model_now`, i.e. it loads a model immediately, and not when a pipeline is executed.
 Thus, it cannot be a part of a pipeline's chain of actions. ``load_model_now`` is expected to be called in an action method or before a training

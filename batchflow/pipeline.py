@@ -866,11 +866,11 @@ class Pipeline:
         ----------
         mode : {'static', 'dynamic'}
         name : str
-            a name for the model. Default - a model class name.
-        model_class : class
-            a model class (optional if model class is specified in config).
+            (optional) a name for the model. Default - a model class name.
+        model_class : class or named expression
+            (optional) a model class (if not specified in the config).
         config : dict or Config
-            model configurations parameters, where each key and value could be named expressions.
+            (optional) model configurations parameters, where each key and value could be named expressions.
 
         Examples
         --------
@@ -887,7 +887,7 @@ class Pipeline:
         >>> pipeline
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self.before.init_model(mode, model_class, name, config=config)
+        self.before.init_model(mode, name, model_class, config=config)
         return self
 
     def import_model(self, model, pipeline=None, name=None):
@@ -1057,7 +1057,7 @@ class Pipeline:
         predictions = model.predict(*args, **kwargs)
         self._save_output(batch, model, predictions, action['save_to'])
 
-    def load_model(self, mode, model_class=None, name=None, *args, **kwargs):
+    def load_model(self, mode, name=None, model_class=None, *args, **kwargs):
         """ Load a model
 
         Parameters
@@ -1065,11 +1065,11 @@ class Pipeline:
         mode : str
             'static' or 'dynamic'
 
-        model_class
-            a type of a model
-
         name : str
             (optional) a model name
+
+        model_class : class or named expression
+            (optional) a model class to instantiate a loaded model instance.
 
         batch : Batch
             (optional) a batch which might be used to evaluate named expressions in other parameters
@@ -1089,9 +1089,9 @@ class Pipeline:
         name = self._eval_expr(action['model_name'], batch=batch)
         model_class = self._eval_expr(action['model_class'], batch=batch)
         args, kwargs = self._make_model_args(batch, action, None)
-        self.models.load_model(mode, model_class, name, *args, **kwargs)
+        self.models.load_model(mode, name, model_class, *args, **kwargs)
 
-    def load_model_now(self, mode, model_class, name=None, *args, batch=None, **kwargs):
+    def load_model_now(self, mode, name=None, model_class=None, *args, batch=None, **kwargs):
         """ Load a model immediately
 
         Parameters
@@ -1099,11 +1099,11 @@ class Pipeline:
         mode : str
             'static' or 'dynamic'
 
-        model_class
-            a type of a model
-
         name : str
             (optional) a model name
+
+        model_class : class or named expression
+            (optional) a model class to instantiate a loaded model instance.
 
         batch : Batch
             (optional) a batch which might be used to evaluate named expressions in other parameters
@@ -1111,7 +1111,7 @@ class Pipeline:
         args, kwargs
             model-specific parameters (like paths, formats, etc)
         """
-        self._exec_load_model(batch, dict(mode=mode, model_class=model_class, model_name=name,
+        self._exec_load_model(batch, dict(mode=mode, model_name=name, model_class=model_class,
                                           args=args, kwargs=kwargs))
 
     def save_model(self, name, *args, **kwargs):
