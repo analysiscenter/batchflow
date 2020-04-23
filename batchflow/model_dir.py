@@ -107,20 +107,27 @@ class ModelDirectory:
         with self.lock:
             self.models.update({name: model})
 
-    def init_model(self, mode, model_class=None, name=None, config=None):
+    def init_model(self, mode, name=None, model_class=None, *args, config=None):
         """ Initialize a static or dynamic model
 
         Parameters
         ----------
         mode : {'static', 'dynamic'}
-        model_class : class or named expression
-            a model class (optional if config contains model_class).
         name : str
             a name for the model. Default - a model class name.
+        model_class : class or named expression
+            a model class (optional if config contains model_class).
         config : dict
             model configurations parameters, where each key and value could be named expressions
         """
-        model_class = model_class if model_class is not None else config.pop('model_class', None)
+        # workaround for a previous arg order
+        if isinstance(name, type) or isinstance(name, NamedExpression):
+            name, model_class = model_class, name
+
+        model_class = model_class if model_class is not None else config.get('model_class')
+        if model_class is None:
+            raise ValueError('model_class should specified in the model config')
+
         if mode == 'static':
             model = self.create_model(model_class, config)
         else:

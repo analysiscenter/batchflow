@@ -27,6 +27,7 @@ except ImportError:
 
 from .dsindex import DatasetIndex, FilesIndex
 # renaming apply_transform decorator is needed as Batch.apply_transform method is also in the same namespace
+# and can serve as a decorator too
 from .decorators import action, inbatch_parallel, any_action_failed, apply_transform as apply_transform_
 from .components import create_item_class, BaseComponents
 
