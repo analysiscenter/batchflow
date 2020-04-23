@@ -114,7 +114,7 @@ class OncePipeline:
         self.pipeline.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
         return self
 
-    def init_model(self, mode, name=None, model_class=None, *args, config=None):
+    def init_model(self, mode, name=None, model_class=None, config=None):
         """ Initialize a static or dynamic model
 
         Parameters
@@ -124,7 +124,7 @@ class OncePipeline:
             a name for the model. Default - a model class name.
         model_class : class
             a model class (optional if config contains model_class)
-        config : dict
+        config : dict or Config
             model configurations parameters, where each key and value could be named expressions.
 
         Examples

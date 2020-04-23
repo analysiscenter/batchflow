@@ -120,6 +120,7 @@ class ModelDirectory:
         config : dict
             model configurations parameters, where each key and value could be named expressions
         """
+        _ = args
         # workaround for a previous arg order
         if isinstance(name, type) or isinstance(name, NamedExpression):
             name, model_class = model_class, name

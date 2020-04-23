@@ -41,11 +41,11 @@ Adding a model to a pipeline
 First of all, a model should be initialized::
 
    full_workflow = my_dataset.p
-                             .init_model('static', MyModel, 'my_model', config)
+                             .init_model('static', 'my_model', MyModel, config)
                              ...
 
-In :meth:`~batchflow.Pipeline.init_model()` you state a mode (``static`` or ``dynamic``), a model class, an optional short model name (otherwise, a class name will be used) and an optional configuration.
-A static model is initialized immediately in the ``init_model``, while a dynamic model will be initialized when the pipeline is run and the very first batch flows into the pipeline.
+In :meth:`~batchflow.Pipeline.init_model()` you state a mode (``static`` or ``dynamic``), an optional short model name (otherwise, a class name will be used) and an optional configuration.
+A static model is initialized immediately in the ``init_model``, while a dynamic model will be initialized when the pipeline is being run and the very first batch flows into the pipeline.
 
 If a model was already created in another pipeline, it might be `imported <#importing-models>`_.
 
@@ -95,7 +95,7 @@ Training a model
 A train action should be stated after an initialization action::
 
    full_workflow = (my_dataset.p
-       .init_model('static', MyModel, 'my_model', config)
+       .init_model('static', 'my_model', MyModel, config)
        ...
        .train_model('my_model', x=B('images'), y=B('labels'))
    )
@@ -119,8 +119,8 @@ Model independent arguments are:
 ::
 
    full_workflow = (my_dataset.p
-       .init_model('static', MyModel, 'my_model', my_config)
-       .init_model('dynamic', AnotherModel, 'another_model', another_config)
+       .init_model('static', 'my_model', MyModel, my_config)
+       .init_model('dynamic', 'another_model', AnotherModel, another_config)
        .init_variable('current_loss', 0)
        .init_variable('current_accuracy', 0)
        .init_variable('loss_history', init_on_each_run=list)
@@ -149,11 +149,11 @@ You can also write an action which works with a model directly.::
 
 
    full_workflow = (my_dataset.p
-       .init_model('static', MyModel, 'my_model', my_config)
-       .init_model('dynamic', MyOtherModel, 'some_model', some_config)
+       .init_model('static', MyModel, config=my_config)
+       .init_model('dynamic', MyOtherModel, config=some_config)
        .some_preprocessing()
        .some_augmentation()
-       .train_in_batch('my_model')
+       .train_in_batch('MyModel')
        .train_linked_model()
    )
 
@@ -164,10 +164,10 @@ Predicting with a model
 :meth:`~batchflow.Pipeline.predict_model` is very similar to `train_model <#training-a-model>`_ described above::
 
    full_workflow = (my_dataset.p
-       .init_model('static', MyModel, 'my_model', config)
+       .init_model('static', MyModel, config=config)
        .init_variable('predicted_labels', init_on_each_run=list)
        ...
-       .predict_model('my_model', x=B('images'), save_to=V('predicted_labels'))
+       .predict_model('MyModel', x=B('images'), save_to=V('predicted_labels'))
    )
 
 Read a model specfication to find out what it needs for predicting and what its output is.

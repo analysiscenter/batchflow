@@ -859,7 +859,7 @@ class Pipeline:
         """ A shorter alias for get_model_by_name() """
         return self.get_model_by_name(name, batch=batch)
 
-    def init_model(self, mode, name=None, model_class=None, *args, config=None):
+    def init_model(self, mode, name=None, model_class=None, config=None):
         """ Initialize a static or dynamic model
 
         Parameters
@@ -869,7 +869,7 @@ class Pipeline:
             a name for the model. Default - a model class name.
         model_class : class
             a model class (optional if model class is specified in config).
-        config : dict
+        config : dict or Config
             model configurations parameters, where each key and value could be named expressions.
 
         Examples
