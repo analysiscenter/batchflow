@@ -859,16 +859,16 @@ class Pipeline:
         """ A shorter alias for get_model_by_name() """
         return self.get_model_by_name(name, batch=batch)
 
-    def init_model(self, mode, model_class=None, name=None, config=None):
+    def init_model(self, mode, name=None, model_class=None, *args, config=None):
         """ Initialize a static or dynamic model
 
         Parameters
         ----------
         mode : {'static', 'dynamic'}
-        model_class : class
-            a model class
         name : str
             a name for the model. Default - a model class name.
+        model_class : class
+            a model class (optional if model class is specified in config).
         config : dict
             model configurations parameters, where each key and value could be named expressions.
 
@@ -878,7 +878,7 @@ class Pipeline:
 
         >>> pipeline
               .init_variable('images_shape', [256, 256])
-              .init_model('static', MyModel, config={'input_shape': V('images_shape')})
+              .init_model('static', 'my_model', MyModel, config={'input_shape': V('images_shape')})
 
         >>> pipeline
               .init_variable('shape_name', 'images_shape')
@@ -887,7 +887,7 @@ class Pipeline:
         >>> pipeline
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self.before.init_model(mode, model_class, name, config)
+        self.before.init_model(mode, model_class, name, config=config)
         return self
 
     def import_model(self, model, pipeline=None, name=None):

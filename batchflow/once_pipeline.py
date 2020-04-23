@@ -114,16 +114,16 @@ class OncePipeline:
         self.pipeline.variables.create(name, default, lock=lock, pipeline=self, **kwargs)
         return self
 
-    def init_model(self, mode, model_class=None, name=None, config=None):
+    def init_model(self, mode, name=None, model_class=None, *args, config=None):
         """ Initialize a static or dynamic model
 
         Parameters
         ----------
         mode : {'static', 'dynamic'}
-        model_class : class
-            a model class (optional if config contains model_class)
         name : str
             a name for the model. Default - a model class name.
+        model_class : class
+            a model class (optional if config contains model_class)
         config : dict
             model configurations parameters, where each key and value could be named expressions.
 
@@ -133,7 +133,7 @@ class OncePipeline:
 
         >>> pipeline.before
               .init_variable('images_shape', [256, 256])
-              .init_model('static', MyModel, config={'input_shape': V('images_shape')})
+              .init_model('static', 'my_model', MyModel, config={'input_shape': V('images_shape')})
 
         >>> pipeline.before
               .init_variable('shape_name', 'images_shape')
@@ -142,7 +142,7 @@ class OncePipeline:
         >>> pipeline.before
               .init_model('dynamic', MyModel, config={'input_shape': C(lambda batch: batch.images.shape[1:])})
         """
-        self.pipeline.models.init_model(mode, model_class, name, config=config)
+        self.pipeline.models.init_model(mode, name, model_class, config=config)
         return self
 
     def save_model(self, name, *args, **kwargs):
