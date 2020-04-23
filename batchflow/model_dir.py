@@ -129,7 +129,6 @@ class ModelDirectory:
         if model_class is None:
             raise ValueError('model_class should specified in the model config')
 
-        print(name, model_class, config)
         if mode == 'static':
             model = self.create_model(model_class, config)
         else:
