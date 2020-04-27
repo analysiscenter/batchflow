@@ -27,7 +27,7 @@ from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics, Loss)
 from ._const import *       # pylint:disable=wildcard-import
 from .utils import  save_data_to
-from .notyfier import Notifyer
+from .notifier import Notifier
 
 
 METRICS = dict(
@@ -1497,8 +1497,8 @@ class Pipeline:
         drop_last = kwargs.get('drop_last')
 
         if bar:
-            if not isinstance(bar, Notifyer):
-                bar = Notifyer(bar)
+            if not isinstance(bar, Notifier):
+                bar = Notifier(bar)
             bar.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                              drop_last=drop_last, length=len(self._dataset.index))
 

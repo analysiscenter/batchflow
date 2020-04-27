@@ -1,5 +1,4 @@
 """ Progress notyfier. """
-import sys
 import math
 from time import time
 
@@ -14,7 +13,7 @@ import matplotlib.pyplot as plt
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .named_expr import NamedExpression, eval_expr
 
-class Notifyer:
+class Notifier:
     """ Progress tracker and a resource monitor tool in one.
 
     Parameters
@@ -31,7 +30,7 @@ class Notifyer:
     drop_last : bool
         Whether the last batch of data is dropped from iterations.
     variables : str, :class:`.NamedExpression` or sequence of them
-        Allows to set trackable entities from the pipeline the Notifyer is used in:
+        Allows to set trackable entities from the pipeline the Notifier is used in:
         If str, then stands for name of the variable to get from the pipeline.
         If any of the named expressions, then evaluated with the pipeline.
     monitors : str, :class:`.Monitor` or sequence of them
@@ -56,6 +55,8 @@ class Notifyer:
                  plot=False, window=None, layout='h', figsize=None, **kwargs):
 
         # Create bar; set number of total iterations, if possible
+        self.bar = None
+
         if callable(bar):
             bar_func = bar
         elif bar == 'n':
@@ -67,7 +68,7 @@ class Notifyer:
             plot = True
         else:
             bar_func = tqdm
-        self.bar = bar_func(*args, **kwargs)
+        self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
         self.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                           drop_last=drop_last, length=length)
 
@@ -104,8 +105,9 @@ class Notifyer:
         self.start_monitors()
 
         # Prepare plot params
+        #pylint: disable=invalid-unary-operand-type
         self.plot = plot
-        self.slice = slice(None) if window is None else slice(-window, None, None)
+        self.slice = slice(-window, None, None) if isinstance(window, int) else slice(None)
         self.layout = (1, len(names)) if layout.startswith('h') else (len(names), 1)
         self.figsize = figsize or ((20, 5) if layout.startswith('h') else (20, 5*(len(names))))
 
@@ -115,13 +117,17 @@ class Notifyer:
         if total is None:
             if n_iters is not None:
                 total = n_iters
-            elif n_epochs is None:
-                total = sys.maxsize
-            elif drop_last:
-                total = length // batch_size * n_epochs
-            else:
-                total = math.ceil(length * n_epochs / batch_size)
-        self.bar.total = total
+            if n_epochs is not None:
+                if drop_last:
+                    total = length // batch_size * n_epochs
+                else:
+                    total = math.ceil(length * n_epochs / batch_size)
+
+        if total is not None:
+            # Force close previous bar, create new
+            if self.bar is not None:
+                self.bar.sp(close=True)
+            self.bar = self.bar_func(total=total)
 
     def __getattr__(self, key):
         """ Redirect everything to the underlying bar. """
@@ -138,7 +144,7 @@ class Notifyer:
 
 
     def update(self, n=1, pipeline=None, batch=None):
-        """ Update Notifyer with new info:
+        """ Update Notifier with new info:
             - increment underlying progress bar tracker
             - set bar description
             - fetch up-to-date data from pipeline and batch; gather info from monitors

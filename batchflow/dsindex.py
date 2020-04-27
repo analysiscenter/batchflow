@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 
 from .base import Baseset
-from .notyfier import Notifyer
+from .notifier import Notifier
 
 
 class DatasetIndex(Baseset):
@@ -493,7 +493,7 @@ class DatasetIndex(Baseset):
         iter_params.update({'_total': total})
 
         if bar:
-            iter_params['bar'] = Notifyer(bar, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+            iter_params['bar'] = Notifier(bar, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
                                           drop_last=drop_last, length=len(self._dataset.index))
 
 
