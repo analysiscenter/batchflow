@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 
 from .base import Baseset
-from .utils import create_bar, update_bar
+from .notifier import Notifier
 
 
 class DatasetIndex(Baseset):
@@ -410,8 +410,8 @@ class DatasetIndex(Baseset):
         iter_params['_start_index'] += rest_of_batch
         return self.create_batch(batch_items, pos=True)
 
-    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False,
-                  bar=False, bar_desc=None, iter_params=None):
+    def gen_batch(self, batch_size, shuffle=False, n_iters=None, n_epochs=None, drop_last=False, bar=False,
+                  iter_params=None):
         """ Generate batches
 
         Parameters
@@ -462,8 +462,6 @@ class DatasetIndex(Baseset):
             Whether to show a progress bar.
             If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
-        bar_desc
-            Prefix for the progressbar.
 
         Yields
         ------
@@ -495,7 +493,8 @@ class DatasetIndex(Baseset):
         iter_params.update({'_total': total})
 
         if bar:
-            iter_params['bar'] = create_bar(bar, batch_size, n_iters, n_epochs, drop_last, len(self))
+            iter_params['bar'] = Notifier(bar, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                          drop_last=drop_last, length=len(self._dataset.index))
 
 
         while True:
@@ -506,7 +505,7 @@ class DatasetIndex(Baseset):
             except StopIteration:
                 return
             if 'bar' in iter_params:
-                update_bar(iter_params['bar'], bar_desc)
+                bar.update()
             yield batch
 
 
