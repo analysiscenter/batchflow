@@ -19,7 +19,7 @@ METRICS = dict(
 def key_value(d):
     return list(d.keys())[0], list(d.values())[0]
 
-class AbstractValidator(metaclass=ABCMeta):
+class AbstractModelAPI(metaclass=ABCMeta):
     @abstractmethod
     def train(*args, **kwargs):
         pass
@@ -28,35 +28,35 @@ class AbstractValidator(metaclass=ABCMeta):
     def inference(*args, **kwargs):
         pass
     
-class BaseValidator(AbstractValidator):
-    def __init__(self, validator_config, validator_class, task_name):
-        self.validator_config = validator_config
-        self.validator_class = validator_class
-        self.task_name = task_name
+class ModelAPI(AbstractModelAPI):
+    def __init__(self, config, name, task_name):
+        self.config = config
+        self.name = name
+        self.task = task
         self.model_path = None
 
-        if 'train' in validator_config and 'pretrained' in validator_config:
+        if 'train' in config and 'pretrained' in config:
             warnings.warn("Both 'train' and 'pretrained' was founded \
-            for {} in {} so train stage will be skipped".format(validator_class, task_name))
+            for {} in {} so train stage will be skipped".format(name, task))
         
-        if 'train' in validator_config:
-            self.train_dataset = self.validator_config['train']['dataset']
-            self.model_path = self.validator_config['train'].get('model')
+        if 'train' in config:
+            self.train_dataset = self.config['train']['dataset']
+            self.model_path = self.config['train'].get('model')
 
-        self.pretrained = validator_config.get('pretrained')
-        self.validate_dataset = self.validator_config['validate']['dataset']
-        self.metrics = self.validator_config['validate']['metrics']
-        self.custom_metrics = self.validator_config['validate'].get('custom_metrics')
+        self.pretrained = config.get('pretrained')
+        self.validate_dataset = self.config['validate']['dataset']
+        self.metrics = self.config['validate']['metrics']
+        self.custom_metrics = self.config['validate'].get('custom_metrics')
         
     def run(self):
-        print("Task: {}. Validator: {}".format(self.task_name, self.validator_class))
+        print("Task: {}. ModelAPI: {}".format(self.task, self.name))
         print("Call init...")
         self.init()
 
         if self.pretrained is None:
             print('Start train...')
             self.train(self.train_dataset, self.model_path)
-        
+
         if self.pretrained:
             model_path = self.pretrained['model']
             pretarined_flag = ' (pretrained)'
@@ -87,19 +87,37 @@ class BaseValidator(AbstractValidator):
             value = getattr(self, _metric)(self.targets, self.predictions)
             self.custom_metric_values[_metric] = value
 
-    @classmethod
-    def start(cls, config_path='validator.yaml'):
+
+class Validator:
+    def __init__(self, config_path='validator.yaml'):
+        self.config_path = config_path
+        self.results = {}
+
+    def start(self):
         import validator_api
 
-        with open(config_path) as file:
-            config = yaml.load(file, Loader=yaml.Loader)
-        for task in config:
+        with open(self.config_path) as file:
+            self.config = yaml.load(file, Loader=yaml.Loader)
+        for task in self.config:
             task_name, task_config = key_value(task)
-            for validator_item in task_config:
-                validator_name, validator_config = key_value(validator_item)
-                validator = eval('validator_api.'+validator_config['class'])(validator_config, validator_name, task_name)
+            self.results[task_name] = {}
+            for model in task_config:
+                model_name, config = key_value(model)
+                validator = eval('validator_api.'+config['class'])(config, model_name, task_name)
+                self.results[task_name][model_name] = validator
                 validator.run()
-                print(validator.metric_values)
-                print(validator.custom_metric_values)
-            
+
+    def _metrics(self, custom_metrics=False):
+        attr = 'custom_metric_values' if custom_metrics else 'metric_values'
+        return {
+            task_name: 
+            {model_name: getattr(self.results[task_name][model_name], attr) for model_name in self.results[task_name]}
+            for task_name in self.results
+        }
+
+    def metrics(self):
+        return self._metrics(custom_metrics=False)
+
+    def custom_metrics(self):
+        return self._metrics(custom_metrics=True)
                     

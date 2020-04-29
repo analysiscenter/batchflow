@@ -1,8 +1,8 @@
 # Validator
 
-Validator is an instrument to unify the process of model validation. To wrap your model you need:
-- make validator-class inherited from `BaseValidator` with `train` and `inference` methods (see details below)
-- configure validator by `validator.yaml`
+Validator is an instrument to unify the process of model training and validation. To make model API, you need:
+- make validator-class inherited from `BaseValidator` with `train` and `inference` methods (see details below),
+- configure validator by `validator.yaml`.
 
 ## Validator class
 How to cook your own validator:
