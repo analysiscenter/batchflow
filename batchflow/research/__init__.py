@@ -1,4 +1,4 @@
-""" Research module. """
+""" Research module """
 from .domain import KV, Domain, Option, ConfigAlias
 from .distributor import Distributor
 from .logger import BaseLogger, FileLogger, PrintLogger, TelegramLogger
