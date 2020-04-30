@@ -51,21 +51,11 @@ class ModelAPI:
             self._test_ds = self.config['test'].get('dataset', {})
             if isinstance(self._test_ds, str):
                 self._test_ds = {'path': self._test_ds}
-            self._metrics = self.config['test'].get('metrics', {})
-            self._custom_metrics = self.config['test'].get('custom_metrics', [])
+            self._metrics = self.config['test'].pop('metrics', {})
+            self._custom_metrics = self.config['test'].pop('custom_metrics', [])
 
         self.custom_metric_values = {}
         self.metric_values = {}
-
-    def init(self, config):
-        """ Init function which is executed before data loading and training.
-
-        Parameters
-        ----------
-        config : dict
-            the whole config from yaml file 
-        """
-        pass
 
     def train_loader(self, path=None, **kwargs):
         """ Train dataset loader.
@@ -83,7 +73,7 @@ class ModelAPI:
          """
         return path
 
-    def test_loader(self, *args, path=None, **kwargs):
+    def test_loader(self, path=None, **kwargs):
         """ Test dataset loader.
 
         Parameters
@@ -99,7 +89,7 @@ class ModelAPI:
          """
         return path
 
-    def load_model(self, path):
+    def load_model(self, path=None):
         """ Loader for pretrained model.
 
         Parameters
@@ -111,17 +101,17 @@ class ModelAPI:
         path : str
             If function is not defined in child class, return `path` to model.
             If `pretrained` is enabled, output of that function will be used
-            as the second argument of `test`.
+            as the second argument of `inference`.
         """
         return path
 
-    def train(self, *args, **kwargs):
+    def train(self, train_dataset):
         """ Function that must contain the whole training process. If `pretrained`
         is not enabled, output of that function will be used as the second argument
-        of `test`. """
+        of `inference`. """
         pass
 
-    def inference(self, *args, **kwargs):
+    def inference(self, test_dataset, train_output):
         """ Function that must contain the whole inference process. The function must return
         predictions and targets for metrics.
         """
@@ -152,8 +142,6 @@ class ModelAPI:
 
     def run(self):
         """ Run validator """
-        self.init(self.config)
-
         if 'train' in self.config:
             self.train_dataset = self.train_loader(**self._train_ds)
             self.from_train = self.train(self.train_dataset)
@@ -162,7 +150,7 @@ class ModelAPI:
 
         if 'test' in self.config:
             self.test_dataset = self.test_loader(**self._test_ds)
-            self.predictions, self.targets = self.inference(self.test_dataset, self.from_train)
+            self.targets, self.predictions = self.inference(self.test_dataset, self.from_train)
             self._compute_metrics()
             self._compute_custom_metrics()
 
@@ -176,39 +164,38 @@ class Validator:
     config_path : str
         path to yaml file with config of the following structure:
         ```
-        - <task_name_1>
-            - <model_name_1>
+        - <task_name_0>
+            - <model_name_0>
                 class: <class>
                 train: (optional)
                     dataset:
-                        - <dataset_param_1>: <value_1>
-                          ...
+                        - <dataset_param_0>: <value_0>
+                        ...
                 pretrained: (optional)
                     path: <model_path>
                 test:
                     dataset:
-                        - <dataset_param_1>: <value_1>
-                          ...
+                        - <dataset_param_0>: <value_0>
+                        ...
                     metrics: (metics from batchflow)
                         - <classification|segmentation|mask|instance|regression>
+                            <classification_kwarg_0>: <value_0>
                             <classification_kwarg_1>: <value_1>
-                            <classification_kwarg_2>: <value_2>
                             ...
                             evaluate:
-                                - <metric_name_1>:
+                                - <metric_name_0>:
+                                    <metric_kwarg_0>: <value_0>
                                     <metric_kwarg_1>: <value_1>
-                                    <metric_kwarg_2>: <value_2>
-                                - <metric_name_2>:
+                                - <metric_name_1>:
                                     ...
                                 ...
                     custom_metrics: (optional, metrics defined in ModelAPI child-class)
+                        - <custom_metric_0>
                         - <custom_metric_1>
-                        - <custom_metric_2>
                         ...
-            - <model_name_2>
+            - <model_name_1>
                 ...
-        - <task_name_2>
-            ...
+        - <task_name_1>
         ```
 
     **How to get metrics values**
