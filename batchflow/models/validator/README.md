@@ -129,7 +129,7 @@ Function that must contain the whole training process. If `pretrained` is not de
 Function that must contain the whole inference process. `test_dataset` is an output of `test_loader` method, `train_output` is an output of `load_model` method for configs with `pretrained` or of `train` method, otherwise.
 Function returns `predictions` and `targets` in formath that can be used with [Batchflow metrics](https://github.com/analysiscenter/batchflow/tree/master/batchflow/models/metrics).
 
-#### Custom metrics
+#### *Custom metrics*
 
 If you need to realize your custom metrics, add method like
 ```python
@@ -153,7 +153,7 @@ To specify what metrics will be computed, add them into config:
         - my_accuracy             # metric from your class
 ```
 
-* **validator.yaml**
+## **validator.yaml**
 
 Generally has the following structure:
 
