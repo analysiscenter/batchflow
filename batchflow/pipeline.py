@@ -1078,7 +1078,7 @@ class Pipeline:
             model-specific parameters (like paths, formats, etc)
         """
         if mode == 'static':
-            self.models.load_model(mode, model_class, name, *args, **kwargs)
+            self.models.load_model(mode, name, model_class, *args, **kwargs)
             return self
         return self._add_action(LOAD_MODEL_ID, *args,
                                 _args=dict(mode=mode, model_class=model_class, model_name=name),
