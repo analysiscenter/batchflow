@@ -43,9 +43,9 @@ class PascalValidator(ModelAPI):
     def inference(self, ds, model):
         test_ppl = ... 
         test_ppl.run()
-        predictions = np.array(test_ppl.v('predictions'))
         targets = np.array(test_ppl.v('targets'))
-        return predictions, targets
+        predictions = np.array(test_ppl.v('predictions'))
+        return targets, predictions
 ```
 
 **validator.yaml**
@@ -74,9 +74,8 @@ class PascalValidator(ModelAPI):
 
 ## **model_api**
 `ModelAPI` child-class can implement the following methods:
-* `train_loader(self, path=None, **kwargs)`
-
-`path` and `kwargs` are from config <task_name>/<model_name>/<train>. In the example above we have empty value for `train` key, therefore `path=None` and `kwargs={}`. Let's define config:
+#### `train_loader(self, path=None, **kwargs)`
+`path` and `kwargs` are from config `<task_name>/<model_name>/<train>`. In the example above we have empty value for `train` key, therefore `path=None` and `kwargs={}`. Let's define config:
 ```yaml
 - Pascal Segmentation: 
   - PascalValidator:
@@ -96,11 +95,11 @@ Now `path='/path/to/dataset', kwargs={format: 'png'}`.
    
 The output of the function will be used as the first argument of `train` method. By default, it returns `path`.
        
-* `test_loader(self, path=None, **kwargs)`
+#### `test_loader(self, path=None, **kwargs)`
 
 The same as `train_loader` but for `test`.
 
-* `load_model(self, path=None)`
+#### `load_model(self, path=None)`
 
 Loader for pretrained model. Let's make example above more complex:
 ```yaml
@@ -120,17 +119,17 @@ Loader for pretrained model. Let's make example above more complex:
 ```
 In that case `/path/to/model` is used as an argument of `load_model` function where you can implement model loading. The output of the function will be used as the second argument of `inference` method. By default, it returns `path`. Note that when you define `pretrained` key in your config, train section will be skipped.
 
-* `train(self, train_dataset)`
+#### `train(self, train_dataset)`
 
 `train_dataset` is an output of `train_loader` method.
 Function that must contain the whole training process. If `pretrained` is not defined in config, output of that function will be used as the second argument of `inference`.
 
-* `inference(self, test_dataset, train_output)`
+#### `inference(self, test_dataset, train_output)`
 
 Function that must contain the whole inference process. `test_dataset` is an output of `test_loader` method, `train_output` is an output of `load_model` method for configs with `pretrained` or of `train` method, otherwise.
-Function returns `predictions` and `targets` in formath that can be used with [Batchflow metrics] (https://github.com/analysiscenter/batchflow/tree/master/batchflow/models/metrics).
+Function returns `predictions` and `targets` in formath that can be used with [Batchflow metrics](https://github.com/analysiscenter/batchflow/tree/master/batchflow/models/metrics).
 
-* custom metrics
+#### Custom metrics
 
 If you need to realize your custom metrics, add method like
 ```python
