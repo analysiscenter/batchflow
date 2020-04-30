@@ -17,6 +17,7 @@ import torch.nn as nn
 from .utils import unpack_fn_from_config, get_shape
 from .layers import ConvBlock
 from .losses import CrossEntropyLoss
+from .. import BaseModel
 from ... import Config
 
 
@@ -53,7 +54,7 @@ DECAYS_DEFAULTS = {
 
 
 
-class TorchModel:
+class TorchModel(BaseModel):
     r""" Base class for eager Torch models.
 
     Parameters

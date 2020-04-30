@@ -1,6 +1,5 @@
 """ API for models and validator """
 
-from abc import ABCMeta, abstractmethod
 import warnings
 
 import yaml
@@ -19,7 +18,7 @@ METRICS = dict(
 def key_value(d):
     return list(d.keys())[0], list(d.values())[0]
 
-class ModelAPI(metaclass=ABCMeta):
+class ModelAPI:
     """ Model API: train, inference and metrics
 
     **Attributes**
@@ -31,48 +30,51 @@ class ModelAPI(metaclass=ABCMeta):
         self.config = config
         self.name = name
         self.task = task
-        self.model_path = None
 
         if 'train' in config and 'pretrained' in config:
             warnings.warn("Both 'train' and 'pretrained' was founded \
             for {} in {} so train stage will be skipped".format(name, task))
 
-        if 'train' in config:
-            self.train_dataset = self.config['train']['dataset']
-            self.model_path = self.config['train'].get('model')
+        self._pretrained = self.config.get('pretrained', {})
 
-        self.pretrained = config.get('pretrained')
-        self.validate_dataset = self.config['validate']['dataset']
-        self.metrics = self.config['validate']['metrics']
-        self.custom_metrics = self.config['validate'].get('custom_metrics')
+        self._train_ds = {}
+        if 'train' in self.config and self.config['train'] is not None:
+            self._train_ds = self.config['train'].get('dataset', {})
+            if isinstance(self._train_ds, str):
+                self._train_ds = {'path': self._train_ds}
+
+        self._test_ds = {}
+        if 'test' in self.config and self.config['test'] is not None:
+            self._test_ds = self.config['test'].get('dataset', {})
+            if isinstance(self._test_ds, str):
+                self._test_ds = {'path': self._test_ds}
+            self._metrics = self.config['test'].get('metrics', {})
+            self._custom_metrics = self.config['test'].get('custom_metrics', [])
 
         self.custom_metric_values = {}
         self.metric_values = {}
 
-    @abstractmethod
+    def init(self):
+        pass
+
+    def train_loader(self, *args, path=None, **kwargs):
+        return path
+
+    def test_loader(self, *args, path=None, **kwargs):
+        return path
+
+    def load_model(self, path):
+        return path
+
     def train(self, *args, **kwargs):
         pass
 
-    @abstractmethod
     def inference(self, *args, **kwargs):
         pass
 
-    def run(self):
-        """ Run validator """
-        self.init()
-
-        if self.pretrained is None:
-            self.train(self.train_dataset, self.model_path)
-
-        if self.pretrained:
-            model_path = self.pretrained['model']
-        else:
-            model_path = self.model_path
-
-        self.inference(self.validate_dataset, model_path)
-
+    def compute_metrics(self):
         self.metric_values = {}
-        for _metric in self.metrics:
+        for _metric in self._metrics:
             metric_class, params = key_value(_metric)
             evaluate = params.pop('evaluate')
             metrics = METRICS[metric_class](self.targets, self.predictions, **params)
@@ -86,10 +88,28 @@ class ModelAPI(metaclass=ABCMeta):
                     kwargs = dict()
                 self.metric_values[metric_class][metric_name] = metrics.evaluate(metric_name, **kwargs)
 
+    def compute_custom_metrics(self):
         self.custom_metric_values = {}
-        for _metric in self.custom_metrics or []:
+        for _metric in self._custom_metrics:
             value = getattr(self, _metric)(self.targets, self.predictions)
             self.custom_metric_values[_metric] = value
+
+    def run(self):
+        """ Run validator """
+        self.init()
+
+        if 'train' in self.config:
+            self.train_dataset = self.train_loader(**self._train_ds)
+            self.from_train = self.train(self.train_dataset)
+        elif 'pretrained' in self.config:
+            self.from_train = self.load_model(**self._pretrained)
+
+        if 'test' in self.config:
+            self.test_dataset = self.test_loader(**self._test_ds)
+            self.inference(self.test_dataset, self.from_train)
+            self.compute_metrics()
+            self.compute_custom_metrics()
+
 
 
 class Validator:
