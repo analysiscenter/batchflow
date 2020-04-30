@@ -25,6 +25,10 @@ class ModelAPI:
 
     config : dict
         model config from yaml file (see :class:`~.Validator`)
+    name : str
+        name of the current model (from yaml)
+    task : str
+        name of the current task (from yaml)
     """
     def __init__(self, config, name, task):
         self.config = config
@@ -36,7 +40,6 @@ class ModelAPI:
             for {} in {} so train stage will be skipped".format(name, task))
 
         self._pretrained = self.config.get('pretrained', {})
-
         self._train_ds = {}
         if 'train' in self.config and self.config['train'] is not None:
             self._train_ds = self.config['train'].get('dataset', {})
@@ -54,25 +57,78 @@ class ModelAPI:
         self.custom_metric_values = {}
         self.metric_values = {}
 
-    def init(self):
+    def init(self, config):
+        """ Init function which is executed before data loading and training.
+
+        Parameters
+        ----------
+        config : dict
+            the whole config from yaml file 
+        """
         pass
 
-    def train_loader(self, *args, path=None, **kwargs):
+    def train_loader(self, path=None, **kwargs):
+        """ Train dataset loader.
+
+        Parameters
+        ----------
+        path : str or None
+            path to train dataset, defined in `train/dataset` section of config.
+
+        Return
+        ------
+        path : str or None
+            If function is not defined in child class, return `path`. It will be
+            used as first argument of `train`.
+         """
         return path
 
     def test_loader(self, *args, path=None, **kwargs):
+        """ Test dataset loader.
+
+        Parameters
+        ----------
+        path : str or None
+            path to test dataset, defined in `test/dataset` section of config.
+
+        Return
+        ------
+        path : str or None
+            If function is not defined in child class, return `path`. It will be
+            used as the first argument of `train`.
+         """
         return path
 
     def load_model(self, path):
+        """ Loader for pretrained model.
+
+        Parameters
+        ----------
+        path : str
+
+        Return
+        ------
+        path : str
+            If function is not defined in child class, return `path` to model.
+            If `pretrained` is enabled, output of that function will be used
+            as the second argument of `test`.
+        """
         return path
 
     def train(self, *args, **kwargs):
+        """ Function that must contain the whole training process. If `pretrained`
+        is not enabled, output of that function will be used as the second argument
+        of `test`. """
         pass
 
     def inference(self, *args, **kwargs):
+        """ Function that must contain the whole inference process. The function must return
+        predictions and targets for metrics.
+        """
         pass
 
-    def compute_metrics(self):
+    def _compute_metrics(self):
+        """ Metrics computation. """
         self.metric_values = {}
         for _metric in self._metrics:
             metric_class, params = key_value(_metric)
@@ -88,7 +144,7 @@ class ModelAPI:
                     kwargs = dict()
                 self.metric_values[metric_class][metric_name] = metrics.evaluate(metric_name, **kwargs)
 
-    def compute_custom_metrics(self):
+    def _compute_custom_metrics(self):
         self.custom_metric_values = {}
         for _metric in self._custom_metrics:
             value = getattr(self, _metric)(self.targets, self.predictions)
@@ -96,7 +152,7 @@ class ModelAPI:
 
     def run(self):
         """ Run validator """
-        self.init()
+        self.init(self.config)
 
         if 'train' in self.config:
             self.train_dataset = self.train_loader(**self._train_ds)
@@ -106,9 +162,9 @@ class ModelAPI:
 
         if 'test' in self.config:
             self.test_dataset = self.test_loader(**self._test_ds)
-            self.inference(self.test_dataset, self.from_train)
-            self.compute_metrics()
-            self.compute_custom_metrics()
+            self.predictions, self.targets = self.inference(self.test_dataset, self.from_train)
+            self._compute_metrics()
+            self._compute_custom_metrics()
 
 
 
@@ -118,19 +174,22 @@ class Validator:
     **Attributes**
 
     config_path : str
-        path yaml file with config. Has the following structure:
+        path to yaml file with config of the following structure:
         ```
         - <task_name_1>
             - <model_name_1>
                 class: <class>
                 train: (optional)
-                    dataset: <dataset_path>
-                    model: <model_path>
+                    dataset:
+                        - <dataset_param_1>: <value_1>
+                          ...
                 pretrained: (optional)
-                    model: <model_path>
-                validate:
-                    dataset: <dataset_path>
-                    metrics:
+                    path: <model_path>
+                test:
+                    dataset:
+                        - <dataset_param_1>: <value_1>
+                          ...
+                    metrics: (metics from batchflow)
                         - <classification|segmentation|mask|instance|regression>
                             <classification_kwarg_1>: <value_1>
                             <classification_kwarg_2>: <value_2>
@@ -142,7 +201,7 @@ class Validator:
                                 - <metric_name_2>:
                                     ...
                                 ...
-                    custom_metrics: (optional)
+                    custom_metrics: (optional, metrics defined in ModelAPI child-class)
                         - <custom_metric_1>
                         - <custom_metric_2>
                         ...
@@ -155,7 +214,7 @@ class Validator:
     **How to get metrics values**
 
         After execution Validator will have attribute `results` with the resulting ModelAPI instances.
-        To get metrics, call `.metrics` or `.custom_metrics` method.
+        To get metrics, call `.metrics` or `.custom_metrics` properties.
     """
     def __init__(self, config_path='validator.yaml'):
         self.config_path = config_path
