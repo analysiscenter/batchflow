@@ -59,12 +59,9 @@ class ModelAPI(metaclass=ABCMeta):
 
     def run(self):
         """ Run validator """
-        print("Task: {}. ModelAPI: {}".format(self.task, self.name))
-        print("Call init...")
         self.init()
 
         if self.pretrained is None:
-            print('Start train...')
             self.train(self.train_dataset, self.model_path)
 
         if self.pretrained:
@@ -72,7 +69,6 @@ class ModelAPI(metaclass=ABCMeta):
         else:
             model_path = self.model_path
 
-        print('Start inference on validation dataset...')
         self.inference(self.validate_dataset, model_path)
 
         self.metric_values = {}
