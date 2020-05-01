@@ -77,7 +77,7 @@ class ModelAPI:
             If function is not defined in child class, return `path`. It will be
             used as first argument of `train`.
          """
-         _ = kwargs
+        _ = kwargs
         return path
 
     def test_loader(self, path=None, **kwargs):
