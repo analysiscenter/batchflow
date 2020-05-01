@@ -2,6 +2,7 @@
 
 Validator is an instrument to unify the process of model training and validation.
 There are two main reasons to wrap your model using classes from `Validator` submodule:
+
 - make the structure of the model lifecycle clear,
 - provide API to automized model training and validation.
 
@@ -10,6 +11,7 @@ All you need is:
 * define `model_api.py` file with model inherited from `ModelAPI`,
 * configure it by `validator.yaml` file in the same folder,
 * execute the following code from the same folder:
+
 ```python
 from batchflow.models.validator import Validator
 
@@ -18,8 +20,10 @@ val.start()
 print(val.metrics)
 ```
 
-## Basic example:
-**model_api.py**
+## Basic example
+
+### model_api.py
+
 ```python
 import ...
 
@@ -48,9 +52,10 @@ class PascalValidator(ModelAPI):
         return targets, predictions
 ```
 
-**validator.yaml**
+### validator.yaml
+
 ```yaml
-- Pascal Segmentation: 
+- Pascal Segmentation:
   - PascalValidator:
       class: PascalValidator
       train:
@@ -61,8 +66,9 @@ class PascalValidator(ModelAPI):
               - accuracy
 ```
 
-**val.metrics**
-```
+### `val.metrics`
+
+```python
 {'Pascal Segmentation':
        {'PascalValidator':
               {'classification': {'accuracy': 0.0092724609375}
@@ -71,19 +77,25 @@ class PascalValidator(ModelAPI):
 ```
 
 ## **model_api**
+
 `ModelAPI` child-class can implement the following methods:
-#### `train_loader(self, path=None, **kwargs)`
+
+### `train_loader(self, path=None, **kwargs)`
+
 `path` and `kwargs` are from config `<task_name>/<model_name>/<train>`. In the example above we have empty value for `train` key, therefore `path=None` and `kwargs={}`. Let's define config:
+
 ```yaml
-- Pascal Segmentation: 
+- Pascal Segmentation:
   - PascalValidator:
       class: PascalValidator
       train:
         dataset: /path/to/dataset
 ```
+
 In that case `path='/path/to/dataset'`. You also can define multiple parameters of `train_loader`:
+
 ```yaml
-- Pascal Segmentation: 
+- Pascal Segmentation:
   - PascalValidator:
       class: PascalValidator
       train:
@@ -91,19 +103,20 @@ In that case `path='/path/to/dataset'`. You also can define multiple parameters 
            path: /path/to/dataset
            format: 'png'
 ```
+
 Now `path='/path/to/dataset', kwargs={format: 'png'}`.
-   
 The output of the function will be used as `train_dataset` argument of `train` method. By default, it returns `path`.
-       
-#### `test_loader(self, path=None, **kwargs)`
+
+### `test_loader(self, path=None, **kwargs)`
 
 The same as `train_loader` but for `test`.
 
-#### `load_model(self, path=None, **kwargs)`
+### `load_model(self, path=None, **kwargs)`
 
 Loader for pretrained model. Let's make example above more complex:
+
 ```yaml
-- Pascal Segmentation: 
+- Pascal Segmentation:
   - PascalValidator:
       class: PascalValidator
       train:
@@ -116,13 +129,15 @@ Loader for pretrained model. Let's make example above more complex:
             evaluate:
               - accuracy
 ```
-In that case `path=/path/to/model` and `kwargs={device: cuda:0}`. The output of the function will be used as `train_output` argument of `inference` method. By default, it returns `path`. Note that when you define `pretrained` key in your config, train section will be skipped.
 
-#### `train(self, train_dataset, **kwargs)`
+In that case `path='/path/to/model'` and `kwargs={device: 'cuda:0'}`. The output of the function will be used as `train_output` argument of `inference` method. By default, it returns `path`. Note that when you define `pretrained` key in your config, train section will be skipped.
+
+### `train(self, train_dataset, **kwargs)`
 
 Function that must contain the whole training process. Argument `train_dataset` is an output of `train_loader` method, dict `kwargs` is from config and doesn't include popped `dataset` key. Example:
+
 ```yaml
-- Pascal Segmentation: 
+- Pascal Segmentation:
   - PascalValidator:
       class: PascalValidator
       train:
@@ -134,23 +149,26 @@ Function that must contain the whole training process. Argument `train_dataset` 
             evaluate:
               - accuracy
 ```
+
 In that case `kwargs={model: 'UNet'}`. If `pretrained` is not defined in config, output of that function will be used as `train_output` argument of `inference`.
 
-#### `inference(self, test_dataset, train_output, **kwargs)`
+### `inference(self, test_dataset, train_output, **kwargs)`
 
 Function that must contain the whole inference process. Argument `test_dataset` is an output of `test_loader` method, `train_output` is an output of `load_model` method for configs with `pretrained` or of `train` method, otherwise. `kwargs` is from config and doesn't include popped `dataset` key.
 Function returns `predictions` and `targets` in format that can be used with [Batchflow metrics](https://github.com/analysiscenter/batchflow/tree/master/batchflow/models/metrics).
 
-#### **Custom metrics**
+### **Custom metrics**
 
 If you need to realize your custom metrics, add method like
+
 ```python
     def my_accuracy(self, target, prediction):
         return (target == prediction.argmax(axis=1)).mean()
 ```
 
 To specify what metrics will be computed, add them into config:
-```
+
+```yaml
 ...
       test:
         metrics:

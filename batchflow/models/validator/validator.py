@@ -54,6 +54,12 @@ class ModelAPI:
             self._metrics = self.config['test'].pop('metrics', {})
             self._custom_metrics = self.config['test'].pop('custom_metrics', [])
 
+        self.train_dataset = None
+        self.from_train = None
+        self.test_dataset = None
+        self.targets = None
+        self.predictions = None
+
         self.custom_metric_values = {}
         self.metric_values = {}
 
@@ -71,6 +77,7 @@ class ModelAPI:
             If function is not defined in child class, return `path`. It will be
             used as first argument of `train`.
          """
+         _ = kwargs
         return path
 
     def test_loader(self, path=None, **kwargs):
@@ -86,7 +93,8 @@ class ModelAPI:
         path : str or None
             If function is not defined in child class, return `path`. It will be
             used as the first argument of `train`.
-         """
+        """
+        _ = kwargs
         return path
 
     def load_model(self, path=None):
@@ -211,7 +219,7 @@ class Validator:
 
     def start(self):
         """ Start validator """
-        import model_api #pylint: disable=unused-import
+        import model_api #pylint: disable=unused-import,import-error
         for task in self.config:
             task_name, task_config = key_value(task)
             self.results[task_name] = {}
