@@ -42,13 +42,13 @@ class ModelAPI:
         self._pretrained = self.config.get('pretrained', {})
         self._train_ds = {}
         if 'train' in self.config and self.config['train'] is not None:
-            self._train_ds = self.config['train'].get('dataset', {})
+            self._train_ds = self.config['train'].pop('dataset', {})
             if isinstance(self._train_ds, str):
                 self._train_ds = {'path': self._train_ds}
 
         self._test_ds = {}
         if 'test' in self.config and self.config['test'] is not None:
-            self._test_ds = self.config['test'].get('dataset', {})
+            self._test_ds = self.config['test'].pop('dataset', {})
             if isinstance(self._test_ds, str):
                 self._test_ds = {'path': self._test_ds}
             self._metrics = self.config['test'].pop('metrics', {})
@@ -105,13 +105,13 @@ class ModelAPI:
         """
         return path
 
-    def train(self, train_dataset):
+    def train(self, train_dataset, **kwargs):
         """ Function that must contain the whole training process. If `pretrained`
         is not enabled, output of that function will be used as the second argument
         of `inference`. """
         pass
 
-    def inference(self, test_dataset, train_output):
+    def inference(self, test_dataset, train_output, **kwargs):
         """ Function that must contain the whole inference process. The function must return
         predictions and targets for metrics.
         """
@@ -144,13 +144,13 @@ class ModelAPI:
         """ Run validator """
         if 'train' in self.config:
             self.train_dataset = self.train_loader(**self._train_ds)
-            self.from_train = self.train(self.train_dataset)
+            self.from_train = self.train(self.train_dataset, **self.config['train'])
         elif 'pretrained' in self.config:
             self.from_train = self.load_model(**self._pretrained)
 
         if 'test' in self.config:
             self.test_dataset = self.test_loader(**self._test_ds)
-            self.targets, self.predictions = self.inference(self.test_dataset, self.from_train)
+            self.targets, self.predictions = self.inference(self.test_dataset, self.from_train, **self.config['test'])
             self._compute_metrics()
             self._compute_custom_metrics()
 
