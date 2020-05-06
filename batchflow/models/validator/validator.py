@@ -154,7 +154,7 @@ class ModelAPI:
             else:
                 metric_config = self.config.get(_metric, {})
                 metric_class = metric_config.pop('class', 'classification')
-                evaluate = metric_config.pop('evaluate')
+                evaluate = metric_config.pop('evaluate', {})
                 metrics = METRICS[metric_class](self.targets, self.predictions, **metric_config)
                 self.metrics[_metric] = metrics.evaluate(_metric, **evaluate)
 
