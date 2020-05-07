@@ -80,6 +80,9 @@ class Validator:
             if isinstance(self._test_ds, str):
                 self._test_ds = {'path': self._test_ds}
             self._metrics = self.config['test'].pop('metrics', {})
+            
+            if isinstance(self._metrics, str):
+                self._metrics = [item.strip() for item in self._metrics.split(',')]
 
         self.train_dataset = None
         self.from_train = None
