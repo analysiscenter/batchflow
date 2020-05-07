@@ -1,22 +1,26 @@
-""" API for models and validator """
+""" Wrapper for models """
 
 import warnings
-
+import inspect
 import yaml
 
-from ..metrics import ClassificationMetrics, SegmentationMetricsByPixels, \
-                      SegmentationMetricsByInstances, RegressionMetrics
+from ...pipeline import METRICS
 
-METRICS = dict(
-    classification=ClassificationMetrics,
-    segmentation=SegmentationMetricsByPixels,
-    mask=SegmentationMetricsByPixels,
-    instance=SegmentationMetricsByInstances,
-    regression=RegressionMetrics
-)
+def _get_class_that_defined_method(meth):
+    if inspect.ismethod(meth):
+        for cls in inspect.getmro(meth.__self__.__class__):
+            if cls.__dict__.get(meth.__name__) is meth:
+                return cls
+        meth = meth.__func__  # fallback to __qualname__ parsing
+    if inspect.isfunction(meth):
+        cls = getattr(inspect.getmodule(meth),
+                      meth.__qualname__.split('.<locals>', 1)[0].rsplit('.', 1)[0])
+        if isinstance(cls, type):
+            return cls
+    return getattr(meth, '__objclass__', None)  # handle special descriptor objects
 
-class ModelAPI:
-    """ Model API: train, inference and metrics
+class Validator:
+    """ Validator: interface for loaders, train, inference and metrics evaluation.
 
     **Attributes**
 
@@ -56,6 +60,7 @@ class ModelAPI:
         name of the current task (from yaml)
     """
     def __init__(self, config_path):
+        self.config_path = config_path
         with open(config_path) as file:
             self.config = yaml.load(file, Loader=yaml.Loader)
 
@@ -157,6 +162,46 @@ class ModelAPI:
                 evaluate = metric_config.pop('evaluate', {})
                 metrics = METRICS[metric_class](self.targets, self.predictions, **metric_config)
                 self.metrics[_metric] = metrics.evaluate(_metric, **evaluate)
+
+    @classmethod
+    def check_api(cls, methods=('train', 'inference'), warning=True):
+        """ Check that Validator child class implements necessary methods.
+
+        Parameters
+        ----------
+        methods : list
+            list of methods to check
+        warning : bool
+            if True, call warning, else raise exception.
+        """
+        if warning:
+            _warning = warnings.warn
+        else:
+            def _warning(msg):
+                raise NotImplementedError(msg)
+        for meth in methods:
+            if _get_class_that_defined_method(getattr(cls, meth)) == Validator:
+                _warning('Method "{}" is not implemented in class {}'.format(meth, cls.__class__))
+
+    def check_config(self, keys=('train', 'test'), warning=True):
+        """ Check that config has necessary keys.
+
+        Parameters
+        ----------
+        keys : list
+            list of keys to check.
+        warning : bool
+            if True, call warning, else raise exception.
+        """
+        if warning:
+            _warning = warnings.warn
+        else:
+            def _warning(msg):
+                raise NotImplementedError(msg)
+        for key in keys:
+            cond = all([_key not in self.config for _key in key.split('|')])
+            if cond:
+                _warning('Key "{}" was not founded in config {}'.format(key, self.config_path))
 
     def run(self):
         """ Run validator """
