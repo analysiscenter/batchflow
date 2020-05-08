@@ -1,13 +1,11 @@
 # pylint: disable=redefined-outer-name, missing-docstring
-import sys
 import pytest
 import numpy as np
 from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.metrics import mean_squared_error
 
-sys.path.append('..')
-from batchflow import Config
 from batchflow.models.validator import Validator
+from batchflow import Config
 
 @pytest.fixture
 def dummy_validator_class():
@@ -16,7 +14,7 @@ def dummy_validator_class():
             if a is None:
                 a = 2
             return a
-        
+
         def inference(self, b, a):
             if b is None:
                 b = 1
@@ -48,14 +46,14 @@ def validator_class():
             x = np.random.random(size).reshape(-1, 1)
             return x, 2 * x
 
-        def train(self, ds, model='linear'):
+        def train(self, dataset, model='linear'):
             self.stages += ['train']
 
             if model == 'linear':
                 model = LinearRegression()
             elif model == 'lasso':
                 model = Lasso()
-            model.fit(ds[0], ds[1])
+            model.fit(dataset[0], dataset[1])
             return model
 
         def load_model(self):
@@ -65,19 +63,19 @@ def validator_class():
             model.coef_ = np.array([2])
             model.intercept_ = 0
             return model
-        
-        def inference(self, ds, model):
+
+        def inference(self, dataset, model):
             self.stages += ['inference']
 
-            predictions = model.predict(ds[0])
-            targets = ds[1]
+            predictions = model.predict(dataset[0])
+            targets = dataset[1]
             return targets, predictions
 
         def my_mse(self, target, prediction):
             self.stages += ['my_mse']
 
             return mean_squared_error(target, prediction)
-        
+
     return NewValidator
 
 @pytest.mark.parametrize('config, metric', [
@@ -95,14 +93,16 @@ def test_skipped_loaders(dummy_validator_class, config, metric):
     ({'train': None, 'test': None}, ['train', 'inference', 'train_loader', 'test_loader']),
     ({'pretrained': None, 'test': None}, ['load_model', 'inference', 'test_loader']),
     ({'train': None}, ['train', 'train_loader']),
-    ({'train': None, 'test': {'metrics': 'my_mse'}},  ['train', 'inference', 'train_loader', 'test_loader', 'my_mse'])
+    ({'train': None, 'test': {'metrics': 'my_mse'}}, ['train', 'inference', 'train_loader', 'test_loader', 'my_mse'])
 ])
 def test_stages(validator_class, config, stages):
     val = validator_class(config)
     val.run()
     assert set(val.stages) == set(stages)
 
-@pytest.mark.parametrize('config', [Config({'train/dataset/size': 100, 'train/model': 'lasso', 'test/dataset/size': 10})])
+@pytest.mark.parametrize('config', [
+    Config({'train/dataset/size': 100, 'train/model': 'lasso', 'test/dataset/size': 10})
+])
 def test_kwargs(validator_class, config):
     val = validator_class(config)
     val.run()
@@ -110,7 +110,9 @@ def test_kwargs(validator_class, config):
     assert len(val.test_dataset[1]) == config['test/dataset/size']
     assert isinstance(val.from_train, Lasso)
 
-@pytest.mark.parametrize('config', [Config({'train': None, 'test/metrics': 'my_mse, mse', 'mse/class': 'regression'})])
+@pytest.mark.parametrize('config', [
+    Config({'train': None, 'test/metrics': 'my_mse, mse', 'mse/class': 'regression'})
+])
 def test_metrics(validator_class, config):
     val = validator_class(config)
     val.run()
@@ -128,15 +130,15 @@ def test_metrics(validator_class, config):
 ])
 def test_config_checks(validator_class, config, keys, exception):
     assert validator_class(config).check_config(keys=keys, warning=False) == exception
-        
+
 @pytest.mark.parametrize('add_methods, methods, exception', [
     (('train', 'inference'), ('train', 'inference'), False),
     (('train', 'inference'), ['train'], False),
     (('inference', ), ['train', 'inference'], True),
-    (('pretrained', 'inference'), ['train', 'inference'], True),
-    (('pretrained', 'inference'), ['train|pretrained', 'inference'], False),
+    (('load_model', 'inference'), ['train', 'inference'], True),
+    (('load_model', 'inference'), ['train|load_model', 'inference'], False),
     (('train',), ('train',), False),
-    # ({'test': None}, ['train', 'pretrained'], True)
+    ({'test': None}, ['train', 'load_model'], True)
 ])
 def test_api_checks(add_methods, methods, exception):
     val_class = type('NewValidator', (Validator, ), {method: lambda x: x for method in add_methods})

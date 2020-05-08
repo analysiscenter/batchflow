@@ -1,7 +1,5 @@
 """ Wrapper for models """
 
-from abc import ABCMeta
-
 import warnings
 import inspect
 from copy import deepcopy
