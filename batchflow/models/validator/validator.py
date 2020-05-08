@@ -1,10 +1,14 @@
 """ Wrapper for models """
 
+from abc import ABCMeta
+
 import warnings
 import inspect
+from copy import deepcopy
 import yaml
 
 from ...pipeline import METRICS
+from ... import Config
 
 def _get_class_that_defined_method(meth):
     if inspect.ismethod(meth):
@@ -61,32 +65,45 @@ class Validator:
     """
     def __init__(self, config):
         if isinstance(config, str):
-            self.config_path = config_path
-            with open(config_path) as file:
+            self.config_path = config
+            with open(config) as file:
                 self.config = yaml.load(file, Loader=yaml.Loader)
-        else:
+        elif isinstance(config, dict):
             self.config_path = None
-            self.config = config
+            self.config = deepcopy(config)
+        elif isinstance(config, Config):
+            self.config_path = None
+            self.config = deepcopy(config.config)
 
         if 'train' in self.config and 'pretrained' in self.config:
-            warnings.warn("Both 'train' and 'pretrained' was founded so train stage will be skipped")
+            raise ValueError("Both 'train' and 'pretrained' was founded.")
 
         self._pretrained = self.config.get('pretrained', {})
+        if 'pretrained' in config and self._pretrained is None:
+            self._pretrained = {}
+
         self._train_ds = {}
-        if 'train' in self.config and self.config['train'] is not None:
-            self._train_ds = self.config['train'].pop('dataset', {})
-            if isinstance(self._train_ds, str):
-                self._train_ds = {'path': self._train_ds}
+        if 'train' in self.config:
+            if self.config['train'] is not None:
+                self._train_ds = self.config['train'].pop('dataset', {})
+                if isinstance(self._train_ds, str):
+                    self._train_ds = {'path': self._train_ds}
+            else:
+                self.config['train'] = {}
 
         self._test_ds = {}
-        if 'test' in self.config and self.config['test'] is not None:
-            self._test_ds = self.config['test'].pop('dataset', {})
-            if isinstance(self._test_ds, str):
-                self._test_ds = {'path': self._test_ds}
-            self._metrics = self.config['test'].pop('metrics', {})
-            
-            if isinstance(self._metrics, str):
-                self._metrics = [item.strip() for item in self._metrics.split(',')]
+        if 'test' in self.config:
+            if self.config['test'] is not None:
+                self._test_ds = self.config['test'].pop('dataset', {})
+                if isinstance(self._test_ds, str):
+                    self._test_ds = {'path': self._test_ds}
+                self._metrics = self.config['test'].pop('metrics', {})
+
+                if isinstance(self._metrics, str):
+                    self._metrics = [item.strip() for item in self._metrics.split(',')]
+            else:
+                self.config['test'] = {}
+                self._metrics = []
 
         self.train_dataset = None
         self.from_train = None
@@ -171,29 +188,40 @@ class Validator:
                 self.metrics[_metric] = metrics.evaluate(_metric, **evaluate)
 
     @classmethod
-    def check_api(cls, methods=('train', 'inference'), warning=True):
+    def check_api(cls, methods=('train', 'inference'), warning=True, exception=False):
         """ Check that Validator child class implements necessary methods.
 
         Parameters
         ----------
         methods : list
-            list of methods to check
+            list of methods to check.
         warning : bool
-            if True, call warning, else raise exception.
+            if True, call warning.
+        exception : bool
+            if True, raise exception.
+
+        Returns
+        -------
+        error: bool
         """
+        error = False
         if isinstance(methods, str):
             methods = (methods, )
-        if warning:
-            _warning = warnings.warn
-        else:
+        if exception:
             def _warning(msg):
                 raise NotImplementedError(msg)
+        elif warning:
+            _warning = warnings.warn
+        else:
+            _warning = lambda msg: msg
         for meth in methods:
             cond = all([_get_class_that_defined_method(getattr(cls, _meth)) == Validator for _meth in meth.split('|')])
             if cond:
-                _warning('Method "{}" is not implemented in class {}'.format(meth, cls.__class__))
+                error = True
+                _ = _warning('Method "{}" is not implemented in class {}'.format(meth, cls.__class__))
+        return error
 
-    def check_config(self, keys=('train', 'test'), warning=True):
+    def check_config(self, keys=('train', 'test'), warning=True, exception=False):
         """ Check that config has necessary keys.
 
         Parameters
@@ -201,27 +229,38 @@ class Validator:
         keys : list
             list of keys to check.
         warning : bool
-            if True, call warning, else raise exception.
+            if True, call warning. If exception
+        exception : bool
+            if True, raise exception.
+
+        Returns
+        -------
+        error: bool
         """
+        error = False
         if isinstance(keys, str):
             keys = (keys, )
-        if warning:
-            _warning = warnings.warn
-        else:
+        if exception:
             def _warning(msg):
                 raise NotImplementedError(msg)
+        elif warning:
+            _warning = warnings.warn
+        else:
+            _warning = lambda msg: msg
         for key in keys:
             cond = all([_key not in self.config for _key in key.split('|')])
             if cond:
-                _warning('Key "{}" was not founded in config: {}'.format(key, self.config))
+                error = True
+                _ = _warning('Key "{}" was not founded in config: {}'.format(key, self.config))
+        return error
 
     def run(self):
         """ Run validator """
-        if 'train' in self.config:
+        if 'pretrained' in self.config:
+            self.from_train = self.load_model(**self._pretrained)
+        elif 'train' in self.config:
             self.train_dataset = self.train_loader(**self._train_ds)
             self.from_train = self.train(self.train_dataset, **self.config['train'])
-        elif 'pretrained' in self.config:
-            self.from_train = self.load_model(**self._pretrained)
 
         if 'test' in self.config:
             self.test_dataset = self.test_loader(**self._test_ds)
