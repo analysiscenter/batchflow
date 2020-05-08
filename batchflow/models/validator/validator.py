@@ -59,10 +59,14 @@ class Validator:
     task : str
         name of the current task (from yaml)
     """
-    def __init__(self, config_path):
-        self.config_path = config_path
-        with open(config_path) as file:
-            self.config = yaml.load(file, Loader=yaml.Loader)
+    def __init__(self, config):
+        if isinstance(config, str):
+            self.config_path = config_path
+            with open(config_path) as file:
+                self.config = yaml.load(file, Loader=yaml.Loader)
+        else:
+            self.config_path = None
+            self.config = config
 
         if 'train' in self.config and 'pretrained' in self.config:
             warnings.warn("Both 'train' and 'pretrained' was founded so train stage will be skipped")
@@ -209,7 +213,7 @@ class Validator:
         for key in keys:
             cond = all([_key not in self.config for _key in key.split('|')])
             if cond:
-                _warning('Key "{}" was not founded in config {}'.format(key, self.config_path))
+                _warning('Key "{}" was not founded in config: {}'.format(key, self.config))
 
     def run(self):
         """ Run validator """
