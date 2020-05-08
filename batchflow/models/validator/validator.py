@@ -177,13 +177,16 @@ class Validator:
         warning : bool
             if True, call warning, else raise exception.
         """
+        if isinstance(methods, str):
+            methods = (methods, )
         if warning:
             _warning = warnings.warn
         else:
             def _warning(msg):
                 raise NotImplementedError(msg)
         for meth in methods:
-            if _get_class_that_defined_method(getattr(cls, meth)) == Validator:
+            cond = all([_get_class_that_defined_method(getattr(cls, _meth)) == Validator for _meth in meth.split('|')])
+            if cond:
                 _warning('Method "{}" is not implemented in class {}'.format(meth, cls.__class__))
 
     def check_config(self, keys=('train', 'test'), warning=True):
@@ -196,6 +199,8 @@ class Validator:
         warning : bool
             if True, call warning, else raise exception.
         """
+        if isinstance(keys, str):
+            keys = (keys, )
         if warning:
             _warning = warnings.warn
         else:

@@ -195,3 +195,30 @@ Generally has the following structure::
                 <metric_kwarg_1>: <value_1>
     ...
 
+Also you can define metrics in the following way: ::
+
+    metrics: <metric_0>, <metric_1>, <custom_metric_0>, ...
+
+Style guide
+===========
+
+To make your interfaces clearer, we propose one rule: use each of 5 methods to divide your model lify-cycle into clear blocks.
+For example, there are several options to define data loading: `__init__`, `train`/`inference` but it's better when you use special methods 'train_loader'/'test_loader'.
+
+To check that interface has necessary methods, you can call `check_api` method.
+For example, call class method::
+
+    MyValidator.check_api(methods=['train_loader', 'train'])
+
+to check if methods `train_loader` and `train` are implemented in MyValidator class. By default, ::
+    
+    methods=['train', 'inference']
+
+and warning will be issued if one of methods is not implemented. To raise exception instead of warning, use `warning=False`.
+
+You also can check keys in validator config by `check_config` method: ::
+
+    val = MyValidator('validator.yaml')
+    val.check_config(keys=['train|pretrained', 'load_model])
+
+Successful check means that class implements `load_model` method and one of 'train` and `pretrained`.
