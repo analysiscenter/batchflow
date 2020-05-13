@@ -268,4 +268,5 @@ class Validator:
         if 'test' in self.config:
             self.test_dataset = self.test_loader(**self._test_ds)
             self.targets, self.predictions = self.inference(self.test_dataset, self.from_train, **self.config['test'])
-            self.compute_metrics(self.targets, self.predictions, *self._metrics, **{key: value for key in self.config if key in self._metrics})
+            self.compute_metrics(self.targets, self.predictions, *self._metrics,
+                                 **{key: value for key, value in self.config.items() if key in self._metrics})
