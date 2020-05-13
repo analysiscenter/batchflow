@@ -21,7 +21,33 @@ def _get_class_that_defined_method(meth):
             return cls
     return getattr(meth, '__objclass__', None)  # handle special descriptor objects
 
-class Validator:
+class DefaultParamsMetaclass(type):
+    def __new__(upperattr_metaclass, future_class_name,
+                future_class_parents, future_class_attr):
+        uppercase_attr = {}
+        for name, val in future_class_attr.items():
+            if name == 'train_loader':
+                def _func(self):
+                    self.train_dataset = val(self._train_ds)
+            elif name == 'train':
+                def _func(self):
+                    self.from_train = val(self.train_dataset, **self.config['train'])
+            elif name == 'test_loader':
+                def _func(self):
+                    self.test_dataset = val(self._test_ds)
+            elif name == 'inference':
+                def _func(self):
+                    self.targets, self.predictions = val(self.test_dataset, self.from_train, **self.config['test'])
+            elif name == 'load_model':
+                def _func(self):
+                    self.from_train = val(**self._pretrained)
+            else:
+                _func = val
+            uppercase_attr[name] = val
+
+        return type(future_class_name, future_class_parents, uppercase_attr)
+
+class Validator(metaclass=DefaultParamsMetaclass):
     """ Validator: interface for loaders, train, inference and metrics evaluation.
 
     **Attributes**
