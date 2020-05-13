@@ -179,7 +179,7 @@ class Validator:
 
     def compute_metrics(self, targets, predictions, *metrics, **metric_configs):
         """ Metrics computation. """
-        metrics = [*metrics, *metric_configs.keys()]
+        metrics = list(set([*metrics, *metric_configs.keys()]))
         for _metric in metrics:
             if hasattr(self, _metric):
                 self.metrics[_metric] = getattr(self, _metric)(targets, predictions)
