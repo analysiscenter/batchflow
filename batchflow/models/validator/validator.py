@@ -21,33 +21,7 @@ def _get_class_that_defined_method(meth):
             return cls
     return getattr(meth, '__objclass__', None)  # handle special descriptor objects
 
-class DefaultParamsMetaclass(type):
-    def __new__(upperattr_metaclass, future_class_name,
-                future_class_parents, future_class_attr):
-        uppercase_attr = {}
-        for name, val in future_class_attr.items():
-            if name == 'train_loader':
-                def _func(self):
-                    self.train_dataset = val(self._train_ds)
-            elif name == 'train':
-                def _func(self):
-                    self.from_train = val(self.train_dataset, **self.config['train'])
-            elif name == 'test_loader':
-                def _func(self):
-                    self.test_dataset = val(self._test_ds)
-            elif name == 'inference':
-                def _func(self):
-                    self.targets, self.predictions = val(self.test_dataset, self.from_train, **self.config['test'])
-            elif name == 'load_model':
-                def _func(self):
-                    self.from_train = val(**self._pretrained)
-            else:
-                _func = val
-            uppercase_attr[name] = val
-
-        return type(future_class_name, future_class_parents, uppercase_attr)
-
-class Validator(metaclass=DefaultParamsMetaclass):
+class Validator:
     """ Validator: interface for loaders, train, inference and metrics evaluation.
 
     **Attributes**
@@ -87,7 +61,7 @@ class Validator(metaclass=DefaultParamsMetaclass):
     task : str
         name of the current task (from yaml)
     """
-    def __init__(self, config):
+    def __init__(self, config=None, **kwargs):
         if isinstance(config, str):
             self.config_path = config
             with open(config) as file:
@@ -98,12 +72,16 @@ class Validator(metaclass=DefaultParamsMetaclass):
         elif isinstance(config, Config):
             self.config_path = None
             self.config = deepcopy(config.config)
+        elif config is None:
+            self.config = {}
+
+        self.config = {**self.config, **kwargs}
 
         if 'train' in self.config and 'pretrained' in self.config:
             raise ValueError("Both 'train' and 'pretrained' was founded.")
 
         self._pretrained = self.config.get('pretrained', {})
-        if 'pretrained' in config and self._pretrained is None:
+        if 'pretrained' in self.config and self._pretrained is None:
             self._pretrained = {}
 
         self._train_ds = {}
@@ -199,16 +177,17 @@ class Validator(metaclass=DefaultParamsMetaclass):
         """
         pass
 
-    def _compute_metrics(self):
+    def compute_metrics(self, targets, predictions, *metrics, **metric_configs):
         """ Metrics computation. """
-        for _metric in self._metrics:
+        metrics = [*metrics, *metric_configs.keys()]
+        for _metric in metrics:
             if hasattr(self, _metric):
-                self.metrics[_metric] = getattr(self, _metric)(self.targets, self.predictions)
+                self.metrics[_metric] = getattr(self, _metric)(targets, predictions)
             else:
-                metric_config = self.config.get(_metric, {})
+                metric_config = metric_configs[_metric]
                 metric_class = metric_config.pop('class', 'classification')
                 evaluate = metric_config.pop('evaluate', {})
-                metrics = METRICS[metric_class](self.targets, self.predictions, **metric_config)
+                metrics = METRICS[metric_class](targets, predictions, **metric_config)
                 self.metrics[_metric] = metrics.evaluate(_metric, **evaluate)
 
     @classmethod
@@ -289,4 +268,4 @@ class Validator(metaclass=DefaultParamsMetaclass):
         if 'test' in self.config:
             self.test_dataset = self.test_loader(**self._test_ds)
             self.targets, self.predictions = self.inference(self.test_dataset, self.from_train, **self.config['test'])
-            self._compute_metrics()
+            self.compute_metrics(self.targets, self.predictions, *self._metrics, **{key: value for key in self.config if key in self._metrics})
