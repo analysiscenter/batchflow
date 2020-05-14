@@ -166,12 +166,11 @@ class Validator:
         return path
 
     def train(self, train_dataset, **kwargs):
-        """ Function that must contain the whole training process. If `pretrained`
-        is not enabled, output of that function will be used as the second argument
-        of `inference`. """
+        """ Function that must contain the whole training process. Method will be executed
+        if `pretrained` is not enabled. """
         pass
 
-    def inference(self, test_dataset, train_output, **kwargs):
+    def inference(self, test_dataset, **kwargs):
         """ Function that must contain the whole inference process. The function must return
         predictions and targets for metrics.
         """
@@ -263,10 +262,10 @@ class Validator:
             self.from_train = self.load_model(**self._pretrained)
         elif 'train' in self.config:
             self.train_dataset = self.train_loader(**self._train_ds)
-            self.from_train = self.train(self.train_dataset, **self.config['train'])
+            self.train(self.train_dataset, **self.config['train'])
 
         if 'test' in self.config:
             self.test_dataset = self.test_loader(**self._test_ds)
-            self.targets, self.predictions = self.inference(self.test_dataset, self.from_train, **self.config['test'])
+            self.targets, self.predictions = self.inference(self.test_dataset, **self.config['test'])
             self.compute_metrics(self.targets, self.predictions, *self._metrics,
                                  **{key: value for key, value in self.config.items() if key in self._metrics})

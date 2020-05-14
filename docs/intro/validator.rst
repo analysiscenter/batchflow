@@ -46,9 +46,10 @@ model_api.py
         def train(self, ds):
             train_ppl = ... << ds
             train_ppl.run()
-            return train_ppl.get_model_by_name('model')
+            self.model = train_ppl.get_model_by_name('model')
 
-        def inference(self, ds, model):
+        def inference(self, ds):
+            model = self.model
             test_ppl = ... << ds
             test_ppl.run()
             targets = np.array(test_ppl.v('targets'))
@@ -128,12 +129,12 @@ Function that must contain the whole training process. Argument `train_dataset` 
     test:
         metrics: accuracy
 
-In that case `kwargs={model: 'UNet'}`. If `pretrained` is not defined in config, output of that function will be used as `train_output` argument of `inference`.
+In that case `kwargs={model: 'UNet'}`. Method is executed when `pretrained` is not defined.
 
-`inference(self, test_dataset, train_output, **kwargs)`
+`inference(self, test_dataset, **kwargs)`
 -------------------------------------------------------
 
-Function that must contain the whole inference process. Argument `test_dataset` is an output of `test_loader` method, `train_output` is an output of `load_model` method for configs with `pretrained` or of `train` method, otherwise. `kwargs` is from config and doesn't include popped `dataset` key.
+Function that must contain the whole inference process. Argument `test_dataset` is an output of `test_loader` method. `kwargs` is from config and doesn't include popped `dataset` key.
 Function returns `predictions` and `targets` in format that can be used with Batchflow metrics (see :doc:`metrics API <../api/batchflow.models.metrics>`).
 
 Custom metrics
@@ -211,7 +212,7 @@ For example, call class method::
     MyValidator.check_api(methods=['train_loader', 'train'])
 
 to check if methods `train_loader` and `train` are implemented in MyValidator class. By default, ::
-    
+
     methods=['train', 'inference']
 
 and warning will be issued if one of methods is not implemented. To raise exception instead of warning, use `warning=False`.

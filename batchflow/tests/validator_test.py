@@ -13,12 +13,12 @@ def dummy_validator_class():
         def train(self, a):
             if a is None:
                 a = 2
-            return a
+            self.a = a
 
-        def inference(self, b, a):
+        def inference(self, b):
             if b is None:
                 b = 1
-            return a, b
+            return self.a, b
 
         def my_metric(self, a, b):
             return a - b
@@ -30,6 +30,7 @@ def validator_class():
     class NewValidator(Validator):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
+            self.model = None
             self.stages = []
 
         def train_loader(self, size=100):
@@ -54,7 +55,7 @@ def validator_class():
             elif model == 'lasso':
                 model = Lasso()
             model.fit(dataset[0], dataset[1])
-            return model
+            self.model = model
 
         def load_model(self):
             self.stages += ['load_model']
@@ -62,13 +63,16 @@ def validator_class():
             model = LinearRegression()
             model.coef_ = np.array([2])
             model.intercept_ = 0
-            return model
+            self.model = model
 
-        def inference(self, dataset, model):
+        def inference(self, dataset):
             self.stages += ['inference']
 
-            predictions = model.predict(dataset[0])
             targets = dataset[1]
+            if self.model:
+                predictions = self.model.predict(dataset[0])
+            else:
+                predictions = None
             return targets, predictions
 
         def my_mse(self, target, prediction):
@@ -93,7 +97,8 @@ def test_skipped_loaders(dummy_validator_class, config, metric):
     ({'train': None, 'test': None}, ['train', 'inference', 'train_loader', 'test_loader']),
     ({'pretrained': None, 'test': None}, ['load_model', 'inference', 'test_loader']),
     ({'train': None}, ['train', 'train_loader']),
-    ({'train': None, 'test': {'metrics': 'my_mse'}}, ['train', 'inference', 'train_loader', 'test_loader', 'my_mse'])
+    ({'train': None, 'test': {'metrics': 'my_mse'}}, ['train', 'inference', 'train_loader', 'test_loader', 'my_mse']),
+    ({'test': None}, ['test_loader', 'inference'])
 ])
 def test_stages(validator_class, config, stages):
     val = validator_class(config)
@@ -108,7 +113,7 @@ def test_kwargs(validator_class, config):
     val.run()
     assert len(val.train_dataset[1]) == config['train/dataset/size']
     assert len(val.test_dataset[1]) == config['test/dataset/size']
-    assert isinstance(val.from_train, Lasso)
+    assert isinstance(val.model, Lasso)
 
 @pytest.mark.parametrize('config', [
     Config({'train': None, 'test/metrics': 'my_mse, mse', 'mse/class': 'regression'})
