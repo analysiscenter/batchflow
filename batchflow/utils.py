@@ -258,45 +258,6 @@ def print_results(df, layout, average_repetitions=False, sort_by=None, ascending
     return res_df
 
 
-def create_bar(bar, batch_size, n_iters, n_epochs, drop_last, length):
-    """ Create progress bar with desired number of total iterations."""
-    if n_iters is not None:
-        total = n_iters
-    elif n_epochs is None:
-        total = sys.maxsize
-    elif drop_last:
-        total = length // batch_size * n_epochs
-    else:
-        total = math.ceil(length * n_epochs / batch_size)
-
-    if callable(bar):
-        progressbar = bar(total=total)
-    elif bar == 'n':
-        progressbar = tqdm.tqdm_notebook(total=total)
-    else:
-        progressbar = tqdm.tqdm(total=total)
-    return progressbar
-
-
-def update_bar(bar, bar_desc, **kwargs):
-    """ Update bar with description and one step."""
-    current_iter = bar.n
-    if bar_desc:
-        if callable(bar_desc) and not isinstance(bar_desc, NamedExpression):
-            desc = bar_desc()
-
-        if current_iter == 0:
-            # During the first iteration we can't get items from empty containers (lists, dicts, etc)
-            try:
-                desc = eval_expr(bar_desc, **kwargs)
-                desc = str(desc)
-            except LookupError:
-                desc = None
-        else:
-            desc = eval_expr(bar_desc, **kwargs)
-            desc = str(desc)
-        bar.set_description(desc)
-    bar.update(1)
 
 def plot_images(images, labels=None, proba=None, ncols=5, classes=None, models_names=None, **kwargs):
     """ Plot images and optionally true labels as well as predicted class proba.

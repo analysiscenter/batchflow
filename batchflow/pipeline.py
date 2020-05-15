@@ -26,7 +26,7 @@ from .variables import VariableDirectory
 from .models.metrics import (ClassificationMetrics, SegmentationMetricsByPixels,
                              SegmentationMetricsByInstances, RegressionMetrics, Loss)
 from ._const import *       # pylint:disable=wildcard-import
-from .utils import  save_data_to
+from .utils import save_data_to
 from .notifier import Notifier
 
 
@@ -1199,7 +1199,7 @@ class Pipeline:
                                save_to=V('inferred_masks'))
                 .gather_metrics('masks', targets=B('masks'), predictions=V('inferred_masks'),
                                 fmt='proba', axis=-1, save_to=V('metrics', mode='u'))
-                .run(BATCH_SIZE, bar=True)
+                .run(BATCH_SIZE, notifier=True)
             )
 
             metrics = pipeline.get_variable('metrics')
@@ -1240,13 +1240,12 @@ class Pipeline:
         return new_p._add_action(REBATCH_ID, _args=dict(batch_size=batch_size, pipeline=self, fn=fn,
                                                         components=components, batch_class=batch_class))
 
-    def _put_batches_into_queue(self, gen_batch, bar):
+    def _put_batches_into_queue(self, gen_batch, notifier):
         while not self._stop_flag:
             self._prefetch_count.put(1, block=True)
             try:
                 batch = next(gen_batch)
-                if bar:
-                    bar.update(pipeline=self, batch=batch)
+                notifier.update(pipeline=self, batch=batch)
             except StopIteration:
                 break
             else:
@@ -1426,7 +1425,7 @@ class Pipeline:
 
             See :meth:`DatasetIndex.gen_batch` for details.
 
-        bar : bool, 'n' or callable
+        notifier : bool, 'n' or callable
             Whether to show a progress bar.
             If 'n', then uses `tqdm_notebook`. If callable, it must have the same signature as `tqdm`.
 
@@ -1479,7 +1478,7 @@ class Pipeline:
         target = kwargs.pop('target', 'threads')
         prefetch = kwargs.pop('prefetch', 0)
         on_iter = kwargs.pop('on_iter', None)
-        bar = kwargs.pop('bar', None)
+        notifier = kwargs.pop('notifier', kwargs.pop('bar', None))
 
         if len(self._actions) > 0 and self._actions[0]['name'] == REBATCH_ID:
             batch_generator = self.gen_rebatch(*args, **kwargs, prefetch=prefetch)
@@ -1496,11 +1495,10 @@ class Pipeline:
         n_epochs = kwargs.get('n_epochs')
         drop_last = kwargs.get('drop_last')
 
-        if bar:
-            if not isinstance(bar, Notifier):
-                bar = Notifier(bar)
-            bar.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                             drop_last=drop_last, length=len(self._dataset.index))
+        if not isinstance(notifier, Notifier):
+            notifier = Notifier(notifier)
+        notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                              drop_last=drop_last, length=len(self._dataset.index))
 
 
         if self.before:
@@ -1522,7 +1520,7 @@ class Pipeline:
             self._prefetch_queue = q.Queue(maxsize=prefetch)
             self._batch_queue = q.Queue(maxsize=1)
             self._service_executor = cf.ThreadPoolExecutor(max_workers=2)
-            self._service_executor.submit(self._put_batches_into_queue, batch_generator, bar)
+            self._service_executor.submit(self._put_batches_into_queue, batch_generator, notifier)
             self._service_executor.submit(self._run_batches_from_queue)
 
             while not self._stop_flag:
@@ -1541,8 +1539,7 @@ class Pipeline:
             for batch in batch_generator:
                 try:
                     batch_res = self.execute_for(batch)
-                    if bar:
-                        bar.update(pipeline=self, batch=batch)
+                    notifier.update(pipeline=self, batch=batch)
                 except SkipBatchException:
                     pass
                 else:
@@ -1554,8 +1551,7 @@ class Pipeline:
                 warnings.warn("Batch generator is empty. Use pipeline.reset('iter') to restart iteration.",
                               EmptyBatchSequence, stacklevel=3)
 
-        if bar:
-            bar.close()
+        notifier.close()
 
         if self.after:
             self.after.run()

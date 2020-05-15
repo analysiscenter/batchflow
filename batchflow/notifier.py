@@ -13,6 +13,34 @@ import matplotlib.pyplot as plt
 from .monitor import ResourceMonitor, MONITOR_ALIASES
 from .named_expr import NamedExpression, eval_expr
 
+
+class DummyBar:
+    """ Progress tracker without visual representation. """
+    def __init__(self, total, *args, **kwargs):
+        self.total = total
+        self.args, self.kwargs = args, kwargs
+
+        self.n = 0
+        self.start_t = time()
+
+    def update(self, n):
+        self.n += n
+
+    def format_meter(self, n, total, t, **kwargs):
+        _ = kwargs
+        return f'{n}/{total} iterations done; elapsed time is {t:3.3} seconds'
+
+    def sp(self, *args, **kwargs):
+        _ = args, kwargs
+
+    def set_description(self, *args, **kwargs):
+        _ = args, kwargs
+
+    def close(self):
+        pass
+
+
+
 class Notifier:
     """ Progress tracker and a resource monitor tool in one.
 
@@ -53,25 +81,6 @@ class Notifier:
                  batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  variables=None, monitors=None, monitor_kwargs=None,
                  plot=False, window=None, layout='h', figsize=None, **kwargs):
-
-        # Create bar; set number of total iterations, if possible
-        self.bar = None
-
-        if callable(bar):
-            bar_func = bar
-        elif bar == 'n':
-            bar_func = tqdm_notebook
-        elif bar == 'a':
-            bar_func = tqdm_auto
-        elif bar == 'j':
-            bar_func = tqdm_notebook
-            plot = True
-        else:
-            bar_func = tqdm
-        self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
-        self.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                          drop_last=drop_last, length=length)
-
         data_generators = []
 
         # Prepare variables
@@ -104,11 +113,29 @@ class Notifier:
         self.data_generators = dict(zip(names, data_generators))
         self.start_monitors()
 
+        # Create bar; set the number of total iterations, if possible
+        self.bar = None
+
+        if callable(bar):
+            bar_func = bar
+        elif bar == 'n':
+            bar_func = tqdm_notebook
+        elif bar == 'a':
+            bar_func = tqdm_auto
+        elif bar == 'j':
+            bar_func = tqdm_notebook
+            plot = True
+        else:
+            bar_func = DummyBar
+        self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
+        self.update_total(total=total, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                          drop_last=drop_last, length=length)
+
         # Prepare plot params
         #pylint: disable=invalid-unary-operand-type
         self.plot = plot
         self.slice = slice(-window, None, None) if isinstance(window, int) else slice(None)
-        self.layout = (1, len(names)) if layout.startswith('h') else (len(names), 1)
+        self.layout = (1, len(self.data_generators)) if layout.startswith('h') else (len(names), 1)
         self.figsize = figsize or ((20, 5) if layout.startswith('h') else (20, 5*(len(names))))
 
 
@@ -123,11 +150,10 @@ class Notifier:
                 else:
                     total = math.ceil(length * n_epochs / batch_size)
 
-        if total is not None:
-            # Force close previous bar, create new
-            if self.bar is not None:
-                self.bar.sp(close=True)
-            self.bar = self.bar_func(total=total)
+        # Force close previous bar, create new
+        if self.bar is not None:
+            self.bar.sp(close=True)
+        self.bar = self.bar_func(total=total)
 
     def __getattr__(self, key):
         """ Redirect everything to the underlying bar. """
@@ -210,11 +236,20 @@ class Notifier:
             ax[i].grid(True)
 
         if add_suptitle:
-            plt.suptitle(self.format_meter(self.n, self.total, time()-self.start_t, ncols=80), y=0.99, fontsize=14)
+            title = self.format_meter(self.n, self.total, time()-self.start_t, ncols=80)
+            plt.suptitle(title, y=0.99, fontsize=14)
         plt.show()
 
     # Convenient alias for working inspect instance after pipeline run
     visualize = update_plots
+
+
+    def __call__(self, iterable):
+        self.update_total(0, 0, 0, 0, 0, total=len(iterable))
+        for item in iterable:
+            yield item
+            self.update()
+        self.close()
 
 
     def close(self):

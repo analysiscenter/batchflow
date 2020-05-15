@@ -23,7 +23,7 @@ class ResourceMonitor:
     function : callable
         Function to use. If not provided, defaults to the `get_usage` static method.
     frequency : number
-        Periodicity of function calls.
+        Periodicity of function calls in seconds.
     **kwargs
         Passed directly to `function` calls.
 
