@@ -493,8 +493,14 @@ class DatasetIndex(Baseset):
         iter_params.update({'_total': total})
 
         if notifier:
-            iter_params['notifier'] = Notifier(notifier, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                                          drop_last=drop_last, length=len(self._dataset.index))
+            if not isinstance(notifier, Notifier):
+                notifier = Notifier(**notifier if isinstance(notifier, dict) else notifier,
+                                    total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                    drop_last=drop_last, length=len(self._dataset.index))
+            else:
+                notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                      drop_last=drop_last, length=len(self._dataset.index))
+            iter_params['notifier'] = notifier
 
 
         while True:

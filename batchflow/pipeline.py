@@ -1496,10 +1496,12 @@ class Pipeline:
         drop_last = kwargs.get('drop_last')
 
         if not isinstance(notifier, Notifier):
-            notifier = Notifier(notifier)
-        notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
-                              drop_last=drop_last, length=len(self._dataset.index))
-
+            notifier = Notifier(**notifier if isinstance(notifier, dict) else notifier,
+                                total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                drop_last=drop_last, length=len(self._dataset.index))
+        else:
+            notifier.update_total(total=None, batch_size=batch_size, n_iters=n_iters, n_epochs=n_epochs,
+                                  drop_last=drop_last, length=len(self._dataset.index))
 
         if self.before:
             self.before.run()

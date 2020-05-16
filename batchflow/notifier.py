@@ -16,6 +16,7 @@ from .named_expr import NamedExpression, eval_expr
 
 class DummyBar:
     """ Progress tracker without visual representation. """
+    #pylint: disable=invalid-name
     def __init__(self, total, *args, **kwargs):
         self.total = total
         self.args, self.kwargs = args, kwargs
@@ -77,8 +78,8 @@ class Notifier:
     *args, **kwargs
         Positional and keyword arguments that are used to create underlying progress bar.
     """
-    def __init__(self, bar=None, total=None, *args,
-                 batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
+    def __init__(self, bar=None, *args,
+                 total=None, batch_size=None, n_iters=None, n_epochs=None, drop_last=False, length=None,
                  variables=None, monitors=None, monitor_kwargs=None,
                  plot=False, window=None, layout='h', figsize=None, **kwargs):
         data_generators = []
@@ -118,13 +119,15 @@ class Notifier:
 
         if callable(bar):
             bar_func = bar
-        elif bar == 'n':
+        elif bar in ['n', 'nb', 'notebook']:
             bar_func = tqdm_notebook
-        elif bar == 'a':
+        elif bar in ['a', 'auto']:
             bar_func = tqdm_auto
-        elif bar == 'j':
+        elif bar in ['j', 'jpn', 'jupyter']:
             bar_func = tqdm_notebook
             plot = True
+        elif bar in [True, 't', 'tqdm']:
+            bar_func = tqdm
         else:
             bar_func = DummyBar
         self.bar_func = lambda total: bar_func(total=total, *args, **kwargs)
@@ -152,8 +155,15 @@ class Notifier:
 
         # Force close previous bar, create new
         if self.bar is not None:
-            self.bar.sp(close=True)
-        self.bar = self.bar_func(total=total)
+            try:
+                # jupyter bar must be closed and reopened
+                self.bar.sp(close=True)
+                self.bar = self.bar_func(total=total)
+            except TypeError:
+                # text bar can work with a simple reassigning of `total`
+                self.bar.total = total
+        else:
+            self.bar = self.bar_func(total=total)
 
     def __getattr__(self, key):
         """ Redirect everything to the underlying bar. """
