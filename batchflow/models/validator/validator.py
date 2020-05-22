@@ -183,7 +183,7 @@ class Validator:
             if hasattr(self, _metric):
                 self.metrics[_metric] = getattr(self, _metric)(targets, predictions)
             else:
-                metric_config = metric_configs[_metric]
+                metric_config = metric_configs.get(_metric, {})
                 metric_class = metric_config.pop('class', 'classification')
                 evaluate = metric_config.pop('evaluate', {})
                 metrics = METRICS[metric_class](targets, predictions, **metric_config)
