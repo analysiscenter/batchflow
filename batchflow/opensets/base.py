@@ -1,19 +1,19 @@
 """ Contains the base class for open datasets """
-
-from .. import Dataset
+from .. import Dataset, DatasetIndex
 from .. import ImagesBatch
 
 
 class Openset(Dataset):
     """ The base class for open datasets """
-    def __init__(self, index=None, batch_class=None, train_test=False, path=None, preloaded=None, **kwargs):
-        self.train_test = train_test
+    def __init__(self, index=None, batch_class=None, path=None, preloaded=None, **kwargs):
         self._train_index, self._test_index = None, None
-        if preloaded is None:
-            preloaded = self.download(path=path)
-        super().__init__(index, batch_class, preloaded=preloaded, **kwargs)
-        if train_test:
-            self.split()
+        if index is None:
+            preloaded, index, self._train_index, self._test_index = self.download(path=path)
+        super().__init__(index, batch_class=batch_class, preloaded=preloaded, **kwargs)
+
+        if self._train_index and self._test_index:
+            self.train = type(self).from_dataset(self, self._train_index, batch_class=batch_class, **kwargs)
+            self.test = type(self).from_dataset(self, self._test_index, batch_class=batch_class, **kwargs)
 
     @staticmethod
     def uild_index(index):
@@ -27,13 +27,12 @@ class Openset(Dataset):
         _ = path
         return None
 
-    def split(self, shares=0.8, shuffle=False):
-        if self.train_test:
-            train_data, test_data = self.preloaded  # pylint:disable=unpacking-non-sequence
-            self.train = type(self)(self._train_index, self.batch_class, train_test=False, preloaded=train_data)
-            self.test = type(self)(self._test_index, self.batch_class, train_test=False, preloaded=test_data)
-        else:
-            super().split(shares, shuffle)
+    def _infer_train_test_index(self, train_len, test_len):
+        total_len = train_len + test_len
+        index = DatasetIndex(list(range(total_len)))
+        train_index = DatasetIndex(list(range(train_len)))
+        test_index = DatasetIndex(list(range(train_len, total_len)))
+        return index, train_index, test_index
 
 
 class ImagesOpenset(Openset):
