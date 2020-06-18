@@ -1,4 +1,4 @@
-""" Tests for Batch apply_transform method.
+""" Tests for Batch apply_parallel method.
 
 Options for `src` and `dst` are listed in SRC_OPTS and DST_OPTS. All possible
 combinations of these options form two lists of length 42 - SRC_COMP and DST_COMP.
@@ -97,7 +97,7 @@ def batch():
 
 @pytest.mark.parametrize('addendum', ADDENDUM)
 @pytest.mark.parametrize('src, dst, expectation, func', list(zip(SRC_COMPS, DST_COMPS, EXPECTATION, FUNCTIONS)))
-def test_apply_transform(src, dst, expectation, func, addendum, batch,):
+def test_apply_parallel(src, dst, expectation, func, addendum, batch,):
     """ Test checks for different types and shapes of `src` and `dst`.
 
     expectation
@@ -107,14 +107,14 @@ def test_apply_transform(src, dst, expectation, func, addendum, batch,):
         Different forms of `src` and `dst` are tested with one of four types of functions: that takes one
         argument and returns one, takes one and return two, takes two - returns one and takes two returns two.
     addendum
-        addendum parameter verifies that `apply_transform` correctly hanles keyword arguments and NamedExpressions.
+        addendum parameter verifies that `apply_parallel` correctly hanles keyword arguments and NamedExpressions.
     """
     # Arrange
     if isinstance(addendum, P):
         addendum.name.random_state.seed(seed=SEED)
     # Act
     with expectation:
-        batch.apply_transform(func, addendum=addendum, src=src, dst=dst)
+        batch.apply_parallel(func, addendum=addendum, src=src, dst=dst)
     # Assert
         if not isinstance(src, (list, tuple)):
             src = [src]
