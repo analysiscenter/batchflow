@@ -296,6 +296,7 @@ class ImagesBatch(BaseImagesBatch):
         component : str
             component to assemble
         """
+        _ = args, kwargs
         if isinstance(result[0], PIL.Image.Image):
             setattr(self, component, np.asarray(result, dtype=object))
         else:
