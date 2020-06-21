@@ -253,7 +253,7 @@ class TFModel(BaseModel):
 
     * Take a look at :class:`.BaseModel`: ``build`` and ``load`` methods inherited from it.
 
-    * Take a look at :class:`~.tf.layers.ConvBlock`. It is a widely used as a building block,
+    * Take a look at :class:`~.tf.layers.ConvBlock` since it is a widely used as a building block,
       capable of chaining various operations (convolutions, batch normalizations, etc).
 
     * Define model defaults (e.g. number of filters, dropout rates, etc) by overriding

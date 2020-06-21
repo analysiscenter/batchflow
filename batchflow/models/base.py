@@ -24,6 +24,9 @@ class BaseModel:
         parameters for model loading. If present, a model will be loaded
         by calling `self.load(**config['load'])`.
 
+    * model_class : type
+        (optional) A specific model class to instantiate the model.
+
     """
     def __init__(self, config=None, *args, **kwargs):
         self.config = Config(config)
