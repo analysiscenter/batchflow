@@ -36,8 +36,7 @@ from .named_expr import P, R
 class MethodsTransformingMeta(type):
     """ A metaclass to transform all class methods in the way described below:
 
-        1. Wrap method with `apply_parallel`. Then add this
-           wrapped method to a class namespace by its original name.
+        1. Methods decorated with `@apply_parallel` are wrapped with `apply_parallel` method.
 
         2. Add the original version of the method (i.e. unwrapped) to a class
            namespace using name with underscores: `'_{}_'.format(name)`. This
@@ -47,12 +46,12 @@ class MethodsTransformingMeta(type):
     def __new__(cls, name, bases, namespace):
         namespace_ = namespace.copy()
         for object_name, object_ in namespace.items():
-            transform_kwargs = getattr(object_, 'transform_kwargs', None)
+            transform_kwargs = getattr(object_, 'apply_kwargs', None)
             if transform_kwargs is not None:
                 namespace_[object_name] = cls.use_apply_parallel(object_, **transform_kwargs)
 
                 disclaimer = "This is an untransformed version of `{}`.\n\n".format(object_.__qualname__)
-                object_.__doc__ = disclaimer + object_.__doc__
+                object_.__doc__ = disclaimer + (object_.__doc__ or '')
                 object_.__name__ = '_' + object_name + '_'
                 object_.__qualname__ = '.'.join(object_.__qualname__.split('.')[:-1] + [object_.__name__])
                 namespace_[object_.__name__] = object_
@@ -66,8 +65,7 @@ class MethodsTransformingMeta(type):
         def apply_parallel_wrapper(self, *args, **kwargs):
             transform = self.apply_parallel
             method_ = method.__get__(self, type(self)) # bound method to class
-            apply_kwargs_full = {**self.apply_defaults, **apply_kwargs}
-            kwargs_full = {**apply_kwargs_full, **kwargs}
+            kwargs_full = {**self.apply_defaults, **apply_kwargs, **kwargs}
             return transform(method_, *args, **kwargs_full)
         return action(apply_parallel_wrapper)
 
@@ -488,26 +486,17 @@ class Batch(metaclass=MethodsTransformingMeta):
             the source to get data from, can be:
             - None
             - str - a component name, e.g. 'images' or 'masks'
-            - sequence - a numpy-array, list, etc
-            - tuple of str - get data from several components
-            - list of str, sequences or tuples - apply same transform to each item in list
+            - tuple of str - several component names
+            - sequence - data as a numpy-array, data frame, etc
 
         dst : str or array
             the destination to put the result in, can be:
             - None - in this case dst is set to be same as src
             - str - a component name, e.g. 'images' or 'masks'
-            - tuple of list of str, e.g. ['images', 'masks']
-            if src is a list, dst should be either list or None.
+            - tuple or list of str, e.g. ['images', 'masks']
 
         p : float or None
-            probability of applying transform to an element in the batch
-
-            if not None, indices of relevant batch elements will be passed ``func``
-            as a named arg ``indices``.
-
-        componentwise : bool
-            apply `func` for pairs of comopnents from src/dst (default=False)
-            `dst[i] = func(src[i], ...)`
+            probability of applying func to an element in the batch
 
         args, kwargs
             other parameters passed to ``func``
@@ -519,52 +508,61 @@ class Batch(metaclass=MethodsTransformingMeta):
             for item in range(len(batch)):
                 self.dst[item] = func(self.src[item], *args, **kwargs)
 
+        `apply_parallel(func, src=['images', 'masks'])` is equal to
+        `apply_parallel(func, src=['images', 'masks'], dst=['images', 'masks'])`,
+        which in turn equals to two subsequent calls::
+
+            images = func(images)
+            masks = func(masks)
+
+        Whereas `apply_parallel(func, src=('images', 'masks'))` (i.e. when `src` takes a tuple of component names,
+        not the list as in the previous example) passes both components data into `func` simultaneously::
+
+            images, masks = func((images, masks))
+
         Examples
         --------
 
         ::
 
             apply_parallel(make_masks_fn, src='images', dst='masks')
-            apply_parallel(apply_mask, src=('images', 'masks'), dst='images')
-            apply_parallel(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2, componentwise=True)
+            apply_parallel(apply_mask, src=('images', 'masks'), dst='images_with_masks')
+            apply_parallel(rotate, src=['images', 'masks'], dst=['images', 'masks'], p=.2)
             apply_parallel(MyBatch.some_static_method, p=.5)
-            apply_parallel(B.some_method, p=.5)
+            apply_parallel(B.some_method, src='features', p=.5)
         """
-        kwargs_full = {**self.apply_defaults, **kwargs}
+        kwargs = {**self.apply_defaults, **kwargs}
 
-        src, dst = [kwargs_full.pop(keyname, None) for keyname in ['src', 'dst']]
+        src, dst = [kwargs.pop(name, None) for name in ('src', 'dst')]
 
         if isinstance(src, list) and (dst is None or isinstance(dst, list) and len(src) == len(dst)):
             if dst is None:
                 dst = src
-            if p is not None:
+            if isinstance(p, float):
                 p = P(np.random.binomial(1, p, size=len(self)))
 
             for ones, oned in zip(src, dst):
-                kwargs_full['src'] = ones
-                kwargs_full['dst'] = oned
-                self.apply_parallel(func, *args, p=p, **kwargs_full)
+                kwargs['src'] = ones
+                kwargs['dst'] = oned
+                self.apply_parallel(func, *args, p=p, **kwargs)
             return self
-
-        target, init, post = [kwargs_full.pop(keyname, None) for keyname in ['target', 'init', 'post']]
-
-        if init is not None:
-            raise ValueError('Parameter init is not used')
 
         if isinstance(src, str):
             init = self.get(component=src)
         elif isinstance(src, (tuple, list)):
-            init = list([x] for x in zip(*[self.get(component=s) for s in src]))
+            init = list((x,) for x in zip(*[self.get(component=s) for s in src]))
         else:
             init = src
 
-        if p is not None and not isinstance(p, P):
+        if isinstance(p, float):
             p = P(R('binomial', 1, p))
+
+        post, target = [kwargs.pop(name, None) for name in ('post', 'target')]
 
         parallel = inbatch_parallel(init=init, post=post, target=target, src=src, dst=dst)
         # unbind the method to pass self explicitly
         transform = parallel(type(self)._apply_once)
-        return transform(self, *args, func=func, p=p, **kwargs_full)
+        return transform(self, *args, func=func, p=p, **kwargs)
 
     def _apply_once(self, item, *args, func=None, p=None, **kwargs):
         """ Apply a function to each item in the batch.
@@ -934,7 +932,7 @@ class Batch(metaclass=MethodsTransformingMeta):
         return self.dump(*args, **kwargs)
 
     @apply_parallel_
-    def to_array(self, comp, dtype=None, channels='last'):
+    def to_array(self, comp, dtype=np.float32, channels='last'):
         """ Converts batch components to np.ndarray format
 
         Parameters
@@ -943,18 +941,24 @@ class Batch(metaclass=MethodsTransformingMeta):
             Component to get images from. Default is 'images'.
         dst : str
             Component to write images to. Default is 'images'.
+        dtype : str or np.dtype
+            Data type
+        channels : None, 'first' or 'last'
+            the dimension for channels axis
         """
-        print('to_ar', comp)
-
-        if isinstance(comp, BaseComponents):
-            print('comp')
-            return comp
         comp = np.array(comp)
-        if len(comp.shape) == 2:
-            comp = comp[:, :, np.newaxis]
 
-        if channels != 'last':
-            comp = np.moveaxis(comp, -1, 0)
+        if len(comp.shape) == 2:
+            # a special treatment for 2d arrays with images - add a new dimension for channels
+            if channels == 'first':
+                comp = comp[np.newaxis, :, :]
+            elif channels == 'last':
+                comp = comp[:, :, np.newaxis]
+        else:
+            # we assume that channels is 'last' by default
+            # so move channels from the last to the first axis if needed
+            if channels == 'first':
+                comp = np.moveaxis(comp, -1, 0)
 
         if dtype is not None:
             comp = comp.astype(dtype)
