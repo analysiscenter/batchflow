@@ -185,8 +185,15 @@ class NamedExpression(metaclass=MetaNamedExpression):
         return name, kwargs
 
     def get(self, **kwargs):
-        """ Return a value of a named expression """
-        name, kwargs = self._get(**kwargs)
+        """ Return a value of a named expression
+
+        Notes
+        -----
+        This method should be overriden in child classes.
+        In the first line it chouls usually call `_get` method::
+
+            name, kwargs = self._get(**kwargs)
+        """
         raise ValueError("Undefined value")
 
     def set(self, value, mode=None, eval=True, **kwargs):
