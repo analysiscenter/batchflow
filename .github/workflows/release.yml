@@ -1,0 +1,87 @@
+name: release
+
+on:
+  push:
+    branches:
+    - dummy
+
+jobs:
+
+  docs:
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: analysiscenter1/ds-py3:cpu
+
+    steps:
+    - uses: actions/checkout@v1
+      with:
+          fetch-depth: 1
+
+    - name: Build docs
+      run: |
+        export LC_ALL="C"
+        pip3 install sphinx
+        pip3 install sphinx-rtd-theme
+        git checkout --orphan gh-pages
+        rm -rf *
+        git fetch
+        git checkout origin/master -- batchflow docs
+        cd docs
+        make html
+
+    - name: Push docs
+      run: |
+        mv docs/_build/html/* .
+        rm -rf docs batchflow
+        touch .nojekyll
+        git config user.email rhudor@gmail.com
+        git config user.name "Roman Kh"
+        git add -A .
+        git commit -am "Build docs"
+        git remote add gh_pages https://${{ secrets.GITHUB_PUSH }}@github.com/${{ github.repository }}
+        git push -f gh_pages gh-pages
+
+  coverage:
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: analysiscenter1/ds-py3:cpu
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Generate coverage report
+      run: |
+        pip3 install -U pytest-cov
+        pytest -m "not slow" --cov=./ --cov-report=xml
+    - name: Upload coverage to Codecov
+      run: |
+        pip3 install -U codecov
+        codecov -t ${{ secrets.CODECOV_TOKEN }}
+
+  pypi:
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: analysiscenter1/ds-py3:cpu
+
+    steps:
+    - uses: actions/checkout@master
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+
+    - name: Build package
+      run: python3 setup.py sdist bdist_wheel
+
+    - name: Publish package
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        user: __token__
+        password: ${{ secrets.pypi_password }}
+        repository_url: https://test.pypi.org/legacy/
